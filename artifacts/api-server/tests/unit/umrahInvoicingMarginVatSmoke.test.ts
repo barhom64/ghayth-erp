@@ -60,12 +60,18 @@ describe("umrahInvoicingEngine — margin-VAT cost-basis fix", () => {
     expect(ENGINE).toMatch(/return \{[\s\S]{1,800}costBasis,\s*marginBase,\s*sellingBelowCost/);
   });
 
-  it("retains the existing margin-scheme math (VAT = marginBase × vatRate, not subtotal)", () => {
-    // Regression guard — the previous engine was already on the
-    // margin scheme. This PR fixed inputs to the formula, not the
-    // formula itself. Pin the formula so a future "simplify VAT
-    // calculation" PR can't accidentally regress to gross-VAT.
-    expect(ENGINE).toMatch(/vatAmount = roundTo2\(marginBase \* \(vatRate \/ 100\)\)/);
+  it("retains the margin-scheme math in BOTH directions (VAT base = marginBase, never subtotal)", () => {
+    // Regression guard — the engine has been on the margin scheme
+    // since this PR; §6 of #1870 then made the *direction* operator-
+    // configurable (inclusive extracts; exclusive adds). Both formulas
+    // must use marginBase, not subtotal — that was the original bug
+    // this smoke caught and we don't want it to creep back in EITHER
+    // direction.
+    expect(ENGINE).toMatch(/roundTo2\(marginBase \* vatRate \/ \(100 \+ vatRate\)\)/); // inclusive (default)
+    expect(ENGINE).toMatch(/roundTo2\(marginBase \* \(vatRate \/ 100\)\)/);             // exclusive (legacy)
+    // The OLD gross-VAT bug must stay gone in BOTH directions.
+    expect(ENGINE).not.toMatch(/roundTo2\(subtotal \* \(vatRate \/ 100\)\)/);
+    expect(ENGINE).not.toMatch(/roundTo2\(subtotal \* vatRate \/ \(100 \+ vatRate\)\)/);
   });
 
   it("query is scoped by companyId + groupId (tenant + obligation match)", () => {
