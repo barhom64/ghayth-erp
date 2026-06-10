@@ -1353,6 +1353,12 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   // postable leaf (e.g. 1111 الصندوق الرئيسي, 2160 إيرادات مقبوضة مقدماً).
   invoice_payment_cash: { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
   customer_advance_liability: { type: "liability", keywords: ["دفعات مقدمة", "مقبوضة مقدم", "عملاء", "advance", "unearned"] },
+  // #1945 FIN-03 — the AR-clearing leg of customer receipts/payments. On a
+  // SOCPA tree the literal fallback "1200" is الأصول غير المتداولة (a
+  // non-postable header), so the credit leg of every customer payment
+  // resolved to a header and the post FAILED. Intent search finds the
+  // postable receivables leaf (e.g. 1131 عملاء محليون).
+  invoice_payment_ar: { type: "asset", keywords: ["ذمم", "مدينون", "عملاء", "receivable"] },
 };
 
 const _resolvedAccountCache = new Map<string, string>();
@@ -1382,7 +1388,7 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     const rows = await rawQuery<{ code: string }>(
       `SELECT code FROM chart_of_accounts
        WHERE "companyId"=$1 AND type=$2 AND "allowPosting"=true AND "deletedAt" IS NULL AND (${likeClauses})
-       ORDER BY length(code) ASC LIMIT 1`,
+       ORDER BY length(code) ASC, code ASC LIMIT 1`,
       params
     );
     if (rows.length) {
