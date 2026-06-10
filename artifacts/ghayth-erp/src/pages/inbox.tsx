@@ -429,6 +429,16 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
     onSuccess: () => { toast({ title: "أُعيد إلى قائمة الإرسال" }); onChange?.(); },
     onError: (e: Error) => toast({ title: "فشل إعادة المحاولة", description: e.message, variant: "destructive" }),
   });
+  // Cancel a scheduled outbound message — backend enforces it must be
+  // a pending row with a future scheduledAt. Surfacing for any pending
+  // outbound row; if the user clicks on one that's actually immediate
+  // the backend returns 422 with a clear reason.
+  const cancelMut = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/inbox/messages/${id}/cancel`, { method: "POST" }),
+    onSuccess: () => { toast({ title: "تم إلغاء الإرسال المجدول" }); onChange?.(); },
+    onError: (e: Error) => toast({ title: "تعذّر الإلغاء", description: e.message, variant: "destructive" }),
+  });
 
   // Bulk selection: selected message ids. Single round-trip move via
   // /inbox/messages/bulk-folder so 50 threads → 1 request, not 50.
@@ -592,6 +602,18 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
                       data-testid={`retry-${t.id}`}
                     >
                       <RefreshCw className={cn("w-3 h-3 text-status-success-foreground", retryMut.isPending && "animate-spin")} />
+                    </button>
+                  )}
+                  {t.direction === "outbound" && t.status === "pending" && (
+                    <button
+                      type="button"
+                      onClick={() => cancelMut.mutate(t.id)}
+                      disabled={cancelMut.isPending}
+                      className="p-1 hover:bg-status-error-surface rounded"
+                      title="إلغاء الإرسال المجدول"
+                      data-testid={`cancel-scheduled-${t.id}`}
+                    >
+                      <Trash2 className={cn("w-3 h-3 text-status-error-foreground", cancelMut.isPending && "opacity-50")} />
                     </button>
                   )}
                   <button
