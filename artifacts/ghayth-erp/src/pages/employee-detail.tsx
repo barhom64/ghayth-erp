@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -288,7 +288,12 @@ function LeaveBalanceSummary({ employeeId }: { employeeId: string }) {
 // (Mon 03:00 weekly + 1st of month 04:00) so HR doesn't think the page
 // is broken on day-1 for a new hire.
 // ════════════════════════════════════════════════════════════════════════════
-function PerformanceWidget({ latestScore, activeSignals }: {
+// PR-4 (#2077) — props grow by one: `employeeId` so the widget can
+// link to the dedicated score detail page (/hr/employees/:id/score)
+// where the operator gets the full per-dimension rationale, raw
+// counters, history, and the on-demand «إعادة الحساب» button.
+function PerformanceWidget({ employeeId, latestScore, activeSignals }: {
+  employeeId: number;
   latestScore: { compositeScore: number; trend: number; periodKey: string;
                  disciplineScore: number; activityScore: number;
                  productivityScore: number; qualityScore: number;
@@ -339,6 +344,14 @@ function PerformanceWidget({ latestScore, activeSignals }: {
                 {latestScore.periodKey}
               </span>
             )}
+            {/* PR-4 (#2077) — link to the dedicated score detail page
+                where HR sees full rationale per dimension + raw counters
+                + history + the on-demand recompute button. */}
+            <Link href={`/hr/employees/${employeeId}/score`}>
+              <a className="text-xs text-status-info-foreground hover:underline ms-auto" data-testid="link-employee-score-detail">
+                تفصيل كامل ←
+              </a>
+            </Link>
           </p>
           {sigCount > 0 && (
             <Badge variant={critical > 0 ? "destructive" : "outline"} className="gap-1">
@@ -697,7 +710,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               the unacknowledged rows in employee_signals (last 90 days).
               When the engines haven't yet produced a score (new hire, or
               before the first monthly cron run), renders an empty state. */}
-          <PerformanceWidget latestScore={latestScore} activeSignals={activeSignals} />
+          <PerformanceWidget employeeId={Number(params?.id ?? 0)} latestScore={latestScore} activeSignals={activeSignals} />
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>

@@ -1000,7 +1000,14 @@ const scoringWeightsSchema = z.object({
   developmentWeight: z.number().min(0).max(1),
 });
 
-router.get("/scoring-weights", authorize(ADMIN), async (req, res) => {
+// PR-4 (#2077) — same logic as the attendance-policy gates in PR-3:
+// the score-weights table is per-company HR settings (drives the
+// 6-dimension composite computed by employeeScoringEngine), so it
+// belongs in the hr.employees lane, not under admin:*. Reads use
+// hr.employees:list so the score detail page can render weight
+// callouts; writes use hr.employees:update because they reshape how
+// every score in the company is computed.
+router.get("/scoring-weights", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const rows = await rawQuery(
@@ -1013,7 +1020,7 @@ router.get("/scoring-weights", authorize(ADMIN), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر جلب أوزان التقييم"); }
 });
 
-router.post("/scoring-weights", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/scoring-weights", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const body = zodParse(scoringWeightsSchema.safeParse(req.body));
@@ -1051,7 +1058,7 @@ router.post("/scoring-weights", authorize(ADMIN_WRITE), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر حفظ أوزان التقييم"); }
 });
 
-router.delete("/scoring-weights/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/scoring-weights/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);
@@ -1066,7 +1073,7 @@ router.delete("/scoring-weights/:id", authorize(ADMIN_WRITE), async (req, res) =
 });
 
 // Company-wide ranking — top N employees by composite for a given period.
-router.get("/scoring-ranking", authorize(ADMIN), async (req, res) => {
+router.get("/scoring-ranking", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const scope = (String(req.query.scope || "monthly")) as "weekly" | "monthly" | "quarterly";

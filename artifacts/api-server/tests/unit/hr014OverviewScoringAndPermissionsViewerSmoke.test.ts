@@ -95,7 +95,10 @@ describe("HR-014 — frontend: overview widget", () => {
   });
 
   it("PerformanceWidget rendered in overview tab", () => {
-    expect(PAGE_SRC).toMatch(/<PerformanceWidget latestScore=\{latestScore\} activeSignals=\{activeSignals\}/);
+    // PR-4 (#2077) added an `employeeId` prop so the widget can link
+    // to the new score detail page; the latestScore + activeSignals
+    // props are still passed (just before the `employeeId`).
+    expect(PAGE_SRC).toMatch(/<PerformanceWidget\s+employeeId=\{[^}]+\}\s+latestScore=\{latestScore\}\s+activeSignals=\{activeSignals\}/);
   });
 
   it("widget has empty state explaining the cron schedule", () => {

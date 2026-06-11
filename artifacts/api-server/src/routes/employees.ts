@@ -26,6 +26,17 @@ import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+// PR-4 (#2077) — on-demand recompute + history wraps the existing
+// employeeScoringEngine library. The library + the weekly/monthly
+// cron handlers already exist (see lib/employeeScoringEngine.ts +
+// lib/cronScheduler.ts `weeklyEmployeeScoring` / `monthlyEmployeeScoring`).
+// PR-4 just adds two HTTP entry points so HR Manager can:
+//   - re-score one employee immediately after a policy/weight change
+//     (instead of waiting until Monday 3am for the weekly cron), and
+//   - read the full breakdown + history with rationale text.
+import {
+  scoreEmployee, currentPeriodKey, type ScoreScope,
+} from "../lib/employeeScoringEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import type { EmployeeRow, EmployeeAssignmentRow } from "../lib/dbTypes.js";
@@ -2367,5 +2378,194 @@ router.post("/obligations/seed", authorize({ feature: "hr.employees", action: "u
 
 // Quiet unused import warnings for helpers referenced conditionally
 void cancelObligation;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PR-4 (#2077) — Institutional scoring: on-demand recompute + history.
+//
+// The engine is already wired into the cron scheduler (weekly Monday 3am
+// + monthly first-of-month 4am). These two routes give the HR Manager
+// an interactive lane:
+//   1. POST /employees/:id/scoring/recompute — re-score on demand for
+//      every scope (weekly + monthly + quarterly), idempotent UPSERT.
+//      Used by the score detail page's «إعادة الحساب» button + by the
+//      «أوزان جديدة» flow on the scoring-weights page.
+//   2. GET  /employees/:id/scoring/history — full history with the
+//      stored rationale text + raw counters, so HR can answer
+//      «لماذا 65 هذا الشهر؟» from a single page without joining
+//      audit_logs by hand.
+//
+// Both routes are scoped on the employee's company via the same JOIN
+// pattern used elsewhere; the recompute action is audit-logged with the
+// IGOC quartet (same shape PR-1's wizard uses).
+// ════════════════════════════════════════════════════════════════════════════
+
+const scoringRecomputeSchema = z.object({
+  // Optional: caller can target a specific scope/period. Default re-
+  // scores the CURRENT weekly + monthly + quarterly windows so an HR
+  // Manager who just changed weights sees the effect immediately.
+  scopes: z.array(z.enum(["weekly", "monthly", "quarterly"])).optional(),
+  periodKey: z.string().optional(),
+});
+
+router.post(
+  "/:id/scoring/recompute",
+  authorize({ feature: "hr.employees", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const body = zodParse(scoringRecomputeSchema.safeParse(req.body ?? {}));
+
+      const [emp] = await rawQuery<{
+        id: number; assignmentId: number; companyId: number; branchId: number | null;
+      }>(
+        `SELECT e.id, ea.id AS "assignmentId", ea."companyId", ea."branchId"
+           FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                       AND ea.status = 'active'
+                                       AND ea."companyId" = $2
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود في هذه الشركة");
+
+      const scopes: ScoreScope[] = body.scopes && body.scopes.length > 0
+        ? body.scopes
+        : ["weekly", "monthly", "quarterly"];
+
+      const results: Array<{ scope: ScoreScope; periodKey: string; composite: number; breakdown: Record<string, number> }> = [];
+      for (const s of scopes) {
+        const periodKey = body.periodKey ?? currentPeriodKey(s);
+        const result = await scoreEmployee({
+          companyId: scope.companyId,
+          assignmentId: emp.assignmentId,
+          employeeId: emp.id,
+          branchId: emp.branchId,
+          scope: s,
+          periodKey,
+        });
+        results.push({
+          scope: s,
+          periodKey,
+          composite: result.composite,
+          breakdown: {
+            discipline: result.discipline,
+            activity: result.activity,
+            productivity: result.productivity,
+            quality: result.quality,
+            manager: result.manager,
+            development: result.development,
+          },
+        });
+      }
+
+      await emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? undefined,
+        userId: scope.userId,
+        action: "employee.scored",
+        entity: "employees",
+        entityId: emp.id,
+        details: JSON.stringify({
+          assignmentId: emp.assignmentId,
+          trigger: "manual_recompute",
+          scopes: scopes,
+          results: results.map((r) => ({ scope: r.scope, periodKey: r.periodKey, composite: r.composite })),
+          context: {
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            activeRoleKey: scope.selectedRoleKey ?? null,
+          },
+        }),
+      }).catch((e) => logger.warn(e, "[scoring/recompute] event emit failed"));
+
+      await createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "recompute",
+        entity: "employee_scores",
+        entityId: emp.id,
+        activeRoleKey: scope.selectedRoleKey ?? null,
+        activeDepartmentId: scope.activeDepartmentId ?? null,
+        resolvedScope: scope.resolvedScope ?? null,
+        impersonationSourceUser: scope.impersonationSourceUser ?? null,
+        after: {
+          assignmentId: emp.assignmentId,
+          trigger: "manual_recompute",
+          scopes,
+          composites: Object.fromEntries(results.map((r) => [`${r.scope}:${r.periodKey}`, r.composite])),
+        },
+      });
+
+      res.status(200).json({
+        data: results,
+        message: `تم إعادة حساب ${results.length} نطاقات (${scopes.join(", ")})`,
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Score recompute error:");
+    }
+  }
+);
+
+router.get(
+  "/:id/scoring/history",
+  authorize({ feature: "hr.employees", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const wantScope = String(req.query.scope || "monthly") as ScoreScope;
+      if (!["weekly", "monthly", "quarterly"].includes(wantScope)) {
+        throw new ValidationError("scope must be weekly | monthly | quarterly");
+      }
+      const limit = Math.min(Number(req.query.limit) || 24, 100);
+
+      const [emp] = await rawQuery<{ id: number; assignmentId: number }>(
+        `SELECT e.id, ea.id AS "assignmentId"
+           FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                       AND ea.status = 'active'
+                                       AND ea."companyId" = $2
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود في هذه الشركة");
+
+      // Read scores ordered newest first. The rationale + rawCounters
+      // columns are JSONB; pg returns them as parsed objects, so the
+      // SPA can render «لماذا 65؟» directly from the row.
+      const rows = await rawQuery<{
+        scope: string; periodKey: string;
+        compositeScore: string; trend: number;
+        disciplineScore: string; activityScore: string;
+        productivityScore: string; qualityScore: string;
+        managerScore: string; developmentScore: string;
+        rationale: Record<string, string>;
+        weightsUsed: Record<string, number>;
+        rawCounters: Record<string, number>;
+        computedAt: string;
+      }>(
+        `SELECT scope, "periodKey",
+                "compositeScore", trend,
+                "disciplineScore", "activityScore", "productivityScore",
+                "qualityScore", "managerScore", "developmentScore",
+                rationale, "weightsUsed", "rawCounters", "computedAt"
+           FROM employee_scores
+          WHERE "assignmentId" = $1 AND scope = $2 AND "companyId" = $3
+          ORDER BY "periodKey" DESC
+          LIMIT $4`,
+        [emp.assignmentId, wantScope, scope.companyId, limit]
+      );
+
+      res.json({ data: rows, total: rows.length, scope: wantScope, assignmentId: emp.assignmentId });
+    } catch (err) {
+      handleRouteError(err, res, "Score history error:");
+    }
+  }
+);
 
 export default router;

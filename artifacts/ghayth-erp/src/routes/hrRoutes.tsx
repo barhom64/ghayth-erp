@@ -72,6 +72,14 @@ const AttendancePolicy = lazy(() => import("@/pages/hr/attendance-policy"));
 // crossing into the admin module. The /admin route stays as a back-
 // compat alias for any bookmark/print/notification deep-link.
 const AttendanceCategoriesHr = lazy(() => import("@/pages/admin/attendance-categories"));
+// PR-4 (#2077) — institutional scoring detail page (NEW) + scoring-weights
+// admin page mirrored under /hr so the HR Manager can edit weights
+// without crossing the /admin/* boundary. The engine + cron already
+// exist (lib/employeeScoringEngine.ts + cronScheduler.ts); PR-4 only
+// adds the HTTP entry points for on-demand recompute/history and this
+// detail page that visualizes them.
+const EmployeeScore = lazy(() => import("@/pages/hr/employee-score"));
+const ScoringWeightsHr = lazy(() => import("@/pages/admin/scoring-weights"));
 const Delegations = lazy(() => import("@/pages/hr/delegations"));
 const Accruals = lazy(() => import("@/pages/hr/accruals"));
 const Transfers = lazy(() => import("@/pages/hr/transfers"));
@@ -183,6 +191,11 @@ export const hrRoutes = [
   // /admin/attendance-categories route; just exposed under /hr so HR
   // managers can reach it via the HR navigation.
   { path: "/hr/attendance-categories", component: AttendanceCategoriesHr, subKey: "attendance" },
+  // PR-4 (#2077) — institutional score for one employee + scoring-weights
+  // editor mirrored under /hr. The /admin route for weights stays as a
+  // back-compat alias just like /admin/attendance-categories did.
+  { path: "/hr/employees/:id/score", component: EmployeeScore, subKey: "performance" },
+  { path: "/hr/scoring-weights", component: ScoringWeightsHr, subKey: "performance" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
