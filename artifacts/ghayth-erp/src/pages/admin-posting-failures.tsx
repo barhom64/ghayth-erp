@@ -241,7 +241,7 @@ export default function AdminPostingFailures() {
                 <div className="flex gap-2">
                   <GuardedButton perm="finance.hardening:approve" size="sm" disabled={busy} onClick={retryAll}>
                     <PlayCircle className="h-4 w-4 me-1" />
-                    {busy && progress ? `جارٍ المعالجة… (${progress.resolved} / تبقّى ${progress.remaining})` : "إعادة محاولة الكل"}
+                    {busy && progress ? `جاري المعالجة… (${progress.resolved} / تبقّى ${progress.remaining})` : "إعادة محاولة الكل"}
                   </GuardedButton>
                   <GuardedButton perm="finance.hardening:approve" variant="outline" size="sm" disabled={busy} onClick={() => setConfirmBulk({})}>
                     <Trash2 className="h-4 w-4 me-1" />تجاهل الكل
