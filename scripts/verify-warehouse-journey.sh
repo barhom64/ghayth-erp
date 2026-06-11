@@ -108,6 +108,46 @@ pw /warehouse/cycle-counts/$CCID/post "{}" >/dev/null
 ST_AGAIN="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
 [ "$ST_AGAIN" = "4" ] && ok "إعادة الترحيل لا تكرّر الأثر (ما زال 4)" || no "re-post double-applied ($ST_AGAIN)"
 
+# 6b) F1 — lot-tracked consumption (FEFO + expiry/recall guard + trace).
+put /settings/system-controls "{\"warehouse.enforce_lot_fefo\":true}" >/dev/null
+LP="$(pw /warehouse/products "{\"name\":\"دواء متتبَّع\",\"sku\":\"LOT-$SKU\",\"unit\":\"piece\",\"costPrice\":7,\"currentStock\":0,\"minStock\":0}")"
+LPID="$(echo "$LP" | gid id)"
+q "update warehouse_products set \"tracksLots\"=true where id=${LPID:-0};" >/dev/null
+[ -n "$LPID" ] && ok "صنف متتبَّع للدفعات أُنشئ (#$LPID)" || no "lot product create: $(echo "$LP"|gid error)"
+# Receipt without a lot number must be rejected for a tracksLots product.
+RCNOLOT="$(code /warehouse/movements "{\"productId\":$LPID,\"type\":\"in\",\"quantity\":5,\"reference\":\"R\"}")"
+{ [ "$RCNOLOT" -ge 400 ] && [ "$RCNOLOT" -lt 500 ]; } && ok "استلام بلا رقم دفعة مرفوض (HTTP $RCNOLOT)" || no "lot-receipt-without-lot allowed ($RCNOLOT)"
+# Receive two lots: A expires soon (FEFO first), B later.
+pw /warehouse/movements "{\"productId\":$LPID,\"type\":\"in\",\"quantity\":5,\"unitCost\":7,\"reference\":\"R-A\",\"lotNumber\":\"A-$SKU\",\"expiryDate\":\"$(date -d '+20 days' +%F 2>/dev/null || date -v+20d +%F)\"}" >/dev/null
+pw /warehouse/movements "{\"productId\":$LPID,\"type\":\"in\",\"quantity\":5,\"unitCost\":7,\"reference\":\"R-B\",\"lotNumber\":\"B-$SKU\",\"expiryDate\":\"$(date -d '+200 days' +%F 2>/dev/null || date -v+200d +%F)\"}" >/dev/null
+LOTA="$(q "select id from warehouse_stock_lots where \"productId\"=$LPID and \"lotNumber\"='A-$SKU';")"
+LOTB="$(q "select id from warehouse_stock_lots where \"productId\"=$LPID and \"lotNumber\"='B-$SKU';")"
+QA="$(q "select quantity::int from warehouse_stock_lots where id=${LOTA:-0};")"
+[ "$QA" = "5" ] && ok "استلام دفعتين بصلاحيتين (A=5)" || no "lot receipt A qty=$QA"
+# FEFO issue of 3 (no lotId) must drain lot A (soonest expiry) first.
+ISSL="$(pw /warehouse/movements "{\"productId\":$LPID,\"type\":\"out\",\"quantity\":3,\"reference\":\"ISS-LOT\"}")"
+MIDL="$(echo "$ISSL" | gid id)"
+QA2="$(q "select quantity::int from warehouse_stock_lots where id=${LOTA:-0};")"
+QB2="$(q "select quantity::int from warehouse_stock_lots where id=${LOTB:-0};")"
+MLOT="$(q "select \"lotId\" from warehouse_movements where id=${MIDL:-0};")"
+{ [ "$QA2" = "2" ] && [ "$QB2" = "5" ] && [ "$MLOT" = "$LOTA" ]; } && ok "صرف FEFO خصم الدفعة الأقرب انتهاءً (A:5←2، B=5) + ختم lotId على الحركة (trace)" || no "FEFO wrong: A=$QA2 B=$QB2 movLot=$MLOT (expect 2/5/$LOTA)"
+# COGS posted for the lot issue (DR 5110 / CR 1151).
+JLOT="$(q "select (sum(jl.debit)=sum(jl.credit) and sum(jl.debit)>0)::text from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"sourceKey\"='warehouse:movement:${MIDL:-0}';")"
+[ "$JLOT" = "true" ] && ok "COGS صرف الدفعة مُرحّل ومتوازن" || no "lot issue COGS not balanced ($JLOT)"
+# Recall lot B, then an explicit issue from B must be rejected (policy guard).
+pw /warehouse/lots/$LOTB/recall "{\"reason\":\"اختبار\"}" >/dev/null
+RCREC="$(code /warehouse/movements "{\"productId\":$LPID,\"type\":\"out\",\"quantity\":1,\"reference\":\"X\",\"lotId\":$LOTB}")"
+{ [ "$RCREC" -ge 400 ] && [ "$RCREC" -lt 500 ]; } && ok "صرف من دفعة مستدعاة مرفوض (HTTP $RCREC)" || no "issue from recalled lot allowed ($RCREC)"
+# Recall trace: lot → movements via warehouse_movements.lotId.
+TRACE="$(q "select count(*)::int from warehouse_movements where \"lotId\"=${LOTA:-0};")"
+[ "${TRACE:-0}" -ge 1 ] && ok "تتبّع الاستدعاء من الدفعة إلى الحركة يعمل (lot→$TRACE حركة)" || no "recall trace empty"
+# Non-lot product still issues via batches (no regression).
+ STN="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+pw /warehouse/movements "{\"productId\":$PID,\"type\":\"out\",\"quantity\":1,\"reference\":\"NOLOT\"}" >/dev/null
+STN2="$(q "select \"currentStock\"::int from warehouse_products where id=$PID;")"
+[ "$STN2" = "$((STN-1))" ] && ok "صنف غير متتبَّع يصرف عبر الدفعات كالمعتاد (لا كسر)" || no "non-lot regression $STN→$STN2"
+put /settings/system-controls "{\"warehouse.enforce_lot_fefo\":false}" >/dev/null
+
 # 7) Advanced slice: lot QC lifecycle + recall + ABC + reports.
 LOT="$(pw /warehouse/lots "{\"productId\":$PID,\"lotNumber\":\"LOT-$SKU\",\"quantity\":5,\"expiryDate\":\"$(date -d '+10 days' +%F 2>/dev/null || date -v+10d +%F)\"}")"
 LOTID="$(echo "$LOT" | gid id)"

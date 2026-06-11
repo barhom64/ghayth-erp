@@ -94,6 +94,17 @@ COST="$(pw /projects/$PID/costs "{\"description\":\"تكلفة إنشاء\",\"am
 JE="$(echo "$COST" | gid journalEntryId)"
 { [ -n "$JE" ] && balanced "$JE"; } && ok "تكلفة→WIP قيد متوازن (#$JE)" || no "cost WIP GL ($JE)"
 
+# 3b) PRJ-P2 — project status transitions validated through lifecycleEngine.
+#     The project is still 'planning' here. planning→blocked is NOT an edge in
+#     the "projects" state machine → must be rejected (409); planning→active IS
+#     → must succeed and persist. Proves the engine-backed guard live on a real DB.
+ILLEGAL="$(ptch /projects/$PID '{"status":"blocked"}' | gid error)"
+[ -n "$ILLEGAL" ] && ok "منع انتقال غير مشروع planning→blocked (lifecycleEngine)" || no "illegal transition not blocked"
+LEGAL="$(ptch /projects/$PID '{"status":"active"}' | gid status)"
+[ "$LEGAL" = "active" ] && ok "انتقال مشروع planning→active عبر المحرّك" || no "legal transition ($LEGAL)"
+PST="$(q "SELECT status FROM projects WHERE id=$PID;")"
+[ "$PST" = "active" ] && ok "حالة المشروع مُحدّثة فعليًا في DB (active)" || no "project status not persisted ($PST)"
+
 # 4) BOQ items → bill → invoice with a line per item
 B1="$(pw /projects/$PID/boq '{"itemType":"aggregate","description":"لياسة","unit":"m2","quantity":80,"unitPrice":50}' | gid id)"
 B2="$(pw /projects/$PID/boq '{"description":"تغيير لمبة","unit":"piece","quantity":5,"unitPrice":30}' | gid id)"
@@ -130,6 +141,17 @@ MIC="$(ptch /projects/$PID/phases/$PH/complete '{}' | gid milestoneInvoiceCreate
 sleep 1
 MINV="$(q "SELECT (\"projectId\"=$PID) FROM invoices WHERE ref='INV-MS-2606-$PH' AND \"companyId\"=2;")"
 [ "$MINV" = "t" ] && ok "فاتورة المستخلص مربوطة بالمشروع" || no "milestone invoice link ($MINV)"
+
+# 7) PRJ-P3 — project statement print preset renders end-to-end on a real DB.
+#     The `project_statement` bespoke preset + its read-only data loader resolve
+#     the project's financial position (budget/cost/billed/remaining) + cost
+#     breakdown. Printing needs print perms → log in as owner for this step.
+PJ="$(mktemp)"
+curl -fsS -c "$PJ" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"door@door.sa\",\"password\":\"$PASSWORD\"}" -o /dev/null
+PCSRF="$(grep erp_csrf "$PJ" | awk '{print $7}')"
+PRES="$(curl -sS -b "$PJ" -H "x-csrf-token: $PCSRF" -H "Content-Type: application/json" -X POST "$BASE/print/render" -d "{\"entityType\":\"project_statement\",\"entityId\":\"$PID\"}")"
+PJOB="$(echo "$PRES" | gid jobId)"
+[ -n "$PJOB" ] && ok "طباعة مستخلص المشروع (preset حيّ + بيانات حقيقية، job #$PJOB)" || no "project statement print ($PRES)"
 
 # teardown — keep the suite re-runnable
 q "UPDATE projects SET \"deletedAt\"=NOW() WHERE id=$PID;" >/dev/null
