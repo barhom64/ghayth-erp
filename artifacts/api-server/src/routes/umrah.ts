@@ -3426,7 +3426,6 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT c."nuskSupplierId",
               s.name  AS "nuskSupplierName",
-              s.code  AS "nuskSupplierCode",
               c."umrahVisaProductId",
               pv.name AS "umrahVisaProductName",
               c."umrahServicesProductId",
@@ -3746,7 +3745,8 @@ router.post("/notifications/test", authorize({ feature: "umrah", action: "create
     // silently dropping.
     const [me] = await rawQuery<{ id: number }>(
       `SELECT ea.id FROM employee_assignments ea
-        WHERE ea."userId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+        JOIN users u ON u."employeeId" = ea."employeeId"
+        WHERE u.id = $1 AND ea."companyId" = $2 AND ea.status = 'active'
         ORDER BY ea.id DESC LIMIT 1`,
       [scope.userId, scope.companyId],
     );

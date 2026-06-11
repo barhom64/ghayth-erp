@@ -2902,14 +2902,13 @@ router.post("/alerts/:id/dismiss", authorize({ feature: "fleet.vehicles", action
 router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    const { vehicleId, search, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
     if (search) { params.push(`%${search}%`); where += ` AND (v."plateNumber" ILIKE $${paramIdx} OR f."stationName" ILIKE $${paramIdx})`; paramIdx++; }
-    if (status) { where += ` AND f.status = $${paramIdx}`; params.push(status); paramIdx++; }
     // #651 follow-up — normalize to createdAt per PR #653 template (was f."fuelDate")
     if (dateFrom) { where += ` AND f."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
     if (dateTo) { where += ` AND f."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }

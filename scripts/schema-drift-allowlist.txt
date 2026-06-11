@@ -1,0 +1,64 @@
+# scripts/schema-drift-allowlist.txt
+#
+# Schema-drift scanner exceptions — see scripts/src/check-schema-drift.mjs.
+#
+# Each line is one of:
+#   routes/<file>.ts                  → skip every finding in that file
+#   routes/<file>.ts:<id>             → skip only that identifier in the file
+#
+# `#` starts a comment; blank lines are ignored. Paths are relative to
+# artifacts/api-server/src/, so artifacts/api-server/src/routes/foo.ts is
+# `routes/foo.ts`.
+#
+# Use sparingly. The scanner exists to catch a route referencing a column
+# or table that does NOT exist in the database (the route → missing-column
+# 500 class). The correct fix is almost always option 1 in the scanner's
+# failure message: add the migration (or fix the typo).
+#
+# ── Why these entries exist ────────────────────────────────────────────
+# Every identifier below was verified to EXIST in the live production
+# database; it is absent only from the committed db/schema*.sql dump that
+# CI loads into its harness. The dump lags behind several pre-cutoff
+# migrations (e.g. 223/224/234/236/242/249) whose tables/columns were
+# never folded back into the dump, and db/.baseline-cutoff (258) marks
+# those migrations "applied" without running them — so CI's harness is
+# missing objects that production has. Refreshing the dump in this PR is
+# not viable: db/schema_pre.sql is a hot file (rewritten by nearly every
+# feature merge) so a frozen refresh would perpetually conflict on
+# update-branch, and pg_dump renormalises literals (NOT IN (...) ->
+# <> ALL (ARRAY[...])) which breaks committed dump-pin tests. These are
+# therefore baselined here until the committed dump is regenerated.
+# ───────────────────────────────────────────────────────────────────────
+
+# finance-accounts.ts — allocation_override_log (migration 223),
+# chart_of_accounts.accountUsage / childrenUsagePolicy (post-dump columns).
+routes/finance-accounts.ts:allocation_override_log
+routes/finance-accounts.ts:accountUsage
+routes/finance-accounts.ts:childrenUsagePolicy
+
+# finance-algorithms.ts — construction-in-progress model (migration 234).
+routes/finance-algorithms.ts:cipId
+routes/finance-algorithms.ts:cip_costs
+routes/finance-algorithms.ts:construction_in_progress
+
+# fleet.ts — driver self-service accounts (migration 242).
+routes/fleet.ts:driver_portal_accounts
+
+# hr-discipline.ts — bulk-action result counters (post-dump columns).
+routes/hr-discipline.ts:violationsCreated
+routes/hr-discipline.ts:memosCreated
+
+# parties.ts — unified party model (migration 249).
+routes/parties.ts:partyId
+routes/parties.ts:party_links
+
+# permissions.ts — per-company feature flags (migration 236).
+routes/permissions.ts:company_feature_flags
+
+# properties.ts — owner payouts + statement columns (migration 224).
+routes/properties.ts:property_owner_payouts
+routes/properties.ts:fromDate
+routes/properties.ts:toDate
+routes/properties.ts:totalRentCollected
+routes/properties.ts:totalMaintenance
+routes/properties.ts:commissionRate

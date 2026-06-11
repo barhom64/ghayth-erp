@@ -54,16 +54,58 @@
 //
 
 import { readdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { loadDrizzleSchema } from "./lib/drizzle-schema.mjs";
+import {
+  extractRawQueryBodies,
+  stripInterpolations,
+} from "./lib/raw-query-bodies.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
 const MIGRATIONS_DIR = join(REPO_ROOT, "artifacts/api-server/src/migrations");
 const DRIZZLE_SCHEMA_FILE = join(REPO_ROOT, "lib/db/src/schema/index.ts");
+const ALLOWLIST_FILE = join(REPO_ROOT, "scripts/schema-drift-allowlist.txt");
+
+// Paths inside findings are relative to REPO_ROOT
+// (artifacts/api-server/src/routes/foo.ts). The allowlist file — like the
+// sibling sql-ambiguity / ghost-row allowlists — keys entries on the
+// shorter `routes/foo.ts` form, so normalise here.
+const ROUTES_REL_PREFIX = "artifacts/api-server/src/";
+
+function toRoutesRel(fileRel) {
+  return fileRel.startsWith(ROUTES_REL_PREFIX)
+    ? fileRel.slice(ROUTES_REL_PREFIX.length)
+    : fileRel;
+}
+
+// Load the schema-drift allowlist. Two entry shapes (mirrors the other
+// SQL guards):
+//   routes/<file>.ts          → skip every finding in that file
+//   routes/<file>.ts:<id>     → skip only that identifier within the file
+// `#` starts a comment; blank lines are ignored. Returns disjoint Sets so
+// the call site can match a finding against either form.
+async function loadAllowlist() {
+  if (!existsSync(ALLOWLIST_FILE)) return { files: new Set(), pairs: new Set() };
+  const txt = await readFile(ALLOWLIST_FILE, "utf8");
+  const files = new Set();
+  const pairs = new Set();
+  for (const raw of txt.split("\n")) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const colonIdx = line.indexOf(":");
+    if (colonIdx === -1) {
+      files.add(line);
+    } else {
+      pairs.add(`${line.slice(0, colonIdx).trim()}:${line.slice(colonIdx + 1).trim()}`);
+    }
+  }
+  return { files, pairs };
+}
 
 // Object keys that legitimately appear inside `.values({…})` /
 // `.set({…})` literals but do NOT represent a column write — Drizzle
@@ -460,53 +502,25 @@ async function walk(dir, acc = []) {
   return acc;
 }
 
-function sanitiseTemplate(body) {
-  let out = body.replace(/\$\{[^}]*\}/g, " ? ");
+// Exported for scripts/src/check-schema-drift.test.mjs (pure-logic
+// fixtures). `${…}` stripping is delegated to the SINGLE shared
+// depth-aware walker `stripInterpolations` so nested interpolations like
+// `${ cond ? `${x}` : '' }` collapse fully (the old one-level
+// `/\$\{[^}]*\}/g` regex stopped at the first `}` and left SQL-looking
+// debris behind — see the helper's header for the full bug class).
+export function sanitiseTemplate(body) {
+  let out = stripInterpolations(body, " ? ");
   out = out.replace(/'(?:[^'\\]|\\.)*'/g, " ");
   out = out.replace(/--[^\n]*\n/g, "\n");
   out = out.replace(/\/\*[\s\S]*?\*\//g, " ");
   return out;
 }
 
-function extractRawQueryBodies(source) {
-  const bodies = [];
-  const re = /rawQuery\s*\(\s*`/g;
-  let match;
-  while ((match = re.exec(source)) !== null) {
-    let i = match.index + match[0].length;
-    let depth = 0;
-    let body = "";
-    while (i < source.length) {
-      const ch = source[i];
-      if (ch === "\\" && i + 1 < source.length) {
-        body += source[i] + source[i + 1];
-        i += 2;
-        continue;
-      }
-      if (ch === "$" && source[i + 1] === "{") {
-        depth++;
-        body += "${";
-        i += 2;
-        continue;
-      }
-      if (ch === "}" && depth > 0) {
-        depth--;
-        body += "}";
-        i++;
-        continue;
-      }
-      if (ch === "`" && depth === 0) break;
-      body += ch;
-      i++;
-    }
-    bodies.push(body);
-  }
-  return bodies;
-}
-
 // Find quoted identifiers in a sanitised SQL fragment. Skip `AS "foo"`
 // aliases — those are locally defined and unrelated to schema columns.
-function findQuotedIdentifiers(sql) {
+// Exported for check-schema-drift.test.mjs so the typed-rawQuery
+// extraction → sanitise → identify pipeline can be asserted without a DB.
+export function findQuotedIdentifiers(sql) {
   const ids = [];
   const re = /"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
   let match;
@@ -569,8 +583,23 @@ function findBareInsertUpdateColumns(sql) {
 // "table never created" class of bug (e.g. financial_posting_failures
 // before migration 119 landed): the table name is bare and lowercase,
 // so the quoted-identifier and INSERT-column scanners both miss it.
-function findTableReferences(sql) {
+export function findTableReferences(sql) {
   const refs = [];
+  // `FROM` is overloaded in SQL: besides the table source it is the
+  // delimiter inside `EXTRACT(field FROM source)`, `SUBSTRING(s FROM a
+  // FOR b)`, `TRIM(... FROM s)`, and `OVERLAY(s PLACING r FROM a)`. The
+  // bareword after that `FROM` is an expression, NOT a table — but the
+  // DML-verb regex below would otherwise flag it (e.g.
+  // `EXTRACT(YEAR FROM "startDate")` → bogus table `startDate`). Neutralise
+  // the `FROM` keyword in those function constructs before scanning. These
+  // false positives stayed hidden while typed `rawQuery<…>(…)` calls were
+  // silently skipped; once they are scanned the EXTRACT/TRIM/etc. FROMs
+  // surface, so this must be handled here.
+  sql = sql
+    .replace(/(\bEXTRACT\s*\(\s*[a-zA-Z_]+\s+)\bFROM\b/gi, "$1 IN ")
+    .replace(/(\bTRIM\s*\((?:\s*(?:LEADING|TRAILING|BOTH)\b)?[^()]*?)\bFROM\b/gi, "$1 IN ")
+    .replace(/(\bSUBSTRING\s*\([^()]*?)\bFROM\b/gi, "$1 IN ")
+    .replace(/(\bOVERLAY\s*\([^()]*?)\bFROM\b/gi, "$1 IN ");
   // Common Postgres reserved words that can follow FROM/JOIN but are
   // not real tables (subquery starts, lateral derived tables, etc.).
   const NOT_A_TABLE = new Set([
@@ -592,6 +621,10 @@ function findTableReferences(sql) {
     const name = m[4];
     // Skip non-public catalog references (information_schema.*, pg_*).
     if (schema && schema !== "public") continue;
+    // Bare system-catalog references (e.g. `FROM pg_tables`) have no
+    // schema qualifier but are never in our public information_schema
+    // snapshot, so skip the `pg_*` catalog/view namespace outright.
+    if (/^pg_/i.test(name)) continue;
     if (NOT_A_TABLE.has(name.toLowerCase())) continue;
     refs.push({ name, verb });
   }
@@ -603,26 +636,48 @@ function findTableReferences(sql) {
 // identifier defined that way is locally valid even if the table
 // hasn't been materialised in the live DB yet, so we treat columns
 // (and table names) declared inside such statements as allowed.
-function collectLocallyDefinedIdentifiers(bodies) {
+// Pull every `CREATE TABLE [IF NOT EXISTS] tbl (col, ...)` out of a
+// sanitised SQL fragment, adding the table name and each column to `local`.
+function collectCreateTableIdentifiers(cleaned, local) {
+  const createRe =
+    /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?[a-zA-Z_][a-zA-Z0-9_]*"?\.)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*\(([\s\S]*?)\)\s*(?:;|$)/gi;
+  let m;
+  while ((m = createRe.exec(cleaned)) !== null) {
+    local.add(m[1]);
+    const body = m[2];
+    for (const line of body.split(",")) {
+      const t = line.trim();
+      if (!t) continue;
+      if (/^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK)\b/i.test(t)) continue;
+      const col = t.match(/^"?([a-zA-Z_][a-zA-Z0-9_]*)"?\b/);
+      if (col) local.add(col[1]);
+    }
+  }
+}
+
+// `source` is the FULL file text: routes also self-create tables via
+// `exec(`CREATE TABLE …`)` / `rawExecute(…)` (not just `rawQuery(…)`),
+// e.g. fx_revaluations. Those CREATE TABLEs never reach `bodies`, so a
+// column declared only there (revaluationDate) would be flagged as drift
+// once typed `rawQuery<…>` calls are scanned. Scanning the whole file for
+// CREATE TABLE — regardless of the wrapping helper — keeps the guard's
+// "trust route-created columns" contract intact for those tables too.
+//
+// IMPORTANT: scan the RAW source here, NOT `sanitiseTemplate(source)`.
+// sanitiseTemplate's single-quote stripper (`/'…'/g`) is built for an
+// isolated SQL fragment; over a whole TS file it pairs up unrelated
+// string-literal quotes and blanks huge spans (it wipes the very
+// `CREATE TABLE` text we need). The `CREATE TABLE … ( … )` regex is
+// specific enough to run safely against the unsanitised file.
+export function collectLocallyDefinedIdentifiers(bodies, source = "") {
   const local = new Set();
+  if (source) collectCreateTableIdentifiers(source, local);
   for (const raw of bodies) {
     const cleaned = sanitiseTemplate(raw);
+    let m;
 
     // CREATE TABLE [IF NOT EXISTS] tbl (col, ...) — adds tbl + cols.
-    const createRe =
-      /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?[a-zA-Z_][a-zA-Z0-9_]*"?\.)?"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s*\(([\s\S]*?)\)\s*(?:;|$)/gi;
-    let m;
-    while ((m = createRe.exec(cleaned)) !== null) {
-      local.add(m[1]);
-      const body = m[2];
-      for (const line of body.split(",")) {
-        const t = line.trim();
-        if (!t) continue;
-        if (/^(CONSTRAINT|PRIMARY|FOREIGN|UNIQUE|CHECK)\b/i.test(t)) continue;
-        const col = t.match(/^"?([a-zA-Z_][a-zA-Z0-9_]*)"?\b/);
-        if (col) local.add(col[1]);
-      }
-    }
+    collectCreateTableIdentifiers(cleaned, local);
 
     // Common-Table-Expression names: WITH a AS (...), b AS (...) ...
     // Also handles `WITH RECURSIVE`. Each CTE name is locally defined
@@ -730,6 +785,7 @@ async function main() {
   const { columns, tables, tableColumns } = loadLiveSchema();
   await harvestMigrationDefs(tables, columns);
   const drizzleSchema = await loadDrizzleSchema(DRIZZLE_SCHEMA_FILE);
+  const allowlist = await loadAllowlist();
   if (columns.size === 0) {
     console.error(
       "[check:schema-drift] ERROR — no columns returned from information_schema. " +
@@ -799,7 +855,7 @@ async function main() {
     const bodies = extractRawQueryBodies(source);
     if (bodies.length === 0) continue;
 
-    const local = collectLocallyDefinedIdentifiers(bodies);
+    const local = collectLocallyDefinedIdentifiers(bodies, source);
     for (const raw of bodies) {
       const cleaned = sanitiseTemplate(raw);
 
@@ -865,14 +921,42 @@ async function main() {
     process.exit(0);
   }
 
-  // Collapse duplicates per (file, id, table?).
+  // Collapse duplicates per (file, id, table?), dropping allowlisted
+  // findings. An allowlist entry suppresses a finding either by whole file
+  // (`routes/foo.ts`) or by file+identifier (`routes/foo.ts:<id>`); see
+  // scripts/schema-drift-allowlist.txt for the rationale (chiefly objects
+  // that exist in the live DB but lag in the committed db/schema*.sql dump).
   const seen = new Set();
   const unique = [];
+  let allowlisted = 0;
   for (const f of findings) {
+    const routesRel = toRoutesRel(f.file);
+    if (
+      allowlist.files.has(routesRel) ||
+      allowlist.pairs.has(`${routesRel}:${f.id}`)
+    ) {
+      allowlisted++;
+      continue;
+    }
     const key = `${f.file}::${f.id}::${f.table ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push(f);
+  }
+
+  if (allowlisted > 0) {
+    console.log(
+      `[check:schema-drift] ${allowlisted} finding(s) suppressed by ` +
+        "scripts/schema-drift-allowlist.txt",
+    );
+  }
+
+  if (unique.length === 0) {
+    console.log(
+      "[check:schema-drift] OK — every non-allowlisted identifier in raw SQL " +
+        "and every Drizzle .values()/.set() key exists in the live database.",
+    );
+    process.exit(0);
   }
 
   console.error(
@@ -898,7 +982,15 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error("[check:schema-drift] crashed:", err);
-  process.exit(2);
-});
+// Only run the live scan when invoked directly as the entrypoint. The
+// pure-logic test (check-schema-drift.test.mjs) imports `sanitiseTemplate`
+// from this module and must not trigger main() (which requires
+// DATABASE_URL) as an import side effect.
+const isEntrypoint =
+  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isEntrypoint) {
+  main().catch((err) => {
+    console.error("[check:schema-drift] crashed:", err);
+    process.exit(2);
+  });
+}

@@ -3157,7 +3157,7 @@ router.get("/room-blocks/:id/allocations", authorize({ feature: "umrah", action:
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const rows = await rawQuery(
-      `SELECT a.*, p.name AS "pilgrimName", p."passportNumber"
+      `SELECT a.*, p."fullName" AS "pilgrimName", p."passportNumber"
          FROM umrah_room_allocations a
          LEFT JOIN umrah_pilgrims p ON p.id = a."pilgrimId" AND p."deletedAt" IS NULL
         WHERE a."companyId" = $1 AND a."blockId" = $2 AND a."deletedAt" IS NULL

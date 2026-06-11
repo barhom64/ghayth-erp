@@ -53,6 +53,7 @@ import {
   splitStatements,
   findFromJoinReferences,
 } from "./check-ghost-rows.mjs";
+import { stripInterpolations } from "./lib/raw-query-bodies.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const ROUTES_DIR = join(REPO_ROOT, "artifacts/api-server/src/routes");
@@ -70,29 +71,11 @@ function escapeRegex(s) {
 
 // Replace every ${…} interpolation (balanced braces) with a neutral
 // placeholder token so the surrounding static SQL still parses. The
-// injected SQL itself is opaque (accepted blind spot).
+// injected SQL itself is opaque (accepted blind spot). Delegates to the
+// single shared depth-aware walker (stripInterpolations) so the
+// brace-counting logic lives in exactly one place.
 export function replaceInterpolations(body) {
-  let out = "";
-  let i = 0;
-  while (i < body.length) {
-    if (body[i] === "$" && body[i + 1] === "{") {
-      let depth = 0;
-      let j = i;
-      for (; j < body.length; j++) {
-        if (body[j] === "{") depth++;
-        else if (body[j] === "}") {
-          depth--;
-          if (depth === 0) break;
-        }
-      }
-      out += " _interp_ ";
-      i = j + 1;
-    } else {
-      out += body[i];
-      i++;
-    }
-  }
-  return out;
+  return stripInterpolations(body, " _interp_ ");
 }
 
 // Decompose a statement into independent query scopes. Every
@@ -250,15 +233,175 @@ export function findAmbiguousRefs(scope, tableColumns) {
   return findings;
 }
 
-// Analyse one rawQuery body end-to-end. Returns { col, kind }[] (index
-// dropped — callers dedupe per (col, kind)).
-export function analyzeBody(body, tableColumns) {
-  const sql = stripCommentsAndStrings(replaceInterpolations(body));
+// Core (second bug class): given one query scope and the live schema,
+// return qualified references (`alias.col` / `alias."col"`) to a column
+// that does NOT exist on the aliased relation. This is the
+// `column "grn.status" does not exist` → 500 class that schema-drift
+// misses because it only validates *quoted* identifiers, not bare
+// `alias.column` refs in a SELECT list.
+//
+// Precision rules (low false-positive — this is a hard merge gate):
+//   * Only qualifiers that resolve to a known public table via FROM/JOIN
+//     are checked. Unknown qualifiers (CTEs, subquery aliases, function
+//     results, information_schema/pg_catalog tables) are skipped — same
+//     accepted blind spot as the ambiguity scan.
+//   * Quoted `alias."Col"` must match the stored column exactly.
+//   * Unquoted `alias.col` is folded to lowercase by Postgres, so it only
+//     matches a column stored all-lowercase — mirroring real PG resolution
+//     (an unquoted ref to a camelCase column would itself 500).
+export function findMissingQualifiedColumns(scope, tableColumns) {
+  const refs = findFromJoinReferences(scope).filter((r) =>
+    tableColumns.has(r.table),
+  );
+  if (refs.length === 0) return [];
+  // qualifier (alias OR bare table name, lowercased) → table name
+  const qualToTable = new Map();
+  for (const r of refs) {
+    qualToTable.set(r.alias.toLowerCase(), r.table);
+    qualToTable.set(r.table.toLowerCase(), r.table);
+  }
+  const findings = [];
+  const seen = new Set();
+  const re = /([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*("?)([A-Za-z_][A-Za-z0-9_]*)\2/g;
+  let m;
+  while ((m = re.exec(scope)) !== null) {
+    const qual = m[1].toLowerCase();
+    const quoted = m[2] === '"';
+    const col = m[3];
+    // `alias.${…}` collapses to `alias._interp_` after interpolation
+    // stripping — the column name is runtime-injected and opaque, so it
+    // is an accepted blind spot, never a missing-column finding.
+    if (col === "_interp_" || qual === "_interp_") continue;
+    const table = qualToTable.get(qual);
+    if (!table) continue; // unknown qualifier — accepted blind spot
+    const cols = tableColumns.get(table);
+    if (!cols) continue;
+    const exists = quoted ? cols.has(col) : cols.has(col.toLowerCase());
+    if (exists) continue;
+    const sig = `${qual}.${col}`;
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    findings.push({ table, qual, col, quoted });
+  }
+  return findings;
+}
+
+// Collect SQL-fragment string variables that are assembled OUTSIDE a
+// rawQuery template and later spliced in via `${var}`. The pattern that
+// shipped the `je."postingDate"` 500:
+//
+//     let dateFilter = "";
+//     if (endDate) dateFilter += ` AND je."postingDate" < ...`;  // ← here
+//     rawQuery(`SELECT ... FROM journal_entries je ... ${dateFilter}`);
+//
+// Each `var (+)= `…`` template literal that looks like SQL is accumulated
+// per variable name. Returns Map<varName, concatenatedFragmentText>.
+// Over-approximates by unioning every literal assigned to a name across
+// the whole file — that is SAFE because a fragment inlined into a body
+// whose FROM/JOIN does not bind the fragment's alias is simply skipped
+// (unknown qualifier), so clean code can never produce a finding.
+export function collectSqlFragmentVars(source) {
+  const map = new Map();
+  const re = /([A-Za-z_$][\w$]*)\s*\+?=\s*`([^`]*)`/g;
+  let m;
+  while ((m = re.exec(source)) !== null) {
+    const name = m[1];
+    const text = m[2];
+    // Only keep SQL-looking fragments (a qualified ref or a SQL keyword) —
+    // never inline unrelated template strings (HTML, log lines, etc.).
+    const looksSql =
+      /[A-Za-z_]\w*\s*\.\s*"?[A-Za-z_]/.test(text) ||
+      /\b(AND|OR|WHERE|JOIN|SELECT|FROM|ORDER\s+BY|GROUP\s+BY|HAVING)\b/i.test(
+        text,
+      );
+    if (!looksSql) continue;
+    map.set(name, (map.has(name) ? map.get(name) + " " : "") + text);
+  }
+  return map;
+}
+
+// Split a route file into per-handler slices at every `router.<verb>(`
+// boundary (plus the module-level preamble before the first handler).
+// Fragment collection MUST be scoped to one handler: variable names like
+// `where`, `q`, `filter` and aliases like `m`/`e`/`f` are reused across
+// handlers binding DIFFERENT tables, so a file-wide union would inline one
+// handler's fragment into another's body and resolve the alias to the
+// wrong table — a false positive. Slicing errs toward NOT inlining (a
+// fragment built in a helper and used in a separate handler is simply
+// missed), which is the safe direction for a merge gate: false negatives,
+// never false positives.
+export function splitHandlerSlices(source) {
+  // Match any router-like identifier (`router`, or any camelCase name ending
+  // in `Router` such as `reportsRouter`/`accountsRouter`/`journalRouter`),
+  // not just the literal `router`. Many route modules name their Router
+  // instance differently, and a too-narrow boundary regex collapses the
+  // whole file into one slice — which would let SQL-fragment vars bleed
+  // across handlers and defeat the per-handler scoping guarantee. The
+  // `*Router` shape is precise enough to avoid spurious splits on calls like
+  // `res.get(...)` / `app.use(...)` / `cache.get(...)`.
+  const re =
+    /\b(?:[A-Za-z_$][\w$]*Router|router)\s*\.\s*(?:get|post|put|patch|delete|use|all)\s*\(/g;
+  const idxs = [];
+  let m;
+  while ((m = re.exec(source)) !== null) idxs.push(m.index);
+  if (idxs.length === 0) return [source];
+  const slices = [];
+  if (idxs[0] > 0) slices.push(source.slice(0, idxs[0]));
+  for (let i = 0; i < idxs.length; i++) {
+    const end = i + 1 < idxs.length ? idxs[i + 1] : source.length;
+    slices.push(source.slice(idxs[i], end));
+  }
+  return slices;
+}
+
+// Splice collected SQL fragments into a body in place of their `${var}`
+// interpolation, so the per-scope scanner sees `alias."col"` right next
+// to the FROM/JOIN that binds `alias` and resolves it in the CORRECT
+// scope. Only known fragment vars are substituted; every other
+// interpolation is left untouched for the _interp_ placeholder. Reusing
+// the scope-correct resolver this way is what makes the fragment check
+// false-positive-free (a whole-file alias map cannot tell which scope a
+// reused alias like `cat` belongs to).
+export function inlineFragments(body, fragMap) {
+  if (!fragMap || fragMap.size === 0) return body;
+  return body.replace(/\$\{\s*([A-Za-z_$][\w$]*)\s*\}/g, (full, name) =>
+    fragMap.has(name) ? ` ${fragMap.get(name)} ` : full,
+  );
+}
+
+// Analyse one rawQuery body end-to-end. Returns tagged findings:
+//   { type: "ambiguous", col, kind } | { type: "missing", col, table }
+// (index dropped — callers dedupe per (type, col)). `fragMap` (optional)
+// inlines interpolated SQL fragments first so fragment-built refs resolve
+// in their real scope.
+export function analyzeBody(body, tableColumns, fragMap) {
   const found = [];
-  for (const stmt of splitStatements(sql)) {
+
+  // Ambiguous pass — runs on the NON-inlined body. Inlining a bare-column
+  // fragment into a multi-join body can manufacture a cross-context
+  // ambiguity that doesn't exist at runtime, so this pass keeps the proven
+  // template-only behaviour.
+  const ambSql = stripCommentsAndStrings(replaceInterpolations(body));
+  for (const stmt of splitStatements(ambSql)) {
     for (const scope of extractScopes(stmt)) {
       for (const f of findAmbiguousRefs(scope, tableColumns)) {
-        found.push({ col: f.col, kind: f.kind });
+        found.push({ type: "ambiguous", col: f.col, kind: f.kind });
+      }
+    }
+  }
+
+  // Missing-column pass — runs on the INLINED body so a qualified ref built
+  // in a spliced-in fragment (the `je."postingDate"` 500 class) resolves in
+  // its real scope. High-confidence with no false positives: a finding
+  // requires the alias to be FROM/JOIN-bound in THIS body AND the column
+  // absent on that table — always a guaranteed runtime error.
+  const missSql = stripCommentsAndStrings(
+    replaceInterpolations(inlineFragments(body, fragMap)),
+  );
+  for (const stmt of splitStatements(missSql)) {
+    for (const scope of extractScopes(stmt)) {
+      for (const f of findMissingQualifiedColumns(scope, tableColumns)) {
+        found.push({ type: "missing", col: `${f.qual}.${f.col}`, table: f.table });
       }
     }
   }
@@ -355,13 +498,27 @@ async function main() {
     if (allow.files.has(relFromSrc)) continue;
     const source = await readFile(file, "utf8");
     const seen = new Set();
-    for (const body of extractRawQueryBodies(source)) {
-      for (const f of analyzeBody(body, tableColumns)) {
-        if (allow.pairs.has(`${relFromSrc}:${f.col}`)) continue;
-        const sig = `${relFromSrc}:${f.col}`;
-        if (seen.has(sig)) continue;
-        seen.add(sig);
-        findings.push({ file: relFromSrc, col: f.col, kind: f.kind });
+    const addFinding = (f) => {
+      if (allow.pairs.has(`${relFromSrc}:${f.col}`)) return;
+      const sig = `${relFromSrc}:${f.type}:${f.col}`;
+      if (seen.has(sig)) return;
+      seen.add(sig);
+      findings.push({
+        file: relFromSrc,
+        type: f.type,
+        col: f.col,
+        kind: f.kind,
+        table: f.table,
+      });
+    };
+    // Analyse one handler at a time so SQL fragments spliced in via `${var}`
+    // (the `je."postingDate"` 500 class) are inlined ONLY into bodies from
+    // the same handler — see splitHandlerSlices for why file-wide inlining
+    // false-positives on reused names (`where`, alias `m`/`e`/`f`).
+    for (const slice of splitHandlerSlices(source)) {
+      const fragMap = collectSqlFragmentVars(slice);
+      for (const body of extractRawQueryBodies(slice)) {
+        for (const f of analyzeBody(body, tableColumns, fragMap)) addFinding(f);
       }
     }
   }
@@ -373,24 +530,48 @@ async function main() {
   );
 
   if (findings.length === 0) {
-    console.log("[check:sql-ambiguity] ✓ no ambiguous column references found.");
+    console.log(
+      "[check:sql-ambiguity] ✓ no ambiguous / missing qualified column references found.",
+    );
     process.exit(0);
   }
 
+  const ambiguous = findings.filter((f) => f.type === "ambiguous");
+  const missing = findings.filter((f) => f.type === "missing");
+
   console.error(
-    `\n[check:sql-ambiguity] ✗ ${findings.length} ambiguous column ` +
-      `reference(s) in multi-table SQL:\n`,
+    `\n[check:sql-ambiguity] ✗ ${findings.length} issue(s) in raw SQL ` +
+      `(${ambiguous.length} ambiguous, ${missing.length} missing column):\n`,
   );
-  for (const f of findings) {
+  if (ambiguous.length > 0) {
     console.error(
-      `  ${f.file}: bare ${f.kind} "${f.col}" in a JOIN/EXISTS where ` +
-        `"${f.col}" exists on 2+ relations — qualify it (alias."${f.col}").`,
+      "  Ambiguous column references (column exists on 2+ joined relations, used bare):",
     );
+    for (const f of ambiguous) {
+      console.error(
+        `    ${f.file}: bare ${f.kind} "${f.col}" in a JOIN/EXISTS — ` +
+          `qualify it (alias."${f.col}").`,
+      );
+    }
+    console.error("");
+  }
+  if (missing.length > 0) {
+    console.error(
+      '  Qualified references to a NON-EXISTENT column (the `column "x.y" does not exist` 500 class):',
+    );
+    for (const f of missing) {
+      console.error(
+        `    ${f.file}: "${f.col}" — table "${f.table}" has no such column.`,
+      );
+    }
+    console.error("");
   }
   console.error(
-    "\n  Fix: prefix each flagged column with its table alias. If a hit is\n" +
-      "  a genuine false positive, add it to scripts/sql-ambiguity-allowlist.txt\n" +
-      "  as `routes/<file>.ts:<col>` (paths relative to artifacts/api-server/src/).",
+    "  Fix: qualify ambiguous refs with their alias; correct or remove\n" +
+      "  references to columns that don't exist. If a hit is a genuine false\n" +
+      "  positive, add it to scripts/sql-ambiguity-allowlist.txt as\n" +
+      "  `routes/<file>.ts:<col>` (paths relative to artifacts/api-server/src/;\n" +
+      "  for a missing-column hit <col> is the full `alias.column`).",
   );
   process.exit(1);
 }
