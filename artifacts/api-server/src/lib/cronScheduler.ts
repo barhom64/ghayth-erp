@@ -23,6 +23,7 @@ import {
   currentYear,
   currentPeriod,
   roundTo2,
+  currentDateInTz,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
@@ -4114,6 +4115,147 @@ async function getRateLimitAlertRecipients(): Promise<RateLimitAdminRecipient[]>
   }
 }
 
+/**
+ * #2079 TA-T18-02 — materialise tomorrow's due route patterns for
+ * companies that opted into autoMaterialiseEnabled. Runs once a day
+ * at 06:30 Riyadh so the dispatcher walks into a day-+1 board already
+ * populated with draft bookings (one per pattern whose mask matches
+ * tomorrow's Riyadh weekday and whose activeFrom..activeUntil window
+ * contains tomorrow).
+ *
+ * Targets TOMORROW (not today) so an op who reviews the cron output
+ * still has business hours to reschedule, override, or cancel before
+ * the materialised bookings flip into dispatch the next morning.
+ *
+ * Idempotency: bookingNumber = `RP-{patternCode}-{YYYYMMDD}` and the
+ * (companyId, bookingNumber) UNIQUE constraint (migration 266) is the
+ * natural key. ON CONFLICT DO NOTHING. Re-running the cron the same
+ * day (manual trigger via /admin/cron/trigger) is a no-op.
+ *
+ * Boundary: NO JE / GL contact (transport rule). The created
+ * bookings are draft + bookingSource='recurring_schedule' just like
+ * the manual /materialise endpoint emits, so downstream behaviour is
+ * identical to the human-fired path.
+ */
+export async function materialiseDueRoutePatterns(): Promise<string> {
+  // Tomorrow in Riyadh — the cron's whole point. UTC math would fire
+  // for the wrong day for any company crossing midnight Asia/Riyadh.
+  const tomorrow = new Date(Date.now() + 86400000);
+  const tomorrowIso = currentDateInTz("Asia/Riyadh", tomorrow);
+  // Day-of-week (0=Sun..6=Sat) computed in Asia/Riyadh — matches the
+  // mask convention pinned in transport-route-patterns.ts.
+  const tomorrowDow = new Date(`${tomorrowIso}T12:00:00+03:00`).getUTCDay();
+
+  // Only patterns belonging to companies that explicitly opted in.
+  // The JOIN against transport_planning_settings is the gate — a
+  // company without a settings row OR with FALSE simply does not appear.
+  const patterns = await rawQueryShared<{
+    id: number;
+    companyId: number;
+    branchId: number | null;
+    patternCode: string;
+    daysOfWeekMask: number;
+    activeFrom: string | null;
+    activeUntil: string | null;
+    defaultCustomerId: number | null;
+    defaultContractId: number | null;
+    fromLocationId: number | null;
+    toLocationId: number | null;
+    fromLocationText: string | null;
+    toLocationText: string | null;
+    fromLocationKind: string | null;
+    toLocationKind: string | null;
+    fromLat: number | null;
+    fromLng: number | null;
+    toLat: number | null;
+    toLng: number | null;
+    defaultCargoWeight: number | null;
+    defaultCargoUnit: string | null;
+  }>(
+    `SELECT rp.id, rp."companyId", rp."branchId",
+            rp."patternCode", rp."daysOfWeekMask",
+            rp."activeFrom", rp."activeUntil",
+            rp."defaultCustomerId", rp."defaultContractId",
+            rp."fromLocationId", rp."toLocationId",
+            rp."fromLocationText", rp."toLocationText",
+            rp."fromLocationKind", rp."toLocationKind",
+            rp."fromLat", rp."fromLng", rp."toLat", rp."toLng",
+            rp."defaultCargoWeight", rp."defaultCargoUnit"
+       FROM transport_route_patterns rp
+       JOIN transport_planning_settings tps
+         ON tps."companyId" = rp."companyId"
+        AND tps."autoMaterialiseEnabled" = TRUE
+      WHERE rp."deletedAt" IS NULL
+        AND rp.status = 'active'
+        AND ((rp."daysOfWeekMask" >> $1) & 1) = 1
+        AND (rp."activeFrom"  IS NULL OR rp."activeFrom"  <= $2::date)
+        AND (rp."activeUntil" IS NULL OR rp."activeUntil" >= $2::date)`,
+    [tomorrowDow, tomorrowIso],
+  );
+
+  let created = 0;
+  let existed = 0;
+  let errors = 0;
+  const target = tomorrowIso;
+
+  for (const pattern of patterns) {
+    const bookingNumber = `RP-${pattern.patternCode}-${target.replace(/-/g, "")}`;
+    try {
+      const rows = await rawQueryShared<{ id: number; existed: boolean }>(
+        `WITH ins AS (
+           INSERT INTO transport_bookings
+             ("companyId", "branchId", "bookingNumber", "bookingSource", "transportServiceType",
+              "routePatternId", "tripFamily",
+              "customerId", "contractId",
+              "fromLocationId", "toLocationId",
+              "fromLocationText", "toLocationText",
+              "fromLocationKind", "toLocationKind",
+              "fromLat", "fromLng", "toLat", "toLng",
+              "requestedPickupDate",
+              "cargoWeight", "cargoUnit",
+              status, "createdBy")
+           VALUES ($1, $2, $3, 'recurring_schedule', 'cargo_load',
+                   $4, 'cargo',
+                   $5, $6,
+                   $7, $8, $9, $10,
+                   $11, $12,
+                   $13, $14, $15, $16,
+                   $17, $18, $19,
+                   'draft', NULL)
+           ON CONFLICT ("companyId", "bookingNumber") DO NOTHING
+           RETURNING id, FALSE AS existed
+         )
+         SELECT id, existed FROM ins
+         UNION ALL
+         SELECT id, TRUE AS existed
+           FROM transport_bookings
+          WHERE "companyId" = $1 AND "bookingNumber" = $3
+            AND NOT EXISTS (SELECT 1 FROM ins)
+         LIMIT 1`,
+        [
+          pattern.companyId, pattern.branchId, bookingNumber,
+          pattern.id, pattern.defaultCustomerId, pattern.defaultContractId,
+          pattern.fromLocationId, pattern.toLocationId,
+          pattern.fromLocationText, pattern.toLocationText,
+          pattern.fromLocationKind, pattern.toLocationKind,
+          pattern.fromLat, pattern.fromLng,
+          pattern.toLat, pattern.toLng,
+          target, pattern.defaultCargoWeight, pattern.defaultCargoUnit,
+        ],
+      );
+      const row = rows[0];
+      if (!row) continue;
+      if (row.existed) existed++;
+      else created++;
+    } catch (err) {
+      errors++;
+      logger.error({ err, patternId: pattern.id, bookingNumber }, "auto-materialise route pattern failed");
+    }
+  }
+
+  return `materialise_due_route_patterns: ${patterns.length} patterns scanned for ${tomorrowIso}, ${created} created, ${existed} existed, ${errors} errors`;
+}
+
 export async function rateLimitFallbackAlertCheck(): Promise<string> {
   const current = getRedisRateLimitStatus();
   const state = await loadRateLimitAlerterState();
@@ -4255,7 +4397,111 @@ async function partyRegistrySync(): Promise<string> {
   return `synced ${companies.length} companies · ${linked} new party link(s)`;
 }
 
+/** Lot expiry alerts (migration 173): for every active lot whose expiry
+ *  falls inside one of the warehouse's expiryAlertDays thresholds, insert one
+ *  lot_expiry_alerts row per (lot, threshold) — the UNIQUE constraint is the
+ *  idempotency gate — and notify the company manager. */
+export async function warehouseLotExpiryAlerts(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const due = await rawQuery<Record<string, any>>(
+      `SELECT l.id AS "lotId", l."lotNumber", l."expiryDate", p.name AS "productName",
+              t.threshold::int AS "thresholdDays",
+              (l."expiryDate" - CURRENT_DATE)::int AS "daysLeft"
+       FROM warehouse_stock_lots l
+       JOIN warehouse_products p ON p.id = l."productId"
+       JOIN warehouses w ON w.id = l."warehouseId" AND w."deletedAt" IS NULL
+       CROSS JOIN LATERAL jsonb_array_elements_text(w."expiryAlertDays") AS t(threshold)
+       WHERE l."companyId" = $1 AND l."deletedAt" IS NULL AND l.status = 'active'
+         AND l."expiryDate" IS NOT NULL
+         AND l."expiryDate" <= CURRENT_DATE + (t.threshold || ' days')::interval
+         AND l."expiryDate" >= CURRENT_DATE
+         AND NOT EXISTS (
+           SELECT 1 FROM lot_expiry_alerts a
+           WHERE a."lotId" = l.id AND a."thresholdDays" = t.threshold::int
+         )`,
+      [company.id]
+    );
+    const [mainBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId"=$1 AND status='active' ORDER BY id ASC LIMIT 1`,
+      [company.id]
+    );
+    for (const d of due) {
+      await rawExecute(
+        `INSERT INTO lot_expiry_alerts ("companyId","lotId","thresholdDays","expiryDate")
+         VALUES ($1,$2,$3,$4) ON CONFLICT ("lotId","thresholdDays") DO NOTHING`,
+        [company.id, d.lotId, d.thresholdDays, d.expiryDate]
+      );
+      const mgr = mainBranch
+        ? await getManagerAssignmentId(company.id, mainBranch.id).catch(() => null)
+        : null;
+      if (mgr) {
+        await createNotification({
+          companyId: company.id, assignmentId: mgr,
+          type: "warehouse", title: "دفعة تقترب من انتهاء الصلاحية",
+          body: `${d.productName} — دفعة ${d.lotNumber}: تنتهي خلال ${d.daysLeft} يوم`,
+          priority: Number(d.daysLeft) <= 30 ? "high" : "normal",
+          refType: "warehouse_stock_lots", refId: d.lotId,
+          actionUrl: "/warehouse/advanced",
+        }).catch((e) => logger.error(e, "[cron] lot expiry notification failed"));
+      }
+      alerted++;
+    }
+  }
+  return `lot expiry: ${alerted} alert(s) fired`;
+}
+
+/** Cycle-count plan scan: open a pending cycle count per plan once per
+ *  period window (weekly = ISO week, monthly = month, quarterly = quarter).
+ *  An existing count for the plan's warehouse inside the current window
+ *  means the plan already ran. */
+export async function warehouseCycleCountPlanScan(): Promise<string> {
+  const plans = await rawQuery<Record<string, any>>(
+    `SELECT pl.id, pl."companyId", pl."warehouseId", pl.period, pl."planType"
+     FROM warehouse_cycle_count_plans pl
+     JOIN warehouses w ON w.id = pl."warehouseId" AND w."deletedAt" IS NULL`,
+    []
+  );
+  let opened = 0;
+  for (const plan of plans) {
+    const trunc = plan.period === "weekly" ? "week" : plan.period === "quarterly" ? "quarter" : "month";
+    const [existing] = await rawQuery<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM warehouse_cycle_counts
+       WHERE "companyId"=$1 AND "warehouseId"=$2
+         AND date_trunc($3, "scheduledDate") = date_trunc($3, CURRENT_DATE)`,
+      [plan.companyId, plan.warehouseId, trunc]
+    );
+    if (Number(existing?.n ?? 0) > 0) continue;
+    const { createCycleCountWithSnapshot } = await import("../routes/warehouse-cycle-counts.js");
+    const countId = await createCycleCountWithSnapshot(
+      plan.companyId, plan.warehouseId, `فُتح تلقائياً من خطة الجرد #${plan.id} (${plan.period})`
+    );
+    const [mainBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId"=$1 AND status='active' ORDER BY id ASC LIMIT 1`,
+      [plan.companyId]
+    );
+    const mgr = mainBranch
+      ? await getManagerAssignmentId(plan.companyId, mainBranch.id).catch(() => null)
+      : null;
+    if (mgr) {
+      await createNotification({
+        companyId: plan.companyId, assignmentId: mgr,
+        type: "warehouse", title: "جرد دوري مجدول فُتح",
+        body: `فُتح الجرد الدوري #${countId} وفق خطة ${plan.period}`,
+        priority: "normal",
+        refType: "warehouse_cycle_counts", refId: countId,
+        actionUrl: "/warehouse/advanced",
+      }).catch((e) => logger.error(e, "[cron] cycle count plan notification failed"));
+    }
+    opened++;
+  }
+  return `cycle-count plans: ${opened} count(s) opened from ${plans.length} plan(s)`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
+  { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
   { name: "party_registry_sync", description: "مزامنة سجل الأطراف (Party) — ربط الكيانات الجديدة", schedule: "30 3 * * *", handler: partyRegistrySync },
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
@@ -4348,6 +4594,10 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
   { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
   { name: "pbx_stt_queue_drain", description: "تفريغ طابور تحويل التسجيلات إلى نصوص + توليد ملخّص AI", schedule: "*/2 * * * *", handler: pbxSttQueueDrain },
+  { name: "thread_snooze_wake", description: "تنبيه المستخدم بإعادة فتح المحادثات المؤجَّلة عند موعدها", schedule: "* * * * *", handler: threadSnoozeWake },
+  // #2079 TA-T18-02 — closes the misleading "by the daily cron" promise
+  // in transport-route-patterns.ts. 06:30 Riyadh = 03:30 UTC.
+  { name: "materialise_due_route_patterns", description: "تجسيد قوالب رحلات الحمولة المتكررة المستحقّة للغد (للشركات المفعّل لديها autoMaterialiseEnabled)", schedule: "30 3 * * *", handler: materialiseDueRoutePatterns },
 ];
 
 /**
@@ -4395,6 +4645,86 @@ async function pbxSttQueueDrain(): Promise<string> {
     }
   }
   return `processed=${processed} summarised=${summarised}`;
+}
+
+/**
+ * Wake due thread snoozes. Each tick picks up snoozes whose wakeAt has
+ * passed, marks them woken, and (when the snooze owner has an active
+ * employee assignment) drops a follow-up task into `tasks` so the
+ * operator gets a real reminder — not just an inbox row that silently
+ * reappears.
+ *
+ * Bounded at 200 rows/tick so a backlog can't blow up a single
+ * heartbeat; the next minute picks up anything left.
+ */
+async function threadSnoozeWake(): Promise<string> {
+  const due = await rawQuery<{
+    id: number; companyId: number; userId: number;
+    channel: string; peerAddress: string; reason: string | null;
+  }>(
+    `SELECT id, "companyId", "userId", channel, "peerAddress", reason
+       FROM thread_snoozes
+      WHERE "wokenAt" IS NULL AND "cancelledAt" IS NULL AND "wakeAt" <= NOW()
+      ORDER BY "wakeAt" ASC
+      LIMIT 200`,
+  );
+  if (due.length === 0) return "no due snoozes";
+
+  let tasksCreated = 0;
+  for (const s of due) {
+    try {
+      // Resolve the user's primary employee + assignment so the task
+      // lands in the right tenant scope. A user without an active
+      // assignment still gets the snooze woken (no orphan rows), the
+      // task just isn't created.
+      const [asn] = await rawQuery<{ employeeId: number; assignmentId: number; branchId: number | null }>(
+        `SELECT ea."employeeId" AS "employeeId", ea.id AS "assignmentId", ea."branchId"
+           FROM users u
+           JOIN employee_assignments ea
+             ON ea."employeeId" = u."employeeId" AND ea."companyId" = $1 AND ea.status = 'active'
+          WHERE u.id = $2
+          LIMIT 1`,
+        [s.companyId, s.userId],
+      );
+
+      if (asn) {
+        const title = `متابعة محادثة مع ${s.peerAddress}`;
+        const body = s.reason
+          ? `تذكير مجدول للمحادثة على قناة ${s.channel} — ${s.reason}`
+          : `تذكير مجدول للمحادثة على قناة ${s.channel}`;
+        await rawExecute(
+          `INSERT INTO tasks
+             ("companyId", "branchId", "assignedTo", "assignmentId",
+              type, "refType", "refId",
+              title, description, priority, status,
+              "autoGenerated", "createdBy", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4,
+                   'comms_followup', 'thread_snooze', $5,
+                   $6, $7, 'normal', 'pending',
+                   true, $3, NOW(), NOW())`,
+          [
+            s.companyId, asn.branchId, asn.employeeId, asn.assignmentId,
+            s.id, title, body,
+          ],
+        );
+        tasksCreated++;
+      }
+
+      await rawExecute(
+        `UPDATE thread_snoozes SET "wokenAt" = NOW() WHERE id = $1`,
+        [s.id],
+      );
+      emitEvent({
+        companyId: s.companyId, userId: s.userId,
+        action: "comms.thread.snooze_woken",
+        entity: "thread_snoozes", entityId: s.id,
+        details: JSON.stringify({ channel: s.channel, peerAddress: s.peerAddress }),
+      }).catch((e) => logger.warn(e, "[event] thread.snooze_woken"));
+    } catch (err) {
+      logger.error(err, `[threadSnoozeWake] failed snooze ${s.id}`);
+    }
+  }
+  return `woken=${due.length} tasksCreated=${tasksCreated}`;
 }
 
 async function rbacV2ExpiredGrantsCleanup(): Promise<string> {

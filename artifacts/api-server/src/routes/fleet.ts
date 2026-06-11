@@ -856,6 +856,135 @@ router.post("/me/cargo/:id/advance", authorize({ feature: "fleet.cargo.my", acti
   } catch (err) { handleRouteError(err, res, "Driver cargo-advance error:"); }
 });
 
+// ─── TR-016 — cargo driver operational checkpoints ──────────────────
+// Per-trip log of WITHIN-step events (weighbridge stop, rest break,
+// inspection, customs, unloading milestones). They do NOT change the
+// manifest's 7-state lifecycle — that machine still belongs to
+// /me/cargo/:id/advance. Checkpoints are free-form chronological
+// facts that the dispatcher renders on the cargo timeline.
+//
+// Driver-side gating:
+//   - status MUST be one of the driver-controlled states
+//     (driver_accepted .. delivered). A checkpoint on a draft or
+//     closed manifest is rejected.
+//   - recordedBy is FORCED to the auth scope's userId — a driver
+//     can't backdate a peer's checkpoint via the API.
+const CARGO_CHECKPOINT_TYPES = [
+  "loading_start", "loading_complete",
+  "weighing", "rest_break", "inspection",
+  "customs", "fueling",
+  "unloading_start", "unloading_complete",
+  "other",
+] as const;
+
+const CARGO_DRIVER_CHECKPOINT_OPEN_STATES = [
+  "driver_accepted", "trip_started", "arrived_pickup",
+  "loaded", "in_transit", "arrived_delivery", "delivered",
+];
+
+const createCheckpointSchema = z.object({
+  checkpointType: z.enum(CARGO_CHECKPOINT_TYPES),
+  notes: z.string().max(1000).optional(),
+  latitude:  z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
+  measuredValue: z.coerce.number().nonnegative().optional(),
+  measuredUnit:  z.string().max(16).optional(),
+  recordedAt: z.string().optional(),
+});
+
+router.post("/me/cargo/:id/checkpoint", authorize({ feature: "fleet.cargo.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(createCheckpointSchema.safeParse(req.body));
+    const [manifest] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM cargo_manifests
+        WHERE id = $1 AND "driverId" = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [id, driver.id, scope.companyId],
+    );
+    if (!manifest) throw new NotFoundError("بوليصة الشحن غير موجودة");
+    if (!CARGO_DRIVER_CHECKPOINT_OPEN_STATES.includes(manifest.status)) {
+      throw new ConflictError(
+        `لا يمكن تسجيل نقطة تشغيل على بوليصة في حالة ${manifest.status}`,
+      );
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO cargo_manifest_checkpoints
+         ("companyId", "manifestId", "checkpointType", notes,
+          latitude, longitude, "measuredValue", "measuredUnit",
+          "recordedBy", "recordedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, NOW()))`,
+      [
+        scope.companyId, id, b.checkpointType, b.notes ?? null,
+        b.latitude ?? null, b.longitude ?? null,
+        b.measuredValue ?? null, b.measuredUnit ?? null,
+        scope.userId, b.recordedAt ?? null,
+      ],
+    );
+    assertInsert(insertId, "cargo_manifest_checkpoints");
+    void emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.cargo.checkpoint_recorded",
+      entity: "cargo_manifest_checkpoints", entityId: insertId,
+      details: JSON.stringify({
+        manifestId: id, checkpointType: b.checkpointType,
+        measuredValue: b.measuredValue ?? null, measuredUnit: b.measuredUnit ?? null,
+      }),
+    });
+    res.status(201).json({ data: { id: insertId } });
+  } catch (err) { handleRouteError(err, res, "Cargo checkpoint create error:"); }
+});
+
+router.get("/me/cargo/:id/checkpoints", authorize({ feature: "fleet.cargo.my", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) { res.json({ data: [] }); return; }
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT c.id, c."checkpointType", c.notes, c.latitude, c.longitude,
+              c."measuredValue", c."measuredUnit",
+              c."recordedBy", c."recordedAt", c."createdAt"
+         FROM cargo_manifest_checkpoints c
+         JOIN cargo_manifests m
+           ON m.id = c."manifestId"
+          AND m."companyId" = c."companyId"
+          AND m."driverId" = $1
+          AND m."deletedAt" IS NULL
+        WHERE c."manifestId" = $2 AND c."companyId" = $3
+        ORDER BY c."recordedAt" ASC`,
+      [driver.id, id, scope.companyId],
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Driver cargo checkpoints list error:"); }
+});
+
+// Dispatcher / ops view — every checkpoint on a given manifest,
+// regardless of who recorded it. Gated on fleet.cargo so a regular
+// dispatcher (not the driver-self role) can see the timeline on the
+// cargo detail page.
+router.get("/cargo/manifests/:id/checkpoints", authorize({ feature: "fleet.cargo", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery(
+      `SELECT c.id, c."checkpointType", c.notes, c.latitude, c.longitude,
+              c."measuredValue", c."measuredUnit",
+              c."recordedBy", c."recordedAt", c."createdAt"
+         FROM cargo_manifest_checkpoints c
+         JOIN cargo_manifests m
+           ON m.id = c."manifestId" AND m."companyId" = c."companyId"
+        WHERE c."manifestId" = $1 AND c."companyId" = $2
+          AND m."deletedAt" IS NULL
+        ORDER BY c."recordedAt" ASC`,
+      [id, scope.companyId],
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Cargo checkpoints list error:"); }
+});
+
 router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1530,7 +1659,7 @@ router.get("/trips", authorize({ feature: "fleet.trips", action: "list" }), asyn
     const scope = req.scope!;
     const { status, search, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 't."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 't."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
@@ -2174,7 +2303,7 @@ router.get("/maintenance", authorize({ feature: "fleet.maintenance", action: "li
     const scope = req.scope!;
     const { vehicleId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'm."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'm."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND m."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
@@ -2752,7 +2881,7 @@ router.get("/fuel-logs", authorize({ feature: "fleet.trips", action: "list" }), 
     const scope = req.scope!;
     const { vehicleId, search, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'f."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'f."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND f."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }
@@ -2922,7 +3051,7 @@ router.get("/insurance", authorize({ feature: "fleet.vehicles", action: "list" }
     const scope = req.scope!;
     const { vehicleId } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'i."branchId"', enforceBranchScope: true });
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'i."companyId"', branchColumn: 'v."branchId"', enforceBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (vehicleId) { where += ` AND i."vehicleId" = $${paramIdx}`; params.push(Number(vehicleId) || 0); paramIdx++; }

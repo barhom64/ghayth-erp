@@ -340,6 +340,21 @@ export async function resolveDocumentAllocations(
  * those are already recorded on the source line itself.
  */
 export async function writeAllocationResult(input: AllocationInput, result: AllocationResult, actorAssignmentId?: number): Promise<void> {
+  // #1945 hardening — this audit write is best-effort by design (the catch
+  // below), but when it runs INSIDE a caller's transaction (e.g. the invoice
+  // approval flow) a failed INSERT used to leave that transaction ABORTED:
+  // the error was swallowed here, then the caller's NEXT statement blew up
+  // with «current transaction is aborted» — which is exactly how the missing
+  // id-sequence drift (fixed by migration 291) turned every invoice approval
+  // into a 500. Guard the INSERT with a SAVEPOINT so a failure rolls back
+  // only this statement, never the caller's transaction. Outside a
+  // transaction the SAVEPOINT itself fails — harmless, because autocommit
+  // already isolates the failed INSERT.
+  let sp = false;
+  try {
+    await rawQuery("SAVEPOINT wa_alloc_result", []);
+    sp = true;
+  } catch { /* not inside a transaction — autocommit isolation suffices */ }
   try {
     await rawExecute(
       `INSERT INTO accounting_allocation_results (
@@ -387,7 +402,9 @@ export async function writeAllocationResult(input: AllocationInput, result: Allo
         JSON.stringify(result.dimensions),
       ]
     );
+    if (sp) await rawQuery("RELEASE SAVEPOINT wa_alloc_result", []).catch(() => {});
   } catch (err) {
+    if (sp) await rawQuery("ROLLBACK TO SAVEPOINT wa_alloc_result", []).catch(() => {});
     logger.error({ err, input }, "[accountingAllocation] writeResult failed");
   }
 }
@@ -596,4 +613,40 @@ function checkRequiredEntity(entityType: string | null, dims: Required<NonNullab
     case "supplier":     return dims.vendorId  ? null : "vendorId";
   }
   return null;
+}
+
+// ── #1945 item 6 — خريطة إيراد المنتج ────────────────────────────────────
+// Map productId → the product's mapped revenue account code
+// (products."defaultRevenueAccountId", migration 203). Consulted by the
+// sales-invoice approval + preview-posting paths for lines whose resolver
+// produced no account (no manual pin, no allocation rule) BEFORE falling
+// back to the generic company-level invoice_revenue — so each product line
+// posts to ITS revenue account with its productId dim, and the preview
+// matches what approval will post. Defensive: only postable accounts of
+// type 'revenue' qualify; a misconfigured product (e.g. pointing at an
+// expense or a header account) is skipped and the caller's generic
+// fallback applies — never a wrong-side posting.
+export async function getProductRevenueCodes(
+  companyId: number,
+  productIds: number[],
+): Promise<Map<number, string>> {
+  const map = new Map<number, string>();
+  const ids = [...new Set(productIds.filter((id) => Number.isInteger(id) && id > 0))];
+  if (ids.length === 0) return map;
+  const rows = await rawQuery<{ id: number; code: string; type: string }>(
+    `SELECT p.id, coa.code, coa.type
+       FROM products p
+       JOIN chart_of_accounts coa
+         ON coa.id = p."defaultRevenueAccountId"
+        AND coa."companyId" = p."companyId"
+        AND coa."deletedAt" IS NULL
+        AND coa."allowPosting" = true
+      WHERE p."companyId" = $1 AND p.id = ANY($2::int[])
+        AND p."defaultRevenueAccountId" IS NOT NULL`,
+    [companyId, ids],
+  );
+  for (const r of rows) {
+    if (r.type === "revenue") map.set(Number(r.id), r.code);
+  }
+  return map;
 }

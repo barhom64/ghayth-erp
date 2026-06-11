@@ -246,32 +246,47 @@ router.get("/threads", authorize({ feature: "communications", action: "list" }),
     // API change. The view's fromAddress/toAddress columns are wider
     // (varchar(300) vs the legacy varchar(20)) so future email-address
     // peer keys work without truncation.
+    // Append the current userId so the unread-count subquery can
+    // LEFT JOIN against the per-user read state without a separate
+    // round-trip. message_read_state only has rows for *read* messages,
+    // so COUNT(... mrs IS NULL) = unread inbound for this user.
+    params.push(req.scope!.userId);
+    const userIdx = params.length;
+
     const rows = await rawQuery(
       `WITH peer AS (
-         SELECT id, channel, direction,
-                COALESCE(NULLIF("fromAddress",''), "toAddress") AS peer_addr,
-                "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
-                subject, body, status, folder, "isStarred",
-                "relatedType", "relatedId", "createdAt",
+         SELECT v.id, v.channel, v.direction,
+                COALESCE(NULLIF(v."fromAddress",''), v."toAddress") AS peer_addr,
+                v."fromAddress" AS "fromNumber", v."toAddress" AS "toNumber",
+                v.subject, v.body, v.status, v.folder, v."isStarred",
+                v."relatedType", v."relatedId", v."createdAt",
+                CASE WHEN v.direction = 'inbound' AND mrs."messageLogId" IS NULL
+                     THEN 1 ELSE 0 END AS is_unread,
                 ROW_NUMBER() OVER (
-                  PARTITION BY channel, COALESCE(NULLIF("fromAddress",''), "toAddress")
-                  ORDER BY "createdAt" DESC
+                  PARTITION BY v.channel, COALESCE(NULLIF(v."fromAddress",''), v."toAddress")
+                  ORDER BY v."createdAt" DESC
                 ) AS rn,
                 COUNT(*) OVER (
-                  PARTITION BY channel, COALESCE(NULLIF("fromAddress",''), "toAddress")
+                  PARTITION BY v.channel, COALESCE(NULLIF(v."fromAddress",''), v."toAddress")
                 ) AS total_messages,
-                COUNT(*) FILTER (WHERE direction = 'inbound') OVER (
-                  PARTITION BY channel, COALESCE(NULLIF("fromAddress",''), "toAddress")
-                ) AS inbound_count
-           FROM v_message_log_all
-          WHERE "companyId" = $1 AND "deletedAt" IS NULL
+                COUNT(*) FILTER (WHERE v.direction = 'inbound') OVER (
+                  PARTITION BY v.channel, COALESCE(NULLIF(v."fromAddress",''), v."toAddress")
+                ) AS inbound_count,
+                SUM(CASE WHEN v.direction = 'inbound' AND mrs."messageLogId" IS NULL
+                         THEN 1 ELSE 0 END) OVER (
+                  PARTITION BY v.channel, COALESCE(NULLIF(v."fromAddress",''), v."toAddress")
+                ) AS unread_count
+           FROM v_message_log_all v
+           LEFT JOIN message_read_state mrs
+             ON mrs."messageLogId" = v.id AND mrs."userId" = $${userIdx}
+          WHERE v."companyId" = $1 AND v."deletedAt" IS NULL
             ${channelCond}${folderCond}${relatedCond}
        )
        SELECT id, channel, direction, peer_addr AS peer, "fromNumber", "toNumber",
               subject, LEFT(body, 300) AS body_preview, status,
               folder, "isStarred",
               "relatedType", "relatedId", "createdAt",
-              total_messages, inbound_count
+              total_messages, inbound_count, unread_count
          FROM peer
         WHERE rn = 1 AND peer_addr IS NOT NULL
         ORDER BY "createdAt" DESC
@@ -369,21 +384,27 @@ router.get("/threads/:channel/:address", authorize({ feature: "communications", 
     // Phase 4 contract step: read from v_message_log_all + alias the
     // unified column names back to fromNumber/toNumber so the frontend
     // sees no shape change. See /threads (above) for the rationale.
+    // LEFT JOIN message_read_state so the response carries an isRead
+    // bit per message — frontend renders unread chips inside the thread.
     const rows = await rawQuery(
-      `SELECT id, channel, direction,
-              "fromAddress" AS "fromNumber", "toAddress" AS "toNumber",
-              subject, body, status, "relatedType", "relatedId", "createdAt"
-         FROM v_message_log_all
-        WHERE "companyId" = $1
-          AND channel = $2
-          AND "deletedAt" IS NULL
+      `SELECT v.id, v.channel, v.direction,
+              v."fromAddress" AS "fromNumber", v."toAddress" AS "toNumber",
+              v.subject, v.body, v.status, v."relatedType", v."relatedId", v."createdAt",
+              (v.direction = 'outbound' OR mrs."messageLogId" IS NOT NULL) AS "isRead",
+              mrs."readAt"
+         FROM v_message_log_all v
+         LEFT JOIN message_read_state mrs
+           ON mrs."messageLogId" = v.id AND mrs."userId" = $4
+        WHERE v."companyId" = $1
+          AND v.channel = $2
+          AND v."deletedAt" IS NULL
           AND (
-            COALESCE(NULLIF("fromAddress",''), '') = $3
-            OR COALESCE(NULLIF("toAddress",''), '') = $3
+            COALESCE(NULLIF(v."fromAddress",''), '') = $3
+            OR COALESCE(NULLIF(v."toAddress",''), '') = $3
           )
-        ORDER BY "createdAt" ASC
+        ORDER BY v."createdAt" ASC
         LIMIT 500`,
-      [cid, channel, address],
+      [cid, channel, address, req.scope!.userId],
     );
     res.json(maskFields(req, { data: rows, total: rows.length, peer: address, channel }));
   } catch (err) {
@@ -808,6 +829,115 @@ router.post("/messages/:id/star", authorize({ feature: "communications", action:
   }
 });
 
+// ─────────────────────── Read state (per-user) ────────────────────────────
+
+/**
+ * POST /inbox/messages/:id/read — mark a single inbound message as
+ * read by the current user. Idempotent: repeated calls just bump
+ * readAt. Outbound rows are no-op (already known to the sender) but
+ * we still 200 so the frontend can call it indiscriminately.
+ *
+ * Read state is per-user — see migration 265 for the rationale.
+ */
+router.post("/messages/:id/read", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [msg] = await rawQuery<{ direction: string }>(
+      `SELECT direction FROM message_log
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!msg) throw new NotFoundError("الرسالة غير موجودة");
+    if (msg.direction !== "inbound") {
+      res.json({ ok: true, skipped: "outbound" });
+      return;
+    }
+    await rawExecute(
+      `INSERT INTO message_read_state ("messageLogId", "userId", "companyId", "readAt")
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT ("messageLogId", "userId") DO UPDATE SET "readAt" = NOW()`,
+      [id, scope.userId, scope.companyId],
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/messages/read");
+  }
+});
+
+/**
+ * POST /inbox/threads/:channel/:address/read — bulk-mark every inbound
+ * message in a thread as read by the current user. Called by the
+ * frontend when the user opens a thread, so a multi-message
+ * conversation drops the unread badge in one round-trip instead of N.
+ */
+router.post("/threads/:channel/:address/read", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = String(req.params.channel);
+    const address = String(req.params.address);
+    if (!["email", "whatsapp", "sms"].includes(channel)) {
+      throw new ValidationError("قناة غير مدعومة");
+    }
+    // INSERT … SELECT only inbound rows of the thread that the user
+    // hasn't already marked. ON CONFLICT is a safety net for races
+    // between two tabs of the same user.
+    const { affectedRows } = await rawExecute(
+      `INSERT INTO message_read_state ("messageLogId", "userId", "companyId", "readAt")
+       SELECT ml.id, $2, $3, NOW()
+         FROM message_log ml
+        WHERE ml."companyId" = $3
+          AND ml.channel = $1
+          AND ml.direction = 'inbound'
+          AND ml."deletedAt" IS NULL
+          AND (
+            COALESCE(NULLIF(ml."fromAddress",''), '') = $4
+            OR COALESCE(NULLIF(ml."toAddress",''), '') = $4
+          )
+       ON CONFLICT ("messageLogId", "userId") DO UPDATE SET "readAt" = NOW()`,
+      [channel, scope.userId, scope.companyId, address],
+    );
+    res.json({ ok: true, marked: affectedRows });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/threads/read");
+  }
+});
+
+/**
+ * GET /inbox/unread-count — total unread inbound messages for the
+ * current user, plus a per-channel breakdown so the sidebar can
+ * render a badge next to each channel filter. Drives the navbar
+ * inbox badge.
+ */
+router.get("/unread-count", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<{ channel: string; n: string }>(
+      `SELECT ml.channel, COUNT(*)::text AS n
+         FROM message_log ml
+         LEFT JOIN message_read_state mrs
+           ON mrs."messageLogId" = ml.id AND mrs."userId" = $2
+        WHERE ml."companyId" = $1
+          AND ml.direction = 'inbound'
+          AND ml."deletedAt" IS NULL
+          AND ml.folder NOT IN ('trash', 'spam', 'archive')
+          AND mrs."messageLogId" IS NULL
+        GROUP BY ml.channel`,
+      [scope.companyId, scope.userId],
+    );
+    const byChannel: Record<string, number> = {};
+    let total = 0;
+    for (const r of rows) {
+      const n = Number(r.n);
+      byChannel[r.channel] = n;
+      total += n;
+    }
+    res.json({ total, byChannel });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/unread-count");
+  }
+});
+
 // ─────────────────────── Drafts ───────────────────────────────────────────
 
 const draftSchema = z.object({
@@ -1102,6 +1232,115 @@ router.get("/folder-counts", authorize({ feature: "communications", action: "lis
     res.json(maskFields(req, counts));
   } catch (err) {
     handleRouteError(err, res, "inbox/folder-counts");
+  }
+});
+
+// ─────────────────────── Thread snooze (follow-up reminders) ─────────────
+
+const snoozeCreateSchema = z.object({
+  wakeAt: z.string().datetime({ offset: true }),
+  reason: z.string().max(300).optional().nullable(),
+});
+
+/**
+ * POST /inbox/threads/:channel/:address/snooze — snooze a thread
+ * until wakeAt for the current user. Hides the thread from the
+ * default inbox view and queues a follow-up task to fire at wakeAt
+ * via the thread_snooze_wake cron worker.
+ *
+ * Idempotent: posting again for the same (user, thread) replaces the
+ * existing active snooze rather than stacking. Matches the unique
+ * partial index on (companyId, userId, channel, peerAddress) WHERE
+ * wokenAt IS NULL AND cancelledAt IS NULL.
+ */
+router.post("/threads/:channel/:address/snooze", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = String(req.params.channel);
+    const address = String(req.params.address);
+    if (!["email", "whatsapp", "sms", "pbx"].includes(channel)) {
+      throw new ValidationError("قناة غير مدعومة");
+    }
+    const body = zodParse(snoozeCreateSchema.safeParse(req.body));
+    const wake = new Date(body.wakeAt);
+    if (Number.isNaN(wake.getTime())) {
+      throw new ValidationError("صيغة وقت التنبيه غير صحيحة", { field: "wakeAt" });
+    }
+    // 60s margin so a "snooze for 30 seconds" request can't fire before
+    // the POST round-trips — UI presets start at 1h anyway.
+    if (wake.getTime() < Date.now() + 60_000) {
+      throw new ValidationError("وقت التنبيه قريب جدًا — اختر وقتًا أبعد", { field: "wakeAt" });
+    }
+    // Replace any existing active snooze on the same thread for this
+    // user via INSERT … ON CONFLICT against the partial unique index.
+    const [row] = await rawQuery<{ id: number }>(
+      `INSERT INTO thread_snoozes ("companyId", "userId", channel, "peerAddress", "wakeAt", reason)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT ("companyId", "userId", channel, "peerAddress")
+         WHERE "wokenAt" IS NULL AND "cancelledAt" IS NULL
+       DO UPDATE SET "wakeAt" = EXCLUDED."wakeAt",
+                     reason   = EXCLUDED.reason,
+                     "snoozedAt" = NOW()
+       RETURNING id`,
+      [scope.companyId, scope.userId, channel, address, wake.toISOString(), body.reason ?? null],
+    );
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "thread_snoozes", entityId: row.id,
+      after: { channel, peerAddress: address, wakeAt: wake.toISOString() },
+    }).catch((e) => logger.warn(e, "[audit] thread.snooze.create"));
+    res.status(201).json({ id: row.id, wakeAt: wake.toISOString() });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/threads/snooze/create");
+  }
+});
+
+/**
+ * DELETE /inbox/threads/:channel/:address/snooze — un-snooze the
+ * current user's active snooze on a thread. No-op if there isn't
+ * one. Returns the cancelled-row id so the frontend can update
+ * its cached state.
+ */
+router.delete("/threads/:channel/:address/snooze", authorize({ feature: "communications", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const channel = String(req.params.channel);
+    const address = String(req.params.address);
+    const rows = await rawQuery<{ id: number }>(
+      `UPDATE thread_snoozes SET "cancelledAt" = NOW()
+        WHERE "companyId" = $1 AND "userId" = $2
+          AND channel = $3 AND "peerAddress" = $4
+          AND "wokenAt" IS NULL AND "cancelledAt" IS NULL
+        RETURNING id`,
+      [scope.companyId, scope.userId, channel, address],
+    );
+    res.json({ ok: true, cancelledId: rows[0]?.id ?? null });
+  } catch (err) {
+    handleRouteError(err, res, "inbox/threads/snooze/cancel");
+  }
+});
+
+/**
+ * GET /inbox/snoozed — list the current user's currently-snoozed
+ * threads. Ordered by wakeAt so "what's coming back next" sits on
+ * top. Frontend renders a dedicated "مؤجَّلة" folder driven by this.
+ */
+router.get("/snoozed", authorize({ feature: "communications", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery(
+      `SELECT s.id, s.channel, s."peerAddress" AS peer, s."wakeAt",
+              s."snoozedAt", s.reason
+         FROM thread_snoozes s
+        WHERE s."companyId" = $1 AND s."userId" = $2
+          AND s."wokenAt" IS NULL AND s."cancelledAt" IS NULL
+        ORDER BY s."wakeAt" ASC
+        LIMIT 100`,
+      [scope.companyId, scope.userId],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "inbox/snoozed");
   }
 });
 

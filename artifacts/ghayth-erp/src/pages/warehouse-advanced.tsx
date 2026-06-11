@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useApiQuery, apiFetch, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { ProductSelect } from "@/components/shared/product-select";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -61,6 +62,9 @@ export default function WarehouseAdvancedPage() {
 function CycleCountsTab() {
   const { toast } = useToast();
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Per-line counted-quantity edits keyed by productId, sent in one
+  // POST /record batch. Cleared whenever the selection changes.
+  const [counts, setCounts] = useState<Record<number, string>>({});
 
   const listQ = useApiQuery<{ data: any[] }>(
     ["warehouse-cycle-counts"],
@@ -79,6 +83,9 @@ function CycleCountsTab() {
     selectedId ? `/warehouse/cycle-counts/${selectedId}` : null,
     !!selectedId,
   );
+  const detail = detailQ.data ?? {};
+  const lines: any[] = detail.items ?? [];
+  const status: string = detail.status ?? "";
 
   const createMut = useApiMutation<unknown, { planId?: number; warehouseId?: number }>(
     "/warehouse/cycle-counts",
@@ -87,11 +94,34 @@ function CycleCountsTab() {
     { successMessage: "تم إنشاء عملية الجرد" },
   );
 
-  const action = async (id: number, kind: "approve" | "submit" | "post" | "record") => {
+  const refreshAll = () => { listQ.refetch(); detailQ.refetch(); };
+
+  const saveCounts = async () => {
+    const payload = Object.entries(counts)
+      .filter(([, v]) => v !== "")
+      .map(([pid, v]) => ({ productId: Number(pid), countedQuantity: Number(v) }));
+    if (payload.length === 0) {
+      toast({ variant: "destructive", title: "أدخل كمية معدودة واحدة على الأقل" });
+      return;
+    }
+    try {
+      await apiFetch(`/warehouse/cycle-counts/${selectedId}/record`, {
+        method: "POST",
+        body: JSON.stringify({ items: payload }),
+      });
+      toast({ title: `سُجّل العدّ (${payload.length} سطر)` });
+      setCounts({});
+      refreshAll();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل تسجيل العدّ", description: err?.message });
+    }
+  };
+
+  const action = async (id: number, kind: "approve" | "submit" | "post") => {
     try {
       await apiFetch(`/warehouse/cycle-counts/${id}/${kind}`, { method: "POST" });
-      toast({ title: `تم تنفيذ "${kind}"` });
-      listQ.refetch();
+      toast({ title: kind === "submit" ? "قُدّمت للمراجعة" : kind === "approve" ? "اعتُمدت" : "رُحّلت الفروق" });
+      refreshAll();
     } catch (err: any) {
       toast({ variant: "destructive", title: "فشل التنفيذ", description: err?.message });
     }
@@ -172,26 +202,78 @@ function CycleCountsTab() {
             {detailQ.isLoading ? <LoadingSpinner /> : (
               <div className="space-y-3">
                 <div className="text-xs grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {Object.entries(detailQ.data ?? {}).filter(([, v]) => typeof v !== "object").map(([k, v]) => (
+                  {["status", "warehouseName", "scheduledDate", "notes"].map((k) => (
                     <div key={k} className="border rounded p-1.5">
                       <p className="text-muted-foreground text-[10px]">{k}</p>
-                      <p className="font-mono">{v == null ? "—" : String(v)}</p>
+                      <p className="font-mono">{detail[k] == null ? "—" : String(detail[k])}</p>
                     </div>
                   ))}
                 </div>
+
+                {/* Per-line counting editor — editable in pending/in_progress;
+                    read-only afterwards. variance/JE stamps show post-trail. */}
+                <div className="border rounded overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-surface-subtle">
+                      <tr>
+                        <th className="p-2 text-start">الصنف</th>
+                        <th className="p-2">رصيد النظام</th>
+                        <th className="p-2">الكمية المعدودة</th>
+                        <th className="p-2">الفرق</th>
+                        <th className="p-2">قيد التسوية</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map((l: any) => (
+                        <tr key={l.id} className="border-t">
+                          <td className="p-2">{l.productName}{l.sku ? ` · ${l.sku}` : ""}</td>
+                          <td className="p-2 text-center font-mono">{Number(l.systemQuantity)}</td>
+                          <td className="p-2 text-center">
+                            {["pending", "in_progress"].includes(status) ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                className="h-7 w-24 mx-auto text-center"
+                                value={counts[l.productId] ?? (l.countedQuantity == null ? "" : String(Number(l.countedQuantity)))}
+                                onChange={(e) => setCounts((c) => ({ ...c, [l.productId]: e.target.value }))}
+                              />
+                            ) : (
+                              <span className="font-mono">{l.countedQuantity == null ? "—" : Number(l.countedQuantity)}</span>
+                            )}
+                          </td>
+                          <td className="p-2 text-center font-mono">
+                            {l.countedQuantity == null ? "—" : Number(l.variance)}
+                          </td>
+                          <td className="p-2 text-center font-mono text-[10px]">
+                            {l.adjustmentJournalEntryId ? `JE#${l.adjustmentJournalEntryId}` : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
                 <div className="flex flex-wrap gap-2 pt-2 border-t">
-                  {(["record", "submit", "approve", "post"] as const).map((k) => (
-                    <GuardedButton
-                      key={k}
-                      perm="warehouse:update"
-                      variant="outline"
-                      size="sm"
-                      rateLimitAware
-                      onClick={() => action(selectedId, k)}
-                    >
-                      {k === "record" ? "تسجيل" : k === "submit" ? "تقديم" : k === "approve" ? "اعتماد" : "ترحيل"}
+                  {["pending", "in_progress"].includes(status) && (
+                    <GuardedButton perm="warehouse:update" size="sm" rateLimitAware onClick={saveCounts}>
+                      حفظ العدّ
                     </GuardedButton>
-                  ))}
+                  )}
+                  {status === "in_progress" && (
+                    <GuardedButton perm="warehouse:update" variant="outline" size="sm" rateLimitAware onClick={() => action(selectedId, "submit")}>
+                      تقديم للمراجعة
+                    </GuardedButton>
+                  )}
+                  {status === "reviewed" && (
+                    <GuardedButton perm="warehouse:approve" variant="outline" size="sm" rateLimitAware onClick={() => action(selectedId, "approve")}>
+                      اعتماد
+                    </GuardedButton>
+                  )}
+                  {status === "approved" && (
+                    <GuardedButton perm="warehouse:approve" variant="outline" size="sm" rateLimitAware onClick={() => action(selectedId, "post")}>
+                      ترحيل الفروق
+                    </GuardedButton>
+                  )}
                 </div>
               </div>
             )}
@@ -206,13 +288,15 @@ function LotsTab() {
   const { toast } = useToast();
   const listQ = useApiQuery<{ data: any[] }>(["warehouse-lots"], "/warehouse/lots");
   const lots: any[] = listQ.data?.data ?? [];
-  const createMut = useApiMutation<unknown, { productId?: number; lotNumber?: string }>(
+  const createMut = useApiMutation<unknown, { productId: number; lotNumber: string; quantity?: number }>(
     "/warehouse/lots",
     "POST",
     [["warehouse-lots"]],
     { successMessage: "تم إنشاء الدفعة" },
   );
   const [newLot, setNewLot] = useState("");
+  const [lotProductId, setLotProductId] = useState("");
+  const [lotQty, setLotQty] = useState("");
 
   const action = async (id: number, kind: "qc-approve" | "qc-reject" | "recall") => {
     try {
@@ -233,19 +317,31 @@ function LotsTab() {
         <CardTitle className="text-sm">دفعات الإنتاج ({lots.length})</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+          <ProductSelect value={lotProductId} onChange={(id) => setLotProductId(id)} stockableOnly placeholder="الصنف" />
           <Input
             value={newLot}
             onChange={(e) => setNewLot(e.target.value)}
             placeholder="رقم الدفعة الجديد"
             className="h-8 text-xs"
           />
+          <Input
+            type="number"
+            min={0}
+            value={lotQty}
+            onChange={(e) => setLotQty(e.target.value)}
+            placeholder="الكمية"
+            className="h-8 text-xs"
+          />
           <GuardedButton
             perm="warehouse:create"
             size="sm"
             rateLimitAware
-            disabled={!newLot || createMut.isPending}
-            onClick={() => { createMut.mutate({ lotNumber: newLot }); setNewLot(""); }}
+            disabled={!newLot || !lotProductId || createMut.isPending}
+            onClick={() => {
+              createMut.mutate({ productId: Number(lotProductId), lotNumber: newLot, quantity: lotQty ? Number(lotQty) : 0 });
+              setNewLot(""); setLotQty("");
+            }}
           >
             إضافة
           </GuardedButton>
@@ -288,13 +384,14 @@ function SerialsTab() {
     selectedSerial ? `/warehouse/serials/${selectedSerial}` : null,
     !!selectedSerial,
   );
-  const createMut = useApiMutation<unknown, { serialNumber: string; productId?: number }>(
+  const createMut = useApiMutation<unknown, { serialNumber: string; productId: number }>(
     "/warehouse/serials",
     "POST",
     [["warehouse-serials"]],
     { successMessage: "تم إنشاء التسلسل" },
   );
   const [newSerial, setNewSerial] = useState("");
+  const [serialProductId, setSerialProductId] = useState("");
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -303,7 +400,8 @@ function SerialsTab() {
           <CardTitle className="text-sm">التسلسلات ({serials.length})</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+            <ProductSelect value={serialProductId} onChange={(id) => setSerialProductId(id)} stockableOnly placeholder="الصنف" />
             <Input
               value={newSerial}
               onChange={(e) => setNewSerial(e.target.value)}
@@ -315,8 +413,8 @@ function SerialsTab() {
               perm="warehouse:create"
               size="sm"
               rateLimitAware
-              disabled={!newSerial || createMut.isPending}
-              onClick={() => { createMut.mutate({ serialNumber: newSerial }); setNewSerial(""); }}
+              disabled={!newSerial || !serialProductId || createMut.isPending}
+              onClick={() => { createMut.mutate({ serialNumber: newSerial, productId: Number(serialProductId) }); setNewSerial(""); }}
             >
               إضافة
             </GuardedButton>
