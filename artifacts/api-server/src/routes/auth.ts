@@ -173,6 +173,13 @@ const refreshLimiter = rateLimit({
   message: { error: "تم تجاوز الحد الأقصى لطلبات تحديث الرمز. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
   store: makeRateLimitStore("auth:refresh"),
+  // Same canonical e2e bypass as loginLimiter above: automated suites
+  // (Playwright, the 604-route runtime audit) walk pages far faster than a
+  // human and each expiry-triggered silent refresh counts against this
+  // per-IP cap — mid-run the whole walk bounced to /login. Non-production
+  // only; production traffic never carries the header.
+  skip: (req) =>
+    !config.isProduction && req.headers["x-e2e-test"] === "1",
 });
 
 const registerLimiter = rateLimit({

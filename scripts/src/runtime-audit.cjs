@@ -170,7 +170,7 @@ function loadRoutes() {
 async function login() {
   const r = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-E2E-Test": "1" },
     body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
   });
   if (!r.ok) throw new Error(`login failed ${r.status}`);
@@ -268,7 +268,7 @@ async function resolveParams(routePath, cookieHeader) {
   let id;
   try {
     const r = await fetch(`${BASE}${resolver}?limit=1`, {
-      headers: { Cookie: cookieHeader, "Accept-Language": "ar" },
+      headers: { Cookie: cookieHeader, "Accept-Language": "ar", "X-E2E-Test": "1" },
     });
     if (!r.ok) return { ok: false, reason: `${resolver} → ${r.status}` };
     const j = await r.json();
@@ -792,7 +792,7 @@ async function probe(page, routePath, resolvedUrl, cls) {
     browser = await puppeteer.launch(chromiumLaunchArgs);
     page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });
-    await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
+    await page.setExtraHTTPHeaders({ "Accept-Language": "ar", "X-E2E-Test": "1" });
   }
   await launchChromium();
   // seed cookie via in-page fetch (HttpOnly cookies don't round-trip via setCookie)
@@ -966,7 +966,7 @@ async function probe(page, routePath, resolvedUrl, cls) {
       try {
         page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 900 });
-        await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
+        await page.setExtraHTTPHeaders({ "Accept-Language": "ar", "X-E2E-Test": "1" });
         pageRecycleCount++;
         console.log(`[audit] page recycled (#${pageRecycleCount}) at routeIdx=${routeIdx}`);
       } catch (e) {
