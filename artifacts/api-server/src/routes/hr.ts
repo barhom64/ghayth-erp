@@ -3090,6 +3090,23 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       [scope.companyId]
     );
 
+    // Umrah commissions (راتب + عمولة): approved-and-unconsumed commission
+    // calculations for this period land on the payroll line as an earning.
+    // `payrollLineId IS NULL` + status='approved' is the exactly-once gate —
+    // a commission row is consumed by ONE run; once marked paid below it can
+    // never pay out again, and unapproved/rejected rows never pay at all.
+    const periodYear = Number(targetPeriod.slice(0, 4));
+    const periodMonth = Number(targetPeriod.slice(5, 7));
+    const commissionRows = await rawQuery<Record<string, unknown>>(
+      `SELECT cc.id, cc."employeeId", cc."finalAmount"
+       FROM employee_commission_calculations cc
+       WHERE cc."companyId" = $1 AND cc.year = $2 AND cc.month = $3
+         AND cc.status = 'approved' AND cc."payrollLineId" IS NULL
+         AND cc."deletedAt" IS NULL AND cc."finalAmount" > 0`,
+      [scope.companyId, periodYear, periodMonth]
+      // as-any-reason: justified-pragmatic - catch fallback preserves empty-result behavior (commission table may be absent on partial tenants)
+    ).catch((e) => { logger.error(e, "payroll commission query failed"); return [] as any[]; });
+
     const [lateDeductionRows, penaltyDeductionRows, violationRows, absenceRows, loanRows, hrLoanRows, overtimeRows, hrOtRows] = await Promise.all([
       rawQuery<Record<string, unknown>>(
         `SELECT "assignmentId", COALESCE(SUM(amount), 0) AS total
@@ -3188,6 +3205,18 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     for (const row of overtimeRows) overtimeMap.set(Number(row.assignmentId), Number(row.totalOvertimeMinutes ?? 0));
     const hrOtMap = new Map<number, number>();
     for (const row of hrOtRows) hrOtMap.set(Number(row.assignmentId), Number(row.otAmount ?? 0));
+    // Commission map keyed by EMPLOYEE id (commission calculations are
+    // person-level; the payroll line carries the assignment). Also keep the
+    // calculation ids per employee so consumption can stamp payrollLineId.
+    const commissionMap = new Map<number, number>();
+    const commissionIdsByEmployee = new Map<number, number[]>();
+    for (const row of commissionRows) {
+      const eId = Number(row.employeeId);
+      commissionMap.set(eId, (commissionMap.get(eId) ?? 0) + Number(row.finalAmount ?? 0));
+      const idsList = commissionIdsByEmployee.get(eId) ?? [];
+      idsList.push(Number(row.id));
+      commissionIdsByEmployee.set(eId, idsList);
+    }
 
     // ── Build per-assignment payroll lines (12 items each) ──
     let totalNet = 0;
@@ -3198,6 +3227,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       gross: number; gosiEmployee: number; gosiEmployer: number;
       lateDeduction: number; absenceDeduction: number; violationDeduction: number;
       loanDeduction: number; overtime: number; overtimeHours: number; net: number;
+      // Umrah commission earning consumed from approved
+      // employee_commission_calculations (راتب + عمولة).
+      commission: number;
       // ZATCA WHT amount per line — persisted on payroll_lines.whtAmount
       // and aggregated to a WHT-payable CR on the run JE.
       whtAmount: number;
@@ -3267,12 +3299,17 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
       // 0 if isNonResident=false). Computed on gross + overtime before
       // GOSI / other deductions, so the employer remits the WHT directly
       // and the employee's net pay drops by the WHT amount.
+      // Umrah commission — an earning on top of gross + overtime. Joins
+      // the WHT base (commission paid to a non-resident is remuneration
+      // under the same withholding rules).
+      const commission = roundTo2(commissionMap.get(Number(asn.employeeId)) ?? 0);
+
       const isNonResident = Boolean(asn.isNonResident);
       const whtRate = isNonResident && asn.whtRate != null ? Number(asn.whtRate) / 100 : 0;
-      const whtAmount = whtRate > 0 ? roundTo2((gross + overtime) * whtRate) : 0;
+      const whtAmount = whtRate > 0 ? roundTo2((gross + overtime + commission) * whtRate) : 0;
 
       const totalDeductions = lateDeduction + absenceDeduction + violationDeduction + loanDeduction + gosiEmployee + whtAmount;
-      const net = Math.max(0, roundTo2(gross + overtime - totalDeductions));
+      const net = Math.max(0, roundTo2(gross + overtime + commission - totalDeductions));
       totalNet += net;
 
       lines.push({
@@ -3280,6 +3317,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         basic, housingAllowance, transportAllowance, gross,
         gosiEmployee, gosiEmployer, lateDeduction, absenceDeduction,
         violationDeduction, loanDeduction, overtime, overtimeHours, net,
+        commission,
         whtAmount,
         departmentId: asn.departmentId != null ? Number(asn.departmentId) : null,
         branchId: asn.branchId != null ? Number(asn.branchId) : null,
@@ -3329,8 +3367,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         // Single bulk INSERT instead of one round-trip per employee.
         // whtAmount (migration 233) captured so ZATCA WHT filings can
         // reproduce per-employee withholding from payroll_lines without
-        // re-running the calc.
-        const COLS_PER_ROW = 17;
+        // re-running the calc. commission carries the umrah commission
+        // earning (راتب + عمولة) consumed from approved calculations.
+        const COLS_PER_ROW = 18;
         const valuesSql: string[] = [];
         const params: unknown[] = [];
         for (const l of lines) {
@@ -3342,14 +3381,38 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
             newRunId, l.assignmentId, l.employeeId, l.basic, l.housingAllowance, l.transportAllowance,
             l.gross, l.gosiEmployee, l.gosiEmployer, l.lateDeduction, l.absenceDeduction,
             l.violationDeduction, l.loanDeduction, l.overtime, l.overtimeHours, l.net,
-            l.whtAmount
+            l.whtAmount, l.commission
           );
         }
-        await client.query(
-          `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary","whtAmount")
-           VALUES ${valuesSql.join(",")}`,
+        const inserted = await client.query(
+          `INSERT INTO payroll_lines ("runId","assignmentId","employeeId",basic,"housingAllowance","transportAllowance","grossSalary",gosi,"gosiEmployer","lateDeduction","absenceDeduction","violationDeduction","loanDeduction","overtime","overtimeHours","netSalary","whtAmount",commission)
+           VALUES ${valuesSql.join(",")}
+           RETURNING id, "employeeId"`,
           params
         );
+
+        // Consume the commission calculations INSIDE the same transaction:
+        // status → 'paid' + payrollLineId stamped. The id is the gate —
+        // a row consumed here can never be picked up by a future run
+        // (the SELECT above filters payrollLineId IS NULL), and a
+        // rollback releases everything atomically.
+        if (commissionIdsByEmployee.size > 0) {
+          const lineIdByEmployee = new Map<number, number>();
+          for (const r of inserted.rows) {
+            lineIdByEmployee.set(Number(r.employeeId), Number(r.id));
+          }
+          for (const [eId, calcIds] of commissionIdsByEmployee) {
+            const lineId = lineIdByEmployee.get(eId);
+            if (!lineId) continue; // employee had no active assignment this run — leave for the next
+            await client.query(
+              `UPDATE employee_commission_calculations
+               SET status = 'paid', "payrollLineId" = $1, "updatedAt" = NOW()
+               WHERE id = ANY($2::int[]) AND "companyId" = $3
+                 AND status = 'approved' AND "payrollLineId" IS NULL`,
+              [lineId, calcIds, scope.companyId]
+            );
+          }
+        }
       }
 
       await client.query(
@@ -3437,6 +3500,9 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     // account (default 2330, configurable via accounting_mappings).
     const totalWht = roundTo2(lines.reduce((s, l) => s + l.whtAmount, 0));
     const totalBankPayoutNetOfWht = roundTo2(totalBankPayout - totalWht);
+    // Umrah commission total — the engine emits a dedicated DR on the
+    // commission-expense account (op payroll_commission_expense → 5240).
+    const totalCommission = roundTo2(lines.reduce((s, l) => s + l.commission, 0));
 
     try {
       const { hrEngine } = await import("../lib/engines/index.js");
@@ -3453,10 +3519,11 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
           totalGosiPayable,
           totalOtherDeductions,
           totalWht,
+          totalCommission,
           // Per-employee breakdown — the engine splits salary + OT +
-          // GOSI debit lines per employee with departmentId stamped
-          // on each, so payroll cost is dimensional. Liabilities stay
-          // aggregated.
+          // GOSI + commission debit lines per employee with departmentId
+          // stamped on each, so payroll cost is dimensional. Liabilities
+          // stay aggregated.
           breakdown: lines.map((l) => ({
             employeeId: l.employeeId,
             departmentId: l.departmentId,
@@ -3468,6 +3535,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
             overtime: l.overtime,
             gosiEmployer: l.gosiEmployer,
             whtAmount: l.whtAmount,
+            commission: l.commission,
           })),
         }
       );
