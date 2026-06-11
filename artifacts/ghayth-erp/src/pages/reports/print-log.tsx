@@ -227,7 +227,7 @@ export default function PrintLogPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-sm text-muted-foreground p-4 text-center">جارٍ التحميل…</div>
+            <div className="text-sm text-muted-foreground p-4 text-center">جاري التحميل…</div>
           ) : !data?.items?.length ? (
             <div className="text-sm text-muted-foreground p-4 text-center">لا توجد مطبوعات تطابق الفلاتر.</div>
           ) : (

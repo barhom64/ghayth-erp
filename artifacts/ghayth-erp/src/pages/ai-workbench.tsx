@@ -253,7 +253,7 @@ function TranslateTool() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ar">العربية</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="en">الإنجليزية</SelectItem>
                 </SelectContent>
               </Select>
               <Badge variant="outline" className="mt-2 text-xs">

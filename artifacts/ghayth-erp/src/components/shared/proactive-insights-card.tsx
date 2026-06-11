@@ -109,7 +109,7 @@ export function ProactiveInsightsCard() {
           <CardTitle className="text-base">ما يحتاج انتباهك</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">جارٍ التحميل…</p>
+          <p className="text-sm text-muted-foreground">جاري التحميل…</p>
         </CardContent>
       </Card>
     );

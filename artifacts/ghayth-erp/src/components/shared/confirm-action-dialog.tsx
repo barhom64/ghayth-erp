@@ -117,19 +117,19 @@ const VARIANT_STYLES: Record<ConfirmActionVariant, VariantStyles> = {
     Icon: AlertTriangle,
     iconClass: "text-status-error-foreground",
     buttonVariant: "destructive",
-    pendingLabel: "جارٍ التنفيذ…",
+    pendingLabel: "جاري التنفيذ…",
   },
   caution: {
     Icon: ShieldAlert,
     iconClass: "text-status-warning-foreground",
     buttonVariant: "default",
-    pendingLabel: "جارٍ التنفيذ…",
+    pendingLabel: "جاري التنفيذ…",
   },
   confirm: {
     Icon: Info,
     iconClass: "text-status-info-foreground",
     buttonVariant: "default",
-    pendingLabel: "جارٍ الحفظ…",
+    pendingLabel: "جاري الحفظ…",
   },
 };
 

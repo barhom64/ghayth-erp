@@ -137,8 +137,8 @@ describe("overrides-report UI renders the before/after diff", () => {
   });
 
   it("table has Before / After columns for the cost centre", () => {
-    expect(REPORT).toMatch(/header: "CC مقترح"/);
-    expect(REPORT).toMatch(/header: "CC مختار"/);
+    expect(REPORT).toMatch(/header: "مركز التكلفة المقترح"/);
+    expect(REPORT).toMatch(/header: "مركز التكلفة المختار"/);
   });
 
   it("After column highlights changes in bold + status-warning tone", () => {

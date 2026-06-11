@@ -171,11 +171,11 @@ export default function OverridesReportPage() {
         );
       },
     },
-    { key: "proposedCostCenterId", header: "CC مقترح",
+    { key: "proposedCostCenterId", header: "مركز التكلفة المقترح",
       render: (r) => r.proposedCostCenterId
         ? <span className="font-mono text-xs text-muted-foreground">cc:{r.proposedCostCenterId}</span>
         : <span className="text-muted-foreground italic text-xs">—</span> },
-    { key: "costCenterId", header: "CC مختار",
+    { key: "costCenterId", header: "مركز التكلفة المختار",
       render: (r) => {
         if (!r.costCenterId) return <span className="text-muted-foreground italic text-xs">—</span>;
         const changed = (r.proposedCostCenterId ?? null) !== (r.costCenterId ?? null);
@@ -214,7 +214,7 @@ export default function OverridesReportPage() {
   return (
     <PageShell
       title="سجل التعديلات اليدوية (Manual Overrides)"
-      subtitle="forensic audit — كل override في توجيه البنود المحاسبية مع المستخدم والسبب"
+      subtitle="مراجعة تدقيقية — كل تجاوز يدوي في توجيه البنود المحاسبية مع المستخدم والسبب"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/allocation-results", label: "سجل التوجيه" },

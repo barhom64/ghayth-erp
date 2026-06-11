@@ -196,7 +196,7 @@ export default function BankReconciliationPage() {
                 <input ref={fileRef} type="file" accept=".csv" onChange={handleFileImport} className="hidden" /> {/* file input: keep raw */}
                 <GuardedButton perm="finance:create" variant="outline" onClick={() => fileRef.current?.click()} disabled={importing} className="flex-1">
                   <Upload className="h-4 w-4 me-2" />
-                  {importing ? "جارٍ الاستيراد..." : "اختر ملف جدولي"}
+                  {importing ? "جاري الاستيراد..." : "اختر ملف جدولي"}
                 </GuardedButton>
               </div>
               <p className="text-xs text-muted-foreground mt-1">الأعمدة المتوقعة: date, description, debit, credit (أو amount)</p>
@@ -256,7 +256,7 @@ export default function BankReconciliationPage() {
             </div>
             <GuardedButton perm="finance:approve" onClick={handleAutoMatch} disabled={autoMatching} className="bg-blue-600 hover:bg-blue-700">
               <RefreshCw className={`h-4 w-4 me-2 ${autoMatching ? "animate-spin" : ""}`} />
-              {autoMatching ? "جارٍ المطابقة..." : "مطابقة تلقائية"}
+              {autoMatching ? "جاري المطابقة..." : "مطابقة تلقائية"}
             </GuardedButton>
           </div>
 

@@ -403,7 +403,7 @@ export default function ApPaymentCalendarPage() {
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-start py-2 px-2">المورد</th>
-                      <th className="text-end py-2 px-2 w-20">POs</th>
+                      <th className="text-end py-2 px-2 w-20">أوامر الشراء</th>
                       <th className="text-end py-2 px-2 w-32">المستحق</th>
                       <th className="text-end py-2 px-2 w-20">%</th>
                       <th className="py-2 px-2 w-8"></th>

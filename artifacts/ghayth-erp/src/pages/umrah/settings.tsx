@@ -830,7 +830,7 @@ function UmrahNotificationsCard() {
             size="sm"
             data-testid="notify-test-send"
           >
-            {testSending ? "جارٍ..." : "إرسال إشعار تجريبي"}
+            {testSending ? "جاري..." : "إرسال إشعار تجريبي"}
           </GuardedButton>
         </div>
       </CardContent>

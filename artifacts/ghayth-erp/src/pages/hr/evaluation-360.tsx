@@ -23,7 +23,7 @@ import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "in_progress", label: "جارٍ التقييم" },
+  { value: "in_progress", label: "جاري التقييم" },
   { value: "completed",   label: "مكتمل"        },
   { value: "cancelled",   label: "ملغي"         },
 ];
@@ -74,7 +74,7 @@ export default function Evaluation360Page() {
 
   const kpis = [
     { label: "إجمالي الدورات", value: stats.total, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
-    { label: "جارٍ التقييم", value: stats.inProgress, icon: RefreshCw, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "جاري التقييم", value: stats.inProgress, icon: RefreshCw, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "مكتملة", value: stats.completed, icon: Award, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "متوسط الأداء", value: stats.avgScore ? `${stats.avgScore}%` : "-", icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
   ];

@@ -606,7 +606,7 @@ export default function TransportPriceRulesAdmin() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
             <Button onClick={save} disabled={submitting} rateLimitAware>
-              {submitting ? "جارٍ الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
+              {submitting ? "جاري الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -718,7 +718,7 @@ export default function TransportPriceRulesAdmin() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>إغلاق</Button>
             <Button onClick={runPreview} disabled={previewing} rateLimitAware>
-              {previewing ? "جارٍ الحساب…" : "احسب السعر"}
+              {previewing ? "جاري الحساب…" : "احسب السعر"}
             </Button>
           </DialogFooter>
         </DialogContent>

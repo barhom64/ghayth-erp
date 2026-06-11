@@ -383,7 +383,7 @@ export default function RentalCreate() {
           disabled={submitting || !hasMinimum || (withDriver && !driverId)}
         >
           <Save className="h-4 w-4 me-1" />
-          {submitting ? "جارٍ الحفظ…" : "حفظ كمسودّة"}
+          {submitting ? "جاري الحفظ…" : "حفظ كمسودّة"}
         </Button>
       </div>
     </PageShell>

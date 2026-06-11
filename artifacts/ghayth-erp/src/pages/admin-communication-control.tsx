@@ -341,10 +341,10 @@ export default function AdminCommunicationControl() {
                 <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع القنوات</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="email">بريد إلكتروني</SelectItem>
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
-                  <SelectItem value="pbx">PBX</SelectItem>
+                  <SelectItem value="sms">رسائل SMS</SelectItem>
+                  <SelectItem value="pbx">سنترال (PBX)</SelectItem>
                   <SelectItem value="webhook">Webhook</SelectItem>
                 </SelectContent>
               </Select>
@@ -440,10 +440,10 @@ function NewProviderDialog({ open, onClose, onSubmit, isSubmitting }: {
             <Select value={channel} onValueChange={setChannel}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="email">بريد إلكتروني</SelectItem>
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="sms">SMS</SelectItem>
-                <SelectItem value="pbx">PBX</SelectItem>
+                <SelectItem value="sms">رسائل SMS</SelectItem>
+                <SelectItem value="pbx">سنترال (PBX)</SelectItem>
                 <SelectItem value="webhook">Webhook</SelectItem>
               </SelectContent>
             </Select>
@@ -504,10 +504,10 @@ function NewDlpRuleDialog({ open, onClose, onSubmit, isSubmitting }: {
                 <SelectTrigger><SelectValue placeholder="الكل" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">الكل</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="email">بريد إلكتروني</SelectItem>
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
-                  <SelectItem value="pbx">PBX</SelectItem>
+                  <SelectItem value="sms">رسائل SMS</SelectItem>
+                  <SelectItem value="pbx">سنترال (PBX)</SelectItem>
                   <SelectItem value="webhook">Webhook</SelectItem>
                 </SelectContent>
               </Select>
@@ -586,10 +586,10 @@ function DlpTesterDialog({ open, onClose }: { open: boolean; onClose: () => void
             <Select value={channel} onValueChange={setChannel}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="email">بريد إلكتروني</SelectItem>
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="sms">SMS</SelectItem>
-                <SelectItem value="pbx">PBX</SelectItem>
+                <SelectItem value="sms">رسائل SMS</SelectItem>
+                <SelectItem value="pbx">سنترال (PBX)</SelectItem>
                 <SelectItem value="webhook">Webhook</SelectItem>
               </SelectContent>
             </Select>

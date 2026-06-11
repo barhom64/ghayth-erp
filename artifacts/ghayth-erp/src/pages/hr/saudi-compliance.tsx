@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { STATUSES } from "@/lib/constants";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -173,7 +174,7 @@ export default function HrSaudiCompliancePage() {
                 )}
                 <div className="space-y-2 pt-2 border-t">
                   <div>
-                    <Label className="text-[10px]">API Key</Label>
+                    <Label className="text-[10px]">مفتاح API</Label>
                     <Input
                       value={apiKeyDraft}
                       onChange={(e) => setApiKeyDraft(e.target.value)}
@@ -183,7 +184,7 @@ export default function HrSaudiCompliancePage() {
                     />
                   </div>
                   <div>
-                    <Label className="text-[10px]">API Secret</Label>
+                    <Label className="text-[10px]">سر API</Label>
                     <Input
                       value={apiSecretDraft}
                       onChange={(e) => setApiSecretDraft(e.target.value)}
@@ -236,7 +237,7 @@ export default function HrSaudiCompliancePage() {
                         {r.reference && <span className="text-muted-foreground ms-2">{r.reference}</span>}
                       </span>
                       <span className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-[10px]">{r.status}</Badge>
+                        <Badge variant="outline" className="text-[10px]">{STATUSES[r.status] ?? r.status}</Badge>
                         <span className="font-mono">{formatCurrency(Number(r.totalNet || 0))}</span>
                       </span>
                     </button>

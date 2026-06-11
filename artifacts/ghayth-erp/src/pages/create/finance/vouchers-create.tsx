@@ -548,7 +548,7 @@ export default function VouchersCreate() {
       <div className="flex justify-end gap-3 pt-4">
         <Button variant="outline" onClick={() => setLocation("/finance/vouchers")}>إلغاء</Button>
         <Button variant="outline" onClick={handlePreview} disabled={!form.amount || previewMut.isPending} rateLimitAware>
-          {previewMut.isPending ? "جارٍ المعاينة..." : "معاينة القيد"}
+          {previewMut.isPending ? "جاري المعاينة..." : "معاينة القيد"}
         </Button>
         <Button onClick={handleSubmit} disabled={!form.amount || createMut.isPending || !activeCtx.ready} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : `حفظ سند ${form.type === "receipt" ? "القبض" : "الصرف"}`}

@@ -100,7 +100,7 @@ function CampaignRoasDialog({ campaign, onClose }: { campaign: any | null; onClo
           </DialogTitle>
         </DialogHeader>
         {isLoading || !roas ? (
-          <p className="text-sm text-muted-foreground text-center py-4">جارٍ التحميل…</p>
+          <p className="text-sm text-muted-foreground text-center py-4">جاري التحميل…</p>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">

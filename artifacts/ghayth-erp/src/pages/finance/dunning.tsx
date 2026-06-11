@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { STATUSES } from "@/lib/constants";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -203,7 +204,7 @@ export default function DunningPage() {
     { key: "subject", header: "الموضوع",
       render: (r) => <span className="text-xs">{r.subject}</span> },
     { key: "status", header: "الحالة",
-      render: (r) => <Badge variant="outline" className="text-xs">{r.status}</Badge> },
+      render: (r) => <Badge variant="outline" className="text-xs">{STATUSES[r.status] ?? r.status}</Badge> },
   ];
 
   return (
@@ -213,7 +214,7 @@ export default function DunningPage() {
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/receivables", label: "التحصيل" },
-        { label: "Dunning" },
+        { label: "متابعة التحصيل" },
       ]}
       actions={
         <div className="flex gap-2">
@@ -275,7 +276,7 @@ export default function DunningPage() {
             className="h-8 rounded border bg-background px-2 text-sm"
           >
             <option value="email">بريد إلكتروني</option>
-            <option value="sms">SMS</option>
+            <option value="sms">رسالة نصية (SMS)</option>
             <option value="manual">يدوي (تسجيل فقط)</option>
           </select>
         </div>

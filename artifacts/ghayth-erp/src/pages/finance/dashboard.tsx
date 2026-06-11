@@ -373,8 +373,8 @@ export default function FinanceDashboard() {
           <div className="text-xs font-semibold">مركز الـ 50+</div>
         </Link>
         <Link href="/finance/cfo-cockpit" className="border rounded p-2 text-center hover:bg-muted/30 transition">
-          <div className="text-[11px] text-muted-foreground">CFO</div>
-          <div className="text-xs font-semibold">Cockpit</div>
+          <div className="text-[11px] text-muted-foreground">المدير المالي</div>
+          <div className="text-xs font-semibold">قمرة القيادة</div>
         </Link>
         <Link href="/finance/daily-close-checklist" className="border rounded p-2 text-center hover:bg-muted/30 transition">
           <div className="text-[11px] text-muted-foreground">روتين يومي</div>

@@ -793,7 +793,7 @@ function ThreadView({ channel, address, onBack, onSent }: {
       </CardHeader>
 
       <CardContent className="flex-1 overflow-y-auto p-4 space-y-3">
-        {isLoading && messages.length === 0 && <p className="text-xs text-muted-foreground">جارٍ التحميل...</p>}
+        {isLoading && messages.length === 0 && <p className="text-xs text-muted-foreground">جاري التحميل...</p>}
         {messages.map((m) => (
           <div key={m.id} className={cn(
             "rounded-lg p-3 max-w-[80%]",
@@ -1336,7 +1336,7 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             onClick={() => saveDraft.mutate()}
           >
             <Save className="w-4 h-4 me-1" />
-            {saveDraft.isPending ? "جارٍ الحفظ..." : (draftId ? "تحديث المسوّدة" : "حفظ كمسوّدة")}
+            {saveDraft.isPending ? "جاري الحفظ..." : (draftId ? "تحديث المسوّدة" : "حفظ كمسوّدة")}
           </Button>
           <Button
             rateLimitAware
@@ -1344,7 +1344,7 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             onClick={() => send.mutate()}
           >
             <Send className="w-4 h-4 me-1" />
-            {send.isPending ? "جارٍ الإرسال..." : (scheduledAt ? "جدولة الإرسال" : "أرسل")}
+            {send.isPending ? "جاري الإرسال..." : (scheduledAt ? "جدولة الإرسال" : "أرسل")}
           </Button>
         </DialogFooter>
       </DialogContent>

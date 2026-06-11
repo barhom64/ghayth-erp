@@ -141,7 +141,7 @@ function EditorHeaderActions({
         </Button>
         <GuardedButton type="submit" perm="documents:create" rateLimitAware disabled={formState.isSubmitting}>
           <Save className="h-4 w-4 me-1" />
-          {formState.isSubmitting ? "جارٍ الحفظ..." : "حفظ"}
+          {formState.isSubmitting ? "جاري الحفظ..." : "حفظ"}
         </GuardedButton>
       </div>
     </div>

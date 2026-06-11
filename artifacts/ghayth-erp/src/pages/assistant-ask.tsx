@@ -85,7 +85,7 @@ export default function AssistantAsk() {
 
         {loading && (
           <div className="text-center text-muted-foreground py-8">
-            <Sparkles className="w-8 h-8 mx-auto mb-2 animate-pulse" /> جارٍ البحث…
+            <Sparkles className="w-8 h-8 mx-auto mb-2 animate-pulse" /> جاري البحث…
           </div>
         )}
 

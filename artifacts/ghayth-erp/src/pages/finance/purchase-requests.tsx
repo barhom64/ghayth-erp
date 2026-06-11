@@ -256,7 +256,7 @@ export default function PurchaseRequestsPage() {
   return (
     <PageShell
       title="طلبات الشراء (Purchase Requests)"
-      subtitle="purchase_requests — تدفّق طلب الشراء قبل إصدار أمر الشراء الرسمي. لكل طلب اعتماد ثم تحويل إلى PO."
+      subtitle="تدفّق طلب الشراء قبل إصدار أمر الشراء الرسمي — لكل طلب اعتماد ثم تحويل إلى أمر شراء"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/purchase-orders", label: "أوامر الشراء" },

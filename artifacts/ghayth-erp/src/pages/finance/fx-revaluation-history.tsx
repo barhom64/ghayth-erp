@@ -130,7 +130,7 @@ export default function FxRevaluationHistoryPage() {
   return (
     <PageShell
       title="سجل إعادة تقييم العملات"
-      subtitle="fx_revaluations — كل قيد إعادة تقييم أُنشئ شهرياً، بأثره على صافي الربح/الخسارة من تذبذب أسعار الصرف"
+      subtitle="سجل إعادة تقييم العملات — كل قيد إعادة تقييم أُنشئ شهرياً، بأثره على صافي الربح/الخسارة من تذبذب أسعار الصرف"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/fx-revaluation", label: "إعادة التقييم" },

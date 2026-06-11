@@ -504,7 +504,7 @@ export default function DisciplineRegulationPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button>
             <GuardedButton perm="hr:create" onClick={submitCreate} disabled={createMut.isPending}>
-              {createMut.isPending ? "جارٍ الحفظ..." : "حفظ"}
+              {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
             </GuardedButton>
           </DialogFooter>
         </DialogContent>

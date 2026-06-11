@@ -185,7 +185,7 @@ export default function GlHealthScorePage() {
     dims.push({
       key: "failures",
       label: "فشل ترحيل + بنود غير موجَّهة",
-      description: "Posting failures + lines without allocation rule",
+      description: "حالات فشل الترحيل والبنود بدون قاعدة توجيه",
       weight: 15,
       rawScore: failScore,
       weightedScore: Math.round((failScore * 15) / 100),

@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
+import { STATUSES } from "@/lib/constants";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -417,7 +418,7 @@ export default function ExecDashboard() {
                 { key: "dueDate", header: "الاستحقاق", render: (r) => (
                   <span className="text-xs text-muted-foreground">{formatDateAr(r.dueDate)}</span>
                 )},
-                { key: "status", header: "الحالة", render: (r) => <Badge variant="outline" className="text-xs">{r.status}</Badge> },
+                { key: "status", header: "الحالة", render: (r) => <Badge variant="outline" className="text-xs">{STATUSES[r.status] ?? r.status}</Badge> },
               ] as DataTableColumn<CriticalObligationRow>[]}
               data={criticalObligations}
               noToolbar

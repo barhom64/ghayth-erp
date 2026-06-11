@@ -244,7 +244,7 @@ export default function TransportIntegration() {
                         rateLimitAware
                       >
                         <Wand2 className="h-3.5 w-3.5 me-1" />
-                        {materializingId === g.id ? "جارٍ الإنشاء…" : "إنشاء حجوزات النقل"}
+                        {materializingId === g.id ? "جاري الإنشاء…" : "إنشاء حجوزات النقل"}
                       </Button>
                     )}
                   </div>

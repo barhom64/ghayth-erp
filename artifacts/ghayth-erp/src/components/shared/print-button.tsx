@@ -135,7 +135,7 @@ export function PrintButton({
       // Friendly loading screen until the bytes arrive — beats the user
       // staring at an empty about:blank tab.
       previewWindow.document.write(
-        `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>جارٍ تجهيز الطباعة…</title></head><body style="font-family:Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#475569"><div style="text-align:center"><div style="font-size:18pt">جارٍ تجهيز المعاينة…</div><div style="margin-top:8px;font-size:11pt;color:#94a3b8">يرجى الانتظار قليلاً</div></div></body></html>`
+        `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>جاري تجهيز الطباعة…</title></head><body style="font-family:Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#475569"><div style="text-align:center"><div style="font-size:18pt">جاري تجهيز المعاينة…</div><div style="margin-top:8px;font-size:11pt;color:#94a3b8">يرجى الانتظار قليلاً</div></div></body></html>`
       );
     }
 
@@ -231,7 +231,7 @@ export function PrintButton({
         });
       }
     } catch (err) {
-      // The preview window is still showing "جارٍ تجهيز…" — close it so the
+      // The preview window is still showing "جاري تجهيز…" — close it so the
       // user gets the toast instead of staring at the loading screen.
       if (previewWindow && !previewWindow.closed) previewWindow.close();
       const e = err as ApiError;

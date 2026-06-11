@@ -286,7 +286,7 @@ export default function FixedAssetsPage() {
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setShowDepreciate(false); setDepResult(null); }}>إغلاق</Button>
                 <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending} rateLimitAware>
-                  {depreciateMutation.isPending ? "جارٍ الإهلاك..." : "تسجيل الإهلاك"}
+                  {depreciateMutation.isPending ? "جاري الإهلاك..." : "تسجيل الإهلاك"}
                 </Button>
               </div>
             </CardContent>

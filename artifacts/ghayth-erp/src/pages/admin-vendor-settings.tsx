@@ -58,7 +58,7 @@ const SLUG_META: Record<string, {
   "pbx-webhook": {
     icon: Phone,
     fields: [
-      { key: "webhookSecret", label: "Webhook Signing Secret", type: "password",
+      { key: "webhookSecret", label: "سر توقيع Webhook", type: "password",
         placeholder: "32 بايت hex (استخدم زرّ التوليد في /admin/pbx-control)",
         hint: "يُستخدم لتوقيع كل webhook وارد من مزوّد PBX." },
     ],
@@ -66,14 +66,14 @@ const SLUG_META: Record<string, {
   "whatsapp": {
     icon: MessageSquare,
     fields: [
-      { key: "accessToken", label: "Access Token", type: "password",
+      { key: "accessToken", label: "رمز الوصول (Access Token)", type: "password",
         placeholder: "Meta Graph access token",
         hint: "Permanent System User token من Meta Business." },
-      { key: "verifyToken", label: "Verify Token", type: "password",
+      { key: "verifyToken", label: "رمز التحقق (Verify Token)", type: "password",
         placeholder: "نص يتطابق مع ما يضبطه Meta في إعداد الـ webhook." },
-      { key: "phoneId", label: "Phone Number ID", type: "text",
+      { key: "phoneId", label: "معرّف رقم الهاتف", type: "text",
         placeholder: "مثل 1234567890" },
-      { key: "appSecret", label: "App Secret", type: "password",
+      { key: "appSecret", label: "سر التطبيق (App Secret)", type: "password",
         placeholder: "Meta App Secret",
         hint: "يُستخدم للتحقق من X-Hub-Signature-256 على inbound." },
     ],
@@ -81,32 +81,32 @@ const SLUG_META: Record<string, {
   "smtp": {
     icon: Mail,
     fields: [
-      { key: "host", label: "SMTP Host", type: "text", placeholder: "smtp.gmail.com" },
-      { key: "port", label: "Port", type: "number", placeholder: "587" },
-      { key: "user", label: "Username", type: "text", placeholder: "user@example.com" },
-      { key: "password", label: "Password / App Password", type: "password" },
-      { key: "from", label: "From Address", type: "text", placeholder: "Ghaith ERP <no-reply@example.com>" },
-      { key: "secure", label: "TLS (true/false)", type: "text", placeholder: "false (StartTLS) أو true (SSL)" },
+      { key: "host", label: "خادم SMTP", type: "text", placeholder: "smtp.gmail.com" },
+      { key: "port", label: "المنفذ", type: "number", placeholder: "587" },
+      { key: "user", label: "اسم المستخدم", type: "text", placeholder: "user@example.com" },
+      { key: "password", label: "كلمة المرور / كلمة مرور التطبيق", type: "password" },
+      { key: "from", label: "عنوان المرسل", type: "text", placeholder: "Ghaith ERP <no-reply@example.com>" },
+      { key: "secure", label: "تشفير TLS (true/false)", type: "text", placeholder: "false (StartTLS) أو true (SSL)" },
     ],
   },
   "vapid": {
     icon: Bell,
     fields: [
-      { key: "publicKey", label: "VAPID Public Key", type: "text",
+      { key: "publicKey", label: "المفتاح العام VAPID", type: "text",
         placeholder: "base64url EC P-256 — ~87 char",
         hint: "ولّد بـ: web-push generate-vapid-keys" },
-      { key: "privateKey", label: "VAPID Private Key", type: "password",
+      { key: "privateKey", label: "المفتاح الخاص VAPID", type: "password",
         placeholder: "base64url EC P-256 — ~43 char" },
-      { key: "subject", label: "Subject", type: "text",
+      { key: "subject", label: "الموضوع", type: "text",
         placeholder: "mailto:admin@example.com" },
     ],
   },
   "siem": {
     icon: Shield,
     fields: [
-      { key: "webhookUrl", label: "SIEM Webhook URL", type: "url",
+      { key: "webhookUrl", label: "رابط Webhook لنظام SIEM", type: "url",
         placeholder: "https://siem.example.com/ingest" },
-      { key: "authHeader", label: "Authorization Header (اختياري)", type: "password",
+      { key: "authHeader", label: "ترويسة التفويض (Authorization) — اختياري", type: "password",
         placeholder: "Bearer xxx أو Basic xxx",
         hint: "يُرسَل في كل event كرأس Authorization." },
     ],
@@ -114,11 +114,11 @@ const SLUG_META: Record<string, {
   "zatca": {
     icon: Receipt,
     fields: [
-      { key: "defaultProvider", label: "Default Provider", type: "text",
+      { key: "defaultProvider", label: "المزوّد الافتراضي", type: "text",
         placeholder: "fatoora أو direct" },
-      { key: "prodUrl", label: "Production URL", type: "url",
+      { key: "prodUrl", label: "رابط الإنتاج", type: "url",
         placeholder: "https://gw-apic-gov.gazt.gov.sa/e-invoicing/core/" },
-      { key: "sandboxUrl", label: "Sandbox URL", type: "url",
+      { key: "sandboxUrl", label: "رابط بيئة الاختبار", type: "url",
         placeholder: "https://gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/" },
     ],
   },
@@ -203,7 +203,7 @@ function VendorCard({ vendor, onChange }: { vendor: VendorRow; onChange: () => v
   };
 
   const sourceBadge = vendor.effectiveSource === "db"
-    ? { label: "DB", color: "text-status-success-foreground" }
+    ? { label: "قاعدة البيانات", color: "text-status-success-foreground" }
     : vendor.effectiveSource === "env"
       ? { label: "ENV (Fallback)", color: "text-status-info-foreground" }
       : { label: "غير مهيّأ", color: "text-status-error-foreground" };
@@ -258,7 +258,7 @@ function VendorCard({ vendor, onChange }: { vendor: VendorRow; onChange: () => v
             <Save className="w-4 h-4 me-1" />حفظ
           </Button>
           <Button variant="outline" onClick={() => test.mutate()} disabled={test.isPending || !vendor.effectiveActive}>
-            <FlaskConical className="w-4 h-4 me-1" />{test.isPending ? "جارٍ الاختبار..." : "اختبر الاتصال"}
+            <FlaskConical className="w-4 h-4 me-1" />{test.isPending ? "جاري الاختبار..." : "اختبر الاتصال"}
           </Button>
         </div>
 

@@ -236,7 +236,7 @@ export function DepartmentsTab() {
             </div>
             <div className="flex gap-2">
               <Button disabled={!form.name || submitting} onClick={submit} data-testid="button-submit-dept">
-                {submitting ? "جارٍ الحفظ..." : editingId ? "تحديث" : "إنشاء"}
+                {submitting ? "جاري الحفظ..." : editingId ? "تحديث" : "إنشاء"}
               </Button>
               <Button variant="outline" onClick={resetForm}>إلغاء</Button>
             </div>

@@ -381,7 +381,7 @@ export default function UmrahPenalties() {
               onClick={(e: React.MouseEvent) => { e.preventDefault(); handleBulkSubmit(); }}
               disabled={bulkWaiveMutation.isPending}
             >
-              {bulkWaiveMutation.isPending ? "جارٍ الإعفاء..." : "تأكيد الإعفاء"}
+              {bulkWaiveMutation.isPending ? "جاري الإعفاء..." : "تأكيد الإعفاء"}
             </GuardedButton>
           </AlertDialogFooter>
         </AlertDialogContent>

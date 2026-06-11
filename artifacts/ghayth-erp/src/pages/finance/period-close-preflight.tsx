@@ -109,7 +109,7 @@ const CHECK_DEFS: CheckDef[] = [
   {
     key: "openCustomerAdvances",
     label: "دفعات مقدمة مفتوحة",
-    description: "Customer advances غير مطبقة — يفضّل تطبيقها على فواتير",
+    description: "دفعات مقدمة من العملاء غير مطبقة — يفضّل تطبيقها على فواتير",
     severity: "info",
     fixHref: "/finance/customer-advances",
     fixLabel: "تطبيق الدفعات",
@@ -327,7 +327,7 @@ export default function PeriodClosePreflightPage() {
   return (
     <PageShell
       title="الفحص ما قبل إقفال الفترة"
-      subtitle="Period-end pre-flight — 10 فحوصات على الفترة المختارة قبل الإقفال. مع زر إقفال آمن مفعّل فقط لو كل الـ blockers خضراء."
+      subtitle="10 فحوصات على الفترة المختارة قبل الإقفال — زر الإقفال الآمن لا يتفعّل إلا بعد اجتياز كل الفحوصات الحاجبة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/fiscal-periods-v2", label: "الفترات المالية" },
@@ -364,7 +364,7 @@ export default function PeriodClosePreflightPage() {
                 "الفحص": c.def.label,
                 "الشدة": c.def.severity,
                 "العدد": c.count,
-                "الحالة": c.status === "pass" ? "ناجح" : c.status === "fail" ? "فاشل" : "جارٍ التحميل",
+                "الحالة": c.status === "pass" ? "ناجح" : c.status === "fail" ? "فاشل" : "جاري التحميل",
               })),
             }}
           />

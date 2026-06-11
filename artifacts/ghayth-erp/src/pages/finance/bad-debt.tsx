@@ -100,7 +100,7 @@ export default function BadDebtPage() {
   return (
     <PageShell
       title="مخصص الديون المشكوك في تحصيلها"
-      subtitle="Allowance for Doubtful Debts — تقدير المبلغ المعرَّض للخسارة بناءً على عمر الذمم وقيد JE شهري"
+      subtitle="مخصص الديون المشكوك في تحصيلها — تقدير المبلغ المعرَّض للخسارة بناءً على عمر الذمم مع قيد شهري"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/receivables", label: "التحصيل" },

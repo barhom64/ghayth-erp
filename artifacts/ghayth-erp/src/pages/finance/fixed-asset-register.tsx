@@ -429,7 +429,7 @@ export default function FixedAssetRegisterPage() {
                         <th className="text-end py-2 px-2">التكلفة</th>
                         <th className="text-end py-2 px-2">العمر/طريقة</th>
                         <th className="text-end py-2 px-2">الإهلاك</th>
-                        <th className="text-end py-2 px-2">NBV</th>
+                        <th className="text-end py-2 px-2">القيمة الدفترية</th>
                         <th className="py-2 px-2 w-32">تقدم الإهلاك</th>
                         <th className="py-2 px-2">الحالة</th>
                         <th className="py-2 px-2 w-8"></th>

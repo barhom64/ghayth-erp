@@ -188,7 +188,7 @@ export default function AccommodationsPage() {
                     }
                   }}
                 >
-                  {createHotel.isPending ? "جارٍ الحفظ..." : "حفظ"}
+                  {createHotel.isPending ? "جاري الحفظ..." : "حفظ"}
                 </Button>
               </div>
             )}
@@ -293,7 +293,7 @@ export default function AccommodationsPage() {
                     }
                   }}
                 >
-                  {createBlock.isPending ? "جارٍ الحفظ..." : "حفظ"}
+                  {createBlock.isPending ? "جاري الحفظ..." : "حفظ"}
                 </Button>
               </div>
             )}

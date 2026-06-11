@@ -474,7 +474,7 @@ function ListPageExportMenu<T>(props: {
     const w = window.open("", "_blank");
     if (w) {
       w.document.write(
-        `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>جارٍ التحضير…</title></head><body style="font-family:Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#475569"><div>جارٍ تجهيز المعاينة…</div></body></html>`,
+        `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"/><title>جاري التحضير…</title></head><body style="font-family:Tahoma,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;color:#475569"><div>جاري تجهيز المعاينة…</div></body></html>`,
       );
     }
     try {

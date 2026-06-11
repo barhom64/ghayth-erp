@@ -193,8 +193,8 @@ export default function AdminIntegrationsDiagnosticsPage() {
           <CardContent className="space-y-2 text-xs">
             <p className="text-muted-foreground">Meta webhook endpoint. GET=verify, POST=incoming events.</p>
             <div className="flex gap-2">
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleWhatsappVerify}>GET verify</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleWhatsappWebhook}>POST event</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleWhatsappVerify}>اختبار التحقق (GET)</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleWhatsappWebhook}>إرسال حدث (POST)</GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -207,9 +207,9 @@ export default function AdminIntegrationsDiagnosticsPage() {
           </CardHeader>
           <CardContent className="text-xs space-y-2">
             <div className="flex gap-1 flex-wrap">
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handlePbxIncoming}>Incoming</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handlePbxCompleted}>Completed</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handlePbxStatus}>Status</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handlePbxIncoming}>مكالمة واردة</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handlePbxCompleted}>مكالمة مكتملة</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handlePbxStatus}>تحديث الحالة</GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -247,9 +247,9 @@ export default function AdminIntegrationsDiagnosticsPage() {
           <CardContent className="text-xs space-y-2">
             <p className="text-muted-foreground">Budget gate + legacy fiscal-period stub (410 expected).</p>
             <div className="flex gap-1 flex-wrap">
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleBudgetValidate}>budget/validate</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleBudgetApproval}>approval-request</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleLegacyClose}>legacy close (410)</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleBudgetValidate}>فحص الموازنة</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleBudgetApproval}>طلب اعتماد</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleLegacyClose}>الإغلاق القديم (410)</GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -262,14 +262,14 @@ export default function AdminIntegrationsDiagnosticsPage() {
           </CardHeader>
           <CardContent className="text-xs space-y-2">
             <Input
-              placeholder="email"
+              placeholder="البريد الإلكتروني"
               dir="ltr"
               value={authForm.email}
               onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
               className="h-7 text-xs"
             />
             <Input
-              placeholder="password"
+              placeholder="كلمة المرور"
               dir="ltr"
               type="password"
               value={authForm.password}
@@ -277,14 +277,14 @@ export default function AdminIntegrationsDiagnosticsPage() {
               className="h-7 text-xs"
             />
             <Input
-              placeholder="company name (register)"
+              placeholder="اسم الشركة (للتسجيل)"
               value={authForm.companyName}
               onChange={(e) => setAuthForm({ ...authForm, companyName: e.target.value })}
               className="h-7 text-xs"
             />
             <div className="flex gap-1">
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleAuthRegister}>register</GuardedButton>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleAuthRefresh}>refresh</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleAuthRegister}>تسجيل</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleAuthRefresh}>تحديث</GuardedButton>
             </div>
           </CardContent>
         </Card>
@@ -347,7 +347,7 @@ export default function AdminIntegrationsDiagnosticsPage() {
                  href={apiUrl(`/mailboxes/oauth/microsoft365/authorize`)}>m365/authorize</a>
               <a className="underline text-status-info-foreground" target="_blank" rel="noopener noreferrer"
                  href={apiUrl(`/mailboxes/oauth/microsoft365/callback`)}>m365/callback</a>
-              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleDispatch}>umrah dispatch</GuardedButton>
+              <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleDispatch}>إرسال عمرة</GuardedButton>
             </div>
             {mediaQ.data && (
               <p className="text-muted-foreground">media: <span className="font-mono">{JSON.stringify(mediaQ.data).slice(0, 200)}</span></p>

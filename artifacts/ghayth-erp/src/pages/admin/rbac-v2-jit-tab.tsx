@@ -448,7 +448,7 @@ function DecisionDialog({ info, onClose, onDone }: {
             disabled={busy || (!isApprove && !reason.trim())}
             variant={isApprove ? "default" : "destructive"}
           >
-            {busy ? "جارٍ..." : isApprove ? "اعتماد" : "رفض"}
+            {busy ? "جاري..." : isApprove ? "اعتماد" : "رفض"}
           </Button>
         </DialogFooter>
       </DialogContent>

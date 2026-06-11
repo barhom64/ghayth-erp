@@ -249,7 +249,7 @@ export default function PayrollPage() {
                     { key: "branchName", header: "الفرع", sortable: true, render: (r) => r.branchName || "—" },
                     { key: "totalBasic", header: "الأساسي", sortable: true, render: (r) => formatCurrency(Number(r.totalBasic ?? 0)) },
                     { key: "totalGross", header: "الإجمالي", sortable: true, render: (r) => formatCurrency(Number(r.totalGross ?? 0)) },
-                    { key: "totalGosi", header: "GOSI", sortable: true, render: (r) => <span className="text-orange-600">{formatCurrency(Number(r.totalGosi ?? 0))}</span> },
+                    { key: "totalGosi", header: "التأمينات (GOSI)", sortable: true, render: (r) => <span className="text-orange-600">{formatCurrency(Number(r.totalGosi ?? 0))}</span> },
                     { key: "totalNet", header: "الصافي", sortable: true, render: (r) => <span className="font-bold text-status-success-foreground">{formatCurrency(Number(r.totalNet ?? 0))}</span> },
                   ] as DataTableColumn<any>[]}
                   data={summaryRows}

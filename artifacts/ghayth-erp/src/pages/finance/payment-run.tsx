@@ -310,7 +310,7 @@ export default function PaymentRunPage() {
                         <th className="text-right py-2">التاريخ</th>
                         <th className="text-right py-2">الطريقة</th>
                         <th className="text-right py-2">الإجمالي</th>
-                        <th className="text-right py-2">PO</th>
+                        <th className="text-right py-2">أمر الشراء</th>
                         <th className="text-right py-2">الحالة</th>
                       </tr>
                     </thead>

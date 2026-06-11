@@ -309,7 +309,7 @@ export default function AdminSystemRegistry() {
                           <th className="text-start p-2">المسار</th>
                           <th className="text-start p-2">المكوّن</th>
                           <th className="text-start p-2">النطاق</th>
-                          <th className="text-start p-2">Lazy</th>
+                          <th className="text-start p-2">تحميل كسول</th>
                           <th className="text-start p-2">حد الصلاحية</th>
                         </tr>
                       </thead>

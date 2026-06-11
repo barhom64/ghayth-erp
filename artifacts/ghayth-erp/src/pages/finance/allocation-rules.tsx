@@ -171,7 +171,7 @@ export default function AllocationRulesPage() {
   return (
     <PageShell
       title="قواعد التوجيه المحاسبي"
-      subtitle="accounting_allocation_rules — تحدد كيف يتم توجيه كل بند مالي إلى حسابه ومركز تكلفته وكيانه التشغيلي تلقائياً (Phase 6)"
+      subtitle="قواعد التوجيه المحاسبي — تحدد كيف يُوجَّه كل بند مالي إلى حسابه ومركز تكلفته وكيانه التشغيلي تلقائياً"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/accounts", label: "الحسابات" },

@@ -91,7 +91,7 @@ function statusTone(s: string) {
 const promptEditSchema = z.object({
   title: z.string().min(1, "العنوان مطلوب").max(300),
   description: z.string().optional().default(""),
-  systemPrompt: z.string().min(1, "System Prompt مطلوب"),
+  systemPrompt: z.string().min(1, "موجّه النظام مطلوب"),
   userTemplate: z.string().optional().default(""),
 });
 type PromptEditForm = z.infer<typeof promptEditSchema>;
@@ -244,12 +244,12 @@ export default function AdminAiPromptDetailPage() {
 
   return (
     <PageShell
-      title={prompt?.title || "تفاصيل الـ Prompt"}
+      title={prompt?.title || "تفاصيل الموجّه"}
       subtitle={prompt ? `${prompt.slug} — v${prompt.version}` : undefined}
       breadcrumbs={[
         { label: "الإدارة" },
         { href: "/admin/ai-governance", label: "حوكمة الذكاء" },
-        { label: "Prompt" },
+        { label: "الموجّه" },
       ]}
       actions={
         <div className="flex items-center gap-2">
@@ -325,14 +325,14 @@ export default function AdminAiPromptDetailPage() {
                   </div>
                 )}
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">System Prompt</p>
+                  <p className="text-xs text-muted-foreground mb-1">موجّه النظام (System Prompt)</p>
                   <pre className="whitespace-pre-wrap text-xs bg-surface-subtle p-3 rounded border font-mono">
                     {prompt.systemPrompt}
                   </pre>
                 </div>
                 {prompt.userTemplate && (
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">User Template</p>
+                    <p className="text-xs text-muted-foreground mb-1">قالب المستخدم</p>
                     <pre className="whitespace-pre-wrap text-xs bg-surface-subtle p-3 rounded border font-mono">
                       {prompt.userTemplate}
                     </pre>
@@ -433,8 +433,8 @@ export default function AdminAiPromptDetailPage() {
           <FormGrid cols={1}>
             <FormTextField name="title" label="العنوان" required />
             <FormTextField name="description" label="الوصف" />
-            <FormTextareaField name="systemPrompt" label="System Prompt" rows={8} />
-            <FormTextareaField name="userTemplate" label="User Template" rows={6} />
+            <FormTextareaField name="systemPrompt" label="موجّه النظام (System Prompt)" rows={8} />
+            <FormTextareaField name="userTemplate" label="قالب المستخدم" rows={6} />
           </FormGrid>
         </EntityEditDialog>
       )}

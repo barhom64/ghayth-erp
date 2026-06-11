@@ -286,7 +286,7 @@ function ApprovalSubmitButton({ className }: { className: string }) {
   const { formState } = useFormContext();
   return (
     <Button type="submit" size="sm" className={className} rateLimitAware disabled={formState.isSubmitting}>
-      {formState.isSubmitting ? "جارٍ..." : "تأكيد"}
+      {formState.isSubmitting ? "جاري..." : "تأكيد"}
     </Button>
   );
 }

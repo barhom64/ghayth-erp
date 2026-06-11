@@ -188,7 +188,7 @@ export function FormShell<TSchema extends FieldValues>({
               className="min-w-[7rem]"
               rateLimitAware
             >
-              {submitting ? "جارٍ الحفظ..." : submitLabel}
+              {submitting ? "جاري الحفظ..." : submitLabel}
             </Button>
           </div>
         )}

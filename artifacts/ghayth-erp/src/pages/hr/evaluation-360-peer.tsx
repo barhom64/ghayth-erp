@@ -189,7 +189,7 @@ export default function Evaluation360PeerPage() {
           <Button variant="outline">إلغاء</Button>
         </Link>
         <GuardedButton perm="hr:create" onClick={handleSubmit} disabled={submitMutation.isPending} rateLimitAware>
-          {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال التقييم"}
+          {submitMutation.isPending ? "جاري الإرسال..." : "إرسال التقييم"}
         </GuardedButton>
       </div>
     </PageShell>

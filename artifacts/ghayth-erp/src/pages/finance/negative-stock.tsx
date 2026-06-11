@@ -186,7 +186,7 @@ export default function NegativeStockPage() {
   return (
     <PageShell
       title="تشغيلات بمخزون سالب"
-      subtitle="lot.quantity < 0 — لا يجب أن يحدث أبداً. وجوده يعني خطأ يحتاج فحص + تصحيح قبل تقرير الميزانية."
+      subtitle="كميات مخزون سالبة — لا يجب أن تحدث أبداً؛ وجودها يعني خطأ يحتاج فحصاً وتصحيحاً قبل تقرير الميزانية"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/reports", label: "التقارير" },

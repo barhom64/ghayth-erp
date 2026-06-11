@@ -45,7 +45,7 @@ const STATUS_LABEL: Record<string, string> = {
   notified: "تم الإبلاغ",
   accepted: "قَبِل",
   declined: "رفض",
-  executing: "جارٍ التنفيذ",
+  executing: "جاري التنفيذ",
   completed: "اكتمل",
   closed: "مغلق",
   cancelled: "ملغى",
@@ -346,7 +346,7 @@ export default function TransportDispatchBoard() {
                               <div className="mt-1 text-[10px] text-rose-700">سبب الرفض: {o.declinedReason}</div>
                             )}
                             {isBusy && (
-                              <div className="mt-1 text-[10px] text-status-info-foreground">جارٍ إعادة الجدولة…</div>
+                              <div className="mt-1 text-[10px] text-status-info-foreground">جاري إعادة الجدولة…</div>
                             )}
                           </div>
                         );

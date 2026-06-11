@@ -492,7 +492,7 @@ function ExpenseRulesPanel() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
             <Button onClick={save} disabled={submitting} rateLimitAware>
-              {submitting ? "جارٍ الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
+              {submitting ? "جاري الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -861,7 +861,7 @@ function IntakeRulesPanel() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
             <Button onClick={save} disabled={submitting} rateLimitAware>
-              {submitting ? "جارٍ الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
+              {submitting ? "جاري الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
             </Button>
           </DialogFooter>
         </DialogContent>

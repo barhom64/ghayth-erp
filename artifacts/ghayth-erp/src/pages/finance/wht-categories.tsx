@@ -96,7 +96,7 @@ export default function WhtCategoriesPage() {
     },
     {
       key: "nameEn",
-      header: "Name (EN)",
+      header: "الاسم (إنجليزي)",
       render: (c) => <span className="text-muted-foreground text-sm" dir="ltr">{c.nameEn || "—"}</span>,
     },
     {

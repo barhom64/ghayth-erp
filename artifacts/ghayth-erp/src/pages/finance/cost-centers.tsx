@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { STATUSES } from "@/lib/constants";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   PageShell,
@@ -193,7 +194,7 @@ export default function CostCentersPage() {
       header: "الحالة",
       render: (r) => r.status === "active"
         ? <Badge className="bg-emerald-100 text-emerald-800 text-xs">نشط</Badge>
-        : <Badge variant="outline" className="text-xs">{r.status}</Badge>,
+        : <Badge variant="outline" className="text-xs">{STATUSES[r.status] ?? r.status}</Badge>,
     },
     {
       key: "__actions",
@@ -234,7 +235,7 @@ export default function CostCentersPage() {
   return (
     <PageShell
       title="مراكز التكلفة"
-      subtitle="cost_centers — تستخدم كأبعاد محاسبية لتحليل المصاريف والأرباح حسب المشروع / المركبة / الموظف / الإدارة"
+      subtitle="مراكز التكلفة — تستخدم كأبعاد محاسبية لتحليل المصاريف والأرباح حسب المشروع / المركبة / الموظف / الإدارة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/accounts", label: "الحسابات" },

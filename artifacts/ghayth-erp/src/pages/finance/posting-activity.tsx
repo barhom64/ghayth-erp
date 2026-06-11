@@ -241,7 +241,7 @@ export default function PostingActivityPage() {
   return (
     <PageShell
       title="نشاط الترحيل المحاسبي اليومي"
-      subtitle="Real-time GL activity feed — كل قيد رُحِّل اليوم، من أنشأه، كم بلغ، هل غير اعتيادي؟"
+      subtitle="نشاط الترحيل اللحظي — كل قيد رُحِّل اليوم، من أنشأه، كم بلغ، وهل هو غير اعتيادي"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/journal", label: "القيود" },

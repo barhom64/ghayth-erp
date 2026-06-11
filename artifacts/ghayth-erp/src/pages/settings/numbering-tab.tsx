@@ -279,7 +279,7 @@ export function NumberingTab() {
                 }}
                 disabled={backfillAllMut.isPending}
               >
-                {backfillAllMut.isPending ? "جارٍ التشغيل..." : "تشغيل الجرد"}
+                {backfillAllMut.isPending ? "جاري التشغيل..." : "تشغيل الجرد"}
               </Button>
             </div>
           </CardContent>

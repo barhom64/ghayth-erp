@@ -288,7 +288,7 @@ export default function CostCenterPnlPage() {
   return (
     <PageShell
       title="مقارنة ربحية مراكز التكلفة"
-      subtitle="P&L لكل مركز تكلفة في فترة واحدة — أي مركز رابح / خاسر / يحتاج تدخل"
+      subtitle="قائمة دخل لكل مركز تكلفة في فترة واحدة — أي مركز رابح / خاسر / يحتاج تدخل"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/cost-centers", label: "مراكز التكلفة" },

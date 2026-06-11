@@ -113,7 +113,7 @@ export default function CommissionsSummaryReport() {
   return (
     <PageShell
       title="تقرير العمولات (ملخص)"
-      subtitle="KPIs + تفصيل حسب الحالة / الشهر / الموظف + آخر 100 احتساب"
+      subtitle="مؤشرات إجمالية + تفصيل حسب الحالة / الشهر / الموظف + آخر 100 احتساب"
       breadcrumbs={[
         { href: "/umrah", label: "إدارة العمرة" },
         { href: "/umrah/reports", label: "التقارير" },

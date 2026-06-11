@@ -328,10 +328,10 @@ export default function TaxFilingCalendarPage() {
             <div>
               <div className="font-semibold mb-1">المواعيد القانونية:</div>
               <ul className="space-y-0.5 text-muted-foreground">
-                <li>• <strong>VAT (شهري)</strong>: آخر يوم من الشهر التالي للفترة الضريبية</li>
-                <li>• <strong>VAT (ربعي)</strong>: آخر يوم من الشهر التالي لنهاية الربع</li>
-                <li>• <strong>WHT</strong>: اليوم 10 من الشهر التالي</li>
-                <li>• <strong>GOSI</strong>: اليوم 15 من الشهر التالي</li>
+                <li>• <strong>القيمة المضافة (شهري)</strong>: آخر يوم من الشهر التالي للفترة الضريبية</li>
+                <li>• <strong>القيمة المضافة (ربعي)</strong>: آخر يوم من الشهر التالي لنهاية الربع</li>
+                <li>• <strong>ضريبة الاستقطاع (WHT)</strong>: اليوم 10 من الشهر التالي</li>
+                <li>• <strong>التأمينات الاجتماعية (GOSI)</strong>: اليوم 15 من الشهر التالي</li>
                 <li>• <strong>الزكاة وضريبة الدخل</strong>: 30 أبريل من السنة التالية</li>
               </ul>
             </div>

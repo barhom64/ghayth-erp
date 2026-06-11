@@ -191,7 +191,7 @@ export default function ProductCatalogPage() {
   return (
     <PageShell
       title="كتالوج المنتجات والخدمات المحاسبي"
-      subtitle="Product Accounting Catalog — كل منتج/خدمة له توجيه افتراضي للحساب ومركز التكلفة والكيان المرتبط، ينطبق تلقائياً عند اختياره في بنود الفاتورة"
+      subtitle="الدليل المحاسبي للمنتجات — كل منتج/خدمة له توجيه افتراضي للحساب ومركز التكلفة والكيان المرتبط، ينطبق تلقائياً عند اختياره في بنود الفاتورة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/accounts", label: "الحسابات" },

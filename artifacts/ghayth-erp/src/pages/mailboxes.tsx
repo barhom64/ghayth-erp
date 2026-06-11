@@ -320,9 +320,9 @@ function ConnectDialog({ open, onClose, onSuccess }: { open: boolean; onClose: (
               <p className="text-xs text-muted-foreground">
                 التوكنات تُشفّر قبل الحفظ. أو ألصق Access/Refresh tokens يدوياً أدناه إذا كنت تعرفهم.
               </p>
-              <Input placeholder="Access Token (اختياري — للإدخال اليدوي)" value={form.accessToken}
+              <Input placeholder="رمز الوصول (Access Token) — اختياري للإدخال اليدوي" value={form.accessToken}
                 onChange={(e) => setForm({ ...form, accessToken: e.target.value })} />
-              <Input placeholder="Refresh Token (اختياري)" value={form.refreshToken}
+              <Input placeholder="رمز التجديد (Refresh Token) — اختياري" value={form.refreshToken}
                 onChange={(e) => setForm({ ...form, refreshToken: e.target.value })} />
               <Input placeholder="Azure Tenant ID (اختياري)" value={form.tenantId}
                 onChange={(e) => setForm({ ...form, tenantId: e.target.value })} />
@@ -330,23 +330,23 @@ function ConnectDialog({ open, onClose, onSuccess }: { open: boolean; onClose: (
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="IMAP Host (e.g. imap.hostinger.com)"
+                <Input placeholder="خادم IMAP (مثل imap.hostinger.com)"
                   value={form.imapHost} onChange={(e) => setForm({ ...form, imapHost: e.target.value })} />
-                <Input type="number" placeholder="IMAP Port" value={form.imapPort}
+                <Input type="number" placeholder="منفذ IMAP" value={form.imapPort}
                   onChange={(e) => setForm({ ...form, imapPort: Number(e.target.value) })} />
-                <Input placeholder="IMAP Username" value={form.imapUsername}
+                <Input placeholder="اسم مستخدم IMAP" value={form.imapUsername}
                   onChange={(e) => setForm({ ...form, imapUsername: e.target.value })} />
-                <Input type="password" placeholder="IMAP Password" value={form.imapPassword}
+                <Input type="password" placeholder="كلمة مرور IMAP" value={form.imapPassword}
                   onChange={(e) => setForm({ ...form, imapPassword: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="SMTP Host (اختياري)" value={form.smtpHost}
+                <Input placeholder="خادم SMTP (اختياري)" value={form.smtpHost}
                   onChange={(e) => setForm({ ...form, smtpHost: e.target.value })} />
-                <Input type="number" placeholder="SMTP Port" value={form.smtpPort}
+                <Input type="number" placeholder="منفذ SMTP" value={form.smtpPort}
                   onChange={(e) => setForm({ ...form, smtpPort: Number(e.target.value) })} />
-                <Input placeholder="SMTP Username (اختياري)" value={form.smtpUsername}
+                <Input placeholder="اسم مستخدم SMTP (اختياري)" value={form.smtpUsername}
                   onChange={(e) => setForm({ ...form, smtpUsername: e.target.value })} />
-                <Input type="password" placeholder="SMTP Password (اختياري)" value={form.smtpPassword}
+                <Input type="password" placeholder="كلمة مرور SMTP (اختياري)" value={form.smtpPassword}
                   onChange={(e) => setForm({ ...form, smtpPassword: e.target.value })} />
               </div>
             </>
