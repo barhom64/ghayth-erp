@@ -384,14 +384,14 @@ export interface PurchaseTreatment {
 }
 
 export const PURCHASE_LINE_TREATMENTS: PurchaseTreatment[] = [
-  { value: "inventory", label: "مخزون (Inventory)", accountPurpose: "inventory_receipt", defaultCode: "1250", capitalize: true, hint: "يُرسمَل في المخزون ويُسوّى عند استلام البضاعة (GRN)." },
+  { value: "inventory", label: "مخزون (Inventory)", accountPurpose: "inventory_receipt", defaultCode: "1150", capitalize: true, hint: "يُرسمَل في المخزون ويُسوّى عند استلام البضاعة (GRN)." },
   { value: "expense", label: "مصروف (Expense)", accountPurpose: "general_expense", defaultCode: "6900", capitalize: false, hint: "يُقيَّد مصروفًا عامًا فور الاستلام." },
   { value: "fixed_asset", label: "أصل ثابت (Fixed Asset)", accountPurpose: "fixed_asset_purchase", defaultCode: "1500", capitalize: true, hint: "يُرسمَل كأصل ثابت ويبدأ إهلاكه الشهري تلقائيًا." },
   { value: "project_cost", label: "تكلفة مشروع (Project Cost)", accountPurpose: "project_cost", defaultCode: "6800", capitalize: false, hint: "يُحمَّل على تكلفة المشروع المرتبط." },
   { value: "vehicle_cost", label: "تكلفة مركبة (Vehicle Cost)", accountPurpose: "vehicle_expense", defaultCode: "6500", capitalize: false, hint: "يُحمَّل على مصروفات المركبة." },
   { value: "property_maintenance", label: "صيانة عقار (Property Maintenance)", accountPurpose: "property_maintenance_expense", defaultCode: "6600", capitalize: false, hint: "يُحمَّل على صيانة العقار." },
-  { value: "custody", label: "عهدة موظف (Custody)", accountPurpose: "employee_custody", defaultCode: "1130", capitalize: true, hint: "يُسجَّل كعهدة على الموظف (أصل) حتى التسوية." },
-  { value: "prepayment", label: "دفعة مقدمة (Prepayment)", accountPurpose: "supplier_prepayment", defaultCode: "1340", capitalize: true, hint: "يُسجَّل دفعة مقدمة للمورد (أصل) حتى التسوية." },
+  { value: "custody", label: "عهدة موظف (Custody)", accountPurpose: "employee_custody", defaultCode: "1142", capitalize: true, hint: "يُسجَّل كعهدة على الموظف (أصل) حتى التسوية." },
+  { value: "prepayment", label: "دفعة مقدمة (Prepayment)", accountPurpose: "supplier_prepayment", defaultCode: "1170", capitalize: true, hint: "يُسجَّل دفعة مقدمة للمورد (أصل) حتى التسوية." },
   { value: "service", label: "خدمة (Service)", accountPurpose: "service_expense", defaultCode: "6920", capitalize: false, hint: "يُقيَّد مصروف خدمات." },
 ];
 
@@ -425,4 +425,52 @@ export function deriveRelatedEntity(
     default:
       return { type: "", id: "" };
   }
+}
+
+// ── #1945 item 5 — direction-aware voucher (صرف=مصروف / قبض=إيراد) ──────
+// Which chart-of-accounts TYPES the voucher's counter account may be, per
+// voucher operationType. Mirrors the backend enforcement map
+// (api-server/src/lib/financeOperationContext.ts VOUCHER_OPERATION_COUNTER_TYPES)
+// — the backend rejects with 422; this map drives the form hint so the
+// operator picks right the first time. Unknown operationType falls back to
+// the direction invariant: قبض لا يقيَّد على مصروف، صرف لا يقيَّد على إيراد.
+export type AccountTypeKey = "asset" | "liability" | "equity" | "revenue" | "expense";
+
+export const ACCOUNT_TYPE_LABELS_AR: Record<AccountTypeKey, string> = {
+  asset: "أصول/ذمم",
+  liability: "التزامات",
+  equity: "حقوق ملكية",
+  revenue: "إيراد",
+  expense: "مصروف",
+};
+
+export const VOUCHER_COUNTER_ACCOUNT_TYPES: Record<string, AccountTypeKey[]> = {
+  // receipt direction (قبض)
+  receipt: ["revenue"],
+  rent: ["revenue"],
+  invoice_payment: ["asset"],
+  deposit: ["liability"],
+  refund: ["expense", "revenue"],
+  // payment direction (صرف)
+  payment: ["expense"],
+  vendor_invoice: ["liability", "expense"],
+  salary: ["expense"],
+  advance: ["asset"],
+  legal_fee: ["expense"],
+  purchase: ["expense", "asset"],
+  custody: ["asset"],
+  insurance: ["expense", "asset"],
+  maintenance: ["expense"],
+};
+
+/** Human hint for the voucher form: which account types the chosen
+ *  operation expects for its counter account. */
+export function voucherCounterAccountHint(operationType: string, direction: "receipt" | "payment"): string {
+  const allowed = VOUCHER_COUNTER_ACCOUNT_TYPES[operationType];
+  if (allowed) {
+    return `هذه العملية تتوقع حساب ${allowed.map((t) => ACCOUNT_TYPE_LABELS_AR[t]).join(" أو ")}.`;
+  }
+  return direction === "receipt"
+    ? "سند القبض لا يُقيَّد على حساب مصروف."
+    : "سند الصرف لا يُقيَّد على حساب إيراد.";
 }

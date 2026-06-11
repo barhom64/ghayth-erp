@@ -51,6 +51,131 @@ const PURCHASE_LINE_TREATMENTS = [
   "property_maintenance", "custody", "prepayment", "service",
 ] as const;
 
+// #1945 FIN-SUB-01 (#2097) — GRN per-line treatment → default DR account
+// purpose. Two literals were wrong on the real SOCPA chart (and the default
+// seed, which is identical): `inventory`→1250 is *leasehold improvements* (a
+// fixed asset, NOT inventory) and `custody`→1130 is the AR control header.
+// Corrected to the real control accounts; the `*_receipt`/`employee_custody`
+// intents (in MAPPING_INTENT) resolve the postable leaf on any tenant chart,
+// so the literal is only a last-resort fallback. Module scope so the
+// pre-flight enforcement and the posting path share ONE source of truth.
+const GRN_TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
+  inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1150" },
+  expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
+  fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
+  project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
+  vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
+  property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
+  custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1142" },
+  prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1170" },
+  service:              { purpose: "service_expense",              side: "debit", defaultCode: "6920" },
+};
+
+// Required chart nature per treatment. Asset-bearing treatments must hit the
+// balance sheet; cost treatments the P&L; project_cost may be either (direct
+// expense or WIP/CIP capitalisation).
+const GRN_TREATMENT_ACCOUNT_NATURE: Record<string, string[]> = {
+  inventory:            ["asset"],
+  fixed_asset:          ["asset"],
+  prepayment:           ["asset"],
+  custody:              ["asset"],
+  expense:              ["expense"],
+  service:              ["expense"],
+  vehicle_cost:         ["expense"],
+  property_maintenance: ["expense"],
+  project_cost:         ["expense", "asset"],
+};
+
+/** Resolve the DR account a GRN line will post to — the SAME chain the posting
+ *  path uses: allocation rule/manual pin → treatment-purpose map → default
+ *  inventory account. Shared so the pre-flight gate can never diverge from the
+ *  actual posting. */
+async function resolveGrnDrAccount(
+  companyId: number,
+  line: { lineTreatment: string | null; accountCode: string | null; costCenterId: number | null; dims: Record<string, number | null>; sourceTable: string; sourceLineId: number },
+  vendorId: number | null,
+  fe: { resolveAccountCode: (c: number, op: string, side: "debit" | "credit", fb: string) => Promise<string> },
+  resolveLineAllocation: (typeof import("../lib/accountingAllocation.js"))["resolveLineAllocation"],
+  defaultInvAccount: string,
+): Promise<string> {
+  const res = await resolveLineAllocation({
+    companyId, documentType: "grn", lineType: line.lineTreatment ?? undefined, entityType: "vendor",
+    accountCode: line.accountCode, costCenterId: line.costCenterId,
+    dimensions: { ...line.dims, vendorId } as any,
+    sourceTable: line.sourceTable, sourceLineId: line.sourceLineId,
+  } as any);
+  let acct = res.resolvedAccountCode;
+  if (!acct && line.lineTreatment) {
+    const map = GRN_TREATMENT_PURPOSE[line.lineTreatment];
+    if (map) acct = await fe.resolveAccountCode(companyId, map.purpose, map.side, map.defaultCode);
+  }
+  return acct ?? defaultInvAccount;
+}
+
+/**
+ * #1945 FIN-SUB-01 (#2097) — ENFORCE treatment ↔ account nature, BEFORE any
+ * write. Each received line's treatment (and the preview the operator saw)
+ * must match the chart nature of the account it actually posts to:
+ *   inventory / fixed_asset / prepayment / custody → asset (balance sheet)
+ *   expense / service / vehicle_cost / property_maintenance → expense (P&L)
+ *   project_cost → expense OR asset (expensed or capitalised to WIP/CIP)
+ * A mismatch (e.g. a fixed-asset line on an expense account via a stale pin or
+ * a misconfigured rule) throws 422 — run as a PRE-FLIGHT before the GRN row,
+ * its items, or receivedQty are touched, so a rejection leaves ZERO trace
+ * (full success or full rejection). Reads live chart types — no hardcoded codes.
+ */
+async function assertGrnTreatmentNature(
+  companyId: number,
+  vendorId: number | null,
+  lines: Array<{ label: string; lineTreatment: string | null; accountCode: string | null; costCenterId: number | null; dims: Record<string, number | null>; sourceTable: string; sourceLineId: number }>,
+): Promise<void> {
+  const constrained = lines.filter((l) => l.lineTreatment && GRN_TREATMENT_ACCOUNT_NATURE[l.lineTreatment]);
+  if (constrained.length === 0) return;
+
+  const { financialEngine } = await import("../lib/engines/index.js");
+  const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+  const defaultInvAccount = await financialEngine.resolveAccountCode(companyId, "inventory_receipt", "debit", "1150");
+
+  const resolved = await Promise.all(
+    constrained.map(async (l) => ({ line: l, acct: await resolveGrnDrAccount(companyId, l, vendorId, financialEngine, resolveLineAllocation, defaultInvAccount) })),
+  );
+  const distinctCodes = [...new Set(resolved.map((r) => r.acct))];
+  const typeRows = await rawQuery<{ code: string; type: string; name: string }>(
+    `SELECT code, type, name FROM chart_of_accounts
+      WHERE "companyId" = $1 AND code = ANY($2::text[]) AND "deletedAt" IS NULL`,
+    [companyId, distinctCodes],
+  );
+  const accByCode = new Map(typeRows.map((r) => [r.code, { type: r.type, name: r.name }]));
+
+  const violations = resolved
+    .map((r) => {
+      const allowed = GRN_TREATMENT_ACCOUNT_NATURE[r.line.lineTreatment!];
+      const acc = accByCode.get(r.acct);
+      if (!acc) return null; // missing account → createJournalEntry rejects it later with its own message
+      if (allowed.includes(acc.type)) return null;
+      return { label: r.line.label, treatment: r.line.lineTreatment!, acct: r.acct, accName: acc.name, accType: acc.type, allowed };
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null);
+
+  if (violations.length > 0) {
+    const v = violations[0];
+    const natureAr: Record<string, string> = { asset: "أصل/ميزانية", liability: "التزام", equity: "حقوق ملكية", revenue: "إيراد", expense: "مصروف" };
+    const treatmentAr: Record<string, string> = {
+      inventory: "مخزون", fixed_asset: "أصل ثابت", prepayment: "مدفوع مقدماً", custody: "عهدة",
+      expense: "مصروف", service: "خدمة", vehicle_cost: "تكلفة مركبة", property_maintenance: "صيانة عقار", project_cost: "تكلفة مشروع",
+    };
+    throw new ValidationError(
+      `معالجة «${treatmentAr[v.treatment] ?? v.treatment}» للبند «${v.label}» لا يجوز ترحيلها على حساب ${natureAr[v.accType] ?? v.accType} «${v.acct} ${v.accName}» — ` +
+      `المتوقَّع حساب ${v.allowed.map((t) => natureAr[t] ?? t).join(" أو ")}.`,
+      {
+        field: "items",
+        fix: "اختر للبند حسابًا من النوع المطابق لمعالجته (مخزون→حساب مخزون، أصل→حساب أصول/ميزانية، مصروف→حساب مصروف) أو صحّح معالجة البند.",
+        meta: { violations },
+      } as any,
+    );
+  }
+}
+
 const purchaseLineDimsSchema = {
   accountId: z.coerce.number().optional(),
   accountCode: z.string().optional(),
@@ -982,6 +1107,34 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       throw new ValidationError("لا توجد كميات للاستلام");
     }
 
+    // #1945 FIN-SUB-01 (#2097) — PRE-FLIGHT treatment↔nature gate. Runs BEFORE
+    // any permanent write (the GRN row, its items, receivedQty, PO status), so
+    // a rejected receipt leaves ZERO operational trace — full success or full
+    // rejection. Resolves each line's DR account from the PO item (identical
+    // inputs to the post-creation resolution, which copies these verbatim onto
+    // the GRN items) and rejects 422 if a treatment lands on a wrong-nature
+    // account (e.g. a fixed-asset line on an expense account → asset in P&L).
+    await assertGrnTreatmentNature(
+      scope.companyId,
+      (po.supplierId as number | null) ?? null,
+      inputLines.map((l) => {
+        const it = poItemMap.get(l.poItemId)!;
+        return {
+          label: String(it.itemName ?? l.poItemId),
+          lineTreatment: it.lineTreatment ?? null,
+          accountCode: it.accountCode ?? null,
+          costCenterId: it.costCenterId ?? null,
+          dims: {
+            projectId: it.projectId ?? null, vehicleId: it.vehicleId ?? null, propertyId: it.propertyId ?? null,
+            unitId: it.unitId ?? null, assetId: it.assetId ?? null, employeeId: it.employeeId ?? null,
+            driverId: it.driverId ?? null, contractId: it.contractId ?? null, productId: it.productId ?? null,
+          },
+          sourceTable: "purchase_order_items",
+          sourceLineId: l.poItemId,
+        };
+      }),
+    );
+
     // Compute totals for this GRN
     let subtotal = 0;
     for (const l of inputLines) {
@@ -1139,22 +1292,8 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2115"),
     ]);
 
-    // Resolve a default account code per lineTreatment. Tenants that
-    // haven't mapped these purposes yet inherit the seed defaults
-    // (1250 inventory etc) — same fallback shape as
-    // resolveAccountCode uses elsewhere.
-    const TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
-      inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1250" },
-      expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
-      fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
-      project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
-      vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
-      property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
-      custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1130" },
-      prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1340" },
-      service:              { purpose: "service_expense",              side: "debit", defaultCode: "6920" },
-    };
-
+    // Per-line DR routing uses the module-scope GRN_TREATMENT_PURPOSE map
+    // (shared with the pre-flight gate above so they can never diverge).
     // Read the dimensional payload from the receipt lines we just
     // inserted. `unitPrice` × `receivedQty` per line is the per-line
     // subtotal; sum to verify against the header `subtotal` for
@@ -1191,7 +1330,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // a safety net so unclassified receipts still post somewhere
     // sensible until Phase 6 forces every line to carry a treatment.
     const defaultInvAccount = await financialEngine.resolveAccountCode(
-      scope.companyId, "inventory_receipt", "debit", "1250"
+      scope.companyId, "inventory_receipt", "debit", "1150"
     );
 
     // Phase 5.4 — run the allocation resolver on every receipt line.
@@ -1299,18 +1438,27 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       umrahAgentId: number | null;
     };
     const buckets = new Map<string, DrBucket>();
+    // #1945 FIN-SUB-01 (#2097) — collect (treatment → resolved account) per
+    // line so we can ENFORCE, before posting, that the actual DR account's
+    // nature matches the line's treatment. Without this the GRN routed by
+    // treatment but never verified the account, so a `fixed_asset` line whose
+    // pinned/rule account was an expense posted an asset straight to P&L
+    // (R-005). That nature gate now runs as a PRE-FLIGHT before any write (see
+    // assertGrnTreatmentNature above) — the account resolution here is identical
+    // (same inputs, copied verbatim onto the GRN items), so the posted account
+    // is guaranteed nature-correct.
     let postedNet = 0;
     for (let i = 0; i < receiptLineRows.length; i++) {
       const ln = receiptLineRows[i];
       const res = lineResolutions[i];
 
-      // Account resolution chain:
+      // Account resolution chain (mirrors resolveGrnDrAccount):
       //   1. Resolver picked an account (rule match or manual override)
-      //   2. Fall back to TREATMENT_PURPOSE map (Phase 4.2)
+      //   2. Fall back to GRN_TREATMENT_PURPOSE map (Phase 4.2)
       //   3. Fall back to defaultInvAccount (legacy)
       let acct = res.resolvedAccountCode;
       if (!acct) {
-        const map = ln.lineTreatment ? TREATMENT_PURPOSE[ln.lineTreatment] : null;
+        const map = ln.lineTreatment ? GRN_TREATMENT_PURPOSE[ln.lineTreatment] : null;
         if (map) {
           acct = await financialEngine.resolveAccountCode(
             scope.companyId, map.purpose, map.side, map.defaultCode
@@ -1386,6 +1534,8 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         umrahSeasonId: null, umrahAgentId: null,
       });
     }
+    // (treatment↔nature is enforced as a pre-flight before any write — see
+    // assertGrnTreatmentNature near the top of the receive handler.)
 
     const drLines = Array.from(buckets.values())
       .filter((b) => Math.abs(b.amount) >= 0.005)
