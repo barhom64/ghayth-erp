@@ -101,8 +101,11 @@ describe("#1733 — vehicle route schemas + INSERT carry the new fields", () => 
   });
 
   it("vehicle PATCH trackedFields list includes the technical-profile fields", () => {
+    // Anchor on the vehicle trackedFields block (the one that carries
+    // payloadKg) — fleet.ts also declares a driver trackedFields earlier,
+    // and a bare non-greedy match would land on that one instead.
     const trackedBlock = FLEET_ROUTE.match(
-      /const trackedFields = \[[\s\S]{0,800}?\] as const;/,
+      /const trackedFields = \[[\s\S]*?"payloadKg"[\s\S]*?\] as const;/,
     )?.[0]!;
     expect(trackedBlock).toContain("payloadKg");
     expect(trackedBlock).toContain("safetyFeatures");
