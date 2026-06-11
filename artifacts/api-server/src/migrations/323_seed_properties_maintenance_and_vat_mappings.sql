@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 300_seed_properties_maintenance_and_vat_mappings.sql
+-- 323_seed_properties_maintenance_and_vat_mappings.sql
 -- ---------------------------------------------------------------------------
 -- WHAT:  Extends migration 257 with the FOUR operationTypes propertiesEngine
 --        also resolves but which were never seeded:
