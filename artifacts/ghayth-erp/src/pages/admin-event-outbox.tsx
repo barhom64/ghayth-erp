@@ -85,7 +85,7 @@ export default function AdminEventOutbox() {
               }
             }}
           >
-            <Zap className="h-4 w-4 me-1" /> {drainMut.isPending ? "جارٍ التفريغ..." : "تفريغ الآن"}
+            <Zap className="h-4 w-4 me-1" /> {drainMut.isPending ? "جاري التفريغ..." : "تفريغ الآن"}
           </GuardedButton>
         </div>
       }

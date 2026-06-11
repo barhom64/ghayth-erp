@@ -277,7 +277,7 @@ export default function VendorContractsPage() {
   return (
     <PageShell
       title="عقود الموردين"
-      subtitle="vendor_contracts — إدارة عقود الإطار مع الموردين، تواريخ النهاية، التنبيه قبل الانتهاء"
+      subtitle="إدارة عقود الإطار مع الموردين، تواريخ النهاية، والتنبيه قبل الانتهاء"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/vendors", label: "الموردون" },
@@ -493,7 +493,7 @@ export default function VendorContractsPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">جارٍ التحميل...</p>
+              <p className="text-sm text-muted-foreground">جاري التحميل...</p>
             )}
           </DialogContent>
         </Dialog>

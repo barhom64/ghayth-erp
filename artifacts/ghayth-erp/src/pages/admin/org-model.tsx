@@ -108,7 +108,7 @@ function LegalEntitiesTab() {
 
   const columns: DataTableColumn<LegalEntity>[] = [
     { key: "nameAr", header: "الاسم العربي", render: (r) => <span className="font-medium">{r.nameAr}</span> },
-    { key: "nameEn", header: "Name (EN)", render: (r) => r.nameEn || "—" },
+    { key: "nameEn", header: "الاسم (إنجليزي)", render: (r) => r.nameEn || "—" },
     { key: "crNumber", header: "السجل التجاري", render: (r) => r.crNumber || "—" },
     { key: "vatNumber", header: "الرقم الضريبي", render: (r) => r.vatNumber || "—" },
     { key: "isActive", header: "الحالة", render: (r) => <PageStatusBadge status={r.isActive ? "active" : "inactive"} /> },
@@ -519,7 +519,7 @@ function ApprovalAuthoritiesTab() {
   const save = async () => {
     const id = Number(form.assignmentId);
     if (!id) { toast({ title: "معرّف تعيين الموظف مطلوب", variant: "destructive" }); return; }
-    if (!form.featureKey.trim() || !form.action.trim()) { toast({ title: "feature و action مطلوبان", variant: "destructive" }); return; }
+    if (!form.featureKey.trim() || !form.action.trim()) { toast({ title: "حقلا الميزة (feature) والإجراء (action) مطلوبان", variant: "destructive" }); return; }
     if (!form.reason.trim()) { toast({ title: "السبب مطلوب — هذا تجاوز للقالب", variant: "destructive" }); return; }
     try {
       await apiFetch("/org/approval-authorities", { method: "POST", body: JSON.stringify({
@@ -545,8 +545,8 @@ function ApprovalAuthoritiesTab() {
       <div><div className="font-medium">{r.employeeName || `#${r.assignmentId}`}</div>
       <div className="text-xs text-muted-foreground">assignment #{r.assignmentId}</div></div>
     )},
-    { key: "featureKey", header: "feature", render: (r) => <code className="text-xs font-mono">{r.featureKey}</code> },
-    { key: "action", header: "action", render: (r) => <Badge variant="outline">{r.action}</Badge> },
+    { key: "featureKey", header: "الميزة (feature)", render: (r) => <code className="text-xs font-mono">{r.featureKey}</code> },
+    { key: "action", header: "الإجراء (action)", render: (r) => <Badge variant="outline">{r.action}</Badge> },
     { key: "maxAmount", header: "الحد الأقصى", render: (r) => r.maxAmount != null
       ? <span className="font-mono">{formatNumber(r.maxAmount)} {r.currency}</span>
       : <Badge variant="secondary">بلا حد</Badge>

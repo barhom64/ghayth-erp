@@ -161,7 +161,7 @@ export default function BankManualMatchPage() {
             </Button>
           </div>
 
-          {jeSearching && <p className="text-muted-foreground text-sm text-center">جارٍ البحث...</p>}
+          {jeSearching && <p className="text-muted-foreground text-sm text-center">جاري البحث...</p>}
 
           {jeResults.length > 0 && (
             <div className="overflow-x-auto max-h-96 overflow-y-auto border rounded">
