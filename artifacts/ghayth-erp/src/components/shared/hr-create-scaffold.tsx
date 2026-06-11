@@ -212,7 +212,7 @@ export function HrCreateScaffold({
           </Badge>
         )}
         <Button onClick={onSubmit} disabled={!canSubmit}>
-          {saving ? "جارٍ الحفظ..." : saveLabel}
+          {saving ? "جاري الحفظ..." : saveLabel}
         </Button>
       </div>
     </div>

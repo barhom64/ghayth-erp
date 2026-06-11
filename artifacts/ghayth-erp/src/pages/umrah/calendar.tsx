@@ -40,7 +40,14 @@ type CalendarLayer =
   | "nusk_expiring"
   // §4 Phase 2 of #1870.
   | "nusk_invoice_issued"
-  | "penalty_created";
+  | "penalty_created"
+  // U-02b M5b (#2080) — unified-contract transport requests (reads
+  // from transport_bookings, written via POST /umrah/groups/:id/
+  // transport-requests). Sits next to `transport_trip` (which still
+  // reads from the legacy umrah_transport table). Both layers stay
+  // enabled by default so historic + contract activity surface
+  // together.
+  | "transport_request";
 
 type ViewMode = "month" | "year";
 
@@ -80,6 +87,11 @@ const LAYER_HREF: Record<CalendarLayer, (ids: number[], date: string) => string>
   nusk_expiring:       ()           => `/umrah/nusk-invoices`,
   nusk_invoice_issued: ()           => `/umrah/nusk-invoices`,
   penalty_created:     ()           => `/umrah/penalties`,
+  // U-02b M5b — the M4 page (PR #2126) is group-scoped, not row-scoped,
+  // so the drilldown opens the page index. The operator picks the
+  // group from the page's selector. Intentionally NOT `/umrah/transport/...`
+  // because those IDs belong to a different table.
+  transport_request:   ()           => `/umrah/transport-requests`,
 };
 
 function pad(n: number): string {
@@ -120,6 +132,9 @@ export default function UmrahCalendar() {
       // §4 Phase 2 — enabled by default so the operator immediately
       // sees finance flow alongside the operational signals.
       "nusk_invoice_issued", "penalty_created",
+      // U-02b M5b — contract-transport requests on by default so the
+      // operator sees the unified path on the calendar from day one.
+      "transport_request",
     ]),
   );
 

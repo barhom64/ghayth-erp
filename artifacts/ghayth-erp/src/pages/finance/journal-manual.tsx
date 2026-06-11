@@ -305,7 +305,7 @@ export default function JournalManualPage() {
                     submitMutation.mutate({ id: actionModal.journal.id })
                   }
                 >
-                  {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال"}
+                  {submitMutation.isPending ? "جاري الإرسال..." : "إرسال"}
                 </GuardedButton>
               )}
               {actionModal.type === "review" && (
@@ -348,7 +348,7 @@ export default function JournalManualPage() {
                     postMutation.mutate({ id: actionModal.journal.id })
                   }
                 >
-                  {postMutation.isPending ? "جارٍ الترحيل..." : "ترحيل"}
+                  {postMutation.isPending ? "جاري الترحيل..." : "ترحيل"}
                 </GuardedButton>
               )}
               <AlertDialogCancel>إلغاء</AlertDialogCancel>
