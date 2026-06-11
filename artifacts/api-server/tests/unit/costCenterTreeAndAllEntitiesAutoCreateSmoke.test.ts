@@ -83,7 +83,9 @@ describe("POST /fleet/vehicles — subsidiary + cost-centre auto-create", () => 
   });
 
   it("calls createSubsidiaryAccountsForEntity(... 'vehicle' ...) — previously absent on vehicle create", () => {
-    expect(FLEET).toMatch(/createSubsidiaryAccountsForEntity\(scope\.companyId, "vehicle", insertId, vehicleLabel\)/);
+    // #2091 — the call now also threads an optional { branchId, actorUserId }
+    // context so a provisioning failure can be recorded against the actor/branch.
+    expect(FLEET).toMatch(/createSubsidiaryAccountsForEntity\(scope\.companyId, "vehicle", insertId, vehicleLabel(, \{[^}]*\})?\)/);
   });
 
   it("vehicle label aggregates make + model + plateNumber for human-readable account names", () => {

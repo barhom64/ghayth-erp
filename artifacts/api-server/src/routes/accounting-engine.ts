@@ -579,6 +579,47 @@ router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounti
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// #2091 — subsidiary-account provisioning FAILURES review queue + retry.
+// The unresolved rows are the finance review surface; retry re-runs the
+// idempotent provisioning and self-resolves on success.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/subsidiary-account-failures", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const includeResolved = String(req.query.includeResolved ?? "") === "true";
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "entityType", "entityId", "entityName", "missingAccountTypes", reason,
+              "branchId", "actorUserId", "retryCount", resolved, "resolvedAt", "firstSeenAt", "lastAttemptAt"
+         FROM subsidiary_account_provisioning_failures
+        WHERE "companyId" = $1 ${includeResolved ? "" : "AND resolved = false"}
+        ORDER BY resolved ASC, "lastAttemptAt" DESC
+        LIMIT 500`,
+      [scope.companyId],
+    );
+    res.json({ data: rows, total: rows.length, openCount: rows.filter((r) => r.resolved === false).length });
+  } catch (err) {
+    handleRouteError(err, res, "List subsidiary provisioning failures error:");
+  }
+});
+
+router.post("/subsidiary-account-failures/:id/retry", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const result = await retrySubsidiaryProvisioningFailure(id, scope.companyId);
+    if (!result) throw new NotFoundError("سجل فشل التأسيس غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "subsidiary_provisioning.retry", entity: "subsidiary_account_provisioning_failures", entityId: id,
+      after: { resolved: result.resolved },
+    }).catch((e) => logger.error(e, "accounting-engine background task failed"));
+    res.json({ id, resolved: result.resolved, message: result.resolved ? "تم تأسيس الحسابات الفرعية وإغلاق السجل" : "لا يزال التأسيس متعذّرًا — راجع شجرة الحسابات" });
+  } catch (err) {
+    handleRouteError(err, res, "Retry subsidiary provisioning error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AUTO-CREATE SUBSIDIARY ACCOUNTS FOR A NEW ENTITY
 // ─────────────────────────────────────────────────────────────────────────────
 // #1945 FIN-003 — intent describing the CONTROL parent each per-entity
@@ -628,11 +669,12 @@ export async function createSubsidiaryAccountsForEntity(
   companyId: number,
   entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property" | "umrah_agent",
   entityId: number,
-  entityName: string
+  entityName: string,
+  opts?: { branchId?: number | null; actorUserId?: number | null }
 ): Promise<void> {
+  // declared outside the try so the catch can record the expected accountTypes
+  const accountsToCreate: SubsidiaryAccountSpec[] = [];
   try {
-    const accountsToCreate: SubsidiaryAccountSpec[] = [];
-
     if (entityType === "employee") {
       accountsToCreate.push(
         { accountType: "advance", parentCode: "1140", suffix: "سلفة", parentIntent: { type: "asset", keywords: ["سلف الموظف", "سلف"] } },
@@ -680,10 +722,14 @@ export async function createSubsidiaryAccountsForEntity(
       );
     }
 
+    // #2091 — track WHY any expected account couldn't be opened (a control
+    // parent that doesn't resolve on this company's chart) so the gap is
+    // recorded, not silently skipped by the loop's `continue`.
+    const parentFailures: string[] = [];
     await withTransaction(async (client) => {
       for (const acc of accountsToCreate) {
         const parentAccount = await resolveSubsidiaryParent(client as any, companyId, acc.parentIntent, acc.parentCode);
-        if (!parentAccount) continue;
+        if (!parentAccount) { parentFailures.push(acc.accountType); continue; }
 
         const newCode = `${parentAccount.code}-${String(entityId).padStart(4, "0")}`;
         const { rows: [existingAcc] } = await client.query(
@@ -716,9 +762,128 @@ export async function createSubsidiaryAccountsForEntity(
         );
       }
     });
+    // #2091 — record the outcome (no silent failure). Compare the expected
+    // accountTypes against what now actually exists; if any are missing (a
+    // parent that didn't resolve, a non-postable header, …) open/refresh a
+    // tracked failure for review + retry. If all present, self-heal any open
+    // failure for this entity.
+    await reconcileSubsidiaryProvisioning(
+      companyId, entityType, entityId, entityName,
+      accountsToCreate.map((a) => a.accountType),
+      parentFailures, null, opts,
+    );
   } catch (err) {
+    // An exception rolled the whole provisioning back → also a tracked failure.
+    await reconcileSubsidiaryProvisioning(
+      companyId, entityType, entityId, entityName,
+      accountsToCreate.map((a) => a.accountType),
+      [], err, opts,
+    ).catch((e) => logger.warn(e, "[subsidiary-provisioning] failed to record failure after error"));
     logger.error(err, "createSubsidiaryAccountsForEntity error:");
   }
+}
+
+/**
+ * #2091 — reconcile a subsidiary-provisioning attempt against reality and
+ * record/resolve a tracked failure. Never throws into the caller (best-effort).
+ */
+async function reconcileSubsidiaryProvisioning(
+  companyId: number,
+  entityType: string,
+  entityId: number,
+  entityName: string,
+  expectedAccountTypes: string[],
+  parentFailures: string[],
+  txnError: unknown,
+  opts?: { branchId?: number | null; actorUserId?: number | null },
+): Promise<void> {
+  try {
+    if (expectedAccountTypes.length === 0) return; // nothing was expected (e.g. property)
+
+    const have = new Set(
+      (await rawQuery<{ accountType: string }>(
+        `SELECT "accountType" FROM subsidiary_accounts
+          WHERE "companyId"=$1 AND "entityType"=$2 AND "entityId"=$3 AND "isActive"=true AND "deletedAt" IS NULL`,
+        [companyId, entityType, entityId],
+      )).map((r) => r.accountType),
+    );
+    const missing = expectedAccountTypes.filter((t) => !have.has(t));
+
+    if (missing.length === 0 && !txnError) {
+      // fully provisioned → self-heal any open failure for this entity
+      await rawExecute(
+        `UPDATE subsidiary_account_provisioning_failures
+            SET resolved=true, "resolvedAt"=now()
+          WHERE "companyId"=$1 AND "entityType"=$2 AND "entityId"=$3 AND resolved=false`,
+        [companyId, entityType, entityId],
+      );
+      return;
+    }
+
+    const reason = txnError
+      ? (txnError instanceof Error ? txnError.message : String(txnError))
+      : `تعذّر إيجاد الأصل الضابط القابل للترحيل لأنواع الحساب: ${(parentFailures.length ? parentFailures : missing).join("، ")}`;
+
+    await rawExecute(
+      `INSERT INTO subsidiary_account_provisioning_failures
+         ("companyId","branchId","entityType","entityId","entityName","missingAccountTypes",reason,"actorUserId",context,"retryCount","lastAttemptAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,now())
+       ON CONFLICT ("companyId","entityType","entityId") WHERE resolved=false
+       DO UPDATE SET
+         reason=EXCLUDED.reason,
+         "missingAccountTypes"=EXCLUDED."missingAccountTypes",
+         "branchId"=COALESCE(EXCLUDED."branchId", subsidiary_account_provisioning_failures."branchId"),
+         "actorUserId"=COALESCE(EXCLUDED."actorUserId", subsidiary_account_provisioning_failures."actorUserId"),
+         context=EXCLUDED.context,
+         "retryCount"=subsidiary_account_provisioning_failures."retryCount"+1,
+         "lastAttemptAt"=now()`,
+      [
+        companyId, opts?.branchId ?? null, entityType, entityId, entityName, missing, reason,
+        opts?.actorUserId ?? null,
+        JSON.stringify({ entityName, missing, parentFailures, errored: !!txnError }),
+      ],
+    );
+
+    // Persisted audit trail (audit_logs) + a notification event. Both awaited
+    // inside reconcile's own try/catch so they never break the caller.
+    await createAuditLog({
+      companyId, branchId: opts?.branchId ?? undefined, userId: opts?.actorUserId ?? 0,
+      action: "subsidiary_provisioning.failed", entity: "subsidiary_accounts", entityId,
+      after: { entityType, missing, reason },
+    }).catch((e) => logger.warn(e, "[subsidiary-provisioning] audit log failed"));
+    await emitEvent({
+      companyId, branchId: opts?.branchId ?? undefined, userId: opts?.actorUserId ?? null,
+      action: "finance.subsidiary_account.provisioning_failed",
+      entity: "subsidiary_accounts", entityId,
+      details: JSON.stringify({ entityType, missing, reason }),
+    }).catch((e) => logger.warn(e, "[subsidiary-provisioning] event emit failed"));
+
+    logger.error({ entityType, entityId, missing, reason }, "[subsidiary-provisioning] incomplete — recorded for review (#2091)");
+  } catch (e) {
+    logger.warn(e, "[subsidiary-provisioning] reconcile failed");
+  }
+}
+
+/**
+ * #2091 — retry a tracked subsidiary-provisioning failure. Re-runs the
+ * (idempotent) provisioning; on full success the tracked row is marked
+ * resolved by reconcileSubsidiaryProvisioning. Returns the post-retry row.
+ */
+export async function retrySubsidiaryProvisioningFailure(failureId: number, companyId: number): Promise<{ resolved: boolean } | null> {
+  const [f] = await rawQuery<{ entityType: string; entityId: number; entityName: string | null; branchId: number | null }>(
+    `SELECT "entityType","entityId","entityName","branchId"
+       FROM subsidiary_account_provisioning_failures WHERE id=$1 AND "companyId"=$2`,
+    [failureId, companyId],
+  );
+  if (!f) return null;
+  await createSubsidiaryAccountsForEntity(
+    companyId, f.entityType as any, f.entityId, f.entityName ?? `${f.entityType}#${f.entityId}`,
+    { branchId: f.branchId },
+  );
+  const [after] = await rawQuery<{ resolved: boolean }>(
+    `SELECT resolved FROM subsidiary_account_provisioning_failures WHERE id=$1`, [failureId],
+  );
+  return after ?? null;
 }
 
 export default router;
