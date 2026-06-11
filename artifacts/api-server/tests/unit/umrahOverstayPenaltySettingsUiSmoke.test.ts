@@ -24,7 +24,13 @@ describe("GET /umrah/settings — penalty knobs in the response", () => {
   it("batch-reads the 3 system_settings keys with NULLS FIRST precedence", () => {
     // Same query shape the cron (PR #1477) uses, so the UI shows
     // EXACTLY what the cron will compute against — no drift.
-    expect(ROUTE).toMatch(/SELECT key, value FROM system_settings[\s\S]{1,500}key IN \('umrah\.overstay_daily_penalty',\s*'umrah\.overstay_tier_days',\s*'umrah\.overstay_tier_amount'\)/);
+    // §8 of #1870 expanded the IN-list to include `umrah_vat_rate`,
+    // `umrah_vat_mode`, and `commission_via_hr` so the same single
+    // round-trip serves the finance-hygiene knobs too — pin the 3
+    // penalty keys are STILL present even though the list now has 6.
+    expect(ROUTE).toMatch(/SELECT key, value FROM system_settings[\s\S]{1,800}'umrah\.overstay_daily_penalty'/);
+    expect(ROUTE).toMatch(/'umrah\.overstay_tier_days'/);
+    expect(ROUTE).toMatch(/'umrah\.overstay_tier_amount'/);
     expect(ROUTE).toMatch(/ORDER BY "companyId" NULLS FIRST/);
   });
 
@@ -71,7 +77,10 @@ describe("PATCH /umrah/settings — penalty knobs in the schema + handler", () =
   it("undefined fields are skipped (omit-preserve semantics)", () => {
     // The `continue` on undefined preserves PATCH semantics — saving
     // only nuskSupplierId shouldn't touch the penalty knobs.
-    expect(ROUTE).toMatch(/for \(const \[key, value\] of penaltyFields\) \{\s*if \(value === undefined\) continue/);
+    // §8 of #1870 renamed the loop variable from `penaltyFields` to
+    // `settingsFields` because the same loop now also covers VAT +
+    // commission knobs — the omit/null/value contract is identical.
+    expect(ROUTE).toMatch(/for \(const \[key, value\] of settingsFields\) \{\s*if \(value === undefined\) continue/);
   });
 
   it("audit log captures the new keys when they changed", () => {

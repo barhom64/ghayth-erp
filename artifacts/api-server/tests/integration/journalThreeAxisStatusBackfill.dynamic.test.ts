@@ -19,6 +19,10 @@ const dbReady =
 
 const d = dbReady ? describe : describe.skip;
 
+// Base ref — each inserted row gets a UNIQUE suffix: the regenerated schema
+// dump (HR #2045) restored uniq_journal_entries_ref (companyId, ref) from
+// migration 217, which the previous drifted dump had lost — same-ref bulk
+// inserts now correctly violate it.
 const REF = "test-287-backfill";
 // Every legacy status the constraint allows, plus `reversed` (defensive).
 const STATUSES = [
@@ -38,41 +42,29 @@ d("migration 287 — three-axis status backfill (live DB)", () => {
     const [c] = await rawQuery<{ id: number }>("SELECT id FROM companies ORDER BY id LIMIT 1");
     companyId = c.id;
 
-    // Insert one row per (status × isPaid), with the three axes left NULL so
-    // the backfill has to populate them.
-    await rawExecute(`DELETE FROM journal_entries WHERE ref = $1`, [REF]);
+    // Insert one row per (status × isPaid). The three axes are now filled by
+    // the DB trigger (migration 311) ON INSERT — no manual backfill needed.
+    // balancesApplied is set REALISTICALLY (true for the posted-family statuses)
+    // because the trigger derives postingStatus from balancesApplied, not from
+    // `status` (owner decision, #2098); for this realistic data postingStatus
+    // therefore still mirrors mapJournalStatus(status).postingStatus exactly.
+    // (The draft-but-balances-applied divergence is covered by
+    // statusAxesTrigger.dynamic.test.ts.)
+    await rawExecute(`DELETE FROM journal_entries WHERE ref LIKE $1`, [REF + "%"]);
     for (const status of STATUSES) {
+      const balancesApplied = ["posted", "approved", "reversed"].includes(status);
       for (const isPaid of [true, false]) {
         await rawExecute(
-          `INSERT INTO journal_entries ("companyId", status, "isPaid", ref,
-             "documentStatus", "paymentStatus", "postingStatus")
-           VALUES ($1, $2, $3, $4, NULL, NULL, NULL)`,
-          [companyId, status, isPaid, REF],
+          `INSERT INTO journal_entries ("companyId", status, "isPaid", ref, "balancesApplied")
+           VALUES ($1, $2, $3, $4, $5)`,
+          [companyId, status, isPaid, `${REF}-${status}-${isPaid ? "p" : "u"}`, balancesApplied],
         );
       }
     }
-
-    // Re-run the migration's backfill (the columns + constraints already exist
-    // from migration 287). This UPDATE is byte-for-byte the migration's, scoped
-    // to the rows just inserted so it never touches other data.
-    await rawExecute(
-      `UPDATE journal_entries SET
-         "documentStatus" = CASE status
-            WHEN 'posted' THEN 'approved' WHEN 'approved' THEN 'approved' WHEN 'reversed' THEN 'approved'
-            WHEN 'pending_approval' THEN 'submitted' WHEN 'returned' THEN 'submitted'
-            WHEN 'rejected' THEN 'rejected' WHEN 'cancelled' THEN 'cancelled' ELSE 'draft' END,
-         "postingStatus" = CASE status
-            WHEN 'posted' THEN 'posted' WHEN 'approved' THEN 'posted'
-            WHEN 'cancelled' THEN 'reversed' WHEN 'reversed' THEN 'reversed' ELSE 'unposted' END,
-         "paymentStatus" = CASE
-            WHEN "isPaid" IS TRUE AND status IN ('posted','approved','reversed') THEN 'paid' ELSE 'unpaid' END
-       WHERE ref = $1 AND "documentStatus" IS NULL`,
-      [REF],
-    );
   });
 
   afterAll(async () => {
-    if (rawExecute) await rawExecute(`DELETE FROM journal_entries WHERE ref = $1`, [REF]);
+    if (rawExecute) await rawExecute(`DELETE FROM journal_entries WHERE ref LIKE $1`, [REF + "%"]);
   });
 
   it("populates documentStatus + postingStatus exactly like the FE mapJournalStatus", async () => {
@@ -81,8 +73,8 @@ d("migration 287 — three-axis status backfill (live DB)", () => {
       documentStatus: string; paymentStatus: string; postingStatus: string;
     }>(
       `SELECT status, "isPaid", "documentStatus", "paymentStatus", "postingStatus"
-         FROM journal_entries WHERE ref = $1`,
-      [REF],
+         FROM journal_entries WHERE ref LIKE $1`,
+      [REF + "%"],
     );
     expect(rows.length).toBe(STATUSES.length * 2);
     for (const r of rows) {
@@ -94,8 +86,8 @@ d("migration 287 — three-axis status backfill (live DB)", () => {
 
   it("paymentStatus honours canBePaid — paid only when isPaid AND approved", async () => {
     const rows = await rawQuery<{ status: string; isPaid: boolean; paymentStatus: string }>(
-      `SELECT status, "isPaid", "paymentStatus" FROM journal_entries WHERE ref = $1`,
-      [REF],
+      `SELECT status, "isPaid", "paymentStatus" FROM journal_entries WHERE ref LIKE $1`,
+      [REF + "%"],
     );
     for (const r of rows) {
       const approved = mapJournalStatus(r.status).documentStatus === "approved";
@@ -107,12 +99,12 @@ d("migration 287 — three-axis status backfill (live DB)", () => {
   it("a draft is never paid and never posted; an approved+paid row is paid+posted", async () => {
     const draftPaid = await rawQuery<{ documentStatus: string; paymentStatus: string; postingStatus: string }>(
       `SELECT "documentStatus","paymentStatus","postingStatus" FROM journal_entries
-         WHERE ref=$1 AND status='draft' AND "isPaid"=true LIMIT 1`, [REF]);
+         WHERE ref LIKE $1 AND status='draft' AND "isPaid"=true LIMIT 1`, [REF + "%"]);
     expect(draftPaid[0]).toMatchObject({ documentStatus: "draft", paymentStatus: "unpaid", postingStatus: "unposted" });
 
     const postedPaid = await rawQuery<{ documentStatus: string; paymentStatus: string; postingStatus: string }>(
       `SELECT "documentStatus","paymentStatus","postingStatus" FROM journal_entries
-         WHERE ref=$1 AND status='posted' AND "isPaid"=true LIMIT 1`, [REF]);
+         WHERE ref LIKE $1 AND status='posted' AND "isPaid"=true LIMIT 1`, [REF + "%"]);
     expect(postedPaid[0]).toMatchObject({ documentStatus: "approved", paymentStatus: "paid", postingStatus: "posted" });
   });
 
@@ -120,10 +112,10 @@ d("migration 287 — three-axis status backfill (live DB)", () => {
     // If any value were out of the allowed set the migration's CHECK would have
     // rejected the UPDATE; assert the domains explicitly too.
     const bad = await rawQuery<{ n: number }>(
-      `SELECT count(*)::int AS n FROM journal_entries WHERE ref=$1 AND (
+      `SELECT count(*)::int AS n FROM journal_entries WHERE ref LIKE $1 AND (
          "documentStatus" NOT IN ('draft','submitted','approved','rejected','cancelled') OR
          "paymentStatus"  NOT IN ('unpaid','partially_paid','paid') OR
-         "postingStatus"  NOT IN ('unposted','posted','reversed'))`, [REF]);
+         "postingStatus"  NOT IN ('unposted','posted','reversed'))`, [REF + "%"]);
     expect(bad[0].n).toBe(0);
   });
 });

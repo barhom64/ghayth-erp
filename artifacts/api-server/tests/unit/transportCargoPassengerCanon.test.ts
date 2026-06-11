@@ -132,7 +132,10 @@ describe("#1812 §K4 — route-patterns CRUD + materialise", () => {
 
   it("router mounted in index.ts with fleet+financial guards", () => {
     expect(INDEX).toContain("transportRoutePatternsRouter");
-    expect(INDEX).toMatch(/router\.use\(requireModule\("fleet"\), requireGuards\("financial"\), transportRoutePatternsRouter\)/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 });
 

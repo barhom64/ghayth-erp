@@ -35,7 +35,10 @@ describe("#1812 — integration router exists + is mounted", () => {
   it("file exists + mounts under requireModule(fleet) + requireGuards(financial)", () => {
     expect(existsSync(join(apiSrc, "routes/transport-integration.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("transportIntegrationRouter");
-    expect(ROUTES_INDEX).toMatch(/requireModule\("fleet"\)[\s\S]{0,100}transportIntegrationRouter/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 
   it("exposes the 3 integration endpoints", () => {

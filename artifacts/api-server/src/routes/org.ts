@@ -17,7 +17,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, NotFoundError, ValidationError, parseId, zodParse } from "../lib/errorHandler.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { auditFromRequest, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -44,13 +44,13 @@ async function audit(
   req: any, action: string, entity: string, entityId: number, after: Record<string, any> = {}
 ): Promise<void> {
   const scope = req.scope!;
-  try {
-    await createAuditLog({
-      userId: scope.userId, companyId: scope.companyId,
-      action, entity, entityId, after,
-      activeRoleKey: scope.selectedRoleKey ?? null,
-    });
-  } catch (e) { logger.warn({ err: e }, "[org] audit failed"); }
+  // Delegate to the canonical helper so the full IGOC context lands
+  // on EVERY org-bridge write (activeRoleKey + activeDepartmentId +
+  // resolvedScope + impersonationSourceUser + branchId). The previous
+  // local copy was passing only activeRoleKey — left department/scope/
+  // impersonation columns NULL on every audit row, which the HR-019
+  // live probe surfaced. See lib/businessHelpers.ts:auditFromRequest.
+  await auditFromRequest(req, action, entity, entityId, { after });
   try {
     await emitEvent({
       companyId: scope.companyId, userId: scope.userId,
