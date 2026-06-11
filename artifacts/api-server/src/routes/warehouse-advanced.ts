@@ -306,8 +306,12 @@ router.get("/abc-classification", authorize({ feature: "warehouse.inventory", ac
     let cumulative = 0;
     for (const u of usage) {
       const share = Number(u.value) / total;
+      // Classify by the cumulative share BEFORE this product: the item that
+      // crosses the 80% (or 95%) boundary still belongs to the higher class
+      // — otherwise a single dominant product (share=1.0) lands in "C".
+      const before = cumulative;
       cumulative += share;
-      const category = cumulative <= 0.8 ? "A" : cumulative <= 0.95 ? "B" : "C";
+      const category = before < 0.8 ? "A" : before < 0.95 ? "B" : "C";
       await rawExecute(
         `INSERT INTO product_abc_classification ("companyId","productId",period,category,"paretoShare","paretoValue")
          VALUES ($1,$2,$3,$4,$5,$6)

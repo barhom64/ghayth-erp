@@ -798,14 +798,21 @@ async function probe(page, routePath, resolvedUrl, cls) {
   // seed cookie via in-page fetch (HttpOnly cookies don't round-trip via setCookie)
   async function inPageLogin() {
     await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.evaluate(async ({ email, password }) => {
+    const loginStatus = await page.evaluate(async ({ email, password }) => {
       const r = await fetch("/api/auth/login", {
         method: "POST", headers: { "Content-Type": "application/json" },
         credentials: "include", body: JSON.stringify({ email, password }),
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       localStorage.setItem("erp_assignments", JSON.stringify(d.assignments || []));
+      return r.status;
     }, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    // Fail fast (Phase 9 spirit): a silently-429'd/failed in-page login used
+    // to leave the whole run unauthenticated, producing 600 phantom
+    // login-bounce FAILs that look like app defects.
+    if (loginStatus !== 200) {
+      throw new Error(`in-page login returned HTTP ${loginStatus} (rate-limited?) — aborting instead of walking unauthenticated`);
+    }
     await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await new Promise((r) => setTimeout(r, 800));
     reloginCount++;

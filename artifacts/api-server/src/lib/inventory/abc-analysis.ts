@@ -105,16 +105,20 @@ export function classifyAbc(
   let cumulative = 0;
   for (const r of sorted) {
     const share = r.periodValue / total;
-    cumulative += share;
-    let category: "A" | "B" | "C";
-    // Use cumulative-after-this-row to decide. A row's category is
-    // based on where its CONTRIBUTION sits in the running total.
+    // Decide by where the running total stood BEFORE this row: the row
+    // that crosses the 80% (or 95%) boundary still belongs to the higher
+    // class — Pareto's "top 80% of value" includes the crossing item.
+    // Cumulative-after semantics misclassified a dominant product
+    // (share 0.85 → B, single product share 1.0 → C, leaving NO class A).
     // Tolerance of 1e-9 absorbs IEEE-754 drift from accumulating
     // many shares (Number.EPSILON ≈ 2.2e-16 is too tight at scale —
     // 20 × 0.04 lands at ~0.8 + 4e-16 which overshoots).
     const TOL = 1e-9;
-    if (cumulative <= thresholds.a + TOL) category = "A";
-    else if (cumulative <= thresholds.b + TOL) category = "B";
+    const before = cumulative;
+    cumulative += share;
+    let category: "A" | "B" | "C";
+    if (before < thresholds.a - TOL) category = "A";
+    else if (before < thresholds.b - TOL) category = "B";
     else category = "C";
 
     out.push({
