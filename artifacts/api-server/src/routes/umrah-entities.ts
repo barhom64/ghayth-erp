@@ -659,13 +659,15 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
       `WITH nusk_stats AS (
          SELECT "groupId", "companyId",
                 COUNT(*) AS "nuskInvoiceCount",
-                COALESCE(SUM("totalAmount"), 0) AS "nuskCostTotal"
+                COALESCE(SUM("totalAmount"), 0) AS "nuskCostTotal",
+                COALESCE(SUM("mutamerCount"), 0) AS "nuskMutamerTotal"
          FROM umrah_nusk_invoices
          WHERE "deletedAt" IS NULL AND "nuskStatus" != 'cancelled'
          GROUP BY "groupId", "companyId"
        ),
        pilgrim_stats AS (
          SELECT "groupId", "companyId",
+                COUNT(*) AS "pilgrimsTotal",
                 COUNT(*) FILTER (WHERE status IN ('arrived','active','overstayed')) AS "pilgrimsInside",
                 COUNT(*) FILTER (WHERE status = 'overstayed') AS "pilgrimsOverstayed",
                 COUNT(*) FILTER (
@@ -688,6 +690,7 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
               si.total AS "salesInvoiceTotal",
               si.status AS "salesInvoiceStatus",
               GREATEST(COALESCE(si.total, 0) - COALESCE(si."paidAmount", 0), 0) AS "salesOutstanding",
+              COALESCE(NULLIF(ps."pilgrimsTotal", 0), ns."nuskMutamerTotal", 0) AS "pilgrimsTotal",
               COALESCE(ps."pilgrimsInside", 0) AS "pilgrimsInside",
               COALESCE(ps."pilgrimsOverstayed", 0) AS "pilgrimsOverstayed",
               COALESCE(ps."visaAtRisk", 0) AS "visaAtRisk"
