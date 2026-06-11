@@ -147,7 +147,7 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
     // Fire-and-forget: an account hiccup must not block the vendor create
     // (mirrors the sibling auto-create calls in clients/fleet/properties).
     import("./accounting-engine.js")
-      .then((m) => m.createSubsidiaryAccountsForEntity(scope.companyId, "vendor", insertId, name))
+      .then((m) => m.createSubsidiaryAccountsForEntity(scope.companyId, "vendor", insertId, name, { branchId: scope.branchId, actorUserId: scope.userId }))
       .catch((err) => logger.error(err, "[FIN-003] vendor subsidiary account auto-create failed"));
 
     emitEvent({
