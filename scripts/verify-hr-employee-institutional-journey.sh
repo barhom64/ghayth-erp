@@ -53,10 +53,13 @@ if [ -z "${TEAMID:-}" ]; then
 fi
 [ -n "${TEAMID:-}" ] && ok "فريق متاح (#$TEAMID)" || no "team create/lookup failed"
 
-# Ensure a project exists. The /projects POST is the canonical create.
+# Ensure a project exists. The /projects POST is the canonical create
+# and requires startDate + endDate (zod) — give it a year-long window.
 PROJID="$(psql "$DSN" -tA -c "select id from projects where \"companyId\"=2 and \"deletedAt\" is null order by id limit 1;")"
 if [ -z "${PROJID:-}" ]; then
-  PROJID="$(pw /projects '{"name":"مشروع التشغيل الافتراضي","code":"OPS-DEFAULT"}' | py 'import sys,json;d=json.load(sys.stdin);print(d.get("id") or (d.get("data") or {}).get("id") or "")')"
+  YEAR_START="$(date +%Y)-01-01"
+  YEAR_END="$(date +%Y)-12-31"
+  PROJID="$(pw /projects "{\"name\":\"مشروع التشغيل الافتراضي\",\"startDate\":\"$YEAR_START\",\"endDate\":\"$YEAR_END\"}" | py 'import sys,json;d=json.load(sys.stdin);print(d.get("id") or (d.get("data") or {}).get("id") or "")')"
 fi
 [ -n "${PROJID:-}" ] && ok "مشروع متاح (#$PROJID)" || no "project create/lookup failed"
 
@@ -77,27 +80,9 @@ MGRID="$(psql "$DSN" -tA -c "select e.id from employees e join employee_assignme
 # 3) FRESH employee per run (unique nationalId / phone). The route
 #    binds them to all 5 mandatory + the optional committee.
 SFX="$(printf '%06d' $(( (RANDOM*RANDOM) % 1000000 )))"
-PAYLOAD="$(cat <<JSON
-{
-  "name": "موظف رحلة الربط المؤسسي",
-  "phone": "057${SFX}1",
-  "nationalId": "23${SFX}$(printf '%02d' $(( RANDOM % 100 )))",
-  "nationality": "سعودي",
-  "department": "المالية",
-  "jobTitle": "محاسب",
-  "contractType": "full_time",
-  "salary": 9500,
-  "branchId": 6,
-  "managerId": ${MGRID},
-  "positionId": ${POSID},
-  "categoryKey": "${CATKEY}",
-  "teamId": ${TEAMID},
-  "projectId": ${PROJID},
-  "costCenterId": ${CCID}${COMID:+,
-  "committeeId": ${COMID}}
-}
-JSON
-)"
+COMFIELD=""
+if [ -n "${COMID:-}" ]; then COMFIELD=",\"committeeId\":${COMID}"; fi
+PAYLOAD="{\"name\":\"موظف رحلة الربط المؤسسي\",\"phone\":\"057${SFX}1\",\"nationalId\":\"23${SFX}$(printf '%02d' $(( RANDOM % 100 )))\",\"nationality\":\"سعودي\",\"department\":\"المالية\",\"jobTitle\":\"محاسب\",\"contractType\":\"full_time\",\"salary\":9500,\"branchId\":6,\"managerId\":${MGRID},\"positionId\":${POSID},\"categoryKey\":\"${CATKEY}\",\"teamId\":${TEAMID},\"projectId\":${PROJID},\"costCenterId\":${CCID}${COMFIELD}}"
 RESP="$(pw /employees "$PAYLOAD")"
 EID="$(echo "$RESP" | gid id)"
 ASG="$(echo "$RESP" | gid assignmentId)"
@@ -127,11 +112,42 @@ fi
 # 5) Audit + event must carry the binding so a forensic query
 #    («who joined project X this month?») is answerable without
 #    self-joining the bridges.
-AUDPOS="$(psql "$DSN" -tA -c "select (\"after\"::jsonb->>'positionId') from audit_logs where entity='employees' and \"entityId\"=$EID and action='create' order by id desc limit 1;")"
-[ "$AUDPOS" = "$POSID" ] && ok "audit_logs.after.positionId = $POSID" || no "audit positionId missing ($AUDPOS)"
+# audit_logs."entityId" is TEXT (mixed-id provenance), event_logs."entityId"
+# is INTEGER. A generic auto-audit middleware sometimes writes a second
+# row with empty `after`; we explicitly pick the one that carries the
+# institutional payload (the row our route's createAuditLog wrote).
+AUDPOS="$(psql "$DSN" -tA -c "select (\"after\"->>'positionId') from audit_logs where entity='employees' and \"entityId\"=$EID::text and action='create' and \"after\" ? 'positionId' order by id desc limit 1;")"
+[ "$AUDPOS" = "$POSID" ] && ok "audit_logs.after.positionId = $POSID (الحقول المؤسسية مسجَّلة)" || no "audit positionId missing ($AUDPOS)"
+AUDCO="$(psql "$DSN" -tA -c "select \"companyId\"||'|'||coalesce(\"branchId\"::text,'-')||'|'||\"userId\"||'|'||coalesce(active_role_key,'-')||'|'||coalesce(resolved_scope,'-') from audit_logs where entity='employees' and \"entityId\"=$EID::text and action='create' and \"after\" ? 'positionId' order by id desc limit 1;")"
+echo "    audit IGOC quartet: companyId|branchId|userId|active_role_key|resolved_scope = $AUDCO"
+echo "$AUDCO" | grep -qE "^2\|" && ok "audit_logs carries companyId=2 (الشركة)" || no "audit companyId missing in $AUDCO"
+echo "$AUDCO" | awk -F'|' '{exit ($2 ~ /^[0-9]+$/) ? 0 : 1}' && ok "audit_logs carries branchId (الفرع)" || no "audit branchId missing in $AUDCO"
+echo "$AUDCO" | awk -F'|' '{exit ($3 ~ /^[0-9]+$/) ? 0 : 1}' && ok "audit_logs carries userId (المستخدم)" || no "audit userId missing in $AUDCO"
+# active_role_key is informational — the test login is the owner user
+# whose session does NOT set selectedRoleKey by default (the IGOC selector
+# is opt-in). resolved_scope IS set ('all' for owner). We require at
+# least one of the four IGOC fields to be present so a future PR can't
+# silently strip them.
+echo "$AUDCO" | awk -F'|' '{exit ($4 != "-" || $5 != "-") ? 0 : 1}' && ok "audit_logs carries IGOC context (active_role_key or resolved_scope set)" || no "audit IGOC quartet entirely NULL ($AUDCO)"
 
-EVTPROJ="$(psql "$DSN" -tA -c "select (details::jsonb->>'projectId') from event_logs where entity='employees' and \"entityId\"=$EID and action='employee.created' order by id desc limit 1;" 2>/dev/null || echo)"
+# event_logs.details is TEXT containing JSON. Some listeners (the
+# cross-domain logger) currently JSON-stringify the already-stringified
+# payload, producing a doubly-encoded row (`"\"{\\\"key\\\":...}\""`).
+# The `#>> '{}'` projection extracts the JSON value at path-root:
+#   - singly-encoded object → returns the object's text representation
+#   - doubly-encoded string  → returns the inner string
+# Casting back to jsonb gives us the underlying object regardless of
+# encoding, so the assertion is robust to which listener path wrote
+# the row. (The double-stringify is a pre-existing bug not in PR-1
+# scope; tracked separately.)
+JQ_EVT="((details::jsonb #>> '{}')::jsonb)"
+EVTPROJ="$(psql "$DSN" -tA -c "select $JQ_EVT->>'projectId' from event_logs where entity='employees' and \"entityId\"=$EID and action='employee.created' order by id desc limit 1;")"
 [ "$EVTPROJ" = "$PROJID" ] && ok "event_logs.details.projectId = $PROJID" || no "event projectId missing ($EVTPROJ)"
+EVTCTX="$(psql "$DSN" -tA -c "select ($JQ_EVT->'context')::text from event_logs where entity='employees' and \"entityId\"=$EID and action='employee.created' order by id desc limit 1;")"
+echo "    event details.context: $EVTCTX"
+echo "$EVTCTX" | grep -qE '"companyId":[ ]*2' && echo "$EVTCTX" | grep -q '"branchId":' && echo "$EVTCTX" | grep -q '"userId":' && ok "event_logs.details.context mirrors الشركة/الفرع/المستخدم" || no "event context missing IGOC fields"
+EVTPOS="$(psql "$DSN" -tA -c "select $JQ_EVT->>'positionId' from event_logs where entity='employees' and \"entityId\"=$EID and action='employee.created' order by id desc limit 1;")"
+[ "$EVTPOS" = "$POSID" ] && ok "event_logs.details.positionId = $POSID" || no "event positionId missing ($EVTPOS)"
 
 # 6) Bootstrap carve-out: prove the route rejects with field-tagged
 #    ValidationError when a non-bootstrap caller drops a mandatory.

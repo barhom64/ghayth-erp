@@ -143,13 +143,70 @@ describe("PR-1 (#2077) — audit + event log carry the new bindings", () => {
   // answerable from audit_logs alone, without joining the bridge
   // tables (which may be soft-ended).
   it("audit log after.payload includes positionId", () => {
-    expect(EMPLOYEES_ROUTE).toMatch(/createAuditLog\([\s\S]{0,1500}after:\s*\{[\s\S]{0,800}positionId/);
+    expect(EMPLOYEES_ROUTE).toMatch(/createAuditLog\([\s\S]{0,2000}after:\s*\{[\s\S]{0,800}positionId/);
   });
   it("event log payload includes the institutional binding ids", () => {
-    expect(EMPLOYEES_ROUTE).toMatch(/emitEvent\([\s\S]{0,1500}details:[\s\S]{0,1200}positionId[\s\S]{0,100}categoryKey[\s\S]{0,100}teamId/);
+    expect(EMPLOYEES_ROUTE).toMatch(/emitEvent\([\s\S]{0,2000}details:[\s\S]{0,1500}positionId[\s\S]{0,100}categoryKey[\s\S]{0,100}teamId/);
   });
   it("response body surfaces institutional binding so the UI can render «الموظف مرتبط بـ …»", () => {
     expect(EMPLOYEES_ROUTE).toMatch(/institutional:\s*\{[\s\S]{0,400}positionId[\s\S]{0,80}categoryKey[\s\S]{0,80}teamId/);
+  });
+});
+
+describe("PR-1 (#2077) — audit + event carry IGOC actor context (review concern #5)", () => {
+  // The reviewer required that audit AND event record:
+  //   الشركة (companyId), الفرع (branchId), الدور النشط (activeRoleKey),
+  //   المستخدم (userId), and the chosen institutional fields.
+  // companyId / branchId / userId / activeRoleKey are the four IGOC
+  // context fields the audit_logs schema already provides (migration
+  // 284). emitEvent has no branchId column → we mirror them inside
+  // details.context. Pinning structural presence so a future PR can't
+  // silently drop one.
+  it("createAuditLog passes activeRoleKey from scope.selectedRoleKey", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/createAuditLog\([\s\S]{0,1500}activeRoleKey:\s*scope\.selectedRoleKey\s*\?\?\s*null/);
+  });
+  it("createAuditLog passes activeDepartmentId from scope", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/createAuditLog\([\s\S]{0,1500}activeDepartmentId:\s*scope\.activeDepartmentId\s*\?\?\s*null/);
+  });
+  it("createAuditLog passes resolvedScope from scope", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/createAuditLog\([\s\S]{0,1500}resolvedScope:\s*scope\.resolvedScope\s*\?\?\s*null/);
+  });
+  it("createAuditLog passes impersonationSourceUser from scope", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/createAuditLog\([\s\S]{0,1500}impersonationSourceUser:\s*scope\.impersonationSourceUser\s*\?\?\s*null/);
+  });
+  it("emitEvent receives branchId so the event-bus payload carries the branch", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/emitEvent\([\s\S]{0,1500}branchId:\s*scope\.branchId\s*\?\?\s*undefined/);
+  });
+  it("event_logs.details.context mirrors the IGOC quartet for downstream listeners", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/context:\s*\{[\s\S]{0,500}companyId:\s*scope\.companyId[\s\S]{0,200}branchId:[\s\S]{0,200}activeRoleKey:\s*scope\.selectedRoleKey/);
+  });
+});
+
+describe("PR-1 (#2077) — bootstrap carve-out is auditable + monotonic (review concern #2)", () => {
+  // The reviewer asked: «Bootstrap carve-out لا يتحول إلى ثغرة دائمة».
+  // Carve-out is monotonic because it keys off active assignment count
+  // — once activeEmpCount>0, mandatoriness is enforced FOREVER. To make
+  // the path detectable in the audit trail (in case anyone tries to
+  // re-open it by deleting all employees), the route emits a WARN log
+  // when the carve-out fires, with the actor's userId + activeRoleKey.
+  it("bootstrap carve-out fires a structured WARN log with actor context", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/if\s*\(isBootstrapEmployee\)\s*\{[\s\S]{0,400}logger\.warn[\s\S]{0,500}activeRoleKey:\s*scope\.selectedRoleKey/);
+  });
+  it("warn message explicitly states the carve-out can only run once per company", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/bootstrap carve-out fired[\s\S]{0,300}can only run once per company/);
+  });
+});
+
+describe("PR-1 (#2077) — committeeId optional design is documented (review concern #3)", () => {
+  // The reviewer asked for the WHY of «committeeId اختياري». The
+  // schema doc-block names the three constraints:
+  //   (a) committees are cross-department + time-bounded ad-hoc,
+  //   (b) NOT a baseline binding every employee needs at hire,
+  //   (c) joining is a later membership transaction.
+  it("schema doc-block names the three constraints", () => {
+    expect(EMPLOYEES_ROUTE).toMatch(/CROSS-DEPARTMENT and\s*\/\/\s*TIME-BOUNDED/);
+    expect(EMPLOYEES_ROUTE).toMatch(/NOT a baseline binding every employee needs at\s*\/\/\s*hire time/);
+    expect(EMPLOYEES_ROUTE).toMatch(/later membership[\s\S]{0,80}PATCH \/org\/committee-memberships/);
   });
 });
 

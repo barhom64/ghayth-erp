@@ -144,15 +144,44 @@ const createEmployeeSchema = z.object({
   // so legacy importers + the first bootstrap employee still work, and
   // the route handler rejects when they're missing in a non-bootstrap
   // company so the API contract is the second line of defence.
-  //   - positionId   → employee_assignments.positionId (the administrative
-  //     role: مدير قسم / نائب / مشرف). Distinct from jobTitle.
-  //   - categoryKey  → employee_assignments.categoryKey (workforce type:
-  //     worker / driver / manager …). Drives per-category attendance.
-  //   - teamId       → employee_team_memberships bridge row.
-  //   - projectId    → employee_project_assignments bridge row
-  //     (also carries costCenterId on the bridge).
-  //   - costCenterId → bound through the project_assignments bridge.
-  //   - committeeId  → optional employee_committee_memberships bridge.
+  //
+  //   MANDATORY (5):
+  //   - positionId   → employee_assignments.positionId. The administrative
+  //                    role (مدير قسم / نائب / مشرف). Distinct from
+  //                    jobTitle (functional role). Required because the
+  //                    org-chart, approval-chain, and supervision-line
+  //                    derivations all key on position level.
+  //   - categoryKey  → employee_assignments.categoryKey. Workforce type
+  //                    (worker / driver / manager / …). Required because
+  //                    attendance_policies_per_category (migration 270)
+  //                    has no fallback row — without categoryKey the
+  //                    daily check-in / late-deduction engine has no
+  //                    policy to apply to this employee.
+  //   - teamId       → employee_team_memberships bridge. Required because
+  //                    workInbox + tasks routing + workload-balance all
+  //                    fan-out by team — an employee with no team is
+  //                    invisible to every fan-out endpoint.
+  //   - projectId    → employee_project_assignments bridge. Required
+  //                    because the cost-center anchor lives on this row;
+  //                    payroll cost attribution needs the project link.
+  //   - costCenterId → carried on the project_assignments bridge (NOT a
+  //                    separate row). Required because every salary
+  //                    journal line debits a cost-centered expense
+  //                    account; without it payroll posts to the
+  //                    "general" cost center, distorting P&L by branch.
+  //
+  //   OPTIONAL (1):
+  //   - committeeId  → employee_committee_memberships bridge. Optional
+  //                    by design: committees are CROSS-DEPARTMENT and
+  //                    TIME-BOUNDED ad-hoc councils (audit committee,
+  //                    safety committee, recruitment panel…). They are
+  //                    NOT a baseline binding every employee needs at
+  //                    hire time, and making them mandatory would force
+  //                    HR to invent a "no committee" placeholder for
+  //                    the 80%+ of employees who never sit on one.
+  //                    Joining a committee is a later membership
+  //                    transaction (PATCH /org/committee-memberships)
+  //                    that the wizard correctly stays out of.
   positionId: z.coerce.number().int().positive().optional().nullable(),
   categoryKey: z.string().trim().min(1).max(40).optional().nullable(),
   teamId: z.coerce.number().int().positive().optional().nullable(),
@@ -548,12 +577,33 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     // skip the institutional anchor that downstream HR engines depend
     // on. Skipped for the very first employee in the company (bootstrap),
     // where the catalog is necessarily empty.
+    //
+    // Bootstrap discipline (concern #2 from review): the carve-out
+    // applies ONLY when the company has zero active assignments. After
+    // the first employee lands, activeEmpCount > 0 forever — the
+    // carve-out closes, the route enforces all 5 mandatories on every
+    // subsequent caller. To make the carve-out auditable (and detect
+    // any attempt to abuse it by deleting all employees just to
+    // re-open it), we log a structured WARN at info-impact priority
+    // with the caller's userId/role when it fires.
     const [{ count: activeEmpCount }] = await rawQuery<{ count: string }>(
       `SELECT COUNT(*)::int AS count FROM employee_assignments
         WHERE "companyId" = $1 AND status = 'active'`,
       [effectiveCompanyId]
     );
     const isBootstrapEmployee = Number(activeEmpCount ?? 0) === 0;
+    if (isBootstrapEmployee) {
+      logger.warn(
+        {
+          companyId: effectiveCompanyId,
+          userId: scope.userId,
+          activeRoleKey: scope.selectedRoleKey ?? null,
+          name,
+        },
+        "[employees] bootstrap carve-out fired — first employee in company, institutional mandatoriness skipped. " +
+          "This path can only run once per company; subsequent employees MUST supply position/category/team/project/costCenter/manager.",
+      );
+    }
 
     if (!isBootstrapEmployee) {
       if (!positionId) {
@@ -1173,8 +1223,12 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     }
 
     // ── Step 10: Event log ──
+    // PR-1 (#2077) — event_logs has no columns for branchId / activeRole,
+    // so the IGOC context rides on `details.context` alongside the
+    // institutional binding. Critical-event listeners + the inbox can
+    // then key on either.
     await emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
+      companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
       action: "employee.created", entity: "employees", entityId: empId,
       details: JSON.stringify({
         empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary,
@@ -1187,6 +1241,19 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         projectId: projectId ? Number(projectId) : null,
         costCenterId: costCenterId ? Number(costCenterId) : null,
         committeeId: committeeId ? Number(committeeId) : null,
+        // PR-1 (#2077) — actor context (الشركة/الفرع/الدور النشط/المستخدم).
+        // event_logs.companyId+userId already carry two of them; we
+        // bundle the remaining two (branch + active role) into details
+        // so the row is self-describing.
+        context: {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          userId: scope.userId,
+          activeRoleKey: scope.selectedRoleKey ?? null,
+          activeDepartmentId: scope.activeDepartmentId ?? null,
+          resolvedScope: scope.resolvedScope ?? null,
+          impersonationSourceUser: scope.impersonationSourceUser ?? null,
+        },
       }),
     });
 
@@ -1200,9 +1267,19 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     );
 
     // ── Step 11: Audit log ──
+    // PR-1 (#2077) — IGOC quartet: persist the four context fields
+    // (active role, active department, resolved scope, impersonation
+    // source) alongside the institutional binding so a forensic
+    // question («who, under which role, in which scope, on behalf of
+    // whom, bound this employee to project X?») is answerable from
+    // one row of audit_logs.
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employees", entityId: empId,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      activeDepartmentId: scope.activeDepartmentId ?? null,
+      resolvedScope: scope.resolvedScope ?? null,
+      impersonationSourceUser: scope.impersonationSourceUser ?? null,
       after: {
         name, empNumber: finalEmpNumber, jobTitle, role, salary,
         contractType, probationDays: Number(probationDays),
