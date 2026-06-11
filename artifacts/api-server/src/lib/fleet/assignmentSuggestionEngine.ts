@@ -44,6 +44,10 @@ import {
   type TripFamily,
   type VehicleRowForVcm,
 } from "./vehicleCapabilityMatrix.js";
+import {
+  checkVehicleDocumentReadiness,
+  type MaintenanceBlock,
+} from "./vehicleReadiness.js";
 
 export interface SuggestionRequest {
   companyId: number;
@@ -163,6 +167,12 @@ interface VehicleRow {
   validForPassengers: boolean | null;
   validForCargo: boolean | null;
   vehicleServiceTypes: string[] | null;
+  // #2079 PE-02 — document expiry columns (already on fleet_vehicles).
+  // Engine treats anything expiring BEFORE the booking window ends as
+  // a hard blocker — see `checkVehicleDocumentReadiness`.
+  registrationExpiry: string | null;
+  insuranceExpiry: string | null;
+  nextInspectionDate: string | null;
 }
 
 interface DriverRow {
@@ -372,6 +382,7 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
             v."engineDisplacementCc", v."transmissionType",
             v."validForPassengers", v."validForCargo",
             v."vehicleServiceTypes",
+            v."registrationExpiry", v."insuranceExpiry", v."nextInspectionDate",
             (
               SELECT s."latitude" FROM vehicle_location_snapshots s
                WHERE s."vehicleId" = v.id AND s."companyId" = v."companyId"
@@ -427,6 +438,32 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
   const conflictedVehicles = new Set(conflicts.map((c) => c.vehicleId));
   const conflictedDrivers  = new Set(conflicts.map((c) => c.driverId));
 
+  // 4b) #2079 PE-02 — maintenance window probe. A vehicle in
+  // 'scheduled' or 'in_progress' maintenance whose serviceDate falls
+  // INSIDE the booking window (treated as a same-day event) is hard-
+  // ejected. Reason is built in vehicleReadiness so the wording stays
+  // out of the engine and out of the user-facing PR diff.
+  const maintenanceHits = await rawQuery<MaintenanceBlock>(
+    `SELECT m."vehicleId",
+            m.type           AS "maintenanceType",
+            m."serviceDate",
+            m."nextServiceDate",
+            m.status
+       FROM fleet_maintenance m
+      WHERE m."companyId" = $1
+        AND m.status IN ('scheduled', 'in_progress')
+        AND m."serviceDate" IS NOT NULL
+        AND m."serviceDate" >= $2::date - INTERVAL '1 day'
+        AND m."serviceDate" <= $3::date + INTERVAL '1 day'`,
+    [req.companyId, start, end],
+  );
+  const maintenanceByVehicleId = new Map<number, MaintenanceBlock>();
+  for (const hit of maintenanceHits) {
+    if (!maintenanceByVehicleId.has(hit.vehicleId)) {
+      maintenanceByVehicleId.set(hit.vehicleId, hit);
+    }
+  }
+
   // 5) Settings (for the manual maps haversine baseline).
   const settings = await loadPlanningSettings(req.companyId);
 
@@ -455,6 +492,13 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       const verdict = isEligibleForTripFamily(vcm, tripFamily, booking.transportServiceType);
       if (!verdict.eligible) continue;
     }
+    // #2079 PE-02 — vehicle readiness gate. Document-expiry and
+    // active-maintenance ejections fire BEFORE scoring so the
+    // dispatcher never sees a candidate they would have to reject
+    // for paperwork or workshop reasons.
+    const readiness = checkVehicleDocumentReadiness(v, end);
+    if (readiness.blocked) continue;
+    if (maintenanceByVehicleId.has(v.id)) continue;
     eligibleVehicles.push(v);
   }
 
