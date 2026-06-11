@@ -29,6 +29,7 @@ import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
+import { resolveSettings } from "../lib/settings.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 import {
   confirmMutamersImport,
@@ -129,6 +130,21 @@ const AGENT_INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 const router = Router();
+
+// U-02b M3 of #2080 — gate for the legacy umrah_transport write path.
+// Reads the boolean catalog flag added in M2
+// (umrahSettingsPoliciesCatalog.ts → financial.legacyTransportWritesDisabled).
+// Default value in the catalog is false → unchanged behaviour for every
+// company that hasn't explicitly enabled the gate. When a company flips
+// the flag to true in `settings`, POST /transport and PATCH /transport/:id
+// return 410 + a hint pointing operators at the unified contract endpoint
+// (POST /umrah/groups/:id/transport-requests). Other handlers (GET,
+// DELETE, manifest, check-in, check-in-bulk) stay live so historic rows
+// remain inspectable/closable while the legacy write surface freezes.
+async function isLegacyTransportWritesDisabled(companyId: number): Promise<boolean> {
+  const raw = await resolveSettings("umrah.financial.legacyTransportWritesDisabled", companyId);
+  return raw === true || raw === "true";
+}
 
 const createSeasonSchema = z.object({
   title: z.string().min(1, "اسم الموسم مطلوب"),
@@ -739,7 +755,7 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch((e) => logger.error(e, "umrah background task failed"));
     // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
     // this agent route to its own revenue leaf via resolveRevenueAccount.
-    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
@@ -2449,6 +2465,13 @@ router.delete("/transport/:id", authorize({ feature: "umrah", action: "delete" }
 router.post("/transport", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    if (await isLegacyTransportWritesDisabled(scope.companyId)) {
+      res.status(410).json({
+        error: "المسار القديم لإنشاء النقل معطّل لهذه الشركة",
+        hint: "استخدم العقد الموحّد: POST /umrah/groups/:id/transport-requests",
+      });
+      return;
+    }
     const b = zodParse(createTransportSchema.safeParse(req.body));
     if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.vehicleId) {
@@ -2544,6 +2567,13 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
 router.patch("/transport/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    if (await isLegacyTransportWritesDisabled(scope.companyId)) {
+      res.status(410).json({
+        error: "المسار القديم لتعديل النقل معطّل لهذه الشركة",
+        hint: "استخدم العقد الموحّد: POST /umrah/groups/:id/transport-requests",
+      });
+      return;
+    }
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchTransportSchema.safeParse(req.body));
     if (b.vehicleId) {

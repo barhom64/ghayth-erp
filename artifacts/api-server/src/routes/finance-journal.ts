@@ -2062,7 +2062,15 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 1 — this read now surfaces the three status
+      // axes alongside the legacy `status` (kept, not removed). The axes are
+      // maintained by the trigger from migration 311, and `postingStatus` is
+      // derived from the ACTUAL posting (`balancesApplied`), so a directly
+      // posted entry that still carries status='draft' (balancesApplied=true)
+      // reads truthfully as postingStatus='posted' here — where the legacy
+      // `status` alone would mislabel it as a draft/unposted entry.
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt",
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."reversalOfId", je."reversedById", je."operationType",
               COALESCE(SUM(jl.debit), 0) AS "totalDebit",
               COALESCE(SUM(jl.credit), 0) AS "totalCredit",

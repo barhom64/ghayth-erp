@@ -70,6 +70,21 @@ const vehicleTechnicalProfileSchema = z.object({
   operationalPayloadKg: z.coerce.number().nonnegative().optional(),
   validForPassengers: z.boolean().optional(),
   validForCargo: z.boolean().optional(),
+  // #2079 Gate-PE-1 — Vehicle Capability Matrix canon (migration 315).
+  // operationalPassengerCapacity mirrors operationalPayloadKg for the
+  // passenger family: a "safe operating" pax count distinct from the
+  // nominal seatCount. vehicleServiceTypes is the explicit allow-list
+  // of transportServiceType values this vehicle may serve — the engine
+  // hard-ejects vehicles outside the list before scoring.
+  operationalPassengerCapacity: z.coerce.number().nonnegative().optional(),
+  vehicleServiceTypes: z.array(z.enum([
+    "cargo_load",
+    "passenger_umrah",
+    "passenger_general",
+    "equipment_rental",
+    "internal_transfer",
+    "other",
+  ])).optional(),
 });
 
 // #1733 Pricing tier (Issue Comment 3) — driverServiceProfile extends
@@ -533,13 +548,16 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_vehicles ("companyId","plateNumber",make,model,year,color,"vinNumber","fuelType","currentMileage",status,"branchId",notes,"registrationNumber","registrationExpiry","inspectionDate","nextInspectionDate","plateType","sequenceNumber","insuranceExpiry","fuelCapacity","purchasePrice","purchaseDate","requiredLicenseClass",
         "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
-        "operationalPayloadKg","validForPassengers","validForCargo")
+        "operationalPayloadKg","validForPassengers","validForCargo",
+        "operationalPassengerCapacity","vehicleServiceTypes")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,
         $24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,
-        $42,$43,$44)`,
+        $42,$43,$44,
+        $45,$46)`,
       [scope.companyId, plateNumber, b.make.trim(), b.model.trim(), b.year ? Number(b.year) : null, b.color, b.vinNumber, b.fuelType || 'gasoline', b.currentMileage || 0, 'available', b.branchId || scope.branchId, b.notes, b.registrationNumber || null, b.registrationExpiry || null, b.inspectionDate || null, b.nextInspectionDate || null, b.plateType || null, b.sequenceNumber || null, b.insuranceExpiry || null, b.fuelCapacity ? Number(b.fuelCapacity) : null, b.purchasePrice ? Number(b.purchasePrice) : null, b.purchaseDate || null, b.requiredLicenseClass || null,
         b.vehicleType ?? null, b.payloadKg ?? null, b.boxLengthCm ?? null, b.boxWidthCm ?? null, b.boxHeightCm ?? null, b.axleCount ?? null, b.tireCount ?? null, b.tireSize ?? null, b.engineDisplacementCc ?? null, b.transmissionType ?? null, b.seatCount ?? null, b.hasAc ?? null, b.screenCount ?? null, b.doorCount ?? null, b.upholsteryType ?? null, b.safetyFeatures ? JSON.stringify(b.safetyFeatures) : null, b.operatingHours ?? null, b.equipmentAttachments ? JSON.stringify(b.equipmentAttachments) : null,
-        b.operationalPayloadKg ?? null, b.validForPassengers ?? null, b.validForCargo ?? null]
+        b.operationalPayloadKg ?? null, b.validForPassengers ?? null, b.validForCargo ?? null,
+        b.operationalPassengerCapacity ?? null, b.vehicleServiceTypes ?? null]
     );
     assertInsert(insertId, "fleet_vehicles");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -548,7 +566,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     // (per-vehicle maintenance + fuel cost roll-up). Both fire-and-
     // forget — the vehicle create must succeed regardless.
     const vehicleLabel = `${b.make} ${b.model} — ${b.plateNumber}`;
-    createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel)
+    createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel, { branchId: scope.branchId, actorUserId: scope.userId })
       .catch((e) => logger.error(e, "vehicle subsidiary auto-create failed"));
     createCostCenterForEntity(
       scope.companyId, "vehicle", insertId, vehicleLabel,
@@ -570,7 +588,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     }).catch((e) => logger.error(e, "fleet background task failed"));
     createSubsidiaryAccountsForEntity(
       scope.companyId, "vehicle", insertId,
-      `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim()
+      `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim(), { branchId: scope.branchId, actorUserId: scope.userId }
     ).catch((e) => logger.error(e, "fleet background task failed"));
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
@@ -1094,7 +1112,7 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId,
@@ -1224,6 +1242,8 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       "vehicleType","payloadKg","boxLengthCm","boxWidthCm","boxHeightCm","axleCount","tireCount","tireSize","engineDisplacementCc","transmissionType","seatCount","hasAc","screenCount","doorCount","upholsteryType","safetyFeatures","operatingHours","equipmentAttachments",
       // #1812 Wave 0.3 — assignment-decision fields from migration 284.
       "operationalPayloadKg","validForPassengers","validForCargo",
+      // #2079 Gate-PE-1 — Vehicle Capability Matrix canon (migration 315).
+      "operationalPassengerCapacity","vehicleServiceTypes",
     ] as const;
     const colMap: Record<string, string> = {
       plateNumber: '"plateNumber"',
@@ -1267,6 +1287,9 @@ router.patch("/vehicles/:id", authorize({ feature: "fleet.vehicles", action: "up
       operationalPayloadKg: '"operationalPayloadKg"',
       validForPassengers: '"validForPassengers"',
       validForCargo: '"validForCargo"',
+      // #2079 Gate-PE-1.
+      operationalPassengerCapacity: '"operationalPassengerCapacity"',
+      vehicleServiceTypes: '"vehicleServiceTypes"',
     };
     const before: Record<string, unknown> = {};
     const after: Record<string, unknown> = {};
