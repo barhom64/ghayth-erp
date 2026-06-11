@@ -1426,6 +1426,20 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   // …and the invoice's output-VAT payable leg — fallback "2300" is absent on
   // a SOCPA tree (the leaf is e.g. 2131 ضريبة القيمة المضافة المستحقة).
   invoice_vat_payable: { type: "liability", keywords: ["ضريبة القيمة المضافة المستحقة", "ضريبة المخرجات", "vat output", "output vat"] },
+  // #1945 FIN-SUB-01 (#2097) — GRN per-line treatment routing. The literal
+  // fallbacks in finance-purchase.ts were wrong/absent on the SOCPA chart
+  // (inventory→1250 leasehold, custody→1130 AR, plus missing expense leaves);
+  // these intents resolve the right postable leaf on any tenant chart, and the
+  // GRN nature-enforcement guarantees the posted account matches the treatment.
+  inventory_receipt:           { type: "asset",   keywords: ["مخزون البضائع", "المخزون", "مخزون"] },
+  employee_custody:            { type: "asset",   keywords: ["عهد مالية للموظف", "عهد"] },
+  supplier_prepayment:         { type: "asset",   keywords: ["مصروفات مدفوعة مقدم", "مدفوعة مقدم", "دفعات مقدمة"] },
+  fixed_asset_purchase:        { type: "asset",   keywords: ["أعمال تحت التنفيذ", "الأصول غير الملموسة", "أصول"] },
+  general_expense:             { type: "expense", keywords: ["مصروفات عمومية", "مصروفات إدارية", "قرطاسية", "مصروف"] },
+  service_expense:             { type: "expense", keywords: ["تكلفة الخدمات", "أتعاب مهنية", "خدمات"] },
+  vehicle_expense:             { type: "expense", keywords: ["صيانة وإصلاح المركبات", "الوقود", "مركبات"] },
+  property_maintenance_expense:{ type: "expense", keywords: ["صيانة المباني والوحدات", "صيانة المباني", "صيانة"] },
+  project_cost:                { type: "expense", keywords: ["تكلفة المشاريع والمقاولات", "تكلفة المشاريع", "مشاريع"] },
 };
 
 const _resolvedAccountCache = new Map<string, string>();
