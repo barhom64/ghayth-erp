@@ -55,7 +55,7 @@ export default function ContractsCreate() {
     notes: "",
     contractNumber: "",
     ejarNumber: "",
-    contractType: "residential",
+    contractType: "residential_rent",
     paymentFrequency: "monthly",
     yearlyRent: "",
     totalContractValue: "",
@@ -255,9 +255,10 @@ export default function ContractsCreate() {
                 <Select value={form.contractType} onValueChange={v => set("contractType", v)}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="residential">سكني</SelectItem>
-                    <SelectItem value="commercial">تجاري</SelectItem>
-                    <SelectItem value="ejar_unified">عقد إيجار الموحد</SelectItem>
+                    <SelectItem value="residential_rent">إيجار سكني</SelectItem>
+                    <SelectItem value="commercial_rent">إيجار تجاري (بضريبة 15%)</SelectItem>
+                    <SelectItem value="sale">بيع عقار</SelectItem>
+                    <SelectItem value="management">إدارة أملاك (بعمولة)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
