@@ -264,7 +264,7 @@ export default function UserOnboarding() {
             <div><Label>رقم المستخدم</Label><Input value={effUserId} onChange={(e) => setEffUserId(e.target.value)} placeholder="userId" className="w-40" /></div>
             <Button variant="outline" onClick={() => /^\d+$/.test(effUserId) && setEffQueryId(Number(effUserId))} disabled={!/^\d+$/.test(effUserId)}>عرض</Button>
           </div>
-          {effLoading && <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> جارٍ التحميل…</div>}
+          {effLoading && <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> جاري التحميل…</div>}
           {eff && (
             <div className="space-y-3">
               <div className="text-sm text-muted-foreground">{eff.email}</div>

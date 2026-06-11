@@ -21,7 +21,7 @@ export function ManagerWorkloadCard({ employeeId, compact = false }: Props) {
   if (!employeeId) return null;
   if (isLoading) {
     return (
-      <Card className="border-dashed"><CardContent className="py-4 text-sm text-muted-foreground text-center">جارٍ تحميل عبء العمل...</CardContent></Card>
+      <Card className="border-dashed"><CardContent className="py-4 text-sm text-muted-foreground text-center">جاري تحميل عبء العمل...</CardContent></Card>
     );
   }
   if (!data) return null;
