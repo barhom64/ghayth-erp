@@ -107,7 +107,7 @@ export default function ViolationsSummaryReport() {
   return (
     <PageShell
       title="تقرير المخالفات (ملخص)"
-      subtitle="KPIs + تفصيل حسب الحالة / النوع / الشهر + آخر 100 مخالفة"
+      subtitle="مؤشرات إجمالية + تفصيل حسب الحالة / النوع / الشهر + آخر 100 مخالفة"
       breadcrumbs={[
         { href: "/umrah", label: "إدارة العمرة" },
         { href: "/umrah/reports", label: "التقارير" },

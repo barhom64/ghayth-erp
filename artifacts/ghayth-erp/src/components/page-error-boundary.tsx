@@ -192,7 +192,7 @@ export class PageErrorBoundary extends Component<Props, State> {
     if (this.state.reloading) {
       return (
         <div className="p-6 text-center text-sm text-muted-foreground" dir="rtl">
-          جارٍ تحديث الصفحة لتحميل أحدث إصدار…
+          جاري تحديث الصفحة لتحميل أحدث إصدار…
         </div>
       );
     }

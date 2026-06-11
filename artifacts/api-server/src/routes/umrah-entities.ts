@@ -4938,7 +4938,7 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
         c: string; total: string;
       }>(
         `SELECT cc."employeeId",
-                e."fullName" AS "employeeName",
+                e.name AS "employeeName",
                 COUNT(*)::text AS c,
                 COALESCE(SUM(cc."finalAmount"), 0)::text AS total
            FROM employee_commission_calculations cc
@@ -4946,7 +4946,7 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
                                 AND e."companyId" = cc."companyId"
                                 AND e."deletedAt" IS NULL
           WHERE ${where}
-          GROUP BY cc."employeeId", e."fullName"
+          GROUP BY cc."employeeId", e.name
           ORDER BY SUM(cc."finalAmount") DESC NULLS LAST
           LIMIT 50`,
         params,
@@ -4960,7 +4960,7 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
         createdAt: string;
       }>(
         `SELECT cc.id, cc."planId", cp."planName",
-                cc."employeeId", e."fullName" AS "employeeName",
+                cc."employeeId", e.name AS "employeeName",
                 cc.month, cc.year, cc.status,
                 cc."finalAmount", cc."commissionAmount",
                 cc."totalMutamers", cc."conditionMet",

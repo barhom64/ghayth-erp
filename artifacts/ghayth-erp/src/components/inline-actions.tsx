@@ -143,7 +143,7 @@ export function InlineEditForm({
       <FormShell
         schema={schema}
         defaultValues={defaults}
-        submitLabel={isPending ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+        submitLabel={isPending ? "جاري الحفظ..." : "حفظ التعديلات"}
         disabled={isPending}
         secondaryActions={
           <Button type="button" size="sm" variant="outline" onClick={onCancel} disabled={isPending} className="gap-1">

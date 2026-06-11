@@ -140,7 +140,7 @@ export default function ProjectPortfolioDashboardPage() {
   return (
     <PageShell
       title="لوحة محفظة المشاريع"
-      subtitle={`P&L كل مشروع نشط في ${year} — الإيرادات والمصاريف والهامش`}
+      subtitle={`ربحية كل مشروع نشط في ${year} — الإيرادات والمصاريف والهامش`}
     >
       <FinanceTabsNav />
 

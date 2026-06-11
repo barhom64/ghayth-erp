@@ -156,7 +156,7 @@ export default function BudgetVariancePage() {
   return (
     <PageShell
       title="تقرير انحراف الميزانية"
-      subtitle="Budget Variance — لكل حساب: المخطط vs الفعلي خلال الفترة، مع تمييز التجاوزات + الاقتراب من السقف"
+      subtitle="انحراف الموازنة — لكل حساب: المخطط مقابل الفعلي خلال الفترة، مع تمييز التجاوزات والاقتراب من السقف"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/budget", label: "الميزانية" },
