@@ -143,6 +143,13 @@ export const UMRAH_POLICY_CATEGORIES: PolicyCategory[] = [
       { key: "autoPostNuskAp", label: "ترحيل قيد ذمم نسك تلقائياً عند إنشاء الفاتورة", type: "boolean", defaultValue: true, hint: "يُسلِّم لـ postNuskJournalEntries في #1867." },
       { key: "autoPostSalesRevenue", label: "ترحيل قيد إيراد المبيعات تلقائياً", type: "boolean", defaultValue: true },
       { key: "blockOnAccountMappingMissing", label: "رفض الترحيل إذا كانت تخصيصات الحسابات ناقصة", type: "boolean", defaultValue: true, hint: "بدله: تسجيل تحذير + ترك الفاتورة بدون قيد للمعالجة اليدوية." },
+      // U-02b / M2 of #2080 — preparatory flag for the legacy umrah_transport
+      // path containment. DECLARATIVE ONLY at this stage: no route, engine,
+      // or UI reads this flag in M2. Subsequent stages (M3+) wire it into
+      // POST/PATCH on /transport behind a separate owner authorisation; see
+      // docs/governance/umrah-inventory-organization-repair/findings/
+      // U-02b_transition_plan.md for the full migration ladder.
+      { key: "legacyTransportWritesDisabled", label: "إيقاف الكتابة على المسار القديم لنقل العمرة (umrah_transport)", type: "boolean", defaultValue: false, hint: "M2 من U-02b — مفتاح مُعَدّ مسبقاً للاستخدام في مراحل لاحقة. قيمته الحالية لا أثر سلوكي لها." },
     ],
   },
   {
