@@ -83,8 +83,16 @@ describe("HR-016 — Unified Work Queue", () => {
     expect(MISC_ROUTES_SRC).toMatch(/\{ path: "\/my\/work-queue", component: WorkQueue \}/);
   });
 
-  it("nav entry under «مساحاتي» at the top of the bucket", () => {
-    expect(NAV_SRC).toMatch(/label: "ما ينتظر إجراءاتي", path: "\/my\/work-queue"/);
+  it("nav entry under «مساحاتي» at the top of the bucket (now points at /work-inbox after PR-5)", () => {
+    // PR-5 (#2077) promoted the canonical inbox to /work-inbox. The
+    // legacy «ما ينتظر إجراءاتي» nav entry under «مساحاتي» now points
+    // at the new page; the experimental /my/work-queue route is kept
+    // mounted (see hrWorkInboxAggregationSmoke) but no longer referenced
+    // from the sidebar.
+    expect(NAV_SRC).toMatch(/label: "ما ينتظر إجراءاتي", path: "\/work-inbox"/);
+    // And a NEW top-level entry «صندوق الأعمال» is added at the top
+    // of «الرئيسية» so the inbox is the first thing every operator sees.
+    expect(NAV_SRC).toMatch(/label: "صندوق الأعمال", path: "\/work-inbox"/);
   });
 });
 

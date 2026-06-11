@@ -22,7 +22,7 @@ import {
   Target, Network, Receipt, Wallet, Car, Wrench, Fuel, User,
   FileCheck, AlertTriangle, ClipboardCheck, Building, FileSignature, Users2,
   Hammer, TrendingUp, FileBarChart, FolderOpen, Archive, ListTodo, GitBranch,
-  FilePlus, CalendarClock, ScrollText, Cog, Bell, Mail,
+  FilePlus, CalendarClock, ScrollText, Cog, Bell, Mail, Inbox,
   MessageSquare, Scale, Briefcase, Megaphone, ShoppingCart, Package, Activity,
   LineChart, Menu, X, LogOut, Headphones, CheckCircle,
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
@@ -76,10 +76,16 @@ export const allNavSections: NavSection[] = [
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
+      // PR-5 (#2077) — صندوق الأعمال الموحّد. Promoted to the top of
+      // «الرئيسية» so it's the first thing every operator sees on
+      // login. Replaces the 5-screen morning routine (notifications +
+      // action-center + hr/approval-inbox + finance/approvals-inbox +
+      // tasks) with a single canonical page.
+      { label: "صندوق الأعمال", path: "/work-inbox", icon: Inbox },
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
-        { label: "ما ينتظر إجراءاتي", path: "/my/work-queue", icon: ListChecks },
+        { label: "ما ينتظر إجراءاتي", path: "/work-inbox", icon: ListChecks },
         { label: "مساحتي", path: "/my-space", icon: User },
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
