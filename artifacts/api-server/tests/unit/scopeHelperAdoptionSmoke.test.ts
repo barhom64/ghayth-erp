@@ -237,8 +237,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
     // This assertion is informational — fails loudly if the route
     // count or adoption ratio shifts significantly. Update the
     // expected numbers when migrations land or new routes ship.
+    // PR-9 (#2077) — +1 route file (myFieldTracking.ts, the /my/field
+    // self-service mount). It delegates ALL scope work to
+    // lib/fieldTrackingService, so it's neither a helper user nor
+    // manual-only — total moves, the other two stay.
     expect({ total, helperUsers, manualOnly }).toEqual({
-      total: 115,
+      total: 116,
       helperUsers: 36,
       manualOnly: 76,
     });

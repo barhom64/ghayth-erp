@@ -144,15 +144,15 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // (route added or removed) the diff reviewer sees the change.
     // Adjust the expected number when the catalog moves on purpose.
     // PR-4 (#2077) added 2 endpoints to employees.ts (scoring/recompute
-    // + scoring/history). PR-8 (#2077) added 3 more (lifecycle/status,
-    // /history, /transitions). All five gated on hr.employees:* so the
-    // 100% authorize-coverage invariant below still holds.
-    expect(ALL_REGISTRATIONS.length).toBe(222);
+    // + scoring/history). PR-8 added 3 (lifecycle/*). PR-9 added 1
+    // (GET /attendance/field-ping/eligibility on hr.ts; the /my/field
+    // self-service mount lives outside the HR file set). All gated.
+    expect(ALL_REGISTRATIONS.length).toBe(223);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(222);
+    expect(gated).toBe(223);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
@@ -162,10 +162,9 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
       // PR-4 (#2077) added 2 (scoring/recompute + scoring/history);
       // PR-8 (#2077) added 3 (lifecycle/status + /history + /transitions).
       "employees.ts": 18,
-      // main merged 4 new endpoints onto hr.ts (121→125) — ALL still
-      // gated by authorize(); the ratchet's primary invariant (100%
-      // coverage) holds, only the count snapshot moved.
-      "hr.ts": 125,
+      // main merged 4 endpoints (121→125); PR-9 (#2077) added the
+      // field-ping eligibility mirror (125→126). All gated.
+      "hr.ts": 126,
       "hr-compliance.ts": 3,
       "hr-contracts.ts": 12,
       "hr-discipline.ts": 24,

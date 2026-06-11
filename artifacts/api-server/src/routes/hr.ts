@@ -11,6 +11,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { resolveAttendancePolicy } from "../lib/attendancePolicyEngine.js";
+import { fieldPingSchema, getFieldEligibility, recordFieldPing } from "../lib/fieldTrackingService.js";
 import { requireAnyPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { resolveRequester } from "../lib/rbac/selfApprovalCreators.js";
@@ -1269,92 +1270,52 @@ router.get("/attendance", authorize({ feature: "hr.attendance", action: "list" }
 // is 30s, a field employee's 300s, office/manager/executive 0 (= no
 // live tracking — their pings are rejected). This makes the policy the
 // single source of truth for "who is tracked and how often".
-const fieldPingSchema = z.object({
-  lat: z.coerce.number().min(-90).max(90),
-  lng: z.coerce.number().min(-180).max(180),
-  accuracy: z.coerce.number().nonnegative().optional(),
-  speed: z.coerce.number().optional(),
-  heading: z.coerce.number().min(0).max(360).optional(),
-  altitude: z.coerce.number().optional(),
-  battery: z.coerce.number().int().min(0).max(100).optional(),
-  deviceId: z.string().max(120).optional(),
-  source: z.enum(["mobile", "web", "device", "manual"]).optional(),
-  taskId: z.coerce.number().int().positive().optional(),
-  tripId: z.coerce.number().int().positive().optional(),
-  visitId: z.coerce.number().int().positive().optional(),
-  // Device-reported capture time. Defaults to server now() when absent.
-  capturedAt: z.string().optional(),
+// PR-9 (#2077) — fieldPingSchema moved to lib/fieldTrackingService.ts
+// (shared between this module-gated mount and the /my/field self-service mount).
+
+// PR-9 (#2077) — eligibility pre-check. The mobile companion calls
+// this BEFORE requesting location permission, so an office employee /
+// manager / executive (trackingFrequencySeconds = 0) never even sees
+// the browser's geolocation prompt. The same policy resolution the
+// field-ping route enforces — this is a read-only mirror, not a new
+// engine. Access scope ≠ field membership: the policy keys off the
+// employee's OWN assignment categoryKey, never off role/permissions,
+// so the admin's branch-wide access does not make them trackable.
+router.get("/attendance/field-ping/eligibility", authorize({ feature: "hr.attendance.checkin", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    res.json(await getFieldEligibility(scope));
+  } catch (err) {
+    handleRouteError(err, res, "Field ping eligibility error:");
+  }
 });
 
 router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checkin", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!scope.activeAssignmentId) {
-      throw new ValidationError("لا يوجد تعيين نشط لتسجيل نقطة التتبع", {
-        field: "assignment",
-        fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
-      });
-    }
     const b = zodParse(fieldPingSchema.safeParse(req.body));
-
-    // Resolve the employee's category policy. Office/manager/executive
-    // categories carry trackingFrequencySeconds = 0 ⇒ no live tracking
-    // ⇒ reject the ping with a clear message rather than silently
-    // storing data the policy says we shouldn't collect.
-    const policy = await resolveAttendancePolicy({
-      companyId: scope.companyId,
-      assignmentId: scope.activeAssignmentId,
-    }).catch((e) => { logger.error(e, "field-ping policy resolution failed"); return null; });
-
-    const freq = policy?.trackingFrequencySeconds ?? 0;
-    if (freq <= 0) {
-      throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
-        fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
-        meta: { categoryKey: policy?.categoryKey ?? null, trackingFrequencySeconds: freq },
-      });
-    }
-
-    // Throttle: reject pings arriving faster than the category allows.
-    // We compare against the most recent stored point for this
-    // assignment. A small 20% tolerance absorbs jitter from mobile
-    // timers without letting a misbehaving client flood the table.
-    const [last] = await rawQuery<{ capturedAt: string }>(
-      `SELECT "capturedAt" FROM field_tracking_points
-        WHERE "assignmentId" = $1
-        ORDER BY "capturedAt" DESC LIMIT 1`,
-      [scope.activeAssignmentId],
-    );
-    const capturedAt = b.capturedAt ? new Date(b.capturedAt) : new Date();
-    if (last) {
-      const gapSeconds = (capturedAt.getTime() - new Date(last.capturedAt).getTime()) / 1000;
-      if (gapSeconds >= 0 && gapSeconds < freq * 0.8) {
-        // Not an error — just an accepted no-op so the client doesn't
-        // treat throttling as a failure and retry-storm.
-        res.status(202).json({ accepted: false, reason: "throttled", minIntervalSeconds: freq });
+    const r = await recordFieldPing(scope, b);
+    switch (r.kind) {
+      case "no_assignment":
+        throw new ValidationError("لا يوجد تعيين نشط لتسجيل نقطة التتبع", {
+          field: "assignment",
+          fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
+        });
+      case "forbidden":
+        throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
+          fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
+          meta: { categoryKey: r.categoryKey, trackingFrequencySeconds: r.freq },
+        });
+      case "throttled":
+        res.status(202).json({ accepted: false, reason: "throttled", minIntervalSeconds: r.freq });
         return;
-      }
+      case "duplicate":
+        res.status(200).json({ accepted: false, reason: "duplicate", minIntervalSeconds: r.freq });
+        return;
+      case "accepted":
+        res.status(201).json({ accepted: true, id: r.id, minIntervalSeconds: r.freq });
+        return;
     }
-
-    const [assignment] = await rawQuery<{ employeeId: number; branchId: number | null }>(
-      `SELECT "employeeId", "branchId" FROM employee_assignments WHERE id = $1 AND "companyId" = $2`,
-      [scope.activeAssignmentId, scope.companyId],
-    );
-
-    const [row] = await rawQuery<{ id: number }>(
-      `INSERT INTO field_tracking_points
-        ("companyId","branchId","assignmentId","employeeId",lat,lng,accuracy,speed,heading,altitude,battery,"deviceId",source,"taskId","tripId","visitId","capturedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       RETURNING id`,
-      [
-        scope.companyId, assignment?.branchId ?? scope.branchId, scope.activeAssignmentId,
-        assignment?.employeeId ?? null,
-        b.lat, b.lng, b.accuracy ?? null, b.speed ?? null, b.heading ?? null, b.altitude ?? null,
-        b.battery ?? null, b.deviceId ?? null, b.source ?? "mobile",
-        b.taskId ?? null, b.tripId ?? null, b.visitId ?? null, capturedAt.toISOString(),
-      ],
-    );
-
-    res.status(201).json({ accepted: true, id: row?.id, minIntervalSeconds: freq });
   } catch (err) {
     handleRouteError(err, res, "Field ping error:");
   }

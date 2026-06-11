@@ -68,6 +68,7 @@ import impactPreviewRouter from "./impactPreview.js";
 import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
+import myFieldTrackingRouter from "./myFieldTracking.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
@@ -540,6 +541,13 @@ router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
+// PR-9 (#2077) — self-service field tracking. Same lane as /my-space:
+// authMiddleware + per-route authorize (hr.attendance.checkin is
+// selfService:true), NO module gate — plain employees (field workers,
+// drivers) don't carry the hr module but must reach their own ping
+// endpoint. The category policy inside fieldTrackingService stays the
+// single authority on WHO is trackable.
+router.use("/my/field", myFieldTrackingRouter);
 // IGOC-006 — /me/proactive-insights aggregates 9 role-adaptive categories
 // (my docs/iqama, my pending requests, team approvals, company iqama/journals/
 // invoices/obligations, critical notifications). Same surface for every role,
