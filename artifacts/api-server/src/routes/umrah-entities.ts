@@ -4198,7 +4198,15 @@ export type CalendarLayer =
   // operational dashboard answer "where does money flow?" not just
   // "where are the pilgrims?"
   | "nusk_invoice_issued"
-  | "penalty_created";
+  | "penalty_created"
+  // U-02b M5b (#2080) — surfaces the unified transport-contract
+  // requests (transport_bookings written via POST /umrah/groups/:id
+  // /transport-requests) as their own calendar layer. Runs ALONGSIDE
+  // the legacy `transport_trip` layer; both stay enabled by default
+  // because the underlying tables are independent — historic rows in
+  // umrah_transport keep flowing through `transport_trip`, contract
+  // bookings flow through this new layer. No conversion, no merge.
+  | "transport_request";
 
 export const CALENDAR_LAYER_META: Record<CalendarLayer, {
   label: string;
@@ -4213,6 +4221,11 @@ export const CALENDAR_LAYER_META: Record<CalendarLayer, {
   nusk_expiring:       { label: "فواتير نسك تنتهي",     color: "yellow", entityType: "umrah_nusk_invoices" },
   nusk_invoice_issued: { label: "فواتير نسك مُصدَرة",  color: "blue",   entityType: "umrah_nusk_invoices" },
   penalty_created:     { label: "غرامات مُصدرة",        color: "red",    entityType: "umrah_penalties" },
+  // U-02b M5b — distinct from `transport_trip` (purple). Reads
+  // transport_bookings.requestedPickupDate filtered to
+  // bookingSource = 'umrah_group' so non-umrah transport activity
+  // (cargo, CRM, etc.) does NOT leak into the umrah calendar.
+  transport_request:   { label: "طلبات نقل (موحَّد)",  color: "gray",   entityType: "transport_bookings" },
 };
 
 const ALL_LAYERS = Object.keys(CALENDAR_LAYER_META) as CalendarLayer[];
@@ -4275,6 +4288,7 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
       pilgrim_arrival: null, pilgrim_departure: null, visa_expiring: null,
       overstay: null, transport_trip: null, nusk_expiring: null,
       nusk_invoice_issued: null, penalty_created: null,
+      transport_request: null,
     };
 
     if (requestedLayers.includes("pilgrim_arrival")) {
@@ -4344,6 +4358,28 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
             AND t."tripDate" BETWEEN $2::date AND $3::date
             AND t."deletedAt" IS NULL${transportSeasonClause}
           GROUP BY t."tripDate"`,
+        baseParams,
+      );
+    }
+    // U-02b M5b — transport_bookings written by the unified contract
+    // (POST /umrah/groups/:id/transport-requests). Separate query, NO
+    // join with umrah_transport. bookingSource filter keeps non-umrah
+    // bookings out of the umrah calendar. Cancelled/rejected rows are
+    // suppressed because they shouldn't compete with operational
+    // attention on the day-cell. The query mirrors the transport_trip
+    // shape so the FE consumes both layers through the same Row type.
+    if (requestedLayers.includes("transport_request")) {
+      runs.transport_request = rawQuery<Row>(
+        `SELECT b."requestedPickupDate"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(b.id ORDER BY b.id))[1:10] AS "sampleIds"
+           FROM transport_bookings b
+          WHERE b."companyId" = $1
+            AND b."requestedPickupDate" BETWEEN $2::date AND $3::date
+            AND b."bookingSource" = 'umrah_group'
+            AND b.status NOT IN ('cancelled', 'rejected')
+            AND b."deletedAt" IS NULL
+          GROUP BY b."requestedPickupDate"`,
         baseParams,
       );
     }
