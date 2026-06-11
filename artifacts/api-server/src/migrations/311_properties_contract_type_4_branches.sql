@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 298_properties_contract_type_4_branches.sql
+-- 311_properties_contract_type_4_branches.sql
 -- ---------------------------------------------------------------------------
 -- WHAT:  Normalises rental_contracts."contractType" to the four real-world
 --        Properties branches — residential_rent, commercial_rent, sale,
