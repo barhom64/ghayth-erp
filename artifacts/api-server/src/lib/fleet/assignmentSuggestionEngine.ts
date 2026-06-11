@@ -48,6 +48,12 @@ import {
   checkVehicleDocumentReadiness,
   type MaintenanceBlock,
 } from "./vehicleReadiness.js";
+import {
+  checkDriverDrivingCaps,
+  checkDriverLeave,
+  type DriverDrivingMinutes,
+  type LeaveOverlap,
+} from "./driverReadiness.js";
 
 export interface SuggestionRequest {
   companyId: number;
@@ -183,6 +189,10 @@ interface DriverRow {
   lastDutyEndedAt: string | null;
   licenseClass: string | null;
   status: string;
+  // #2079 PE-03 — driver readiness fields. employeeId is the join key
+  // for hr_leave_requests; without it the leave gate is silently
+  // skipped (legacy drivers not linked to an employee row).
+  employeeId: number | null;
 }
 
 interface ConflictRow {
@@ -416,7 +426,8 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
             COALESCE(d."restHoursRequired", 8)::float AS "restHoursRequired",
             d."lastDutyEndedAt",
             d."licenseClass",
-            COALESCE(d.status, 'active') AS status
+            COALESCE(d.status, 'active') AS status,
+            d."employeeId"
        FROM fleet_drivers d
       WHERE d."companyId" = $1
         AND d."deletedAt" IS NULL
@@ -464,8 +475,101 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     }
   }
 
+  // 4c) #2079 PE-03 — approved leave overlap probe. Drivers whose
+  // employee row has a non-deleted approved leave that overlaps the
+  // booking window get hard-ejected before scoring. Pending leaves
+  // are intentionally ignored — operators can still plan around them
+  // and approve/reject after the fact.
+  const leaveRows = await rawQuery<LeaveOverlap>(
+    `SELECT lr."employeeId",
+            to_char(lr."startDate", 'YYYY-MM-DD') AS "startDate",
+            to_char(lr."endDate",   'YYYY-MM-DD') AS "endDate",
+            lt.name AS "leaveType"
+       FROM hr_leave_requests lr
+            LEFT JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
+      WHERE lr."companyId" = $1
+        AND lr."deletedAt" IS NULL
+        AND lr.status = 'approved'
+        AND lr."startDate" <= $3::date
+        AND lr."endDate"   >= $2::date`,
+    [req.companyId, start, end],
+  );
+  const leaveByEmployeeId = new Map<number, LeaveOverlap>();
+  for (const lv of leaveRows) {
+    if (!leaveByEmployeeId.has(lv.employeeId)) {
+      leaveByEmployeeId.set(lv.employeeId, lv);
+    }
+  }
+
+  // 4d) #2079 PE-03 — daily / weekly driving-minute probe. One SQL
+  // query per suggest call, two SUMs against `transport_dispatch_orders`
+  // for every driver, then the cap is enforced in the loop via
+  // `checkDriverDrivingCaps`. The trailing windows are anchored on the
+  // booking START so a future booking on a quiet driver still benefits
+  // from their idle time before the planned trip.
+  const minutesRows = await rawQuery<{
+    driverId: number;
+    daily: string;
+    weekly: string;
+  }>(
+    `SELECT "driverId",
+            COALESCE(SUM(
+              EXTRACT(EPOCH FROM ("scheduledEndAt" - "scheduledStartAt")) / 60
+            ) FILTER (
+              WHERE "scheduledStartAt" >= $2::timestamptz - INTERVAL '24 hours'
+                AND "scheduledStartAt" <  $2::timestamptz
+            ), 0)::int AS daily,
+            COALESCE(SUM(
+              EXTRACT(EPOCH FROM ("scheduledEndAt" - "scheduledStartAt")) / 60
+            ) FILTER (
+              WHERE "scheduledStartAt" >= $2::timestamptz - INTERVAL '7 days'
+                AND "scheduledStartAt" <  $2::timestamptz
+            ), 0)::int AS weekly
+       FROM transport_dispatch_orders
+      WHERE "companyId" = $1
+        AND status NOT IN ('declined', 'cancelled')
+      GROUP BY "driverId"`,
+    [req.companyId, start],
+  );
+  const drivingMinutesByDriverId = new Map<number, DriverDrivingMinutes>();
+  for (const r of minutesRows) {
+    drivingMinutesByDriverId.set(r.driverId, {
+      daily:  Number(r.daily)  || 0,
+      weekly: Number(r.weekly) || 0,
+    });
+  }
+
   // 5) Settings (for the manual maps haversine baseline).
   const settings = await loadPlanningSettings(req.companyId);
+
+  // #2079 PE-03 — load driving caps from per-company settings. The
+  // 780/3600 defaults match what migration 325 applies on every row
+  // (13h / day, 60h / week). One row per company, so this is a fast
+  // PK lookup. Falling back to industry defaults when the row is
+  // missing keeps the suggest path resilient on fresh tenants.
+  const [capsRow] = await rawQuery<{
+    dailyMinutes: number;
+    weeklyMinutes: number;
+  }>(
+    `SELECT "defaultMaxDailyDrivingMinutes"  AS "dailyMinutes",
+            "defaultMaxWeeklyDrivingMinutes" AS "weeklyMinutes"
+       FROM transport_planning_settings
+      WHERE "companyId" = $1`,
+    [req.companyId],
+  );
+  const drivingCaps = {
+    dailyMinutes:  capsRow?.dailyMinutes  ?? 780,
+    weeklyMinutes: capsRow?.weeklyMinutes ?? 3600,
+  };
+  // Estimated trip duration in minutes. Used for the projected sum
+  // against the caps — chaining a 5h trip onto a driver who has
+  // already done 9h triggers the daily ejection.
+  const tripDurationMinutes = Math.max(
+    1,
+    Math.round(
+      (new Date(end).getTime() - new Date(start).getTime()) / 60_000,
+    ),
+  );
 
   // 6) Score every (vehicle, driver) pair.
   const results: SuggestionResult[] = [];
@@ -502,6 +606,24 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     eligibleVehicles.push(v);
   }
 
+  // #2079 PE-03 — driver pre-elimination mirroring the vehicle gate.
+  // Drivers in approved leave during the window, or who would exceed
+  // a driving cap with this trip, never enter the scoring loop. Result:
+  // the (vehicle × driver) pair count drops to (eligible × eligible)
+  // and the dispatcher never sees an unactionable candidate.
+  const eligibleDrivers: DriverRow[] = [];
+  for (const d of drivers) {
+    const leaveVerdict = checkDriverLeave(d.employeeId, leaveByEmployeeId);
+    if (leaveVerdict.blocked) continue;
+    const capVerdict = checkDriverDrivingCaps(
+      drivingMinutesByDriverId.get(d.id) ?? null,
+      tripDurationMinutes,
+      drivingCaps,
+    );
+    if (capVerdict.blocked) continue;
+    eligibleDrivers.push(d);
+  }
+
   for (const v of eligibleVehicles) {
     // Hard filter: exact-required vehicle.
     if (booking.requiredExactVehicleId != null && v.id !== booking.requiredExactVehicleId) {
@@ -509,7 +631,7 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     }
     const vcm = vcmByVehicleId.get(v.id)!;
 
-    for (const d of drivers) {
+    for (const d of eligibleDrivers) {
       if (booking.requiredExactDriverId != null && d.id !== booking.requiredExactDriverId) {
         continue;
       }
