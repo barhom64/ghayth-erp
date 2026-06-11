@@ -755,7 +755,7 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch((e) => logger.error(e, "umrah background task failed"));
     // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
     // this agent route to its own revenue leaf via resolveRevenueAccount.
-    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
