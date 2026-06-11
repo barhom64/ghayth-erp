@@ -284,7 +284,7 @@ class FinancialEngineImpl implements DomainEngine {
     companyId: number,
     operationType: string,
     side: "debit" | "credit",
-    fallbackCode: string
+    fallbackCode?: string
   ): Promise<string> {
     return getAccountCodeFromMapping(companyId, operationType, side, fallbackCode);
   }

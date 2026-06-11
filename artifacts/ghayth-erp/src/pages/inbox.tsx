@@ -15,7 +15,7 @@
  *   - Compose button (top right) opens a dialog that sends through
  *     the same DLP-aware backend
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PageShell } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
@@ -39,7 +39,7 @@ import {
   ArrowDownLeft, ArrowUpRight, AlertOctagon, Sparkles,
   PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed,
   Inbox as InboxIcon, FileEdit, Star, Archive, Trash2, AlertTriangle,
-  Save, PenSquare, Settings,
+  Save, PenSquare, Settings, Clock, BellOff,
 } from "lucide-react";
 
 type Folder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash" | "spam";
@@ -73,6 +73,7 @@ interface ThreadRow {
   createdAt: string;
   total_messages: number;
   inbound_count: number;
+  unread_count: number;
 }
 
 interface MessageRow {
@@ -85,6 +86,8 @@ interface MessageRow {
   body: string;
   status: string;
   createdAt: string;
+  isRead?: boolean;
+  readAt?: string | null;
 }
 
 interface CallRow {
@@ -545,6 +548,7 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
             const Icon = meta.icon;
             const isActive = active?.channel === t.channel && active.address === t.peer;
             const isChecked = selected.has(t.id);
+            const hasUnread = (t.unread_count ?? 0) > 0;
             return (
               <div
                 key={`${t.channel}-${t.peer}-${t.id}`}
@@ -552,6 +556,7 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
                   "p-3 hover:bg-surface-subtle/60 flex gap-2 items-start transition-colors group",
                   isActive && "bg-status-info-surface",
                   isChecked && "bg-indigo-50/30",
+                  hasUnread && !isActive && "bg-status-info-surface/30",
                   t.channel === "pbx" && "opacity-60",
                 )}
               >
@@ -572,13 +577,18 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
                   className="flex-1 min-w-0 text-start"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm truncate">{t.peer}</span>
-                    {t.inbound_count > 0 && (
-                      <Badge variant="outline" className="text-[10px] shrink-0">{t.inbound_count} وارد</Badge>
-                    )}
+                    <span className={cn("text-sm truncate", hasUnread ? "font-bold" : "font-medium")}>{t.peer}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {hasUnread && (
+                        <Badge className="text-[10px] bg-primary text-primary-foreground">{t.unread_count} جديد</Badge>
+                      )}
+                      {t.inbound_count > 0 && (
+                        <Badge variant="outline" className="text-[10px]">{t.inbound_count} وارد</Badge>
+                      )}
+                    </div>
                   </div>
                   {t.subject && (
-                    <p className="text-xs font-medium text-muted-foreground truncate">{t.subject}</p>
+                    <p className={cn("text-xs truncate", hasUnread ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>{t.subject}</p>
                   )}
                   <p className="text-xs text-muted-foreground truncate">
                     {t.direction === "outbound" ? "← " : "→ "}{t.body_preview}
@@ -720,6 +730,22 @@ function ThreadView({ channel, address, onBack, onSent }: {
   const [reply, setReply] = useState("");
   const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
 
+  // Mark every inbound message in this thread as read once the thread
+  // is loaded. We dedupe via the (channel,address) key so the network
+  // call doesn't fire on every refetch — only when the user first
+  // opens (or switches to) this thread. The server-side endpoint is
+  // idempotent so a stale fire-and-forget would be harmless anyway.
+  const lastReadKey = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${channel}:${address}`;
+    if (lastReadKey.current === key) return;
+    if (!messages.some((m) => m.direction === "inbound" && !m.isRead)) return;
+    lastReadKey.current = key;
+    apiFetch(`/inbox/threads/${channel}/${encodeURIComponent(address)}/read`, { method: "POST" })
+      .then(() => onSent())
+      .catch(() => { lastReadKey.current = null; });
+  }, [channel, address, messages, onSent]);
+
   const send = useMutation({
     mutationFn: () => {
       const lastId = messages[messages.length - 1]?.id;
@@ -757,9 +783,12 @@ function ThreadView({ channel, address, onBack, onSent }: {
             <span>{address}</span>
             <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="w-3 h-3" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <ThreadSnoozeMenu channel={channel} address={address} onSnoozed={onBack} />
+            <Button variant="ghost" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -777,6 +806,9 @@ function ThreadView({ channel, address, onBack, onSent }: {
               <span>{m.direction === "outbound" ? "أنت" : address}</span>
               <span>•</span>
               <span>{formatDateAr(m.createdAt)}</span>
+              {m.direction === "inbound" && m.isRead === false && (
+                <Badge className="text-[9px] bg-primary text-primary-foreground">جديد</Badge>
+              )}
               {m.status === "blocked_dlp" && (
                 <Badge variant="outline" className="text-[9px] text-status-error-foreground border-status-error-surface">حُجبت DLP</Badge>
               )}
@@ -827,6 +859,80 @@ function ThreadView({ channel, address, onBack, onSent }: {
         <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter للإرسال السريع</p>
       </div>
     </Card>
+  );
+}
+
+// ─────────────────────── Thread snooze menu ────────────────────────────
+
+const SNOOZE_PRESETS: { label: string; hours: number }[] = [
+  { label: "ساعة", hours: 1 },
+  { label: "4 ساعات", hours: 4 },
+  { label: "غداً ٩ صباحًا", hours: snoozeUntilTomorrowMorning() },
+  { label: "أسبوع", hours: 24 * 7 },
+];
+
+function snoozeUntilTomorrowMorning(): number {
+  const now = new Date();
+  const tomorrow9 = new Date(now);
+  tomorrow9.setDate(tomorrow9.getDate() + 1);
+  tomorrow9.setHours(9, 0, 0, 0);
+  return Math.max(1, (tomorrow9.getTime() - now.getTime()) / 3600_000);
+}
+
+function ThreadSnoozeMenu({ channel, address, onSnoozed }: {
+  channel: Channel;
+  address: string;
+  onSnoozed: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const snooze = useMutation({
+    mutationFn: (hours: number) => {
+      const wakeAt = new Date(Date.now() + hours * 3600_000).toISOString();
+      return apiFetch(`/inbox/threads/${channel}/${encodeURIComponent(address)}/snooze`, {
+        method: "POST",
+        body: JSON.stringify({ wakeAt }),
+      });
+    },
+    onSuccess: () => {
+      setOpen(false);
+      toast({ title: "تم تأجيل المحادثة", description: "سيتم تذكيرك في الوقت المحدد" });
+      onSnoozed();
+    },
+    onError: (e: Error) => toast({ title: "تعذّر التأجيل", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title="تأجيل المحادثة">
+        <Clock className="w-3 h-3" />
+      </Button>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <BellOff className="w-4 h-4" />
+            تأجيل المحادثة
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            ستختفي المحادثة من الوارد، ثم تظهر مهمّة متابعة تلقائية عند الوقت المحدد.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-2 py-2">
+          {SNOOZE_PRESETS.map((p) => (
+            <Button
+              key={p.label}
+              variant="outline"
+              size="sm"
+              disabled={snooze.isPending}
+              onClick={() => snooze.mutate(p.hours)}
+              className="justify-start"
+            >
+              <Clock className="w-3 h-3 me-2" />{p.label}
+            </Button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

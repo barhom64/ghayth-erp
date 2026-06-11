@@ -7,14 +7,46 @@
  */
 import * as zod from "zod";
 /**
- * @summary Health check
+ * Lightweight liveness check. Proves the process is up. Does NOT
+verify DB connectivity or schema completeness — use
+`GET /api/health/schema` for readiness verification.
+
+ * @summary Liveness probe (lightweight)
  */
 export declare const HealthCheckResponse: zod.ZodObject<{
     status: zod.ZodString;
+    redisRateLimit: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     status: string;
+    redisRateLimit?: string | undefined;
 }, {
     status: string;
+    redisRateLimit?: string | undefined;
+}>;
+/**
+ * Readiness probe. Verifies that the expected tables/columns exist
+and that pending migrations have been applied. This is the
+endpoint that post-deploy verification scripts should poll —
+`/api/health` and `/api/healthz` only prove connectivity /
+liveness, not schema completeness.
+
+ * @summary Schema/readiness verification
+ */
+export declare const HealthSchemaResponse: zod.ZodObject<{
+    status: zod.ZodString;
+    tables: zod.ZodOptional<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>>;
+    migrations: zod.ZodOptional<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>>;
+    checkedAt: zod.ZodDate;
+}, "strip", zod.ZodTypeAny, {
+    status: string;
+    checkedAt: Date;
+    tables?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
+    migrations?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
+}, {
+    status: string;
+    checkedAt: Date;
+    tables?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
+    migrations?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
 }>;
 /**
  * @summary Login
@@ -30,48 +62,149 @@ export declare const LoginBody: zod.ZodObject<{
     password: string;
 }>;
 export declare const LoginResponse: zod.ZodObject<{
-    token: zod.ZodString;
     assignments: zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">;
+    userRoles: zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">;
 }, "strip", zod.ZodTypeAny, {
-    token: string;
     assignments: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[];
+    userRoles: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[];
 }, {
-    token: string;
     assignments: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[];
+    userRoles: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[];
 }>;
 /**
  * @summary Get current user
  */
 export declare const GetMeResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
     name: zod.ZodString;
-    phone: zod.ZodOptional<zod.ZodString>;
-    email: zod.ZodOptional<zod.ZodString>;
-    photoUrl: zod.ZodOptional<zod.ZodString>;
-    jobTitle: zod.ZodOptional<zod.ZodString>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    empNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    photoUrl: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodString>;
+    jobTitle: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    jobTitleId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     role: zod.ZodString;
-    salary: zod.ZodOptional<zod.ZodNumber>;
-    companyName: zod.ZodString;
-    branchName: zod.ZodString;
+    salary: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    companyId: zod.ZodNumber;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    companyName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    branchName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    preferredCalendar: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    preferredLocale: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    userRoles: zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">;
 }, "strip", zod.ZodTypeAny, {
+    userRoles: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[];
+    id: number;
     name: string;
     role: string;
-    companyName: string;
-    branchName: string;
-    email?: string | undefined;
-    phone?: string | undefined;
-    photoUrl?: string | undefined;
-    jobTitle?: string | undefined;
-    salary?: number | undefined;
+    companyId: number;
+    status?: string | undefined;
+    email?: string | null | undefined;
+    phone?: string | null | undefined;
+    empNumber?: string | null | undefined;
+    photoUrl?: string | null | undefined;
+    jobTitle?: string | null | undefined;
+    jobTitleId?: number | null | undefined;
+    salary?: string | null | undefined;
+    branchId?: number | null | undefined;
+    companyName?: string | null | undefined;
+    branchName?: string | null | undefined;
+    preferredCalendar?: string | null | undefined;
+    preferredLocale?: string | null | undefined;
 }, {
+    userRoles: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[];
+    id: number;
     name: string;
     role: string;
-    companyName: string;
-    branchName: string;
-    email?: string | undefined;
-    phone?: string | undefined;
-    photoUrl?: string | undefined;
-    jobTitle?: string | undefined;
-    salary?: number | undefined;
+    companyId: number;
+    status?: string | undefined;
+    email?: string | null | undefined;
+    phone?: string | null | undefined;
+    empNumber?: string | null | undefined;
+    photoUrl?: string | null | undefined;
+    jobTitle?: string | null | undefined;
+    jobTitleId?: number | null | undefined;
+    salary?: string | null | undefined;
+    branchId?: number | null | undefined;
+    companyName?: string | null | undefined;
+    branchName?: string | null | undefined;
+    preferredCalendar?: string | null | undefined;
+    preferredLocale?: string | null | undefined;
+}>;
+/**
+ * Employee login for native/mobile clients. Returns the access and refresh tokens in the JSON body (NOT as cookies). The access token is the same JWT used by the web cookie flow, so it carries identical RBAC / allowedModules / feature-flag scope — send it as `Authorization: Bearer <accessToken>` on subsequent requests. When the access token expires (HTTP 401), call `/auth/mobile/refresh` with the stored refresh token to obtain a new pair. To sign out, POST the refresh token to `/auth/logout`.
+
+ * @summary Mobile (Bearer-token) login
+ */
+export declare const MobileLoginBody: zod.ZodObject<{
+    email: zod.ZodString;
+    password: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    email: string;
+    password: string;
+}, {
+    email: string;
+    password: string;
+}>;
+export declare const MobileLoginResponse: zod.ZodIntersection<zod.ZodObject<{
+    tokenType: zod.ZodEnum<["Bearer"]>;
+    accessToken: zod.ZodString;
+    refreshToken: zod.ZodString;
+    accessTokenExpiresIn: zod.ZodNumber;
+    refreshTokenExpiresIn: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    tokenType: "Bearer";
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresIn: number;
+    refreshTokenExpiresIn: number;
+}, {
+    tokenType: "Bearer";
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresIn: number;
+    refreshTokenExpiresIn: number;
+}>, zod.ZodObject<{
+    assignments: zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">;
+    userRoles: zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    assignments: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[];
+    userRoles: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[];
+}, {
+    assignments: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[];
+    userRoles: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[];
+}>>;
+/**
+ * Exchanges a valid refresh token for a new access + refresh token pair (returned in the body). Refresh tokens are rotated on every use; re-using an already-rotated token revokes the entire session (reuse detection).
+
+ * @summary Mobile refresh-token rotation
+ */
+export declare const MobileRefreshBody: zod.ZodObject<{
+    refreshToken: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    refreshToken: string;
+}, {
+    refreshToken: string;
+}>;
+export declare const MobileRefreshResponse: zod.ZodObject<{
+    tokenType: zod.ZodEnum<["Bearer"]>;
+    accessToken: zod.ZodString;
+    refreshToken: zod.ZodString;
+    accessTokenExpiresIn: zod.ZodNumber;
+    refreshTokenExpiresIn: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    tokenType: "Bearer";
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresIn: number;
+    refreshTokenExpiresIn: number;
+}, {
+    tokenType: "Bearer";
+    accessToken: string;
+    refreshToken: string;
+    accessTokenExpiresIn: number;
+    refreshTokenExpiresIn: number;
 }>;
 /**
  * @summary Get dashboard stats
@@ -81,17 +214,23 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         todayTasks: zod.ZodOptional<zod.ZodNumber>;
         awaitingMe: zod.ZodOptional<zod.ZodNumber>;
         overdue: zod.ZodOptional<zod.ZodNumber>;
+        completedToday: zod.ZodOptional<zod.ZodNumber>;
         completedPct: zod.ZodOptional<zod.ZodNumber>;
+        total: zod.ZodOptional<zod.ZodNumber>;
     }, "strip", zod.ZodTypeAny, {
         todayTasks?: number | undefined;
         awaitingMe?: number | undefined;
         overdue?: number | undefined;
+        completedToday?: number | undefined;
         completedPct?: number | undefined;
+        total?: number | undefined;
     }, {
         todayTasks?: number | undefined;
         awaitingMe?: number | undefined;
         overdue?: number | undefined;
+        completedToday?: number | undefined;
         completedPct?: number | undefined;
+        total?: number | undefined;
     }>;
     todayTasks: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodNumber;
@@ -125,37 +264,51 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         createdAt?: string | undefined;
     }>, "many">;
     pendingApprovals: zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">;
+    pendingFinanceApprovals: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+    pendingPurchaseRequests: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
     notifications: zod.ZodArray<zod.ZodObject<{
         id: zod.ZodNumber;
         type: zod.ZodString;
         title: zod.ZodString;
-        body: zod.ZodOptional<zod.ZodString>;
-        priority: zod.ZodOptional<zod.ZodString>;
+        body: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        priority: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
         isRead: zod.ZodBoolean;
         createdAt: zod.ZodOptional<zod.ZodString>;
+        refType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        refId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        actionUrl: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
     }, "strip", zod.ZodTypeAny, {
         type: string;
         id: number;
         title: string;
         isRead: boolean;
-        priority?: string | undefined;
+        priority?: string | null | undefined;
         createdAt?: string | undefined;
-        body?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
     }, {
         type: string;
         id: number;
         title: string;
         isRead: boolean;
-        priority?: string | undefined;
+        priority?: string | null | undefined;
         createdAt?: string | undefined;
-        body?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
     }>, "many">;
+    role: zod.ZodOptional<zod.ZodString>;
 }, "strip", zod.ZodTypeAny, {
     cards: {
         todayTasks?: number | undefined;
         awaitingMe?: number | undefined;
         overdue?: number | undefined;
+        completedToday?: number | undefined;
         completedPct?: number | undefined;
+        total?: number | undefined;
     };
     todayTasks: {
         status: string;
@@ -174,16 +327,24 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         id: number;
         title: string;
         isRead: boolean;
-        priority?: string | undefined;
+        priority?: string | null | undefined;
         createdAt?: string | undefined;
-        body?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
     }[];
+    role?: string | undefined;
+    pendingFinanceApprovals?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    pendingPurchaseRequests?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
 }, {
     cards: {
         todayTasks?: number | undefined;
         awaitingMe?: number | undefined;
         overdue?: number | undefined;
+        completedToday?: number | undefined;
         completedPct?: number | undefined;
+        total?: number | undefined;
     };
     todayTasks: {
         status: string;
@@ -202,10 +363,16 @@ export declare const GetDashboardResponse: zod.ZodObject<{
         id: number;
         title: string;
         isRead: boolean;
-        priority?: string | undefined;
+        priority?: string | null | undefined;
         createdAt?: string | undefined;
-        body?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
     }[];
+    role?: string | undefined;
+    pendingFinanceApprovals?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    pendingPurchaseRequests?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
 }>;
 /**
  * @summary Get quick stats summary
@@ -217,6 +384,80 @@ export declare const GetDashboardSummaryResponse: zod.ZodObject<{
     pendingInvoices: zod.ZodNumber;
     activeTasksToday: zod.ZodNumber;
     presentToday: zod.ZodNumber;
+    vehicles: zod.ZodOptional<zod.ZodObject<{
+        total: zod.ZodOptional<zod.ZodNumber>;
+        active: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        total?: number | undefined;
+        active?: number | undefined;
+    }, {
+        total?: number | undefined;
+        active?: number | undefined;
+    }>>;
+    tickets: zod.ZodOptional<zod.ZodObject<{
+        open: zod.ZodOptional<zod.ZodNumber>;
+        breached: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        open?: number | undefined;
+        breached?: number | undefined;
+    }, {
+        open?: number | undefined;
+        breached?: number | undefined;
+    }>>;
+    projects: zod.ZodOptional<zod.ZodObject<{
+        total: zod.ZodOptional<zod.ZodNumber>;
+        active: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        total?: number | undefined;
+        active?: number | undefined;
+    }, {
+        total?: number | undefined;
+        active?: number | undefined;
+    }>>;
+    contracts: zod.ZodOptional<zod.ZodObject<{
+        active: zod.ZodOptional<zod.ZodNumber>;
+        expiringSoon: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        active?: number | undefined;
+        expiringSoon?: number | undefined;
+    }, {
+        active?: number | undefined;
+        expiringSoon?: number | undefined;
+    }>>;
+    opportunities: zod.ZodOptional<zod.ZodObject<{
+        total: zod.ZodOptional<zod.ZodNumber>;
+        value: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        value?: number | undefined;
+        total?: number | undefined;
+    }, {
+        value?: number | undefined;
+        total?: number | undefined;
+    }>>;
+    warehouseAlerts: zod.ZodOptional<zod.ZodNumber>;
+    pendingLeaveRequests: zod.ZodOptional<zod.ZodNumber>;
+    umrah: zod.ZodOptional<zod.ZodObject<{
+        activePilgrims: zod.ZodOptional<zod.ZodNumber>;
+        overstayPilgrims: zod.ZodOptional<zod.ZodNumber>;
+        openSeasons: zod.ZodOptional<zod.ZodNumber>;
+        monthlyRevenue: zod.ZodOptional<zod.ZodNumber>;
+        pendingInvoices: zod.ZodOptional<zod.ZodNumber>;
+        openPenalties: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        pendingInvoices?: number | undefined;
+        activePilgrims?: number | undefined;
+        overstayPilgrims?: number | undefined;
+        openSeasons?: number | undefined;
+        monthlyRevenue?: number | undefined;
+        openPenalties?: number | undefined;
+    }, {
+        pendingInvoices?: number | undefined;
+        activePilgrims?: number | undefined;
+        overstayPilgrims?: number | undefined;
+        openSeasons?: number | undefined;
+        monthlyRevenue?: number | undefined;
+        openPenalties?: number | undefined;
+    }>>;
 }, "strip", zod.ZodTypeAny, {
     totalEmployees: number;
     totalClients: number;
@@ -224,6 +465,36 @@ export declare const GetDashboardSummaryResponse: zod.ZodObject<{
     pendingInvoices: number;
     activeTasksToday: number;
     presentToday: number;
+    vehicles?: {
+        total?: number | undefined;
+        active?: number | undefined;
+    } | undefined;
+    tickets?: {
+        open?: number | undefined;
+        breached?: number | undefined;
+    } | undefined;
+    projects?: {
+        total?: number | undefined;
+        active?: number | undefined;
+    } | undefined;
+    contracts?: {
+        active?: number | undefined;
+        expiringSoon?: number | undefined;
+    } | undefined;
+    opportunities?: {
+        value?: number | undefined;
+        total?: number | undefined;
+    } | undefined;
+    warehouseAlerts?: number | undefined;
+    pendingLeaveRequests?: number | undefined;
+    umrah?: {
+        pendingInvoices?: number | undefined;
+        activePilgrims?: number | undefined;
+        overstayPilgrims?: number | undefined;
+        openSeasons?: number | undefined;
+        monthlyRevenue?: number | undefined;
+        openPenalties?: number | undefined;
+    } | undefined;
 }, {
     totalEmployees: number;
     totalClients: number;
@@ -231,6 +502,36 @@ export declare const GetDashboardSummaryResponse: zod.ZodObject<{
     pendingInvoices: number;
     activeTasksToday: number;
     presentToday: number;
+    vehicles?: {
+        total?: number | undefined;
+        active?: number | undefined;
+    } | undefined;
+    tickets?: {
+        open?: number | undefined;
+        breached?: number | undefined;
+    } | undefined;
+    projects?: {
+        total?: number | undefined;
+        active?: number | undefined;
+    } | undefined;
+    contracts?: {
+        active?: number | undefined;
+        expiringSoon?: number | undefined;
+    } | undefined;
+    opportunities?: {
+        value?: number | undefined;
+        total?: number | undefined;
+    } | undefined;
+    warehouseAlerts?: number | undefined;
+    pendingLeaveRequests?: number | undefined;
+    umrah?: {
+        pendingInvoices?: number | undefined;
+        activePilgrims?: number | undefined;
+        overstayPilgrims?: number | undefined;
+        openSeasons?: number | undefined;
+        monthlyRevenue?: number | undefined;
+        openPenalties?: number | undefined;
+    } | undefined;
 }>;
 /**
  * @summary List employees
@@ -250,74 +551,112 @@ export declare const ListEmployeesQueryParams: zod.ZodObject<{
     page?: number | undefined;
     limit?: number | undefined;
 }>;
-export declare const ListEmployeesResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    name: zod.ZodString;
-    phone: zod.ZodOptional<zod.ZodString>;
-    email: zod.ZodOptional<zod.ZodString>;
-    assignmentId: zod.ZodOptional<zod.ZodNumber>;
-    jobTitle: zod.ZodString;
-    role: zod.ZodString;
-    salary: zod.ZodOptional<zod.ZodNumber>;
-    status: zod.ZodString;
-    empNumber: zod.ZodOptional<zod.ZodString>;
+export declare const ListEmployeesResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        name: zod.ZodString;
+        phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        empNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        status: zod.ZodString;
+        activeAssignmentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        iqamaNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        iqamaExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        iqamaStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        jobTitle: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        jobTitleId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        role: zod.ZodString;
+        salary: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        branchName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        govLinkCount: zod.ZodOptional<zod.ZodNumber>;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: number;
+        name: string;
+        role: string;
+        email?: string | null | undefined;
+        phone?: string | null | undefined;
+        empNumber?: string | null | undefined;
+        jobTitle?: string | null | undefined;
+        jobTitleId?: number | null | undefined;
+        salary?: string | null | undefined;
+        branchId?: number | null | undefined;
+        branchName?: string | null | undefined;
+        activeAssignmentId?: number | null | undefined;
+        iqamaNumber?: string | null | undefined;
+        iqamaExpiry?: string | null | undefined;
+        iqamaStatus?: string | null | undefined;
+        govLinkCount?: number | undefined;
+    }, {
+        status: string;
+        id: number;
+        name: string;
+        role: string;
+        email?: string | null | undefined;
+        phone?: string | null | undefined;
+        empNumber?: string | null | undefined;
+        jobTitle?: string | null | undefined;
+        jobTitleId?: number | null | undefined;
+        salary?: string | null | undefined;
+        branchId?: number | null | undefined;
+        branchName?: string | null | undefined;
+        activeAssignmentId?: number | null | undefined;
+        iqamaNumber?: string | null | undefined;
+        iqamaExpiry?: string | null | undefined;
+        iqamaStatus?: string | null | undefined;
+        govLinkCount?: number | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    status: string;
-    name: string;
-    jobTitle: string;
-    role: string;
-    id: number;
-    email?: string | undefined;
-    phone?: string | undefined;
-    salary?: number | undefined;
-    assignmentId?: number | undefined;
-    empNumber?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        name: string;
+        role: string;
+        email?: string | null | undefined;
+        phone?: string | null | undefined;
+        empNumber?: string | null | undefined;
+        jobTitle?: string | null | undefined;
+        jobTitleId?: number | null | undefined;
+        salary?: string | null | undefined;
+        branchId?: number | null | undefined;
+        branchName?: string | null | undefined;
+        activeAssignmentId?: number | null | undefined;
+        iqamaNumber?: string | null | undefined;
+        iqamaExpiry?: string | null | undefined;
+        iqamaStatus?: string | null | undefined;
+        govLinkCount?: number | undefined;
+    }[];
+    pageSize: number;
 }, {
-    status: string;
-    name: string;
-    jobTitle: string;
-    role: string;
-    id: number;
-    email?: string | undefined;
-    phone?: string | undefined;
-    salary?: number | undefined;
-    assignmentId?: number | undefined;
-    empNumber?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        name: string;
+        role: string;
+        email?: string | null | undefined;
+        phone?: string | null | undefined;
+        empNumber?: string | null | undefined;
+        jobTitle?: string | null | undefined;
+        jobTitleId?: number | null | undefined;
+        salary?: string | null | undefined;
+        branchId?: number | null | undefined;
+        branchName?: string | null | undefined;
+        activeAssignmentId?: number | null | undefined;
+        iqamaNumber?: string | null | undefined;
+        iqamaExpiry?: string | null | undefined;
+        iqamaStatus?: string | null | undefined;
+        govLinkCount?: number | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const ListEmployeesResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    name: zod.ZodString;
-    phone: zod.ZodOptional<zod.ZodString>;
-    email: zod.ZodOptional<zod.ZodString>;
-    assignmentId: zod.ZodOptional<zod.ZodNumber>;
-    jobTitle: zod.ZodString;
-    role: zod.ZodString;
-    salary: zod.ZodOptional<zod.ZodNumber>;
-    status: zod.ZodString;
-    empNumber: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    status: string;
-    name: string;
-    jobTitle: string;
-    role: string;
-    id: number;
-    email?: string | undefined;
-    phone?: string | undefined;
-    salary?: number | undefined;
-    assignmentId?: number | undefined;
-    empNumber?: string | undefined;
-}, {
-    status: string;
-    name: string;
-    jobTitle: string;
-    role: string;
-    id: number;
-    email?: string | undefined;
-    phone?: string | undefined;
-    salary?: number | undefined;
-    assignmentId?: number | undefined;
-    empNumber?: string | undefined;
-}>, "many">;
 /**
  * @summary Create employee
  */
@@ -359,17 +698,53 @@ export declare const CreateEmployeeBody: zod.ZodObject<{
     departmentId?: number | undefined;
 }>;
 export declare const CreateEmployeeResponse: zod.ZodObject<{
-    employeeId: zod.ZodNumber;
-    assignmentId: zod.ZodNumber;
-    empNumber: zod.ZodString;
+    id: zod.ZodNumber;
+    name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    empNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    jobTitle: zod.ZodString;
+    role: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    salary: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    branchName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    assignmentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    onboardingTasksCreated: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    probationEndDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    userAccount: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
 }, "strip", zod.ZodTypeAny, {
-    assignmentId: number;
-    empNumber: string;
-    employeeId: number;
+    id: number;
+    jobTitle: string;
+    status?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    empNumber?: string | null | undefined;
+    role?: string | null | undefined;
+    salary?: string | null | undefined;
+    branchId?: number | null | undefined;
+    branchName?: string | null | undefined;
+    assignmentId?: number | null | undefined;
+    onboardingTasksCreated?: number | null | undefined;
+    probationEndDate?: string | null | undefined;
+    userAccount?: Record<string, unknown> | null | undefined;
 }, {
-    assignmentId: number;
-    empNumber: string;
-    employeeId: number;
+    id: number;
+    jobTitle: string;
+    status?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    empNumber?: string | null | undefined;
+    role?: string | null | undefined;
+    salary?: string | null | undefined;
+    branchId?: number | null | undefined;
+    branchName?: string | null | undefined;
+    assignmentId?: number | null | undefined;
+    onboardingTasksCreated?: number | null | undefined;
+    probationEndDate?: string | null | undefined;
+    userAccount?: Record<string, unknown> | null | undefined;
 }>;
 /**
  * @summary Get employee by ID
@@ -381,61 +756,166 @@ export declare const GetEmployeeParams: zod.ZodObject<{
 }, {
     id: number;
 }>;
-export declare const GetEmployeeResponse: zod.ZodIntersection<zod.ZodObject<{
+export declare const GetEmployeeResponse: zod.ZodObject<{
     id: zod.ZodNumber;
-    name: zod.ZodString;
-    phone: zod.ZodOptional<zod.ZodString>;
-    email: zod.ZodOptional<zod.ZodString>;
-    assignmentId: zod.ZodOptional<zod.ZodNumber>;
+    name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    empNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    photoUrl: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdAt: zod.ZodString;
+    nationalId: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    nationality: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    gender: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    dateOfBirth: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    iqamaNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    iqamaExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    passportNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    passportExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    borderNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    sponsorNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    workPermitNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    workPermitExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    iqamaStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    assignmentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
     jobTitle: zod.ZodString;
-    role: zod.ZodString;
-    salary: zod.ZodOptional<zod.ZodNumber>;
-    status: zod.ZodString;
-    empNumber: zod.ZodOptional<zod.ZodString>;
+    jobTitleId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    role: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    salary: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    hireDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    companyId: zod.ZodNumber;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    departmentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    managerId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    branchName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    departmentName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    managerName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    tasks: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    attendance: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    leaves: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    trainings: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    payroll: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    violations: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    loans: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    overtime: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    userAccount: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+    roles: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    contract: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+    position: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+    custodies: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    latestScore: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+    activeSignals: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
 }, "strip", zod.ZodTypeAny, {
-    status: string;
-    name: string;
-    jobTitle: string;
-    role: string;
     id: number;
-    email?: string | undefined;
-    phone?: string | undefined;
-    salary?: number | undefined;
-    assignmentId?: number | undefined;
-    empNumber?: string | undefined;
-}, {
-    status: string;
-    name: string;
     jobTitle: string;
-    role: string;
-    id: number;
-    email?: string | undefined;
-    phone?: string | undefined;
-    salary?: number | undefined;
-    assignmentId?: number | undefined;
-    empNumber?: string | undefined;
-}>, zod.ZodObject<{
-    gender: zod.ZodOptional<zod.ZodString>;
-    nationality: zod.ZodOptional<zod.ZodString>;
-    hireDate: zod.ZodOptional<zod.ZodString>;
-    departmentName: zod.ZodOptional<zod.ZodString>;
-    branchName: zod.ZodOptional<zod.ZodString>;
-    companyName: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    companyName?: string | undefined;
-    branchName?: string | undefined;
-    gender?: string | undefined;
-    nationality?: string | undefined;
-    hireDate?: string | undefined;
-    departmentName?: string | undefined;
+    companyId: number;
+    createdAt: string;
+    status?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    empNumber?: string | null | undefined;
+    photoUrl?: string | null | undefined;
+    jobTitleId?: number | null | undefined;
+    role?: string | null | undefined;
+    salary?: string | null | undefined;
+    branchId?: number | null | undefined;
+    branchName?: string | null | undefined;
+    iqamaNumber?: string | null | undefined;
+    iqamaExpiry?: string | null | undefined;
+    iqamaStatus?: string | null | undefined;
+    nationalId?: string | null | undefined;
+    gender?: string | null | undefined;
+    nationality?: string | null | undefined;
+    departmentId?: number | null | undefined;
+    hireDate?: string | null | undefined;
+    assignmentId?: number | null | undefined;
+    userAccount?: Record<string, unknown> | null | undefined;
+    dateOfBirth?: string | null | undefined;
+    passportNumber?: string | null | undefined;
+    passportExpiry?: string | null | undefined;
+    borderNumber?: string | null | undefined;
+    visaNumber?: string | null | undefined;
+    visaType?: string | null | undefined;
+    visaExpiry?: string | null | undefined;
+    sponsorNumber?: string | null | undefined;
+    workPermitNumber?: string | null | undefined;
+    workPermitExpiry?: string | null | undefined;
+    managerId?: number | null | undefined;
+    departmentName?: string | null | undefined;
+    managerName?: string | null | undefined;
+    tasks?: Record<string, unknown>[] | undefined;
+    attendance?: Record<string, unknown>[] | undefined;
+    leaves?: Record<string, unknown>[] | undefined;
+    trainings?: Record<string, unknown>[] | undefined;
+    payroll?: Record<string, unknown>[] | undefined;
+    violations?: Record<string, unknown>[] | undefined;
+    loans?: Record<string, unknown>[] | undefined;
+    overtime?: Record<string, unknown>[] | undefined;
+    roles?: Record<string, unknown>[] | undefined;
+    contract?: Record<string, unknown> | null | undefined;
+    position?: Record<string, unknown> | null | undefined;
+    custodies?: Record<string, unknown>[] | undefined;
+    latestScore?: Record<string, unknown> | null | undefined;
+    activeSignals?: Record<string, unknown>[] | undefined;
 }, {
-    companyName?: string | undefined;
-    branchName?: string | undefined;
-    gender?: string | undefined;
-    nationality?: string | undefined;
-    hireDate?: string | undefined;
-    departmentName?: string | undefined;
-}>>;
+    id: number;
+    jobTitle: string;
+    companyId: number;
+    createdAt: string;
+    status?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    empNumber?: string | null | undefined;
+    photoUrl?: string | null | undefined;
+    jobTitleId?: number | null | undefined;
+    role?: string | null | undefined;
+    salary?: string | null | undefined;
+    branchId?: number | null | undefined;
+    branchName?: string | null | undefined;
+    iqamaNumber?: string | null | undefined;
+    iqamaExpiry?: string | null | undefined;
+    iqamaStatus?: string | null | undefined;
+    nationalId?: string | null | undefined;
+    gender?: string | null | undefined;
+    nationality?: string | null | undefined;
+    departmentId?: number | null | undefined;
+    hireDate?: string | null | undefined;
+    assignmentId?: number | null | undefined;
+    userAccount?: Record<string, unknown> | null | undefined;
+    dateOfBirth?: string | null | undefined;
+    passportNumber?: string | null | undefined;
+    passportExpiry?: string | null | undefined;
+    borderNumber?: string | null | undefined;
+    visaNumber?: string | null | undefined;
+    visaType?: string | null | undefined;
+    visaExpiry?: string | null | undefined;
+    sponsorNumber?: string | null | undefined;
+    workPermitNumber?: string | null | undefined;
+    workPermitExpiry?: string | null | undefined;
+    managerId?: number | null | undefined;
+    departmentName?: string | null | undefined;
+    managerName?: string | null | undefined;
+    tasks?: Record<string, unknown>[] | undefined;
+    attendance?: Record<string, unknown>[] | undefined;
+    leaves?: Record<string, unknown>[] | undefined;
+    trainings?: Record<string, unknown>[] | undefined;
+    payroll?: Record<string, unknown>[] | undefined;
+    violations?: Record<string, unknown>[] | undefined;
+    loans?: Record<string, unknown>[] | undefined;
+    overtime?: Record<string, unknown>[] | undefined;
+    roles?: Record<string, unknown>[] | undefined;
+    contract?: Record<string, unknown> | null | undefined;
+    position?: Record<string, unknown> | null | undefined;
+    custodies?: Record<string, unknown>[] | undefined;
+    latestScore?: Record<string, unknown> | null | undefined;
+    activeSignals?: Record<string, unknown>[] | undefined;
+}>;
 /**
  * @summary List clients
  */
@@ -453,74 +933,77 @@ export declare const ListClientsQueryParams: zod.ZodObject<{
     page?: number | undefined;
     classification?: string | undefined;
 }>;
-export declare const ListClientsResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    name: zod.ZodOptional<zod.ZodString>;
-    phone: zod.ZodOptional<zod.ZodString>;
-    email: zod.ZodOptional<zod.ZodString>;
-    classification: zod.ZodString;
-    source: zod.ZodOptional<zod.ZodString>;
-    totalRevenue: zod.ZodOptional<zod.ZodNumber>;
-    isBlacklisted: zod.ZodOptional<zod.ZodBoolean>;
-    assignedToName: zod.ZodOptional<zod.ZodString>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
+export declare const ListClientsResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        classification: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        totalRevenue: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        expectedRevenue: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        isBlacklisted: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+        createdAt: zod.ZodOptional<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        id: number;
+        email?: string | null | undefined;
+        name?: string | null | undefined;
+        phone?: string | null | undefined;
+        createdAt?: string | undefined;
+        totalRevenue?: string | null | undefined;
+        classification?: string | null | undefined;
+        source?: string | null | undefined;
+        expectedRevenue?: string | null | undefined;
+        isBlacklisted?: boolean | null | undefined;
+    }, {
+        id: number;
+        email?: string | null | undefined;
+        name?: string | null | undefined;
+        phone?: string | null | undefined;
+        createdAt?: string | undefined;
+        totalRevenue?: string | null | undefined;
+        classification?: string | null | undefined;
+        source?: string | null | undefined;
+        expectedRevenue?: string | null | undefined;
+        isBlacklisted?: boolean | null | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    id: number;
-    classification: string;
-    email?: string | undefined;
-    name?: string | undefined;
-    phone?: string | undefined;
-    createdAt?: string | undefined;
-    totalRevenue?: number | undefined;
-    source?: string | undefined;
-    isBlacklisted?: boolean | undefined;
-    assignedToName?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        id: number;
+        email?: string | null | undefined;
+        name?: string | null | undefined;
+        phone?: string | null | undefined;
+        createdAt?: string | undefined;
+        totalRevenue?: string | null | undefined;
+        classification?: string | null | undefined;
+        source?: string | null | undefined;
+        expectedRevenue?: string | null | undefined;
+        isBlacklisted?: boolean | null | undefined;
+    }[];
+    pageSize: number;
 }, {
-    id: number;
-    classification: string;
-    email?: string | undefined;
-    name?: string | undefined;
-    phone?: string | undefined;
-    createdAt?: string | undefined;
-    totalRevenue?: number | undefined;
-    source?: string | undefined;
-    isBlacklisted?: boolean | undefined;
-    assignedToName?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        id: number;
+        email?: string | null | undefined;
+        name?: string | null | undefined;
+        phone?: string | null | undefined;
+        createdAt?: string | undefined;
+        totalRevenue?: string | null | undefined;
+        classification?: string | null | undefined;
+        source?: string | null | undefined;
+        expectedRevenue?: string | null | undefined;
+        isBlacklisted?: boolean | null | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const ListClientsResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    name: zod.ZodOptional<zod.ZodString>;
-    phone: zod.ZodOptional<zod.ZodString>;
-    email: zod.ZodOptional<zod.ZodString>;
-    classification: zod.ZodString;
-    source: zod.ZodOptional<zod.ZodString>;
-    totalRevenue: zod.ZodOptional<zod.ZodNumber>;
-    isBlacklisted: zod.ZodOptional<zod.ZodBoolean>;
-    assignedToName: zod.ZodOptional<zod.ZodString>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    id: number;
-    classification: string;
-    email?: string | undefined;
-    name?: string | undefined;
-    phone?: string | undefined;
-    createdAt?: string | undefined;
-    totalRevenue?: number | undefined;
-    source?: string | undefined;
-    isBlacklisted?: boolean | undefined;
-    assignedToName?: string | undefined;
-}, {
-    id: number;
-    classification: string;
-    email?: string | undefined;
-    name?: string | undefined;
-    phone?: string | undefined;
-    createdAt?: string | undefined;
-    totalRevenue?: number | undefined;
-    source?: string | undefined;
-    isBlacklisted?: boolean | undefined;
-    assignedToName?: string | undefined;
-}>, "many">;
 /**
  * @summary Create client
  */
@@ -541,14 +1024,89 @@ export declare const CreateClientBody: zod.ZodObject<{
     source?: string | undefined;
 }>;
 export declare const CreateClientResponse: zod.ZodObject<{
-    clientId: zod.ZodNumber;
-    code: zod.ZodString;
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    code: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    nationality: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    language: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lat: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lon: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    classification: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    assignedTo: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    totalRevenue: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    avgRating: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    tags: zod.ZodOptional<zod.ZodUnknown>;
+    isBlacklisted: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    lastActivityAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lastPaymentAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdAt: zod.ZodString;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    attachments: zod.ZodOptional<zod.ZodUnknown>;
+    taxNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    expectedRevenue: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
-    code: string;
-    clientId: number;
+    id: number;
+    companyId: number;
+    createdAt: string;
+    updatedAt: string;
+    code?: string | null | undefined;
+    type?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    totalRevenue?: string | null | undefined;
+    nationality?: string | null | undefined;
+    classification?: string | null | undefined;
+    source?: string | null | undefined;
+    expectedRevenue?: string | null | undefined;
+    isBlacklisted?: boolean | null | undefined;
+    language?: string | null | undefined;
+    lat?: string | null | undefined;
+    lon?: string | null | undefined;
+    assignedTo?: number | null | undefined;
+    avgRating?: string | null | undefined;
+    tags?: unknown;
+    lastActivityAt?: string | null | undefined;
+    lastPaymentAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    attachments?: unknown;
+    taxNumber?: string | null | undefined;
 }, {
-    code: string;
-    clientId: number;
+    id: number;
+    companyId: number;
+    createdAt: string;
+    updatedAt: string;
+    code?: string | null | undefined;
+    type?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    totalRevenue?: string | null | undefined;
+    nationality?: string | null | undefined;
+    classification?: string | null | undefined;
+    source?: string | null | undefined;
+    expectedRevenue?: string | null | undefined;
+    isBlacklisted?: boolean | null | undefined;
+    language?: string | null | undefined;
+    lat?: string | null | undefined;
+    lon?: string | null | undefined;
+    assignedTo?: number | null | undefined;
+    avgRating?: string | null | undefined;
+    tags?: unknown;
+    lastActivityAt?: string | null | undefined;
+    lastPaymentAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    attachments?: unknown;
+    taxNumber?: string | null | undefined;
 }>;
 /**
  * @summary Get client by ID
@@ -560,40 +1118,127 @@ export declare const GetClientParams: zod.ZodObject<{
 }, {
     id: number;
 }>;
-export declare const GetClientResponse: zod.ZodObject<{
+export declare const GetClientResponse: zod.ZodIntersection<zod.ZodObject<{
     id: zod.ZodNumber;
-    name: zod.ZodOptional<zod.ZodString>;
-    phone: zod.ZodOptional<zod.ZodString>;
-    email: zod.ZodOptional<zod.ZodString>;
-    classification: zod.ZodString;
-    source: zod.ZodOptional<zod.ZodString>;
-    totalRevenue: zod.ZodOptional<zod.ZodNumber>;
-    isBlacklisted: zod.ZodOptional<zod.ZodBoolean>;
-    assignedToName: zod.ZodOptional<zod.ZodString>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
+    companyId: zod.ZodNumber;
+    code: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    nationality: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    language: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lat: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lon: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    classification: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    source: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    assignedTo: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    totalRevenue: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    avgRating: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    tags: zod.ZodOptional<zod.ZodUnknown>;
+    isBlacklisted: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    lastActivityAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lastPaymentAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdAt: zod.ZodString;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    attachments: zod.ZodOptional<zod.ZodUnknown>;
+    taxNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    expectedRevenue: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodString;
 }, "strip", zod.ZodTypeAny, {
     id: number;
-    classification: string;
-    email?: string | undefined;
-    name?: string | undefined;
-    phone?: string | undefined;
-    createdAt?: string | undefined;
-    totalRevenue?: number | undefined;
-    source?: string | undefined;
-    isBlacklisted?: boolean | undefined;
-    assignedToName?: string | undefined;
+    companyId: number;
+    createdAt: string;
+    updatedAt: string;
+    code?: string | null | undefined;
+    type?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    totalRevenue?: string | null | undefined;
+    nationality?: string | null | undefined;
+    classification?: string | null | undefined;
+    source?: string | null | undefined;
+    expectedRevenue?: string | null | undefined;
+    isBlacklisted?: boolean | null | undefined;
+    language?: string | null | undefined;
+    lat?: string | null | undefined;
+    lon?: string | null | undefined;
+    assignedTo?: number | null | undefined;
+    avgRating?: string | null | undefined;
+    tags?: unknown;
+    lastActivityAt?: string | null | undefined;
+    lastPaymentAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    attachments?: unknown;
+    taxNumber?: string | null | undefined;
 }, {
     id: number;
-    classification: string;
-    email?: string | undefined;
-    name?: string | undefined;
-    phone?: string | undefined;
-    createdAt?: string | undefined;
-    totalRevenue?: number | undefined;
-    source?: string | undefined;
-    isBlacklisted?: boolean | undefined;
-    assignedToName?: string | undefined;
-}>;
+    companyId: number;
+    createdAt: string;
+    updatedAt: string;
+    code?: string | null | undefined;
+    type?: string | null | undefined;
+    email?: string | null | undefined;
+    name?: string | null | undefined;
+    phone?: string | null | undefined;
+    totalRevenue?: string | null | undefined;
+    nationality?: string | null | undefined;
+    classification?: string | null | undefined;
+    source?: string | null | undefined;
+    expectedRevenue?: string | null | undefined;
+    isBlacklisted?: boolean | null | undefined;
+    language?: string | null | undefined;
+    lat?: string | null | undefined;
+    lon?: string | null | undefined;
+    assignedTo?: number | null | undefined;
+    avgRating?: string | null | undefined;
+    tags?: unknown;
+    lastActivityAt?: string | null | undefined;
+    lastPaymentAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    attachments?: unknown;
+    taxNumber?: string | null | undefined;
+}>, zod.ZodObject<{
+    invoices: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    opportunities: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    tickets: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    projects: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    financials: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+    conversations: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    timeline: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    activeServices: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+    tenancies: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    legalCases: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+    umrahSubAgents: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    tickets?: Record<string, unknown>[] | undefined;
+    projects?: Record<string, unknown>[] | undefined;
+    opportunities?: Record<string, unknown>[] | undefined;
+    invoices?: Record<string, unknown>[] | undefined;
+    financials?: Record<string, unknown> | null | undefined;
+    conversations?: Record<string, unknown>[] | undefined;
+    timeline?: Record<string, unknown>[] | undefined;
+    activeServices?: Record<string, unknown> | null | undefined;
+    tenancies?: Record<string, unknown>[] | undefined;
+    legalCases?: Record<string, unknown>[] | undefined;
+    umrahSubAgents?: Record<string, unknown>[] | undefined;
+}, {
+    tickets?: Record<string, unknown>[] | undefined;
+    projects?: Record<string, unknown>[] | undefined;
+    opportunities?: Record<string, unknown>[] | undefined;
+    invoices?: Record<string, unknown>[] | undefined;
+    financials?: Record<string, unknown> | null | undefined;
+    conversations?: Record<string, unknown>[] | undefined;
+    timeline?: Record<string, unknown>[] | undefined;
+    activeServices?: Record<string, unknown> | null | undefined;
+    tenancies?: Record<string, unknown>[] | undefined;
+    legalCases?: Record<string, unknown>[] | undefined;
+    umrahSubAgents?: Record<string, unknown>[] | undefined;
+}>>;
 /**
  * @summary Record attendance check-in
  */
@@ -630,132 +1275,210 @@ export declare const GetAttendanceQueryParams: zod.ZodObject<{
 }, {
     month?: string | undefined;
 }>;
-export declare const GetAttendanceResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    date: zod.ZodString;
-    checkIn: zod.ZodOptional<zod.ZodString>;
-    checkOut: zod.ZodOptional<zod.ZodString>;
-    lateMinutes: zod.ZodOptional<zod.ZodNumber>;
-    status: zod.ZodString;
+export declare const GetAttendanceResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        date: zod.ZodString;
+        checkIn: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        checkOut: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        lateMinutes: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        status: zod.ZodString;
+        employeeName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        checkInLat: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        checkInLon: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        checkOutLat: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        checkOutLon: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        workHours: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        overtimeMinutes: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        deductionAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        violationSeverity: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        date: string;
+        id: number;
+        lateMinutes?: number | null | undefined;
+        checkIn?: string | null | undefined;
+        checkOut?: string | null | undefined;
+        employeeName?: string | null | undefined;
+        checkInLat?: string | null | undefined;
+        checkInLon?: string | null | undefined;
+        checkOutLat?: string | null | undefined;
+        checkOutLon?: string | null | undefined;
+        workHours?: string | null | undefined;
+        overtimeMinutes?: number | null | undefined;
+        deductionAmount?: string | null | undefined;
+        violationSeverity?: string | null | undefined;
+    }, {
+        status: string;
+        date: string;
+        id: number;
+        lateMinutes?: number | null | undefined;
+        checkIn?: string | null | undefined;
+        checkOut?: string | null | undefined;
+        employeeName?: string | null | undefined;
+        checkInLat?: string | null | undefined;
+        checkInLon?: string | null | undefined;
+        checkOutLat?: string | null | undefined;
+        checkOutLon?: string | null | undefined;
+        workHours?: string | null | undefined;
+        overtimeMinutes?: number | null | undefined;
+        deductionAmount?: string | null | undefined;
+        violationSeverity?: string | null | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    status: string;
-    date: string;
-    id: number;
-    lateMinutes?: number | undefined;
-    checkIn?: string | undefined;
-    checkOut?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        date: string;
+        id: number;
+        lateMinutes?: number | null | undefined;
+        checkIn?: string | null | undefined;
+        checkOut?: string | null | undefined;
+        employeeName?: string | null | undefined;
+        checkInLat?: string | null | undefined;
+        checkInLon?: string | null | undefined;
+        checkOutLat?: string | null | undefined;
+        checkOutLon?: string | null | undefined;
+        workHours?: string | null | undefined;
+        overtimeMinutes?: number | null | undefined;
+        deductionAmount?: string | null | undefined;
+        violationSeverity?: string | null | undefined;
+    }[];
+    pageSize: number;
 }, {
-    status: string;
-    date: string;
-    id: number;
-    lateMinutes?: number | undefined;
-    checkIn?: string | undefined;
-    checkOut?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        date: string;
+        id: number;
+        lateMinutes?: number | null | undefined;
+        checkIn?: string | null | undefined;
+        checkOut?: string | null | undefined;
+        employeeName?: string | null | undefined;
+        checkInLat?: string | null | undefined;
+        checkInLon?: string | null | undefined;
+        checkOutLat?: string | null | undefined;
+        checkOutLon?: string | null | undefined;
+        workHours?: string | null | undefined;
+        overtimeMinutes?: number | null | undefined;
+        deductionAmount?: string | null | undefined;
+        violationSeverity?: string | null | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const GetAttendanceResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    date: zod.ZodString;
-    checkIn: zod.ZodOptional<zod.ZodString>;
-    checkOut: zod.ZodOptional<zod.ZodString>;
-    lateMinutes: zod.ZodOptional<zod.ZodNumber>;
-    status: zod.ZodString;
-}, "strip", zod.ZodTypeAny, {
-    status: string;
-    date: string;
-    id: number;
-    lateMinutes?: number | undefined;
-    checkIn?: string | undefined;
-    checkOut?: string | undefined;
-}, {
-    status: string;
-    date: string;
-    id: number;
-    lateMinutes?: number | undefined;
-    checkIn?: string | undefined;
-    checkOut?: string | undefined;
-}>, "many">;
 /**
  * @summary List leave types
  */
-export declare const ListLeaveTypesResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    name: zod.ZodString;
-    annualDays: zod.ZodNumber;
-    isPaid: zod.ZodOptional<zod.ZodBoolean>;
+export declare const ListLeaveTypesResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        name: zod.ZodString;
+        maxDays: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        requiresApproval: zod.ZodOptional<zod.ZodBoolean>;
+        isPaid: zod.ZodOptional<zod.ZodBoolean>;
+    }, "strip", zod.ZodTypeAny, {
+        id: number;
+        name: string;
+        maxDays?: number | null | undefined;
+        requiresApproval?: boolean | undefined;
+        isPaid?: boolean | undefined;
+    }, {
+        id: number;
+        name: string;
+        maxDays?: number | null | undefined;
+        requiresApproval?: boolean | undefined;
+        isPaid?: boolean | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    name: string;
-    id: number;
-    annualDays: number;
-    isPaid?: boolean | undefined;
+    total: number;
+    page: number;
+    data: {
+        id: number;
+        name: string;
+        maxDays?: number | null | undefined;
+        requiresApproval?: boolean | undefined;
+        isPaid?: boolean | undefined;
+    }[];
+    pageSize: number;
 }, {
-    name: string;
-    id: number;
-    annualDays: number;
-    isPaid?: boolean | undefined;
+    total: number;
+    page: number;
+    data: {
+        id: number;
+        name: string;
+        maxDays?: number | null | undefined;
+        requiresApproval?: boolean | undefined;
+        isPaid?: boolean | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const ListLeaveTypesResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    name: zod.ZodString;
-    annualDays: zod.ZodNumber;
-    isPaid: zod.ZodOptional<zod.ZodBoolean>;
-}, "strip", zod.ZodTypeAny, {
-    name: string;
-    id: number;
-    annualDays: number;
-    isPaid?: boolean | undefined;
-}, {
-    name: string;
-    id: number;
-    annualDays: number;
-    isPaid?: boolean | undefined;
-}>, "many">;
 /**
  * @summary Get leave balances
  */
-export declare const GetLeaveBalanceResponseItem: zod.ZodObject<{
-    leaveTypeId: zod.ZodNumber;
-    leaveTypeName: zod.ZodOptional<zod.ZodString>;
-    entitled: zod.ZodNumber;
-    used: zod.ZodNumber;
-    reserved: zod.ZodOptional<zod.ZodNumber>;
-    remaining: zod.ZodNumber;
+export declare const GetLeaveBalanceResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        leaveTypeId: zod.ZodNumber;
+        name: zod.ZodString;
+        annualDays: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        maxDays: zod.ZodNumber;
+        used: zod.ZodNumber;
+        reserved: zod.ZodOptional<zod.ZodNumber>;
+        remaining: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        name: string;
+        maxDays: number;
+        leaveTypeId: number;
+        used: number;
+        remaining: number;
+        annualDays?: number | null | undefined;
+        reserved?: number | undefined;
+    }, {
+        name: string;
+        maxDays: number;
+        leaveTypeId: number;
+        used: number;
+        remaining: number;
+        annualDays?: number | null | undefined;
+        reserved?: number | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    leaveTypeId: number;
-    entitled: number;
-    used: number;
-    remaining: number;
-    leaveTypeName?: string | undefined;
-    reserved?: number | undefined;
+    total: number;
+    page: number;
+    data: {
+        name: string;
+        maxDays: number;
+        leaveTypeId: number;
+        used: number;
+        remaining: number;
+        annualDays?: number | null | undefined;
+        reserved?: number | undefined;
+    }[];
+    pageSize: number;
 }, {
-    leaveTypeId: number;
-    entitled: number;
-    used: number;
-    remaining: number;
-    leaveTypeName?: string | undefined;
-    reserved?: number | undefined;
+    total: number;
+    page: number;
+    data: {
+        name: string;
+        maxDays: number;
+        leaveTypeId: number;
+        used: number;
+        remaining: number;
+        annualDays?: number | null | undefined;
+        reserved?: number | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const GetLeaveBalanceResponse: zod.ZodArray<zod.ZodObject<{
-    leaveTypeId: zod.ZodNumber;
-    leaveTypeName: zod.ZodOptional<zod.ZodString>;
-    entitled: zod.ZodNumber;
-    used: zod.ZodNumber;
-    reserved: zod.ZodOptional<zod.ZodNumber>;
-    remaining: zod.ZodNumber;
-}, "strip", zod.ZodTypeAny, {
-    leaveTypeId: number;
-    entitled: number;
-    used: number;
-    remaining: number;
-    leaveTypeName?: string | undefined;
-    reserved?: number | undefined;
-}, {
-    leaveTypeId: number;
-    entitled: number;
-    used: number;
-    remaining: number;
-    leaveTypeName?: string | undefined;
-    reserved?: number | undefined;
-}>, "many">;
 /**
  * @summary List leave requests
  */
@@ -766,68 +1489,87 @@ export declare const ListLeaveRequestsQueryParams: zod.ZodObject<{
 }, {
     status?: string | undefined;
 }>;
-export declare const ListLeaveRequestsResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    leaveTypeId: zod.ZodOptional<zod.ZodNumber>;
-    leaveTypeName: zod.ZodOptional<zod.ZodString>;
-    startDate: zod.ZodString;
-    endDate: zod.ZodString;
-    days: zod.ZodNumber;
-    status: zod.ZodString;
-    reason: zod.ZodOptional<zod.ZodString>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
+export declare const ListLeaveRequestsResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        leaveTypeName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        employeeName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        startDate: zod.ZodString;
+        endDate: zod.ZodString;
+        days: zod.ZodNumber;
+        status: zod.ZodString;
+        reason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        rejectedReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        approvedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        approvedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        createdAt: zod.ZodOptional<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: number;
+        startDate: string;
+        endDate: string;
+        days: number;
+        createdAt?: string | undefined;
+        employeeName?: string | null | undefined;
+        leaveTypeName?: string | null | undefined;
+        reason?: string | null | undefined;
+        rejectedReason?: string | null | undefined;
+        approvedBy?: number | null | undefined;
+        approvedAt?: string | null | undefined;
+    }, {
+        status: string;
+        id: number;
+        startDate: string;
+        endDate: string;
+        days: number;
+        createdAt?: string | undefined;
+        employeeName?: string | null | undefined;
+        leaveTypeName?: string | null | undefined;
+        reason?: string | null | undefined;
+        rejectedReason?: string | null | undefined;
+        approvedBy?: number | null | undefined;
+        approvedAt?: string | null | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    status: string;
-    id: number;
-    startDate: string;
-    endDate: string;
-    days: number;
-    createdAt?: string | undefined;
-    leaveTypeId?: number | undefined;
-    leaveTypeName?: string | undefined;
-    reason?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        startDate: string;
+        endDate: string;
+        days: number;
+        createdAt?: string | undefined;
+        employeeName?: string | null | undefined;
+        leaveTypeName?: string | null | undefined;
+        reason?: string | null | undefined;
+        rejectedReason?: string | null | undefined;
+        approvedBy?: number | null | undefined;
+        approvedAt?: string | null | undefined;
+    }[];
+    pageSize: number;
 }, {
-    status: string;
-    id: number;
-    startDate: string;
-    endDate: string;
-    days: number;
-    createdAt?: string | undefined;
-    leaveTypeId?: number | undefined;
-    leaveTypeName?: string | undefined;
-    reason?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        startDate: string;
+        endDate: string;
+        days: number;
+        createdAt?: string | undefined;
+        employeeName?: string | null | undefined;
+        leaveTypeName?: string | null | undefined;
+        reason?: string | null | undefined;
+        rejectedReason?: string | null | undefined;
+        approvedBy?: number | null | undefined;
+        approvedAt?: string | null | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const ListLeaveRequestsResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    leaveTypeId: zod.ZodOptional<zod.ZodNumber>;
-    leaveTypeName: zod.ZodOptional<zod.ZodString>;
-    startDate: zod.ZodString;
-    endDate: zod.ZodString;
-    days: zod.ZodNumber;
-    status: zod.ZodString;
-    reason: zod.ZodOptional<zod.ZodString>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    status: string;
-    id: number;
-    startDate: string;
-    endDate: string;
-    days: number;
-    createdAt?: string | undefined;
-    leaveTypeId?: number | undefined;
-    leaveTypeName?: string | undefined;
-    reason?: string | undefined;
-}, {
-    status: string;
-    id: number;
-    startDate: string;
-    endDate: string;
-    days: number;
-    createdAt?: string | undefined;
-    leaveTypeId?: number | undefined;
-    leaveTypeName?: string | undefined;
-    reason?: string | undefined;
-}>, "many">;
 /**
  * @summary Submit leave request
  */
@@ -890,50 +1632,72 @@ export declare const ApproveLeaveResponse: zod.ZodObject<{
 /**
  * @summary List payroll runs
  */
-export declare const ListPayrollRunsResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    period: zod.ZodString;
-    status: zod.ZodString;
-    totalNet: zod.ZodNumber;
-    employeeCount: zod.ZodOptional<zod.ZodNumber>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
+export declare const ListPayrollRunsResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        period: zod.ZodString;
+        month: zod.ZodOptional<zod.ZodString>;
+        status: zod.ZodString;
+        totalNet: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        totalAmount: zod.ZodOptional<zod.ZodNumber>;
+        employeeCount: zod.ZodOptional<zod.ZodNumber>;
+        runByName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        createdAt: zod.ZodOptional<zod.ZodString>;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: number;
+        period: string;
+        createdAt?: string | undefined;
+        month?: string | undefined;
+        totalNet?: string | null | undefined;
+        totalAmount?: number | undefined;
+        employeeCount?: number | undefined;
+        runByName?: string | null | undefined;
+    }, {
+        status: string;
+        id: number;
+        period: string;
+        createdAt?: string | undefined;
+        month?: string | undefined;
+        totalNet?: string | null | undefined;
+        totalAmount?: number | undefined;
+        employeeCount?: number | undefined;
+        runByName?: string | null | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    status: string;
-    id: number;
-    period: string;
-    totalNet: number;
-    createdAt?: string | undefined;
-    employeeCount?: number | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        period: string;
+        createdAt?: string | undefined;
+        month?: string | undefined;
+        totalNet?: string | null | undefined;
+        totalAmount?: number | undefined;
+        employeeCount?: number | undefined;
+        runByName?: string | null | undefined;
+    }[];
+    pageSize: number;
 }, {
-    status: string;
-    id: number;
-    period: string;
-    totalNet: number;
-    createdAt?: string | undefined;
-    employeeCount?: number | undefined;
+    total: number;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        period: string;
+        createdAt?: string | undefined;
+        month?: string | undefined;
+        totalNet?: string | null | undefined;
+        totalAmount?: number | undefined;
+        employeeCount?: number | undefined;
+        runByName?: string | null | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const ListPayrollRunsResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    period: zod.ZodString;
-    status: zod.ZodString;
-    totalNet: zod.ZodNumber;
-    employeeCount: zod.ZodOptional<zod.ZodNumber>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    status: string;
-    id: number;
-    period: string;
-    totalNet: number;
-    createdAt?: string | undefined;
-    employeeCount?: number | undefined;
-}, {
-    status: string;
-    id: number;
-    period: string;
-    totalNet: number;
-    createdAt?: string | undefined;
-    employeeCount?: number | undefined;
-}>, "many">;
 /**
  * @summary Run payroll for a period
  */
@@ -974,92 +1738,117 @@ export declare const ListInvoicesQueryParams: zod.ZodObject<{
     status?: string | undefined;
     page?: number | undefined;
 }>;
-export declare const ListInvoicesResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    ref: zod.ZodString;
-    clientName: zod.ZodOptional<zod.ZodString>;
-    clientId: zod.ZodOptional<zod.ZodNumber>;
-    description: zod.ZodOptional<zod.ZodString>;
-    subtotal: zod.ZodOptional<zod.ZodNumber>;
-    vatRate: zod.ZodOptional<zod.ZodNumber>;
-    vatAmount: zod.ZodOptional<zod.ZodNumber>;
+export declare const ListInvoicesResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        ref: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        clientName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        clientId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        description: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        subtotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        vatRate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        vatAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        total: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        paidAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        status: zod.ZodString;
+        issueDate: zod.ZodString;
+        dueDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        paymentTerms: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        isTaxLinked: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+        zatcaStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        createdByName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        status: string;
+        id: number;
+        issueDate: string;
+        total?: string | null | undefined;
+        clientName?: string | null | undefined;
+        notes?: string | null | undefined;
+        ref?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        subtotal?: string | null | undefined;
+        vatRate?: string | null | undefined;
+        vatAmount?: string | null | undefined;
+        paidAmount?: string | null | undefined;
+        dueDate?: string | null | undefined;
+        paymentTerms?: string | null | undefined;
+        isTaxLinked?: boolean | null | undefined;
+        zatcaStatus?: string | null | undefined;
+        createdByName?: string | null | undefined;
+    }, {
+        status: string;
+        id: number;
+        issueDate: string;
+        total?: string | null | undefined;
+        clientName?: string | null | undefined;
+        notes?: string | null | undefined;
+        ref?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        subtotal?: string | null | undefined;
+        vatRate?: string | null | undefined;
+        vatAmount?: string | null | undefined;
+        paidAmount?: string | null | undefined;
+        dueDate?: string | null | undefined;
+        paymentTerms?: string | null | undefined;
+        isTaxLinked?: boolean | null | undefined;
+        zatcaStatus?: string | null | undefined;
+        createdByName?: string | null | undefined;
+    }>, "many">;
     total: zod.ZodNumber;
-    paidAmount: zod.ZodOptional<zod.ZodNumber>;
-    status: zod.ZodString;
-    dueDate: zod.ZodOptional<zod.ZodString>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    status: string;
-    id: number;
-    ref: string;
     total: number;
-    clientName?: string | undefined;
-    createdAt?: string | undefined;
-    clientId?: number | undefined;
-    description?: string | undefined;
-    subtotal?: number | undefined;
-    vatRate?: number | undefined;
-    vatAmount?: number | undefined;
-    paidAmount?: number | undefined;
-    dueDate?: string | undefined;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        issueDate: string;
+        total?: string | null | undefined;
+        clientName?: string | null | undefined;
+        notes?: string | null | undefined;
+        ref?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        subtotal?: string | null | undefined;
+        vatRate?: string | null | undefined;
+        vatAmount?: string | null | undefined;
+        paidAmount?: string | null | undefined;
+        dueDate?: string | null | undefined;
+        paymentTerms?: string | null | undefined;
+        isTaxLinked?: boolean | null | undefined;
+        zatcaStatus?: string | null | undefined;
+        createdByName?: string | null | undefined;
+    }[];
+    pageSize: number;
 }, {
-    status: string;
-    id: number;
-    ref: string;
     total: number;
-    clientName?: string | undefined;
-    createdAt?: string | undefined;
-    clientId?: number | undefined;
-    description?: string | undefined;
-    subtotal?: number | undefined;
-    vatRate?: number | undefined;
-    vatAmount?: number | undefined;
-    paidAmount?: number | undefined;
-    dueDate?: string | undefined;
+    page: number;
+    data: {
+        status: string;
+        id: number;
+        issueDate: string;
+        total?: string | null | undefined;
+        clientName?: string | null | undefined;
+        notes?: string | null | undefined;
+        ref?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        subtotal?: string | null | undefined;
+        vatRate?: string | null | undefined;
+        vatAmount?: string | null | undefined;
+        paidAmount?: string | null | undefined;
+        dueDate?: string | null | undefined;
+        paymentTerms?: string | null | undefined;
+        isTaxLinked?: boolean | null | undefined;
+        zatcaStatus?: string | null | undefined;
+        createdByName?: string | null | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const ListInvoicesResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    ref: zod.ZodString;
-    clientName: zod.ZodOptional<zod.ZodString>;
-    clientId: zod.ZodOptional<zod.ZodNumber>;
-    description: zod.ZodOptional<zod.ZodString>;
-    subtotal: zod.ZodOptional<zod.ZodNumber>;
-    vatRate: zod.ZodOptional<zod.ZodNumber>;
-    vatAmount: zod.ZodOptional<zod.ZodNumber>;
-    total: zod.ZodNumber;
-    paidAmount: zod.ZodOptional<zod.ZodNumber>;
-    status: zod.ZodString;
-    dueDate: zod.ZodOptional<zod.ZodString>;
-    createdAt: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    status: string;
-    id: number;
-    ref: string;
-    total: number;
-    clientName?: string | undefined;
-    createdAt?: string | undefined;
-    clientId?: number | undefined;
-    description?: string | undefined;
-    subtotal?: number | undefined;
-    vatRate?: number | undefined;
-    vatAmount?: number | undefined;
-    paidAmount?: number | undefined;
-    dueDate?: string | undefined;
-}, {
-    status: string;
-    id: number;
-    ref: string;
-    total: number;
-    clientName?: string | undefined;
-    createdAt?: string | undefined;
-    clientId?: number | undefined;
-    description?: string | undefined;
-    subtotal?: number | undefined;
-    vatRate?: number | undefined;
-    vatAmount?: number | undefined;
-    paidAmount?: number | undefined;
-    dueDate?: string | undefined;
-}>, "many">;
 /**
  * @summary Create invoice
  */
@@ -1100,20 +1889,191 @@ export declare const CreateInvoiceBody: zod.ZodObject<{
     dueInDays?: number | undefined;
 }>;
 export declare const CreateInvoiceResponse: zod.ZodObject<{
-    invoiceId: zod.ZodNumber;
-    ref: zod.ZodString;
-    total: zod.ZodNumber;
-    dueDate: zod.ZodOptional<zod.ZodString>;
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    clientId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    ref: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    description: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    subtotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    vatRate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    vatAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    total: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    paidAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    dueDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    paidAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    createdAt: zod.ZodString;
+    currency: zod.ZodString;
+    paymentTerms: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    poNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    discountAmount: zod.ZodString;
+    discountPercent: zod.ZodString;
+    journalEntryId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    sentAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isTaxLinked: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    zatcaStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaUuid: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaHash: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaQrCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    invoiceTypeCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    taxCategoryCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    exemptionReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    projectId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    lastDunningStage: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    lastDunningAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    exchangeRate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodString;
+    costCenter: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaIcv: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    zatcaPih: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaSignature: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaClearedXml: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaClearanceStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaClearedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaReportedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaLastError: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    approvedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    approvedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    postedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    postedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    taxCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    taxInclusive: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    cogsTotal: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    cogsJournalEntryId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    amendedFromInvoiceId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    amendedToInvoiceId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    amendmentReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    amendedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    clientName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lines: zod.ZodOptional<zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">>;
 }, "strip", zod.ZodTypeAny, {
-    ref: string;
-    total: number;
-    invoiceId: number;
-    dueDate?: string | undefined;
+    id: number;
+    companyId: number;
+    createdAt: string;
+    updatedAt: string;
+    currency: string;
+    discountAmount: string;
+    discountPercent: string;
+    status?: string | null | undefined;
+    branchId?: number | null | undefined;
+    total?: string | null | undefined;
+    clientName?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    approvedBy?: number | null | undefined;
+    approvedAt?: string | null | undefined;
+    ref?: string | null | undefined;
+    clientId?: number | null | undefined;
+    description?: string | null | undefined;
+    subtotal?: string | null | undefined;
+    vatRate?: string | null | undefined;
+    vatAmount?: string | null | undefined;
+    paidAmount?: string | null | undefined;
+    dueDate?: string | null | undefined;
+    paymentTerms?: string | null | undefined;
+    isTaxLinked?: boolean | null | undefined;
+    zatcaStatus?: string | null | undefined;
+    paidAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    poNumber?: string | null | undefined;
+    journalEntryId?: number | null | undefined;
+    sentAt?: string | null | undefined;
+    zatcaUuid?: string | null | undefined;
+    zatcaHash?: string | null | undefined;
+    zatcaQrCode?: string | null | undefined;
+    invoiceTypeCode?: string | null | undefined;
+    taxCategoryCode?: string | null | undefined;
+    exemptionReason?: string | null | undefined;
+    projectId?: number | null | undefined;
+    lastDunningStage?: number | null | undefined;
+    lastDunningAt?: string | null | undefined;
+    exchangeRate?: string | null | undefined;
+    costCenter?: string | null | undefined;
+    zatcaIcv?: number | null | undefined;
+    zatcaPih?: string | null | undefined;
+    zatcaSignature?: string | null | undefined;
+    zatcaClearedXml?: string | null | undefined;
+    zatcaClearanceStatus?: string | null | undefined;
+    zatcaClearedAt?: string | null | undefined;
+    zatcaReportedAt?: string | null | undefined;
+    zatcaLastError?: string | null | undefined;
+    postedBy?: number | null | undefined;
+    postedAt?: string | null | undefined;
+    taxCode?: string | null | undefined;
+    taxInclusive?: boolean | null | undefined;
+    cogsTotal?: string | null | undefined;
+    cogsJournalEntryId?: number | null | undefined;
+    amendedFromInvoiceId?: number | null | undefined;
+    amendedToInvoiceId?: number | null | undefined;
+    amendmentReason?: string | null | undefined;
+    amendedAt?: string | null | undefined;
+    lines?: Record<string, unknown>[] | undefined;
 }, {
-    ref: string;
-    total: number;
-    invoiceId: number;
-    dueDate?: string | undefined;
+    id: number;
+    companyId: number;
+    createdAt: string;
+    updatedAt: string;
+    currency: string;
+    discountAmount: string;
+    discountPercent: string;
+    status?: string | null | undefined;
+    branchId?: number | null | undefined;
+    total?: string | null | undefined;
+    clientName?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    approvedBy?: number | null | undefined;
+    approvedAt?: string | null | undefined;
+    ref?: string | null | undefined;
+    clientId?: number | null | undefined;
+    description?: string | null | undefined;
+    subtotal?: string | null | undefined;
+    vatRate?: string | null | undefined;
+    vatAmount?: string | null | undefined;
+    paidAmount?: string | null | undefined;
+    dueDate?: string | null | undefined;
+    paymentTerms?: string | null | undefined;
+    isTaxLinked?: boolean | null | undefined;
+    zatcaStatus?: string | null | undefined;
+    paidAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    poNumber?: string | null | undefined;
+    journalEntryId?: number | null | undefined;
+    sentAt?: string | null | undefined;
+    zatcaUuid?: string | null | undefined;
+    zatcaHash?: string | null | undefined;
+    zatcaQrCode?: string | null | undefined;
+    invoiceTypeCode?: string | null | undefined;
+    taxCategoryCode?: string | null | undefined;
+    exemptionReason?: string | null | undefined;
+    projectId?: number | null | undefined;
+    lastDunningStage?: number | null | undefined;
+    lastDunningAt?: string | null | undefined;
+    exchangeRate?: string | null | undefined;
+    costCenter?: string | null | undefined;
+    zatcaIcv?: number | null | undefined;
+    zatcaPih?: string | null | undefined;
+    zatcaSignature?: string | null | undefined;
+    zatcaClearedXml?: string | null | undefined;
+    zatcaClearanceStatus?: string | null | undefined;
+    zatcaClearedAt?: string | null | undefined;
+    zatcaReportedAt?: string | null | undefined;
+    zatcaLastError?: string | null | undefined;
+    postedBy?: number | null | undefined;
+    postedAt?: string | null | undefined;
+    taxCode?: string | null | undefined;
+    taxInclusive?: boolean | null | undefined;
+    cogsTotal?: string | null | undefined;
+    cogsJournalEntryId?: number | null | undefined;
+    amendedFromInvoiceId?: number | null | undefined;
+    amendedToInvoiceId?: number | null | undefined;
+    amendmentReason?: string | null | undefined;
+    amendedAt?: string | null | undefined;
+    lines?: Record<string, unknown>[] | undefined;
 }>;
 /**
  * @summary Record invoice payment
@@ -1156,108 +2116,226 @@ export declare const GetChartOfAccountsResponseItem: zod.ZodObject<{
     code: zod.ZodString;
     name: zod.ZodString;
     type: zod.ZodString;
+    parentCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodString>;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    accountUsage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    childrenUsagePolicy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     code: string;
     type: string;
-    name: string;
     id: number;
+    name: string;
+    status?: string | undefined;
+    branchId?: number | null | undefined;
+    parentCode?: string | null | undefined;
+    accountUsage?: string | null | undefined;
+    childrenUsagePolicy?: string | null | undefined;
 }, {
     code: string;
     type: string;
-    name: string;
     id: number;
+    name: string;
+    status?: string | undefined;
+    branchId?: number | null | undefined;
+    parentCode?: string | null | undefined;
+    accountUsage?: string | null | undefined;
+    childrenUsagePolicy?: string | null | undefined;
 }>;
 export declare const GetChartOfAccountsResponse: zod.ZodArray<zod.ZodObject<{
     id: zod.ZodNumber;
     code: zod.ZodString;
     name: zod.ZodString;
     type: zod.ZodString;
+    parentCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodString>;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    accountUsage: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    childrenUsagePolicy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
 }, "strip", zod.ZodTypeAny, {
     code: string;
     type: string;
-    name: string;
     id: number;
+    name: string;
+    status?: string | undefined;
+    branchId?: number | null | undefined;
+    parentCode?: string | null | undefined;
+    accountUsage?: string | null | undefined;
+    childrenUsagePolicy?: string | null | undefined;
 }, {
     code: string;
     type: string;
-    name: string;
     id: number;
+    name: string;
+    status?: string | undefined;
+    branchId?: number | null | undefined;
+    parentCode?: string | null | undefined;
+    accountUsage?: string | null | undefined;
+    childrenUsagePolicy?: string | null | undefined;
 }>, "many">;
 /**
  * @summary Get finance statistics
  */
 export declare const GetFinanceStatsResponse: zod.ZodObject<{
-    totalRevenue: zod.ZodNumber;
-    pendingAmount: zod.ZodNumber;
-    overdueAmount: zod.ZodNumber;
-    paidThisMonth: zod.ZodNumber;
+    totalRevenue: zod.ZodString;
+    pendingAmount: zod.ZodString;
+    overdueAmount: zod.ZodString;
+    paidThisMonth: zod.ZodString;
     invoicesByStatus: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
 }, "strip", zod.ZodTypeAny, {
-    totalRevenue: number;
-    pendingAmount: number;
-    overdueAmount: number;
-    paidThisMonth: number;
+    totalRevenue: string;
+    pendingAmount: string;
+    overdueAmount: string;
+    paidThisMonth: string;
     invoicesByStatus?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
 }, {
-    totalRevenue: number;
-    pendingAmount: number;
-    overdueAmount: number;
-    paidThisMonth: number;
+    totalRevenue: string;
+    pendingAmount: string;
+    overdueAmount: string;
+    paidThisMonth: string;
     invoicesByStatus?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}>;
+/**
+ * The **only** supported way to create a project. Used by the
+projects module *and* by finance UI screens that need to spin up
+a new project (e.g. "إنشاء مشروع جديد" shortcut on
+`project-costing`). Enforces:
+  - RBAC `projects.list:create` (or role `projects_manager`).
+  - Manager assignment (auto-pinned to caller for `projects_manager`).
+  - Delivery obligation registration on `endDate`.
+  - `project.created` event + audit log.
+The historical `POST /api/finance/projects` was removed because
+it bypassed all of the above.
+
+ * @summary Create a project (canonical entrypoint)
+ */
+export declare const createProjectBodyBudgetMin = 0;
+export declare const createProjectBodyStatusDefault = "planning";
+export declare const CreateProjectBody: zod.ZodObject<{
+    name: zod.ZodString;
+    description: zod.ZodOptional<zod.ZodString>;
+    clientId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    managerId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    startDate: zod.ZodDate;
+    endDate: zod.ZodDate;
+    budget: zod.ZodOptional<zod.ZodNumber>;
+    status: zod.ZodDefault<zod.ZodEnum<["planning", "active", "on_hold", "completed", "cancelled"]>>;
+    phases: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{
+        name: zod.ZodString;
+        startDate: zod.ZodOptional<zod.ZodDate>;
+        endDate: zod.ZodOptional<zod.ZodDate>;
+    }, "strip", zod.ZodTypeAny, {
+        name: string;
+        startDate?: Date | undefined;
+        endDate?: Date | undefined;
+    }, {
+        name: string;
+        startDate?: Date | undefined;
+        endDate?: Date | undefined;
+    }>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    status: "active" | "planning" | "on_hold" | "completed" | "cancelled";
+    name: string;
+    startDate: Date;
+    endDate: Date;
+    managerId?: number | null | undefined;
+    clientId?: number | null | undefined;
+    description?: string | undefined;
+    budget?: number | undefined;
+    phases?: {
+        name: string;
+        startDate?: Date | undefined;
+        endDate?: Date | undefined;
+    }[] | undefined;
+}, {
+    name: string;
+    startDate: Date;
+    endDate: Date;
+    status?: "active" | "planning" | "on_hold" | "completed" | "cancelled" | undefined;
+    managerId?: number | null | undefined;
+    clientId?: number | null | undefined;
+    description?: string | undefined;
+    budget?: number | undefined;
+    phases?: {
+        name: string;
+        startDate?: Date | undefined;
+        endDate?: Date | undefined;
+    }[] | undefined;
 }>;
 /**
  * @summary List notifications
  */
-export declare const ListNotificationsResponseItem: zod.ZodObject<{
-    id: zod.ZodNumber;
-    type: zod.ZodString;
-    title: zod.ZodString;
-    body: zod.ZodOptional<zod.ZodString>;
-    priority: zod.ZodOptional<zod.ZodString>;
-    isRead: zod.ZodBoolean;
-    createdAt: zod.ZodOptional<zod.ZodString>;
+export declare const ListNotificationsResponse: zod.ZodObject<{
+    data: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        type: zod.ZodString;
+        title: zod.ZodString;
+        body: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        priority: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        isRead: zod.ZodBoolean;
+        createdAt: zod.ZodOptional<zod.ZodString>;
+        refType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        refId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        actionUrl: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        type: string;
+        id: number;
+        title: string;
+        isRead: boolean;
+        priority?: string | null | undefined;
+        createdAt?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
+    }, {
+        type: string;
+        id: number;
+        title: string;
+        isRead: boolean;
+        priority?: string | null | undefined;
+        createdAt?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
+    }>, "many">;
+    total: zod.ZodNumber;
+    page: zod.ZodNumber;
+    pageSize: zod.ZodNumber;
 }, "strip", zod.ZodTypeAny, {
-    type: string;
-    id: number;
-    title: string;
-    isRead: boolean;
-    priority?: string | undefined;
-    createdAt?: string | undefined;
-    body?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        type: string;
+        id: number;
+        title: string;
+        isRead: boolean;
+        priority?: string | null | undefined;
+        createdAt?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
+    }[];
+    pageSize: number;
 }, {
-    type: string;
-    id: number;
-    title: string;
-    isRead: boolean;
-    priority?: string | undefined;
-    createdAt?: string | undefined;
-    body?: string | undefined;
+    total: number;
+    page: number;
+    data: {
+        type: string;
+        id: number;
+        title: string;
+        isRead: boolean;
+        priority?: string | null | undefined;
+        createdAt?: string | undefined;
+        body?: string | null | undefined;
+        refType?: string | null | undefined;
+        refId?: number | null | undefined;
+        actionUrl?: string | null | undefined;
+    }[];
+    pageSize: number;
 }>;
-export declare const ListNotificationsResponse: zod.ZodArray<zod.ZodObject<{
-    id: zod.ZodNumber;
-    type: zod.ZodString;
-    title: zod.ZodString;
-    body: zod.ZodOptional<zod.ZodString>;
-    priority: zod.ZodOptional<zod.ZodString>;
-    isRead: zod.ZodBoolean;
-    createdAt: zod.ZodOptional<zod.ZodString>;
-}, "strip", zod.ZodTypeAny, {
-    type: string;
-    id: number;
-    title: string;
-    isRead: boolean;
-    priority?: string | undefined;
-    createdAt?: string | undefined;
-    body?: string | undefined;
-}, {
-    type: string;
-    id: number;
-    title: string;
-    isRead: boolean;
-    priority?: string | undefined;
-    createdAt?: string | undefined;
-    body?: string | undefined;
-}>, "many">;
 /**
  * @summary Mark notification as read
  */
@@ -1350,4 +2428,1701 @@ export declare const ListTasksResponse: zod.ZodArray<zod.ZodObject<{
     clientPhone?: string | undefined;
     createdAt?: string | undefined;
 }>, "many">;
+/**
+ * Moves the listed pilgrims out of the source group into a fresh
+child group. Rejects 409 if the source group is already linked to
+a sales invoice (issue credit note first). agentId / subAgentId /
+seasonId / programDuration are inherited from the source.
+
+ * @summary Split a group into a new group (move N pilgrims)
+ */
+export declare const SplitUmrahGroupParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const SplitUmrahGroupBody: zod.ZodObject<{
+    pilgrimIds: zod.ZodArray<zod.ZodNumber, "many">;
+    newGroupName: zod.ZodOptional<zod.ZodString>;
+    newNuskGroupNumber: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    pilgrimIds: number[];
+    newGroupName?: string | undefined;
+    newNuskGroupNumber?: string | undefined;
+}, {
+    pilgrimIds: number[];
+    newGroupName?: string | undefined;
+    newNuskGroupNumber?: string | undefined;
+}>;
+export declare const SplitUmrahGroupResponse: zod.ZodObject<{
+    success: zod.ZodOptional<zod.ZodBoolean>;
+    newGroup: zod.ZodOptional<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>>;
+    movedCount: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    success?: boolean | undefined;
+    newGroup?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
+    movedCount?: number | undefined;
+}, {
+    success?: boolean | undefined;
+    newGroup?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
+    movedCount?: number | undefined;
+}>;
+/**
+ * Moves every pilgrim from each source group into the target, then
+soft-deletes the now-empty source groups. Rejects 409 if any
+source is already invoiced. Idempotent on re-runs because
+deleted groups are skipped on subsequent calls.
+
+ * @summary Merge multiple source groups into a target group
+ */
+export declare const MergeUmrahGroupsBody: zod.ZodObject<{
+    sourceGroupIds: zod.ZodArray<zod.ZodNumber, "many">;
+    targetGroupId: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    sourceGroupIds: number[];
+    targetGroupId: number;
+}, {
+    sourceGroupIds: number[];
+    targetGroupId: number;
+}>;
+export declare const MergeUmrahGroupsResponse: zod.ZodObject<{
+    success: zod.ZodOptional<zod.ZodBoolean>;
+    movedCount: zod.ZodOptional<zod.ZodNumber>;
+    mergedSourceIds: zod.ZodOptional<zod.ZodArray<zod.ZodNumber, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    success?: boolean | undefined;
+    movedCount?: number | undefined;
+    mergedSourceIds?: number[] | undefined;
+}, {
+    success?: boolean | undefined;
+    movedCount?: number | undefined;
+    mergedSourceIds?: number[] | undefined;
+}>;
+/**
+ * Loops each penaltyId through `applyTransition` +
+`postPenaltyWaiverGL`. A single bad row does not break the batch
+— failures + skips are reported back so the UI can render a
+non-atomic summary. Posts one consolidated reversal journal
+entry per successful row.
+
+ * @summary Waive multiple penalties under one reason
+ */
+export declare const BulkWaiveUmrahPenaltiesBody: zod.ZodObject<{
+    penaltyIds: zod.ZodArray<zod.ZodNumber, "many">;
+    reason: zod.ZodString;
+}, "strip", zod.ZodTypeAny, {
+    reason: string;
+    penaltyIds: number[];
+}, {
+    reason: string;
+    penaltyIds: number[];
+}>;
+export declare const BulkWaiveUmrahPenaltiesResponse: zod.ZodObject<{
+    successCount: zod.ZodOptional<zod.ZodNumber>;
+    successIds: zod.ZodOptional<zod.ZodArray<zod.ZodNumber, "many">>;
+    totalWaivedAmount: zod.ZodOptional<zod.ZodNumber>;
+    skipped: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+    errors: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    successCount?: number | undefined;
+    successIds?: number[] | undefined;
+    totalWaivedAmount?: number | undefined;
+    skipped?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    errors?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}, {
+    successCount?: number | undefined;
+    successIds?: number[] | undefined;
+    totalWaivedAmount?: number | undefined;
+    skipped?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    errors?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}>;
+/**
+ * @summary List polymorphic attachments
+ */
+export declare const ListUmrahAttachmentsQueryParams: zod.ZodObject<{
+    entityType: zod.ZodOptional<zod.ZodEnum<["mutamer", "sub_agent", "group", "agent", "nusk_invoice", "season", "sales_invoice", "violation"]>>;
+    entityId: zod.ZodOptional<zod.ZodNumber>;
+    type: zod.ZodOptional<zod.ZodEnum<["passport", "visa", "contract", "nusk_file", "identity", "transfer_receipt", "other"]>>;
+}, "strip", zod.ZodTypeAny, {
+    type?: "contract" | "passport" | "visa" | "nusk_file" | "identity" | "transfer_receipt" | "other" | undefined;
+    entityType?: "mutamer" | "sub_agent" | "group" | "agent" | "nusk_invoice" | "season" | "sales_invoice" | "violation" | undefined;
+    entityId?: number | undefined;
+}, {
+    type?: "contract" | "passport" | "visa" | "nusk_file" | "identity" | "transfer_receipt" | "other" | undefined;
+    entityType?: "mutamer" | "sub_agent" | "group" | "agent" | "nusk_invoice" | "season" | "sales_invoice" | "violation" | undefined;
+    entityId?: number | undefined;
+}>;
+export declare const ListUmrahAttachmentsResponse: zod.ZodObject<{
+    data: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    data?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}, {
+    data?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}>;
+/**
+ * Verifies ownership of the target row via an entityType→table
+whitelist before insert (no raw table-name injection). The
+attached file is described by metadata only; uploads go through
+the central storage service and `storageKey` + `fileUrl` are
+recorded here.
+
+ * @summary Attach a file to an umrah entity
+ */
+export declare const CreateUmrahAttachmentBody: zod.ZodObject<{
+    entityType: zod.ZodString;
+    entityId: zod.ZodNumber;
+    type: zod.ZodString;
+    title: zod.ZodString;
+    notes: zod.ZodOptional<zod.ZodString>;
+    fileUrl: zod.ZodOptional<zod.ZodString>;
+    storageKey: zod.ZodOptional<zod.ZodString>;
+    fileSize: zod.ZodOptional<zod.ZodNumber>;
+    mimeType: zod.ZodOptional<zod.ZodString>;
+}, "strip", zod.ZodTypeAny, {
+    type: string;
+    title: string;
+    entityType: string;
+    entityId: number;
+    notes?: string | undefined;
+    fileUrl?: string | undefined;
+    storageKey?: string | undefined;
+    fileSize?: number | undefined;
+    mimeType?: string | undefined;
+}, {
+    type: string;
+    title: string;
+    entityType: string;
+    entityId: number;
+    notes?: string | undefined;
+    fileUrl?: string | undefined;
+    storageKey?: string | undefined;
+    fileSize?: number | undefined;
+    mimeType?: string | undefined;
+}>;
+/**
+ * @summary Soft-delete an attachment
+ */
+export declare const DeleteUmrahAttachmentParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const DeleteUmrahAttachmentResponse: zod.ZodObject<{
+    success: zod.ZodBoolean;
+}, "strip", zod.ZodTypeAny, {
+    success: boolean;
+}, {
+    success: boolean;
+}>;
+/**
+ * Detail-page payload: the full `umrah_agents` row plus the statement
+aggregates the detail pane renders (pilgrim count, overstayed count,
+total invoiced/paid/outstanding, and a per-status breakdown dict).
+Every column is enumerated rather than passthrough so the
+contract-drift guard fires on any added/renamed returned field.
+
+ * @summary Get an umrah agent by ID (full row + statement aggregates)
+ */
+export declare const GetUmrahAgentParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const GetUmrahAgentResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    name: zod.ZodString;
+    contactPerson: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    country: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    profitMargin: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    contractRef: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    currency: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    seasonId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    nuskAgentNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    updatedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pilgrimCount: zod.ZodNumber;
+    overstayedCount: zod.ZodNumber;
+    totalInvoiced: zod.ZodNumber;
+    totalPaid: zod.ZodNumber;
+    totalOutstanding: zod.ZodNumber;
+    statusBreakdown: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+    name: string;
+    companyId: number;
+    totalPaid: number;
+    pilgrimCount: number;
+    overstayedCount: number;
+    totalInvoiced: number;
+    totalOutstanding: number;
+    statusBreakdown: Record<string, unknown>;
+    status?: string | null | undefined;
+    email?: string | null | undefined;
+    phone?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    currency?: string | null | undefined;
+    contactPerson?: string | null | undefined;
+    country?: string | null | undefined;
+    profitMargin?: string | null | undefined;
+    contractRef?: string | null | undefined;
+    seasonId?: number | null | undefined;
+    nuskAgentNumber?: string | null | undefined;
+    updatedBy?: number | null | undefined;
+}, {
+    id: number;
+    name: string;
+    companyId: number;
+    totalPaid: number;
+    pilgrimCount: number;
+    overstayedCount: number;
+    totalInvoiced: number;
+    totalOutstanding: number;
+    statusBreakdown: Record<string, unknown>;
+    status?: string | null | undefined;
+    email?: string | null | undefined;
+    phone?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    currency?: string | null | undefined;
+    contactPerson?: string | null | undefined;
+    country?: string | null | undefined;
+    profitMargin?: string | null | undefined;
+    contractRef?: string | null | undefined;
+    seasonId?: number | null | undefined;
+    nuskAgentNumber?: string | null | undefined;
+    updatedBy?: number | null | undefined;
+}>;
+/**
+ * Detail-page payload: the full `umrah_groups` row joined with the
+agent/sub-agent/season names, the pilgrim roster summary, a per-status
+breakdown dict, exemption/visa-expiring counts, and nested finance
+(invoice/NUSK totals + margin) and schedule (date range + flight
+codes) objects. Every column is enumerated so the contract-drift
+guard fires on any added/renamed returned field.
+
+ * @summary Get an umrah group by ID (full row + roster + aggregates)
+ */
+export declare const GetUmrahGroupParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const GetUmrahGroupResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    nuskGroupNumber: zod.ZodString;
+    internalRef: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    name: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    agentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    subAgentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    seasonId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    mutamerCount: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    programDuration: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    nuskInvoiceNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    salesInvoiceId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    createdBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    updatedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    agentName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    subAgentName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    seasonTitle: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pilgrims: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        fullName: zod.ZodString;
+        nationality: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        overstayExempt: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+        visaExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        entryFlight: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        exitFlight: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        id: number;
+        fullName: string;
+        status?: string | null | undefined;
+        nationality?: string | null | undefined;
+        visaExpiry?: string | null | undefined;
+        overstayExempt?: boolean | null | undefined;
+        entryFlight?: string | null | undefined;
+        exitFlight?: string | null | undefined;
+    }, {
+        id: number;
+        fullName: string;
+        status?: string | null | undefined;
+        nationality?: string | null | undefined;
+        visaExpiry?: string | null | undefined;
+        overstayExempt?: boolean | null | undefined;
+        entryFlight?: string | null | undefined;
+        exitFlight?: string | null | undefined;
+    }>, "many">;
+    statusBreakdown: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+    overstayExemptCount: zod.ZodNumber;
+    visaExpiringCount: zod.ZodNumber;
+    finance: zod.ZodObject<{
+        invoiceCount: zod.ZodNumber;
+        invoiceTotal: zod.ZodNumber;
+        invoicePaid: zod.ZodNumber;
+        invoiceOutstanding: zod.ZodNumber;
+        nuskCount: zod.ZodNumber;
+        nuskNetCost: zod.ZodNumber;
+        nuskRefund: zod.ZodNumber;
+        margin: zod.ZodNumber;
+    }, "strip", zod.ZodTypeAny, {
+        invoiceCount: number;
+        invoiceTotal: number;
+        invoicePaid: number;
+        invoiceOutstanding: number;
+        nuskCount: number;
+        nuskNetCost: number;
+        nuskRefund: number;
+        margin: number;
+    }, {
+        invoiceCount: number;
+        invoiceTotal: number;
+        invoicePaid: number;
+        invoiceOutstanding: number;
+        nuskCount: number;
+        nuskNetCost: number;
+        nuskRefund: number;
+        margin: number;
+    }>;
+    schedule: zod.ZodObject<{
+        minArrival: zod.ZodNullable<zod.ZodString>;
+        maxDeparture: zod.ZodNullable<zod.ZodString>;
+        entryFlights: zod.ZodArray<zod.ZodString, "many">;
+        exitFlights: zod.ZodArray<zod.ZodString, "many">;
+    }, "strip", zod.ZodTypeAny, {
+        minArrival: string | null;
+        maxDeparture: string | null;
+        entryFlights: string[];
+        exitFlights: string[];
+    }, {
+        minArrival: string | null;
+        maxDeparture: string | null;
+        entryFlights: string[];
+        exitFlights: string[];
+    }>;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+    companyId: number;
+    statusBreakdown: Record<string, unknown>;
+    nuskGroupNumber: string;
+    pilgrims: {
+        id: number;
+        fullName: string;
+        status?: string | null | undefined;
+        nationality?: string | null | undefined;
+        visaExpiry?: string | null | undefined;
+        overstayExempt?: boolean | null | undefined;
+        entryFlight?: string | null | undefined;
+        exitFlight?: string | null | undefined;
+    }[];
+    overstayExemptCount: number;
+    visaExpiringCount: number;
+    finance: {
+        invoiceCount: number;
+        invoiceTotal: number;
+        invoicePaid: number;
+        invoiceOutstanding: number;
+        nuskCount: number;
+        nuskNetCost: number;
+        nuskRefund: number;
+        margin: number;
+    };
+    schedule: {
+        minArrival: string | null;
+        maxDeparture: string | null;
+        entryFlights: string[];
+        exitFlights: string[];
+    };
+    status?: string | null | undefined;
+    name?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    seasonId?: number | null | undefined;
+    updatedBy?: number | null | undefined;
+    internalRef?: string | null | undefined;
+    agentId?: number | null | undefined;
+    subAgentId?: number | null | undefined;
+    mutamerCount?: number | null | undefined;
+    programDuration?: number | null | undefined;
+    nuskInvoiceNumber?: string | null | undefined;
+    salesInvoiceId?: number | null | undefined;
+    agentName?: string | null | undefined;
+    subAgentName?: string | null | undefined;
+    seasonTitle?: string | null | undefined;
+}, {
+    id: number;
+    companyId: number;
+    statusBreakdown: Record<string, unknown>;
+    nuskGroupNumber: string;
+    pilgrims: {
+        id: number;
+        fullName: string;
+        status?: string | null | undefined;
+        nationality?: string | null | undefined;
+        visaExpiry?: string | null | undefined;
+        overstayExempt?: boolean | null | undefined;
+        entryFlight?: string | null | undefined;
+        exitFlight?: string | null | undefined;
+    }[];
+    overstayExemptCount: number;
+    visaExpiringCount: number;
+    finance: {
+        invoiceCount: number;
+        invoiceTotal: number;
+        invoicePaid: number;
+        invoiceOutstanding: number;
+        nuskCount: number;
+        nuskNetCost: number;
+        nuskRefund: number;
+        margin: number;
+    };
+    schedule: {
+        minArrival: string | null;
+        maxDeparture: string | null;
+        entryFlights: string[];
+        exitFlights: string[];
+    };
+    status?: string | null | undefined;
+    name?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    seasonId?: number | null | undefined;
+    updatedBy?: number | null | undefined;
+    internalRef?: string | null | undefined;
+    agentId?: number | null | undefined;
+    subAgentId?: number | null | undefined;
+    mutamerCount?: number | null | undefined;
+    programDuration?: number | null | undefined;
+    nuskInvoiceNumber?: string | null | undefined;
+    salesInvoiceId?: number | null | undefined;
+    agentName?: string | null | undefined;
+    subAgentName?: string | null | undefined;
+    seasonTitle?: string | null | undefined;
+}>;
+/**
+ * Detail-page payload: the full `umrah_pilgrims` row (sensitive
+passport/visa/border/mofa fields decrypted, plus their `*_hash`
+lookup columns) joined with the agent/package/season/group/sub-agent
+names, followed by the pilgrim's penalty rows. Every column is
+enumerated so the contract-drift guard fires on any added/renamed
+returned field.
+
+ * @summary Get an umrah pilgrim by ID (decrypted row + penalties)
+ */
+export declare const GetUmrahPilgrimParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const GetUmrahPilgrimResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    seasonId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    agentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    packageId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    fullName: zod.ZodString;
+    passportNumber: zod.ZodString;
+    visaNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    nationality: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    gender: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    dateOfBirth: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    arrivalDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    departureDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    actualArrival: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    actualDeparture: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    hotelName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    roomNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    transportAssigned: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    nuskNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    entryPort: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    exitPort: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    overstayDays: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    actualStayDays: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    subAgentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    passportExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    groupId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    entryFlight: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    exitFlight: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    programDuration: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    borderNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    mofaNumber: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isInsideKingdom: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    hasUmrahPermit: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    createdBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    updatedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    passportNumber_hash: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaNumber_hash: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    mofaNumber_hash: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    borderNumber_hash: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    entryDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    exitDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    overstayExempt: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    overstayExemptReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    overstayExemptBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    overstayExemptAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    familyId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    visaStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaRequestedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaIssuedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaRejectedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    visaRejectionReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    agentName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    packageName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    seasonTitle: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    groupName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    subAgentName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    penalties: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        companyId: zod.ZodNumber;
+        pilgrimId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        agentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        seasonId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        type: zod.ZodString;
+        daysOverstayed: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        amount: zod.ZodNullable<zod.ZodString>;
+        currency: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        invoiceId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        createdBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        updatedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        journalEntryId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        type: string;
+        id: number;
+        companyId: number;
+        amount: string | null;
+        status?: string | null | undefined;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        deletedAt?: string | null | undefined;
+        updatedAt?: string | null | undefined;
+        createdBy?: number | null | undefined;
+        currency?: string | null | undefined;
+        journalEntryId?: number | null | undefined;
+        seasonId?: number | null | undefined;
+        updatedBy?: number | null | undefined;
+        agentId?: number | null | undefined;
+        pilgrimId?: number | null | undefined;
+        daysOverstayed?: number | null | undefined;
+        invoiceId?: number | null | undefined;
+    }, {
+        type: string;
+        id: number;
+        companyId: number;
+        amount: string | null;
+        status?: string | null | undefined;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        deletedAt?: string | null | undefined;
+        updatedAt?: string | null | undefined;
+        createdBy?: number | null | undefined;
+        currency?: string | null | undefined;
+        journalEntryId?: number | null | undefined;
+        seasonId?: number | null | undefined;
+        updatedBy?: number | null | undefined;
+        agentId?: number | null | undefined;
+        pilgrimId?: number | null | undefined;
+        daysOverstayed?: number | null | undefined;
+        invoiceId?: number | null | undefined;
+    }>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+    companyId: number;
+    passportNumber: string;
+    fullName: string;
+    penalties: {
+        type: string;
+        id: number;
+        companyId: number;
+        amount: string | null;
+        status?: string | null | undefined;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        deletedAt?: string | null | undefined;
+        updatedAt?: string | null | undefined;
+        createdBy?: number | null | undefined;
+        currency?: string | null | undefined;
+        journalEntryId?: number | null | undefined;
+        seasonId?: number | null | undefined;
+        updatedBy?: number | null | undefined;
+        agentId?: number | null | undefined;
+        pilgrimId?: number | null | undefined;
+        daysOverstayed?: number | null | undefined;
+        invoiceId?: number | null | undefined;
+    }[];
+    status?: string | null | undefined;
+    phone?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    gender?: string | null | undefined;
+    nationality?: string | null | undefined;
+    dateOfBirth?: string | null | undefined;
+    passportExpiry?: string | null | undefined;
+    borderNumber?: string | null | undefined;
+    visaNumber?: string | null | undefined;
+    visaExpiry?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    seasonId?: number | null | undefined;
+    updatedBy?: number | null | undefined;
+    agentId?: number | null | undefined;
+    subAgentId?: number | null | undefined;
+    programDuration?: number | null | undefined;
+    agentName?: string | null | undefined;
+    subAgentName?: string | null | undefined;
+    seasonTitle?: string | null | undefined;
+    overstayExempt?: boolean | null | undefined;
+    entryFlight?: string | null | undefined;
+    exitFlight?: string | null | undefined;
+    packageId?: number | null | undefined;
+    arrivalDate?: string | null | undefined;
+    departureDate?: string | null | undefined;
+    actualArrival?: string | null | undefined;
+    actualDeparture?: string | null | undefined;
+    hotelName?: string | null | undefined;
+    roomNumber?: string | null | undefined;
+    transportAssigned?: boolean | null | undefined;
+    nuskNumber?: string | null | undefined;
+    entryPort?: string | null | undefined;
+    exitPort?: string | null | undefined;
+    overstayDays?: number | null | undefined;
+    actualStayDays?: number | null | undefined;
+    groupId?: number | null | undefined;
+    mofaNumber?: string | null | undefined;
+    isInsideKingdom?: boolean | null | undefined;
+    hasUmrahPermit?: boolean | null | undefined;
+    passportNumber_hash?: string | null | undefined;
+    visaNumber_hash?: string | null | undefined;
+    mofaNumber_hash?: string | null | undefined;
+    borderNumber_hash?: string | null | undefined;
+    entryDate?: string | null | undefined;
+    exitDate?: string | null | undefined;
+    overstayExemptReason?: string | null | undefined;
+    overstayExemptBy?: number | null | undefined;
+    overstayExemptAt?: string | null | undefined;
+    familyId?: number | null | undefined;
+    visaStatus?: string | null | undefined;
+    visaRequestedAt?: string | null | undefined;
+    visaIssuedAt?: string | null | undefined;
+    visaRejectedAt?: string | null | undefined;
+    visaRejectionReason?: string | null | undefined;
+    packageName?: string | null | undefined;
+    groupName?: string | null | undefined;
+}, {
+    id: number;
+    companyId: number;
+    passportNumber: string;
+    fullName: string;
+    penalties: {
+        type: string;
+        id: number;
+        companyId: number;
+        amount: string | null;
+        status?: string | null | undefined;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        notes?: string | null | undefined;
+        deletedAt?: string | null | undefined;
+        updatedAt?: string | null | undefined;
+        createdBy?: number | null | undefined;
+        currency?: string | null | undefined;
+        journalEntryId?: number | null | undefined;
+        seasonId?: number | null | undefined;
+        updatedBy?: number | null | undefined;
+        agentId?: number | null | undefined;
+        pilgrimId?: number | null | undefined;
+        daysOverstayed?: number | null | undefined;
+        invoiceId?: number | null | undefined;
+    }[];
+    status?: string | null | undefined;
+    phone?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    gender?: string | null | undefined;
+    nationality?: string | null | undefined;
+    dateOfBirth?: string | null | undefined;
+    passportExpiry?: string | null | undefined;
+    borderNumber?: string | null | undefined;
+    visaNumber?: string | null | undefined;
+    visaExpiry?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    seasonId?: number | null | undefined;
+    updatedBy?: number | null | undefined;
+    agentId?: number | null | undefined;
+    subAgentId?: number | null | undefined;
+    programDuration?: number | null | undefined;
+    agentName?: string | null | undefined;
+    subAgentName?: string | null | undefined;
+    seasonTitle?: string | null | undefined;
+    overstayExempt?: boolean | null | undefined;
+    entryFlight?: string | null | undefined;
+    exitFlight?: string | null | undefined;
+    packageId?: number | null | undefined;
+    arrivalDate?: string | null | undefined;
+    departureDate?: string | null | undefined;
+    actualArrival?: string | null | undefined;
+    actualDeparture?: string | null | undefined;
+    hotelName?: string | null | undefined;
+    roomNumber?: string | null | undefined;
+    transportAssigned?: boolean | null | undefined;
+    nuskNumber?: string | null | undefined;
+    entryPort?: string | null | undefined;
+    exitPort?: string | null | undefined;
+    overstayDays?: number | null | undefined;
+    actualStayDays?: number | null | undefined;
+    groupId?: number | null | undefined;
+    mofaNumber?: string | null | undefined;
+    isInsideKingdom?: boolean | null | undefined;
+    hasUmrahPermit?: boolean | null | undefined;
+    passportNumber_hash?: string | null | undefined;
+    visaNumber_hash?: string | null | undefined;
+    mofaNumber_hash?: string | null | undefined;
+    borderNumber_hash?: string | null | undefined;
+    entryDate?: string | null | undefined;
+    exitDate?: string | null | undefined;
+    overstayExemptReason?: string | null | undefined;
+    overstayExemptBy?: number | null | undefined;
+    overstayExemptAt?: string | null | undefined;
+    familyId?: number | null | undefined;
+    visaStatus?: string | null | undefined;
+    visaRequestedAt?: string | null | undefined;
+    visaIssuedAt?: string | null | undefined;
+    visaRejectedAt?: string | null | undefined;
+    visaRejectionReason?: string | null | undefined;
+    packageName?: string | null | undefined;
+    groupName?: string | null | undefined;
+}>;
+/**
+ * Detail-page payload: the full `support_tickets` row joined with the
+client name, the reply thread, and the computed SLA fields
+(`isSlaBreached` boolean + `slaRemainingHours` string). Every column
+is enumerated so the contract-drift guard fires on any added/renamed
+returned field.
+
+ * @summary Get a support ticket by ID (full row + replies + SLA)
+ */
+export declare const GetSupportTicketParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const GetSupportTicketResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    ref: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    title: zod.ZodString;
+    description: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    category: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    priority: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    clientId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    assigneeId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    slaDeadline: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    firstResponseAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    resolvedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    escalationLevel: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    rating: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    ratingComment: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    slaBreached: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    invoiceId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    contractId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    clientName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    replies: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+    isSlaBreached: zod.ZodBoolean;
+    slaRemainingHours: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+    companyId: number;
+    title: string;
+    replies: Record<string, unknown>[];
+    isSlaBreached: boolean;
+    status?: string | null | undefined;
+    branchId?: number | null | undefined;
+    priority?: string | null | undefined;
+    clientName?: string | null | undefined;
+    createdAt?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    ref?: string | null | undefined;
+    clientId?: number | null | undefined;
+    description?: string | null | undefined;
+    invoiceId?: number | null | undefined;
+    category?: string | null | undefined;
+    assigneeId?: number | null | undefined;
+    slaDeadline?: string | null | undefined;
+    firstResponseAt?: string | null | undefined;
+    resolvedAt?: string | null | undefined;
+    escalationLevel?: number | null | undefined;
+    rating?: number | null | undefined;
+    ratingComment?: string | null | undefined;
+    slaBreached?: boolean | null | undefined;
+    contractId?: number | null | undefined;
+    slaRemainingHours?: string | null | undefined;
+}, {
+    id: number;
+    companyId: number;
+    title: string;
+    replies: Record<string, unknown>[];
+    isSlaBreached: boolean;
+    status?: string | null | undefined;
+    branchId?: number | null | undefined;
+    priority?: string | null | undefined;
+    clientName?: string | null | undefined;
+    createdAt?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    ref?: string | null | undefined;
+    clientId?: number | null | undefined;
+    description?: string | null | undefined;
+    invoiceId?: number | null | undefined;
+    category?: string | null | undefined;
+    assigneeId?: number | null | undefined;
+    slaDeadline?: string | null | undefined;
+    firstResponseAt?: string | null | undefined;
+    resolvedAt?: string | null | undefined;
+    escalationLevel?: number | null | undefined;
+    rating?: number | null | undefined;
+    ratingComment?: string | null | undefined;
+    slaBreached?: boolean | null | undefined;
+    contractId?: number | null | undefined;
+    slaRemainingHours?: string | null | undefined;
+}>;
+/**
+ * Detail-page payload: the full `property_units` row plus the related
+contracts, payments, maintenance requests, and an activity timeline.
+Every column is enumerated so the contract-drift guard fires on any
+added/renamed returned field.
+
+ * @summary Get a property unit by ID (full row + related collections)
+ */
+export declare const GetPropertyUnitParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const GetPropertyUnitResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    unitNumber: zod.ZodString;
+    buildingName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    area: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    bedrooms: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    bathrooms: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    floor: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    monthlyRent: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    address: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    buildingId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    features: zod.ZodOptional<zod.ZodNullable<zod.ZodArray<zod.ZodString, "many">>>;
+    direction: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    finishing: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    amenities: zod.ZodOptional<zod.ZodUnknown>;
+    electricityMeter: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    waterMeter: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    usageType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    ownerId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    parkingSpaces: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    acType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    hasKitchen: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    yearlyRent: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    insurancePolicy: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    insuranceExpiry: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    contracts: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+    payments: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+    maintenance: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+    timeline: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+    companyId: number;
+    contracts: Record<string, unknown>[];
+    timeline: Record<string, unknown>[];
+    unitNumber: string;
+    payments: Record<string, unknown>[];
+    maintenance: Record<string, unknown>[];
+    status?: string | null | undefined;
+    type?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    buildingName?: string | null | undefined;
+    area?: string | null | undefined;
+    bedrooms?: number | null | undefined;
+    bathrooms?: number | null | undefined;
+    floor?: number | null | undefined;
+    monthlyRent?: string | null | undefined;
+    address?: string | null | undefined;
+    buildingId?: number | null | undefined;
+    features?: string[] | null | undefined;
+    direction?: string | null | undefined;
+    finishing?: string | null | undefined;
+    amenities?: unknown;
+    electricityMeter?: string | null | undefined;
+    waterMeter?: string | null | undefined;
+    usageType?: string | null | undefined;
+    ownerId?: number | null | undefined;
+    parkingSpaces?: number | null | undefined;
+    acType?: string | null | undefined;
+    hasKitchen?: boolean | null | undefined;
+    yearlyRent?: string | null | undefined;
+    insurancePolicy?: string | null | undefined;
+    insuranceExpiry?: string | null | undefined;
+}, {
+    id: number;
+    companyId: number;
+    contracts: Record<string, unknown>[];
+    timeline: Record<string, unknown>[];
+    unitNumber: string;
+    payments: Record<string, unknown>[];
+    maintenance: Record<string, unknown>[];
+    status?: string | null | undefined;
+    type?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    buildingName?: string | null | undefined;
+    area?: string | null | undefined;
+    bedrooms?: number | null | undefined;
+    bathrooms?: number | null | undefined;
+    floor?: number | null | undefined;
+    monthlyRent?: string | null | undefined;
+    address?: string | null | undefined;
+    buildingId?: number | null | undefined;
+    features?: string[] | null | undefined;
+    direction?: string | null | undefined;
+    finishing?: string | null | undefined;
+    amenities?: unknown;
+    electricityMeter?: string | null | undefined;
+    waterMeter?: string | null | undefined;
+    usageType?: string | null | undefined;
+    ownerId?: number | null | undefined;
+    parkingSpaces?: number | null | undefined;
+    acType?: string | null | undefined;
+    hasKitchen?: boolean | null | undefined;
+    yearlyRent?: string | null | undefined;
+    insurancePolicy?: string | null | undefined;
+    insuranceExpiry?: string | null | undefined;
+}>;
+/**
+ * Detail-page payload: the full `journal_entries` row plus the
+reversal-link reference/description fields, the entry's lines (each
+the full `journal_lines` row joined with the account name), and the
+nested `reversalOf` / `reversedBy` linked-entry objects (null when not
+a reversal). Every column is enumerated so the contract-drift guard
+fires on any added/renamed returned field.
+
+ * @summary Get a journal entry by ID (full row + lines + reversal links)
+ */
+export declare const GetJournalEntryParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const GetJournalEntryResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    ref: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    description: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    date: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    type: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    status: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    balancesApplied: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    sourceType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    sourceId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    postedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    postedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    costCenter: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    departmentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    relatedEntityType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    relatedEntityId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    paymentMethod: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reference: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isPaid: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    attachmentUrl: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    attachmentType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    expenseType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    operationType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    projectId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    taxCategory: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    dueDate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isTaxLinked: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    zatcaStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaUuid: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaHash: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    zatcaQrCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    invoiceTypeCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    taxCategoryCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    exemptionReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    govIntegrationId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    govSyncEnabled: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    govExternalRef: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    govEntityType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    govEntityId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    approvalStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isManual: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    reviewedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    reviewedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    approvedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    approvedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    approvalNotes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reversalOfId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    reversedById: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    reversedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reversalReason: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    sourceKey: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    originalCurrency: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    exchangeRate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    originalAmount: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    documentStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    paymentStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    postingStatus: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reversalOfRef: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reversalOfDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reversedByRef: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    reversedByDescription: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    lines: zod.ZodArray<zod.ZodObject<{
+        id: zod.ZodNumber;
+        journalId: zod.ZodNumber;
+        accountCode: zod.ZodString;
+        debit: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        credit: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        accountId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        description: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        costCenter: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        departmentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        projectId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        employeeId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        vehicleId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        propertyId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        contractId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        activityType: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        templateId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        productId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        clientId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        vendorId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        driverId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        originalCurrency: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        originalDebit: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        originalCredit: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        exchangeRate: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        costCenterId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        unitId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        assetId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        umrahSeasonId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        umrahAgentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        sourceLineTable: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        sourceLineId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        dimensionJson: zod.ZodOptional<zod.ZodUnknown>;
+        deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+        branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+        accountName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    }, "strip", zod.ZodTypeAny, {
+        id: number;
+        journalId: number;
+        accountCode: string;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        departmentId?: number | null | undefined;
+        deletedAt?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        projectId?: number | null | undefined;
+        exchangeRate?: string | null | undefined;
+        costCenter?: string | null | undefined;
+        contractId?: number | null | undefined;
+        originalCurrency?: string | null | undefined;
+        debit?: string | null | undefined;
+        credit?: string | null | undefined;
+        accountId?: number | null | undefined;
+        employeeId?: number | null | undefined;
+        vehicleId?: number | null | undefined;
+        propertyId?: number | null | undefined;
+        activityType?: string | null | undefined;
+        templateId?: number | null | undefined;
+        productId?: number | null | undefined;
+        vendorId?: number | null | undefined;
+        driverId?: number | null | undefined;
+        originalDebit?: string | null | undefined;
+        originalCredit?: string | null | undefined;
+        costCenterId?: number | null | undefined;
+        unitId?: number | null | undefined;
+        assetId?: number | null | undefined;
+        umrahSeasonId?: number | null | undefined;
+        umrahAgentId?: number | null | undefined;
+        sourceLineTable?: string | null | undefined;
+        sourceLineId?: number | null | undefined;
+        dimensionJson?: unknown;
+        accountName?: string | null | undefined;
+    }, {
+        id: number;
+        journalId: number;
+        accountCode: string;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        departmentId?: number | null | undefined;
+        deletedAt?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        projectId?: number | null | undefined;
+        exchangeRate?: string | null | undefined;
+        costCenter?: string | null | undefined;
+        contractId?: number | null | undefined;
+        originalCurrency?: string | null | undefined;
+        debit?: string | null | undefined;
+        credit?: string | null | undefined;
+        accountId?: number | null | undefined;
+        employeeId?: number | null | undefined;
+        vehicleId?: number | null | undefined;
+        propertyId?: number | null | undefined;
+        activityType?: string | null | undefined;
+        templateId?: number | null | undefined;
+        productId?: number | null | undefined;
+        vendorId?: number | null | undefined;
+        driverId?: number | null | undefined;
+        originalDebit?: string | null | undefined;
+        originalCredit?: string | null | undefined;
+        costCenterId?: number | null | undefined;
+        unitId?: number | null | undefined;
+        assetId?: number | null | undefined;
+        umrahSeasonId?: number | null | undefined;
+        umrahAgentId?: number | null | undefined;
+        sourceLineTable?: string | null | undefined;
+        sourceLineId?: number | null | undefined;
+        dimensionJson?: unknown;
+        accountName?: string | null | undefined;
+    }>, "many">;
+    reversalOf: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+    reversedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>>>;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+    companyId: number;
+    lines: {
+        id: number;
+        journalId: number;
+        accountCode: string;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        departmentId?: number | null | undefined;
+        deletedAt?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        projectId?: number | null | undefined;
+        exchangeRate?: string | null | undefined;
+        costCenter?: string | null | undefined;
+        contractId?: number | null | undefined;
+        originalCurrency?: string | null | undefined;
+        debit?: string | null | undefined;
+        credit?: string | null | undefined;
+        accountId?: number | null | undefined;
+        employeeId?: number | null | undefined;
+        vehicleId?: number | null | undefined;
+        propertyId?: number | null | undefined;
+        activityType?: string | null | undefined;
+        templateId?: number | null | undefined;
+        productId?: number | null | undefined;
+        vendorId?: number | null | undefined;
+        driverId?: number | null | undefined;
+        originalDebit?: string | null | undefined;
+        originalCredit?: string | null | undefined;
+        costCenterId?: number | null | undefined;
+        unitId?: number | null | undefined;
+        assetId?: number | null | undefined;
+        umrahSeasonId?: number | null | undefined;
+        umrahAgentId?: number | null | undefined;
+        sourceLineTable?: string | null | undefined;
+        sourceLineId?: number | null | undefined;
+        dimensionJson?: unknown;
+        accountName?: string | null | undefined;
+    }[];
+    status?: string | null | undefined;
+    type?: string | null | undefined;
+    date?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    departmentId?: number | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    isPaid?: boolean | null | undefined;
+    approvedBy?: number | null | undefined;
+    approvedAt?: string | null | undefined;
+    ref?: string | null | undefined;
+    description?: string | null | undefined;
+    dueDate?: string | null | undefined;
+    isTaxLinked?: boolean | null | undefined;
+    zatcaStatus?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    zatcaUuid?: string | null | undefined;
+    zatcaHash?: string | null | undefined;
+    zatcaQrCode?: string | null | undefined;
+    invoiceTypeCode?: string | null | undefined;
+    taxCategoryCode?: string | null | undefined;
+    exemptionReason?: string | null | undefined;
+    projectId?: number | null | undefined;
+    exchangeRate?: string | null | undefined;
+    costCenter?: string | null | undefined;
+    postedBy?: number | null | undefined;
+    postedAt?: string | null | undefined;
+    balancesApplied?: boolean | null | undefined;
+    sourceType?: string | null | undefined;
+    sourceId?: number | null | undefined;
+    relatedEntityType?: string | null | undefined;
+    relatedEntityId?: number | null | undefined;
+    paymentMethod?: string | null | undefined;
+    reference?: string | null | undefined;
+    attachmentUrl?: string | null | undefined;
+    attachmentType?: string | null | undefined;
+    expenseType?: string | null | undefined;
+    operationType?: string | null | undefined;
+    taxCategory?: string | null | undefined;
+    govIntegrationId?: number | null | undefined;
+    govSyncEnabled?: boolean | null | undefined;
+    govExternalRef?: string | null | undefined;
+    govEntityType?: string | null | undefined;
+    govEntityId?: number | null | undefined;
+    approvalStatus?: string | null | undefined;
+    isManual?: boolean | null | undefined;
+    reviewedBy?: number | null | undefined;
+    reviewedAt?: string | null | undefined;
+    approvalNotes?: string | null | undefined;
+    reversalOfId?: number | null | undefined;
+    reversedById?: number | null | undefined;
+    reversedAt?: string | null | undefined;
+    reversalReason?: string | null | undefined;
+    sourceKey?: string | null | undefined;
+    originalCurrency?: string | null | undefined;
+    originalAmount?: string | null | undefined;
+    documentStatus?: string | null | undefined;
+    paymentStatus?: string | null | undefined;
+    postingStatus?: string | null | undefined;
+    reversalOfRef?: string | null | undefined;
+    reversalOfDescription?: string | null | undefined;
+    reversedByRef?: string | null | undefined;
+    reversedByDescription?: string | null | undefined;
+    reversalOf?: Record<string, unknown> | null | undefined;
+    reversedBy?: Record<string, unknown> | null | undefined;
+}, {
+    id: number;
+    companyId: number;
+    lines: {
+        id: number;
+        journalId: number;
+        accountCode: string;
+        branchId?: number | null | undefined;
+        createdAt?: string | null | undefined;
+        departmentId?: number | null | undefined;
+        deletedAt?: string | null | undefined;
+        clientId?: number | null | undefined;
+        description?: string | null | undefined;
+        projectId?: number | null | undefined;
+        exchangeRate?: string | null | undefined;
+        costCenter?: string | null | undefined;
+        contractId?: number | null | undefined;
+        originalCurrency?: string | null | undefined;
+        debit?: string | null | undefined;
+        credit?: string | null | undefined;
+        accountId?: number | null | undefined;
+        employeeId?: number | null | undefined;
+        vehicleId?: number | null | undefined;
+        propertyId?: number | null | undefined;
+        activityType?: string | null | undefined;
+        templateId?: number | null | undefined;
+        productId?: number | null | undefined;
+        vendorId?: number | null | undefined;
+        driverId?: number | null | undefined;
+        originalDebit?: string | null | undefined;
+        originalCredit?: string | null | undefined;
+        costCenterId?: number | null | undefined;
+        unitId?: number | null | undefined;
+        assetId?: number | null | undefined;
+        umrahSeasonId?: number | null | undefined;
+        umrahAgentId?: number | null | undefined;
+        sourceLineTable?: string | null | undefined;
+        sourceLineId?: number | null | undefined;
+        dimensionJson?: unknown;
+        accountName?: string | null | undefined;
+    }[];
+    status?: string | null | undefined;
+    type?: string | null | undefined;
+    date?: string | null | undefined;
+    branchId?: number | null | undefined;
+    createdAt?: string | null | undefined;
+    departmentId?: number | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    isPaid?: boolean | null | undefined;
+    approvedBy?: number | null | undefined;
+    approvedAt?: string | null | undefined;
+    ref?: string | null | undefined;
+    description?: string | null | undefined;
+    dueDate?: string | null | undefined;
+    isTaxLinked?: boolean | null | undefined;
+    zatcaStatus?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    zatcaUuid?: string | null | undefined;
+    zatcaHash?: string | null | undefined;
+    zatcaQrCode?: string | null | undefined;
+    invoiceTypeCode?: string | null | undefined;
+    taxCategoryCode?: string | null | undefined;
+    exemptionReason?: string | null | undefined;
+    projectId?: number | null | undefined;
+    exchangeRate?: string | null | undefined;
+    costCenter?: string | null | undefined;
+    postedBy?: number | null | undefined;
+    postedAt?: string | null | undefined;
+    balancesApplied?: boolean | null | undefined;
+    sourceType?: string | null | undefined;
+    sourceId?: number | null | undefined;
+    relatedEntityType?: string | null | undefined;
+    relatedEntityId?: number | null | undefined;
+    paymentMethod?: string | null | undefined;
+    reference?: string | null | undefined;
+    attachmentUrl?: string | null | undefined;
+    attachmentType?: string | null | undefined;
+    expenseType?: string | null | undefined;
+    operationType?: string | null | undefined;
+    taxCategory?: string | null | undefined;
+    govIntegrationId?: number | null | undefined;
+    govSyncEnabled?: boolean | null | undefined;
+    govExternalRef?: string | null | undefined;
+    govEntityType?: string | null | undefined;
+    govEntityId?: number | null | undefined;
+    approvalStatus?: string | null | undefined;
+    isManual?: boolean | null | undefined;
+    reviewedBy?: number | null | undefined;
+    reviewedAt?: string | null | undefined;
+    approvalNotes?: string | null | undefined;
+    reversalOfId?: number | null | undefined;
+    reversedById?: number | null | undefined;
+    reversedAt?: string | null | undefined;
+    reversalReason?: string | null | undefined;
+    sourceKey?: string | null | undefined;
+    originalCurrency?: string | null | undefined;
+    originalAmount?: string | null | undefined;
+    documentStatus?: string | null | undefined;
+    paymentStatus?: string | null | undefined;
+    postingStatus?: string | null | undefined;
+    reversalOfRef?: string | null | undefined;
+    reversalOfDescription?: string | null | undefined;
+    reversedByRef?: string | null | undefined;
+    reversedByDescription?: string | null | undefined;
+    reversalOf?: Record<string, unknown> | null | undefined;
+    reversedBy?: Record<string, unknown> | null | undefined;
+}>;
+/**
+ * Detail-page payload: the full `umrah_sub_agents` row joined with
+the linked agent / client names, plus the statement aggregates
+the detail pane renders (pilgrim count, overstayed count, total
+paid, and a per-status breakdown dict).
+
+ * @summary Get a sub-agent by ID (full row + statement aggregates)
+ */
+export declare const GetUmrahSubAgentParams: zod.ZodObject<{
+    id: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+}, {
+    id: number;
+}>;
+export declare const GetUmrahSubAgentResponse: zod.ZodObject<{
+    id: zod.ZodNumber;
+    companyId: zod.ZodNumber;
+    branchId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    nuskCode: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    name: zod.ZodString;
+    agentId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    clientId: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    paymentTerms: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    defaultPricePerMutamer: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    phone: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    email: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    country: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    isActive: zod.ZodOptional<zod.ZodNullable<zod.ZodBoolean>>;
+    notes: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    createdBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    updatedBy: zod.ZodOptional<zod.ZodNullable<zod.ZodNumber>>;
+    createdAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    updatedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    deletedAt: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    agentName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    clientName: zod.ZodOptional<zod.ZodNullable<zod.ZodString>>;
+    pilgrimCount: zod.ZodNumber;
+    overstayedCount: zod.ZodNumber;
+    totalPaid: zod.ZodNumber;
+    statusBreakdown: zod.ZodRecord<zod.ZodString, zod.ZodUnknown>;
+}, "strip", zod.ZodTypeAny, {
+    id: number;
+    name: string;
+    companyId: number;
+    totalPaid: number;
+    pilgrimCount: number;
+    overstayedCount: number;
+    statusBreakdown: Record<string, unknown>;
+    email?: string | null | undefined;
+    phone?: string | null | undefined;
+    branchId?: number | null | undefined;
+    clientName?: string | null | undefined;
+    createdAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    clientId?: number | null | undefined;
+    paymentTerms?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    country?: string | null | undefined;
+    updatedBy?: number | null | undefined;
+    agentId?: number | null | undefined;
+    agentName?: string | null | undefined;
+    nuskCode?: string | null | undefined;
+    defaultPricePerMutamer?: string | null | undefined;
+    isActive?: boolean | null | undefined;
+}, {
+    id: number;
+    name: string;
+    companyId: number;
+    totalPaid: number;
+    pilgrimCount: number;
+    overstayedCount: number;
+    statusBreakdown: Record<string, unknown>;
+    email?: string | null | undefined;
+    phone?: string | null | undefined;
+    branchId?: number | null | undefined;
+    clientName?: string | null | undefined;
+    createdAt?: string | null | undefined;
+    notes?: string | null | undefined;
+    deletedAt?: string | null | undefined;
+    updatedAt?: string | null | undefined;
+    clientId?: number | null | undefined;
+    paymentTerms?: string | null | undefined;
+    createdBy?: number | null | undefined;
+    country?: string | null | undefined;
+    updatedBy?: number | null | undefined;
+    agentId?: number | null | undefined;
+    agentName?: string | null | undefined;
+    nuskCode?: string | null | undefined;
+    defaultPricePerMutamer?: string | null | undefined;
+    isActive?: boolean | null | undefined;
+}>;
+/**
+ * Running-balance ledger (opening balance, dated debit/credit
+entries for invoices + violations + payments, closing balance).
+Defaults to the detailed view; `?type=summary` collapses to a
+monthly roll-up. JSON peer of the printable
+`/umrah/statements/{subAgentId}/pdf`.
+
+ * @summary Sub-agent statement of account (JSON)
+ */
+export declare const UmrahSubAgentStatementParams: zod.ZodObject<{
+    subAgentId: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    subAgentId: number;
+}, {
+    subAgentId: number;
+}>;
+export declare const UmrahSubAgentStatementQueryParams: zod.ZodObject<{
+    type: zod.ZodOptional<zod.ZodEnum<["detailed", "summary"]>>;
+    from: zod.ZodOptional<zod.ZodDate>;
+    to: zod.ZodOptional<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    type?: "detailed" | "summary" | undefined;
+    from?: Date | undefined;
+    to?: Date | undefined;
+}, {
+    type?: "detailed" | "summary" | undefined;
+    from?: Date | undefined;
+    to?: Date | undefined;
+}>;
+export declare const UmrahSubAgentStatementResponse: zod.ZodObject<{
+    openingBalance: zod.ZodNumber;
+    closingBalance: zod.ZodNumber;
+    entries: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
+}, "strip", zod.ZodTypeAny, {
+    entries: Record<string, unknown>[];
+    openingBalance: number;
+    closingBalance: number;
+}, {
+    entries: Record<string, unknown>[];
+    openingBalance: number;
+    closingBalance: number;
+}>;
+/**
+ * Read-only diff across three dimensions:
+  1. amountDiffs — nuskInvoice.totalAmount vs posted JE total
+  2. countDiffs — nuskInvoice.mutamerCount vs actual pilgrims
+  3. overstayGaps — pilgrims with overstayDays>0 and no open
+     violation row
+
+ * @summary NUSK file ↔ system reconciliation
+ */
+export declare const UmrahReconciliationReportQueryParams: zod.ZodObject<{
+    seasonId: zod.ZodOptional<zod.ZodNumber>;
+}, "strip", zod.ZodTypeAny, {
+    seasonId?: number | undefined;
+}, {
+    seasonId?: number | undefined;
+}>;
+export declare const UmrahReconciliationReportResponse: zod.ZodObject<{
+    summary: zod.ZodOptional<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>>;
+    amountDiffs: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+    countDiffs: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+    overstayGaps: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    summary?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
+    amountDiffs?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    countDiffs?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    overstayGaps?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}, {
+    summary?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough"> | undefined;
+    amountDiffs?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    countDiffs?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    overstayGaps?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}>;
+/**
+ * Returns arrivals + departures for a given date plus everyone
+currently overstaying. Defaults to today (ISO yyyy-mm-dd).
+Companion PDF at `/umrah/reports/daily-runsheet/pdf`.
+
+ * @summary Daily operations run-sheet (JSON)
+ */
+export declare const UmrahDailyRunsheetQueryParams: zod.ZodObject<{
+    date: zod.ZodOptional<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    date?: Date | undefined;
+}, {
+    date?: Date | undefined;
+}>;
+export declare const UmrahDailyRunsheetResponse: zod.ZodObject<{
+    date: zod.ZodOptional<zod.ZodDate>;
+    arrivals: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+    departures: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+    overstays: zod.ZodOptional<zod.ZodArray<zod.ZodObject<{}, "passthrough", zod.ZodTypeAny, zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">, zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">>, "many">>;
+}, "strip", zod.ZodTypeAny, {
+    date?: Date | undefined;
+    arrivals?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    departures?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    overstays?: zod.objectOutputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}, {
+    date?: Date | undefined;
+    arrivals?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    departures?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+    overstays?: zod.objectInputType<{}, zod.ZodTypeAny, "passthrough">[] | undefined;
+}>;
+/**
+ * @summary Daily operations run-sheet (Arabic PDF)
+ */
+export declare const UmrahDailyRunsheetPdfQueryParams: zod.ZodObject<{
+    date: zod.ZodOptional<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    date?: Date | undefined;
+}, {
+    date?: Date | undefined;
+}>;
+/**
+ * Detailed running-balance ledger (invoices + violations + payments
+with opening + closing balance), rendered as a printable PDF for
+WhatsApp / email / hand delivery.
+
+ * @summary Sub-agent statement of account (Arabic PDF)
+ */
+export declare const UmrahSubAgentStatementPdfParams: zod.ZodObject<{
+    subAgentId: zod.ZodNumber;
+}, "strip", zod.ZodTypeAny, {
+    subAgentId: number;
+}, {
+    subAgentId: number;
+}>;
+export declare const UmrahSubAgentStatementPdfQueryParams: zod.ZodObject<{
+    from: zod.ZodOptional<zod.ZodDate>;
+    to: zod.ZodOptional<zod.ZodDate>;
+}, "strip", zod.ZodTypeAny, {
+    from?: Date | undefined;
+    to?: Date | undefined;
+}, {
+    from?: Date | undefined;
+    to?: Date | undefined;
+}>;
 //# sourceMappingURL=api.d.ts.map

@@ -581,6 +581,49 @@ router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounti
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTO-CREATE SUBSIDIARY ACCOUNTS FOR A NEW ENTITY
 // ─────────────────────────────────────────────────────────────────────────────
+// #1945 FIN-003 — intent describing the CONTROL parent each per-entity
+// subsidiary account hangs under. The literal `parentCode` is a last-resort
+// fallback ONLY: the historical literals (client→1111, employee advance→1121,
+// custody→1131, vendor→2102) matched neither the default-seed chart nor the
+// SOCPA chart — both actually use 1130 (AR), 2110 (AP), 1140/1141/1142
+// (staff advances/custody). The old codes pointed client receivables at
+// 1111 (الصندوق — cash!), employee advances at 1121 (a bank), and custody at
+// 1131 (clients), so every per-entity account was minted under the WRONG
+// parent and any posting through it overstated cash / mislabelled balances.
+// Resolution now goes by intent (type + name keywords) and only falls back to
+// the literal when no chart account matches — so it is correct on any tenant
+// chart, exactly like the operation-account intent search in businessHelpers.
+type ParentIntent = { type: string; keywords: string[] };
+interface SubsidiaryAccountSpec { accountType: string; parentCode: string; suffix: string; parentIntent: ParentIntent }
+
+/**
+ * Resolve the control parent account for a per-entity subsidiary account.
+ * Intent (type + keyword match, shallowest code wins → the control header)
+ * first; the literal fallbackCode only if intent finds nothing. Returns the
+ * resolved { id, code } or null when neither path matches (caller skips).
+ */
+async function resolveSubsidiaryParent(
+  client: { query: (sql: string, params: unknown[]) => Promise<{ rows: Array<{ id: number; code: string }> }> },
+  companyId: number,
+  intent: ParentIntent,
+  fallbackCode: string,
+): Promise<{ id: number; code: string } | null> {
+  const likeClauses = intent.keywords.map((_, i) => `name LIKE $${i + 3}`).join(" OR ");
+  const params = [companyId, intent.type, ...intent.keywords.map((k) => `%${k}%`)];
+  const byIntent = await client.query(
+    `SELECT id, code FROM chart_of_accounts
+      WHERE "companyId" = $1 AND type = $2 AND "deletedAt" IS NULL AND (${likeClauses})
+      ORDER BY length(code) ASC, code ASC LIMIT 1`,
+    params,
+  );
+  if (byIntent.rows[0]) return byIntent.rows[0];
+  const byCode = await client.query(
+    `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
+    [companyId, fallbackCode],
+  );
+  return byCode.rows[0] ?? null;
+}
+
 export async function createSubsidiaryAccountsForEntity(
   companyId: number,
   entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property" | "umrah_agent",
@@ -588,20 +631,20 @@ export async function createSubsidiaryAccountsForEntity(
   entityName: string
 ): Promise<void> {
   try {
-    const accountsToCreate: Array<{ accountType: string; parentCode: string; suffix: string }> = [];
+    const accountsToCreate: SubsidiaryAccountSpec[] = [];
 
     if (entityType === "employee") {
       accountsToCreate.push(
-        { accountType: "advance", parentCode: "1121", suffix: "سلفة" },
-        { accountType: "custody", parentCode: "1131", suffix: "عهدة" }
+        { accountType: "advance", parentCode: "1140", suffix: "سلفة", parentIntent: { type: "asset", keywords: ["سلف الموظف", "سلف"] } },
+        { accountType: "custody", parentCode: "1142", suffix: "عهدة", parentIntent: { type: "asset", keywords: ["عهد مالية للموظف"] } }
       );
     } else if (entityType === "client") {
       accountsToCreate.push(
-        { accountType: "receivable", parentCode: "1111", suffix: "ذمم" }
+        { accountType: "receivable", parentCode: "1130", suffix: "ذمم", parentIntent: { type: "asset", keywords: ["الذمم المدينة", "العملاء"] } }
       );
     } else if (entityType === "vendor") {
       accountsToCreate.push(
-        { accountType: "payable", parentCode: "2102", suffix: "ذمة" }
+        { accountType: "payable", parentCode: "2110", suffix: "ذمة", parentIntent: { type: "liability", keywords: ["الذمم الدائنة", "الموردون"] } }
       );
     } else if (entityType === "driver") {
       // Drivers receive cash advances for fuel + on-the-road
@@ -610,7 +653,7 @@ export async function createSubsidiaryAccountsForEntity(
       // managers can report per-driver outstanding cash without
       // pulling employee_assignments joins.
       accountsToCreate.push(
-        { accountType: "custody", parentCode: "1131", suffix: "عهدة سائق" }
+        { accountType: "custody", parentCode: "1113", suffix: "عهدة سائق", parentIntent: { type: "asset", keywords: ["العهد النقدية", "عهد"] } }
       );
     } else if (entityType === "vehicle") {
       // Per-vehicle subsidiary accounts (#1594 — "نظام قوي قابل للتحكم"):
@@ -619,15 +662,11 @@ export async function createSubsidiaryAccountsForEntity(
       // to the parent for consolidated reporting. Editable later from the
       // vehicle page via /finance/subsidiary-accounts. Parents that don't
       // exist in a minimal COA are skipped gracefully (the loop `continue`s).
-      //   custody  → 1131 (fuel cards / tolls / deposits held on the plate)
-      //   fuel     → 5510 (الوقود)
-      //   maintenance → 5520 (صيانة وإصلاح المركبات)
-      //   depreciation → 5710 (إهلاك المركبات)
       accountsToCreate.push(
-        { accountType: "custody", parentCode: "1113", suffix: "عهدة مركبة" },
-        { accountType: "fuel", parentCode: "5510", suffix: "وقود" },
-        { accountType: "maintenance", parentCode: "5520", suffix: "صيانة" },
-        { accountType: "depreciation", parentCode: "5710", suffix: "إهلاك" }
+        { accountType: "custody", parentCode: "1113", suffix: "عهدة مركبة", parentIntent: { type: "asset", keywords: ["العهد النقدية"] } },
+        { accountType: "fuel", parentCode: "5510", suffix: "وقود", parentIntent: { type: "expense", keywords: ["الوقود", "وقود"] } },
+        { accountType: "maintenance", parentCode: "5520", suffix: "صيانة", parentIntent: { type: "expense", keywords: ["صيانة وإصلاح المركبات", "صيانة"] } },
+        { accountType: "depreciation", parentCode: "5710", suffix: "إهلاك", parentIntent: { type: "expense", keywords: ["إهلاك المركبات", "إهلاك"] } }
       );
     } else if (entityType === "umrah_agent") {
       // Per-agent revenue routing (#1594): each umrah agent gets its own
@@ -637,19 +676,16 @@ export async function createSubsidiaryAccountsForEntity(
       // umrah_agent → accountType='revenue' subsidiary lookup. Editable
       // later from /finance/subsidiary-accounts.
       accountsToCreate.push(
-        { accountType: "revenue", parentCode: "4130", suffix: "إيراد عمرة" }
+        { accountType: "revenue", parentCode: "4130", suffix: "إيراد عمرة", parentIntent: { type: "revenue", keywords: ["إيرادات الخدمات", "عمرة"] } }
       );
     }
 
     await withTransaction(async (client) => {
       for (const acc of accountsToCreate) {
-        const { rows: [parentAccount] } = await client.query(
-          `SELECT id, code FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
-          [companyId, acc.parentCode]
-        );
+        const parentAccount = await resolveSubsidiaryParent(client as any, companyId, acc.parentIntent, acc.parentCode);
         if (!parentAccount) continue;
 
-        const newCode = `${acc.parentCode}-${String(entityId).padStart(4, "0")}`;
+        const newCode = `${parentAccount.code}-${String(entityId).padStart(4, "0")}`;
         const { rows: [existingAcc] } = await client.query(
           `SELECT id FROM chart_of_accounts WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL`,
           [companyId, newCode]
