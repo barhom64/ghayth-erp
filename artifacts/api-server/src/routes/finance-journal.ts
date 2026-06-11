@@ -357,7 +357,15 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 2 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status + isPaid (both KEPT, nothing removed). The axes are maintained
+      // by the migration-311 trigger, and postingStatus derives from the
+      // ACTUAL posting (balancesApplied), so a directly-posted expense that
+      // still carries status='draft' (balancesApplied=true) reads truthfully
+      // as postingStatus='posted' here — where status alone would mislabel it.
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
               je."paymentMethod", je.reference, je."isPaid", je."attachmentUrl", je."attachmentType",
               je."expenseType", je."operationType",
@@ -380,6 +388,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
+                je."documentStatus", je."paymentStatus", je."postingStatus",
                 je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
                 je."paymentMethod", je.reference, je."isPaid", je."attachmentUrl", je."attachmentType",
                 je."expenseType", je."operationType",
