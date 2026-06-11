@@ -175,6 +175,26 @@ const createCustomerAdvanceSchema = z.object({
   lineAllocation: z.record(z.string(), z.any()).optional(),
 });
 
+// #1945 FIN-03 — customer receipt wizard. GL accounts are NOT accepted from
+// the client; the service resolves them through the accounting engine.
+const createCustomerReceiptSchema = z.object({
+  clientId: z.coerce.number({ required_error: "العميل مطلوب" }),
+  amount: z.coerce.number().positive("المبلغ مطلوب"),
+  method: z.enum(["cash", "bank", "transfer", "check", "bank_transfer"]).default("bank"),
+  // Caller-stable idempotency key (UUID generated once per wizard session) —
+  // a network retry must not double-apply the invoice payments.
+  receiptKey: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, "receiptKey غير صالح"),
+  date: z.string().optional(),
+  reference: z.string().max(120).optional(),
+  notes: z.string().max(2000).optional(),
+  applications: z.array(z.object({
+    invoiceId: z.coerce.number().int().positive(),
+    amount: z.coerce.number().positive(),
+  })).max(200).default([]),
+  branchId: z.coerce.number().optional(),
+  lineAllocation: z.record(z.string(), z.any()).optional(),
+});
+
 const impactPreviewSchema = z.object({
   clientId: z.coerce.number().optional(),
   lines: z.array(z.any()).optional(),
@@ -1024,6 +1044,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         validateAllocationCompleteness,
         getEnforceLineAllocation,
         logAllocationOverride,
+        getProductRevenueCodes,
       } = await import("../lib/accountingAllocation.js");
       const lineResolutions = await Promise.all(
         dimLines.rows.map((ln) =>
@@ -1105,6 +1126,18 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
       const revenueLines: JournalEntryLine[] = [];
 
+      // #1945 item 6 — خريطة إيراد المنتج: lines the resolver left without an
+      // account (no manual pin, no rule) consult the PRODUCT's mapped revenue
+      // account (products.defaultRevenueAccountId) before the generic
+      // company-level invoice_revenue — each product line lands on ITS
+      // revenue account, carrying its productId dim.
+      const productRevenueCodes = await getProductRevenueCodes(
+        scope.companyId,
+        dimLines.rows
+          .filter((ln, i) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
+          .map((ln) => Number(ln.productId)),
+      );
+
       if (dimLines.rows.length > 0) {
         // Group lines that share the SAME revenue account + dimension
         // signature into one journal_line, so the GL stays compact
@@ -1131,12 +1164,14 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           const ln = dimLines.rows[i];
           const res = lineResolutions[i];
           // Resolver picked an account (rule match or manual override);
-          // unmapped lines fall back to the generic invoice_revenue
-          // mapping so the entry still posts. The dimensions used in
-          // the bucket key come from the RESOLVER OUTPUT — for an
-          // 'explicit' or 'from_vehicle' strategy that may differ
-          // from the raw line.
-          const acct = res.resolvedAccountCode || invRevenueCode;
+          // unmapped lines try the PRODUCT's mapped revenue account
+          // (#1945 item 6) before the generic invoice_revenue mapping so
+          // the entry still posts. The dimensions used in the bucket key
+          // come from the RESOLVER OUTPUT — for an 'explicit' or
+          // 'from_vehicle' strategy that may differ from the raw line.
+          const acct = res.resolvedAccountCode
+            || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
+            || invRevenueCode;
           const dims = res.dimensions;
           const cc = res.costCenterId;
           const key = [
@@ -1547,7 +1582,7 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     // raw line's accountCode. A line with no accountCode but a matching
     // rule shows as "resolved" with the rule's chosen account in the
     // preview, matching exactly what /approve would post.
-    const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+    const { resolveLineAllocation, getProductRevenueCodes } = await import("../lib/accountingAllocation.js");
     const lineResolutions = await Promise.all(
       lines.map((ln) =>
         resolveLineAllocation({
@@ -1601,6 +1636,14 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     const unmappedLineIds: number[] = [];
     // Aggregate resolver warnings so the operator sees them in the preview.
     const resolverWarnings: Array<{ lineId: number; code: string; message: string }> = [];
+    // #1945 item 6 — same product-revenue-map fallback as /approve, so the
+    // preview shows the product's mapped revenue account, not the generic.
+    const productRevenueCodes = await getProductRevenueCodes(
+      scope.companyId,
+      lines
+        .filter((ln: any, i: number) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
+        .map((ln: any) => Number(ln.productId)),
+    );
     if (lines.length > 0) {
       const buckets = new Map<string, PreviewLine & { _amount: number }>();
       let postedNet = 0;
@@ -1610,7 +1653,9 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
 
         // Resolver output drives the bucket — same as /approve so the
         // preview shows exactly what would post.
-        const acct = res.resolvedAccountCode || invRevenueCode;
+        const acct = res.resolvedAccountCode
+          || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
+          || invRevenueCode;
         const cc = res.costCenterId;
         const dims = res.dimensions;
         if (res.status === "unmapped") unmappedLineIds.push(ln.id);
@@ -4111,6 +4156,78 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Customer advance create error:");
+  }
+});
+
+// #1945 FIN-03 — customer receipt wizard (سند قبض). Replaces the old flow
+// where the BROWSER built raw GL lines with hardcoded accounts (1200/1220/
+// 2110 — a non-postable header, the furniture account, and the vendors
+// header on a SOCPA tree) and POSTed them to /finance/journal without ever
+// updating the invoices. All account resolution + invoice application +
+// leftover-advance + the single balanced JE live in customerReceiptService,
+// routed through the accounting engine.
+invoicesRouter.post("/customer-receipts", authorize({ feature: "finance.invoices", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(createCustomerReceiptSchema.safeParse(req.body));
+
+    // Branch resolution — same policy as POST /customer-advances.
+    let receiptBranchId: number;
+    if (scope.isOwner || OWNER_GM_ROLES.includes(scope.role)) {
+      receiptBranchId = (body.branchId ?? scope.branchId) as number;
+      if (!receiptBranchId) throw new ValidationError("الفرع مطلوب لتسجيل سند قبض", { field: "branchId" });
+    } else {
+      const r = resolveTransactionBranch({
+        scope: { companyId: scope.companyId, branchId: scope.branchId, allowedBranches: scope.allowedBranches },
+        bodyBranchId: body.branchId,
+      });
+      receiptBranchId = r.branchId;
+    }
+
+    // #1715 §6 — whitelist the operation-context dims for the cash line.
+    const dims: Record<string, number | string> = {};
+    if (body.lineAllocation) {
+      for (const k of ["costCenterId", "projectId", "departmentId", "vehicleId", "propertyId", "unitId", "contractId", "assetId", "driverId", "vendorId", "umrahAgentId", "umrahSeasonId"] as const) {
+        const v = (body.lineAllocation as Record<string, unknown>)[k];
+        if (v != null && v !== "") dims[k] = Number(v);
+      }
+      const at = (body.lineAllocation as Record<string, unknown>).activityType;
+      if (typeof at === "string" && at) dims.activityType = at;
+    }
+
+    const { postCustomerReceipt } = await import("../lib/customerReceiptService.js");
+    const result = await postCustomerReceipt({
+      companyId: scope.companyId,
+      branchId: receiptBranchId,
+      createdBy: scope.activeAssignmentId,
+      clientId: body.clientId,
+      amount: body.amount,
+      method: body.method === "bank" || body.method === "transfer" ? "bank_transfer" : body.method,
+      receiptKey: body.receiptKey,
+      receivedDate: body.date,
+      reference: body.reference ?? null,
+      notes: body.notes ?? null,
+      applications: body.applications,
+      dims,
+      // An applied invoice may live on another branch — the receipt clears
+      // ITS receivable, so the operator must have access to that branch.
+      assertBranchAccess: (documentBranchId) => assertDocumentBranchAccess(documentBranchId, {
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        allowedBranches: (scope as any).allowedBranches,
+      }),
+    });
+    markIdempotencyReplay(req, res, result.alreadyExists);
+
+    emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.payment.received", entity: "journal_entries", entityId: result.journalId,
+      details: JSON.stringify({ voucherId: result.journalId, clientId: body.clientId, amount: body.amount, applied: result.applied.length, leftover: result.leftover }),
+    }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+
+    res.status(201).json(result);
+  } catch (err) {
+    handleRouteError(err, res, "Customer receipt error:");
   }
 });
 
