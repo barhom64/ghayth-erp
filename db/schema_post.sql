@@ -434,6 +434,20 @@ ALTER TABLE ONLY public.contract_payment_schedule ALTER COLUMN id SET DEFAULT ne
 
 
 --
+-- Name: conversation_links id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_links ALTER COLUMN id SET DEFAULT nextval('public.conversation_links_id_seq'::regclass);
+
+
+--
+-- Name: conversations id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversations ALTER COLUMN id SET DEFAULT nextval('public.conversations_id_seq'::regclass);
+
+
+--
 -- Name: correspondence id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -3540,6 +3554,22 @@ ALTER TABLE ONLY public.construction_in_progress
 
 ALTER TABLE ONLY public.contract_payment_schedule
     ADD CONSTRAINT contract_payment_schedule_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conversation_links conversation_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_links
+    ADD CONSTRAINT conversation_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conversations conversations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversations
+    ADD CONSTRAINT conversations_pkey PRIMARY KEY (id);
 
 
 --
@@ -8395,6 +8425,48 @@ CREATE INDEX idx_communications_log_deletedat ON public.communications_log USING
 --
 
 CREATE INDEX idx_communications_log_starred ON public.communications_log USING btree ("companyId", "createdAt" DESC) WHERE (("isStarred" = true) AND ("deletedAt" IS NULL));
+
+
+--
+-- Name: idx_conversation_links_entity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conversation_links_entity ON public.conversation_links USING btree ("companyId", "relatedType", "relatedId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_conversations_assigned; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conversations_assigned ON public.conversations USING btree ("companyId", "assignedTo") WHERE (("deletedAt" IS NULL) AND ("assignedTo" IS NOT NULL));
+
+
+--
+-- Name: idx_conversations_company_last; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_conversations_company_last ON public.conversations USING btree ("companyId", "lastMessageAt" DESC) WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: uq_conversation_links_target; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_conversation_links_target ON public.conversation_links USING btree ("conversationId", "relatedType", "relatedId") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: uq_conversations_company_channel_peer; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_conversations_company_channel_peer ON public.conversations USING btree ("companyId", "channelPrimary", "participantAddress") WHERE ("deletedAt" IS NULL);
+
+
+--
+-- Name: idx_message_log_conversation; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_message_log_conversation ON public.message_log USING btree ("conversationId") WHERE ("conversationId" IS NOT NULL);
 
 
 --
@@ -14518,6 +14590,14 @@ ALTER TABLE ONLY public.contract_payment_schedule
 
 ALTER TABLE ONLY public.contract_payment_schedule
     ADD CONSTRAINT "contract_payment_schedule_contractId_fkey" FOREIGN KEY ("contractId") REFERENCES public.rental_contracts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conversation_links conversation_links_conversationId_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conversation_links
+    ADD CONSTRAINT "conversation_links_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES public.conversations(id);
 
 
 --

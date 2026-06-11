@@ -241,8 +241,10 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +2 total/helperUsers: routes/warehouse-cycle-counts.ts and
       // routes/warehouse-advanced.ts both ship with buildScopedWhere
       // adopted from day one (company-level list cascades).
-      total: 117,
-      helperUsers: 38,
+      // +1 total/helperUsers: routes/inboxConversations.ts (#2138)
+      // ships with buildScopedWhere adopted from day one.
+      total: 118,
+      helperUsers: 39,
       manualOnly: 76,
     });
   });
