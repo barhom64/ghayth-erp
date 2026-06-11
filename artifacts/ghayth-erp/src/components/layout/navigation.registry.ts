@@ -454,7 +454,10 @@ export const allNavSections: NavSection[] = [
         { label: "قائمة المشاريع", path: "/projects?tab=list", icon: Target },
         { label: "مخطط غانت", path: "/projects/gantt", icon: BarChart2 },
         { label: "المخاطر", path: "/projects/risks", icon: ShieldAlert },
-        { label: "مهام المشاريع", path: "/projects/tasks", icon: ListTodo },
+        // "مهام المشاريع" → /projects/tasks removed: it rendered the GENERAL
+        // operations Tasks page (the `tasks` table), mislabelling operations work
+        // as project tasks. Per-project tasks (project_tasks) live in the project
+        // detail page; general operations tasks live at /tasks (below).
         { label: "المهام", path: "/tasks", icon: ListTodo },
       ]},
     ],

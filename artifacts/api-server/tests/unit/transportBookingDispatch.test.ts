@@ -137,9 +137,12 @@ describe("#1733 Booking + Dispatch — route surface", () => {
 
   it("router is mounted under /api with module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("transportBookingsRouter");
-    expect(ROUTES_INDEX).toMatch(
-      /router\.use\(\s*requireModule\("fleet"\),\s*requireGuards\("financial"\),\s*transportBookingsRouter\)/,
-    );
+    // #1959: gated by the path-conditional fleet+financial transportPathGate (a
+    // path-less requireModule used to globally lock non-admins out of all later
+    // modules). The router mounts path-less; the gate runs only for /transport+/fleet.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 });
 

@@ -24,9 +24,21 @@ export const MUTAMER_HEADER_MAP: Record<string, string> = {
   "رقم المجموعة": "nuskGroupNumber",
   "اسم المجموعة": "groupName",
   "رقم الوكيل": "nuskAgentNumber",
+  "رقم الوكيل الرئيسي": "nuskAgentNumber",
+  "كود الوكيل": "nuskAgentNumber",
+  "رمز الوكيل": "nuskAgentNumber",
   "اسم الوكيل": "agentName",
+  "الوكيل": "agentName",
+  "الوكيل الرئيسي": "agentName",
+  "اسم الوكيل الرئيسي": "agentName",
   "رمز المكتب": "nuskCode",
+  "كود المكتب": "nuskCode",
+  "رمز الوكيل الفرعي": "nuskCode",
+  "كود الوكيل الفرعي": "nuskCode",
   "اسم المكتب": "subAgentName",
+  "المكتب": "subAgentName",
+  "الوكيل الفرعي": "subAgentName",
+  "اسم الوكيل الفرعي": "subAgentName",
   "الحالة": "status",
   "تاريخ الدخول": "entryDate",
   "تاريخ الخروج": "exitDate",
@@ -50,6 +62,11 @@ export const VOUCHER_HEADER_MAP: Record<string, string> = {
   "رقم المجموعة": "nuskGroupNumber",
   "اسم المجموعة": "groupName",
   "عدد المعتمرين": "mutamerCount",
+  "إجمالي المعتمرين": "mutamerCount",
+  "اجمالي المعتمرين": "mutamerCount",
+  "عدد المعتمرين في الفاتورة": "mutamerCount",
+  "عدد الحجاج": "mutamerCount",
+  "العدد": "mutamerCount",
   "خدمات أرضية": "groundServices",
   "رسوم إلكترونية": "electronicFees",
   "رسوم التأشيرة": "visaFees",
@@ -68,9 +85,21 @@ export const VOUCHER_HEADER_MAP: Record<string, string> = {
   "تاريخ الانتهاء": "expiryDate",
   "مدة البرنامج": "programDuration",
   "رقم الوكيل": "nuskAgentNumber",
+  "رقم الوكيل الرئيسي": "nuskAgentNumber",
+  "كود الوكيل": "nuskAgentNumber",
+  "رمز الوكيل": "nuskAgentNumber",
   "اسم الوكيل": "agentName",
+  "الوكيل": "agentName",
+  "الوكيل الرئيسي": "agentName",
+  "اسم الوكيل الرئيسي": "agentName",
   "رمز المكتب": "nuskCode",
+  "كود المكتب": "nuskCode",
+  "رمز الوكيل الفرعي": "nuskCode",
+  "كود الوكيل الفرعي": "nuskCode",
   "اسم المكتب": "subAgentName",
+  "المكتب": "subAgentName",
+  "الوكيل الفرعي": "subAgentName",
+  "اسم الوكيل الفرعي": "subAgentName",
 };
 
 // ---------------------------------------------------------------------------
@@ -303,6 +332,19 @@ function normaliseHeader(s: string): string {
 }
 
 /**
+ * Folded header key for tolerant matching in `normalizeImportRows`. Same
+ * Arabic folds as `normaliseHeader` (hamza / alif-maksura / ta-marbuta /
+ * tatweel / whitespace / case) plus quote-stripping. Lets a vendor file
+ * whose column is written "الوكيل الرئيسي" / "إجمالى المعتمرين" still
+ * resolve against the dictionary even though the exact (trim-only) key
+ * differs — the silent-drop that left agentId/subAgentId NULL and
+ * mutamerCount 0 on import.
+ */
+function foldHeaderKey(s: string): string {
+  return normaliseHeader(s).replace(/["']/g, "");
+}
+
+/**
  * Classic 2-row Levenshtein distance — O(n×m) time, O(min(n,m)) space.
  * Iterative bottom-up DP; no recursion to keep the call stack flat
  * when the wizard suggests for 30+ headers at once.
@@ -401,12 +443,20 @@ export function normalizeImportRows(
   customMapping?: Record<string, string>,
 ): ParsedRow[] {
   const builtin = fileType === "vouchers" ? VOUCHER_HEADER_MAP : MUTAMER_HEADER_MAP;
-  // Build a fast lookup whose keys are trimmed (Excel files often pad
-  // headers with whitespace). Trim once here, then match against
-  // pre-trimmed runtime keys below.
+  // Build two lookups per source: a trim-only exact map (Excel files often
+  // pad headers with whitespace) AND an Arabic-folded map (hamza /
+  // ta-marbuta / alif-maksura / tatweel / case variants). The folded layer
+  // is what lets "الوكيل الرئيسي" / "إجمالى المعتمرين" resolve against the
+  // dictionary's canonical key — without it those columns silently dropped,
+  // landing agentId/subAgentId NULL and mutamerCount 0 on import.
   const trimmedBuiltin: Record<string, string> = {};
-  for (const [k, v] of Object.entries(builtin)) trimmedBuiltin[k.trim()] = v;
+  const foldedBuiltin: Record<string, string> = {};
+  for (const [k, v] of Object.entries(builtin)) {
+    trimmedBuiltin[k.trim()] = v;
+    foldedBuiltin[foldHeaderKey(k)] = v;
+  }
   const trimmedCustom: Record<string, string> = {};
+  const foldedCustom: Record<string, string> = {};
   if (customMapping) {
     for (const [k, v] of Object.entries(customMapping)) {
       const trimmedKey = k.trim();
@@ -415,6 +465,7 @@ export function normalizeImportRows(
       // built-in lookup or be dropped.
       if (trimmedKey && typeof v === "string" && v.trim()) {
         trimmedCustom[trimmedKey] = v.trim();
+        foldedCustom[foldHeaderKey(k)] = v.trim();
       }
     }
   }
@@ -423,9 +474,13 @@ export function normalizeImportRows(
     const out: ParsedRow = {};
     for (const [origKey, val] of Object.entries(raw)) {
       const key = origKey.trim();
-      // Custom mapping takes priority over built-in. If neither knows
-      // the key, drop it — see the function-level comment.
-      const target = trimmedCustom[key] ?? trimmedBuiltin[key];
+      const folded = foldHeaderKey(origKey);
+      // Resolution order: custom-exact → custom-folded → builtin-exact →
+      // builtin-folded. Custom (operator) mapping always beats built-in;
+      // exact always beats folded. If nothing knows the key, drop it.
+      const target =
+        trimmedCustom[key] ?? foldedCustom[folded] ??
+        trimmedBuiltin[key] ?? foldedBuiltin[folded];
       if (!target) continue;
       // Engine fields use camelCase strings/numbers; we coerce non-null
       // values to string to match the ParsedRow value shape (the engine

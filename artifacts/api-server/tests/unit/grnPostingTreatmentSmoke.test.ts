@@ -23,7 +23,7 @@ describe("TREATMENT_PURPOSE map", () => {
   for (const t of TREATMENTS) {
     it(`maps treatment '${t}'`, () => {
       // Find the treatment key inside TREATMENT_PURPOSE
-      const idx = ROUTE.indexOf("const TREATMENT_PURPOSE");
+      const idx = ROUTE.indexOf("const GRN_TREATMENT_PURPOSE");
       const end = ROUTE.indexOf("};", idx);
       const block = ROUTE.slice(idx, end);
       expect(block).toContain(`${t}:`);
@@ -31,7 +31,7 @@ describe("TREATMENT_PURPOSE map", () => {
   }
 
   it("each treatment has purpose + side + defaultCode", () => {
-    const idx = ROUTE.indexOf("const TREATMENT_PURPOSE");
+    const idx = ROUTE.indexOf("const GRN_TREATMENT_PURPOSE");
     const end = ROUTE.indexOf("};", idx);
     const block = ROUTE.slice(idx, end);
     for (const purpose of [
@@ -92,7 +92,7 @@ describe("per-treatment bucket grouping", () => {
 
   it("treatment with no mapping falls back to default inventory account", () => {
     expect(ROUTE).toContain("defaultInvAccount");
-    expect(ROUTE).toContain('"inventory_receipt", "debit", "1250"');
+    expect(ROUTE).toContain('"inventory_receipt", "debit", "1150"');
   });
 });
 
