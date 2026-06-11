@@ -29,6 +29,7 @@ import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
+import { resolveSettings } from "../lib/settings.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 import {
   confirmMutamersImport,
@@ -129,6 +130,21 @@ const AGENT_INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
 };
 
 const router = Router();
+
+// U-02b M3 of #2080 — gate for the legacy umrah_transport write path.
+// Reads the boolean catalog flag added in M2
+// (umrahSettingsPoliciesCatalog.ts → financial.legacyTransportWritesDisabled).
+// Default value in the catalog is false → unchanged behaviour for every
+// company that hasn't explicitly enabled the gate. When a company flips
+// the flag to true in `settings`, POST /transport and PATCH /transport/:id
+// return 410 + a hint pointing operators at the unified contract endpoint
+// (POST /umrah/groups/:id/transport-requests). Other handlers (GET,
+// DELETE, manifest, check-in, check-in-bulk) stay live so historic rows
+// remain inspectable/closable while the legacy write surface freezes.
+async function isLegacyTransportWritesDisabled(companyId: number): Promise<boolean> {
+  const raw = await resolveSettings("umrah.financial.legacyTransportWritesDisabled", companyId);
+  return raw === true || raw === "true";
+}
 
 const createSeasonSchema = z.object({
   title: z.string().min(1, "اسم الموسم مطلوب"),
@@ -2449,6 +2465,13 @@ router.delete("/transport/:id", authorize({ feature: "umrah", action: "delete" }
 router.post("/transport", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    if (await isLegacyTransportWritesDisabled(scope.companyId)) {
+      res.status(410).json({
+        error: "المسار القديم لإنشاء النقل معطّل لهذه الشركة",
+        hint: "استخدم العقد الموحّد: POST /umrah/groups/:id/transport-requests",
+      });
+      return;
+    }
     const b = zodParse(createTransportSchema.safeParse(req.body));
     if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.vehicleId) {
@@ -2544,6 +2567,13 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
 router.patch("/transport/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    if (await isLegacyTransportWritesDisabled(scope.companyId)) {
+      res.status(410).json({
+        error: "المسار القديم لتعديل النقل معطّل لهذه الشركة",
+        hint: "استخدم العقد الموحّد: POST /umrah/groups/:id/transport-requests",
+      });
+      return;
+    }
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchTransportSchema.safeParse(req.body));
     if (b.vehicleId) {
@@ -3366,6 +3396,24 @@ const umrahSettingsPatchSchema = z.object({
   umrahOverstayDailyPenalty: nullableNumberPreproc,
   umrahOverstayTierDays: nullableNumberPreproc,
   umrahOverstayTierAmount: nullableNumberPreproc,
+  // §8 of #1870 — operator-facing knobs for the §6/§5 finance hygiene
+  // PRs. Stored as system_settings rows keyed per company; null clears
+  // back to the engine's default.
+  //   umrahVatRate    — standard rate the engine multiplies the margin by (0-100).
+  //   umrahVatMode    — 'inclusive' (default, KSA margin scheme extracts the VAT)
+  //                     or 'exclusive' (legacy add-on-top).
+  //   commissionViaHr — 'true' (default) routes commission CR to salary_payable
+  //                     so HR's payroll JE clears one payable; 'false' keeps the
+  //                     legacy commission_payable account.
+  umrahVatRate: nullableNumberPreproc,
+  umrahVatMode: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.enum(["inclusive", "exclusive"]).nullable().optional(),
+  ),
+  commissionViaHr: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.boolean().nullable().optional(),
+  ),
 });
 
 router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
@@ -3412,7 +3460,10 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
       `SELECT key, value FROM system_settings
         WHERE key IN ('umrah.overstay_daily_penalty',
                       'umrah.overstay_tier_days',
-                      'umrah.overstay_tier_amount')
+                      'umrah.overstay_tier_amount',
+                      'umrah_vat_rate',
+                      'umrah_vat_mode',
+                      'commission_via_hr')
           AND ( ("companyId" IS NULL AND "branchId" IS NULL)
                 OR ("companyId" = $1 AND "branchId" IS NULL) )
         ORDER BY "companyId" NULLS FIRST`,
@@ -3426,7 +3477,26 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
       "umrah.overstay_tier_days": null,
       "umrah.overstay_tier_amount": null,
     };
+    // §8 of #1870 — the 3 finance-hygiene knobs. VAT rate is numeric,
+    // mode is a string enum, commission_via_hr is a boolean string.
+    // The engine defaults stay in effect if the setting is unread.
+    let umrahVatRate: number | null = null;
+    let umrahVatMode: string | null = null;
+    let commissionViaHr: boolean | null = null;
     for (const r of penaltyRows) {
+      if (r.key === "umrah_vat_rate") {
+        const v = Number(r.value);
+        umrahVatRate = Number.isFinite(v) ? v : null;
+        continue;
+      }
+      if (r.key === "umrah_vat_mode") {
+        umrahVatMode = r.value === "exclusive" ? "exclusive" : "inclusive";
+        continue;
+      }
+      if (r.key === "commission_via_hr") {
+        commissionViaHr = r.value !== "false";
+        continue;
+      }
       const v = Number(r.value);
       penaltyByKey[r.key] = Number.isFinite(v) ? v : null;
     }
@@ -3441,6 +3511,9 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
       umrahOverstayDailyPenalty: penaltyByKey["umrah.overstay_daily_penalty"],
       umrahOverstayTierDays: penaltyByKey["umrah.overstay_tier_days"],
       umrahOverstayTierAmount: penaltyByKey["umrah.overstay_tier_amount"],
+      umrahVatRate,
+      umrahVatMode,
+      commissionViaHr,
     });
   } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
 });
@@ -3500,7 +3573,7 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       ["umrahServicesProductId", b.umrahServicesProductId],
       ["umrahTransportProductId", b.umrahTransportProductId],
     ];
-    const auditAfter: Record<string, number | null> = {};
+    const auditAfter: Record<string, number | string | boolean | null> = {};
     for (const [field, value] of fields) {
       if (value === undefined) continue;
       params.push(value);
@@ -3514,22 +3587,31 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       );
     }
 
-    // Overstay-penalty knobs live in system_settings (not companies).
-    // Same omit/null/value semantics as the FK fields above. We UPSERT
-    // when the value is non-null, DELETE the company-scoped row when
-    // the value is explicitly null — clearing reverts to the global
-    // default (key with companyId IS NULL).
-    const penaltyFields: Array<[string, number | null | undefined]> = [
+    // Overstay-penalty knobs + §8 finance-hygiene knobs live in
+    // system_settings (not companies). Same omit/null/value semantics
+    // as the FK fields above. We UPSERT when the value is non-null,
+    // DELETE the company-scoped row when the value is explicitly null
+    // — clearing reverts to the global default (key with
+    // companyId IS NULL).
+    const settingsFields: Array<[string, number | string | boolean | null | undefined]> = [
       ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
-      ["umrah.overstay_tier_days", b.umrahOverstayTierDays],
-      ["umrah.overstay_tier_amount", b.umrahOverstayTierAmount],
+      ["umrah.overstay_tier_days",     b.umrahOverstayTierDays],
+      ["umrah.overstay_tier_amount",   b.umrahOverstayTierAmount],
+      // §8 of #1870 — finance-hygiene knobs operator-configurable from
+      // the same /umrah/settings UI page.
+      ["umrah_vat_rate",   b.umrahVatRate],
+      ["umrah_vat_mode",   b.umrahVatMode],
+      ["commission_via_hr", typeof b.commissionViaHr === "boolean" ? (b.commissionViaHr ? "true" : "false") : b.commissionViaHr],
     ];
     const keyToAuditField: Record<string, string> = {
       "umrah.overstay_daily_penalty": "umrahOverstayDailyPenalty",
-      "umrah.overstay_tier_days": "umrahOverstayTierDays",
-      "umrah.overstay_tier_amount": "umrahOverstayTierAmount",
+      "umrah.overstay_tier_days":     "umrahOverstayTierDays",
+      "umrah.overstay_tier_amount":   "umrahOverstayTierAmount",
+      "umrah_vat_rate":               "umrahVatRate",
+      "umrah_vat_mode":               "umrahVatMode",
+      "commission_via_hr":            "commissionViaHr",
     };
-    for (const [key, value] of penaltyFields) {
+    for (const [key, value] of settingsFields) {
       if (value === undefined) continue;
       if (value === null) {
         await rawExecute(

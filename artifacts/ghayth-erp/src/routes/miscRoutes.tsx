@@ -106,7 +106,9 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/crm/:id", component: OpportunityDetail, module: "crm" },
   { path: "/projects", component: Projects, module: "operations" },
   { path: "/projects/create", component: ProjectsCreate, module: "operations" },
-  { path: "/projects/tasks", component: Tasks, module: "operations" },
+  // "/projects/tasks" alias removed — it rendered the general operations Tasks
+  // page under a projects URL (task-ownership blur). The Tasks page stays wired
+  // at "/tasks" (below); per-project tasks live in the project detail page.
   { path: "/projects/gantt", component: ProjectGantt, module: "operations" },
   { path: "/projects/risks", component: ProjectRisks, module: "operations" },
   { path: "/projects/:id", component: ProjectDetail, module: "operations" },

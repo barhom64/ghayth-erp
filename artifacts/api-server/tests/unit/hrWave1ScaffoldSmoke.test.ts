@@ -100,8 +100,21 @@ describe("HR-Wave-1 / step A — follows axis controls H3 visibility", () => {
     expect(SCAFFOLD_SRC).toMatch(/\{employeeId && needAssignments && \(/);
   });
 
-  it("H3 body comes from the assignmentSelectorSlot prop (scaffold owns the section, caller owns the picker)", () => {
-    expect(SCAFFOLD_SRC).toMatch(/\{assignmentSelectorSlot \?\? <MissingAssignmentSlotNotice \/>\}/);
+  it("H3 default body is the scaffold's DefaultAssignmentBadge; assignmentSelectorSlot overrides it", () => {
+    // Wave-1/B group 2 moved the per-form AssignmentReadOnlyBadge here
+    // as the default. Single-assignment shops pass only selectedEmployee;
+    // multi-assignment shops still override via the slot.
+    expect(SCAFFOLD_SRC).toMatch(/\{assignmentSelectorSlot \?\? \(\s*<DefaultAssignmentBadge/);
+  });
+
+  it("DefaultAssignmentBadge blocks when no active assignment, auto-binds otherwise", () => {
+    expect(SCAFFOLD_SRC).toMatch(/function DefaultAssignmentBadge\(/);
+    expect(SCAFFOLD_SRC).toMatch(/لا يوجد تعيين فعّال لهذا الموظف/);
+    expect(SCAFFOLD_SRC).toMatch(/مُحدَّد تلقائياً/);
+  });
+
+  it("selectedEmployee prop carries the badge metadata (activeAssignmentId/branchName/jobTitle)", () => {
+    expect(SCAFFOLD_SRC).toMatch(/selectedEmployee\?: \{\s*activeAssignmentId\?:/);
   });
 
   it("scaffold does NOT hard-code a backend endpoint for assignments (caller picks the right one)", () => {
@@ -110,11 +123,6 @@ describe("HR-Wave-1 / step A — follows axis controls H3 visibility", () => {
     // ownership to the caller via assignmentSelectorSlot. Re-pinning
     // the absence so a future PR doesn't restore the orphan call.
     expect(SCAFFOLD_SRC).not.toMatch(/\/employees\/\$\{employeeId\}\/assignments/);
-  });
-
-  it("missing-slot fallback explains the contract to the developer", () => {
-    expect(SCAFFOLD_SRC).toMatch(/MissingAssignmentSlotNotice/);
-    expect(SCAFFOLD_SRC).toMatch(/assignmentSelectorSlot/);
   });
 });
 

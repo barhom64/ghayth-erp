@@ -150,7 +150,10 @@ class WarehouseEngineImpl implements DomainEngine {
       productId: number;
       quantity: number;
       unitCost?: number;
-      reference?: string | null;
+      /** Required movement reference — the CALLER owns numbering/correlation
+       *  (e.g. the fleet maintenance handler passes `MAINT-{id}`). Same
+       *  contract as financialEngine.createPurchaseOrder's required `ref`. */
+      reference: string;
       notes?: string | null;
     }
   ): Promise<{ movementId: number | null; journalId: number | null }> {
@@ -214,7 +217,7 @@ class WarehouseEngineImpl implements DomainEngine {
       const movRes = await client.query(
         `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId")
          VALUES ($1,$2,'out',$3,$4,$5,$6,$7,$8) RETURNING id`,
-        [ctx.companyId, params.productId, qty, issueCost, params.reference ?? null, params.notes ?? null, ctx.createdBy, ctx.branchId]
+        [ctx.companyId, params.productId, qty, issueCost, params.reference, params.notes ?? null, ctx.createdBy, ctx.branchId]
       );
       movementId = movRes.rows[0]?.id ?? 0;
     });
