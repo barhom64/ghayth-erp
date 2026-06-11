@@ -1191,7 +1191,7 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
     // (NOT fleet_drivers.currentVehicleId). Join through fleet_drivers
     // whose employeeId == this employee.
     const [vehicle] = await rawQuery<{ id: number; plateNumber: string; brand: string | null }>(
-      `SELECT v.id, v."plateNumber", v.brand
+      `SELECT v.id, v."plateNumber", v.make AS brand
          FROM fleet_drivers d
          JOIN fleet_vehicles v
            ON v."assignedDriverId" = d.id AND v."companyId" = d."companyId" AND v."deletedAt" IS NULL

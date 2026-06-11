@@ -19,6 +19,7 @@ import {
   extractOutputAliases,
   isInOrderOrGroupRegion,
   findAmbiguousRefs,
+  findMissingQualifiedColumns,
   analyzeBody,
 } from "./check-sql-ambiguity.mjs";
 
@@ -47,6 +48,13 @@ const tableColumns = new Map([
     new Set(["id", "companyId", "branchId", "employeeId", "status", "isPrimary"]),
   ],
   ["tasks", new Set(["id", "companyId", "branchId", "status", "title"])],
+  // goods_receipts deliberately has NO `status` column (mirrors the real
+  // table) — used to exercise the missing-qualified-column detector.
+  [
+    "goods_receipts",
+    new Set(["id", "companyId", "ref", "journalId", "createdAt", "deletedAt"]),
+  ],
+  ["goods_receipt_items", new Set(["id", "grnId", "itemName", "lineTotal"])],
 ]);
 
 const cols = (f) => f.map((x) => x.col).sort();
@@ -207,6 +215,76 @@ assert(
     tableColumns,
   ).length === 0,
   "the real evaluation-cycles list query (fully qualified) is clean",
+);
+
+// ── findMissingQualifiedColumns: the `column "x.y" does not exist` class ─
+console.log("findMissingQualifiedColumns — flags qualified refs to missing cols");
+assert(
+  findMissingQualifiedColumns(
+    `SELECT gri.id, grn.ref, grn.status FROM goods_receipt_items gri JOIN goods_receipts grn ON grn.id = gri."grnId"`,
+    tableColumns,
+  ).some((f) => f.qual === "grn" && f.col === "status"),
+  "flags grn.status (goods_receipts has no status column)",
+);
+assert(
+  findMissingQualifiedColumns(
+    `SELECT grn."receiptStatus" FROM goods_receipts grn`,
+    tableColumns,
+  ).some((f) => f.col === "receiptStatus" && f.quoted),
+  'flags quoted grn."receiptStatus" (nonexistent)',
+);
+assert(
+  findMissingQualifiedColumns(
+    `SELECT grn.createdAt FROM goods_receipts grn`,
+    tableColumns,
+  ).some((f) => f.col === "createdAt"),
+  "flags unquoted grn.createdAt (camelCase col must be quoted → folds to nonexistent createdat)",
+);
+
+console.log("findMissingQualifiedColumns — does NOT flag valid refs");
+assert(
+  findMissingQualifiedColumns(
+    `SELECT grn.id, grn.ref, grn."journalId", gri."grnId", gri."itemName" FROM goods_receipt_items gri JOIN goods_receipts grn ON grn.id = gri."grnId"`,
+    tableColumns,
+  ).length === 0,
+  "all existing qualified refs are clean",
+);
+assert(
+  findMissingQualifiedColumns(
+    `SELECT cte.anything, sub.whatever FROM some_cte cte JOIN (SELECT 1 AS whatever) sub ON true`,
+    tableColumns,
+  ).length === 0,
+  "unknown qualifiers (CTE / subquery alias) are skipped — accepted blind spot",
+);
+assert(
+  findMissingQualifiedColumns(
+    `SELECT c.column_name FROM information_schema.columns c`,
+    tableColumns,
+  ).length === 0,
+  "information_schema/pg_catalog aliases are skipped (not public tables)",
+);
+assert(
+  findMissingQualifiedColumns(
+    `SELECT grn.${"_interp_"} FROM goods_receipts grn`,
+    tableColumns,
+  ).length === 0,
+  "alias.${…} (collapsed to alias._interp_) is skipped — runtime-injected col, not a missing-column finding",
+);
+assert(
+  findMissingQualifiedColumns(
+    `SELECT CASE WHEN grn."journalId" IS NOT NULL THEN 'posted' ELSE 'received' END AS status FROM goods_receipts grn`,
+    tableColumns,
+  ).length === 0,
+  "the actual fix (derived CASE status from journalId) is clean",
+);
+
+console.log("analyzeBody — surfaces missing-column findings end-to-end");
+assert(
+  analyzeBody(
+    `SELECT grn.ref, grn.status FROM goods_receipt_items gri JOIN goods_receipts grn ON grn.id = gri."grnId" WHERE grn."companyId" = $1`,
+    tableColumns,
+  ).some((f) => f.type === "missing" && f.col === "grn.status"),
+  "analyzeBody tags grn.status as a missing-column finding",
 );
 
 if (failed > 0) {

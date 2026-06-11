@@ -3426,7 +3426,7 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT c."nuskSupplierId",
               s.name  AS "nuskSupplierName",
-              s.code  AS "nuskSupplierCode",
+              NULL::text AS "nuskSupplierCode",
               c."umrahVisaProductId",
               pv.name AS "umrahVisaProductName",
               c."umrahServicesProductId",

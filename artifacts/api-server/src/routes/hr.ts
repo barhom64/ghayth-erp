@@ -7938,8 +7938,8 @@ router.get("/expiring-documents", authorize({ feature: "hr.employees", action: "
 
     // Company documents (commercial registration, chamber of commerce, etc.)
     const companyDocs = await rawQuery<Record<string, unknown>>(
-      `SELECT cd.id AS "entityId", cd.title AS "entityName", cd."expiryDate",
-              cd.type AS "docType", cd.title AS "docLabel",
+      `SELECT cd.id AS "entityId", cd."documentType" AS "entityName", cd."expiryDate",
+              cd."documentType" AS "docType", cd."documentNumber" AS "docLabel",
               (cd."expiryDate"::date - CURRENT_DATE) AS "daysLeft",
               'company' AS "entityType"
        FROM company_documents cd
