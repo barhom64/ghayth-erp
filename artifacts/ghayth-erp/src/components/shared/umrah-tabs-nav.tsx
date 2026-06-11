@@ -36,6 +36,11 @@ const PRIMARY_TABS: Tab[] = [
   { href: "/umrah/invoices", label: "الفواتير", icon: Receipt, match: ["/umrah/invoices"] },
   { href: "/umrah/commission-plans", label: "العمولات", icon: Briefcase, match: ["/umrah/commission-plans", "/umrah/commission-calculations"] },
   { href: "/umrah/transport", label: "النقل", icon: Bus, match: ["/umrah/transport"] },
+  // U-02b M5a (#2080) — تبويب جديد يظهر صفحة طلبات النقل الموحَّدة
+  // (POST /umrah/groups/:id/transport-requests). يقف بجانب التبويب
+  // القديم بلا حذف وبلا تعديل سلوك. M5a لا يُحوِّل أي رابط آخر —
+  // التقويم وتعطيل المسار القديم يتطلبان إذناً مستقلاً (M5b وما بعده).
+  { href: "/umrah/transport-requests", label: "طلبات النقل", icon: ClipboardList, match: ["/umrah/transport-requests"] },
   { href: "/umrah/violations", label: "المخالفات", icon: ShieldAlert, match: ["/umrah/violations"] },
   { href: "/umrah/penalties", label: "الغرامات", icon: AlertTriangle, match: ["/umrah/penalties"] },
   { href: "/umrah/import", label: "الاستيراد", icon: Upload, match: ["/umrah/import"] },
