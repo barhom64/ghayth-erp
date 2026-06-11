@@ -182,6 +182,7 @@ SEED_REPLAY_ALLOWLIST=(
   "278_default_hr_role_templates.sql"
   "289_seed_project_gl_mappings.sql"
   "291_seed_purchase_grni_mapping.sql"
+  "312_seed_finance_intent_account_mappings.sql"
 )
 is_replay_seed() {
   for s in "${SEED_REPLAY_ALLOWLIST[@]}"; do
