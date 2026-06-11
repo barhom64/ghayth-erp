@@ -42,37 +42,25 @@ d("migration 287 — three-axis status backfill (live DB)", () => {
     const [c] = await rawQuery<{ id: number }>("SELECT id FROM companies ORDER BY id LIMIT 1");
     companyId = c.id;
 
-    // Insert one row per (status × isPaid), with the three axes left NULL so
-    // the backfill has to populate them.
+    // Insert one row per (status × isPaid). The three axes are now filled by
+    // the DB trigger (migration 311) ON INSERT — no manual backfill needed.
+    // balancesApplied is set REALISTICALLY (true for the posted-family statuses)
+    // because the trigger derives postingStatus from balancesApplied, not from
+    // `status` (owner decision, #2098); for this realistic data postingStatus
+    // therefore still mirrors mapJournalStatus(status).postingStatus exactly.
+    // (The draft-but-balances-applied divergence is covered by
+    // statusAxesTrigger.dynamic.test.ts.)
     await rawExecute(`DELETE FROM journal_entries WHERE ref LIKE $1`, [REF + "%"]);
     for (const status of STATUSES) {
+      const balancesApplied = ["posted", "approved", "reversed"].includes(status);
       for (const isPaid of [true, false]) {
         await rawExecute(
-          `INSERT INTO journal_entries ("companyId", status, "isPaid", ref,
-             "documentStatus", "paymentStatus", "postingStatus")
-           VALUES ($1, $2, $3, $4, NULL, NULL, NULL)`,
-          [companyId, status, isPaid, `${REF}-${status}-${isPaid ? "p" : "u"}`],
+          `INSERT INTO journal_entries ("companyId", status, "isPaid", ref, "balancesApplied")
+           VALUES ($1, $2, $3, $4, $5)`,
+          [companyId, status, isPaid, `${REF}-${status}-${isPaid ? "p" : "u"}`, balancesApplied],
         );
       }
     }
-
-    // Re-run the migration's backfill (the columns + constraints already exist
-    // from migration 287). This UPDATE is byte-for-byte the migration's, scoped
-    // to the rows just inserted so it never touches other data.
-    await rawExecute(
-      `UPDATE journal_entries SET
-         "documentStatus" = CASE status
-            WHEN 'posted' THEN 'approved' WHEN 'approved' THEN 'approved' WHEN 'reversed' THEN 'approved'
-            WHEN 'pending_approval' THEN 'submitted' WHEN 'returned' THEN 'submitted'
-            WHEN 'rejected' THEN 'rejected' WHEN 'cancelled' THEN 'cancelled' ELSE 'draft' END,
-         "postingStatus" = CASE status
-            WHEN 'posted' THEN 'posted' WHEN 'approved' THEN 'posted'
-            WHEN 'cancelled' THEN 'reversed' WHEN 'reversed' THEN 'reversed' ELSE 'unposted' END,
-         "paymentStatus" = CASE
-            WHEN "isPaid" IS TRUE AND status IN ('posted','approved','reversed') THEN 'paid' ELSE 'unpaid' END
-       WHERE ref LIKE $1 AND "documentStatus" IS NULL`,
-      [REF + "%"],
-    );
   });
 
   afterAll(async () => {
