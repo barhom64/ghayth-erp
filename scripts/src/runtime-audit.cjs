@@ -805,6 +805,15 @@ async function probe(page, routePath, resolvedUrl, cls) {
       });
       const d = await r.json().catch(() => ({}));
       localStorage.setItem("erp_assignments", JSON.stringify(d.assignments || []));
+      // Seed the ACTIVE context too (selected company/branch). Create/edit
+      // pages are gated behind the "سياق نشط" guard — without this the A3/A5
+      // axes probe the guard screen, not the form, and every create page
+      // reads as "no save button".
+      const a = (d.assignments || [])[0];
+      if (a) {
+        localStorage.setItem("erp_selected_companies", JSON.stringify([a.companyId].filter(Boolean)));
+        localStorage.setItem("erp_selected_branches", JSON.stringify([a.branchId].filter(Boolean)));
+      }
       return r.status;
     }, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
     // Fail fast (Phase 9 spirit): a silently-429'd/failed in-page login used
