@@ -37,6 +37,12 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 import {
   scoreEmployee, currentPeriodKey, type ScoreScope,
 } from "../lib/employeeScoringEngine.js";
+// PR-8 (#2077) — lifecycle engine: state machine + guards.
+import {
+  ALLOWED_TRANSITIONS, EVENT_TO_STATE_AFTER, STATE_LABEL_AR, EVENT_LABEL_AR,
+  resolveCurrentState, checkGuards, nextTransitions,
+  type LifecycleState, type LifecycleEventType,
+} from "../lib/employeeLifecycleEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import type { EmployeeRow, EmployeeAssignmentRow } from "../lib/dbTypes.js";
@@ -2571,6 +2577,253 @@ router.get(
       res.json({ data: rows, total: rows.length, scope: wantScope, assignmentId: emp.assignmentId });
     } catch (err) {
       handleRouteError(err, res, "Score history error:");
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════
+// PR-8 (#2077) — Employee lifecycle: status resolver + history + transitions.
+//
+// Three HR-side endpoints wrap the existing lifecycleEngine library:
+//
+//   GET  /employees/:id/lifecycle/status      — current state + next allowed
+//                                              transitions + guard checks.
+//                                              The UI uses this to render the
+//                                              «الإجراءات المتاحة» buttons.
+//   GET  /employees/:id/lifecycle/history     — ordered event list with the
+//                                              4 dates + actor + reason +
+//                                              overrideReason. Used by the
+//                                              «دورة الحياة» tab on the 360.
+//   POST /employees/:id/lifecycle/transitions — fire a transition. Validates
+//                                              the state machine + guards
+//                                              first; persists ONE row to
+//                                              employee_lifecycle_events with
+//                                              the IGOC quartet; emits the
+//                                              employee.lifecycle.transitioned
+//                                              event for downstream listeners.
+//
+// The doctrine: «HR يقرر الحالة والسبب، والمالية خادم». This module ONLY
+// writes the event + emits the event. It does NOT update employees.status
+// or employee_assignments.status — the canonical screens for those
+// (hr-exit.ts, employees.ts PATCH, transfers) own that side-effect. The
+// lifecycle ledger is the system of record for «من قرر، متى، ولماذا».
+// ════════════════════════════════════════════════════════════════════════════
+
+const lifecycleTransitionSchema = z.object({
+  eventType: z.enum([
+    "candidate_created", "offer_extended", "offer_accepted", "onboarded",
+    "probation_started", "probation_passed", "suspended", "reinstated",
+    "resigned", "terminated", "clearance_started", "clearance_completed",
+    "transferred", "assigned", "reactivated",
+  ]),
+  reason: z.string().min(1, "السبب مطلوب"),
+  decisionDate: z.string().optional().nullable(),
+  effectiveDate: z.string().optional().nullable(),
+  documentDate: z.string().optional().nullable(),
+  documentRef: z.string().max(80).optional().nullable(),
+  overrideReason: z.string().optional().nullable(),
+  metadata: z.record(z.any()).optional(),
+});
+
+router.get(
+  "/:id/lifecycle/status",
+  authorize({ feature: "hr.employees", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const [emp] = await rawQuery<{ id: number; assignmentId: number | null; branchId: number | null }>(
+        `SELECT e.id, ea.id AS "assignmentId", ea."branchId"
+           FROM employees e
+           LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                            AND ea."companyId" = $2
+                                            AND (ea.status = 'active' OR ea.status = 'terminated')
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          ORDER BY ea."isPrimary" DESC NULLS LAST, ea.id DESC LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود");
+
+      const current = await resolveCurrentState(id, scope.companyId);
+      const nexts = nextTransitions(current);
+      res.json({
+        currentState: current,
+        currentStateLabel: current ? STATE_LABEL_AR[current] : null,
+        nextTransitions: nexts.map((s) => ({ state: s, label: STATE_LABEL_AR[s] })),
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Lifecycle status error:");
+    }
+  }
+);
+
+router.get(
+  "/:id/lifecycle/history",
+  authorize({ feature: "hr.employees", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+
+      const rows = await rawQuery<{
+        id: number; eventType: string; stateBefore: string | null; stateAfter: string | null;
+        reason: string | null; decisionDate: string | null; effectiveDate: string | null;
+        documentDate: string | null; documentRef: string | null;
+        actorUserId: number; actorName: string | null; activeRoleKey: string | null;
+        overrideReason: string | null; metadata: Record<string, unknown>;
+        createdAt: string;
+      }>(
+        `SELECT le.id, le."eventType", le."stateBefore", le."stateAfter",
+                le.reason, le."decisionDate", le."effectiveDate",
+                le."documentDate", le."documentRef",
+                le."actorUserId", e.name AS "actorName", le."activeRoleKey",
+                le."overrideReason", le.metadata, le."createdAt"
+           FROM employee_lifecycle_events le
+           LEFT JOIN users u ON u.id = le."actorUserId"
+           LEFT JOIN employees e ON e.id = u."employeeId"
+          WHERE le."employeeId" = $1 AND le."companyId" = $2
+          ORDER BY le."createdAt" DESC, le.id DESC
+          LIMIT $3`,
+        [id, scope.companyId, limit]
+      );
+
+      // Decorate each row with the Arabic label for event + state, so
+      // the UI doesn't re-implement the i18n map.
+      const data = rows.map((r) => ({
+        ...r,
+        eventLabel: EVENT_LABEL_AR[r.eventType as LifecycleEventType] ?? r.eventType,
+        stateBeforeLabel: r.stateBefore ? STATE_LABEL_AR[r.stateBefore as LifecycleState] : null,
+        stateAfterLabel: r.stateAfter ? STATE_LABEL_AR[r.stateAfter as LifecycleState] : null,
+      }));
+      res.json({ data, total: data.length });
+    } catch (err) {
+      handleRouteError(err, res, "Lifecycle history error:");
+    }
+  }
+);
+
+router.post(
+  "/:id/lifecycle/transitions",
+  authorize({ feature: "hr.employees", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const body = zodParse(lifecycleTransitionSchema.safeParse(req.body));
+
+      const [emp] = await rawQuery<{ id: number; assignmentId: number | null; branchId: number | null }>(
+        `SELECT e.id, ea.id AS "assignmentId", ea."branchId"
+           FROM employees e
+           LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                            AND ea."companyId" = $2
+                                            AND ea."isPrimary" = true
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود");
+
+      const current = await resolveCurrentState(id, scope.companyId);
+      const stateAfter = EVENT_TO_STATE_AFTER[body.eventType as LifecycleEventType] ?? null;
+
+      // Validate the state machine — operational events (transferred,
+      // assigned) skip the transitions check since they don't change
+      // state.
+      if (stateAfter && current) {
+        const allowed = ALLOWED_TRANSITIONS[current] ?? [];
+        if (!allowed.includes(stateAfter)) {
+          throw new ValidationError(
+            `الانتقال غير مسموح: من «${STATE_LABEL_AR[current]}» إلى «${STATE_LABEL_AR[stateAfter]}»`,
+            { field: "eventType", fix: "اختر حدثًا متوافقًا مع الحالة الحالية" }
+          );
+        }
+      }
+
+      // Run guards. Failures BLOCK the transition unless the operator
+      // supplies overrideReason — in which case the row records the
+      // bypass for the audit trail.
+      const guards = await checkGuards({
+        employeeId: id, companyId: scope.companyId,
+        from: current, to: stateAfter, eventType: body.eventType as LifecycleEventType,
+      });
+      if (guards.length > 0 && !body.overrideReason) {
+        throw new ValidationError(
+          `الانتقال محجوب: ${guards.map((g) => g.allowed === false ? g.reason : "").filter(Boolean).join(" · ")}`,
+          { field: "overrideReason", fix: "وثّق سبب التجاوز إذا أردت المتابعة" }
+        );
+      }
+
+      const [row] = await rawQuery<{ id: number }>(
+        `INSERT INTO employee_lifecycle_events
+          ("companyId", "branchId", "employeeId", "assignmentId",
+           "eventType", "stateBefore", "stateAfter",
+           reason, "decisionDate", "effectiveDate", "documentDate", "documentRef",
+           "actorUserId", "activeRoleKey", "activeDepartmentId", "resolvedScope", "impersonationSourceUser",
+           "overrideReason", metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+         RETURNING id`,
+        [
+          scope.companyId, emp.branchId, id, emp.assignmentId,
+          body.eventType, current, stateAfter,
+          body.reason,
+          body.decisionDate || null,
+          body.effectiveDate || null,
+          body.documentDate || null,
+          body.documentRef || null,
+          scope.userId,
+          scope.selectedRoleKey ?? null,
+          scope.activeDepartmentId ?? null,
+          scope.resolvedScope ?? null,
+          scope.impersonationSourceUser ?? null,
+          body.overrideReason || null,
+          JSON.stringify(body.metadata ?? {}),
+        ]
+      );
+
+      await createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "transition", entity: "employee_lifecycle", entityId: id,
+        activeRoleKey: scope.selectedRoleKey ?? null,
+        activeDepartmentId: scope.activeDepartmentId ?? null,
+        resolvedScope: scope.resolvedScope ?? null,
+        impersonationSourceUser: scope.impersonationSourceUser ?? null,
+        after: {
+          eventType: body.eventType, stateBefore: current, stateAfter,
+          reason: body.reason, override: !!body.overrideReason,
+        },
+      });
+
+      await emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "employee.lifecycle.transitioned",
+        entity: "employees", entityId: id,
+        details: JSON.stringify({
+          eventId: row.id, eventType: body.eventType,
+          stateBefore: current, stateAfter,
+          assignmentId: emp.assignmentId,
+          context: {
+            companyId: scope.companyId, branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            activeRoleKey: scope.selectedRoleKey ?? null,
+            resolvedScope: scope.resolvedScope ?? null,
+          },
+        }),
+      }).catch((e) => logger.warn(e, "[lifecycle] event emit failed"));
+
+      res.status(201).json({
+        data: {
+          id: row.id,
+          eventType: body.eventType,
+          eventLabel: EVENT_LABEL_AR[body.eventType as LifecycleEventType],
+          stateBefore: current,
+          stateAfter,
+          stateAfterLabel: stateAfter ? STATE_LABEL_AR[stateAfter] : null,
+          guardsBypassed: guards.length,
+        },
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Lifecycle transition error:");
     }
   }
 );

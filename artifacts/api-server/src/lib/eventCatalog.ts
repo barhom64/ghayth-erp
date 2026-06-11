@@ -1168,6 +1168,10 @@ export const EVENT_CATALOG: EventDefinition[] = [
   // pin (eventBusIntegrity.test.ts) also requires at least one
   // declared field per catalog entry.
   { name: "employee.scored", label: "حساب درجة الموظف", domain: "hr", description: "تُصدر عند حساب الدرجة المؤسسية لموظف (يدويًا أو من الكرون)", payload: {"entityId":"number"}, consumers: ["auditTrail","scoreReports"], sideEffects: ["audit"], critical: true },
+  // PR-8 (#2077) — lifecycle transition. Critical so event_logs
+  // persists every fire — the lifecycle ledger is the system of
+  // record for «من قرر، متى، ولماذا».
+  { name: "employee.lifecycle.transitioned", label: "انتقال دورة حياة موظف", domain: "hr", description: "تُصدر عند كل انتقال حالة (تجهيز، تجربة، تثبيت، نقل، إيقاف، استقالة، إنهاء، مخالصة)", payload: {"entityId":"number"}, consumers: ["auditTrail","workInbox"], sideEffects: ["audit"], critical: true },
   { name: "employee_document.created", label: "إنشاء مستند موظف", domain: "hr", description: "تُصدر عند إنشاء مستند موظف", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "evaluation.created", label: "إنشاء تقييم", domain: "hr", description: "تُصدر عند إنشاء تقييم", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "excuse.approved", label: "اعتماد عذر", domain: "hr", description: "تُصدر عند اعتماد عذر", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"], critical: true },

@@ -198,9 +198,12 @@ describe("PR-7 (#2077) — preserves PR-1/PR-2/PR-6 (no regression)", () => {
     // (a PR-1 add) is still in employees.ts.
     expect(EMPLOYEES_ROUTE).toMatch(/positionId:\s*z\.coerce\.number\(\)\.int\(\)\.positive\(\)\.optional\(\)\.nullable\(\)/);
   });
-  it("the PR-6 360 tabs spine still has 17 entries (administration row added to info, not as a new tab)", () => {
+  it("the 360 tabs spine grows correctly (17 after PR-7, 18 after PR-8 adds دورة الحياة)", () => {
+    // PR-7 did not add a tab; PR-8 added لifecycle. The count is now 18.
+    // hrLifecycleEngineSmoke + employee360FinalTabsAndSeedsSmoke pin
+    // 18 too — keep this in sync if a future PR moves the count.
     const tabsMatch = EMPLOYEE_DETAIL.match(/const TABS = \[[\s\S]*?\] as const;/)?.[0] || "";
     const tabCount = (tabsMatch.match(/key:\s*"/g) ?? []).length;
-    expect(tabCount).toBe(17);
+    expect(tabCount).toBe(18);
   });
 });

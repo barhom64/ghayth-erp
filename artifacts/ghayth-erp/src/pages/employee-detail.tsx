@@ -33,6 +33,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@workspace/report-kit";
@@ -80,6 +81,194 @@ function OperationalStatusBar({ employeeId }: { employeeId: string }) {
       <Icon className="h-4 w-4" />
       <span>{opStatus.label}</span>
       {opStatus.reason && <span className="text-xs opacity-70">— {opStatus.reason}</span>}
+    </div>
+  );
+}
+
+// PR-8 (#2077) — Lifecycle tab content.
+// Renders the timeline + the «إجراء انتقال جديد» panel that wraps
+// POST /employees/:id/lifecycle/transitions. The panel is intentionally
+// minimal: pick a next state (the engine returns the legal options) +
+// reason + the four dates. The backend runs the guards; this UI just
+// shows the resulting error inline so HR knows which guard blocked.
+function LifecycleTabContent({ employeeId, status, history, onTransitioned }: {
+  employeeId: number;
+  status: any;
+  history: any[];
+  onTransitioned: () => void;
+}) {
+  const { toast } = useToast();
+  const nextOpts: Array<{ state: string; label: string }> = status?.nextTransitions ?? [];
+  const [target, setTarget] = useState<string>(nextOpts[0]?.state ?? "");
+  const [reason, setReason] = useState("");
+  const [decisionDate, setDecisionDate] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [documentDate, setDocumentDate] = useState("");
+  const [documentRef, setDocumentRef] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Map target state → event type. The engine uses event types under
+  // the hood; this mapping mirrors EVENT_TO_STATE_AFTER server-side.
+  const stateToEvent: Record<string, string> = {
+    offer_extended: "offer_extended",
+    onboarding: "offer_accepted",
+    active: "onboarded",            // when current=onboarding
+    probation: "probation_started",
+    confirmed: "probation_passed",
+    suspended: "suspended",
+    resigned: "resigned",
+    terminated: "terminated",
+    clearance_pending: "clearance_started",
+    clearance_complete: "clearance_completed",
+  };
+  const reactivation = status?.currentState === "terminated" && target === "active";
+  const eventType = reactivation ? "reactivated" : (stateToEvent[target] ?? "");
+
+  const submit = async () => {
+    if (!eventType) { toast({ title: "اختر حالة هدف", variant: "destructive" }); return; }
+    if (!reason.trim()) { toast({ title: "السبب مطلوب", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      await apiFetch(`/employees/${employeeId}/lifecycle/transitions`, {
+        method: "POST",
+        body: JSON.stringify({
+          eventType,
+          reason: reason.trim(),
+          decisionDate: decisionDate || undefined,
+          effectiveDate: effectiveDate || undefined,
+          documentDate: documentDate || undefined,
+          documentRef: documentRef || undefined,
+          overrideReason: overrideReason || undefined,
+        }),
+      });
+      toast({ title: "تم تسجيل الانتقال" });
+      setReason(""); setDecisionDate(""); setEffectiveDate(""); setDocumentDate("");
+      setDocumentRef(""); setOverrideReason("");
+      onTransitioned();
+    } catch (err: any) {
+      toast({ title: err?.message || "فشل الانتقال", variant: "destructive" });
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="space-y-5" data-testid="lifecycle-content">
+      {/* Next-transition launcher: only HR-write users see the panel
+          via the GuardedButton on submit. */}
+      {nextOpts.length > 0 ? (
+        <div className="border rounded-lg p-4 space-y-3 bg-surface-subtle/30" data-testid="lifecycle-transition-panel">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            إجراء انتقال جديد
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">الحالة المستهدفة</Label>
+              <select
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                className="w-full mt-1 border rounded px-2 py-1.5 text-sm"
+                data-testid="lifecycle-target-select"
+              >
+                {nextOpts.map((o) => (
+                  <option key={o.state} value={o.state}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">سبب الانتقال *</Label>
+              <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: قرار اعتماد التثبيت" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">تاريخ القرار</Label>
+              <Input type="date" value={decisionDate} onChange={(e) => setDecisionDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">تاريخ التنفيذ</Label>
+              <Input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">تاريخ المستند</Label>
+              <Input type="date" value={documentDate} onChange={(e) => setDocumentDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">مرجع المستند</Label>
+              <Input value={documentRef} onChange={(e) => setDocumentRef(e.target.value)} placeholder="مثال: HR-2026-045" className="mt-1" />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">سبب التجاوز (إذا كانت الحوارس ستحجب)</Label>
+              <Input value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="اتركه فارغًا إن لم يكن لازمًا" className="mt-1" />
+              <p className="text-[11px] text-muted-foreground mt-1">يُسجَّل التجاوز في الـAudit ويظهر في السجل أدناه — استخدمه فقط للحالات الموثَّقة.</p>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={submit} disabled={submitting || !reason.trim()} data-testid="lifecycle-submit-btn">
+              {submitting ? "جارٍ التنفيذ..." : "تسجيل الانتقال"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-muted-foreground border rounded p-3 bg-status-success-surface/30">
+          <CheckCircle2 className="h-4 w-4 inline-block ms-1" />
+          لا يوجد انتقال متاح من الحالة الحالية. (انتهت دورة الحياة أو الانتقال يتم خارج هذا التبويب.)
+        </div>
+      )}
+
+      {/* Timeline. Each event card shows the four dates + the actor +
+          the override reason when present (the override flag is the
+          most-watched audit signal). */}
+      <div className="border-t pt-4">
+        <p className="text-sm font-semibold mb-3">السجل الزمني ({history.length})</p>
+        {history.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic text-center py-4">لا يوجد سجل انتقالات لهذا الموظف بعد.</p>
+        ) : (
+          <div className="space-y-2">
+            {history.map((e: any) => (
+              <div key={e.id} className="border rounded p-3 text-sm" data-testid={`lifecycle-event-${e.id}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline" className="text-xs">{e.eventLabel || e.eventType}</Badge>
+                  {e.stateBeforeLabel && e.stateAfterLabel && (
+                    <span className="text-xs text-muted-foreground">
+                      {e.stateBeforeLabel} ← {e.stateAfterLabel}
+                    </span>
+                  )}
+                  {e.overrideReason && (
+                    <Badge className="bg-status-warning-surface text-status-warning-foreground border-0 text-xs ms-auto" data-testid="lifecycle-override-badge">
+                      تجاوز موثَّق
+                    </Badge>
+                  )}
+                </div>
+                {e.reason && <p className="text-sm font-medium mb-2">{e.reason}</p>}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
+                  <DateRow label="تاريخ القرار" value={e.decisionDate} />
+                  <DateRow label="تاريخ التنفيذ" value={e.effectiveDate} />
+                  <DateRow label="تاريخ المستند" value={e.documentDate} />
+                  <DateRow label="مرجع المستند" value={e.documentRef} mono />
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground border-t pt-2">
+                  <span>المنفِّذ: <strong>{e.actorName || `#${e.actorUserId}`}</strong></span>
+                  <span>{e.activeRoleKey ? `بدور: ${e.activeRoleKey}` : ""}</span>
+                  <span>{formatDateAr(e.createdAt)}</span>
+                </div>
+                {e.overrideReason && (
+                  <p className="text-xs bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+                    <strong>سبب التجاوز:</strong> {e.overrideReason}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DateRow({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-[11px]">{label}</p>
+      <p className={cn("text-xs font-medium", mono && "font-mono")}>{value ? formatDateAr(value) : "—"}</p>
     </div>
   );
 }
@@ -534,6 +723,7 @@ const TABS = [
   { key: "tasks",       label: "المهام",            icon: ListTodo },
   { key: "trainings",   label: "التدريب",           icon: GraduationCap },
   { key: "activity",    label: "النشاط",            icon: History },         // PR-6 NEW
+  { key: "lifecycle",   label: "دورة الحياة",       icon: Activity },        // PR-8 NEW
   { key: "finance",     label: "المالية",           icon: BookOpen },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
@@ -615,6 +805,21 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
     ["employee-scoring-history", String(id), "monthly"],
     id ? `/employees/${id}/scoring/history?scope=monthly&limit=12` : null,
     { enabled: !!id && activeTab === "evaluation" },
+  );
+
+  // PR-8 (#2077) — Lifecycle: status + history.
+  // Status is light (current state + next allowed transitions) and
+  // ALSO gates the lifecycle tab's status badge ("action_needed" when
+  // a next transition exists). History is heavier; lazy.
+  const { data: lifecycleStatusResp, refetch: refetchLifecycle } = useApiQuery<any>(
+    ["employee-lifecycle-status", String(id)],
+    id ? `/employees/${id}/lifecycle/status` : null,
+    { enabled: !!id },
+  );
+  const { data: lifecycleHistResp } = useApiQuery<any>(
+    ["employee-lifecycle-history", String(id)],
+    id ? `/employees/${id}/lifecycle/history?limit=50` : null,
+    { enabled: !!id && activeTab === "lifecycle" },
   );
   const [govEditing, setGovEditing] = useState(false);
   const [govForm, setGovForm] = useState<Record<string, string>>({});
@@ -705,6 +910,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const documents = allDocs.filter((d: any) => String(d.employeeId) === String(id));
   const activityRows: any[] = (activityResp?.data ?? activityResp ?? []) as any[];
   const scoringHistory: any[] = (scoringHistResp?.data ?? scoringHistResp ?? []) as any[];
+  const lifecycleHistory: any[] = (lifecycleHistResp?.data ?? lifecycleHistResp ?? []) as any[];
 
   // Compute the status of each tab. Used for both the tab strip badge
   // and the empty-state messaging. «action_needed» beats «complete»
@@ -741,6 +947,12 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
     tasks:       overdueTasks > 0 ? "action_needed" : tasks.length > 0 ? "complete" : "missing",
     trainings:   trainings.length > 0 ? "complete" : "missing",
     activity:    activityForbidden ? "forbidden" : activityRows.length > 0 ? "complete" : "missing",
+    // PR-8 (#2077) — lifecycle. «action_needed» when the engine
+    // suggests next transitions (HR has work to do); «complete» when
+    // the employee is at a terminal-ish state (confirmed / clearance
+    // complete); «missing» when no events have landed yet.
+    lifecycle:   lifecycleStatusResp?.nextTransitions?.length ? "action_needed"
+                 : lifecycleStatusResp?.currentState ? "complete" : "missing",
     finance:     "complete",
   };
 
@@ -1847,6 +2059,38 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* PR-8 (#2077) — دورة الحياة tab. Reads the lifecycle status +
+          history endpoints; surfaces the current state + a timeline +
+          a transition launcher. The transition dialog is intentionally
+          minimal (eventType + reason + the 4 dates) — every transition
+          goes through POST /lifecycle/transitions which validates the
+          state machine + runs the guards. */}
+      {activeTab === "lifecycle" && (
+        <Card data-testid="tab-content-lifecycle">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                دورة حياة الموظف
+              </span>
+              {lifecycleStatusResp?.currentStateLabel && (
+                <Badge variant="outline" className="text-sm" data-testid="lifecycle-current-state">
+                  الحالة الحالية: {lifecycleStatusResp.currentStateLabel}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LifecycleTabContent
+              employeeId={Number(id)}
+              status={lifecycleStatusResp}
+              history={lifecycleHistory}
+              onTransitioned={() => { refetchLifecycle(); refetch(); }}
+            />
           </CardContent>
         </Card>
       )}

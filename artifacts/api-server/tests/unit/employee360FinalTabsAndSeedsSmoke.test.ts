@@ -46,12 +46,13 @@ describe("Employee 360 — 14 tabs final", () => {
     expect(tabsBlock).toMatch(/key:\s*"custodies",\s*label:\s*"العهد والأصول"/);
   });
 
-  it("total of 17 entries in TABS array (HR-012 baseline 14 + PR-6 added documents/evaluation/activity)", () => {
-    // PR-6 (#2077) added three tabs the deep audit surfaced as missing
-    // — documents, evaluation, activity. The new count is 17 = 14 + 3.
-    // hrEmployee360TabsSmoke pins the three new keys explicitly.
+  it("total of 18 entries in TABS array (HR-012 baseline 14 + PR-6 3 + PR-8 lifecycle)", () => {
+    // PR-6 (#2077) added three tabs (documents, evaluation, activity).
+    // PR-8 (#2077) added one more — «دورة الحياة» (lifecycle). The new
+    // count is 18 = 14 + 3 + 1. hrLifecycleEngineSmoke pins the key
+    // explicitly.
     const matches = tabsBlock.match(/\{\s*key:\s*"/g) ?? [];
-    expect(matches.length).toBe(17);
+    expect(matches.length).toBe(18);
   });
 
   it("custodies count surfaces in the tab badge", () => {

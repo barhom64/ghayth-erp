@@ -143,25 +143,25 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // The snapshot is informational: if it shifts in either direction
     // (route added or removed) the diff reviewer sees the change.
     // Adjust the expected number when the catalog moves on purpose.
-    // PR-4 (#2077) added 2 endpoints to employees.ts:
-    //   POST /:id/scoring/recompute — on-demand re-score
-    //   GET  /:id/scoring/history — full history with rationale
-    // Both gated on hr.employees:* so the 100% authorize-coverage
-    // invariant below still holds.
-    expect(ALL_REGISTRATIONS.length).toBe(219);
+    // PR-4 (#2077) added 2 endpoints to employees.ts (scoring/recompute
+    // + scoring/history). PR-8 (#2077) added 3 more (lifecycle/status,
+    // /history, /transitions). All five gated on hr.employees:* so the
+    // 100% authorize-coverage invariant below still holds.
+    expect(ALL_REGISTRATIONS.length).toBe(222);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(219);
+    expect(gated).toBe(222);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
     const byFile: Record<string, number> = {};
     for (const r of ALL_REGISTRATIONS) byFile[r.file] = (byFile[r.file] ?? 0) + 1;
     expect(byFile).toEqual({
-      // PR-4 (#2077) — +2 on employees.ts (scoring/recompute + scoring/history).
-      "employees.ts": 15,
+      // PR-4 (#2077) added 2 (scoring/recompute + scoring/history);
+      // PR-8 (#2077) added 3 (lifecycle/status + /history + /transitions).
+      "employees.ts": 18,
       // main merged 4 new endpoints onto hr.ts (121→125) — ALL still
       // gated by authorize(); the ratchet's primary invariant (100%
       // coverage) holds, only the count snapshot moved.
