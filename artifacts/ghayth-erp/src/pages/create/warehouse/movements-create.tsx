@@ -13,7 +13,7 @@ import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 const DRAFT_KEY = "warehouse_movements_create";
-const INITIAL = { productId: "", type: "in", quantity: "", unitCost: "", reference: "", notes: "" };
+const INITIAL = { productId: "", type: "in", quantity: "", unitCost: "", reference: "", notes: "", lotId: "", lotNumber: "", expiryDate: "" };
 const STOCK_DECREASE_TYPES = new Set(["out", "transfer_out", "adjustment_out"]);
 
 export default function MovementsCreate() {
@@ -41,6 +41,10 @@ export default function MovementsCreate() {
   const currentStock = Number(selectedProduct?.currentStock ?? 0);
   const wouldOverdraw = Boolean(selectedProduct && STOCK_DECREASE_TYPES.has(form.type) && requestedQty > currentStock);
   const canPreview = Boolean(form.productId && requestedQty > 0);
+  // F1 — lot-tracked products: inbound needs a lot number (+optional expiry);
+  // outbound may name a lot, else the server picks FEFO.
+  const tracksLots = selectedProduct?.tracksLots === true;
+  const isOutbound = STOCK_DECREASE_TYPES.has(form.type);
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -52,6 +56,9 @@ export default function MovementsCreate() {
           : null,
       reference: requireReference && !form.reference.trim()
         ? "المرجع مطلوب لكل حركة (سياسة الشركة: لا حركة بلا سبب)"
+        : null,
+      lotNumber: tracksLots && !isOutbound && !form.lotNumber.trim() && !form.lotId
+        ? "هذا الصنف يتتبّع الدفعات — رقم الدفعة مطلوب عند الاستلام"
         : null,
     });
 
@@ -68,6 +75,10 @@ export default function MovementsCreate() {
         unitCost: form.unitCost ? Number(form.unitCost) : undefined,
         reference: form.reference || undefined,
         notes: form.notes || undefined,
+        // F1 — only meaningful for tracksLots products; harmless otherwise.
+        lotId: tracksLots && form.lotId ? Number(form.lotId) : undefined,
+        lotNumber: tracksLots && !isOutbound && form.lotNumber ? form.lotNumber.trim() : undefined,
+        expiryDate: tracksLots && !isOutbound && form.expiryDate ? form.expiryDate : undefined,
       });
 
       clearDraft();
@@ -130,6 +141,16 @@ export default function MovementsCreate() {
         <TextField label="المرجع" required={requireReference} placeholder={requireReference ? "GRN / أمر صرف / تذكرة صيانة — إلزامي" : "GRN / أمر صرف / تذكرة صيانة"} value={form.reference} onChange={(v) => setForm((f) => ({ ...f, reference: v }))} error={fieldErrors.reference} />
 
         <TextField label="ملاحظات" value={form.notes} onChange={(v) => setForm((f) => ({ ...f, notes: v }))} />
+
+        {tracksLots && !isOutbound && (
+          <>
+            <TextField label="رقم الدفعة" required placeholder="رقم الدفعة المستلمة" value={form.lotNumber} onChange={(v) => setForm((f) => ({ ...f, lotNumber: v }))} error={fieldErrors.lotNumber} />
+            <TextField label="تاريخ الصلاحية" type="date" value={form.expiryDate} onChange={(v) => setForm((f) => ({ ...f, expiryDate: v }))} />
+          </>
+        )}
+        {tracksLots && isOutbound && (
+          <TextField label="رقم الدفعة (اختياري)" placeholder="اتركه فارغاً للاختيار التلقائي بالأقرب انتهاءً (FEFO)" value={form.lotId} onChange={(v) => setForm((f) => ({ ...f, lotId: v }))} />
+        )}
       </div>
 
       {wouldOverdraw && (
