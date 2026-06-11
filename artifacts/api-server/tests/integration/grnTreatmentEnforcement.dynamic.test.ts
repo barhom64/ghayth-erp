@@ -156,18 +156,29 @@ d("FIN-SUB-01 — GRN treatment ↔ account nature enforced (live DB, HTTP)", ()
     }
   });
 
-  it("REJECTS a fixed-asset line pinned to an expense account (asset must not hit P&L) — no JE posted", async () => {
+  it("REJECTS fixed-asset on an expense account (asset must not hit P&L) and leaves ZERO trace", async () => {
     const poId = await makePO([
       { name: PFX + "bad-asset", qty: 1, price: 500, treatment: "fixed_asset", accountCode: EXP }, // 5350 = expense
     ]);
+    const poItemBefore = await rawQuery<{ id: number; receivedQty: string }>(
+      `SELECT id, COALESCE("receivedQty",0)::text AS "receivedQty" FROM purchase_order_items WHERE "orderId"=$1`, [poId]);
+    const statusBefore = (await rawQuery<{ status: string }>(`SELECT status FROM purchase_orders WHERE id=$1`, [poId]))[0].status;
+
     const res = await receive(poId);
     expect(res.status, JSON.stringify(res.body)).toBe(422);
     expect(JSON.stringify(res.body)).toMatch(/لا يجوز ترحيلها على حساب مصروف|أصل/);
 
-    // no journal entry was posted for this GRN
-    const grns = await rawQuery<{ id: number; journalId: number | null }>(
-      `SELECT id, "journalId" FROM goods_receipts WHERE "poId"=$1`, [poId]);
-    for (const g of grns) expect(g.journalId).toBeNull();
+    // ── full rejection: NO permanent trace whatsoever ──
+    // 1. no GRN row created (and therefore no journal entry)
+    const grns = await rawQuery<{ id: number }>(`SELECT id FROM goods_receipts WHERE "poId"=$1`, [poId]);
+    expect(grns.length, "no goods_receipts row may be created on a rejected receipt").toBe(0);
+    // 2. receivedQty unchanged
+    const poItemAfter = await rawQuery<{ id: number; receivedQty: string }>(
+      `SELECT id, COALESCE("receivedQty",0)::text AS "receivedQty" FROM purchase_order_items WHERE "orderId"=$1`, [poId]);
+    expect(poItemAfter.map((r) => r.receivedQty)).toEqual(poItemBefore.map((r) => r.receivedQty));
+    // 3. PO status unchanged
+    const statusAfter = (await rawQuery<{ status: string }>(`SELECT status FROM purchase_orders WHERE id=$1`, [poId]))[0].status;
+    expect(statusAfter).toBe(statusBefore);
   });
 
   it("REJECTS an inventory line pinned to an expense account (inventory must not be expensed)", async () => {
