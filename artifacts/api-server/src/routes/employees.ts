@@ -1674,11 +1674,18 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
               ea."companyId", ea."branchId", ea."departmentId",
               ea."managerId",
               b.name AS "branchName", d.name AS "departmentName",
+              -- PR-7 (#2077) — surface the full org chain on the
+              -- employee detail (Administration row in 360 view).
+              -- The LEFT JOIN keeps departments without an
+              -- administrationId returning NULL, which the UI shows
+              -- as «—» (no break).
+              d."administrationId", adm.name AS "administrationName",
               mgr.name AS "managerName"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN departments d ON d.id = ea."departmentId"
+       LEFT JOIN administrations adm ON adm.id = d."administrationId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        LEFT JOIN employees mgr ON mgr.id = ea."managerId"
        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL${extraCondition}`,

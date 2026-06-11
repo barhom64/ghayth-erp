@@ -959,6 +959,11 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             </CardHeader>
             <CardContent className="space-y-4">
               <InfoRow label="المسمى الوظيفي" value={employee.jobTitle} bold />
+              {/* PR-7 (#2077) — full org chain (شركة → فرع → إدارة → قسم → فريق).
+                  The Administration row pulls from departments.administrationName
+                  resolved by the /employees/:id route via the LEFT JOIN added
+                  in PR-7. When NULL the row shows «—» (no UI break). */}
+              <InfoRow label="الإدارة" value={employee.administrationName || "—"} />
               <InfoRow label="القسم" value={employee.departmentName || "-"} />
               <InfoRow label={<span className="flex items-center gap-2"><Building className="h-4 w-4" /> الفرع</span>} value={employee.branchName || "-"} />
               <InfoRow label="المدير المباشر" value={employee.managerName || "-"} />

@@ -80,6 +80,8 @@ const AttendanceCategoriesHr = lazy(() => import("@/pages/admin/attendance-categ
 // detail page that visualizes them.
 const EmployeeScore = lazy(() => import("@/pages/hr/employee-score"));
 const ScoringWeightsHr = lazy(() => import("@/pages/admin/scoring-weights"));
+// PR-7 (#2077) — unified org tree page (شركة → فرع → إدارة → قسم → فريق).
+const OrgTree = lazy(() => import("@/pages/hr/org-tree"));
 const Delegations = lazy(() => import("@/pages/hr/delegations"));
 const Accruals = lazy(() => import("@/pages/hr/accruals"));
 const Transfers = lazy(() => import("@/pages/hr/transfers"));
@@ -196,6 +198,8 @@ export const hrRoutes = [
   // back-compat alias just like /admin/attendance-categories did.
   { path: "/hr/employees/:id/score", component: EmployeeScore, subKey: "performance" },
   { path: "/hr/scoring-weights", component: ScoringWeightsHr, subKey: "performance" },
+  // PR-7 (#2077) — الشجرة التنظيمية الموحّدة.
+  { path: "/hr/org-tree", component: OrgTree, subKey: "employees" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
