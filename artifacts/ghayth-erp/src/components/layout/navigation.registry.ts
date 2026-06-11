@@ -205,16 +205,25 @@ export const allNavSections: NavSection[] = [
       ]},
 
       // 5. الامتثال والجزاءات — gathers all violations + memos +
-      // regulations + Saudization (previously 3 separate clusters)
-      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr", children: [
-        { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
-        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
-        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
-        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
-        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
-        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
+      // regulations + Saudization (previously 3 separate clusters).
+      // PR-10 (#2077) — Closure Gate: explicit perm guard on the
+      // group + the discipline/violations children so the رابط لا يظهر
+      // for users without violations/discipline visibility (e.g.
+      // payroll_officer). Backend authorize() still 403s either way —
+      // this just keeps «نظهرَ ثم 403» out of the UX. السعودة + WPS
+      // children stay on their own permissions so finance/payroll
+      // personas can still reach them.
+      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
+        perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
+        children: [
+        { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees", perm: ["hr.saudization:view","hr.saudization:list"], permMode: "any" },
+        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
       ]},
 
       // 6. الأداء والتطوير — gathers performance + 360 + IDP + training

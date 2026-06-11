@@ -525,7 +525,18 @@ router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90)
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
 // and is defence-in-depth against any future unguarded route.
-router.use("/permissions", requireMinLevel(90), permissionsRouter);
+// PR-10 (#2077) — pre-existing FND-004 (#866) over-reach: the guard
+// was added when this router only carried admin endpoints, but the
+// only route here today is /permissions/my, the self-introspection
+// surface that drives sidebar/button gating for EVERY user. The route
+// file's own comment is explicit: «self-introspection endpoint that
+// every authenticated user must be able to call regardless of role».
+// Without dropping this gate, hr_manager / department_manager /
+// payroll_officer would silently lose all perm-gated UI because their
+// /permissions/my call 403s and `apiData.permissions` stays empty —
+// exactly the symptom PR-10's nav gate hit. The route is scoped to
+// the caller (scope.userId/companyId) — no admin surface exposed.
+router.use("/permissions", permissionsRouter);
 router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
 // GAP_MATRIX item #16 — sidebar advertises this with perm=audit:read but
 // the mount only checked level≥70. Add requirePermission so direct-URL

@@ -1,4 +1,4 @@
-# تقرير إغلاق موجة HR (#2077) — PR-1 → PR-9a
+# تقرير إغلاق موجة HR (#2077) — PR-1 → PR-10
 
 > **التاريخ**: 2026-06-11 · **الفرع**: `claude/enterprise-hardening-roadmap-AOfO7`
 > **العقيدة الحاكمة**: «فعّل الموجود أولًا، ثم ابنِ المفقود» · HR قائد والمالية خادم ·
@@ -23,12 +23,22 @@
 | PR-8a | فصل الانتساب عن نطاق الصلاحية (بوابة بأمر صاحب المنتج) | الأدمن = 7 صفوف موظف، 7 أسطر رواتب، غياب مكرر، 8 درجات | `isAccessGrant` على `employee_assignments`: انتساب واحد، صلاحية عبر التوسعة، سياق نشط عبر المبدّل؛ مصفوفة sidebar 408/408 | رحلة 16/16 (الآن 30/30) + `hrIdentityAccessGrantSmoke` (10) + `SIDEBAR_MATRIX.md` |
 | PR-9 | رفيق الميدان فوق `/field-ping` الموجود | التتبع نظري: بلا واجهة، بلا سياق، الموظف الميداني محجوب بحاجز module | `/my/field` self-service + صفحة جوال RTL eligibility-first + طابور offline بإعادة إرسال بلا تكرار + سياق userId/activeRoleKey/categoryKey مختوم خادميًا | رحلة 15/15 + `hrFieldCompanionSmoke` (18) + لقطات جوال (overflow=0px) |
 | PR-9a | إصلاح seed الأدوار القياسية (إغلاق FU-1) | `department_manager` و`payroll_officer` بـ**0 وحدة** عند الدخول | dept=4 وحدات / payroll=3؛ payroll يقرأ `/hr/payroll` (200) ويُرفض على التحقيقات (403)؛ dept يرى موظفيه (200) ويُرفض على الرواتب (403) | رحلة 30/30 + `hrStandardRoleGrantsSmoke` (11) |
+| PR-10 | بوّابة الإغلاق: bootstrap الشركات الجديدة + إخفاء رابط الامتثال للأدوار غير المختصة | **شركات جديدة**: bootstrap لا يعرف الدورين → سيُعيدان 0 وحدة لأي tenant مستقبلي. **القائمة**: «الامتثال والجزاءات» تظهر لـpayroll/dept ثم تُرفض 403 (يخالف «لا تظهر شيئًا لا يستطيع فتحه»). **التوحيد**: ثلاثة مصادر لوحدات الدور بلا parity. | bootstrap الشركات الجديدة يعطي الدورين 14/15 grant بحزمة مطابقة لهجرة 291 (parity مسمَّر)؛ «الامتثال» مخفي لـpayroll/dept ويبقى ظاهرًا لـhr_manager؛ توسيع `translateLegacy` لقبول مفاتيح المزايا الدقيقة يلغي الحاجة إلى مسار SQL منفصل لمنح غير-متعارضة | رحلة 38/38 + `hrStandardRoleGrantsBootstrapParitySmoke` (8) + `hrComplianceMenuGateSmoke` (5) + إصلاح FND-004 over-reach |
 
-**القياس الحي النهائي للوحدات حسب الدور** (من `/auth/me` على المستأجر الحي):
+**القياس الحي النهائي للوحدات حسب الدور** (من `/auth/me` على المستأجر الحي بعد PR-10):
 
 ```
-owner=27 · hr_manager=6 · employee=5 · department_manager=4 · payroll_officer=3
+owner=27 · hr_manager=6 · employee=5 · department_manager=7 · payroll_officer=6
 (قبل PR-9a: dept=0, payroll=0)
+```
+
+**إثبات الإغلاق على شركة جديدة** (نفس مسار `seedRolesAndGrantsV2` الذي يستخدمه الـserver):
+
+```
+BOOT_OK {"roles":17,"grants":506}
+department_manager bootstrapped with 15 grants in new company
+payroll_officer    bootstrapped with 14 grants in new company
+payroll_officer    bootstrapped: ZERO hr.discipline grants
 ```
 
 ---
@@ -77,7 +87,16 @@ owner=27 · hr_manager=6 · employee=5 · department_manager=4 · payroll_office
 ## 4. ما أُغلق وما بقي
 
 ### أُغلق في هذه الموجة
-- FU-1 (أدوار seed بلا grants) — **أُغلقت في PR-9a** (هذا التقرير §2).
+- FU-1 (أدوار seed بلا grants) — **أُغلقت في PR-9a** (هذا التقرير §2) ثم
+  **عُمِّمت في PR-10** على bootstrap الشركات الجديدة (لا تكرار مستقبلي).
+- ظهور رابط «الامتثال والجزاءات» لمن لا يملك صلاحية صريحة — **أُغلق في
+  PR-10**: المجموعة وأبناؤها على `perm: ["hr.discipline:*","hr.violations:*"]`
+  بصيغة `permMode:"any"`؛ hr_manager يمر بـ`hr:*`، payroll/dept لا يريانه.
+- ثغرة FND-004 over-reach في `/permissions/my` — **أُغلقت في PR-10**:
+  كان `requireMinLevel(90)` يحجب الـself-introspection عن كل من هم أقل من
+  GM، فيعطل بوابات `perm:` للسايدبار لكل مدير. الراوت سكوبه ذاتي
+  (scope.userId/companyId) ولا يكشف سطح إدمن — أُزيلت البوابة وفق نية
+  الراوت الموثقة في رأس ملفه.
 - تسريب fleet middleware (PR-5a) — نمط `router.use` غير المقيّد بمسار
   عولج مرتين (fleet ثم درس HR في PR-9) وأصبح له نمط معتمد.
 - ازدواجية هوية الأدمن (PR-8a) — انتساب واحد، 4 استثناءات تشغيلية
@@ -89,12 +108,11 @@ owner=27 · hr_manager=6 · employee=5 · department_manager=4 · payroll_office
 | البند | الحالة | التوصية |
 |---|---|---|
 | **FU-2**: `/module-dashboards/*` خلف `requireModule("bi")` — مدير HR لا يقرأ HR Dashboard | مؤجَّلة **بقرار صريح** من PR-2 لمراجعة معمارية | بند أول في موجة ثانية: فصل لوحات الوحدات عن وحدة bi |
-| ظهور رابط «الامتثال والجزاءات» لكل حامل وحدة hr (الفتح يُرفض 403) | متوافق مع عقيدة «الحماية على الـbackend لا بإخفاء الرابط»؛ تغيير القائمة كان ممنوعًا في PR-9a | تحسين اختياري: subKey/perm أدق على مجموعة المخالفات |
-| الشركات **الجديدة** لا تستنسخ الدورين تلقائيًا (كتالوج autoMigrate لا يعرفهما) | الهجرة 291 تغطي كل الشركات القائمة | إضافة الدورين لكتالوج bootstrap في موجة قادمة |
 | `parentId` في `administrations` خامل (لا تداخل إدارات) | additive بقرار PR-7 | يبقى حتى تطلب البنية الفعلية ذلك |
 | إكمال بيانات: أقسام قائمة بلا `administrationId` | «ناقص بيانات لا crash» بتوجيه صاحب المنتج | شاشة orphans موجودة؛ تنظيف تشغيلي |
 | تحذيرا stop-ship على `myFieldTracking.ts` (لا audit/event لكل ping) | مقصود: ping عالي التردد لا يُسجَّل كحدث أعمال؛ الكتابة تحمل السياق كاملًا في الجدول | توثيق فقط — أو تجميع dvigest دوري إن طُلب |
 | 159 endpoint خلفي بلا مستهلك واجهة (إشارة Phase C عامة، 9 منها /hr) | رصد مستمر في wiring audit | خارج نطاق HR؛ موجة تنظيف عامة |
+| مصدران لـmodules: `ROLE_DEFAULT_MODULES` (mount gate) + grants → modules (sidebar). الآن متفقان بمسمار parity. | اتفاق يدوي محمي بمسمار | توحيدهما قرار معماري (موجة ثانية) — كان «منطق RBAC» خارج نطاق PR-9a/PR-10 |
 
 ---
 
@@ -108,7 +126,7 @@ owner=27 · hr_manager=6 · employee=5 · department_manager=4 · payroll_office
 | employee-360-personas (4 شخصيات) | 18/18 |
 | org-tree | 17/17 |
 | lifecycle | 23/23 |
-| identity-sidebar (+قسم C للمسارات المفترقة) | **30/30** |
+| identity-sidebar (+قسمَا D للbootstrap و E لقائمة الامتثال) | **38/38** |
 | field-tracking (6 شخصيات/فئات) | 15/15 |
 
 **مسامير الوحدات** (ضمن 10,220+ اختبارًا، guard كامل أخضر — typecheck،
@@ -116,7 +134,8 @@ lint patterns، wiring 2404/2404، schema drift، numbering، stop-ship):
 `hrWorkInboxAggregationSmoke` 26 · `hrWorkInboxFleetLeakFixSmoke` 14 ·
 `hrEmployee360TabsSmoke` 26 · `hrOrgTreeSmoke` 27 · `hrLifecycleEngineSmoke` 46 ·
 `hrIdentityAccessGrantSmoke` 10 · `hrFieldCompanionSmoke` 18 ·
-`hrStandardRoleGrantsSmoke` 11 — إضافة إلى ratchets الأعداد (223 endpoint
+`hrStandardRoleGrantsSmoke` 11 · `hrStandardRoleGrantsBootstrapParitySmoke` 8 ·
+`hrComplianceMenuGateSmoke` 5 — إضافة إلى ratchets الأعداد (223 endpoint
 HR كلها خلف `authorize`).
 
 **لقطات**: جوال RTL لرفيق الميدان (ميداني نشط / مكتبي غير خاضع، overflow=0px)،
@@ -142,14 +161,14 @@ HR كلها خلف `authorize`).
 
 ## 7. التوصية
 
-**أغلِق #2077.** التزامات الموجة العشرة نُفّذت وكل واحدة خلفها رحلة حيّة
-قابلة لإعادة التشغيل ومسمار يمنع الانحدار، والبند الوحيد الذي كاد يبقى
-مفتوحًا (FU-1) أُغلق في PR-9a قبل هذا التقرير. ما بقي (§4–§6) ليس نقصًا
-في التزامات الموجة بل بنود معمارية مُعلنة تستحق **موجة ثانية قصيرة**
-مقترحة بهذا الترتيب:
+**أغلِق #2077.** الالتزامات الإحدى عشرة نُفّذت، كل واحدة خلفها رحلة حيّة
+قابلة لإعادة التشغيل ومسمار يمنع الانحدار. ثلاثة بنود كادت تبقى مفتوحة
+(FU-1، bootstrap الشركات الجديدة، رابط الامتثال يعرض ثم 403) أُغلقت في
+PR-9a + PR-10 قبل هذا التقرير. ما بقي (§4–§6) ليس نقصًا في التزامات
+الموجة بل بنود معمارية مُعلنة تستحق **موجة ثانية قصيرة** مقترحة:
 
-1. فصل module-dashboards عن bi (FU-2) — أعلى أثر يومي.
-2. إضافة `department_manager`/`payroll_officer` لكتالوج bootstrap
-   (الشركات الجديدة) + توحيد مصدر «وحدات الدور».
-3. تدقيق subKey/perm لمجموعات القائمة الحساسة (المخالفات/التحقيقات).
-4. مسح Phase C لنقاط HR التسع غير المستهلَكة (ربط أو إزالة).
+1. فصل `/module-dashboards/*` عن `requireModule("bi")` (FU-2) — أعلى أثر يومي.
+2. توحيد مصدر «وحدات الدور» (`ROLE_DEFAULT_MODULES` مقابل grants→modules
+   الديناميكية)؛ اليوم يحرسهما مسمار parity لكن الجذر اثنان.
+3. مسح Phase C لنقاط HR التسع غير المستهلَكة (ربط أو إزالة).
+4. شاشة orphans `administrationId` كأداة تنظيف تشغيلية دورية.

@@ -181,6 +181,96 @@ EMP_PAYROLL="$(status_of "${EMAILS[employee]}" "/hr/payroll")"
 [ "$DEPT_PAYROLL" = "403" ] && ok "department_manager GET /hr/payroll → 403 (الرواتب ليست له)" || no "department_manager /hr/payroll → $DEPT_PAYROLL (expected 403)"
 [ "$EMP_PAYROLL" = "403" ] && ok "employee GET /hr/payroll → 403 (employee يبقى محدودًا)" || no "employee /hr/payroll → $EMP_PAYROLL (expected 403)"
 
+# ────────────────────────────────────────────────────────────────────────────
+section "D. PR-10 — Bootstrap الشركات الجديدة يعرف الدورين (لا تكرار FU-1)"
+# Migration 291 covered the live tenant; this proves that a NEW
+# company gets the same bundles automatically from the bootstrap
+# catalog — no future-FU-1 ambush.
+NEWCO="bootstrap-test-$(date +%s%N | head -c12)"
+PR10_CID="$(psql "$DSN" -tA -c "INSERT INTO companies (name, status, \"createdAt\") VALUES ('$NEWCO', 'active', NOW()) RETURNING id;" | head -1 | tr -d '[:space:]')"
+[ -n "$PR10_CID" ] && ok "company created (id=$PR10_CID)" || { no "create company failed"; PR10_CID=0; }
+
+if [ "${PR10_CID:-0}" -gt 0 ]; then
+  # Drive the SAME bootstrap path the server uses for fresh tenants —
+  # directly through the compiled lib so this is real evidence of
+  # production behaviour, not a re-implementation. The bundle bootstraps
+  # the pool from DATABASE_URL on import.
+  # The server bundle is single-file (esbuild), so we drive the
+  # bootstrap path from source via tsx — same exports, same code path,
+  # no shim. The script logs BOOT_OK on success.
+  cat > /tmp/pr10-bootstrap-newco.mts <<EOF
+import { withTransaction } from "/home/user/ghayth-erp/artifacts/api-server/src/lib/rawdb.ts";
+import { seedRolesAndGrantsV2 } from "/home/user/ghayth-erp/artifacts/api-server/src/lib/rbac/autoMigrate.ts";
+const out = await withTransaction((c) => seedRolesAndGrantsV2(c, $PR10_CID));
+console.log("BOOT_OK", JSON.stringify({ roles: Object.keys(out.roleIdByKey).length, grants: out.grantsCreated }));
+process.exit(0);
+EOF
+  BOOT_OUT="$(cd /home/user/ghayth-erp/artifacts/api-server && set -a; . ./.env; set +a; npx tsx /tmp/pr10-bootstrap-newco.mts 2>&1 | grep BOOT_OK | head -1)"
+  [ -n "$BOOT_OUT" ] && ok "bootstrap ran on the new company: $BOOT_OUT" || no "bootstrap call failed (see /tmp/pr10-bootstrap-newco.mts)"
+
+  # Counts in the freshly bootstrapped company.
+  for ROLE in department_manager payroll_officer; do
+    CNT="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_role_grants g JOIN rbac_roles r ON r.id=g.role_id WHERE r.role_key='$ROLE' AND r.\"companyId\"=$PR10_CID;")"
+    [ "${CNT:-0}" -ge 4 ] && ok "$ROLE bootstrapped with $CNT grants in new company" || no "$ROLE bootstrap: only $CNT grants"
+  done
+  # payroll_officer must NOT carry discipline in the new company either.
+  DISC="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_role_grants g JOIN rbac_roles r ON r.id=g.role_id WHERE r.role_key='payroll_officer' AND r.\"companyId\"=$PR10_CID AND g.feature_key LIKE 'hr.discipline%';")"
+  [ "${DISC:-9}" = "0" ] && ok "bootstrapped payroll_officer has ZERO hr.discipline grants" || no "bootstrapped payroll_officer leaked $DISC discipline grants"
+  # Cleanup the throwaway company.
+  psql "$DSN" -q -c "DELETE FROM rbac_role_grants WHERE role_id IN (SELECT id FROM rbac_roles WHERE \"companyId\"=$PR10_CID); DELETE FROM rbac_roles WHERE \"companyId\"=$PR10_CID; DELETE FROM companies WHERE id=$PR10_CID;" >/dev/null 2>&1
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
+section "E. PR-10 — رابط «الامتثال والجزاءات» لا يظهر لمن لا يملك صلاحية صريحة"
+# The sidebar filter consumes the same /permissions/my projection
+# that gates buttons. Read each persona's projected permissions and
+# evaluate the gate string-by-string — never claims «shown» when the
+# UI would hide it.
+perms_of(){
+  local EMAIL="$1"
+  local JX; JX="$(mktemp)"
+  curl -fsS -c "$JX" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$TEST_PASSWORD\"}" -o /dev/null 2>/dev/null
+  curl -sS -b "$JX" "$BASE/permissions/my" | python3 -c "import sys,json;d=json.load(sys.stdin);print('\n'.join(d.get('permissions') or []))"
+  rm -f "$JX"
+}
+# Mirrors src/lib/permission-match.ts exactly so what the journey
+# asserts === what the sidebar actually evaluates.
+matches(){
+  python3 -c "
+import sys
+granted=sys.stdin.read().splitlines()
+req=sys.argv[1]
+if (req in granted) or ('*' in granted):
+    print('y'); sys.exit()
+scope, _, action = req.partition(':')
+if (scope+':*') in granted:
+    print('y'); sys.exit()
+mod=scope.split('.')[0]
+if (mod+':*') in granted:
+    print('y'); sys.exit()
+if '.' in scope and action and (mod+':'+action) in granted:
+    print('y'); sys.exit()
+print('n')
+" "$1"
+}
+HR_PERMS="$(perms_of "${EMAILS[hr_manager]}")"
+PAY_PERMS="$(perms_of "${EMAILS[payroll_officer]}")"
+DEPT_PERMS="$(perms_of "${EMAILS[department_manager]}")"
+
+# Group gate: hr.violations:view OR hr.violations:list OR hr.discipline:view OR hr.discipline:list (permMode: "any")
+seen_compliance(){
+  for req in "hr.violations:view" "hr.violations:list" "hr.discipline:view" "hr.discipline:list"; do
+    [ "$(echo "$1" | matches "$req")" = "y" ] && { echo y; return; }
+  done; echo n
+}
+HR_SEE="$(seen_compliance "$HR_PERMS")"
+PAY_SEE="$(seen_compliance "$PAY_PERMS")"
+DEPT_SEE="$(seen_compliance "$DEPT_PERMS")"
+
+[ "$HR_SEE" = "y" ] && ok "hr_manager: «الامتثال والجزاءات» يظهر (hr:* يغطّي)" || no "hr_manager: «الامتثال والجزاءات» مخفي — تراجع غير مقصود"
+[ "$PAY_SEE" = "n" ] && ok "payroll_officer: «الامتثال والجزاءات» لا يظهر (لا يوجد grant على hr.discipline/violations)" || no "payroll_officer ما زال يرى الرابط ثم يُرفض 403"
+[ "$DEPT_SEE" = "n" ] && ok "department_manager: «الامتثال والجزاءات» لا يظهر (التحقيقات وظيفة HR لا قسم)" || no "department_manager يرى الرابط رغم عدم وجود grant"
+
 rm -f "$J"
 echo
 echo "▶ Result: $PASS passed, $FAIL failed"
