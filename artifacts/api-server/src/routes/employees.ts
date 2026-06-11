@@ -1022,7 +1022,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     }
 
     // ── Step 12: Auto-create subsidiary accounting accounts ──
-    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch((e) => logger.error(e, "employees background task failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "employees background task failed"));
 
     const [employee] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
