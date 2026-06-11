@@ -1143,16 +1143,39 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // haven't mapped these purposes yet inherit the seed defaults
     // (1250 inventory etc) — same fallback shape as
     // resolveAccountCode uses elsewhere.
+    // #1945 FIN-SUB-01 (#2097) — two default codes were wrong on the real SOCPA
+    // chart (and the default seed, which is identical): `inventory`→1250 is
+    // *leasehold improvements* (a fixed asset, NOT inventory), and `custody`→
+    // 1130 is the AR control header (clients), not custody. Corrected to the
+    // real control accounts; the `*_receipt`/`employee_custody` intents (added
+    // to MAPPING_INTENT) resolve the postable leaf on any tenant chart so the
+    // literal is only a last-resort fallback. Nature enforcement below is the
+    // hard guarantee regardless of which source picked the account.
     const TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
-      inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1250" },
+      inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1150" },
       expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
       fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
       project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
       vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
       property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
-      custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1130" },
-      prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1340" },
+      custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1142" },
+      prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1170" },
       service:              { purpose: "service_expense",              side: "debit", defaultCode: "6920" },
+    };
+
+    // Required chart nature per treatment (the enforcement contract below).
+    // Asset-bearing treatments must hit the balance sheet; cost treatments the
+    // P&L; project_cost may be either (direct expense or WIP/CIP capitalisation).
+    const TREATMENT_ACCOUNT_NATURE: Record<string, string[]> = {
+      inventory:            ["asset"],
+      fixed_asset:          ["asset"],
+      prepayment:           ["asset"],
+      custody:              ["asset"],
+      expense:              ["expense"],
+      service:              ["expense"],
+      vehicle_cost:         ["expense"],
+      property_maintenance: ["expense"],
+      project_cost:         ["expense", "asset"],
     };
 
     // Read the dimensional payload from the receipt lines we just
@@ -1299,6 +1322,13 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       umrahAgentId: number | null;
     };
     const buckets = new Map<string, DrBucket>();
+    // #1945 FIN-SUB-01 (#2097) — collect (treatment → resolved account) per
+    // line so we can ENFORCE, before posting, that the actual DR account's
+    // nature matches the line's treatment. Without this the GRN routed by
+    // treatment but never verified the account, so a `fixed_asset` line whose
+    // pinned/rule account was an expense posted an asset straight to P&L
+    // (R-005) — the catastrophe this task closes.
+    const treatmentAcctChecks: Array<{ lineId: number; treatment: string; acct: string }> = [];
     let postedNet = 0;
     for (let i = 0; i < receiptLineRows.length; i++) {
       const ln = receiptLineRows[i];
@@ -1318,6 +1348,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         }
       }
       if (!acct) acct = defaultInvAccount;
+      if (ln.lineTreatment && acct) treatmentAcctChecks.push({ lineId: ln.id, treatment: ln.lineTreatment, acct });
 
       // Use resolver-resolved cost-centre + dimensions so an
       // explicit `from_vehicle` strategy in the rule picks up the
@@ -1385,6 +1416,53 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         unitId: null, assetId: null,
         umrahSeasonId: null, umrahAgentId: null,
       });
+    }
+
+    // ── #1945 FIN-SUB-01 (#2097) — ENFORCE treatment ↔ account nature ──────
+    // The treatment the operator chose (and the preview showed) MUST match the
+    // chart nature of the account the line actually posts to:
+    //   inventory / fixed_asset / prepayment / custody → asset (balance sheet)
+    //   expense / service / vehicle_cost / property_maintenance → expense (P&L)
+    //   project_cost → expense OR asset (expensed or capitalised to WIP/CIP)
+    // A mismatch (e.g. a fixed-asset line landing on an expense account via a
+    // stale pin or a misconfigured rule) is rejected here — so the posted JE
+    // can never contradict the treatment, and an asset can never hit P&L.
+    // Reads the live chart types (no hardcoded codes); validated on Postgres.
+    if (treatmentAcctChecks.length > 0) {
+      const distinctCodes = [...new Set(treatmentAcctChecks.map((c) => c.acct))];
+      const typeRows = await rawQuery<{ code: string; type: string; name: string }>(
+        `SELECT code, type, name FROM chart_of_accounts
+          WHERE "companyId" = $1 AND code = ANY($2::text[]) AND "deletedAt" IS NULL`,
+        [scope.companyId, distinctCodes]
+      );
+      const accByCode = new Map(typeRows.map((r) => [r.code, { type: r.type, name: r.name }]));
+      const violations: Array<{ lineId: number; treatment: string; acct: string; accName: string; accType: string; allowed: string[] }> = [];
+      for (const c of treatmentAcctChecks) {
+        const allowed = TREATMENT_ACCOUNT_NATURE[c.treatment];
+        if (!allowed) continue; // treatment not nature-constrained
+        const acc = accByCode.get(c.acct);
+        if (!acc) continue; // missing account → createJournalEntry rejects it downstream with its own message
+        if (!allowed.includes(acc.type)) {
+          violations.push({ lineId: c.lineId, treatment: c.treatment, acct: c.acct, accName: acc.name, accType: acc.type, allowed });
+        }
+      }
+      if (violations.length > 0) {
+        const v = violations[0];
+        const natureAr: Record<string, string> = { asset: "أصل/ميزانية", liability: "التزام", equity: "حقوق ملكية", revenue: "إيراد", expense: "مصروف" };
+        const treatmentAr: Record<string, string> = {
+          inventory: "مخزون", fixed_asset: "أصل ثابت", prepayment: "مدفوع مقدماً", custody: "عهدة",
+          expense: "مصروف", service: "خدمة", vehicle_cost: "تكلفة مركبة", property_maintenance: "صيانة عقار", project_cost: "تكلفة مشروع",
+        };
+        throw new ValidationError(
+          `معالجة «${treatmentAr[v.treatment] ?? v.treatment}» لا يجوز ترحيلها على حساب ${natureAr[v.accType] ?? v.accType} «${v.acct} ${v.accName}» — ` +
+          `المتوقَّع حساب ${v.allowed.map((t) => natureAr[t] ?? t).join(" أو ")}.`,
+          {
+            field: "items",
+            fix: "اختر للبند حسابًا من النوع المطابق لمعالجته (مخزون→حساب مخزون، أصل→حساب أصول/ميزانية، مصروف→حساب مصروف) أو صحّح معالجة البند.",
+            meta: { violations },
+          } as any,
+        );
+      }
     }
 
     const drLines = Array.from(buckets.values())
