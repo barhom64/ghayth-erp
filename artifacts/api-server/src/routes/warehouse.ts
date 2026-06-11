@@ -47,6 +47,10 @@ interface WarehousePolicies {
   requireMovementReference: boolean;
   /** When false, hitting min-stock does NOT auto-create a purchase request. */
   autoPurchaseRequestOnMinStock: boolean;
+  /** F1 — when true, issuing a tracksLots product also REJECTS expired lots
+   *  (recalled/quarantine are always rejected regardless). Default off so
+   *  enabling lot tracking on a product never silently blocks issues. */
+  enforceLotFefo: boolean;
 }
 
 function parsePolicyBool(raw: unknown, fallback: boolean): boolean {
@@ -57,14 +61,102 @@ function parsePolicyBool(raw: unknown, fallback: boolean): boolean {
 
 async function getWarehousePolicies(companyId: number, branchId?: number): Promise<WarehousePolicies> {
   const { resolveSettings } = await import("../lib/settings.js");
-  const [requireRef, autoPr] = await Promise.all([
+  const [requireRef, autoPr, lotFefo] = await Promise.all([
     resolveSettings("warehouse.require_movement_reference", companyId, branchId),
     resolveSettings("warehouse.auto_purchase_request_on_min_stock", companyId, branchId),
+    resolveSettings("warehouse.enforce_lot_fefo", companyId, branchId),
   ]);
   return {
     requireMovementReference: parsePolicyBool(requireRef, false),
     autoPurchaseRequestOnMinStock: parsePolicyBool(autoPr, true),
+    enforceLotFefo: parsePolicyBool(lotFefo, false),
   };
+}
+
+/** Default warehouse for the company inside a transaction — creates the
+ *  canonical "المستودع الرئيسي" once. Mirrors warehouse-cycle-counts'
+ *  resolveWarehouseId but uses the open client (lot receipt is transactional). */
+async function resolveDefaultWarehouseId(
+  client: import("pg").PoolClient, companyId: number, branchId: number | null
+): Promise<number> {
+  const existing = await client.query(
+    `SELECT id FROM warehouses WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' ORDER BY id ASC LIMIT 1`,
+    [companyId]
+  );
+  if (existing.rows.length) return existing.rows[0].id;
+  const created = await client.query(
+    `INSERT INTO warehouses ("companyId","branchId",name,code,status) VALUES ($1,$2,'المستودع الرئيسي','MAIN','active') RETURNING id`,
+    [companyId, branchId]
+  );
+  return created.rows[0].id;
+}
+
+const NON_ISSUABLE_LOT_STATUSES = new Set(["recalled", "quarantine", "disposed", "expired"]);
+
+/**
+ * Lot-aware outbound consumption for a tracksLots product (F1). Runs inside
+ * the movement transaction (`client`). Picks lots FEFO (earliest expiry first,
+ * NULLs last) or honours an explicit `lotId`; rejects recalled/quarantine/
+ * disposed lots always, and expired lots when the company policy is on;
+ * deducts `warehouse_stock_lots.quantity`; returns the consumed lots so the
+ * movement can stamp its `lotId` (recall trace) and value at lot cost. No GL
+ * here — the route posts via warehouseEngine as before.
+ */
+export async function consumeLotsFefo(
+  client: import("pg").PoolClient,
+  args: { companyId: number; productId: number; quantity: number; explicitLotId?: number | null; blockExpired: boolean }
+): Promise<{ lotId: number; takenQty: number; unitCost: number }[]> {
+  const { companyId, productId, quantity, explicitLotId, blockExpired } = args;
+  const expiredClause = blockExpired ? `AND ("expiryDate" IS NULL OR "expiryDate" >= CURRENT_DATE)` : "";
+  let lots: Array<Record<string, any>>;
+  if (explicitLotId) {
+    lots = (await client.query(
+      `SELECT id, quantity, "unitCost", status, "qualityControlStatus", "expiryDate"
+       FROM warehouse_stock_lots
+       WHERE id=$1 AND "companyId"=$2 AND "productId"=$3 AND "deletedAt" IS NULL FOR UPDATE`,
+      [explicitLotId, companyId, productId]
+    )).rows;
+    if (!lots.length) throw new ValidationError("الدفعة المحددة غير موجودة لهذا الصنف", { field: "lotId", fix: "اختر دفعة صحيحة" });
+    const lot = lots[0];
+    if (NON_ISSUABLE_LOT_STATUSES.has(String(lot.status)) || (blockExpired && lot.expiryDate && new Date(lot.expiryDate) < new Date(new Date().toDateString()))) {
+      throw new ValidationError(`لا يمكن الصرف من دفعة بحالة "${lot.status}"${lot.expiryDate ? " أو منتهية" : ""}`, { field: "lotId", fix: "اختر دفعة نشطة وغير منتهية" });
+    }
+    if (String(lot.qualityControlStatus) !== "approved") {
+      throw new ValidationError("الدفعة لم تُعتمد في فحص الجودة (QC)", { field: "lotId", fix: "اعتمد الدفعة في QC قبل الصرف" });
+    }
+  } else {
+    lots = (await client.query(
+      `SELECT id, quantity, "unitCost", "expiryDate"
+       FROM warehouse_stock_lots
+       WHERE "companyId"=$1 AND "productId"=$2 AND "deletedAt" IS NULL
+         AND status='active' AND "qualityControlStatus"='approved' AND quantity > 0 ${expiredClause}
+       ORDER BY "expiryDate" ASC NULLS LAST, id ASC FOR UPDATE`,
+      [companyId, productId]
+    )).rows;
+  }
+
+  const available = lots.reduce((s, l) => s + Number(l.quantity), 0);
+  if (available < quantity) {
+    throw new ConflictError(
+      `الكمية المطلوبة (${quantity}) تتجاوز رصيد الدفعات الصالحة (${available})`,
+      { field: "lotId", fix: `رصيد الدفعات الصالح للصرف: ${available}` }
+    );
+  }
+
+  let remaining = quantity;
+  const consumed: { lotId: number; takenQty: number; unitCost: number }[] = [];
+  for (const lot of lots) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, Number(lot.quantity));
+    if (take <= 0) continue;
+    remaining -= take;
+    await client.query(
+      `UPDATE warehouse_stock_lots SET quantity = quantity - $1, "updatedAt"=NOW() WHERE id=$2`,
+      [take, lot.id]
+    );
+    consumed.push({ lotId: lot.id, takenQty: take, unitCost: Number(lot.unitCost ?? 0) });
+  }
+  return consumed;
 }
 
 const createProductSchema = z.object({
@@ -177,6 +269,12 @@ const createMovementSchema = z.object({
   unitCost: z.coerce.number().min(0, "تكلفة الوحدة يجب أن تكون 0 أو أكثر").optional().nullable(),
   reference: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  // Lot tracking (F1): on a tracksLots product, an inbound receipt carries a
+  // lotNumber (+optional expiry) to create/augment the lot; an outbound issue
+  // may name a specific lotId, else the engine auto-picks FEFO.
+  lotId: z.coerce.number().int().positive().optional().nullable(),
+  lotNumber: z.string().max(80).optional().nullable(),
+  expiryDate: z.string().optional().nullable(),
 });
 
 const PRODUCT_STATUSES = ["active", "inactive", "discontinued"] as const;
@@ -748,6 +846,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
     let updatedProduct: any = null;
     let preMovementAvgCost = 0;
     let productRef: any = null;
+    let lotForMovement: number | null = null; // F1 — recall-trace link on the movement
 
     await withTransaction(async (client) => {
       const prodRes = await client.query(
@@ -789,54 +888,100 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
         unitCost = preMovementAvgCost;
       }
 
+      const tracksLots = product.tracksLots === true;
+
       if (isOutbound) {
-        const batchRes = await client.query(
-          `SELECT id, quantity, "unitCost", "receivedDate" FROM warehouse_stock_batches WHERE "productId"=$1 AND quantity > 0 ORDER BY "receivedDate" ASC`,
-          [b.productId]
-        );
-        const batches = batchRes.rows;
-        let remaining = Number(b.quantity);
-        const updates: { id: number; newQty: number }[] = [];
-        for (const batch of batches) {
-          if (remaining <= 0) break;
-          const take = Math.min(remaining, Number(batch.quantity));
-          remaining -= take;
-          updates.push({ id: batch.id, newQty: Math.max(Number(batch.quantity) - take, 0) });
-        }
-        if (updates.length > 0) {
-          // Single UPDATE ... FROM (VALUES ...) instead of one round-trip per batch.
-          const valuesSql: string[] = [];
-          const params: unknown[] = [];
-          for (const u of updates) {
-            const base = params.length;
-            valuesSql.push(`($${base + 1}::int, $${base + 2}::numeric)`);
-            params.push(u.id, u.newQty);
-          }
-          await client.query(
-            `UPDATE warehouse_stock_batches AS wsb
-             SET quantity = v.new_qty
-             FROM (VALUES ${valuesSql.join(",")}) AS v(id, new_qty)
-             WHERE wsb.id = v.id`,
-            params
+        if (tracksLots) {
+          // F1 — lot-aware consumption: FEFO (or explicit lotId), rejecting
+          // recalled/quarantine/disposed always and expired when policy on.
+          // Value the issue at the weighted lot cost so COGS reflects reality.
+          const consumed = await consumeLotsFefo(client, {
+            companyId: scope.companyId, productId: b.productId, quantity: Number(b.quantity),
+            explicitLotId: b.lotId ?? null, blockExpired: policies.enforceLotFefo,
+          });
+          lotForMovement = consumed[0]?.lotId ?? null; // recall trace link
+          const totalCost = consumed.reduce((s, c) => s + c.takenQty * c.unitCost, 0);
+          unitCost = Number(b.quantity) > 0 ? roundTo2(totalCost / Number(b.quantity)) : 0;
+        } else {
+          const batchRes = await client.query(
+            `SELECT id, quantity, "unitCost", "receivedDate" FROM warehouse_stock_batches WHERE "productId"=$1 AND quantity > 0 ORDER BY "receivedDate" ASC`,
+            [b.productId]
           );
+          const batches = batchRes.rows;
+          let remaining = Number(b.quantity);
+          const updates: { id: number; newQty: number }[] = [];
+          for (const batch of batches) {
+            if (remaining <= 0) break;
+            const take = Math.min(remaining, Number(batch.quantity));
+            remaining -= take;
+            updates.push({ id: batch.id, newQty: Math.max(Number(batch.quantity) - take, 0) });
+          }
+          if (updates.length > 0) {
+            // Single UPDATE ... FROM (VALUES ...) instead of one round-trip per batch.
+            const valuesSql: string[] = [];
+            const params: unknown[] = [];
+            for (const u of updates) {
+              const base = params.length;
+              valuesSql.push(`($${base + 1}::int, $${base + 2}::numeric)`);
+              params.push(u.id, u.newQty);
+            }
+            await client.query(
+              `UPDATE warehouse_stock_batches AS wsb
+               SET quantity = v.new_qty
+               FROM (VALUES ${valuesSql.join(",")}) AS v(id, new_qty)
+               WHERE wsb.id = v.id`,
+              params
+            );
+          }
+          unitCost = Number(product.costPrice ?? 0);
         }
-        unitCost = Number(product.costPrice ?? 0);
       }
 
       if (b.type === 'in') {
-        // Internal correlation id, NOT a customer-visible doc number
-        // (Issue #1141). Stays as a time-based ref by design.
-        const batchNum = internalTechRef("BATCH");
-        await client.query(
-          `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
-          [b.productId, batchNum, b.quantity, b.unitCost || 0]
-        );
+        if (tracksLots) {
+          // F1 — a tracked receipt creates/augments a lot (not a plain batch).
+          // The lot starts QC 'approved' here only if explicitly received into
+          // an existing approved lot; brand-new lots created via the lots
+          // endpoint carry their own QC gate. A receipt requires a lotNumber.
+          if (b.lotId) {
+            const up = await client.query(
+              `UPDATE warehouse_stock_lots SET quantity = quantity + $1, "updatedAt"=NOW()
+               WHERE id=$2 AND "companyId"=$3 AND "productId"=$4 AND "deletedAt" IS NULL RETURNING id`,
+              [b.quantity, b.lotId, scope.companyId, b.productId]
+            );
+            if (!up.rows.length) throw new ValidationError("الدفعة المحددة غير موجودة لهذا الصنف", { field: "lotId", fix: "اختر دفعة صحيحة" });
+            lotForMovement = b.lotId;
+          } else {
+            if (!(b.lotNumber && b.lotNumber.trim())) {
+              throw new ValidationError("هذا الصنف يتتبّع الدفعات — رقم الدفعة مطلوب عند الاستلام", { field: "lotNumber", fix: "أدخل رقم الدفعة (وتاريخ الصلاحية إن وُجد)" });
+            }
+            const warehouseId = await resolveDefaultWarehouseId(client, scope.companyId, scope.branchId);
+            const lotRes = await client.query(
+              `INSERT INTO warehouse_stock_lots
+                 ("companyId","productId","warehouseId","lotNumber",quantity,"originalQuantity","unitCost","receivedDate","expiryDate",status,"qualityControlStatus")
+               VALUES ($1,$2,$3,$4,$5,$5,$6,CURRENT_DATE,$7,'active','approved')
+               ON CONFLICT ("companyId","productId","warehouseId","lotNumber") WHERE "deletedAt" IS NULL
+               DO UPDATE SET quantity = warehouse_stock_lots.quantity + EXCLUDED.quantity, "updatedAt"=NOW()
+               RETURNING id`,
+              [scope.companyId, b.productId, warehouseId, b.lotNumber.trim(), b.quantity, b.unitCost || 0, b.expiryDate ?? null]
+            );
+            lotForMovement = lotRes.rows[0]?.id ?? null;
+          }
+        } else {
+          // Internal correlation id, NOT a customer-visible doc number
+          // (Issue #1141). Stays as a time-based ref by design.
+          const batchNum = internalTechRef("BATCH");
+          await client.query(
+            `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
+            [b.productId, batchNum, b.quantity, b.unitCost || 0]
+          );
+        }
       }
 
       const sign = isInbound ? 1 : -1;
       const movRes = await client.query(
-        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [scope.companyId, b.productId, b.type, b.quantity, unitCost, b.reference, b.notes, scope.userId, scope.branchId]
+        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId","lotId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [scope.companyId, b.productId, b.type, b.quantity, unitCost, b.reference, b.notes, scope.userId, scope.branchId, lotForMovement]
       );
       insertId = movRes.rows[0]?.id ?? 0;
 

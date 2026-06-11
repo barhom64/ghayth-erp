@@ -246,6 +246,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadBuildingCard(companyId, entityId);
     case "project":
       return await loadProjectCard(companyId, entityId);
+    case "project_statement":
+      return await loadProjectStatement(companyId, entityId);
     case "store_order":
       return await loadStoreOrder(companyId, entityId);
     case "crm_opportunity":
@@ -1559,6 +1561,52 @@ async function loadProjectCard(companyId: number, id: string) {
     [id, companyId],
   );
   return { entity: row ?? { id } };
+}
+
+/** Project statement / مستخلص المشروع — the project header plus its financial
+ *  position (budget vs. actual cost vs. billed-to-client vs. remaining) and a
+ *  line-by-line cost breakdown. Read-only over existing projects tables — no
+ *  finance writes; this is a print view of what the project routes already
+ *  recorded (project_costs, project_boq_items). Powers the `project_statement`
+ *  bespoke print preset (templateResolver.ts). */
+async function loadProjectStatement(companyId: number, id: string) {
+  const [project] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*, c.name AS "clientName", e.name AS "managerName",
+            br.name AS "branchName"
+     FROM projects p
+     LEFT JOIN clients c ON c.id = p."clientId"
+     LEFT JOIN employees e ON e.id = p."managerId"
+     LEFT JOIN branches br ON br.id = p."branchId"
+     WHERE p.id = $1 AND p."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!project) return { entity: { id } };
+
+  const costs = await rawQuery<Record<string, unknown>>(
+    `SELECT "costDate", category, description, amount
+       FROM project_costs
+      WHERE "projectId" = $1 AND "companyId" = $2
+      ORDER BY "costDate" ASC, id ASC`,
+    [id, companyId],
+  );
+  const [agg] = await rawQuery<Record<string, unknown>>(
+    `SELECT
+        COALESCE((SELECT SUM(amount) FROM project_costs
+                   WHERE "projectId" = $1 AND "companyId" = $2), 0)  AS "totalCosts",
+        COALESCE((SELECT SUM("lineTotal") FROM project_boq_items
+                   WHERE "projectId" = $1 AND "companyId" = $2
+                     AND status = 'billed'), 0)                      AS "totalBilled"`,
+    [id, companyId],
+  );
+  const budget = Number(project.budget || 0);
+  const totalCosts = Number(agg?.totalCosts || 0);
+  const totalBilled = Number(agg?.totalBilled || 0);
+  const remaining = Math.round((budget - totalCosts) * 100) / 100;
+
+  return {
+    entity: { ...project, budget, totalCosts, totalBilled, remaining },
+    costs,
+  };
 }
 
 async function loadStoreOrder(companyId: number, id: string) {

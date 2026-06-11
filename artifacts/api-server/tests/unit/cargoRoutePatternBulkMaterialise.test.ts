@@ -43,7 +43,11 @@ describe("#1812 TR-017 — endpoint surface", () => {
     expect(SRC).toMatch(
       /transportRoutePatternsRouter\.post\(\s*"\/transport\/route-patterns\/:id\/materialise-range"/,
     );
-    const block = SRC.slice(SRC.indexOf("/materialise-range"));
+    // Anchor on the actual endpoint registration (not the first
+    // string occurrence — the route file's header comment now also
+    // mentions /materialise-range when explaining the cron in
+    // #2079 TA-T18-02).
+    const block = SRC.slice(SRC.indexOf('transportRoutePatternsRouter.post(\n  "/transport/route-patterns/:id/materialise-range"'));
     expect(block.slice(0, 400)).toMatch(/feature: "fleet\.bookings", action: "create"/);
   });
 

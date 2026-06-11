@@ -3,8 +3,14 @@
  *
  * A route_pattern is a TEMPLATE for cargo trips that repeat on a
  * recurring schedule. Materialised into `transport_bookings` rows by
- * the daily cron, with bookingSource = "recurring_schedule" and
- * routePatternId pointing back to the template.
+ * either:
+ *   1. the dispatcher firing /materialise (one day) or /materialise-range
+ *      (a date window) from the SPA, or
+ *   2. the `materialise_due_route_patterns` cron at 06:30 Riyadh —
+ *      gated on transport_planning_settings.autoMaterialiseEnabled
+ *      (default FALSE; companies opt in explicitly per #2079 TA-T18-02).
+ * Either path emits bookings with bookingSource = "recurring_schedule"
+ * and routePatternId pointing back to the template.
  *
  * Endpoints:
  *
