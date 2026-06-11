@@ -243,7 +243,7 @@ export const allNavSections: NavSection[] = [
         { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
         { label: "أوزان التقييم وترتيب الأداء", path: "/admin/scoring-weights", icon: TrendingUp, subKey: "settings" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
-        { label: "فئات الموظفين وسياسات الحضور", path: "/admin/attendance-categories", icon: Users, subKey: "settings" },
+        { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },
       ]},
     ],
   },

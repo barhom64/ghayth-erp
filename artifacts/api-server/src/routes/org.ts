@@ -24,6 +24,24 @@ const router = Router();
 
 const ADMIN = { feature: "admin", action: "list" } as const;
 const ADMIN_WRITE = { feature: "admin", action: "update" } as const;
+// PR-3 (#2077) — domain-correct guards for the HR-side org surfaces.
+// The previous ADMIN gate was too tight: an HR Manager who can edit
+// the company-wide attendance policy (/hr/attendance-policy) couldn't
+// open the per-category override page (/org/attendance-policies-per-
+// category) — the page was technically built but the API 403'd. The
+// employee-categories catalog has the same coupling: PR-1's wizard
+// reads it for the category dropdown, but a non-owner caller hit a
+// 403 and saw an empty list.
+//
+// Splitting the gates: the CATALOG read is shared with every HR
+// operator who manages employees (hr.employees:list — the basic
+// «can see employee list» permission). The per-category policy
+// surface is gated on hr.attendance — the same module that owns the
+// company-wide policy editor, so the two pages stay in the same
+// permission lane.
+const HR_EMPLOYEES_READ = { feature: "hr.employees", action: "list" } as const;
+const HR_ATTENDANCE_READ = { feature: "hr.attendance", action: "list" } as const;
+const HR_ATTENDANCE_WRITE = { feature: "hr.attendance", action: "update" } as const;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function requireScope(req: any): { companyId: number; userId: number } {
@@ -597,7 +615,12 @@ router.delete("/approval-authorities/:id", authorize(ADMIN_WRITE), async (req, r
 //    270). Companies can NOT edit system categories from this UI — only
 //    add per-company overrides in attendance_policies_per_category.
 // ════════════════════════════════════════════════════════════════════════════
-router.get("/employee-categories", authorize(ADMIN), async (req, res) => {
+// PR-3 (#2077) — the categories catalog is a lookup table used by
+// every employee-create form (the wizard's EmployeeCategorySelect)
+// and by the per-category attendance settings page. Gated on
+// hr.employees:list so any HR operator can render the dropdown;
+// the system rows are read-only here regardless of the guard.
+router.get("/employee-categories", authorize(HR_EMPLOYEES_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const rows = await rawQuery(
@@ -628,7 +651,13 @@ const attendancePolicyPerCategorySchema = z.object({
   trackingFrequencySeconds: z.number().int().min(0).max(3600).optional().nullable(),
 });
 
-router.get("/attendance-policies-per-category", authorize(ADMIN), async (req, res) => {
+// PR-3 (#2077) — the per-category policy is a sibling of the
+// company-wide /hr/attendance-policy (which uses hr.attendance:list).
+// Gating both with the same key keeps the HR Manager flow coherent:
+// you can edit the default policy AND its per-category overrides
+// from the same permission level (the override page lives under the
+// /hr/attendance-categories navigation, not /admin/*).
+router.get("/attendance-policies-per-category", authorize(HR_ATTENDANCE_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const rows = await rawQuery(
@@ -645,7 +674,7 @@ router.get("/attendance-policies-per-category", authorize(ADMIN), async (req, re
   } catch (e) { handleRouteError(e, res, "تعذّر جلب overrides سياسة الحضور"); }
 });
 
-router.post("/attendance-policies-per-category", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/attendance-policies-per-category", authorize(HR_ATTENDANCE_WRITE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const body = zodParse(attendancePolicyPerCategorySchema.safeParse(req.body));
@@ -682,7 +711,7 @@ router.post("/attendance-policies-per-category", authorize(ADMIN_WRITE), async (
   } catch (e) { handleRouteError(e, res, "تعذّر حفظ override سياسة الحضور"); }
 });
 
-router.delete("/attendance-policies-per-category/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/attendance-policies-per-category/:id", authorize(HR_ATTENDANCE_WRITE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);

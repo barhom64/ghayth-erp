@@ -66,6 +66,12 @@ const Evaluation360Upward = lazy(() => import("@/pages/hr/evaluation-360-upward"
 const Evaluation360History = lazy(() => import("@/pages/hr/evaluation-360-history"));
 const PublicHolidays = lazy(() => import("@/pages/hr/public-holidays"));
 const AttendancePolicy = lazy(() => import("@/pages/hr/attendance-policy"));
+// PR-3 (#2077) — per-category attendance overrides. Page module already
+// existed under /admin (HR-015) but was only reachable by admins; mount
+// it under /hr too so the HR Manager can manage policies without
+// crossing into the admin module. The /admin route stays as a back-
+// compat alias for any bookmark/print/notification deep-link.
+const AttendanceCategoriesHr = lazy(() => import("@/pages/admin/attendance-categories"));
 const Delegations = lazy(() => import("@/pages/hr/delegations"));
 const Accruals = lazy(() => import("@/pages/hr/accruals"));
 const Transfers = lazy(() => import("@/pages/hr/transfers"));
@@ -173,6 +179,10 @@ export const hrRoutes = [
   { path: "/hr/evaluation-360/:id", component: Evaluation360Detail, subKey: "performance" },
   { path: "/hr/public-holidays", component: PublicHolidays, subKey: "leaves" },
   { path: "/hr/attendance-policy", component: AttendancePolicy, subKey: "attendance" },
+  // PR-3 (#2077) — per-category overrides. Same component as the legacy
+  // /admin/attendance-categories route; just exposed under /hr so HR
+  // managers can reach it via the HR navigation.
+  { path: "/hr/attendance-categories", component: AttendanceCategoriesHr, subKey: "attendance" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },

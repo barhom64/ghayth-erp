@@ -90,7 +90,12 @@ describe("HR-016 — Unified Work Queue", () => {
 
 describe("HR-015 — Attendance Categories admin (backend)", () => {
   it("GET /employee-categories endpoint defined", () => {
-    expect(ORG_SRC).toMatch(/router\.get\("\/employee-categories", authorize\(ADMIN\)/);
+    // PR-3 (#2077) widened the gate from admin:list to hr.employees:list
+    // so the PR-1 wizard's category dropdown actually returns rows for
+    // non-admin operators. The dedicated PR-3 smoke (hrAttendancePerCategoryGatesSmoke)
+    // pins the exact constant; here we just confirm the route is mounted
+    // and authorize() is applied (the gate is no longer admin).
+    expect(ORG_SRC).toMatch(/router\.get\("\/employee-categories", authorize\(HR_EMPLOYEES_READ\)/);
   });
 
   it("returns system templates AND company-scoped rows", () => {
@@ -137,13 +142,21 @@ describe("HR-015 — Attendance Categories admin (frontend)", () => {
     expect(ATT_CAT_SRC).toMatch(/SelectItem value="false"/);
   });
 
-  it("page registered at /admin/attendance-categories", () => {
+  it("page registered at /admin/attendance-categories (back-compat alias)", () => {
+    // PR-3 (#2077) added a canonical /hr/attendance-categories mount so HR
+    // Managers can reach the page without crossing the admin module
+    // boundary. The /admin route stays as a back-compat alias for any
+    // bookmark/print/notification deep-link. Both routes resolve to the
+    // same component.
     expect(ADMIN_ROUTES_SRC).toMatch(/const AdminAttendanceCategories = lazy/);
     expect(ADMIN_ROUTES_SRC).toMatch(/\{ path: "\/admin\/attendance-categories", component: AdminAttendanceCategories \}/);
   });
 
-  it("nav entry under «إعدادات الموارد البشرية»", () => {
-    expect(NAV_SRC).toMatch(/label: "فئات الموظفين وسياسات الحضور", path: "\/admin\/attendance-categories"/);
+  it("nav entry under «إعدادات الموارد البشرية» (now points at /hr after PR-3)", () => {
+    // PR-3 moved the navigation entry from /admin/attendance-categories
+    // to /hr/attendance-categories so the link doesn't 403 for the
+    // HR Manager whose role lacks `admin:*`.
+    expect(NAV_SRC).toMatch(/label: "فئات الموظفين وسياسات الحضور", path: "\/hr\/attendance-categories"/);
   });
 });
 
