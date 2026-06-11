@@ -32,10 +32,10 @@ const BOOKING_DETAIL = readSpa("pages/fleet/transport-booking-detail.tsx");
 const BOOKINGS_LIST = readSpa("pages/fleet/transport-bookings.tsx");
 
 describe("#1812 — integration router exists + is mounted", () => {
-  it("file exists + mounts under requireModule(fleet) + requireGuards(financial)", () => {
+  it("file exists + mounts via PR-5a fleetGuards helper (still gates on fleet + financial)", () => {
     expect(existsSync(join(apiSrc, "routes/transport-integration.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("transportIntegrationRouter");
-    expect(ROUTES_INDEX).toMatch(/requireModule\("fleet"\)[\s\S]{0,100}transportIntegrationRouter/);
+    expect(ROUTES_INDEX).toMatch(/router\.use\(fleetGuards\(\),\s*transportIntegrationRouter\)/);
   });
 
   it("exposes the 3 integration endpoints", () => {

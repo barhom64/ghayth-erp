@@ -174,7 +174,36 @@ OR_COUNT="$(echo "$MS_RESP" | py "import sys,json;d=json.load(sys.stdin);print(l
 [ "${PA_COUNT:-0}" -ge 1 ] && [ "${OR_COUNT:-0}" -ge 1 ] && ok "HR Manager sees ≥ $PA_COUNT approvals + ≥ $OR_COUNT follow-ups in one call to /my-space" || no "/my-space empty"
 echo "    Before PR-5 the HR Manager would have visited 5 pages to learn the same; after PR-5 the page wraps these endpoints into one screen."
 
-rm -f "$J" "$JOWNER"
+section "4. PR-5a regression — HR Manager (non-fleet) can now reach the inbox sources"
+# Before PR-5a the unbound `requireModule("fleet")` at routes/index.ts
+# leaked onto /my-space + /notifications, so the HR Manager hit 403
+# on every source the work-inbox page reads. PR-5a wrapped the fleet
+# guards in a path-conditional gate (fleetGuards() — fires only for
+# /transport/* and /fleet/*). Prove it ON THE LIVE TENANT.
+JHR2="$(mktemp)"
+curl -fsS -c "$JHR2" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$HR_EMAIL\",\"password\":\"$TEST_PASSWORD\"}" -o /dev/null
+[ -n "$(grep erp_csrf "$JHR2" | awk '{print $7}')" ] && ok "hr_manager login (post-PR-5a)" || { no "hr_manager login"; exit 1; }
+
+MS_STATUS="$(curl -sS -o /dev/null -w "%{http_code}" -b "$JHR2" "$BASE/my-space")"
+NT_STATUS="$(curl -sS -o /dev/null -w "%{http_code}" -b "$JHR2" "$BASE/notifications?limit=5")"
+[ "$MS_STATUS" = "200" ] && ok "GET /my-space as HR Manager → 200 (was 403 with requiredModule=fleet before PR-5a)" || no "GET /my-space → $MS_STATUS"
+[ "$NT_STATUS" = "200" ] && ok "GET /notifications as HR Manager → 200 (was 403 before PR-5a)" || no "GET /notifications → $NT_STATUS"
+
+# /tasks legitimately requires the `operations` module (it's not part
+# of the fleet leak). HR Manager doesn't get that module, so 403 here
+# is correct gating — but the 403 must NOT be `requiredModule=fleet`
+# anymore. Pin that explicitly so a future regression that re-leaks
+# fleet onto /tasks fails the check.
+TASKS_BODY="$(curl -sS -b "$JHR2" "$BASE/tasks?limit=5&assignedToMe=1")"
+TASKS_REQ_MOD="$(echo "$TASKS_BODY" | py "import sys,json;d=json.load(sys.stdin);print((d.get('meta') or {}).get('requiredModule'))")"
+echo "$TASKS_REQ_MOD" | grep -q "fleet" && no "GET /tasks still reports requiredModule=fleet (leak NOT fixed): $TASKS_REQ_MOD" || ok "GET /tasks no longer reports requiredModule=fleet (correct domain gate now: $TASKS_REQ_MOD)"
+
+# The fleet routes themselves MUST still be gated — proving the guard
+# wasn't broken in the opposite direction.
+FLEET_STATUS="$(curl -sS -o /dev/null -w "%{http_code}" -b "$JHR2" "$BASE/transport/locations")"
+[ "$FLEET_STATUS" = "403" ] && ok "GET /transport/locations as HR Manager → 403 (fleet guard still fires for /transport/* — gate not over-loosened)" || no "GET /transport/locations → $FLEET_STATUS (expected 403)"
+
+rm -f "$J" "$JOWNER" "$JHR2"
 echo
 echo "▶ Result: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1

@@ -135,10 +135,14 @@ describe("#1733 Booking + Dispatch — route surface", () => {
     expect(block).toMatch(/declinedReason/);
   });
 
-  it("router is mounted under /api with module + financial guards", () => {
+  it("router is mounted under /api with module + financial guards (via PR-5a's fleetGuards helper)", () => {
+    // PR-5a (#2077) wrapped the previously-unbound guards in a
+    // path-conditional helper `fleetGuards()` so the fleet middleware
+    // no longer leaks onto unrelated routes (/my-space, /tasks, …).
+    // The guards still fire — only for /transport/* and /fleet/* paths.
     expect(ROUTES_INDEX).toContain("transportBookingsRouter");
     expect(ROUTES_INDEX).toMatch(
-      /router\.use\(\s*requireModule\("fleet"\),\s*requireGuards\("financial"\),\s*transportBookingsRouter\)/,
+      /router\.use\(\s*fleetGuards\(\),\s*transportBookingsRouter\)/,
     );
   });
 });

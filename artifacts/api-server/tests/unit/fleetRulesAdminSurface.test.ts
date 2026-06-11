@@ -23,10 +23,10 @@ const FLEET_ROUTES = readSpa("routes/fleetRoutes.tsx");
 const BOOKINGS_LIST = readSpa("pages/fleet/transport-bookings.tsx");
 
 describe("#1733 follow-up — fleet_expense_rules backend CRUD", () => {
-  it("file exists + mounts under requireModule(fleet) + requireGuards(financial)", () => {
+  it("file exists + mounts via PR-5a fleetGuards helper", () => {
     expect(existsSync(join(apiSrc, "routes/fleet-rules-admin.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("fleetRulesAdminRouter");
-    expect(ROUTES_INDEX).toMatch(/requireModule\("fleet"\)[\s\S]{0,80}fleetRulesAdminRouter/);
+    expect(ROUTES_INDEX).toMatch(/router\.use\(fleetGuards\(\),\s*fleetRulesAdminRouter\)/);
   });
 
   it("exposes the 4 CRUD endpoints + soft-delete", () => {

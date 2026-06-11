@@ -84,11 +84,9 @@ describe("#1733 Pricing — route surface", () => {
     expect(block).toMatch(/finance\.transport_billing\.batch\.ready/);
   });
 
-  it("router is mounted with fleet module + financial guards", () => {
+  it("router is mounted with fleet module + financial guards (via PR-5a fleetGuards helper)", () => {
     expect(ROUTES_INDEX).toContain("transportPricingRouter");
-    expect(ROUTES_INDEX).toMatch(
-      /router\.use\(\s*requireModule\("fleet"\),\s*requireGuards\("financial"\),\s*transportPricingRouter\)/,
-    );
+    expect(ROUTES_INDEX).toMatch(/router\.use\(\s*fleetGuards\(\),\s*transportPricingRouter\)/);
   });
 });
 

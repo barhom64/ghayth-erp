@@ -200,10 +200,10 @@ describe("#1812 — driver-rest guard", () => {
 });
 
 describe("#1812 — planning routes", () => {
-  it("router file exists + is mounted under requireModule(fleet)", () => {
+  it("router file exists + is mounted via PR-5a fleetGuards helper", () => {
     expect(existsSync(join(apiSrc, "routes/transport-planning.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("transportPlanningRouter");
-    expect(ROUTES_INDEX).toMatch(/requireModule\("fleet"\)[\s\S]{0,100}transportPlanningRouter/);
+    expect(ROUTES_INDEX).toMatch(/router\.use\(fleetGuards\(\),\s*transportPlanningRouter\)/);
   });
 
   it("exposes the 5 planning endpoints", () => {

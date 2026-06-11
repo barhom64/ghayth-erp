@@ -394,28 +394,61 @@ router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRo
 // own full paths (/transport/bookings, /transport/dispatch-orders,
 // /fleet/vehicles/:vehicleId/...) so they mount without a prefix.
 // Same fleet-module + financial guards.
-router.use(requireModule("fleet"), requireGuards("financial"), transportBookingsRouter);
+// PR-5a (#2077) — wrap the 7 unbound `router.use(requireModule("fleet"), …,
+// subRouter)` mounts below so the fleet+financial guards only fire for
+// /transport/* and /fleet/* requests — NOT for every request that
+// happens to reach this point in the chain. Express runs `router.use(mw,
+// subRouter)` middleware unconditionally on every incoming request
+// (even those the subRouter won't match), so the previous code blocked
+// /my-space, /tasks, /notifications, /work-inbox, etc. for any operator
+// without the fleet module. Surfaced by PR-5's verify journey — the
+// HR Manager's صندوق الأعمال 403'd until this fix landed.
+//
+// `gateForFleetPaths` is path-conditional: it forwards to the next
+// middleware when req.path matches one of the fleet/transport prefixes,
+// otherwise it skips straight to the subRouter (which then no-matches
+// and Express moves on to the rest of the chain). Each subRouter still
+// owns its own authMiddleware (applied via subRouter.use(authMiddleware)),
+// so the auth surface doesn't widen.
+function gateForFleetPaths(...middlewares: import("express").RequestHandler[]): import("express").RequestHandler {
+  return function fleetPrefixGate(req, res, next) {
+    if (!req.path.startsWith("/transport/") && !req.path.startsWith("/fleet/")) {
+      return next();
+    }
+    let i = 0;
+    const runNext: import("express").NextFunction = (err) => {
+      if (err) return next(err);
+      const mw = middlewares[i++];
+      if (!mw) return next();
+      mw(req, res, runNext);
+    };
+    runNext();
+  };
+}
+const fleetGuards = () => gateForFleetPaths(requireModule("fleet"), requireGuards("financial"));
+
+router.use(fleetGuards(), transportBookingsRouter);
 // #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
 // /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
-router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRouter);
+router.use(fleetGuards(), vehicleProfileRouter);
 // #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
 // /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
-router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
+router.use(fleetGuards(), transportPricingRouter);
 // #1812 Planning engine — assignment-suggestion + maps + ops dashboard +
 // itineraries + in-app driver navigation sessions. URLs land at
 // /transport/planning-settings, /transport/bookings/:id/suggest-assignment,
 // /transport/ops-dashboard, /transport/itineraries, and
 // /transport/dispatch-orders/:id/navigation/*. Fleet-module + financial
 // guards (same as the other transport routers).
-router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
+router.use(fleetGuards(), transportPlanningRouter);
 // #1812 integration bridges — pulls bookings FROM umrah groups + lists
 // linked sources that don't yet have transport materialized + iCalendar
 // feed for the central calendar. The user's governing comment: "النقل
 // ليس جزيرة" — this router is the proof.
-router.use(requireModule("fleet"), requireGuards("financial"), transportIntegrationRouter);
+router.use(fleetGuards(), transportIntegrationRouter);
 // #1812 Comment 4663005810 — cargo recurring route patterns.
-router.use(requireModule("fleet"), requireGuards("financial"), transportRoutePatternsRouter);
-router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
+router.use(fleetGuards(), transportRoutePatternsRouter);
+router.use(fleetGuards(), fleetRulesAdminRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
 router.use("/properties", propertiesUserLimiter);

@@ -130,9 +130,9 @@ describe("#1812 §K4 — route-patterns CRUD + materialise", () => {
     expect(PATTERNS).toMatch(/\(mask & \(1 << dayOfWeek\)\) !== 0/);
   });
 
-  it("router mounted in index.ts with fleet+financial guards", () => {
+  it("router mounted in index.ts with fleet+financial guards (PR-5a path-conditional wrap)", () => {
     expect(INDEX).toContain("transportRoutePatternsRouter");
-    expect(INDEX).toMatch(/router\.use\(requireModule\("fleet"\), requireGuards\("financial"\), transportRoutePatternsRouter\)/);
+    expect(INDEX).toMatch(/router\.use\(fleetGuards\(\), transportRoutePatternsRouter\)/);
   });
 });
 
