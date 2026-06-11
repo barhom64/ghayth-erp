@@ -599,45 +599,75 @@ transportBookingsRouter.post(
         assertInsert(headerInsert.insertId, "transport_bookings");
         const bookingId = headerInsert.insertId;
 
-        // #1812 multi-leg — atomically insert the lines payload if present.
-        // Server auto-numbers any leg that didn't supply lineNumber so the
-        // operator can just push legs onto an array without bookkeeping.
+        // #1812 multi-leg + #2079 Gate-PE-2 (Route Leg as Canon).
+        // Server auto-numbers any leg that didn't supply lineNumber so
+        // the operator can just push legs onto an array without
+        // bookkeeping. If the caller omitted `lines` entirely or sent
+        // an empty array, we synthesise a single leg derived from the
+        // booking header so the invariant «every booking has ≥1 line»
+        // holds for every new row. Single-leg posts therefore look
+        // exactly the same as before from the wire — but on the DB
+        // side they always produce a line.
         let inserted = 0;
-        if (b.lines && b.lines.length > 0) {
-          for (let i = 0; i < b.lines.length; i++) {
-            const leg = b.lines[i];
-            const lineNumber = leg.lineNumber ?? i + 1;
-            await rawExecute(
-              `INSERT INTO transport_booking_lines
-                 ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
-                  "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
-                  "fromLocationId", "toLocationId",
-                  "fromLocationText", "toLocationText",
-                  "fromLocationKind", "toLocationKind",
-                  "fromLat", "fromLng", "fromPlaceId",
-                  "toLat", "toLng", "toPlaceId",
-                  "legRouteType",
-                  "scheduledPickupAt", "scheduledDeliveryAt",
-                  "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
-               VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
-                       $14,$15,$16, $17,$18,$19, $20, $21,$22,
-                       $23,$24,$25,$26,$27)`,
-              [
-                scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
-                leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
-                leg.fromLocationId ?? null, leg.toLocationId ?? null,
-                leg.fromLocationText ?? null, leg.toLocationText ?? null,
-                leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
-                leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
-                leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
-                leg.legRouteType ?? null,
-                leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
-                leg.lineDescription ?? null, leg.quantity ?? null,
-                leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
-              ],
-            );
-            inserted++;
-          }
+        const legsToInsert: typeof bookingLineSchema._type[] = b.lines && b.lines.length > 0
+          ? b.lines
+          : [{
+              fromLocationId:   b.fromLocationId,
+              toLocationId:     b.toLocationId,
+              fromLocationText: b.fromLocationText,
+              toLocationText:   b.toLocationText,
+              fromLocationKind: b.fromLocationKind,
+              toLocationKind:   b.toLocationKind,
+              fromLat:          b.fromLat,
+              fromLng:          b.fromLng,
+              fromPlaceId:      b.fromPlaceId,
+              toLat:            b.toLat,
+              toLng:            b.toLng,
+              toPlaceId:        b.toPlaceId,
+              legRouteType:     b.routeType,
+              scheduledPickupAt:
+                b.pickupWindowStart ?? b.fixedAppointmentTime ?? undefined,
+              scheduledDeliveryAt:
+                b.dropoffWindowStart ?? undefined,
+              lineDescription:  b.cargoDescription ?? undefined,
+              quantity:         b.cargoQuantity ?? undefined,
+              unitOfMeasure:    b.cargoUnit ?? undefined,
+              passengerCount:   b.passengerCount ?? undefined,
+              notes:            "Auto-derived single leg",
+            }];
+        for (let i = 0; i < legsToInsert.length; i++) {
+          const leg = legsToInsert[i];
+          const lineNumber = leg.lineNumber ?? i + 1;
+          await rawExecute(
+            `INSERT INTO transport_booking_lines
+               ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
+                "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
+                "fromLocationId", "toLocationId",
+                "fromLocationText", "toLocationText",
+                "fromLocationKind", "toLocationKind",
+                "fromLat", "fromLng", "fromPlaceId",
+                "toLat", "toLng", "toPlaceId",
+                "legRouteType",
+                "scheduledPickupAt", "scheduledDeliveryAt",
+                "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
+             VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
+                     $14,$15,$16, $17,$18,$19, $20, $21,$22,
+                     $23,$24,$25,$26,$27)`,
+            [
+              scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
+              leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
+              leg.fromLocationId ?? null, leg.toLocationId ?? null,
+              leg.fromLocationText ?? null, leg.toLocationText ?? null,
+              leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
+              leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
+              leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
+              leg.legRouteType ?? null,
+              leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
+              leg.lineDescription ?? null, leg.quantity ?? null,
+              leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
+            ],
+          );
+          inserted++;
         }
         return { insertId: bookingId, legsInserted: inserted };
       });
