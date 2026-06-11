@@ -399,6 +399,7 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   risk: () => buildRiskPreset(),
   application: () => buildJobApplicationPreset(),
   project_costing: () => buildProjectCostingPreset(),
+  project_statement: () => buildProjectStatementPreset(),
   umrah_agent: () => buildUmrahAgentCardPreset(),
   umrah_sub_agent: () => buildUmrahSubAgentCardPreset(),
   umrah_package: () => buildUmrahPackagePreset(),
@@ -3378,6 +3379,59 @@ function buildJobApplicationPreset(): PrintTemplate {
   });
 }
 
+function buildProjectStatementPreset(): PrintTemplate {
+  return makePreset({
+    id: -111, presetKey: "project_statement_classic", entityType: "project_statement",
+    name: "مستخلص المشروع",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">مستخلص المشروع</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<div class="meta-grid">
+  <div><strong>رقم المشروع:</strong> <span dir="ltr">{{entity.ref}}</span></div>
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>العميل:</strong> {{entity.clientName}}</div>
+  <div><strong>مدير المشروع:</strong> {{entity.managerName}}</div>
+  <div><strong>تاريخ البدء:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ الانتهاء:</strong> {{entity.endDate}}</div>
+</div>
+<div class="meta-grid" style="margin-top:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px">
+  <div><strong>الميزانية المعتمدة:</strong> {{entity.budget}}</div>
+  <div><strong>إجمالي التكاليف:</strong> {{entity.totalCosts}}</div>
+  <div><strong>المفوتر للعميل:</strong> {{entity.totalBilled}}</div>
+  <div><strong>المتبقي من الميزانية:</strong> {{entity.remaining}}</div>
+</div>
+<div style="margin:16px 0">
+  <div style="font-weight:bold;margin-bottom:6px">تفصيل التكاليف</div>
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr>
+      <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">التاريخ</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">الفئة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">البيان</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9;font-size:10pt">القيمة</th>
+    </tr></thead>
+    <tbody>
+    {{#each costs}}
+      <tr>
+        <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center">{{@index}}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:center" dir="ltr">{{this.costDate}}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.category}}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt">{{this.description}}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px;font-size:10pt;text-align:left">{{this.amount}}</td>
+      </tr>
+    {{/each}}
+    </tbody>
+  </table>
+</div>
+<div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.description}}</div>
+<div class="signatures" style="margin-top:36px">
+  <div>مدير المشروع<br/>____________________</div>
+  <div>المالية<br/>____________________</div>
+  <div>الإدارة<br/>____________________</div>
+</div>`,
+  });
+}
+
 function buildProjectCostingPreset(): PrintTemplate {
   return makePreset({
     id: -90, presetKey: "project_costing_classic", entityType: "project_costing",
@@ -3647,7 +3701,7 @@ export const ARABIC_TITLES: Record<string, string> = {
   umrah_violation: "مخالفة عمرة",
   budget: "موازنة", custody: "عهدة", commitment: "التزام",
   receivable: "ذمم مدينة", recurring_journal: "قيد متكرر",
-  project: "مشروع", project_costing: "تكلفة مشروع",
+  project: "مشروع", project_costing: "تكلفة مشروع", project_statement: "مستخلص المشروع",
   fleet_maintenance: "صيانة مركبة", salary_advance: "سلفة راتب",
   training_program: "برنامج تدريبي", warehouse_product: "بطاقة منتج",
   governance_policy: "سياسة حوكمة",

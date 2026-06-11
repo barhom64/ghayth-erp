@@ -142,6 +142,17 @@ sleep 1
 MINV="$(q "SELECT (\"projectId\"=$PID) FROM invoices WHERE ref='INV-MS-2606-$PH' AND \"companyId\"=2;")"
 [ "$MINV" = "t" ] && ok "فاتورة المستخلص مربوطة بالمشروع" || no "milestone invoice link ($MINV)"
 
+# 7) PRJ-P3 — project statement print preset renders end-to-end on a real DB.
+#     The `project_statement` bespoke preset + its read-only data loader resolve
+#     the project's financial position (budget/cost/billed/remaining) + cost
+#     breakdown. Printing needs print perms → log in as owner for this step.
+PJ="$(mktemp)"
+curl -fsS -c "$PJ" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"door@door.sa\",\"password\":\"$PASSWORD\"}" -o /dev/null
+PCSRF="$(grep erp_csrf "$PJ" | awk '{print $7}')"
+PRES="$(curl -sS -b "$PJ" -H "x-csrf-token: $PCSRF" -H "Content-Type: application/json" -X POST "$BASE/print/render" -d "{\"entityType\":\"project_statement\",\"entityId\":\"$PID\"}")"
+PJOB="$(echo "$PRES" | gid jobId)"
+[ -n "$PJOB" ] && ok "طباعة مستخلص المشروع (preset حيّ + بيانات حقيقية، job #$PJOB)" || no "project statement print ($PRES)"
+
 # teardown — keep the suite re-runnable
 q "UPDATE projects SET \"deletedAt\"=NOW() WHERE id=$PID;" >/dev/null
 
