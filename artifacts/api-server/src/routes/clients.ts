@@ -245,7 +245,7 @@ router.post("/", authorize({ feature: "crm.clients", action: "create" }), async 
       after: { name, phone, email, classification, source },
     }).catch((e) => logger.error(e, "clients background task failed"));
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertedId, name).catch((e) => logger.error(e, "clients background task failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "client", insertedId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "clients background task failed"));
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.created", entity: "clients", entityId: insertedId, details: JSON.stringify({ name, phone, email, classification, source }) }).catch((e) => logger.error(e, "clients background task failed"));
 

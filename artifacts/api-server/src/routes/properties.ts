@@ -615,7 +615,7 @@ router.post("/units", authorize({ feature: "properties.units", action: "create" 
     }).catch((e) => logger.error(e, "properties background task failed"));
     createSubsidiaryAccountsForEntity(
       scope.companyId, "property", insertId,
-      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`
+      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`, { branchId: scope.branchId, actorUserId: scope.userId }
     ).catch((e) => logger.error(e, "properties background task failed"));
     // #1715 (owner feedback) — consistent entity-provisioning policy: every
     // trackable entity gets a cost centre for per-entity P&L. The unit's CC
@@ -2989,7 +2989,7 @@ router.post("/buildings", authorize({ feature: "properties.buildings", action: "
     // #1715 (owner feedback) — consistent entity-provisioning policy: a new
     // property building gets BOTH a subsidiary account (per-property ledger)
     // and a cost centre (per-property P&L), mirroring vehicle creation.
-    createSubsidiaryAccountsForEntity(scope.companyId, "property", insertId, b.name)
+    createSubsidiaryAccountsForEntity(scope.companyId, "property", insertId, b.name, { branchId: scope.branchId, actorUserId: scope.userId })
       .catch((e) => logger.error(e, "property subsidiary auto-create failed"));
     createCostCenterForEntity(
       scope.companyId, "property", insertId, b.name,
