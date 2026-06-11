@@ -250,11 +250,156 @@
 
 ---
 
+## §12 — Vehicle Capability Matrix (VCM) — نمذجة canon لا توسعة محرّك
+
+> **قرار مالك (سعادة، 2026-06-11):** الملف الفني للمركبة ليس «حقول إضافية اختيارية» — هو **مصفوفة قدرة موحَّدة** يمرّ عليها المحرّك قبل أي ترشيح. لا تُقترح مركبة لم تُعرَّف قدرتها.
+
+**ما يوجد الآن (مبعثَر، غير معاهد):**
+
+19 حقلًا مهاجَرًا (262 + 295) لكن **بلا مفهوم «مصفوفة قدرة»**:
+- صحّة الأنواع: `validForPassengers`, `validForCargo` (boolean nullable — `null` = «غير محدَّد» = يفلت).
+- السعة الكمّية: `payloadKg`, `operationalPayloadKg`, `seatCount`.
+- الفيزياء: `boxLengthCm`, `boxWidthCm`, `boxHeightCm`, `axleCount`, `tireCount`, `tireSize`.
+- المحرّك: `engineDisplacementCc`, `transmissionType`.
+- الراحة: `hasAc`, `screenCount`, `doorCount`, `upholsteryType`, `safetyFeatures` (jsonb).
+- المعدّات: `operatingHours`, `equipmentAttachments` (jsonb).
+- **مفقود تمامًا:** `fuelType`, `operationalPassengerCapacity` (السعة التشغيلية للركاب — مختلفة عن `seatCount` السقف الإسمي), `vehicleServiceTypes` (مصفوفة الخدمات المعتمدة)، `compatibleTripFamilies`.
+
+**المسلَّمات المطلوبة بعد اعتماد VCM:**
+1. **`vehicle_capability_matrix` view (أو computed columns)** يجمّع الحقول في عقد موحَّد:
+   ```
+   {
+     family: {
+       passengers: { eligible, seatCount, operationalSeats },
+       cargo:      { eligible, payloadKg, operationalPayloadKg,
+                     boxLxWxH, axleCount, tireCount, tireSize },
+       equipment:  { eligible, operatingHours, attachments }
+     },
+     powertrain: { fuelType, engineDisplacementCc, transmissionType },
+     amenities:  { hasAc, screenCount, doorCount, upholsteryType, safetyFeatures },
+     serviceTypes: ['passenger_umrah','passenger_general','cargo_load','equipment_rental',…],
+     completeness: 0..100  // كم حقلًا في الـVCM مُعبَّأ
+   }
+   ```
+2. **حارس صلب في المحرّك (مبكّر، قبل الحلقة):** مركبة `completeness < 70%` أو `validFor*` غير معبَّأ للعائلة المطلوبة → **إقصاء مع reason صريح**: «الملف الفني للمركبة غير مكتمل — لا يمكن الترشيح بدون تعريف القدرة».
+3. **حقول جديدة (migration واحدة):** `operationalPassengerCapacity NUMERIC`، `fuelType TEXT` (CHECK ANY ARRAY)، `vehicleServiceTypes TEXT[]` (افتراضي مشتق من `validFor*` للترحيل).
+4. **شاشة VCM موحَّدة** (إكمال TA-T18-05): بدلًا من «تبويب تحرير الحقول الـ19»، تبويب «مصفوفة القدرة» يعرض الـcompleteness ويميّز الحقول الحمراء التي تفلت المحرّك.
+5. **بوّابة استيراد:** أي مركبة جديدة لا تُحفَظ بـ`status='available'` ما لم تجتز VCM minimum (`validFor*`+سعة عددية مطابقة).
+
+**المثال الذي ساقه سعادتك حرفيًا:**
+- *«طلب عمرة 45 راكب → قد يقترح النظام مركبة لا تستوعب العدد.»*
+  حاليًا: `seatCount=null` → capacity score 50، تظهر في الترتيب. **بعد VCM:** إقصاء بـcompleteness<70 (لأن `seatCount` غير معبَّأ) أو بـ`validForPassengers!=true`.
+- *«حمولة 38 طن وحمولة تشغيلية 30 طن.»*
+  حاليًا: المقارنة بـ`payloadKg=40000` → 100 درجة (يفلت). **بعد VCM:** المقارنة بـ`operationalPayloadKg=30000` ← blocker «الطلب يتجاوز السعة التشغيلية الآمنة» **حتى لو** كان دون السقف القانوني.
+
+**هذا يحلّ:** PROF-01، PROF-02، PROF-04 (تفضيلات الراحة)، CONF-05 (التراخيص — تُضاف إلى الـcompleteness)، **و يُلغي حاجة PE-01 كتعديل منفصل** (يصبح جزءًا من VCM gate).
+
+---
+
+## §13 — Route Leg كـCanon (لا Feature) — نمذجة لا توسعة
+
+> **قرار مالك (سعادة، 2026-06-11):** *«لا تجعل multi-leg مجرد ميزة — هذا تشغيل يومي. مطار جدة → فندق مكة → الحرم → مزار → فندق → مطار جدة. ورأس الخير → النعيرية → حفر الباطن → ضباء».* الـleg هو **العمود الفقري للنقل**، لا الـbooking.
+
+**النمذجة الحالية (legs كملحق للعمرة فقط):**
+- `transport_bookings` هو الـcanon المالي/التسويقي (FK من الفاتورة، رقم الحجز، العميل).
+- `transport_itineraries + transport_itinerary_legs` (migration 271:213-287) موجودة لكنها تُستخدم فقط للعمرة (UMR) — في `transport-planning.ts:417, 459-466` يُكتفى بربط الـ`umrahGroupId` و`customerId`.
+- الـ**حجوزات غير-العمرة تُنشَأ بمقطع واحد ضمني** (`fromLocationText` → `toLocationText` على الـbooking نفسه)، بلا أي leg.
+- النتيجة: رحلة الرياض→جدة→الدمام تُسجَّل كحجزين منفصلين، يفقدان السلسلة، والمحرّك يفقد سياق «المركبة في جدة الآن».
+
+**النمذجة المقترَحة (Leg = canon):**
+
+1. **كل booking ينتج ≥1 leg حتميًّا.** الرحلة الأحادية = leg واحدة (مولَّدة آليًّا من `fromLocation*` + `toLocation*` عند الإنشاء). لا booking بلا legs.
+2. **الـlegs تخرج من `transport_itinerary_legs` إلى جدول أوّلي مستقل أو يُدمَج الجدولان** — هذا قرار نمذجة، توصيتي **إبقاء `transport_itinerary_legs` لكن:**
+   - جعل `itineraryId` nullable على الـleg (الـleg يمكن أن ينتمي مباشرة لـbooking بدون itinerary وسيط)، أو
+   - بناء `transport_booking_legs` جديد بنفس البنية، يكون السرعة canon، و`transport_itineraries` يبقى للـmega-trip (العمرة الكاملة)؛ الأقل تكلفة.
+   - **التوصية الأبسط:** خيار (ب) — `transport_booking_legs` جدول جديد، الـitineraries يستمرّ كملاءمة العمرة (مجموعة legs من bookings متعدّدة).
+3. **`fromLocation*` و`toLocation*` على الـbooking تصبح حقول مشتقة** (= leg[0].origin، leg[N].destination). الـvalidation: لا يُسمح بـbooking بدون legs، ولا بـleg دون tying مع location معروف.
+4. **الجدولة الزمنية تتحوّل لـper-leg:** `scheduledStartAt/EndAt` على الـbooking تبقى لاحتساب التقاويم الإجمالية، لكن **conflict + driver_rest + maintenance** تُفحَص على **windows per-leg**، لا booking كاملة.
+5. **dispatch_orders تتحوّل لـper-leg (أو tighter):** اليوم dispatch واحد لكل booking. الانتقال يجعل dispatch واحدة لكل leg (الـvehicle/driver يمكن أن يتغيّر بين legs لرحلة طويلة). الـbackward-compat: legs=1 ⇒ dispatch واحدة ⇒ سلوك مطابق للحالي.
+6. **اقتراح المركبة يصبح per-leg:** PE-05 يصبح الـdefault path لا path استثنائي.
+
+**الأمثلة (حرفيًا من سعادتك):**
+
+```
+Booking: العمرة-2026-OCT-12 (45 راكب، فوج الأردن)
+ ├── Leg 1  JED Airport → فندق مكة     | حافلة 50 مقعدًا | سائق متمرس
+ ├── Leg 2  فندق → الحرم               | شاتل 30 مقعدًا  | سائق فوج
+ ├── Leg 3  فندق → مزار التنعيم        | شاتل 30 مقعدًا  | سائق فوج
+ ├── Leg 4  فندق → الحرم (يومي)        | شاتل 30 مقعدًا  | سائق فوج
+ └── Leg 5  فندق مكة → JED Airport      | حافلة 50 مقعدًا | سائق متمرس
+```
+
+```
+Booking: حمولة-2026-OCT-19 (طاقم رأس الخير → ضباء)
+ ├── Leg 1  رأس الخير → النعيرية       | شاحنة | سائق ثقيل
+ ├── Leg 2  النعيرية → حفر الباطن      | شاحنة | سائق ثقيل
+ └── Leg 3  حفر الباطن → ضباء          | شاحنة | سائق ثقيل
+```
+
+**الأثر الإيجابي على باقي الجرد:**
+- MULTI-01..04 تُحلّ هيكليًّا (الـlegs canon → السلسلة موجودة دومًا → suggest يعرف الموقع التالي).
+- UTIL-03 يُحلّ (الـlegs تُمكّن قياس استخدام تشغيلي حقيقي per-segment، لا per-booking).
+- UMR-04 يُحلّ (الـlineage على الـleg، أعمق من الـbooking).
+- TA-T18-04 (SPA Route Patterns) يستفيد: قالب أسبوعي يبني legs لا bookings مستقلة.
+
+**التكلفة الواقعية:**
+- migration واحدة كبيرة + backfill (كل booking قائم يحصل على leg واحدة مشتقّة).
+- تحديث transport-bookings.ts للـPOST/PATCH ليأخذ `legs[]` (وقبول `from/to*` تقليديًّا كـsyntactic sugar لرحلة أحادية).
+- تحديث suggest وdispatch وops-* للقراءة per-leg مع backward-compat (legs=1 ⇒ نفس السلوك القديم).
+- اختبار شامل: legs=1 لا يكسر شيئًا، legs=N يفعّل السلسلة.
+
+**هذه ليست «ميزة» — هي إعادة نمذجة Foundation.** إن لم تُنفَّذ، كل عمل planning أو optimizer لاحق سيُبنى على نموذج خاطئ.
+
+---
+
+## §14 — ترتيب التنفيذ المُحدَّث (بعد قرارات المالك 2026-06-11)
+
+```text
+بوّابة-ج (Gate-PE) — إلزامية قبل أي PE-01..07:
+   Gate-1: VCM (مصفوفة قدرة المركبة)        — يُدمج PE-01 ضمنه
+   Gate-2: Leg-as-Canon (الـleg جدول أساسي) — يحلّ MULTI-* هيكليًّا
+
+ثم الموجة ج كما سبق، معدَّلة:
+   PE-02 (صيانة + التراخيص)        — مستقل عن Gate
+   PE-03 (إجازات + سقوف القيادة)    — مستقل عن Gate
+   PE-04 (utilization محور)         — تستفيد من Leg-as-Canon لكنها لا تشترطه
+   PE-05 (suggest per-leg)          — تبسَّط بشدّة بعد Gate-2 (تصبح default path)
+   PE-06 (umrahFamiliarity)         — تستفيد من Leg lineage
+   PE-07 (ladder per-family)        — مستقل
+   + T18-04..08 كما هي
+
+الموجة د/هـ بعد ذلك بدون تغيير.
+```
+
+**التسلسل العملي الصارم:**
+1. PR1: VCM migration + view + completeness + guard في المحرّك (يُدمج PE-01).
+2. PR2: PE-02 (صيانة + تراخيص — مستقل، يُنفَّذ بالتوازي إن أمكن).
+3. PR3: PE-03 (إجازات + سقوف — مشروط بـCHECK-PE-04 و-05).
+4. PR4: Leg-as-Canon migration (الأكبر، prep) — جدول `transport_booking_legs` + backfill + قبول بـbackward-compat.
+5. PR5: suggest + dispatch + ops-* per-leg (PE-05 يستهلكه).
+6. PR6..PR8: PE-04 (utilization)، PE-06 (umrah)، PE-07 (ladder).
+
+---
+
+## §15 — المهام المُضافة (تحديث §9)
+
+### TA-T18-PE-00-VCM — مصفوفة قدرة المركبة canon (Gate-1)
+**الوصف:** الملف الفني للمركبة ليس حقولًا حرّة — مصفوفة قدرة موحَّدة (VCM) يمرّ عليها المحرّك قبل أي ترشيح. **الموقع:** migration جديدة + `lib/fleet/vehicleCapabilityMatrix.ts` (جديد) + `assignmentSuggestionEngine.ts:398` (حارس مبكّر) + شاشة VCM (إكمال TA-T18-05). **المطلوب:** (أ) migration تضيف `operationalPassengerCapacity`, `fuelType`, `vehicleServiceTypes[]`. (ب) view أو helper يحسب `completeness 0..100` ويعيد العقد الموصوف §12. (ج) حارس في المحرّك: `completeness<70 OR validFor[family]!=true` → إقصاء مع reason صريح. (د) شاشة VCM تُظهر الـcompleteness ميدانيًّا (Red/Amber/Green) + بوّابة حفظ `status='available'`. **الممنوع:** ترقيع حقول مفردة من الملف الفني بلا VCM؛ تحميل المحرّك بالحقول مباشرة بدلًا من الـmatrix. **معيار القبول:** 3 اختبارات: (1) مركبة `validForCargo=null` لا تظهر لـcargo. (2) مركبة `seatCount=null` لا تظهر لـpassenger. (3) شاحنة `operationalPayloadKg=30000, payloadKg=40000` ترفض حمولة 35000 ولو كانت دون السقف القانوني. **الأولوية:** عاجل جدًا، **بوّابة قبل PE-01..07**. **الخطورة:** عالية (سلامة + نمذجة). **الارتباط:** ملف المركبة + RM-جديد.
+
+### TA-T18-PE-00-LEG — الـRoute Leg كيان أساسي (Gate-2)
+**الوصف:** Multi-leg ليس استثناء — هو الحالة العادية للعمرة والشحن الطويل. كل booking ينتج ≥1 leg. **الموقع:** migration جديدة (`transport_booking_legs` أو توسيع 271) + `transport-bookings.ts` (POST/PATCH يقبل `legs[]`) + suggest/dispatch/ops-* (قراءة per-leg مع backward-compat). **المطلوب:** (أ) جدول جديد أو نَمذجة عبر `transport_itinerary_legs` بـ`itineraryId` nullable. (ب) backfill كل booking قائمة → 1 leg مشتقّة من `fromLocation*/toLocation*`. (ج) POST/PATCH /transport/bookings يقبل `legs[]` (افتراضي: legs.length=1 إذا أُرسل `from/to*` تقليديًّا). (د) suggest وdispatch وconflict probe يفحصون per-leg. (هـ) backward-compat: legs=1 ⇒ سلوك مطابق للحالي. **الممنوع:** فقدان أي حجز قائم في الـbackfill؛ تغيير عقد ops-dashboard للحقول الإجمالية. **معيار القبول:** (1) booking أحادية تبقى تعمل كما كانت بصفر فروق. (2) booking بـ3 legs ينشئ 3 صفوف، dispatch منفصل لكل leg، suggest يقترح بـcontinuity. (3) backfill يحوّل 100% من الـbookings القائمة. **الأولوية:** عاجل، **بوّابة لـPE-05 وفائدة هيكلية لباقي PE**. **الخطورة:** عالية (نَمذجة جذرية مع backward-compat). **الارتباط:** RM-جديد + الجدولة + التخطيط متعدد المقاطع.
+
+> **ملاحظة على PE-01:** يُدمَج رسميًّا داخل **PE-00-VCM** ولا يُنفَّذ كـPR منفصل. الـVCM gate يحلّ PROF-01 + PROF-02 + PROF-04 معًا.
+
+---
+
 ## §11 — التزام الإغلاق
 
-هذا الملف **ليس Refactor** ولا يفتح أي PR كود من نفسه. الترتيب الإلزامي:
-1. **اعتماد المالك** لهذا الملف و7 نقاط CHECK-PE-01..07.
-2. **تحديث الملف 18** بإضافة TA-T18-PE-01..07 إلى §«الموجة ج» تحت رمزها.
-3. **تنفيذ TA-T18-PE-01 و-02 و-03 أولًا** — أعلى قيمة سلامة وأقل كود.
-4. **بقية PE تأتي بالتسلسل** — PR صغير لكل مهمة، فرع مستقل من main المحدَّث، guard أخضر.
-5. **لا يُغلَق #2079** حتى تكتمل PE-01..07 + الموجة ب الحيّة + بقية الموجة ج.
+هذا الملف **ليس Refactor** ولا يفتح أي PR كود من نفسه. الترتيب الإلزامي بعد قرارات المالك 2026-06-11:
+1. **اعتماد المالك** لهذا الملف (نسخة v2) و7 نقاط CHECK-PE-01..07 + قرارَي VCM canon و Leg canon.
+2. **تحديث #2079 §12 جديدة** بإضافة Gate-PE (VCM + Leg) كبوّابة قبل PE-01..07.
+3. **تحديث الملف 18** بإضافة TA-T18-PE-00-VCM و TA-T18-PE-00-LEG في رأس قائمة PE.
+4. **تنفيذ Gate-1 (VCM) أولًا** — يدمج PE-01 ويفتح PE-02/03 بالتوازي.
+5. **تنفيذ Gate-2 (Leg) ثانيًا** — يبسّط PE-05 جذريًّا.
+6. **بقية PE تأتي بالتسلسل** — PR صغير لكل مهمة، فرع مستقل من main المحدَّث، guard أخضر.
+7. **لا يُغلَق #2079** حتى تكتمل Gate-1 + Gate-2 + PE-02..07 + الموجة ب الحيّة + بقية الموجة ج.
