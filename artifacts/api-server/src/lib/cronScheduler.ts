@@ -943,6 +943,10 @@ async function reconcileAttendance(): Promise<string> {
        SELECT ea.id, ea."companyId", ea."branchId", CURRENT_DATE, 'absent', NOW()
        FROM employee_assignments ea
        WHERE ea."companyId"=$1 AND ea.status='active'
+         -- PR-8a (#2077): access-grant assignments are not employment;
+         -- never mark them absent (the admin was getting one absence
+         -- row PER BRANCH per day).
+         AND ea."isAccessGrant" = FALSE
          AND NOT EXISTS (
            SELECT 1 FROM attendance a WHERE a."assignmentId"=ea.id AND a.date=CURRENT_DATE
          )
@@ -1960,7 +1964,11 @@ async function runEmployeeScoringPeriod(scope: "weekly" | "monthly" | "quarterly
   }>(
     `SELECT id, "employeeId", "companyId", "branchId"
        FROM employee_assignments
-      WHERE status = 'active'`,
+      WHERE status = 'active'
+        -- PR-8a (#2077): one person = one score. Access-grant rows
+        -- (the admin's per-branch entries) were producing 8 composite
+        -- scores for one human.
+        AND "isAccessGrant" = FALSE`,
   );
   for (const a of assignments) {
     try {

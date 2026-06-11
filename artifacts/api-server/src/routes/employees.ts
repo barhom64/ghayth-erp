@@ -360,6 +360,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
               COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                   AND ea."isAccessGrant" = FALSE
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        LEFT JOIN gov_counts gc ON gc."entityId" = e.id
@@ -376,6 +377,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       `SELECT COUNT(*) AS total
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                   AND ea."isAccessGrant" = FALSE
        WHERE ${where} AND e."deletedAt" IS NULL`,
       countParams
     );

@@ -2989,8 +2989,11 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     }
 
     // ── Payroll pre-check: attendance completeness ──
+    // PR-8a (#2077) — access-grant assignments (the admin's per-branch
+    // rows) are NOT employment; they don't gate payroll completeness
+    // and they don't receive payroll lines.
     const [activeCount] = await rawQuery<Record<string, unknown>>(
-      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "companyId" = $1 AND status = 'active'`,
+      `SELECT COUNT(*) AS cnt FROM employee_assignments WHERE "companyId" = $1 AND status = 'active' AND "isAccessGrant" = FALSE`,
       [scope.companyId]
     );
     const [attendanceCount] = await rawQuery<Record<string, unknown>>(
@@ -3086,7 +3089,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
               e."whtRate"
        FROM employee_assignments ea
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."deletedAt" IS NULL
-       WHERE ea."companyId" = $1 AND ea.status = 'active'`,
+       WHERE ea."companyId" = $1 AND ea.status = 'active' AND ea."isAccessGrant" = FALSE`,
       [scope.companyId]
     );
 
