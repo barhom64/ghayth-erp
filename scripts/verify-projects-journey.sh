@@ -94,6 +94,17 @@ COST="$(pw /projects/$PID/costs "{\"description\":\"تكلفة إنشاء\",\"am
 JE="$(echo "$COST" | gid journalEntryId)"
 { [ -n "$JE" ] && balanced "$JE"; } && ok "تكلفة→WIP قيد متوازن (#$JE)" || no "cost WIP GL ($JE)"
 
+# 3b) PRJ-P2 — project status transitions validated through lifecycleEngine.
+#     The project is still 'planning' here. planning→blocked is NOT an edge in
+#     the "projects" state machine → must be rejected (409); planning→active IS
+#     → must succeed and persist. Proves the engine-backed guard live on a real DB.
+ILLEGAL="$(ptch /projects/$PID '{"status":"blocked"}' | gid error)"
+[ -n "$ILLEGAL" ] && ok "منع انتقال غير مشروع planning→blocked (lifecycleEngine)" || no "illegal transition not blocked"
+LEGAL="$(ptch /projects/$PID '{"status":"active"}' | gid status)"
+[ "$LEGAL" = "active" ] && ok "انتقال مشروع planning→active عبر المحرّك" || no "legal transition ($LEGAL)"
+PST="$(q "SELECT status FROM projects WHERE id=$PID;")"
+[ "$PST" = "active" ] && ok "حالة المشروع مُحدّثة فعليًا في DB (active)" || no "project status not persisted ($PST)"
+
 # 4) BOQ items → bill → invoice with a line per item
 B1="$(pw /projects/$PID/boq '{"itemType":"aggregate","description":"لياسة","unit":"m2","quantity":80,"unitPrice":50}' | gid id)"
 B2="$(pw /projects/$PID/boq '{"description":"تغيير لمبة","unit":"piece","quantity":5,"unitPrice":30}' | gid id)"
