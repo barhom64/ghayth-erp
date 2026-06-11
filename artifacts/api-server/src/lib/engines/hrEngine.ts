@@ -278,6 +278,15 @@ class HREngineImpl implements DomainEngine {
        *  amount on the next filing. The caller has already netted
        *  WHT off totalBankPayout, so credit-side totals remain balanced. */
       totalWht?: number;
+      /** Umrah sales commissions consumed by this run (راتب + عمولة).
+       *  When > 0, a DR on the commission-expense account (op
+       *  `payroll_commission_expense`, default 5240 «المكافآت والحوافز»)
+       *  is emitted — separate from salary expense so commission cost
+       *  stays its own ledger line. The caller has already ADDED the
+       *  commission into each line's net (→ totalBankPayout), so the
+       *  credit side carries it; subtracting it from the derived
+       *  salary-expense figure keeps the entry balanced and honest. */
+      totalCommission?: number;
       /**
        * Optional per-employee breakdown. When provided, the salary +
        * GOSI expense + overtime DR lines are split per employee with
@@ -298,6 +307,9 @@ class HREngineImpl implements DomainEngine {
         overtime: number;
         gosiEmployer: number;
         whtAmount?: number;
+        /** Per-employee umrah commission — splits the commission-expense
+         *  DR per employee (dimensional like salary/OT/GOSI). */
+        commission?: number;
       }>;
     }
   ) {
@@ -306,7 +318,7 @@ class HREngineImpl implements DomainEngine {
     // credited to salary_payable, settled later by postPayrollPostGL when the
     // run is posted. Crediting the bank here (and again at posting) was the
     // source of the double-count.
-    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode, whtPayableCode] = await Promise.all([
+    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode, whtPayableCode, commissionExpenseCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5120"),
@@ -314,8 +326,12 @@ class HREngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2210"),
       financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2330"),
+      // Umrah commission expense — seeded by migration 288 to 5240
+      // (المكافآت والحوافز); the fallback matches the seed.
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_commission_expense", "debit", "5240"),
     ]);
     const totalWht = roundTo2(payroll.totalWht ?? 0);
+    const totalCommission = roundTo2(payroll.totalCommission ?? 0);
 
     // The six payroll aggregates are each rounded independently, so Σdebit
     // can drift a sub-cent from Σcredit. The salary-expense debit is DERIVED
@@ -331,8 +347,10 @@ class HREngineImpl implements DomainEngine {
     // totalGross is derived as Σcredit − Σother-debits so debits and
     // credits balance to the cent. The WHT-payable credit is part of
     // the credit side (caller already netted WHT off bankPayout), so
-    // it joins the running total.
-    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer);
+    // it joins the running total. Commission joined the credit side
+    // inside bankPayout (net pay grew by it), so the commission DR is
+    // subtracted here to keep salary expense pure.
+    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer - totalCommission);
 
     // Build debit lines — per-employee when breakdown is provided,
     // otherwise the legacy 3-line aggregate. The credit side stays
@@ -348,23 +366,25 @@ class HREngineImpl implements DomainEngine {
       // Validate the breakdown sums match the aggregates within a
       // small rounding tolerance. If they diverge by more than a
       // cent the breakdown is unreliable — fall back to aggregate.
-      let sumBasic = 0, sumOT = 0, sumGosi = 0;
+      let sumBasic = 0, sumOT = 0, sumGosi = 0, sumCommission = 0;
       for (const e of payroll.breakdown) {
         sumBasic += roundTo2(e.basic);
         sumOT += roundTo2(e.overtime);
         sumGosi += roundTo2(e.gosiEmployer);
+        sumCommission += roundTo2(e.commission ?? 0);
       }
       const grossDiff = Math.abs(roundTo2(sumBasic) - totalGross);
       const otDiff = Math.abs(roundTo2(sumOT) - totalOvertime);
       const gosiDiff = Math.abs(roundTo2(sumGosi) - gosiEmployer);
-      const breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5;
+      const commissionDiff = Math.abs(roundTo2(sumCommission) - totalCommission);
+      const breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5 && commissionDiff < 0.5;
 
       if (breakdownTrusted) {
-        // Per-employee DR lines for salary + overtime + GOSI.
+        // Per-employee DR lines for salary + overtime + GOSI + commission.
         // The rounding remainder lands on the LAST employee row in
         // each bucket so the bucket total stays exact.
         const lastIdx = payroll.breakdown.length - 1;
-        let runningBasic = 0, runningOT = 0, runningGosi = 0;
+        let runningBasic = 0, runningOT = 0, runningGosi = 0, runningCommission = 0;
         for (let i = 0; i < payroll.breakdown.length; i++) {
           const e = payroll.breakdown[i];
           const basicRounded = i === lastIdx
@@ -376,6 +396,9 @@ class HREngineImpl implements DomainEngine {
           const gosiRounded = i === lastIdx
             ? roundTo2(gosiEmployer - runningGosi)
             : roundTo2(e.gosiEmployer);
+          const commissionRounded = i === lastIdx
+            ? roundTo2(totalCommission - runningCommission)
+            : roundTo2(e.commission ?? 0);
           if (basicRounded > 0) {
             debitLines.push({
               accountCode: salaryExpenseCode, debit: basicRounded, credit: 0,
@@ -400,6 +423,14 @@ class HREngineImpl implements DomainEngine {
             });
             runningGosi = roundTo2(runningGosi + gosiRounded);
           }
+          if (commissionRounded > 0) {
+            debitLines.push({
+              accountCode: commissionExpenseCode, debit: commissionRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningCommission = roundTo2(runningCommission + commissionRounded);
+          }
         }
       } else {
         // Breakdown didn't reconcile — fall back to aggregate lines
@@ -409,14 +440,16 @@ class HREngineImpl implements DomainEngine {
           { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
           { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
           { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+          { accountCode: commissionExpenseCode, debit: totalCommission, credit: 0 },
         );
       }
     } else {
-      // Legacy 3-line aggregate.
+      // Legacy aggregate lines.
       debitLines.push(
         { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
         { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
         { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+        { accountCode: commissionExpenseCode, debit: totalCommission, credit: 0 },
       );
     }
 

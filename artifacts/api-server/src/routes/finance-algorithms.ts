@@ -17,7 +17,7 @@ import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPerio
 import { internalTechRef } from "../lib/internalRef.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
 import { logger } from "../lib/logger.js";
-import { requestIdempotencyToken } from "../lib/requestIdempotency.js";
+import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 
 export const financeAlgorithmsRouter = Router();
 financeAlgorithmsRouter.use(authMiddleware);
@@ -50,6 +50,14 @@ const bankAutoMatchSchema = z.object({
 const bankManualMatchSchema = z.object({
   bankStatementId: z.coerce.number(),
   journalLineId: z.coerce.number(),
+});
+
+// #1945 FIN-18 — post the missing adjustment JE for a statement row that has
+// no journal counterpart (bank fee / interest). Accounts come from the
+// accounting engine, not the request.
+const bankPostAdjustmentSchema = z.object({
+  bankStatementId: z.coerce.number(),
+  notes: z.string().max(1000).optional(),
 });
 
 const VALID_DEPRECIATION_METHODS = [
@@ -863,12 +871,11 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature
  *     journal_line — both rows are just FLAGGED as matched. Posting a new
  *     GL entry here would double-count the transaction.
  *
- * Open feature gap (NOT a bug): when a bank row has no matching journal
- * (bank fee, interest income, error) the current code returns 404. A
- * future workflow can let the operator post DR Bank-Fee-Expense /
- * CR Bank from this endpoint. That's a product scope decision, not an
- * audit finding — tracked in
- * docs/audit/GHAITH_SWEEP_EXECUTION_PROGRESS.md.
+ * The previously-open feature gap — a bank row with no matching journal
+ * (bank fee, interest income) — is closed by #1945 FIN-18: POST
+ * /bank-reconciliation/post-adjustment below posts the real adjustment JE
+ * (DR fee-expense / CR bank, or DR bank / CR interest income) through the
+ * accounting engine and matches the row to the freshly-posted bank line.
  */
 financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
@@ -922,6 +929,57 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ fe
     res.json({ success: true, message: "تمت المطابقة اليدوية" });
   } catch (err) {
     handleRouteError(err, res, "Manual match error:");
+  }
+});
+
+// #1945 FIN-18 — التسوية البنكية: قيد تسوية حقيقي لسطر كشف بلا قيد مقابل
+// (رسوم بنكية / فوائد). الحسابات عبر محرك الحسابات، والقيد يَلِد على تاريخ
+// الكشف، والسطر يُطابَق ذرّيًا مع سطر البنك في القيد المُرحَّل.
+financeAlgorithmsRouter.post("/bank-reconciliation/post-adjustment", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const { bankStatementId, notes } = zodParse(bankPostAdjustmentSchema.safeParse(req.body ?? {}));
+
+    const { postBankAdjustment } = await import("../lib/bankReconciliationService.js");
+    const result = await postBankAdjustment({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      createdBy: scope.activeAssignmentId,
+      bankStatementId,
+      notes: notes ?? null,
+    });
+
+    await emitEvent({
+      action: "finance.bank_reconciliation.matched",
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      entity: "bank_statements",
+      entityId: bankStatementId,
+      details: `adjustment JE ${result.ref} posted (${result.direction}) and matched line ${result.matchedJournalLineId}`,
+      after: { bankStatementId, journalId: result.journalId, direction: result.direction, amount: result.amount },
+    });
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "bank_reconciliation.post_adjustment",
+      entity: "bank_statements",
+      entityId: bankStatementId,
+      after: {
+        journalId: result.journalId, ref: result.ref, direction: result.direction,
+        bankAccountCode: result.bankAccountCode, counterAccountCode: result.counterAccountCode, amount: result.amount,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms bank post-adjustment audit failed"));
+
+    markIdempotencyReplay(req, res, result.alreadyExists);
+    res.status(result.alreadyExists ? 200 : 201).json({
+      ...result,
+      message: result.alreadyExists ? "قيد التسوية موجود مسبقًا" : "تم ترحيل قيد التسوية ومطابقة السطر",
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Bank post-adjustment error:");
   }
 });
 
