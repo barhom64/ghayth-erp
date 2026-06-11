@@ -50,6 +50,7 @@ import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
+import { fleetEngine } from "../lib/engines/index.js";
 
 export const transportBookingsRouter = Router();
 transportBookingsRouter.use(authMiddleware);
@@ -698,7 +699,59 @@ transportBookingsRouter.patch(
         action: "update", entity: "transport_bookings", entityId: id,
         before: { status: existing.status }, after: b,
       }).catch((e) => logger.error(e, "booking audit failed"));
-      res.json({ data: { id } });
+
+      // #2079 TA-T18-01 — passenger booking close → Accounting Candidate.
+      // Mirrors the cargo + rental handoffs. Only fires when status
+      // actually transitions INTO `completed` (not when other fields
+      // change while already completed — idempotency still holds, but
+      // we save the query). Soft-fail: a candidate hiccup is logged
+      // and never rolls back the operational close (the insert is
+      // idempotent and the operator can re-fire the transition).
+      let passengerCandidateId: number | null = null;
+      if (b.status === "completed" && existing.status !== "completed") {
+        try {
+          const [row] = await rawQuery<{
+            tripFamily: string | null; customerId: number | null;
+            passengerCount: number | null;
+            bookingNumber: string;
+            fromLocationText: string | null; toLocationText: string | null;
+            notes: string | null;
+            vehicleId: number | null; driverId: number | null;
+          }>(
+            `SELECT b."tripFamily", b."customerId", b."passengerCount",
+                    b."bookingNumber", b."fromLocationText", b."toLocationText", b.notes,
+                    d."vehicleId", d."driverId"
+               FROM transport_bookings b
+               LEFT JOIN LATERAL (
+                 SELECT "vehicleId", "driverId"
+                   FROM transport_dispatch_orders
+                  WHERE "companyId" = b."companyId"
+                    AND "bookingId" = b.id
+                    AND status NOT IN ('declined', 'cancelled')
+                  ORDER BY id DESC LIMIT 1
+               ) d ON TRUE
+              WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
+            [id, scope.companyId],
+          );
+          if (row) {
+            const candidate = await fleetEngine.createPassengerBillingCandidate(
+              { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+              {
+                id, bookingNumber: row.bookingNumber,
+                tripFamily: row.tripFamily, customerId: row.customerId,
+                passengerCount: row.passengerCount,
+                fromLocationText: row.fromLocationText, toLocationText: row.toLocationText,
+                vehicleId: row.vehicleId, driverId: row.driverId,
+                notes: row.notes,
+              },
+            );
+            passengerCandidateId = candidate?.id ?? null;
+          }
+        } catch (err) {
+          logger.error(err, "passenger billing candidate failed");
+        }
+      }
+      res.json({ data: { id, billingCandidateId: passengerCandidateId } });
     } catch (err) {
       handleRouteError(err, res, "Update transport booking error:");
     }

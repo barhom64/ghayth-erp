@@ -30,7 +30,7 @@ import {
 import { createCostCenterForEntity, syncEntityCostCenterAllocation } from "../lib/costCenterAutoCreate.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { applyTransition, lifecycleErrorResponse, isValidTransition, getStateMachine } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -183,26 +183,12 @@ const router = Router();
 // LIFECYCLE STATE MACHINES — Phase C.5 Projects audit
 // ─────────────────────────────────────────────────────────────────────────────
 const PROJECT_STATUSES = ["planning", "planned", "draft", "active", "in_progress", "on_hold", "completed", "cancelled", "blocked"] as const;
-const PROJECT_TRANSITIONS: Record<string, readonly string[]> = {
-  // completion goes through /close (handled by lifecycleEngine). PATCH can
-  // only move through the non-terminal states below.
-  planning:    ["active", "in_progress", "cancelled", "on_hold"],
-  planned:     ["active", "in_progress", "cancelled", "on_hold"],
-  draft:       ["planning", "active", "cancelled"],
-  active:      ["on_hold", "blocked", "in_progress"],
-  in_progress: ["active", "on_hold", "blocked"],
-  on_hold:     ["active", "in_progress", "cancelled"],
-  blocked:     ["active", "in_progress", "cancelled"],
-  completed:   [],
-  cancelled:   [],
-};
-
-const PHASE_TRANSITIONS: Record<string, readonly string[]> = {
-  pending:     ["in_progress", "cancelled"],
-  in_progress: ["completed", "cancelled"],
-  completed:   [],
-  cancelled:   [],
-};
+// PRJ-P2 — the project and phase transition graphs are NOT local maps anymore.
+// They live in lifecycleEngine's STATE_MACHINES ("projects" / "project_phases")
+// as the single source of truth, validated below via isValidTransition and
+// enforced on the applyTransition path (/close, phase-complete) by the engine's
+// defence-in-depth. This removes the old per-route transition maps that
+// duplicated — and could drift from — the engine's canonical graph.
 
 const TASK_STATUSES = ["todo", "in_progress", "blocked", "done", "cancelled", "review"] as const;
 const TASK_TRANSITIONS: Record<string, readonly string[]> = {
@@ -694,8 +680,14 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
           { field: "status", fix: "استخدم /projects/:id/close لإقفال المشروع بالقيود المحاسبية" }
         );
       }
-      const allowedNext = PROJECT_TRANSITIONS[existing.status as string] ?? [];
-      if (!allowedNext.includes(b.status)) {
+      // Validate the transition through lifecycleEngine — the same "projects"
+      // state machine that backs /close's applyTransition. `completed` is a
+      // member of the graph (for /close) but unreachable here because the
+      // explicit guard above rejects `b.status === "completed"`, so it is
+      // filtered out of the human-readable "allowed transitions" hint.
+      if (!isValidTransition("projects", existing.status as string, b.status)) {
+        const allowedNext = (getStateMachine("projects")?.transitions[existing.status as string] ?? [])
+          .filter((s) => s !== "completed");
         throw new ConflictError(
           `لا يمكن نقل المشروع من "${existing.status}" إلى "${b.status}"`,
           { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد (حالة نهائية)"}` }
@@ -876,9 +868,12 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
     const [phase] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
     if (!phase) throw new NotFoundError("المرحلة غير موجودة");
 
-    // State machine — phases must be pending or in_progress to complete
-    const allowedNext = PHASE_TRANSITIONS[(phase.status as string | null) ?? "pending"] ?? [];
-    if (!allowedNext.includes("completed")) {
+    // State machine — validated through lifecycleEngine's "project_phases"
+    // machine (single source of truth). Only an in_progress phase may complete;
+    // a pending phase must be started first.
+    const phaseStatus = (phase.status as string | null) ?? "pending";
+    if (!isValidTransition("project_phases", phaseStatus, "completed")) {
+      const allowedNext = getStateMachine("project_phases")?.transitions[phaseStatus] ?? [];
       throw new ConflictError(
         `لا يمكن إكمال مرحلة حالتها "${phase.status ?? "pending"}"`,
         { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` }
@@ -890,7 +885,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
       id: phaseId,
       scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
       action: "project.phase.completed",
-      fromStates: ["pending", "in_progress"],
+      fromStates: ["in_progress"],
       toState: "completed",
       after: { projectId, previousStatus: phase.status ?? "pending" },
     });

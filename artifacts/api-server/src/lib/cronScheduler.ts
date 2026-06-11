@@ -23,6 +23,7 @@ import {
   currentYear,
   currentPeriod,
   roundTo2,
+  currentDateInTz,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
@@ -4114,6 +4115,147 @@ async function getRateLimitAlertRecipients(): Promise<RateLimitAdminRecipient[]>
   }
 }
 
+/**
+ * #2079 TA-T18-02 — materialise tomorrow's due route patterns for
+ * companies that opted into autoMaterialiseEnabled. Runs once a day
+ * at 06:30 Riyadh so the dispatcher walks into a day-+1 board already
+ * populated with draft bookings (one per pattern whose mask matches
+ * tomorrow's Riyadh weekday and whose activeFrom..activeUntil window
+ * contains tomorrow).
+ *
+ * Targets TOMORROW (not today) so an op who reviews the cron output
+ * still has business hours to reschedule, override, or cancel before
+ * the materialised bookings flip into dispatch the next morning.
+ *
+ * Idempotency: bookingNumber = `RP-{patternCode}-{YYYYMMDD}` and the
+ * (companyId, bookingNumber) UNIQUE constraint (migration 266) is the
+ * natural key. ON CONFLICT DO NOTHING. Re-running the cron the same
+ * day (manual trigger via /admin/cron/trigger) is a no-op.
+ *
+ * Boundary: NO JE / GL contact (transport rule). The created
+ * bookings are draft + bookingSource='recurring_schedule' just like
+ * the manual /materialise endpoint emits, so downstream behaviour is
+ * identical to the human-fired path.
+ */
+export async function materialiseDueRoutePatterns(): Promise<string> {
+  // Tomorrow in Riyadh — the cron's whole point. UTC math would fire
+  // for the wrong day for any company crossing midnight Asia/Riyadh.
+  const tomorrow = new Date(Date.now() + 86400000);
+  const tomorrowIso = currentDateInTz("Asia/Riyadh", tomorrow);
+  // Day-of-week (0=Sun..6=Sat) computed in Asia/Riyadh — matches the
+  // mask convention pinned in transport-route-patterns.ts.
+  const tomorrowDow = new Date(`${tomorrowIso}T12:00:00+03:00`).getUTCDay();
+
+  // Only patterns belonging to companies that explicitly opted in.
+  // The JOIN against transport_planning_settings is the gate — a
+  // company without a settings row OR with FALSE simply does not appear.
+  const patterns = await rawQueryShared<{
+    id: number;
+    companyId: number;
+    branchId: number | null;
+    patternCode: string;
+    daysOfWeekMask: number;
+    activeFrom: string | null;
+    activeUntil: string | null;
+    defaultCustomerId: number | null;
+    defaultContractId: number | null;
+    fromLocationId: number | null;
+    toLocationId: number | null;
+    fromLocationText: string | null;
+    toLocationText: string | null;
+    fromLocationKind: string | null;
+    toLocationKind: string | null;
+    fromLat: number | null;
+    fromLng: number | null;
+    toLat: number | null;
+    toLng: number | null;
+    defaultCargoWeight: number | null;
+    defaultCargoUnit: string | null;
+  }>(
+    `SELECT rp.id, rp."companyId", rp."branchId",
+            rp."patternCode", rp."daysOfWeekMask",
+            rp."activeFrom", rp."activeUntil",
+            rp."defaultCustomerId", rp."defaultContractId",
+            rp."fromLocationId", rp."toLocationId",
+            rp."fromLocationText", rp."toLocationText",
+            rp."fromLocationKind", rp."toLocationKind",
+            rp."fromLat", rp."fromLng", rp."toLat", rp."toLng",
+            rp."defaultCargoWeight", rp."defaultCargoUnit"
+       FROM transport_route_patterns rp
+       JOIN transport_planning_settings tps
+         ON tps."companyId" = rp."companyId"
+        AND tps."autoMaterialiseEnabled" = TRUE
+      WHERE rp."deletedAt" IS NULL
+        AND rp.status = 'active'
+        AND ((rp."daysOfWeekMask" >> $1) & 1) = 1
+        AND (rp."activeFrom"  IS NULL OR rp."activeFrom"  <= $2::date)
+        AND (rp."activeUntil" IS NULL OR rp."activeUntil" >= $2::date)`,
+    [tomorrowDow, tomorrowIso],
+  );
+
+  let created = 0;
+  let existed = 0;
+  let errors = 0;
+  const target = tomorrowIso;
+
+  for (const pattern of patterns) {
+    const bookingNumber = `RP-${pattern.patternCode}-${target.replace(/-/g, "")}`;
+    try {
+      const rows = await rawQueryShared<{ id: number; existed: boolean }>(
+        `WITH ins AS (
+           INSERT INTO transport_bookings
+             ("companyId", "branchId", "bookingNumber", "bookingSource", "transportServiceType",
+              "routePatternId", "tripFamily",
+              "customerId", "contractId",
+              "fromLocationId", "toLocationId",
+              "fromLocationText", "toLocationText",
+              "fromLocationKind", "toLocationKind",
+              "fromLat", "fromLng", "toLat", "toLng",
+              "requestedPickupDate",
+              "cargoWeight", "cargoUnit",
+              status, "createdBy")
+           VALUES ($1, $2, $3, 'recurring_schedule', 'cargo_load',
+                   $4, 'cargo',
+                   $5, $6,
+                   $7, $8, $9, $10,
+                   $11, $12,
+                   $13, $14, $15, $16,
+                   $17, $18, $19,
+                   'draft', NULL)
+           ON CONFLICT ("companyId", "bookingNumber") DO NOTHING
+           RETURNING id, FALSE AS existed
+         )
+         SELECT id, existed FROM ins
+         UNION ALL
+         SELECT id, TRUE AS existed
+           FROM transport_bookings
+          WHERE "companyId" = $1 AND "bookingNumber" = $3
+            AND NOT EXISTS (SELECT 1 FROM ins)
+         LIMIT 1`,
+        [
+          pattern.companyId, pattern.branchId, bookingNumber,
+          pattern.id, pattern.defaultCustomerId, pattern.defaultContractId,
+          pattern.fromLocationId, pattern.toLocationId,
+          pattern.fromLocationText, pattern.toLocationText,
+          pattern.fromLocationKind, pattern.toLocationKind,
+          pattern.fromLat, pattern.fromLng,
+          pattern.toLat, pattern.toLng,
+          target, pattern.defaultCargoWeight, pattern.defaultCargoUnit,
+        ],
+      );
+      const row = rows[0];
+      if (!row) continue;
+      if (row.existed) existed++;
+      else created++;
+    } catch (err) {
+      errors++;
+      logger.error({ err, patternId: pattern.id, bookingNumber }, "auto-materialise route pattern failed");
+    }
+  }
+
+  return `materialise_due_route_patterns: ${patterns.length} patterns scanned for ${tomorrowIso}, ${created} created, ${existed} existed, ${errors} errors`;
+}
+
 export async function rateLimitFallbackAlertCheck(): Promise<string> {
   const current = getRedisRateLimitStatus();
   const state = await loadRateLimitAlerterState();
@@ -4453,6 +4595,9 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
   { name: "pbx_stt_queue_drain", description: "تفريغ طابور تحويل التسجيلات إلى نصوص + توليد ملخّص AI", schedule: "*/2 * * * *", handler: pbxSttQueueDrain },
   { name: "thread_snooze_wake", description: "تنبيه المستخدم بإعادة فتح المحادثات المؤجَّلة عند موعدها", schedule: "* * * * *", handler: threadSnoozeWake },
+  // #2079 TA-T18-02 — closes the misleading "by the daily cron" promise
+  // in transport-route-patterns.ts. 06:30 Riyadh = 03:30 UTC.
+  { name: "materialise_due_route_patterns", description: "تجسيد قوالب رحلات الحمولة المتكررة المستحقّة للغد (للشركات المفعّل لديها autoMaterialiseEnabled)", schedule: "30 3 * * *", handler: materialiseDueRoutePatterns },
 ];
 
 /**
