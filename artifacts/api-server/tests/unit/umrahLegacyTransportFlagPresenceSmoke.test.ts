@@ -95,15 +95,26 @@ describe("U-02b M2 §A — legacyTransportWritesDisabled is declared, typed, def
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §B — The flag is NOT read anywhere in production code yet
+// §B — The flag now has exactly one reference in routes/umrah.ts (M3 gate)
+//      and stays untouched in routes/umrah-entities.ts.
 // ─────────────────────────────────────────────────────────────────────────────
-describe("U-02b M2 §B — the flag has zero consumers in routes (declarative only)", () => {
-  it("routes/umrah.ts does not reference legacyTransportWritesDisabled", () => {
-    // M2 is preparation only — no route branches on this flag yet.
-    // A future stage (M3) that wires the flag into POST/PATCH on
-    // /transport needs its own separate owner authorisation and will
-    // flip this assertion to a count >= 1.
-    expect(ROUTE_UMRAH).not.toMatch(/\blegacyTransportWritesDisabled\b/);
+describe("U-02b §B — the flag has the M3 gate reference in umrah.ts, zero elsewhere", () => {
+  it("routes/umrah.ts references legacyTransportWritesDisabled exactly twice (M3 doc-comment + settings key)", () => {
+    // M3 of #2080 wired a gate on POST /transport and PATCH /transport/:id.
+    // The gate uses an `isLegacyTransportWritesDisabled` helper (which
+    // does NOT match the word-boundary regex below — the helper's name
+    // has `is` glued to `Legacy` so `\blegacy...` won't match it).
+    //
+    // The two boundary-matched occurrences this assertion freezes:
+    //   1) The helper's documentation comment, referencing
+    //      `financial.legacyTransportWritesDisabled` in prose.
+    //   2) The literal settings key
+    //      `"umrah.financial.legacyTransportWritesDisabled"` passed
+    //      to resolveSettings.
+    // Adding any new direct reference (e.g. duplicating the key
+    // somewhere else in the file) is a regression worth surfacing.
+    const refs = ROUTE_UMRAH.match(/\blegacyTransportWritesDisabled\b/g) ?? [];
+    expect(refs.length).toBe(2);
   });
 
   it("routes/umrah-entities.ts does not reference legacyTransportWritesDisabled", () => {
