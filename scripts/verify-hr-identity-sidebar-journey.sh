@@ -10,8 +10,13 @@
 #      payroll_officer / employee) get DIFFERENT module sets from
 #      /auth/me — same proof shape as PR-2 but with the two personas
 #      the product owner added.
+#   C. PR-9a (FU-1 closed): department_manager + payroll_officer get
+#      REAL module sets (>0 — the seed fix in migration 291), and the
+#      lanes separate: payroll_officer reads payroll but 403s on
+#      التحقيقات (hr.discipline); department_manager reads his
+#      department's employees but 403s on payroll.
 #
-# Prereqs: bootstrap + built server + Al-Diyaa tenant + migration 289.
+# Prereqs: bootstrap + built server + Al-Diyaa tenant + migrations 289+291.
 set -euo pipefail
 BASE="${BASE:-http://localhost:5000/api}"
 DSN="${DATABASE_URL:-postgres://ghayth_erp:ghayth_erp@localhost:5432/ghayth_erp}"
@@ -29,10 +34,19 @@ section(){ echo; echo "▶ $1"; }
 export PGPASSWORD="$(echo "$DSN" | sed -E 's#.*://[^:]+:([^@]+)@.*#\1#')"
 SFX="$(printf '%06d' $(( (RANDOM*RANDOM) % 1000000 )))"
 
-section "0. migration 289 applied + owner login"
+section "0. migrations 289+291 applied + owner login"
 psql "$DSN" -q -f /home/user/ghayth-erp/artifacts/api-server/src/migrations/289_access_grant_assignments.sql >/dev/null 2>&1
 COL="$(psql "$DSN" -tA -c "SELECT count(*) FROM information_schema.columns WHERE table_name='employee_assignments' AND column_name='isAccessGrant';")"
 [ "$COL" = "1" ] && ok "isAccessGrant column exists" || { no "column missing"; exit 1; }
+
+# PR-9a — FU-1 seed fix: standard grants for department_manager + payroll_officer.
+psql "$DSN" -q -f /home/user/ghayth-erp/artifacts/api-server/src/migrations/291_seed_standard_role_grants_fix.sql >/dev/null 2>&1
+G_DEPT="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_role_grants g JOIN rbac_roles r ON r.id=g.role_id WHERE r.role_key='department_manager' AND r.\"companyId\" IS NULL;")"
+G_PAY="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_role_grants g JOIN rbac_roles r ON r.id=g.role_id WHERE r.role_key='payroll_officer' AND r.\"companyId\" IS NULL;")"
+[ "${G_DEPT:-0}" -ge 1 ] && ok "department_manager carries $G_DEPT grants (was 0 — no role row at all)" || no "department_manager still 0 grants"
+[ "${G_PAY:-0}" -ge 1 ] && ok "payroll_officer carries $G_PAY grants (was 0)" || no "payroll_officer still 0 grants"
+G_PAY_DISC="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_role_grants g JOIN rbac_roles r ON r.id=g.role_id WHERE r.role_key='payroll_officer' AND g.feature_key LIKE 'hr.discipline%';")"
+[ "${G_PAY_DISC:-9}" = "0" ] && ok "payroll_officer has ZERO hr.discipline grants (التحقيقات خارج حزمته)" || no "payroll_officer leaked $G_PAY_DISC discipline grants"
 
 curl -fsS -c "$J" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$OWNER_EMAIL\",\"password\":\"$OWNER_PASSWORD\"}" -o /dev/null
 CSRF="$(grep erp_csrf "$J" | awk '{print $7}')"
@@ -104,10 +118,20 @@ declare -A EMAILS
 for P in hr_manager department_manager payroll_officer employee; do
   EMAILS[$P]="pr8a-${P//_/-}-${SFX}@dr.local"
 done
+# PR-9a: dept/payroll seeding is now a HARD assertion — migration 291
+# guarantees the role rows + grants exist, so a silent 0-row bind is a bug.
 seed_persona hr_manager        "${EMAILS[hr_manager]}"        "مديرة HR" 1 >/dev/null && ok "hr_manager seeded" || no "hr seed"
-seed_persona department_manager "${EMAILS[department_manager]}" "مدير قسم" 2 >/dev/null && ok "department_manager seeded" || echo "  ⏭️  dept role may be absent"
-seed_persona payroll_officer   "${EMAILS[payroll_officer]}"   "مسؤول رواتب" 3 >/dev/null && ok "payroll_officer seeded" || echo "  ⏭️  payroll role may be absent"
+seed_persona department_manager "${EMAILS[department_manager]}" "مدير قسم" 2 >/dev/null && ok "department_manager seeded" || no "dept seed"
+seed_persona payroll_officer   "${EMAILS[payroll_officer]}"   "مسؤول رواتب" 3 >/dev/null && ok "payroll_officer seeded" || no "payroll seed"
 seed_persona employee          "${EMAILS[employee]}"          "موظف عادي" 4 >/dev/null && ok "employee seeded" || no "emp seed"
+
+# Belt-and-braces: the rbac bind must have matched a real role row, and a
+# NON-template one — /auth/me only surfaces is_template=FALSE roles, so a
+# template bind = authorized API but 0-module sidebar (the FU-1 symptom).
+for P in department_manager payroll_officer; do
+  BOUND="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_user_roles ur JOIN rbac_roles r ON r.id=ur.role_id JOIN users u ON u.id=ur.\"userId\" WHERE u.email='${EMAILS[$P]}' AND r.role_key='$P' AND r.is_template=FALSE;")"
+  [ "${BOUND:-0}" = "1" ] && ok "$P persona bound to a per-company (non-template) role row" || no "$P bound to template/nothing (the pre-291 failure mode)"
+done
 
 modules_of(){
   local EMAIL="$1" PASS_="$2"
@@ -127,11 +151,35 @@ echo "    modules: owner=$M_OWNER hr=$M_HR dept=$M_DEPT payroll=$M_PAY employee=
 [ "${M_OWNER:-0}" -gt "${M_EMP:-0}" ] && ok "owner ($M_OWNER) > employee ($M_EMP) — sidebar narrows" || no "no narrowing owner vs employee"
 [ "${M_HR:-0}" -gt "${M_EMP:-0}" ] && ok "hr_manager ($M_HR) > employee ($M_EMP)" || no "no narrowing hr vs employee"
 [ "${M_OWNER:-0}" -gt "${M_HR:-0}" ] && ok "owner ($M_OWNER) > hr_manager ($M_HR)" || no "owner not wider than hr"
-if [ "${M_PAY:--1}" != "-1" ] && [ "${M_PAY:-0}" -ge 1 ]; then
-  [ "${M_PAY:-0}" -lt "${M_OWNER:-0}" ] && ok "payroll_officer ($M_PAY) < owner — scoped lane" || no "payroll not narrowed"
-else
-  echo "  ⏭️  payroll_officer login/modules unavailable — role likely absent in seed"
-fi
+
+# PR-9a hard pins (FU-1 closed): both personas now have REAL module sets.
+[ "${M_DEPT:-0}" -ge 1 ] && ok "department_manager has $M_DEPT modules (was 0 pre-291)" || no "department_manager still 0 modules"
+[ "${M_PAY:-0}" -ge 1 ] && ok "payroll_officer has $M_PAY modules (was 0 pre-291)" || no "payroll_officer still 0 modules"
+[ "${M_DEPT:-0}" -lt "${M_OWNER:-0}" ] && ok "department_manager ($M_DEPT) < owner ($M_OWNER) — scoped, not the whole system" || no "dept not narrowed"
+[ "${M_PAY:-0}" -lt "${M_OWNER:-0}" ] && ok "payroll_officer ($M_PAY) < owner — scoped lane" || no "payroll not narrowed"
+
+# ────────────────────────────────────────────────────────────────────────────
+section "C. PR-9a — المسارات تفترق: الرواتب لمسؤول الرواتب، التحقيقات ليست له"
+# status_of <email> <path> → HTTP status code as that persona.
+status_of(){
+  local EMAIL="$1" PATH_="$2"
+  local JX; JX="$(mktemp)"
+  curl -fsS -c "$JX" -H "X-E2E-Test: 1" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$TEST_PASSWORD\"}" -o /dev/null 2>/dev/null || { echo "000"; rm -f "$JX"; return; }
+  curl -sS -o /dev/null -w "%{http_code}" -b "$JX" "$BASE$PATH_"
+  rm -f "$JX"
+}
+
+PAY_PAYROLL="$(status_of "${EMAILS[payroll_officer]}" "/hr/payroll")"
+PAY_DISC="$(status_of "${EMAILS[payroll_officer]}" "/hr/discipline/memos")"
+DEPT_EMP="$(status_of "${EMAILS[department_manager]}" "/employees?limit=5")"
+DEPT_PAYROLL="$(status_of "${EMAILS[department_manager]}" "/hr/payroll")"
+EMP_PAYROLL="$(status_of "${EMAILS[employee]}" "/hr/payroll")"
+
+[ "$PAY_PAYROLL" = "200" ] && ok "payroll_officer GET /hr/payroll → 200 (يرى المسيرات)" || no "payroll_officer /hr/payroll → $PAY_PAYROLL"
+[ "$PAY_DISC" = "403" ] && ok "payroll_officer GET /hr/discipline/memos → 403 (لا يرى التحقيقات — authorize، لا إخفاء رابط)" || no "payroll_officer /hr/discipline/memos → $PAY_DISC (expected 403)"
+[ "$DEPT_EMP" = "200" ] && ok "department_manager GET /employees → 200 (يرى موظفيه)" || no "department_manager /employees → $DEPT_EMP"
+[ "$DEPT_PAYROLL" = "403" ] && ok "department_manager GET /hr/payroll → 403 (الرواتب ليست له)" || no "department_manager /hr/payroll → $DEPT_PAYROLL (expected 403)"
+[ "$EMP_PAYROLL" = "403" ] && ok "employee GET /hr/payroll → 403 (employee يبقى محدودًا)" || no "employee /hr/payroll → $EMP_PAYROLL (expected 403)"
 
 rm -f "$J"
 echo
