@@ -548,7 +548,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     // (per-vehicle maintenance + fuel cost roll-up). Both fire-and-
     // forget — the vehicle create must succeed regardless.
     const vehicleLabel = `${b.make} ${b.model} — ${b.plateNumber}`;
-    createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel)
+    createSubsidiaryAccountsForEntity(scope.companyId, "vehicle", insertId, vehicleLabel, { branchId: scope.branchId, actorUserId: scope.userId })
       .catch((e) => logger.error(e, "vehicle subsidiary auto-create failed"));
     createCostCenterForEntity(
       scope.companyId, "vehicle", insertId, vehicleLabel,
@@ -570,7 +570,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
     }).catch((e) => logger.error(e, "fleet background task failed"));
     createSubsidiaryAccountsForEntity(
       scope.companyId, "vehicle", insertId,
-      `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim()
+      `${b.plateNumber} ${b.make || ""} ${b.model || ""}`.trim(), { branchId: scope.branchId, actorUserId: scope.userId }
     ).catch((e) => logger.error(e, "fleet background task failed"));
     if (b.purchasePrice && Number(b.purchasePrice) > 0) {
       (async () => {
@@ -1091,7 +1091,7 @@ router.post("/drivers", authorize({ feature: "fleet.vehicles", action: "create" 
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
-    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name).catch((e) => logger.error(e, "fleet background task failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "driver", insertId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "fleet background task failed"));
 
     createAuditLog({
       companyId: scope.companyId,
