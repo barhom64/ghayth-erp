@@ -13,6 +13,19 @@ import {
   Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CargoCheckpointDialog } from "@/components/shared/cargo-checkpoint-dialog";
+
+// #2079 TA-T18-03 — within-step operational checkpoints are recorded
+// through a dialog mounted on each cargo card while the manifest sits
+// in a driver-controlled state. The set mirrors the backend's
+// CARGO_DRIVER_CHECKPOINT_OPEN_STATES gate at
+// /api/fleet/me/cargo/:id/checkpoint (status ∈ driver_accepted ..
+// delivered). Closing the SPA half of #2056 — the dialog NEVER
+// changes the 7-state lifecycle; advance buttons own that.
+const CARGO_CHECKPOINT_OPEN: ReadonlySet<string> = new Set([
+  "driver_accepted", "trip_started", "arrived_pickup",
+  "loaded", "in_transit", "arrived_delivery", "delivered",
+]);
 
 interface DriverMe {
   id: number; name: string; phone: string | null;
@@ -327,6 +340,16 @@ export default function MeDriver() {
                       disabled={busy === `cargo-${m.id}-delivered`}
                       onClick={() => cargoAdvance(m.id, "delivered")}>تأكيد التسليم</Button>
                   )}
+                  {/* TA-T18-03 — log within-step checkpoints (weighing,
+                      rest, inspection, customs, fueling, (un)loading
+                      milestones) without touching the headline status.
+                      Gated to driver-controlled states only — matches
+                      the backend's CARGO_DRIVER_CHECKPOINT_OPEN_STATES. */}
+                  <CargoCheckpointDialog
+                    manifestId={m.id}
+                    manifestNumber={m.manifestNumber}
+                    disabled={!CARGO_CHECKPOINT_OPEN.has(m.status)}
+                  />
                 </CardContent>
               </Card>
             );
