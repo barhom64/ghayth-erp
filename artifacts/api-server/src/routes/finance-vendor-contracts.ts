@@ -67,6 +67,9 @@ vendorContractsRouter.get(
       const { where, params } = buildScopedWhere(scope, filters, {
         companyColumn: 'vc."companyId"',
         softDeleteColumn: 'vc."deletedAt"',
+        // vendor_contracts has no branchId column — a ?branchIds= filter
+        // from the topbar 500'd with `column "branchId" does not exist`.
+        disableBranchScope: true,
       });
       const status = typeof req.query.status === "string" ? req.query.status : null;
       const vendorIdRaw = typeof req.query.vendorId === "string" ? req.query.vendorId : null;
