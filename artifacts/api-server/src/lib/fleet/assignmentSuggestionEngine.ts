@@ -54,6 +54,12 @@ import {
   type DriverDrivingMinutes,
   type LeaveOverlap,
 } from "./driverReadiness.js";
+import {
+  checkOperatingWindow,
+  dailyOperatingMinutes,
+  utilizationScore,
+  type OperatingWindowSettings,
+} from "./operatingWindow.js";
 
 export interface SuggestionRequest {
   companyId: number;
@@ -85,6 +91,9 @@ export interface SuggestionResult {
     license: number;
     distance: number;
     agreement: number;
+    /** #2079 PE-04 — trailing-7-day utilisation balancing axis.
+     *  Scoring only, never a blocker. */
+    utilization: number;
   };
   /** Arabic explanation strings — direct user-facing. */
   reasons: string[];
@@ -547,12 +556,20 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
   // (13h / day, 60h / week). One row per company, so this is a fast
   // PK lookup. Falling back to industry defaults when the row is
   // missing keeps the suggest path resilient on fresh tenants.
+  // #2079 PE-04 — the same row also carries the operating window
+  // (migration 330): nullable TIME bounds + 7-bit days mask.
   const [capsRow] = await rawQuery<{
     dailyMinutes: number;
     weeklyMinutes: number;
+    operatingStartTime: string | null;
+    operatingEndTime: string | null;
+    operatingDaysMask: number | null;
   }>(
     `SELECT "defaultMaxDailyDrivingMinutes"  AS "dailyMinutes",
-            "defaultMaxWeeklyDrivingMinutes" AS "weeklyMinutes"
+            "defaultMaxWeeklyDrivingMinutes" AS "weeklyMinutes",
+            "operatingStartTime",
+            "operatingEndTime",
+            "operatingDaysMask"
        FROM transport_planning_settings
       WHERE "companyId" = $1`,
     [req.companyId],
@@ -561,6 +578,24 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     dailyMinutes:  capsRow?.dailyMinutes  ?? 780,
     weeklyMinutes: capsRow?.weeklyMinutes ?? 3600,
   };
+  const operatingWindow: OperatingWindowSettings | null = capsRow
+    ? {
+        operatingStartTime: capsRow.operatingStartTime,
+        operatingEndTime:   capsRow.operatingEndTime,
+        operatingDaysMask:  capsRow.operatingDaysMask,
+      }
+    : null;
+
+  // #2079 PE-04 — HARD operating-window guard. The trip START must
+  // fall inside the company's configured transport operating hours
+  // (Asia/Riyadh wall-clock). Outside → no candidates at all; the
+  // route layer's diagnoseEmptySuggest then surfaces the same Arabic
+  // reason to the operator. NULL configuration skips the gate.
+  const windowVerdict = checkOperatingWindow(start, operatingWindow);
+  if (windowVerdict.blocked) {
+    return [];
+  }
+
   // Estimated trip duration in minutes. Used for the projected sum
   // against the caps — chaining a 5h trip onto a driver who has
   // already done 9h triggers the daily ejection.
@@ -570,6 +605,30 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       (new Date(end).getTime() - new Date(start).getTime()) / 60_000,
     ),
   );
+
+  // #2079 PE-04 — trailing 7-day booked minutes per vehicle. ONE
+  // grouped query; feeds the utilization SCORING axis (never blocks)
+  // + the predictedUtilisation field the interface promised since
+  // #1812 but never computed (audit file 20 §0).
+  const vehicleMinutesRows = await rawQuery<{ vehicleId: number; minutes: string }>(
+    `SELECT "vehicleId",
+            COALESCE(SUM(
+              EXTRACT(EPOCH FROM ("scheduledEndAt" - "scheduledStartAt")) / 60
+            ), 0)::int AS minutes
+       FROM transport_dispatch_orders
+      WHERE "companyId" = $1
+        AND status NOT IN ('declined', 'cancelled')
+        AND "scheduledStartAt" >= $2::timestamptz - INTERVAL '7 days'
+        AND "scheduledStartAt" <  $2::timestamptz
+      GROUP BY "vehicleId"`,
+    [req.companyId, start],
+  );
+  const bookedMinutesByVehicleId = new Map<number, number>();
+  for (const r of vehicleMinutesRows) {
+    bookedMinutesByVehicleId.set(r.vehicleId, Number(r.minutes) || 0);
+  }
+  // Denominator honours the configured window (UTIL-02), else 12h/day.
+  const weeklyOperatingMinutes = dailyOperatingMinutes(operatingWindow) * 7;
 
   // 6) Score every (vehicle, driver) pair.
   const results: SuggestionResult[] = [];
@@ -805,15 +864,39 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
         }
       }
 
+      // ─ utilization (weight 5, scoring only — NEVER blocks) ───────
+      // #2079 PE-04. Trailing-7-day booked minutes against the
+      // operating-window-aware denominator. Owner's rule: balancing
+      // factor, not a gate — a 100%-busy vehicle still appears, just
+      // ranked below an equivalent idle one.
+      const bookedMinutes = bookedMinutesByVehicleId.get(v.id) ?? 0;
+      const utilisationPct = weeklyOperatingMinutes > 0
+        ? (bookedMinutes / weeklyOperatingMinutes) * 100
+        : 0;
+      const utilScore = utilizationScore(utilisationPct);
+      if (utilisationPct > 80) {
+        reasons.push(
+          `استخدام المركبة مرتفع (${Math.round(utilisationPct)}٪ آخر 7 أيام) — يُفضَّل توزيع الحمل`,
+        );
+      }
+      const predictedUtilisation = Math.round(
+        weeklyOperatingMinutes > 0
+          ? ((bookedMinutes + tripDurationMinutes) / weeklyOperatingMinutes) * 100
+          : 0,
+      );
+
       // ─ Aggregate ─────────────────────────────────────────────────
+      // PE-04: weights re-balanced — distance 0.10 → 0.05, the freed
+      // 0.05 goes to utilization. Sum stays 1.00.
       const finalScore = Math.round(
         capacityScore     * 0.20 +
         availabilityScore * 0.10 +
         conflictScore     * 0.25 +
         restScore         * 0.15 +
         licenseScore      * 0.10 +
-        distanceScore     * 0.10 +
-        agreementScore    * 0.10,
+        distanceScore     * 0.05 +
+        agreementScore    * 0.10 +
+        utilScore         * 0.05,
       );
 
       // Drop candidates with HARD blockers UNLESS the dispatcher
@@ -835,10 +918,12 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           license: licenseScore,
           distance: distanceScore,
           agreement: agreementScore,
+          utilization: utilScore,
         },
         reasons,
         blockers,
         estimatedDistanceKm,
+        predictedUtilisation,
       });
     }
   }
