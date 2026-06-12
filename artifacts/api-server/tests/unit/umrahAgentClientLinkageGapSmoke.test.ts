@@ -101,15 +101,59 @@ describe("U-11 §A — generateSalesInvoice gates on subAgent.clientId", () => {
     );
   });
 
-  it("engine throws ConflictError when subAgent.clientId is falsy", () => {
-    // The error message is in Arabic and references the linkage step
-    // operators must take. Pinning the literal message catches a
-    // silent rephrase that might confuse a future regression hunt.
+  it("engine throws ConflictError when subAgent.clientId is falsy (policy-aware after U-11 impl)", () => {
+    // The gate's STRUCTURE survives U-11: the engine still hard-blocks
+    // when subAgent.clientId is missing — silent invoicing is still
+    // impossible. The error MESSAGE is now policy-aware (4 branches),
+    // but every branch ends with a ConflictError. The four-string
+    // assertion below pins each policy's hint so a refactor that
+    // collapses them back to a single generic message has to update
+    // this smoke deliberately.
     expect(INVOICING_ENGINE).toMatch(
-      /if\s*\(\s*!subAgent\.clientId\s*\)\s*throw\s+new\s+ConflictError\(/,
+      /if\s*\(\s*!subAgent\.clientId\s*\)\s*\{[\s\S]*?throw\s+new\s+ConflictError\(/,
+    );
+    // operational_until_linked (default)
+    expect(INVOICING_ENGINE).toMatch(/تشغيلي ولم يُربط بعميل بعد/);
+    // sub_agent_client_required
+    expect(INVOICING_ENGINE).toMatch(
+      /تتطلب ربط الوكيل الفرعي بعميل صريح/,
+    );
+    // main_agent_client (deliberately routed to the same hard block —
+    // schema work for agent.clientId is out of scope)
+    expect(INVOICING_ENGINE).toMatch(
+      /main_agent_client[\s\S]*?ربط الوكيل الرئيسي بعميل/,
+    );
+  });
+
+  it("engine declares the 4 known policies as a single source of truth", () => {
+    // KNOWN_CLIENT_LINKAGE_POLICIES is the canonical list. If a new
+    // policy lands or one is renamed, this assertion flips and forces
+    // a smoke update + audit-doc update.
+    expect(INVOICING_ENGINE).toMatch(/KNOWN_CLIENT_LINKAGE_POLICIES/);
+    expect(INVOICING_ENGINE).toMatch(/"operational_until_linked"/);
+    expect(INVOICING_ENGINE).toMatch(/"sub_agent_client_required"/);
+    expect(INVOICING_ENGINE).toMatch(/"main_agent_client"/);
+    expect(INVOICING_ENGINE).toMatch(/"operator_confirmed_on_import"/);
+  });
+
+  it("engine resolves the active policy via resolveSettings on `umrah.auto_link.clientLinkagePolicy`", () => {
+    // Anchoring on the exact settings key + the helper signature
+    // catches a silent rename of the catalog key.
+    expect(INVOICING_ENGINE).toMatch(
+      /resolveSettings\(\s*"umrah\.auto_link\.clientLinkagePolicy"\s*,\s*companyId\s*,?\s*\)/,
     );
     expect(INVOICING_ENGINE).toMatch(
-      /الوكيل الفرعي غير مربوط بعميل/,
+      /async\s+function\s+resolveClientLinkagePolicy\(/,
+    );
+  });
+
+  it("policy resolver falls back to the safe default when no setting / unknown value", () => {
+    // Pin the literal default-return so a refactor that silently
+    // changes the default (e.g. to `sub_agent_client_required`) has
+    // to update this assertion. The default is the company-safe
+    // option per U-11's owner ratification.
+    expect(INVOICING_ENGINE).toMatch(
+      /return\s+"operational_until_linked"/,
     );
   });
 
@@ -219,50 +263,92 @@ describe("U-11 §D — PUT /sub-agents/:id/link is the only sub-agent → client
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §E — Settings catalog has no client-linkage policy field today
+// §E — Settings catalog declares `clientLinkagePolicy` (post-U-11 impl)
 // ─────────────────────────────────────────────────────────────────────────────
-describe("U-11 §E — settings catalog has no client-linkage policy field today", () => {
+describe("U-11 §E — settings catalog declares clientLinkagePolicy under auto_link", () => {
   const autoLink = UMRAH_POLICY_CATEGORIES.find(
     (c) => c.id === "auto_link",
   );
 
-  it("`auto_link` category exists with exactly its three pre-existing fields", () => {
+  it("`auto_link` category still exists with the three pre-existing fields", () => {
     expect(autoLink).toBeDefined();
     const keys = new Set(autoLink!.fields.map((f) => f.key));
     expect(keys.has("autoCreateMissingAgents")).toBe(true);
     expect(keys.has("autoCreateMissingGroups")).toBe(true);
     expect(keys.has("fuzzyMatchMinConfidence")).toBe(true);
-    expect(autoLink!.fields.length).toBe(3);
   });
 
-  it("no field in `auto_link` mentions client linkage today", () => {
-    // The policy field for U-11 cases A/B/C/D (if any) would land
-    // here. Today there is nothing — confirm by sweeping the field
-    // keys for likely names.
-    const keys = autoLink!.fields.map((f) => f.key);
-    const forbiddenSubstrings = [
-      "client",
-      "Client",
-      "customer",
-      "Customer",
-      "linkClient",
-    ];
-    for (const key of keys) {
-      for (const sub of forbiddenSubstrings) {
-        expect(key).not.toContain(sub);
-      }
-    }
+  it("auto_link category now has exactly four fields (three legacy + clientLinkagePolicy)", () => {
+    expect(autoLink?.fields.length).toBe(4);
   });
 
-  it("no other catalog category has snuck in a client-linkage policy field", () => {
-    // Catch a future PR that adds the policy field under a
-    // different category by mistake.
+  it("clientLinkagePolicy field is declared as a select with the safe default", () => {
+    const f = autoLink!.fields.find((x) => x.key === "clientLinkagePolicy");
+    expect(f).toBeDefined();
+    expect(f!.type).toBe("select");
+    expect(f!.defaultValue).toBe("operational_until_linked");
+  });
+
+  it("clientLinkagePolicy options expose exactly the 4 ratified values", () => {
+    const f = autoLink!.fields.find((x) => x.key === "clientLinkagePolicy");
+    expect(f?.options).toBeDefined();
+    const values = new Set((f!.options ?? []).map((o) => o.value));
+    expect(values.has("operational_until_linked")).toBe(true);
+    expect(values.has("sub_agent_client_required")).toBe(true);
+    expect(values.has("main_agent_client")).toBe(true);
+    expect(values.has("operator_confirmed_on_import")).toBe(true);
+    expect(f!.options!.length).toBe(4);
+  });
+
+  it("no rival policy key landed under another category (single source of truth)", () => {
     for (const cat of UMRAH_POLICY_CATEGORIES) {
+      // The `auto_link` category is the canonical home. Any other
+      // category surfacing the same key is a regression worth
+      // catching — a refactor that moves the field elsewhere must
+      // update this assertion deliberately.
+      if (cat.id === "auto_link") continue;
       for (const f of cat.fields) {
-        expect(f.key).not.toMatch(/clientLinkagePolicy/i);
+        expect(f.key).not.toBe("clientLinkagePolicy");
         expect(f.key).not.toMatch(/subAgentDefaultStatus/i);
         expect(f.key).not.toMatch(/customerEntity/i);
       }
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §F — Silent-linkage + silent-invoicing guards (post-U-11 impl)
+//
+// The owner's two non-negotiables: no silent client creation in import,
+// no silent invoicing without a linked client. The §B / §A sections
+// already cover these from different angles; §F re-pins the boundary
+// using exact-call sentinels so a future refactor can't slide either
+// behaviour in under cover of a renamed function.
+// ─────────────────────────────────────────────────────────────────────────────
+describe("U-11 §F — silent-linkage + silent-invoicing guards", () => {
+  it("import engine does NOT include `resolveSettings` for any client-creation path", () => {
+    // The policy must be consulted at INVOICE time, not at IMPORT
+    // time. If a future PR auto-links sub-agents during import based
+    // on the policy, this assertion will need to be updated AND
+    // §B will surface the new clients-write.
+    expect(IMPORT_ENGINE).not.toMatch(
+      /resolveSettings\([^)]*clientLinkagePolicy/,
+    );
+    expect(IMPORT_ENGINE).not.toMatch(
+      /resolveSettings\([^)]*auto_link\.clientLinkagePolicy/,
+    );
+  });
+
+  it("explicit linker (PUT /sub-agents/:id/link) still emits umrah.agent.linked event + audit log", () => {
+    // Audit + Event on link were observed at audit time; this guards
+    // against a silent regression that strips either of them.
+    const linkBlock = UMRAH_ENTITIES_ROUTE.match(
+      /router\.put\(\s*"\/sub-agents\/:id\/link"[\s\S]{0,6000}?(?=\nrouter\.|\n\}\);)/,
+    );
+    expect(linkBlock).not.toBeNull();
+    expect(linkBlock![0]).toMatch(
+      /emitEvent\(\s*\{[\s\S]*?"umrah\.agent\.linked"/,
+    );
+    expect(linkBlock![0]).toMatch(/createAuditLog\(/);
   });
 });
