@@ -111,6 +111,28 @@ export const UMRAH_POLICY_CATEGORIES: PolicyCategory[] = [
       { key: "autoCreateMissingAgents", label: "إنشاء وكيل جديد تلقائياً إذا لم يُعرف في الاستيراد", type: "boolean", defaultValue: true },
       { key: "autoCreateMissingGroups", label: "إنشاء مجموعة جديدة تلقائياً إذا لم تُعرف", type: "boolean", defaultValue: true },
       { key: "fuzzyMatchMinConfidence", label: "الحد الأدنى لثقة المطابقة الضبابية (0–1)", type: "number", defaultValue: 0.6 },
+      // U-11 — سياسة ربط الوكيل الفرعي بالعميل المالي.
+      // الافتراضي operational_until_linked: الوكيل الفرعي المستورد يبقى
+      // كياناً تشغيلياً ولا يصبح عميلاً مالياً إلا بربط صريح من المُشغّل.
+      // القيم الثلاث الأخرى مُعرَّفة في الـcatalog لكن لها مستويات تفعيل
+      // مختلفة: sub_agent_client_required = نفس الـgate الحالي + رسالة
+      // مخصَّصة؛ operator_confirmed_on_import = سلوك الافتراضي + يبقى
+      // اقتراح الـimport-wizard متروكاً لـPR لاحق؛ main_agent_client =
+      // معطَّل engine-side حتى تُضاف umrah_agents.clientId عبر migration
+      // مُؤذَنة. كل ذلك موثَّق في U-11_agent_client_linkage_audit.md.
+      {
+        key: "clientLinkagePolicy",
+        label: "سياسة ربط الوكيل الفرعي بالعميل المالي",
+        type: "select",
+        defaultValue: "operational_until_linked",
+        options: [
+          { value: "operational_until_linked", label: "تشغيلي حتى الربط الصريح (افتراضي وآمن)" },
+          { value: "sub_agent_client_required", label: "الوكيل الفرعي عميل مستقل (بربط صريح)" },
+          { value: "main_agent_client", label: "الوكيل الرئيسي هو العميل (تحتاج migration إضافية)" },
+          { value: "operator_confirmed_on_import", label: "اقتراح ربط أثناء الاستيراد بتأكيد المُشغّل" },
+        ],
+        hint: "افتراضي عند الإنشاء: الوكيل الفرعي تشغيلي فقط. لا فاتورة، لا ذمم، حتى يربطه المُشغّل صراحةً عبر PUT /umrah/sub-agents/:id/link.",
+      },
     ],
   },
   {
