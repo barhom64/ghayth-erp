@@ -326,17 +326,19 @@ describe("U-11 §E — settings catalog declares clientLinkagePolicy under auto_
 // behaviour in under cover of a renamed function.
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-11 §F — silent-linkage + silent-invoicing guards", () => {
-  it("import engine does NOT include `resolveSettings` for any client-creation path", () => {
-    // The policy must be consulted at INVOICE time, not at IMPORT
-    // time. If a future PR auto-links sub-agents during import based
-    // on the policy, this assertion will need to be updated AND
-    // §B will surface the new clients-write.
-    expect(IMPORT_ENGINE).not.toMatch(
-      /resolveSettings\([^)]*clientLinkagePolicy/,
-    );
-    expect(IMPORT_ENGINE).not.toMatch(
-      /resolveSettings\([^)]*auto_link\.clientLinkagePolicy/,
-    );
+  it("import engine does NOT write to the clients table (Phase 3a may READ the policy but must not auto-create)", () => {
+    // U-11 Phase 3a (#2080 follow-up) legitimately READS
+    // `umrah.auto_link.clientLinkagePolicy` to surface the active
+    // policy on the import preview. That's detection only — the
+    // operator-facing wizard banner names the policy and the
+    // invoicing-block hint. The HARD line is that no INSERT INTO
+    // / UPDATE on the `clients` table happens in the import path.
+    // The U-11 Phase 3a smoke
+    // (umrahImportUnlinkedDetectionSmoke) re-pins this from its
+    // own §B and stays the canonical owner of the constraint;
+    // this assertion is the cross-reference.
+    expect(IMPORT_ENGINE).not.toMatch(/INSERT\s+INTO\s+clients\b/i);
+    expect(IMPORT_ENGINE).not.toMatch(/UPDATE\s+clients\b/i);
   });
 
   it("explicit linker (PUT /sub-agents/:id/link) still emits umrah.agent.linked event + audit log", () => {

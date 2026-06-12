@@ -45,6 +45,25 @@ interface PreviewSummary {
   rowsWithoutSubAgent?: number;
   violationsDetected?: number;
   rows?: any[];
+  /**
+   * U-11 Phase 3a — current `umrah.auto_link.clientLinkagePolicy`.
+   * Surfaced verbatim so the banner can name the company's declared
+   * stance. The preview engine never acts on this; Phase 3a is
+   * detection-only.
+   */
+  clientLinkagePolicy?: string;
+  /**
+   * Non-null when the import would touch sub-agents lacking a
+   * `clientId`. The same signal `generateSalesInvoice` would raise
+   * later — surfaced up-front so the operator can link before
+   * confirm rather than after a failed invoice draft.
+   */
+  unlinkedSubAgentInvoicingHint?: {
+    willBlockInvoicing: boolean;
+    unlinkedSubAgentCount: number;
+    activePolicy: string;
+    arabicHint: string;
+  } | null;
 }
 
 // Arabic labels for the `umrah_import_changes` audit trail. Engine writes
@@ -853,6 +872,41 @@ export default function UmrahImportWizard() {
                 <p className="text-sm text-status-warning-foreground">
                   تم رصد <strong>{formatNumber(preview.violationsDetected)}</strong> مخالفة محتملة ستُنشأ تلقائياً.
                 </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* U-11 Phase 3a — invoicing-block banner. Renders ONLY when
+              the backend surfaces a non-null hint, which itself fires
+              ONLY when unlinked sub-agents are present. The banner is
+              purely informational: it names the active policy and the
+              three guarantees Phase 3a ships under (operational ok,
+              no auto-link, invoicing blocked until explicit linkage). */}
+          {preview.unlinkedSubAgentInvoicingHint && (
+            <Card className="border-status-warning-surface bg-status-warning-surface/30">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 text-status-warning-foreground shrink-0" />
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-status-warning-foreground">
+                      الفوترة محظورة حتى الربط الصريح ({formatNumber(preview.unlinkedSubAgentInvoicingHint.unlinkedSubAgentCount)} وكيل فرعي)
+                    </h3>
+                    <p className="text-xs">
+                      السياسة الحالية للربط:{" "}
+                      <span className="font-mono" dir="ltr">
+                        {preview.unlinkedSubAgentInvoicingHint.activePolicy}
+                      </span>
+                    </p>
+                    <ul className="text-xs space-y-1 list-disc ps-5">
+                      <li>التشغيل مسموح — الوكلاء الفرعيون يُنشأون ككيانات عمرة فقط.</li>
+                      <li>الفوترة ممنوعة — `generateSalesInvoice` سيرفض حتى الربط الصريح.</li>
+                      <li>لا يوجد ربط تلقائي — لا يُنشأ عميل مالي ولا يُربط أحد بصمت.</li>
+                    </ul>
+                    <p className="text-xs text-muted-foreground">
+                      اربط الوكلاء الفرعيين أدناه عبر زر "ربط الآن" قبل التأكيد، أو اربطهم لاحقاً من صفحة الوكلاء الفرعيين.
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )}
