@@ -81,12 +81,17 @@ const SLUG_META: Record<string, {
   "smtp": {
     icon: Mail,
     fields: [
-      { key: "host", label: "خادم SMTP", type: "text", placeholder: "smtp.gmail.com" },
-      { key: "port", label: "المنفذ", type: "number", placeholder: "587" },
-      { key: "user", label: "اسم المستخدم", type: "text", placeholder: "user@example.com" },
-      { key: "password", label: "كلمة المرور / كلمة مرور التطبيق", type: "password" },
-      { key: "from", label: "عنوان المرسل", type: "text", placeholder: "Ghaith ERP <no-reply@example.com>" },
-      { key: "secure", label: "تشفير TLS (true/false)", type: "text", placeholder: "false (StartTLS) أو true (SSL)" },
+      { key: "host", label: "خادم SMTP", type: "text", placeholder: "smtp.hostinger.com" },
+      { key: "port", label: "المنفذ", type: "number", placeholder: "465" },
+      { key: "user", label: "اسم المستخدم (البريد الكامل)", type: "text", placeholder: "rep@door.sa" },
+      { key: "password", label: "كلمة المرور / كلمة مرور التطبيق", type: "password",
+        hint: "تُشفَّر في قاعدة البيانات ولا تُعرض مرة أخرى. لا تُملأ تلقائيًا من أي preset." },
+      { key: "from", label: "بريد المرسل", type: "text", placeholder: "rep@door.sa" },
+      { key: "fromName", label: "اسم المرسل الظاهر", type: "text", placeholder: "نظام غيث" },
+      { key: "replyTo", label: "بريد الرد (Reply-To)", type: "text", placeholder: "rep@door.sa" },
+      { key: "secure", label: "تشفير TLS (true/false)", type: "text", placeholder: "true (SSL :465) أو false (STARTTLS :587)" },
+      { key: "fallbackPort", label: "منفذ احتياطي (اختياري)", type: "number",
+        placeholder: "587", hint: "يحاول العامل عليه بـ STARTTLS إذا فشل المنفذ الأساسي." },
     ],
   },
   "vapid": {
@@ -121,6 +126,34 @@ const SLUG_META: Record<string, {
       { key: "sandboxUrl", label: "رابط بيئة الاختبار", type: "url",
         placeholder: "https://gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/" },
     ],
+  },
+};
+
+/**
+ * Provider presets for the system-email card (#2137 §4). Selecting a
+ * preset fills hosts/ports/security defaults + the rep@door.sa identity
+ * fields — NEVER the password (the operator types that once and it is
+ * encrypted server-side).
+ */
+const SMTP_PRESETS: Record<string, { label: string; values: Record<string, string> }> = {
+  hostinger: {
+    label: "Hostinger",
+    values: {
+      host: "smtp.hostinger.com", port: "465", secure: "true", fallbackPort: "587",
+      user: "rep@door.sa", from: "rep@door.sa", fromName: "نظام غيث", replyTo: "rep@door.sa",
+    },
+  },
+  microsoft365: {
+    label: "Microsoft 365",
+    values: { host: "smtp.office365.com", port: "587", secure: "false", fallbackPort: "" },
+  },
+  gmail: {
+    label: "Gmail SMTP",
+    values: { host: "smtp.gmail.com", port: "465", secure: "true", fallbackPort: "587" },
+  },
+  zoho: {
+    label: "Zoho",
+    values: { host: "smtp.zoho.com", port: "465", secure: "true", fallbackPort: "587" },
   },
 };
 
@@ -159,6 +192,78 @@ export default function AdminVendorSettings() {
         </div>
       </PageStateWrapper>
     </PageShell>
+  );
+}
+
+/**
+ * Real test-send block for the system-email card (#2137 §3.3):
+ * delivers an actual message through the SAME resolver the queue
+ * worker uses (verify + sendMail), and shows the persisted last-test
+ * outcome (lastTestAt / lastTestStatus / lastTestError / source).
+ */
+function SmtpTestSend({ vendor, onDone }: { vendor: VendorRow; onDone: () => void }) {
+  const [to, setTo] = useState("");
+  const [result, setResult] = useState<{ ok: boolean; message: string; source?: string; from?: string | null } | null>(null);
+
+  const sendTest = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; message: string; source?: string; from?: string | null }>(
+      "/admin/vendor-settings/smtp/test-send",
+      { method: "POST", body: JSON.stringify({ to: to.trim() }) },
+    ),
+    onSuccess: (r) => { setResult(r); onDone(); },
+    onError: (e: Error) => { setResult({ ok: false, message: e.message }); onDone(); },
+  });
+
+  const lastTestAt = typeof vendor.config.lastTestAt === "string" ? vendor.config.lastTestAt : null;
+  const lastTestStatus = typeof vendor.config.lastTestStatus === "string" ? vendor.config.lastTestStatus : null;
+  const lastTestError = typeof vendor.config.lastTestError === "string" ? vendor.config.lastTestError : null;
+  const lastTestSource = typeof vendor.config.lastTestSource === "string" ? vendor.config.lastTestSource : null;
+
+  return (
+    <div className="rounded-lg border p-3 space-y-2">
+      <p className="text-xs font-medium">إرسال بريد اختبار حقيقي</p>
+      <p className="text-[10px] text-muted-foreground">
+        يمر عبر نفس الإعدادات التي يستخدمها عامل قائمة الإرسال (resolver واحد) — مصادقة كاملة ثم تسليم فعلي. اختبار TCP وحده لم يعد كافيًا.
+      </p>
+      <div className="flex gap-2 flex-wrap">
+        <Input
+          type="email"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          placeholder="بريد المستلم للاختبار"
+          className="text-sm max-w-xs"
+          data-testid="smtp-test-send-to"
+        />
+        <Button
+          rateLimitAware
+          variant="outline"
+          disabled={!to.trim() || sendTest.isPending}
+          onClick={() => sendTest.mutate()}
+          data-testid="smtp-test-send-button"
+        >
+          <Mail className="w-4 h-4 me-1" />{sendTest.isPending ? "جاري الإرسال..." : "أرسل بريد اختبار حقيقي"}
+        </Button>
+      </div>
+      {result && (
+        <div className={cn(
+          "rounded p-2 text-xs flex items-start gap-2",
+          result.ok ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground",
+        )} data-testid="smtp-test-send-result">
+          {result.ok ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <AlertOctagon className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+          <div>
+            <p>{result.message}</p>
+            {result.from && <p className="text-[10px] mt-0.5">المرسل: {result.from}</p>}
+            {result.source && <p className="text-[10px] text-muted-foreground mt-0.5">مصدر الإعداد: {result.source}</p>}
+          </div>
+        </div>
+      )}
+      {lastTestAt && (
+        <p className="text-[10px] text-muted-foreground" data-testid="smtp-last-test">
+          آخر اختبار: {lastTestAt} — {lastTestStatus === "ok" ? "نجح ✓" : `فشل: ${lastTestError ?? ""}`}
+          {lastTestSource ? ` (المصدر: ${lastTestSource})` : ""}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -237,6 +342,26 @@ function VendorCard({ vendor, onChange }: { vendor: VendorRow; onChange: () => v
         )}
       </CardHeader>
       <CardContent className="space-y-3">
+        {vendor.slug === "smtp" && (
+          <div className="flex items-center gap-2 flex-wrap rounded-lg border bg-surface-subtle/40 px-3 py-2">
+            <span className="text-xs text-muted-foreground">قوالب مزوّد جاهزة:</span>
+            {Object.entries(SMTP_PRESETS).map(([key, p]) => (
+              <Button
+                key={key}
+                variant="outline"
+                size="sm"
+                className="text-xs h-7"
+                data-testid={`smtp-preset-${key}`}
+                onClick={() => setForm((prev) => ({ ...prev, ...p.values }))}
+              >
+                {p.label}
+              </Button>
+            ))}
+            <span className="text-[10px] text-muted-foreground w-full">
+              الـ preset يملأ الخادم والمنافذ والهوية فقط — كلمة المرور تُدخل يدويًا ولا تُعرض بعد الحفظ.
+            </span>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {meta.fields.map((f) => (
             <div key={f.key} className={f.type === "password" || f.label.length > 25 ? "md:col-span-2" : ""}>
@@ -261,6 +386,10 @@ function VendorCard({ vendor, onChange }: { vendor: VendorRow; onChange: () => v
             <FlaskConical className="w-4 h-4 me-1" />{test.isPending ? "جاري الاختبار..." : "اختبر الاتصال"}
           </Button>
         </div>
+
+        {vendor.slug === "smtp" && (
+          <SmtpTestSend vendor={vendor} onDone={onChange} />
+        )}
 
         {testResult && (
           <div className={cn(
