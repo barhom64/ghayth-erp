@@ -38,6 +38,7 @@ import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
 import inboxRouter from "./inbox.js";
+import inboxConversationsRouter from "./inboxConversations.js";
 import mailboxesRouter from "./mailboxes.js";
 import governanceRouter from "./governance.js";
 import biRouter from "./bi.js";
@@ -459,6 +460,11 @@ router.use("/communications", requireModule("comms"), requireMinLevel(40), commu
 // User-facing inbox: compose/send + thread view + call log. Lives next
 // to /communications (read-only logs) so the SPA can navigate between
 // them without crossing module boundaries.
+// /inbox/conversations is the persisted Conversation canon (#2138,
+// migration 335) — mounted before the legacy /inbox router so its
+// paths win; the computed /inbox/threads view keeps serving the
+// current UI until the conversation-first frontend slice lands.
+router.use("/inbox/conversations", requireModule("comms"), inboxConversationsRouter);
 router.use("/inbox", requireModule("comms"), inboxRouter);
 router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
 // Agent 7 — sidebar gates الحوكمة والامتثال at level 60 and ذكاء الأعمال

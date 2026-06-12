@@ -74,7 +74,11 @@ export async function rawExecute(
   const result = await currentExecutor()
     .query(finalSQL, cleanParams(params))
     .finally(() => recordQuery(finalSQL, Date.now() - start));
-  const insertId = result.rows[0]?.id ?? 0;
+  // node-postgres returns int8 (bigint) columns as STRINGS — message_log.id
+  // is bigint, so without the Number() coercion every caller that does
+  // assertInsert(insertId) on a bigint table throws ("returned no id")
+  // even though the row landed. Safe up to 2^53-1, far beyond any id here.
+  const insertId = Number(result.rows[0]?.id ?? 0);
   return { insertId, affectedRows: result.rowCount ?? 0 };
 }
 
