@@ -1244,11 +1244,21 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 3 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status (KEPT, nothing removed). The axes are maintained by the
+      // migration-311 trigger, and postingStatus derives from the ACTUAL
+      // posting (balancesApplied), so a directly-posted voucher that still
+      // carries status='draft' (balancesApplied=true) reads truthfully as
+      // postingStatus='posted' here — where status alone would mislabel it.
+      // (This list historically never exposed isPaid; paymentStatus now
+      // conveys the payment state truthfully, gated by the canBePaid rule.)
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS type,
               je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
               je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
               COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               e_cre.name AS "createdByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
@@ -1256,6 +1266,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
+                je."documentStatus", je."paymentStatus", je."postingStatus",
                 je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
                 je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
                 e_cre.name
