@@ -60,6 +60,10 @@ import {
   utilizationScore,
   type OperatingWindowSettings,
 } from "./operatingWindow.js";
+import {
+  scoreUmrahFamiliarity,
+  type UmrahFamiliarityHistory,
+} from "./umrahFamiliarity.js";
 
 export interface SuggestionRequest {
   companyId: number;
@@ -94,6 +98,9 @@ export interface SuggestionResult {
     /** #2079 PE-04 — trailing-7-day utilisation balancing axis.
      *  Scoring only, never a blocker. */
     utilization: number;
+    /** #2079 PE-06 — umrah-familiarity bonus axis.
+     *  Active ONLY for passenger_umrah bookings; 0 otherwise. */
+    umrahFamiliarity: number;
   };
   /** Arabic explanation strings — direct user-facing. */
   reasons: string[];
@@ -125,6 +132,10 @@ interface BookingRow {
   toLat: number | null;
   toLng: number | null;
   priority: number;
+  // #2079 PE-06 — needed by the umrah-familiarity scorer ONLY when
+  // transportServiceType === 'passenger_umrah'. Both nullable.
+  customerId: number | null;
+  umrahGroupId: number | null;
 }
 
 /** #1812 — internal criteria shared between booking-based and
@@ -155,6 +166,11 @@ export interface SuggestionCriteria {
    *  to the top of the chain — keeps a multi-leg umrah / cargo
    *  itinerary on one team unless a hard guard ejects them. */
   continuityPair?: { vehicleId: number; driverId: number } | null;
+  /** #2079 PE-06 — umrah-familiarity context. Both nullable. The
+   *  scorer no-ops unless transportServiceType === 'passenger_umrah'
+   *  AND at least one of these is set. */
+  umrahGroupId?: number | null;
+  customerId?: number | null;
 }
 
 interface VehicleRow {
@@ -275,7 +291,9 @@ export async function suggestAssignments(
             fl."longitude" AS "fromLng",
             tl."latitude"  AS "toLat",
             tl."longitude" AS "toLng",
-            b.priority
+            b.priority,
+            b."customerId",
+            b."umrahGroupId"
        FROM transport_bookings b
             LEFT JOIN transport_locations fl ON fl.id = b."fromLocationId" AND fl."companyId" = b."companyId"
             LEFT JOIN transport_locations tl ON tl.id = b."toLocationId"   AND tl."companyId" = b."companyId"
@@ -304,6 +322,10 @@ export async function suggestAssignments(
     fromLat: booking.fromLat,
     fromLng: booking.fromLng,
     limit: req.limit,
+    // #2079 PE-06 — thread the umrah context through. The criteria
+    // wrapper does NOT touch these unless the scorer activates.
+    umrahGroupId: booking.umrahGroupId,
+    customerId:   booking.customerId,
   });
 }
 
@@ -686,6 +708,52 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     });
   }
 
+  // 4e) #2079 PE-06 — umrah familiarity history.
+  //
+  // ONLY runs when this suggest call is for a passenger_umrah booking
+  // AND we have at least one matching key (umrahGroupId or customerId).
+  // For every driver, counts completed dispatch trips in the trailing
+  // 90 days against (a) the same umrahGroupId and (b) the same
+  // customerId. Single SQL — independent of the candidate count.
+  const umrahHistory: UmrahFamiliarityHistory = new Map();
+  if (
+    c.transportServiceType === "passenger_umrah" &&
+    (c.umrahGroupId != null || c.customerId != null)
+  ) {
+    const familiarityRows = await rawQuery<{
+      driverId: number;
+      groupTrips: string;
+      customerTrips: string;
+    }>(
+      `SELECT d."driverId",
+              COUNT(*) FILTER (
+                WHERE $3::int IS NOT NULL AND b."umrahGroupId" = $3
+              )::int AS "groupTrips",
+              COUNT(*) FILTER (
+                WHERE $4::int IS NOT NULL AND b."customerId" = $4
+              )::int AS "customerTrips"
+         FROM transport_dispatch_orders d
+              JOIN transport_booking_lines  l ON l.id = d."bookingLineId"
+              JOIN transport_bookings       b ON b.id = l."bookingId"
+        WHERE d."companyId" = $1
+          AND d.status NOT IN ('declined', 'cancelled')
+          AND d."scheduledStartAt" >= $2::timestamptz - INTERVAL '90 days'
+          AND d."scheduledStartAt" <  $2::timestamptz
+          AND (
+            ($3::int IS NOT NULL AND b."umrahGroupId" = $3)
+         OR ($4::int IS NOT NULL AND b."customerId"   = $4)
+          )
+        GROUP BY d."driverId"`,
+      [req.companyId, start, c.umrahGroupId ?? null, c.customerId ?? null],
+    );
+    for (const r of familiarityRows) {
+      umrahHistory.set(r.driverId, {
+        groupTrips:    Number(r.groupTrips)    || 0,
+        customerTrips: Number(r.customerTrips) || 0,
+      });
+    }
+  }
+
   // 5) Settings (for the manual maps haversine baseline).
   const settings = await loadPlanningSettings(req.companyId);
 
@@ -1023,18 +1091,42 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           : 0,
       );
 
+      // ─ umrahFamiliarity (weight 2.5, scoring only) ───────────────
+      // #2079 PE-06. Active ONLY for passenger_umrah bookings. The
+      // pure scorer guards the trigger itself; the bonus reaches 100
+      // when the driver has ≥3 trips for this group (+15 → 15 * 1.0
+      // weight inside the axis, equivalent to ~0.375 on the final
+      // score after re-weighting).
+      let umrahFamiliarityScore = 0;
+      const fam = scoreUmrahFamiliarity({
+        transportServiceType: booking.transportServiceType,
+        driverId: d.id,
+        umrahGroupId: c.umrahGroupId ?? null,
+        customerId:   c.customerId   ?? null,
+        history: umrahHistory,
+      });
+      if (fam.bonus > 0) {
+        // Project the 0..15 bonus onto a 0..100 axis so the weighted
+        // sum stays consistent with the other axes (each axis is
+        // 0..100 then multiplied by its weight).
+        umrahFamiliarityScore = Math.min(100, Math.round((fam.bonus / 15) * 100));
+        if (fam.reason) reasons.push(fam.reason);
+      }
+
       // ─ Aggregate ─────────────────────────────────────────────────
-      // PE-04: weights re-balanced — distance 0.10 → 0.05, the freed
-      // 0.05 goes to utilization. Sum stays 1.00.
+      // PE-06: weights re-balanced one more time — distance 0.05 →
+      // 0.025, the freed 0.025 funds the new umrahFamiliarity axis.
+      // utilization stays at 0.05. Total still 1.00.
       const finalScore = Math.round(
-        capacityScore     * 0.20 +
-        availabilityScore * 0.10 +
-        conflictScore     * 0.25 +
-        restScore         * 0.15 +
-        licenseScore      * 0.10 +
-        distanceScore     * 0.05 +
-        agreementScore    * 0.10 +
-        utilScore         * 0.05,
+        capacityScore        * 0.20 +
+        availabilityScore    * 0.10 +
+        conflictScore        * 0.25 +
+        restScore            * 0.15 +
+        licenseScore         * 0.10 +
+        distanceScore        * 0.025 +
+        agreementScore       * 0.10 +
+        utilScore            * 0.05 +
+        umrahFamiliarityScore * 0.025,
       );
 
       // #2079 PE-05 — continuity bonus. Only applies when the caller
@@ -1075,6 +1167,7 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           distance: distanceScore,
           agreement: agreementScore,
           utilization: utilScore,
+          umrahFamiliarity: umrahFamiliarityScore,
         },
         reasons,
         blockers,
