@@ -1,4 +1,4 @@
-// #2138 slice 1 — the persisted Conversation canon (migration 330 +
+// #2138 slice 1 — the persisted Conversation canon (migration 335 +
 // routes/inboxConversations.ts). Proves over a REAL Postgres + HTTP:
 //
 //   - the message_log BEFORE INSERT trigger materialises one

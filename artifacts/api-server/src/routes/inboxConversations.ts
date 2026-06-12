@@ -1,7 +1,7 @@
 /**
  * Inbox conversations — the persisted Conversation canon API (#2138).
  *
- * Until migration 330, an inbox "thread" was a window-function grouping
+ * Until migration 335, an inbox "thread" was a window-function grouping
  * computed on every GET /inbox/threads — it could be listed but carried
  * no state. This router serves the materialised `conversations` rows
  * (kept 1:1 with the legacy thread grouping by the message_log BEFORE

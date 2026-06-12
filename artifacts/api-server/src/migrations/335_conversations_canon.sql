@@ -1,4 +1,4 @@
--- 330_conversations_canon.sql
+-- 335_conversations_canon.sql
 --
 -- WHAT: introduce the persisted Conversation canon (#2138):
 --       1. `conversations` — one row per (companyId, channel, peer

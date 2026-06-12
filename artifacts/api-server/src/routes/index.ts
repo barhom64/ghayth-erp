@@ -459,7 +459,7 @@ router.use("/communications", requireModule("comms"), requireMinLevel(40), commu
 // to /communications (read-only logs) so the SPA can navigate between
 // them without crossing module boundaries.
 // /inbox/conversations is the persisted Conversation canon (#2138,
-// migration 330) — mounted before the legacy /inbox router so its
+// migration 335) — mounted before the legacy /inbox router so its
 // paths win; the computed /inbox/threads view keeps serving the
 // current UI until the conversation-first frontend slice lands.
 router.use("/inbox/conversations", requireModule("comms"), inboxConversationsRouter);
