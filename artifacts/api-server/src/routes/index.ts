@@ -486,7 +486,17 @@ router.use("/settings", requireModule("settings"), requireMinLevel(70), settings
 // per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
 router.use("/numbering", requireModule("settings"), requireMinLevel(70), numberingRouter);
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
-router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
+// PR-1 / #2163 — decouple /module-dashboards/* from requireModule("bi").
+// Each tab endpoint inside moduleDashboardsRouter (/hr, /finance, /fleet,
+// /crm, /store, /support, /legal, /properties, /projects, /tasks,
+// /warehouse) already carries its own `authorize({ feature: "<module>",
+// action: "list" })` per-route gate. The mount-level requireModule("bi")
+// was an over-reach (FU-2 from #2077, PR-0 §7 of #2163): it blocked
+// every manager that owned their own module but not BI — e.g. مدير HR
+// couldn't open «لوحة الموارد البشرية» despite holding the hr module.
+// The per-route authorize() is the canonical gate; the mount stays
+// auth-only.
+router.use("/module-dashboards", moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
 // Observability operator pane (#1139 §5). Mounted under /admin/observability
 // so the same module + minLevel guards apply; each endpoint inside also
