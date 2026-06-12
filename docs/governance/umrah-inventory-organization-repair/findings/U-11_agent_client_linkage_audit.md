@@ -1,12 +1,33 @@
 # U-11 — Agent / Sub-Agent → Financial Client Linkage Audit
 
-**Status:** Investigation only. **No new logic was built.**
-Existing implementation checked before build, per the explicit
-authorisation on issue #2080's parallel thread.
+**Status:**
+- **Phase 1 (audit + freeze):** ✅ merged via PR #2151 — SHA
+  `0278e636071aa54c0a949bde8e88f7f9c5fee3d4`.
+- **Phase 2 (policy field + engine awareness):** ✅ this PR —
+  catalog field `umrah.auto_link.clientLinkagePolicy` declared
+  with the 4 ratified values, default `operational_until_linked`;
+  `generateSalesInvoice` reads the policy and surfaces a tailored
+  error message per case. The hard block on missing
+  `subAgent.clientId` is preserved (silent invoicing remains
+  impossible). Existing implementation checked before build.
 
-**Authorisation scope:** Audit + freeze current behaviour with a
-regression smoke. Policy decisions for cases A–D below remain
-pending owner ratification.
+**Owner ratification (recorded on #2080):**
+- Default policy: `operational_until_linked` — safest stance.
+- Three other supported values declared in the catalog enum:
+  `sub_agent_client_required`, `main_agent_client`,
+  `operator_confirmed_on_import`.
+- Case C (hierarchical client/sub-client) is **out of U-11** —
+  needs a CRM/Clients model change, not a patch inside umrah.
+
+**Deferred to future PRs (not in this Phase 2 PR):**
+- Import-wizard "suggest link" UX
+  (`operator_confirmed_on_import` mode UI).
+- `main_agent_client` schema work — needs an `umrah_agents.clientId`
+  migration which the owner ringfenced behind a separate
+  authorisation. The catalog value exists today but the engine
+  routes it to the same hard block as the default policy.
+- Sub-agent CREATE validation under `sub_agent_client_required`
+  (require clientId at sub-agent creation time).
 
 ---
 

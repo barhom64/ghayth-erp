@@ -51,6 +51,12 @@ const ROLE_DEFAULT_SCOPE: Record<string, Scope> = {
   crm_manager: "company",
   bi_manager: "company",
   branch_manager: "branch",
+  // PR-10 (#2077) — Closure Gate. Migration 291 closed FU-1 for
+  // companies that existed at apply time; the bootstrap catalog must
+  // know the two roles so a NEWLY-created company doesn't reproduce
+  // the 0-modules symptom. Scopes match 291's per-feature scopes.
+  department_manager: "department",
+  payroll_officer: "company",
   driver: "self",
   employee: "self",
 };
@@ -69,6 +75,8 @@ const ROLE_LABELS: Record<string, string> = {
   crm_manager: "مدير علاقات العملاء",
   bi_manager: "مدير التحليلات",
   branch_manager: "مدير الفرع",
+  department_manager: "مدير القسم",
+  payroll_officer: "مسؤول الرواتب",
   driver: "سائق",
   employee: "موظف",
 };
@@ -78,7 +86,9 @@ const ROLE_LEVELS: Record<string, number> = {
   hr_manager: 70, finance_manager: 70, fleet_manager: 70, warehouse_manager: 70,
   property_manager: 70, projects_manager: 70, legal_manager: 70, support_manager: 70,
   crm_manager: 70, bi_manager: 70,
-  branch_manager: 60, driver: 10, employee: 10,
+  branch_manager: 60,
+  department_manager: 50, payroll_officer: 50,
+  driver: 10, employee: 10,
 };
 
 const ROLE_COLORS: Record<string, string> = {
@@ -95,6 +105,8 @@ const ROLE_COLORS: Record<string, string> = {
   crm_manager: "#9333ea",
   bi_manager: "#0d9488",
   branch_manager: "#475569",
+  department_manager: "#0ea5e9",
+  payroll_officer: "#10b981",
   driver: "#0d9488",
   employee: "#64748b",
 };
@@ -195,6 +207,21 @@ export const DEFAULT_ROLE_DEFS: RoleDef[] = [
   { role: "crm_manager", permissions: ["dashboard:read", "crm:*", "marketing:*", "documents:read", "requests:*", "comms:read"] },
   { role: "bi_manager", permissions: ["dashboard:read", "bi:*", "reports:*", "documents:read", "requests:*", "comms:read"] },
   { role: "branch_manager", permissions: ["dashboard:read", "employees:read", "attendance:*", "leaves:approve", "reports:read", "documents:read", "requests:*", "comms:read", "support:read"] },
+  // PR-10 (#2077) — FU-1 closure for NEW companies. Migration 291
+  // covered the live tenant; without these entries every newly
+  // bootstrapped company would reproduce the 0-modules symptom for
+  // the two roles. Bundles must equal what migration 291 produces so
+  // bootstrap output matches the seed (verified by
+  // hrStandardRoleGrantsBootstrapParitySmoke).
+  //   department_manager (scope=department): hr employee/attendance/
+  //     leaves/performance + reports; standard requests/documents/comms.
+  //   payroll_officer    (scope=company)   : payroll preparation lane
+  //     only — explicitly NO discipline, NO approve on runs («لا يعتمد
+  //     بنفسه», migration 278). The exact-feature shorthand
+  //     (translateLegacy dotted form) is required to express
+  //     hr.payroll.* without leaking hr.discipline.
+  { role: "department_manager", permissions: ["dashboard:read", "hr.employees:read", "hr.attendance:read", "hr.attendance:export", "hr.leaves:read", "hr.leaves:approve", "hr.leaves:reject", "hr.performance:read", "hr.performance:create", "hr.performance:update", "reports:read", "reports:export", "requests:*", "documents:read", "comms:read"] },
+  { role: "payroll_officer",    permissions: ["dashboard:read", "hr.payroll:read", "hr.payroll:export", "hr.payroll.runs:read", "hr.payroll.runs:export", "hr.payroll.runs:create", "hr.payroll.runs:update", "hr.payroll.wps:read", "hr.payroll.wps:export", "hr.payroll.wps:create", "hr.payroll.wps:update", "hr.payroll.wps:submit", "hr.attendance:read", "hr.attendance:export", "requests:*", "documents:read", "comms:read"] },
   // Self-service driver — fleet.* read for the dispatcher-board feeds their
   // /me/driver consumes; the actual self-service capabilities come through the
   // featureCatalog selfService floor, not this seed.
