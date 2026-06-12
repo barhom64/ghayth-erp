@@ -339,6 +339,57 @@ d("#2138 slice 1 — conversation canon (live DB, HTTP)", () => {
     expect(after.body.data.links).toHaveLength(0);
   });
 
+  it("surfaces a DLP block as a typed 422 (code DLP_BLOCKED + meta) — #2138 slice 2 contract", async () => {
+    // Block rule scoped to this company; cleaned up at the end so the
+    // other scenarios' sends stay unaffected.
+    const [rule] = await rawQuery<{ id: number }>(
+      `INSERT INTO communication_dlp_rules ("companyId", name, pattern, action, severity, enabled)
+       VALUES ($1, $2, 'سري-للغاية-2138', 'block', 'critical', TRUE) RETURNING id`,
+      [COMPANY, PFX + "block-rule"],
+    );
+    // Rules are cached per (channel, companyId) with a TTL — earlier
+    // scenarios already populated the cache with an empty list, so the
+    // fresh rule would be invisible without busting it.
+    const { invalidateCommunicationControlCache } = await import("../../src/lib/communicationControl.js");
+    invalidateCommunicationControlCache();
+    try {
+      const list = await request(app)
+        .get(`/api/inbox/conversations?q=${PFX}party`)
+        .set("Authorization", `Bearer ${token}`);
+      const convId = list.body.data[0].id;
+
+      const res = await request(app)
+        .post(`/api/inbox/conversations/${convId}/messages`)
+        .set("Authorization", `Bearer ${token}`)
+        .set("Cookie", `erp_csrf=${CSRF}`)
+        .set("x-csrf-token", CSRF)
+        .send({ subject: "اختبار", body: "هذا نص يحتوي سري-للغاية-2138 داخله" });
+
+      // The typed-error contract the frontend ApiError consumes:
+      // error + code + meta carry the block details.
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe("DLP_BLOCKED");
+      expect(res.body.error).toBeTruthy();
+      expect(res.body.blocked).toBe(true);
+      expect((res.body.meta?.dlpMatches ?? []).length).toBeGreaterThan(0);
+
+      // Blocked ⇒ logged for audit but never queued.
+      const [logRow] = await rawQuery<{ status: string }>(
+        `SELECT status FROM message_log WHERE id = $1`,
+        [res.body.logId],
+      );
+      expect(logRow.status).toBe("blocked_dlp");
+      const queueRows = await rawQuery(
+        `SELECT id FROM outbound_queue WHERE "messageLogId" = $1`,
+        [res.body.logId],
+      );
+      expect(queueRows).toHaveLength(0);
+    } finally {
+      await rawExecute(`DELETE FROM communication_dlp_rules WHERE id = $1`, [rule.id]);
+      invalidateCommunicationControlCache();
+    }
+  });
+
   it("never leaks another company's conversation", async () => {
     const [foreign] = await rawQuery<{ id: number }>(
       `INSERT INTO conversations ("companyId","channelPrimary","participantAddress")
