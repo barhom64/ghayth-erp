@@ -21,6 +21,7 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
+import { getEjarReader, isValidEjarFormat } from "../lib/ejarContractReader.js";
 
 const createUnitSchema = z.object({
   unitNumber: z.string().min(1, "رقم الوحدة مطلوب"),
@@ -117,6 +118,7 @@ const updateContractSchema = z.object({
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
+  contractSource: z.enum(["ejar", "manual"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
   totalContractValue: z.coerce.number().optional().nullable(),
@@ -169,6 +171,7 @@ const createContractSchema = z.object({
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
+  contractSource: z.enum(["ejar", "manual"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
   totalContractValue: z.coerce.number().optional().nullable(),
@@ -885,6 +888,40 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
 });
 
+// Preview from Ejar — Mock-First read by ejarNumber. The form calls
+// this when the operator chooses contractSource='ejar' and enters an
+// Ejar number; the response pre-fills the contract fields and the UI
+// locks the reference ones (parties, unit, amounts) so they can't be
+// edited locally — the doctrine rule for Ejar-bound contracts.
+//
+// The underlying reader is swappable (mock vs real) via the
+// EJAR_READER_MODE env. Today only mock returns data; flipping to
+// real fails loudly until the platform read endpoint is wired up.
+router.post("/contracts/preview-from-ejar", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
+  try {
+    const ejarNumber = String(req.body?.ejarNumber ?? "").trim();
+    if (!isValidEjarFormat(ejarNumber)) {
+      res.status(400).json({
+        error: "صيغة رقم إيجار غير صحيحة. المتوقع: EJ-XXXX",
+        field: "ejarNumber",
+      });
+      return;
+    }
+    const reader = getEjarReader();
+    const data = await reader.read(ejarNumber);
+    if (!data) {
+      res.status(404).json({
+        error: "لم يُعثر على عقد بهذا الرقم في إيجار",
+        ejarNumber,
+      });
+      return;
+    }
+    res.json({ data, source: "ejar" });
+  } catch (err) {
+    handleRouteError(err, res, "Preview from Ejar error:");
+  }
+});
+
 // Impact preview — shows what will happen when the rental contract is created
 router.post("/contracts/impact-preview", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
@@ -1178,12 +1215,12 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
     const insertId = await withTransaction(async (client) => {
       const contractRes = await client.query(
         `INSERT INTO rental_contracts ("companyId","unitId","tenantId","tenantName","tenantPhone","tenantEmail","tenantIdNumber","startDate","endDate","monthlyRent","depositAmount","paymentDay",notes,status,
-         "contractNumber","ejarNumber","contractType","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
+         "contractNumber","ejarNumber","contractType","contractSource","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
          RETURNING id`,
         [scope.companyId, b.unitId, tenantId, b.tenantName, b.tenantPhone, b.tenantEmail, b.tenantIdNumber, b.startDate, b.endDate, monthlyRent, b.depositAmount || 0, b.paymentDay || 1, b.notes, b.status || "active",
-         contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
+         contractNumber, b.ejarNumber || null, b.contractType || 'residential_rent', b.contractSource || (b.ejarNumber ? 'ejar' : 'manual'), frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
       );
       const contractId = contractRes.rows[0].id;
 
@@ -1379,6 +1416,7 @@ router.patch("/contracts/:id", authorize({ feature: "properties.contracts", acti
     addField("contractNumber", b.contractNumber);
     addField("ejarNumber", b.ejarNumber);
     addField("contractType", b.contractType);
+    addField("contractSource", b.contractSource);
     addField("paymentFrequency", b.paymentFrequency);
     addField("yearlyRent", b.yearlyRent);
     addField("totalContractValue", b.totalContractValue);

@@ -223,7 +223,7 @@ export default function ViolationsReportPage() {
             onClick={handleBulkResolve}
           >
             <CheckCircle2 className="h-4 w-4 me-1" />
-            {bulkMut.isPending ? "جارٍ الإغلاق…" : "إغلاق المخالفات المطابقة"}
+            {bulkMut.isPending ? "جاري الإغلاق…" : "إغلاق المخالفات المطابقة"}
           </GuardedButton>
           <PrintButton
             entityType="report_violations_report"

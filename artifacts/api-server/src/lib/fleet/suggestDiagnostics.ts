@@ -20,6 +20,10 @@
  */
 
 import { rawQuery } from "../rawdb.js";
+import {
+  checkOperatingWindow,
+  type OperatingWindowSettings,
+} from "./operatingWindow.js";
 
 export interface SuggestDiagnostics {
   /** Human-readable Arabic explanation the SPA can display verbatim. */
@@ -30,6 +34,7 @@ export interface SuggestDiagnostics {
     | "no_active_drivers"
     | "no_dispatchable_vehicles"
     | "no_window"
+    | "outside_operating_hours"
     | "all_busy"
     | "all_blocked"
     | "unknown";
@@ -137,6 +142,31 @@ export async function diagnoseEmptySuggest(args: Args): Promise<SuggestDiagnosti
         "أو استخدم نافذة التحميل + نافذة التسليم في قسم 'اتفاق العميل'.",
       ],
     };
+  }
+
+  // #2079 PE-04 — operating-window check. When the engine returned
+  // empty because the trip starts outside the company's configured
+  // transport operating hours, that exact Arabic reason is what the
+  // operator must see — not a generic "all busy".
+  const [windowRow] = await rawQuery<OperatingWindowSettings>(
+    `SELECT "operatingStartTime", "operatingEndTime", "operatingDaysMask"
+       FROM transport_planning_settings
+      WHERE "companyId" = $1`,
+    [args.companyId],
+  );
+  if (windowRow) {
+    const verdict = checkOperatingWindow(args.scheduledStartAt, windowRow);
+    if (verdict.blocked) {
+      return {
+        reason: verdict.reason!,
+        axis: "outside_operating_hours",
+        counts,
+        hints: [
+          "عدّل وقت انطلاق الرحلة ليقع داخل ساعات تشغيل النقل.",
+          "أو راجع إعدادات ساعات التشغيل في إعدادات تخطيط النقل إذا كانت الرحلة مقصودة.",
+        ],
+      };
+    }
   }
 
   // المركبات + السائقون موجودون والنافذة محددة — لا بد أن المشكلة
