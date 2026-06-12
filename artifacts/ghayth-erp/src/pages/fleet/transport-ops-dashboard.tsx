@@ -74,7 +74,7 @@ const STATUS_LABEL: Record<string, string> = {
   notified: "تم الإبلاغ",
   accepted: "قَبِل",
   declined: "رفض",
-  executing: "جارٍ التنفيذ",
+  executing: "جاري التنفيذ",
   completed: "اكتمل",
   closed: "مغلق",
   cancelled: "ملغى",
@@ -453,7 +453,7 @@ export default function TransportOpsDashboard() {
                   rateLimitAware
                 >
                   <Wand2 className="h-3 w-3 me-1" />
-                  {planningAll ? "جارٍ التخطيط…" : "خطّط الكل"}
+                  {planningAll ? "جاري التخطيط…" : "خطّط الكل"}
                 </Button>
               )}
               <span className="ms-auto text-xs font-normal text-muted-foreground">
