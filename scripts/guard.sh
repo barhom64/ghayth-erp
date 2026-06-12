@@ -124,6 +124,10 @@ run_step "audit:numbering-bypass"      node scripts/src/audit-numbering-service-
 run_step "audit:numbering-schemes-vs-callers" node scripts/src/audit-numbering-schemes-vs-callers.mjs
 
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
+# Dump staleness — every table a pre-cutoff migration creates must exist in
+# db/schema_pre.sql (fresh installs never re-run pre-cutoff migrations, so a
+# stale dump silently 500s clean environments — the 2026-06 inbox incident).
+run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
 run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs

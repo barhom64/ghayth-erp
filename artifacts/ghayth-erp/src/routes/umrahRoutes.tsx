@@ -7,6 +7,7 @@ const UmrahAgents = lazy(() => import("@/pages/umrah/agents"));
 const UmrahSeasons = lazy(() => import("@/pages/umrah/seasons"));
 const UmrahAccommodations = lazy(() => import("@/pages/umrah/accommodations"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
+const UmrahRefundRequests = lazy(() => import("@/pages/umrah/refund-requests"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
@@ -100,6 +101,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/accommodations", component: UmrahAccommodations, module: "operations" },
   { path: "/umrah/seasons/:id", component: UmrahSeasonDetail, module: "operations" },
   { path: "/umrah/penalties", component: UmrahPenalties, module: "operations" },
+  { path: "/umrah/refund-requests", component: UmrahRefundRequests, module: "operations" },
   { path: "/umrah/penalties/:id", component: UmrahPenaltyDetail, module: "operations" },
   { path: "/umrah/invoices", component: UmrahInvoices, module: "operations" },
   { path: "/umrah/invoices/:id", component: UmrahInvoiceDetail, module: "operations" },

@@ -1,0 +1,13 @@
+page_file,paths,segments
+pages/admin/rbac-simple-editor,/admin/roles;/admin/roles-simple,admin
+pages/create/finance/expenses-create,/finance/expenses/create;/finance/expenses/multi-line,finance
+pages/crm,/crm;/crm/pipeline,crm
+pages/documents-page,/documents;/documents/folders,documents
+pages/fleet/telematics/live-map,/fleet/telematics;/fleet/telematics/live-map,fleet
+pages/governance,/governance;/governance/audits;/governance/compliance;/governance/policies;/governance/risks,governance
+pages/legal,/legal;/legal/cases;/legal/contracts;/legal/documents,legal
+pages/requests-page,/requests;/requests/types;/requests/workflows,requests
+pages/settings,/settings;/settings/audit-log;/settings/branches;/settings/companies;/settings/departments,settings
+pages/store,/store;/store/orders;/store/products,store
+pages/umrah/commission-plan-editor,/umrah/commission-plans/:x/edit;/umrah/commission-plans/new,umrah
+pages/warehouse,/warehouse;/warehouse/categories;/warehouse/movements;/warehouse/suppliers,warehouse

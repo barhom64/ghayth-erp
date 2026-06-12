@@ -184,8 +184,9 @@ describe("#2079 PE-05 — boundary intact", () => {
     expect(eligible).not.toMatch(/continuityBonus/);
   });
 
-  it("PE-06 / PE-07 surfaces are NOT present in this diff", () => {
-    expect(ENGINE).not.toMatch(/umrahFamiliarity/);
+  it("PE-07 surface is NOT present in this diff (PE-06 landed in a separate PR)", () => {
+    // PE-06 (umrahFamiliarity) merged after PE-05; this test pins
+    // only the remaining future surface (PE-07 per-family ladder).
     expect(ENGINE).not.toMatch(/PAX_LADDER|CARGO_LADDER/);
   });
 });

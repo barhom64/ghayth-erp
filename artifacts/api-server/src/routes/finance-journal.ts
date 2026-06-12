@@ -1931,14 +1931,25 @@ journalRouter.get("/salary-advances/:id", authorize({ feature: "finance.journal"
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 6 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status (KEPT, nothing removed). The axes are maintained by the
+      // migration-311 trigger, and postingStatus derives from the ACTUAL
+      // posting (balancesApplied), so a directly-posted advance that still
+      // carries status='draft' (balancesApplied=true) reads truthfully as
+      // postingStatus='posted' here — where status alone would mislabel it.
+      // (This detail never exposed isPaid; not added — paymentStatus conveys
+      // the payment state truthfully, gated by the canBePaid rule.)
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."branchId", je."companyId",
               COALESCE(SUM(jl.debit), 0) AS amount,
               CONCAT('SA-', je.id) AS "refDisplay"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
-       GROUP BY je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt", je."branchId", je."companyId"`,
+       GROUP BY je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
+                je."documentStatus", je."paymentStatus", je."postingStatus", je."branchId", je."companyId"`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("السلفة غير موجودة");
