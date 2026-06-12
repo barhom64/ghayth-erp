@@ -8,6 +8,7 @@
 // /org/attendance-policies-per-category (CRUD).
 // ════════════════════════════════════════════════════════════════════════════
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,7 +54,12 @@ interface PolicyOverride {
   trackingFrequencySeconds?: number | null;
 }
 
-const PERM_WRITE = "admin:update";
+// PR-3 (#2077) — write permission moved from `admin:update` to
+// `hr.attendance:update` to match the new backend gate on
+// /org/attendance-policies-per-category. The HR Manager surfaces the
+// page from /hr/attendance-categories; their role grants hr.attendance
+// but not admin:*, so the old key hid the buttons from the new caller.
+const PERM_WRITE = "hr.attendance:update";
 const EMPTY_FORM = {
   categoryKey: "",
   lateThresholdMinutes: "",
@@ -76,6 +82,13 @@ function numOrNull(s: string): number | null {
 
 export default function AttendanceCategoriesPage() {
   const { toast } = useToast();
+  // PR-3 (#2077) — the page is mounted at BOTH /admin/attendance-categories
+  // (back-compat alias) and /hr/attendance-categories (new canonical HR
+  // path). The breadcrumb shape switches accordingly so the parent crumb
+  // matches the user's navigation lane and clicking it returns them
+  // to the right module home.
+  const [location] = useLocation();
+  const onHrRoute = location.startsWith("/hr/");
   const { data: catData, isLoading: lCat } = useApiQuery<{ data: EmployeeCategory[] }>(
     ["employee-categories"], "/org/employee-categories",
   );
@@ -189,7 +202,12 @@ export default function AttendanceCategoriesPage() {
     <PageShell
       title="فئات الموظفين وسياسات الحضور"
       subtitle="إدارة الـ 6 system categories + إنشاء overrides لكل شركة (#1799 priority #6 closure)"
-      breadcrumbs={[
+      breadcrumbs={onHrRoute ? [
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { href: "/hr", label: "الموارد البشرية" },
+        { href: "/hr/attendance-policy", label: "سياسة الحضور" },
+        { label: "فئات الحضور" },
+      ] : [
         { href: "/dashboard", label: "لوحة التحكم" },
         { href: "/admin", label: "الإدارة" },
         { label: "فئات الحضور" },
