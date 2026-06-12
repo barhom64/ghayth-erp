@@ -386,8 +386,22 @@ router.post("/", authorize({ feature: "communications", action: "create" }), asy
       });
     }
 
-    const blocked = sendResult?.blocked === true;
-    res.status(blocked ? 422 : 201).json(
+    if (sendResult?.blocked === true) {
+      // Same DLP_BLOCKED contract as POST /:id/messages — see the
+      // comment there. The conversation itself was still created.
+      res.status(422).json(
+        maskFields(req, {
+          error: sendResult.reason ?? "حُجبت الرسالة بواسطة قواعد حماية البيانات (DLP)",
+          code: "DLP_BLOCKED",
+          meta: { reason: sendResult.reason, dlpMatches: sendResult.dlpMatches },
+          conversationId: conversation.id,
+          existing: !conversation.created,
+          send: sendResult,
+        }),
+      );
+      return;
+    }
+    res.status(201).json(
       maskFields(req, {
         conversationId: conversation.id,
         existing: !conversation.created,
@@ -446,7 +460,21 @@ router.post("/:id/messages", authorize({ feature: "communications", action: "cre
       );
     }
 
-    res.status(result.blocked ? 422 : 201).json(maskFields(req, { conversationId: id, ...result }));
+    if (result.blocked) {
+      // 422 bodies travel to the frontend as ApiError, which only
+      // surfaces { error, code, meta } — without these fields the DLP
+      // reason/rules would be dropped and the UI could not render the
+      // "حُجبت بواسطة DLP" state (#2138 slice 2 requirement).
+      res.status(422).json(maskFields(req, {
+        error: result.reason ?? "حُجبت الرسالة بواسطة قواعد حماية البيانات (DLP)",
+        code: "DLP_BLOCKED",
+        meta: { reason: result.reason, dlpMatches: result.dlpMatches },
+        conversationId: id,
+        ...result,
+      }));
+      return;
+    }
+    res.status(201).json(maskFields(req, { conversationId: id, ...result }));
   } catch (err) {
     handleRouteError(err, res, "inbox/conversations/message");
   }
