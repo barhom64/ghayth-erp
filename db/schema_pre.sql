@@ -17071,6 +17071,8 @@ CREATE TABLE public.rental_contracts (
     "terminatedAt" timestamp with time zone,
     "terminationReason" text,
     "closedAt" timestamp with time zone,
+    "contractSource" character varying(20) DEFAULT 'manual'::character varying NOT NULL,
+    CONSTRAINT rental_contracts_contract_source_check CHECK ((("contractSource")::text = ANY ((ARRAY['ejar'::character varying, 'manual'::character varying])::text[]))),
     CONSTRAINT rental_contracts_contract_type_check CHECK ((("contractType")::text = ANY ((ARRAY['residential_rent'::character varying, 'commercial_rent'::character varying, 'sale'::character varying, 'management'::character varying, 'residential'::character varying, 'commercial'::character varying, 'ejar_unified'::character varying])::text[])))
 );
 
