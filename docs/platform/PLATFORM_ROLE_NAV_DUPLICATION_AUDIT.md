@@ -52,13 +52,20 @@
 
 ```
 canonical                 417
-deep-link-only            189    (details/create — لا تحتاج nav)
-tabbed-page                36    (مقبولة — توثيق)
+deep-link-only            189    (details/create — لا تحتاج nav بالتصميم)
+tabbed-page                36    (مقبولة — توثيق فقط)
 cross-module-duplicate      8
-orphan                      5
+orphan                      5    (مفصَّلة بـ4 sub-categories في §6)
 dead-link                   0    ✅
-forbidden-visible           ❓   (محسوب جزئيًا بسبب seed gap)
+forbidden-visible           ❓   انظر §10a
 ```
+
+**§10a — `forbidden-visible` غير محسوم في PR-0** (لا «صفر»): القياس
+يتطلب login لكل دور قياسي ثم محاولة فتح كل path يراه في nav والتحقق
+أن الـbackend يُرجِع 200 لا 403. اليوم 5 من 10 personas مفقودة من
+الـseed (§10)، فلا يمكن إجراء القياس الكامل. **سيُحسَم في PR-6
+(إكمال seed personas) ثم PR-8 (الرحلة الشاملة) من الموجة الثانية**؛
+الـ`?` في الجدول أعلاه يعكس عدم الحساب لا عدم الوجود.
 
 ---
 
@@ -85,19 +92,60 @@ forbidden-visible           ❓   (محسوب جزئيًا بسبب seed gap)
 
 ---
 
-## 6. الـ5 orphans (routes بلا nav)
+## 6. الـ5 orphans — مُفصَّلة بـ4 sub-categories
 
-| المسار | القرار المقترح |
+المصفوفة وسمت **5 paths فقط** بـtag `orphan`. التقرير الأول لـPR-0 خلط
+معها 4 paths هي canonical فعلًا في nav (تأكيد بـgrep: `/admin/users`،
+`/finance/ar-collection-workbench`، `/finance/bank-accounts-watch`،
+`/finance/purchase-requests`، `/me/driver`، `/umrah/reports/agent-balances`
+كلها لها صفوف nav). أُزيلت من هذا القسم. أدناه الـ5 الحقيقية مفصَّلة:
+
+### 6.A — actual orphan routes (route موجود، nav غير موجود، وغير deep-link بالتصميم)
+
+| المسار | لماذا «حقيقي» |
 |---|---|
-| `/admin/users` | إضافة لـnav تحت «الإدارة → المستخدمين» (موجود مسارًا في `/admin/user-onboarding` لكن الـlanding مفقود من القائمة) |
-| `/finance/ar-collection-workbench` | إضافة لـnav أو deep-link موثَّق |
-| `/finance/bank-accounts-watch` | إضافة لـnav أو deep-link موثَّق |
-| `/finance/purchase-requests` | تقاطع محتمل مع nav موجودة — يحتاج التحقق |
-| `/me/driver` | self-service — deep-link بعد login (ليس لـnav) |
-| `/my/work-queue` | مُلغى عمليًا بـ `/work-inbox` من PR-5 — يحتاج تأكيد صاحب المنتج |
-| `/umrah/commission-plans/new` | deep-link من قائمة العمولات (لا nav-add) |
-| `/umrah/reports/agent-balances` | إضافة لـnav تحت تقارير العمرة |
-| `/umrah/transport-requests` | إضافة لـnav تحت العمرة → النقل |
+| _لا شيء_ | بعد الفلترة، كل الـ5 ينتمي لإحدى الـ3 categories التالية — لا يوجد path مفقود-بالنية المعمارية |
+
+**العدد**: 0.
+
+### 6.B — deep-link-only candidates (يجب أن لا يُضاف لـnav — يُفتح من سياق أبيه)
+
+| المسار | السياق الصحيح للفتح |
+|---|---|
+| `/umrah/commission-plans/new` | من قائمة العمولات `/umrah/commission-plans` (زر «جديد») — نمط `/create` |
+
+**العدد**: 1. **القرار**: لا nav-add. توثيق في صفحة الـlist.
+
+### 6.C — back-compat / legacy aliases (مرشَّحة للحذف الآمن أو الإخفاء بعد redirect)
+
+| المسار | بديله الحالي | حالة |
+|---|---|---|
+| `/my/work-queue` | `/work-inbox` (PR-5) | الـcanonical الجديد يستوعب كل ما كان يخدمه — يحتاج تأكيد صاحب المنتج قبل الحذف |
+
+**العدد**: 1. **القرار**: redirect → `/work-inbox` ثم إزالة (PR منفصل).
+
+### 6.D — nav-add candidates (route صالح، nav فقدته)
+
+| المسار | nav-section المقترح |
+|---|---|
+| `/umrah/transport-requests` | «العمرة → النقل» |
+
+**العدد**: 1. **القرار**: إضافة nav item تحت السكشن المقترح.
+
+### 6.E — orphan + cross-module-duplicate (تُحَل بحل الـduplicate)
+
+| المسار | ملاحظة |
+|---|---|
+| `/admin/attendance-categories` | الـ`/hr/attendance-categories` المرآة في nav؛ بعد تثبيت canonical في §4، هذا الـorphan يختفي تلقائيًا |
+| `/admin/scoring-weights` | نفس النمط |
+
+**العدد**: 2. **القرار**: لا قرار مستقل — يُحَل ضمن PR-3 (تنظيف الـduplicates).
+
+### مجموع §6
+
+**5 orphans = 0 actual + 1 deep-link-only + 1 back-compat + 1 nav-add + 2 cross-duplicate-resolved**
+
+(يطابق التوزيع في §3 ويطابق صف #4 في جدول القرار §11.)
 
 ---
 
@@ -185,7 +233,7 @@ owner    /auth/me modules: [dashboard, properties, projects, …]   (27 module)
 | 1 | `/module-dashboards/*` خلف `bi` | فصل كل لوحة خلف `module` صاحب المسار | PR-1 (الموجة 2) | عالية |
 | 2 | مصدر «وحدات الدور» المزدوج | توحيد مصدر واحد | PR-2 (الموجة 2) | عالية |
 | 3 | الـ4 cross-module duplicates | تثبيت canonical + redirect + إزالة الـduplicate | PR-3 (الموجة 2) | متوسطة |
-| 4 | الـ5 orphans + 4 deep-link candidates | قرار لكل واحد: nav-add / deep-link-only / remove | PR-4 (الموجة 2) | متوسطة |
+| 4 | الـ5 orphans = 0 actual + 1 deep-link + 1 back-compat + 1 nav-add + 2 يُحَلّان بـPR-3 | تنفيذ 3 قرارات صغيرة (انظر §6.B/C/D) | PR-4 (الموجة 2) | منخفضة (نطاق أصغر بكثير من المتصوَّر) |
 | 5 | الـ96 unused endpoints | تصنيف لكل واحد: wire / internal-service / remove | PR-5 (الموجة 2) | متوسطة |
 | 6 | seed gap في 5 personas | إضافة users تجريبية للأدوار الخمسة | PR-6 (الموجة 2) | عالية (يسبق PR-8) |
 | 7 | شاشة orphans للبيانات التنظيمية | بناء شاشة قراءة فقط | PR-7 (الموجة 2) | متوسطة |
@@ -202,7 +250,7 @@ owner    /auth/me modules: [dashboard, properties, projects, …]   (27 module)
 | 1 | فصل `/module-dashboards/*` عن `bi` | كل لوحة مسار خلف module المسار صاحب اللوحة + مسمار | — | عالية |
 | 2 | توحيد مصدر «وحدات الدور» جذريًا | مصدر واحد ينتج modules لكلا mount-gate و sidebar | — | عالية |
 | 3 | تنظيف الـ4 cross-module duplicates | canonical + redirects + إزالة الـduplicates | — | متوسطة |
-| 4 | تنظيف الـ5 orphans + nav-add للناقص | كل orphan يأخذ قراره: nav / deep-link / remove | — | متوسطة |
+| 4 | تنظيف الـ5 orphans (نطاق ضيق بعد التصنيف) | 1 nav-add + 1 deep-link doc + 1 back-compat redirect (الـ2 الباقيان يُحَلَّان بـPR-3) | — | منخفضة |
 | 5 | تصنيف الـ96 unused endpoints | كل endpoint قراره | — | متوسطة |
 | 6 | seed users للأدوار الخمسة الناقصة | users + توثيق طريقة إضافة persona | — | عالية |
 | 7 | شاشة orphans للبيانات التنظيمية | صفحة قراءة فقط ترصد الناقص | — | متوسطة |
