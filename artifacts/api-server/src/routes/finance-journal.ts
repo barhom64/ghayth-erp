@@ -2940,7 +2940,17 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
     }
 
     const entries = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 7 — this read IS journal-entry-bound (OB-%
+      // entries in journal_entries), so surfacing the three status axes is
+      // meaningful, not artificial. Add documentStatus/paymentStatus/
+      // postingStatus alongside the legacy status (KEPT, nothing removed). The
+      // axes are maintained by the migration-311 trigger; postingStatus derives
+      // from the ACTUAL posting (balancesApplied), so a directly-posted opening
+      // balance that still carries status='draft' (balancesApplied=true) reads
+      // truthfully as postingStatus='posted' here — where status alone would
+      // mislabel it. (This read never exposed isPaid; not added.)
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."branchId", je."companyId",
               COALESCE(SUM(jl.debit), 0) AS "totalDebit",
               COALESCE(SUM(jl.credit), 0) AS "totalCredit",
@@ -2954,7 +2964,8 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${where}${extraWhere}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."branchId", je."companyId"
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
+                je."documentStatus", je."paymentStatus", je."postingStatus", je."branchId", je."companyId"
        ORDER BY je."createdAt" DESC`,
       params
     );
