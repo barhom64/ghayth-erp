@@ -243,7 +243,13 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // adopted from day one (company-level list cascades).
       // +1 total/helperUsers: routes/inboxConversations.ts (#2138)
       // ships with buildScopedWhere adopted from day one.
-      total: 118,
+      // +1 total/manualOnly: PR-9 (#2077) added routes/myFieldTracking.ts
+      // — self-service field tracking. It's a 2-endpoint router (GET
+      // /eligibility + POST /ping) that does NOT use buildScopedWhere
+      // because both routes serve the caller's own data via
+      // scope.userId (selfService:true), where scoped lists wouldn't
+      // apply. Counted under manualOnly to preserve the invariant.
+      total: 119,
       helperUsers: 39,
       manualOnly: 76,
     });

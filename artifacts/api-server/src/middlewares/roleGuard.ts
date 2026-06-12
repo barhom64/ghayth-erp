@@ -20,6 +20,11 @@ const ROLE_LEVELS: Record<string, number> = {
   crm_manager: 70,
   bi_manager: 70,
   branch_manager: 60,
+  // PR-9a (#2077) — the two standard roles seeded by migrations 278/291.
+  // Levels mirror rbac_roles.level so the in-code fallback never
+  // disagrees with the DB rows.
+  department_manager: 50,
+  payroll_officer: 50,
   employee: 10,
 };
 
@@ -37,7 +42,14 @@ const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
   crm_manager: ["home","crm","marketing","requests","documents","comms"],
   bi_manager: ["home","bi","reports","requests","documents","comms"],
   branch_manager: ["home","hr","finance","requests","documents","comms","support"],
-  employee: ["home","requests","documents","comms"],
+  // PR-9a (#2077) — FU-1 close. Without these entries the two roles'
+  // rbac grants (migration 291) light the sidebar but every module-
+  // gated mount (requireModule) still 403s, because this map — not the
+  // grants table — is what requireModule consults. Per-route authorize()
+  // remains the fine gate: payroll_officer passes the hr mount yet has
+  // no hr.discipline grant, so التحقيقات stay 403.
+  department_manager: ["home","hr","requests","documents","reports","comms"],
+  payroll_officer: ["home","hr","requests","documents","comms"],
 };
 
 async function getUserModules(userId: number, fallbackRole?: string, companyId?: number): Promise<{ modules: string[]; roles: string[]; level: number }> {

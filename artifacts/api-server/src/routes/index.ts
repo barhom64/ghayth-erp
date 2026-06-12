@@ -71,6 +71,7 @@ import impactPreviewRouter from "./impactPreview.js";
 import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
+import myFieldTrackingRouter from "./myFieldTracking.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
@@ -410,7 +411,8 @@ router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRo
 // with NO mount path (so Express never strips the prefix — requireGuards reads
 // the real req.path), and gates ONLY /transport + /fleet; every route in these 7
 // routers lives under those two prefixes (verified: 56 /transport + 14 /fleet,
-// zero others).
+// zero others). PR-5a (#2077) hit the SAME bug for HR's صندوق الأعمال
+// and merged into main's #1959 solution.
 const fleetModuleGate = requireModule("fleet");
 const transportFinancialGate = requireGuards("financial");
 const transportPathGate: RequestHandler = (req, res, next) => {
@@ -510,7 +512,18 @@ router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90)
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
 // and is defence-in-depth against any future unguarded route.
-router.use("/permissions", requireMinLevel(90), permissionsRouter);
+// PR-10 (#2077) — pre-existing FND-004 (#866) over-reach: the guard
+// was added when this router only carried admin endpoints, but the
+// only route here today is /permissions/my, the self-introspection
+// surface that drives sidebar/button gating for EVERY user. The route
+// file's own comment is explicit: «self-introspection endpoint that
+// every authenticated user must be able to call regardless of role».
+// Without dropping this gate, hr_manager / department_manager /
+// payroll_officer would silently lose all perm-gated UI because their
+// /permissions/my call 403s and `apiData.permissions` stays empty —
+// exactly the symptom PR-10's nav gate hit. The route is scoped to
+// the caller (scope.userId/companyId) — no admin surface exposed.
+router.use("/permissions", permissionsRouter);
 router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
 // GAP_MATRIX item #16 — sidebar advertises this with perm=audit:read but
 // the mount only checked level≥70. Add requirePermission so direct-URL
@@ -526,6 +539,13 @@ router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
+// PR-9 (#2077) — self-service field tracking. Same lane as /my-space:
+// authMiddleware + per-route authorize (hr.attendance.checkin is
+// selfService:true), NO module gate — plain employees (field workers,
+// drivers) don't carry the hr module but must reach their own ping
+// endpoint. The category policy inside fieldTrackingService stays the
+// single authority on WHO is trackable.
+router.use("/my/field", myFieldTrackingRouter);
 // IGOC-006 — /me/proactive-insights aggregates 9 role-adaptive categories
 // (my docs/iqama, my pending requests, team approvals, company iqama/journals/
 // invoices/obligations, critical notifications). Same surface for every role,

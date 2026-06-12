@@ -22,7 +22,7 @@ import {
   Target, Network, Receipt, Wallet, Car, Wrench, Fuel, User,
   FileCheck, AlertTriangle, ClipboardCheck, Building, FileSignature, Users2,
   Hammer, TrendingUp, FileBarChart, FolderOpen, Archive, ListTodo, GitBranch,
-  FilePlus, CalendarClock, ScrollText, Cog, Bell, Mail,
+  FilePlus, CalendarClock, ScrollText, Cog, Bell, Mail, Inbox,
   MessageSquare, Scale, Briefcase, Megaphone, ShoppingCart, Package, Activity,
   LineChart, Menu, X, LogOut, Headphones, CheckCircle,
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
@@ -76,10 +76,20 @@ export const allNavSections: NavSection[] = [
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
+      // PR-5 (#2077) — صندوق الأعمال الموحّد. Promoted to the top of
+      // «الرئيسية» so it's the first thing every operator sees on
+      // login. Replaces the 5-screen morning routine (notifications +
+      // action-center + hr/approval-inbox + finance/approvals-inbox +
+      // tasks) with a single canonical page.
+      { label: "صندوق الأعمال", path: "/work-inbox", icon: Inbox },
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
-        { label: "ما ينتظر إجراءاتي", path: "/my/work-queue", icon: ListChecks },
+        { label: "ما ينتظر إجراءاتي", path: "/work-inbox", icon: ListChecks },
+        // PR-9 (#2077) — رفيق الميدان. The page itself checks the
+        // category-policy eligibility; non-field categories see the
+        // «فئتك لا تخضع للتتبع» banner and never get a location prompt.
+        { label: "رفيق الميدان", path: "/my/field-companion", icon: MapPin },
         { label: "مساحتي", path: "/my-space", icon: User },
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
@@ -198,16 +208,25 @@ export const allNavSections: NavSection[] = [
       ]},
 
       // 5. الامتثال والجزاءات — gathers all violations + memos +
-      // regulations + Saudization (previously 3 separate clusters)
-      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr", children: [
-        { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
-        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
-        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
-        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
-        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
-        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
+      // regulations + Saudization (previously 3 separate clusters).
+      // PR-10 (#2077) — Closure Gate: explicit perm guard on the
+      // group + the discipline/violations children so the رابط لا يظهر
+      // for users without violations/discipline visibility (e.g.
+      // payroll_officer). Backend authorize() still 403s either way —
+      // this just keeps «نظهرَ ثم 403» out of the UX. السعودة + WPS
+      // children stay on their own permissions so finance/payroll
+      // personas can still reach them.
+      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
+        perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
+        children: [
+        { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees", perm: ["hr.saudization:view","hr.saudization:list"], permMode: "any" },
+        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
       ]},
 
       // 6. الأداء والتطوير — gathers performance + 360 + IDP + training
@@ -244,10 +263,11 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
+        { label: "الشجرة التنظيمية", path: "/hr/org-tree", icon: Network, subKey: "employees" },
         { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
-        { label: "أوزان التقييم وترتيب الأداء", path: "/admin/scoring-weights", icon: TrendingUp, subKey: "settings" },
+        { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
-        { label: "فئات الموظفين وسياسات الحضور", path: "/admin/attendance-categories", icon: Users, subKey: "settings" },
+        { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },
       ]},
     ],
   },
