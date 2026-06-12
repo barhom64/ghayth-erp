@@ -160,7 +160,8 @@ export const allNavSections: NavSection[] = [
     // bookmarks + deep-links keep working.
     items: [
       // 1. لوحة HR
-      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "bi" },
+      // PR-1 / #2163 — was module:"bi" (FU-2). hr_manager owns hr, not bi.
+      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
       // بوابة /hr — لوحة تشغيلية خاصة بفريق الموارد البشرية (مؤشرات وروابط
       // سريعة لا تظهر في اللوحة العامة). كانت مركّبة بلا مدخل (orphan).
       { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr" },
@@ -503,7 +504,8 @@ export const allNavSections: NavSection[] = [
         // ملاحة السائق — نفس بوابة لوحة السائق (module بدل perm) ولنفس السبب.
         { label: "ملاحة السائق", path: "/me/driver/navigation", icon: Navigation, module: "fleet" },
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "fleet" },
         // Management children are gated by the exact backend feature:action each
         // page requires, so a role lacking the grant (e.g. driver) never sees a
         // link that would 403 into "حدث خطأ في تحميل البيانات". Owner bypasses
@@ -556,7 +558,8 @@ export const allNavSections: NavSection[] = [
     items: [
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard, module: "warehouse" },
         { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
@@ -565,7 +568,8 @@ export const allNavSections: NavSection[] = [
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard, module: "store" },
         { label: "المنتجات", path: "/store/products", icon: Package },
         { label: "الطلبات", path: "/store/orders", icon: ShoppingCart },
       ]},
@@ -661,14 +665,16 @@ export const allNavSections: NavSection[] = [
     items: [
       { label: "العملاء والمبيعات", path: "/clients", icon: Target, module: "crm", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard, module: "crm" },
         { label: "الفرص التجارية", path: "/crm", icon: Target },
         { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
         { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
       ]},
       { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard, module: "support" },
         { label: "التذاكر", path: "/support", icon: Headphones },
         { label: "قاعدة المعرفة", path: "/support/kb", icon: BookOpen },
         { label: "الردود الجاهزة", path: "/support/replies", icon: MessageSquare },
