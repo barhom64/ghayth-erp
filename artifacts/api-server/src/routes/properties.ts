@@ -21,6 +21,7 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
+import { getEjarReader, isValidEjarFormat } from "../lib/ejarContractReader.js";
 
 const createUnitSchema = z.object({
   unitNumber: z.string().min(1, "رقم الوحدة مطلوب"),
@@ -885,6 +886,40 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
 
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
+});
+
+// Preview from Ejar — Mock-First read by ejarNumber. The form calls
+// this when the operator chooses contractSource='ejar' and enters an
+// Ejar number; the response pre-fills the contract fields and the UI
+// locks the reference ones (parties, unit, amounts) so they can't be
+// edited locally — the doctrine rule for Ejar-bound contracts.
+//
+// The underlying reader is swappable (mock vs real) via the
+// EJAR_READER_MODE env. Today only mock returns data; flipping to
+// real fails loudly until the platform read endpoint is wired up.
+router.post("/contracts/preview-from-ejar", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
+  try {
+    const ejarNumber = String(req.body?.ejarNumber ?? "").trim();
+    if (!isValidEjarFormat(ejarNumber)) {
+      res.status(400).json({
+        error: "صيغة رقم إيجار غير صحيحة. المتوقع: EJ-XXXX",
+        field: "ejarNumber",
+      });
+      return;
+    }
+    const reader = getEjarReader();
+    const data = await reader.read(ejarNumber);
+    if (!data) {
+      res.status(404).json({
+        error: "لم يُعثر على عقد بهذا الرقم في إيجار",
+        ejarNumber,
+      });
+      return;
+    }
+    res.json({ data, source: "ejar" });
+  } catch (err) {
+    handleRouteError(err, res, "Preview from Ejar error:");
+  }
 });
 
 // Impact preview — shows what will happen when the rental contract is created
