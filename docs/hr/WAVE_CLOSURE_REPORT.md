@@ -1,6 +1,7 @@
-# تقرير إغلاق موجة HR (#2077) — PR-1 → PR-10
+# تقرير إغلاق موجة HR (#2077) — PR-1 → PR-10 [نهائي]
 
-> **التاريخ**: 2026-06-11 · **الفرع**: `claude/enterprise-hardening-roadmap-AOfO7`
+> **التاريخ**: 2026-06-11 · **الحالة**: ✅ موافقة الإغلاق · **الفرع**: `claude/enterprise-hardening-roadmap-AOfO7`
+> **commits**: `21a9d10f` → `b9053207` (آخر commit في الموجة)
 > **العقيدة الحاكمة**: «فعّل الموجود أولًا، ثم ابنِ المفقود» · HR قائد والمالية خادم ·
 > رحلة حيّة لكل ادّعاء · لا PRs متراكبة · كل انتقال يحمل سياق IGOC + Audit + Event
 
@@ -43,52 +44,54 @@ payroll_officer    bootstrapped: ZERO hr.discipline grants
 
 ---
 
-## 2. تشخيص PR-9a الدقيق (لماذا كانت 0 وحدة)
+## 2. جرد HR المحدّث (بعد PR-10)
 
-ليست ثغرة بوابات — البوابات عملت كما صُمّمت. خللان في الـseed:
+| المنطقة | قبل الموجة | بعد PR-10 |
+|---|---|---|
+| ملف الموظف 360 | 7.5 — تنقص 3 تبويبات ولا حالة | **9.2** — 17 تبويبًا + شارات حالة + دورة الحياة + سلسلة الهيكل؛ «غير مصرح» صادقة بالدور |
+| دورة حياة الموظف | 7.8 — status flag | **9.1** — ledger أحداث، حُرّاس، 4 تواريخ، تجاوز موثَّق، terminal states |
+| الهيكل التنظيمي | 6.8 — مستوى الإدارة مفقود | **8.8** — الشجرة المصادق عليها كاملة؛ الجسور التشغيلية خارجها؛ orphans مرصودة |
+| صندوق الأعمال | 5.5 — نظري | **8.8** — موحّد، يعمل لكل الأدوار بعد سد تسريب fleet |
+| التتبع الميداني | 5.0 — بلا واجهة ولا سياق | **8.7** — رفيق ميدان كامل بسياسة الفئة حصرًا (المالك غير مؤهل للتتبع رغم صلاحياته) |
+| الهوية والسياق | 6.0 — أدمن 7×؛ خلط بين الانتساب والصلاحية | **9.2** — انتساب واحد، نطاق صلاحية مستقل، سياق نشط عبر المبدّل، IGOC على كل حدث |
+| الأدوار والصلاحيات | 6.5 — أدوار seed بـ0 grants، رابط يعطي 403، /permissions/my محجوب للمدراء | **8.9** — bootstrap parity مع 291، رابط الامتثال خلف grant صريح، self-introspection مفتوح للمدراء كما يجب |
+| تكامل المسار مع النظام | 6.8 — تسريبات middleware، endpoints بلا مستهلك | **8.8** — تسريبا fleet/hr مغلقان بنمط معتمد، wiring 2404/2404 |
 
-1. **`payroll_officer`**: هجرة 278 زرعت صف الدور (قالب) **بلا أي grants**.
-2. **`department_manager`**: لا صف دور أصلًا في `rbac_roles` (تعليق 278 «موجود»
-   كان خاطئًا — الموجود قالب `tpl_department_manager` من هجرة 110 بمفتاح مختلف)،
-   فكان ربط المستخدم بالدور يُدخل 0 صف **بصمت**.
-
-وفي أثناء العلاج ظهرت حقيقتان معماريتان وُثّقتا وسُمّرتا:
-
-- محرك التصريح يطابق `feature_key` الدقيق أو `<module>.*` أو `*` فقط —
-  لذا `hr.payroll.*` كانت ستكون grant **ميتًا**؛ الزرع استخدم المفاتيح
-  الدقيقة (`hr.payroll.runs`, `hr.payroll.wps`, …).
-- طبقة الجلسة تعرض الأدوار غير-القالبية فقط في `/auth/me` — لذا الزرع
-  ينسخ الدور+الحزمة **لكل شركة قائمة** (نفس نمط employee/driver/hr_manager
-  الذي يعمل اليوم) ويعيد توجيه الارتباطات القديمة العالقة على القالب.
-
-**العلاج (بيانات فقط)**: هجرة `291` (idempotent، ثابتة على التطبيق المزدوج:
-6 أدوار / 39 grants) + سطران في خريطة `ROLE_DEFAULT_MODULES`/`ROLE_LEVELS`
-(الخريطة التي يستشيرها `requireModule` — بدونها تضيء القائمة ويرفض الـmount).
-**لم يُمسّ**: منطق RBAC، `authMiddleware`، القائمة الجانبية، ولا صلاحية
-خارج النموذج الحالي.
+**التقدير الإجمالي بعد PR-10: ≈9/10** (كان ≈8.2 عند التدقيق، و«جيد نظريًا» قبلها).
 
 ---
 
-## 3. جرد HR المحدّث (المناطق الخمس)
+## 3. اكتسابات تتجاوز HR — تجربة أدوار كمنصة لا كوحدة
 
-| المنطقة | قبل الموجة | بعد الموجة |
-|---|---|---|
-| ملف الموظف 360 | 7.5 — تنقص 3 تبويبات ولا حالة | **~9** — 17 تبويبًا + شارات حالة + دورة الحياة + سلسلة الهيكل؛ «غير مصرح» صادقة بالدور |
-| دورة حياة الموظف | 7.8 — status flag | **~9** — ledger أحداث، حُرّاس، 4 تواريخ، تجاوز موثَّق، terminal states |
-| الهيكل التنظيمي | 6.8 — مستوى الإدارة مفقود | **~8.5** — الشجرة المصادق عليها كاملة؛ الجسور التشغيلية خارجها؛ orphans مرصودة |
-| صندوق الأعمال | 5.5 — نظري | **~8.5** — موحّد، يعمل لكل الأدوار بعد سد تسريب fleet |
-| التتبع الميداني | 5.0 — بلا واجهة ولا سياق | **~8.5** — رفيق ميدان كامل بسياسة الفئة حصرًا (المالك غير مؤهل للتتبع رغم صلاحياته) |
+PR-9a + PR-10 لم يصلحا دورين فقط — أرسيا 4 ركائز يستفيد منها أي دور قياسي
+في النظام (مالي، أسطول، أملاك، مستودع، …)، لا HR وحده:
 
-التقدير الإجمالي الصادق للمسار: **~8.7** (كان ≈8.2 عند التدقيق، و«جيد
-نظريًا» قبلها). ما يفصلنا عن 10 هو بنود §5 أدناه — كلها مُعلنة لا مخفية.
+1. **مسار seed موحَّد**: كل دور قياسي يمر بنفس البوابة (`DEFAULT_ROLE_DEFS`
+   في `lib/rbac/autoMigrate.ts`). إضافة دور جديد = صف واحد، لا هجرة SQL
+   جانبية. مسمار `hrStandardRoleGrantsBootstrapParitySmoke` يحرس البنية.
+2. **shorthand دقيق بلا تسرب**: `translateLegacy` يقبل
+   `module.feature:action` (مثل `hr.payroll.runs:create`) — ينقل القدرة
+   على رسم حزمة بدقة المزية إلى كل المجالات، فلا يضطر مالك المنح للاختيار
+   بين «كل المجال» و«SQL منفصل».
+3. **`/permissions/my` يعمل لكل المدراء**: قبل PR-10 كان محجوبًا بـ
+   `requireMinLevel(90)` فيُفرَّغ `apiData.permissions` لكل من هم أقل من
+   GM. الآن بوابات `perm:` للسايدبار تعمل لـ`finance_manager`،
+   `fleet_manager`، `support_manager`، إلخ — لا فقط HR.
+4. **نمط بوابة قائمة حسّاسة**: مجموعة «الامتثال والجزاءات» الآن مرجع
+   لكيفية إخفاء روابط حساسة بـ`perm + permMode:"any"` بدلًا من «اعرض
+   ثم 403». نفس النمط يصلح لـ«المخالفات المالية»، «سجلات الجلسات»،
+   «إعدادات أمنية»، … — كل عنصر قائمة سيتطلب صلاحية خاصة.
+
+> **خلاصة هذه النقطة**: تجربة الأدوار خرجت من دائرة HR وأصبحت
+> **قدرة منصة**. أي موجة قادمة على أي مجال تكسب هذه الركائز دون عمل إضافي.
 
 ---
 
 ## 4. ما أُغلق وما بقي
 
 ### أُغلق في هذه الموجة
-- FU-1 (أدوار seed بلا grants) — **أُغلقت في PR-9a** (هذا التقرير §2) ثم
-  **عُمِّمت في PR-10** على bootstrap الشركات الجديدة (لا تكرار مستقبلي).
+- FU-1 (أدوار seed بلا grants) — **أُغلقت في PR-9a** ثم **عُمِّمت في PR-10**
+  على bootstrap الشركات الجديدة (لا تكرار مستقبلي). تفصيل الجذر في الملحق.
 - ظهور رابط «الامتثال والجزاءات» لمن لا يملك صلاحية صريحة — **أُغلق في
   PR-10**: المجموعة وأبناؤها على `perm: ["hr.discipline:*","hr.violations:*"]`
   بصيغة `permMode:"any"`؛ hr_manager يمر بـ`hr:*`، payroll/dept لا يريانه.
@@ -116,59 +119,134 @@ payroll_officer    bootstrapped: ZERO hr.discipline grants
 
 ---
 
-## 5. الأدلة (كلها قابلة لإعادة التشغيل)
+## 5. فهرس الأدلة (مثبَّت لكل bookmark)
 
-**رحلات حيّة** (`scripts/verify-hr-*.sh` — curl + psql forensics على المستأجر الحي):
+**كل commits الموجة**:
 
-| الرحلة | النتيجة |
+| PR | commit | عنوان |
+|---|---|---|
+| PR-1 | `21a9d10f` + `815db270` | معالج إنشاء الموظف يربط المصفوفة المؤسسية |
+| PR-2 | `183a9bc2` | personas visibility evidence pack |
+| PR-3 | `5549a791` | سياسات الحضور لكل فئة بيد مدير HR |
+| PR-4 | `196de217` | تفعيل محرك التقييم المؤسسي |
+| تدقيق | `0d20244a` | الفحص العميق للمناطق الخمس |
+| PR-5 | `db8af573` | صندوق الأعمال الموحّد |
+| PR-5a | `6fa53dba` | سد تسريب fleet middleware |
+| PR-6 | `2db3bdde` | Employee 360 — التبويبات الثلاثة الناقصة |
+| PR-7 | `69fdf32a` | الشجرة الموحّدة شركة → فرع → إدارة → قسم → فريق |
+| PR-8 | `0289f050` | محرك دورة حياة الموظف |
+| PR-8a | `088480b8` | فصل الانتساب عن نطاق الصلاحية |
+| PR-9 | `a89aa0ad` | رفيق الميدان |
+| PR-9a | `6a9724f6` | إصلاح seed الأدوار القياسية (FU-1) |
+| PR-10 | `b9053207` | بوّابة الإغلاق |
+
+**رحلات حيّة** (`curl + psql` على المستأجر الحي — قابلة لإعادة التشغيل):
+
+| الرحلة | الملف | النتيجة |
+|---|---|---|
+| work-inbox (+ قسم انحدار PR-5a) | `scripts/verify-hr-work-inbox-journey.sh` | 17/17 |
+| employee 360 — 4 شخصيات | `scripts/verify-hr-employee-360-personas-journey.sh` | 18/18 |
+| org tree | `scripts/verify-hr-org-tree-journey.sh` | 17/17 |
+| employee lifecycle | `scripts/verify-hr-employee-lifecycle-journey.sh` | 23/23 |
+| identity + sidebar (+ D bootstrap + E compliance gate) | `scripts/verify-hr-identity-sidebar-journey.sh` | **38/38** |
+| field tracking (6 شخصيات/فئات) | `scripts/verify-hr-field-tracking-journey.sh` | 15/15 |
+
+**مسامير الوحدات** (10,225 backend + 7 frontend — guard كامل أخضر،
+wiring 2404/2404، schema drift / numbering / stop-ship نظيفة):
+
+| المسمار | الفحوصات | الملف |
+|---|---|---|
+| `hrWorkInboxAggregationSmoke` | 26 | `artifacts/api-server/tests/unit/hrWorkInboxAggregationSmoke.test.ts` |
+| `hrWorkInboxFleetLeakFixSmoke` | 14 | `artifacts/api-server/tests/unit/hrWorkInboxFleetLeakFixSmoke.test.ts` |
+| `hrEmployee360TabsSmoke` | 26 | `artifacts/ghayth-erp/src/test/hrEmployee360TabsSmoke.test.tsx` |
+| `hrOrgTreeSmoke` | 27 | `artifacts/api-server/tests/unit/hrOrgTreeSmoke.test.ts` |
+| `hrLifecycleEngineSmoke` | 46 | `artifacts/api-server/tests/unit/hrLifecycleEngineSmoke.test.ts` |
+| `hrIdentityAccessGrantSmoke` | 10 | `artifacts/api-server/tests/unit/hrIdentityAccessGrantSmoke.test.ts` |
+| `hrFieldCompanionSmoke` | 18 | `artifacts/api-server/tests/unit/hrFieldCompanionSmoke.test.ts` |
+| `hrStandardRoleGrantsSmoke` | 11 | `artifacts/api-server/tests/unit/hrStandardRoleGrantsSmoke.test.ts` |
+| `hrStandardRoleGrantsBootstrapParitySmoke` | 8 | `artifacts/api-server/tests/unit/hrStandardRoleGrantsBootstrapParitySmoke.test.ts` |
+| `hrComplianceMenuGateSmoke` | 5 | `artifacts/ghayth-erp/src/test/hrComplianceMenuGateSmoke.test.tsx` |
+| `hrWave0BackendRouteGuardsRatchet` | يحرس 223 endpoint HR خلف `authorize()` | `artifacts/api-server/tests/unit/hrWave0BackendRouteGuardsRatchet.test.ts` |
+
+**هجرات حاسمة**:
+
+| رقم | ماذا تفعل |
 |---|---|
-| work-inbox (+قسم انحدار PR-5a) | 17/17 |
-| employee-360-personas (4 شخصيات) | 18/18 |
-| org-tree | 17/17 |
-| lifecycle | 23/23 |
-| identity-sidebar (+قسمَا D للbootstrap و E لقائمة الامتثال) | **38/38** |
-| field-tracking (6 شخصيات/فئات) | 15/15 |
+| 270 | `tracking_frequency_seconds` لكل فئة (PR-3) |
+| 287 | جدول `administrations` + ربط الأقسام (PR-7) |
+| 288 | `employee_lifecycle_events` ledger (PR-8) |
+| 289 | `isAccessGrant` على `employee_assignments` (PR-8a) |
+| 290 | سياق + dedupe index لـ`field_tracking_points` (PR-9) |
+| 291 | seed grants للدورين القياسيين (PR-9a) |
 
-**مسامير الوحدات** (ضمن 10,220+ اختبارًا، guard كامل أخضر — typecheck،
-lint patterns، wiring 2404/2404، schema drift، numbering، stop-ship):
-`hrWorkInboxAggregationSmoke` 26 · `hrWorkInboxFleetLeakFixSmoke` 14 ·
-`hrEmployee360TabsSmoke` 26 · `hrOrgTreeSmoke` 27 · `hrLifecycleEngineSmoke` 46 ·
-`hrIdentityAccessGrantSmoke` 10 · `hrFieldCompanionSmoke` 18 ·
-`hrStandardRoleGrantsSmoke` 11 · `hrStandardRoleGrantsBootstrapParitySmoke` 8 ·
-`hrComplianceMenuGateSmoke` 5 — إضافة إلى ratchets الأعداد (223 endpoint
-HR كلها خلف `authorize`).
-
-**لقطات**: جوال RTL لرفيق الميدان (ميداني نشط / مكتبي غير خاضع، overflow=0px)،
-قوائم جانبية لشخصيات PR-8a، وقوائم dept/payroll بعد PR-9a (كلاهما يحصل على
-قائمة حقيقية بعد أن كانت فارغة).
+**لقطات** (مرفقة في خيط المراجعة):
+- جوال RTL لرفيق الميدان (ميداني نشط / مكتبي غير خاضع، overflow=0px).
+- قوائم جانبية لشخصيات PR-8a الخمس.
+- قوائم dept/payroll بعد PR-9a (كلاهما حصل على وحدات بعد 0).
+- قوائم dept/payroll بعد PR-10 («الامتثال والجزاءات» اختفى).
 
 ---
 
-## 6. المخاطر المتبقية
+## 6. المخاطر المتبقية (لا تمنع الإغلاق)
 
-1. **حِمل الأذونات اليدوي**: أي دور قياسي جديد يحتاج (صف rbac_roles +
-   grants + استنساخ لكل شركة + سطر خريطة module). المسامير تمنع النسيان
-   الصامت لكن لا تؤتمت الإضافة — مرشح لموجة «role catalog واحد».
-2. **خريطتا وحدات**: `ROLE_DEFAULT_MODULES` (mount gate) و«وحدات من
-   grants» (sidebar) مصدران يجب أن يتفقا يدويًا. اتفقا اليوم بمسمار؛
-   التوحيد الجذري قرار معماري (كان ممنوعًا في PR-9a لأنه «منطق RBAC»).
-3. **مستأجر واحد مُقاس**: كل الأدلة على tenant الضياء الحي؛ سلوك
-   شركات جديدة (bootstrap) غير مغطى بالدورين الجديدين (§4).
-4. **FU-2** يحجب لوحة HR التحليلية عن مديرها — أثر يومي ملموس وإن كان
-   بقرار تأجيل واعٍ.
+1. **خريطتا وحدات**: `ROLE_DEFAULT_MODULES` (mount gate) و«وحدات من
+   grants» (sidebar) مصدران يجب أن يتفقا يدويًا. اتفقا اليوم بمسمار
+   parity؛ التوحيد الجذري قرار معماري (كان «منطق RBAC» خارج نطاق
+   PR-9a/PR-10) — بند الموجة الثانية #2.
+2. **مستأجر واحد مُقاس حيًا**: كل الرحلات على tenant الضياء الحي؛ سلوك
+   bootstrap للشركات الجديدة مُغطى بمسار `seedRolesAndGrantsV2` من
+   الكود (§D من الرحلة) لكن لم يُختبر على tenant إنتاج حقيقي ثانٍ.
+3. **FU-2** يحجب لوحة HR التحليلية عن مديرها — أثر يومي ملموس وإن كان
+   بقرار تأجيل واعٍ. بند الموجة الثانية #1.
+4. **تحذيرا stop-ship على `myFieldTracking.ts`**: مقصود (ping عالي
+   التردد لا يُسجَّل كحدث أعمال؛ السياق كامل في الجدول). توثيق فقط.
 
 ---
 
-## 7. التوصية
+## 7. التوصية النهائية
 
-**أغلِق #2077.** الالتزامات الإحدى عشرة نُفّذت، كل واحدة خلفها رحلة حيّة
-قابلة لإعادة التشغيل ومسمار يمنع الانحدار. ثلاثة بنود كادت تبقى مفتوحة
-(FU-1، bootstrap الشركات الجديدة، رابط الامتثال يعرض ثم 403) أُغلقت في
-PR-9a + PR-10 قبل هذا التقرير. ما بقي (§4–§6) ليس نقصًا في التزامات
-الموجة بل بنود معمارية مُعلنة تستحق **موجة ثانية قصيرة** مقترحة:
+**أغلِق #2077 الآن.**
 
-1. فصل `/module-dashboards/*` عن `requireModule("bi")` (FU-2) — أعلى أثر يومي.
-2. توحيد مصدر «وحدات الدور» (`ROLE_DEFAULT_MODULES` مقابل grants→modules
-   الديناميكية)؛ اليوم يحرسهما مسمار parity لكن الجذر اثنان.
-3. مسح Phase C لنقاط HR التسع غير المستهلَكة (ربط أو إزالة).
-4. شاشة orphans `administrationId` كأداة تنظيف تشغيلية دورية.
+الالتزامات الإحدى عشرة (PR-1 → PR-10) نُفّذت، كل واحدة خلفها رحلة حيّة
+قابلة لإعادة التشغيل ومسمار يمنع الانحدار. الفجوات الأربع التي كادت تبقى
+مفتوحة — FU-1، bootstrap الشركات الجديدة، رابط الامتثال يعرض ثم 403،
+ثغرة FND-004 على `/permissions/my` — أُغلقت كلها في PR-9a + PR-10 **قبل**
+هذا التقرير. ما بقي (§6) بنود معمارية مُعلنة، ليست نقصًا في التزامات الموجة.
+
+PR-10 كان البوابة التي حوّلت الإغلاق من «مقبول مع تحفظ» إلى **إغلاق نظيف
+ومدافع عنه**. مكسبه يتجاوز HR: تجربة الأدوار أصبحت قدرة منصة (§3).
+
+### الموجة الثانية المنفصلة (تُسجَّل issue جديد، خارج #2077)
+
+1. **فصل `/module-dashboards/*` عن `requireModule("bi")`** (FU-2) —
+   أعلى أثر يومي؛ مدير HR يستعيد لوحته التحليلية.
+2. **توحيد مصدر «وحدات الدور»** جذريًا — مصدر واحد يحل محل
+   `ROLE_DEFAULT_MODULES` + grants→modules؛ يلغي مسمار parity.
+3. **مسح Phase C** لـ9 نقاط HR غير مستهلَكة من الواجهة (ربط أو إزالة).
+4. **شاشة orphans** للبيانات التنظيمية الناقصة (`administrationId` خامل،
+   أقسام بلا إدارة) — أداة تنظيف تشغيلية دورية.
+
+---
+
+## ملحق — جذر FU-1 الدقيق (للأرشيف)
+
+ليست ثغرة بوابات — البوابات عملت كما صُمّمت. خللان في الـseed كشفهما PR-9a:
+
+1. **`payroll_officer`**: هجرة 278 زرعت صف الدور (قالب) **بلا أي grants**.
+2. **`department_manager`**: لا صف دور أصلًا في `rbac_roles` (تعليق 278
+   «موجود» كان خاطئًا — الموجود قالب `tpl_department_manager` من هجرة 110
+   بمفتاح مختلف)، فكان ربط المستخدم بالدور يُدخل 0 صف **بصمت**.
+
+وفي أثناء العلاج ظهرت حقيقتان معماريتان وُثّقتا وسُمّرتا:
+
+- محرك التصريح يطابق `feature_key` الدقيق أو `<module>.*` أو `*` فقط —
+  لذا `hr.payroll.*` كانت ستكون grant **ميتًا**؛ الزرع استخدم المفاتيح
+  الدقيقة (`hr.payroll.runs`, `hr.payroll.wps`, …).
+- طبقة الجلسة تعرض الأدوار غير-القالبية فقط في `/auth/me` — لذا الزرع
+  ينسخ الدور+الحزمة لكل شركة قائمة (نفس نمط employee/driver/hr_manager)
+  ويعيد توجيه الارتباطات القديمة العالقة على القالب.
+
+**العلاج (بيانات فقط)**: هجرة `291` (idempotent، ثابتة على التطبيق المزدوج:
+6 أدوار / 39 grants) + سطران في خريطة `ROLE_DEFAULT_MODULES`/`ROLE_LEVELS`.
+عُمِّم في PR-10 على bootstrap الشركات الجديدة. **لم يُمسّ**: منطق RBAC،
+`authMiddleware`، القائمة الجانبية.
