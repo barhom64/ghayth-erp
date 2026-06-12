@@ -1285,11 +1285,21 @@ journalRouter.get("/vouchers/:id", authorize({ feature: "finance.journal", actio
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 4 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status (KEPT, nothing removed). The axes are maintained by the
+      // migration-311 trigger, and postingStatus derives from the ACTUAL
+      // posting (balancesApplied), so a directly-posted voucher that still
+      // carries status='draft' (balancesApplied=true) reads truthfully as
+      // postingStatus='posted' here — where status alone would mislabel it.
+      // (This detail read never exposed isPaid; paymentStatus now conveys the
+      // payment state truthfully, gated by the canBePaid rule — not added.)
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS "voucherType",
               je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
               je."relatedEntityType", je."relatedEntityId", je."operationType",
-              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status
+              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
