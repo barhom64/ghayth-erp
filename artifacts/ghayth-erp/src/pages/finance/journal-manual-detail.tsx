@@ -308,7 +308,7 @@ export default function JournalManualDetailPage() {
           rateLimitAware
         >
           <Send className="h-4 w-4" />
-          {submitMut.isPending ? "جارٍ الإرسال…" : "إرسال للمراجعة"}
+          {submitMut.isPending ? "جاري الإرسال…" : "إرسال للمراجعة"}
         </GuardedButton>
       )}
 
@@ -344,7 +344,7 @@ export default function JournalManualDetailPage() {
               rateLimitAware
             >
               <CheckCircle2 className="h-4 w-4" />
-              {(approveMut.isPending || directApproveMut.isPending) ? "جارٍ الاعتماد…" : "اعتماد"}
+              {(approveMut.isPending || directApproveMut.isPending) ? "جاري الاعتماد…" : "اعتماد"}
             </GuardedButton>
             <GuardedButton
               perm="finance:approve"
@@ -375,7 +375,7 @@ export default function JournalManualDetailPage() {
           rateLimitAware
         >
           <Upload className="h-4 w-4" />
-          {postMut.isPending ? "جارٍ الترحيل…" : "ترحيل"}
+          {postMut.isPending ? "جاري الترحيل…" : "ترحيل"}
         </GuardedButton>
       )}
 

@@ -220,9 +220,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Employee"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Employee"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
     post:
       operationId: createEmployee
       tags: [employees]
@@ -289,9 +299,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Client"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Client"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
     post:
       operationId: createClient
       tags: [clients]
@@ -329,7 +349,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Client"
+                $ref: "#/components/schemas/ClientDetail"
 
   # ─── HR ────────────────────────────────────────────────────
   /hr/check-in:
@@ -369,9 +389,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AttendanceRecord"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AttendanceRecord"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
 
   /hr/leave-types:
     get:
@@ -385,9 +415,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LeaveType"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeaveType"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
 
   /hr/leave-balance:
     get:
@@ -401,9 +441,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LeaveBalance"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeaveBalance"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
 
   /hr/leave-requests:
     get:
@@ -422,9 +472,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/LeaveRequest"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LeaveRequest"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
     post:
       operationId: requestLeave
       tags: [hr]
@@ -482,9 +542,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/PayrollRun"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PayrollRun"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
     post:
       operationId: runPayroll
       tags: [hr]
@@ -527,9 +597,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Invoice"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invoice"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
     post:
       operationId: createInvoice
       tags: [finance]
@@ -672,9 +752,19 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Notification"
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                required: [data, total, page, pageSize]
 
   /notifications/{id}/read:
     post:
@@ -851,8 +941,10 @@ paths:
                   totalWaivedAmount: { type: number }
                   skipped:
                     type: array
+                    items: { type: object }
                   errors:
                     type: array
+                    items: { type: object }
 
   /umrah/attachments:
     get:
@@ -884,6 +976,8 @@ paths:
                 properties:
                   data:
                     type: array
+                    items:
+                      type: object
     post:
       operationId: createUmrahAttachment
       tags: [umrah]
@@ -943,6 +1037,223 @@ paths:
                 $ref: "#/components/schemas/SuccessResponse"
         "404": { description: Attachment not found }
 
+  /umrah/agents/{id}:
+    get:
+      operationId: getUmrahAgent
+      tags: [umrah]
+      summary: Get an umrah agent by ID (full row + statement aggregates)
+      description: |
+        Detail-page payload: the full `umrah_agents` row plus the statement
+        aggregates the detail pane renders (pilgrim count, overstayed count,
+        total invoiced/paid/outstanding, and a per-status breakdown dict).
+        Every column is enumerated rather than passthrough so the
+        contract-drift guard fires on any added/renamed returned field.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahAgentDetail"
+        "404": { description: Agent not found }
+
+  /umrah/groups/{id}:
+    get:
+      operationId: getUmrahGroup
+      tags: [umrah]
+      summary: Get an umrah group by ID (full row + roster + aggregates)
+      description: |
+        Detail-page payload: the full `umrah_groups` row joined with the
+        agent/sub-agent/season names, the pilgrim roster summary, a per-status
+        breakdown dict, exemption/visa-expiring counts, and nested finance
+        (invoice/NUSK totals + margin) and schedule (date range + flight
+        codes) objects. Every column is enumerated so the contract-drift
+        guard fires on any added/renamed returned field.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahGroupDetail"
+        "404": { description: Group not found }
+
+  /umrah/pilgrims/{id}:
+    get:
+      operationId: getUmrahPilgrim
+      tags: [umrah]
+      summary: Get an umrah pilgrim by ID (decrypted row + penalties)
+      description: |
+        Detail-page payload: the full `umrah_pilgrims` row (sensitive
+        passport/visa/border/mofa fields decrypted, plus their `*_hash`
+        lookup columns) joined with the agent/package/season/group/sub-agent
+        names, followed by the pilgrim's penalty rows. Every column is
+        enumerated so the contract-drift guard fires on any added/renamed
+        returned field.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Pilgrim details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahPilgrimDetail"
+        "404": { description: Pilgrim not found }
+
+  /support/tickets/{id}:
+    get:
+      operationId: getSupportTicket
+      tags: [support]
+      summary: Get a support ticket by ID (full row + replies + SLA)
+      description: |
+        Detail-page payload: the full `support_tickets` row joined with the
+        client name, the reply thread, and the computed SLA fields
+        (`isSlaBreached` boolean + `slaRemainingHours` string). Every column
+        is enumerated so the contract-drift guard fires on any added/renamed
+        returned field.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Ticket details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportTicketDetail"
+        "404": { description: Ticket not found }
+
+  /properties/units/{id}:
+    get:
+      operationId: getPropertyUnit
+      tags: [properties]
+      summary: Get a property unit by ID (full row + related collections)
+      description: |
+        Detail-page payload: the full `property_units` row plus the related
+        contracts, payments, maintenance requests, and an activity timeline.
+        Every column is enumerated so the contract-drift guard fires on any
+        added/renamed returned field.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Unit details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyUnitDetail"
+        "404": { description: Unit not found }
+
+  /finance/journal/{id}:
+    get:
+      operationId: getJournalEntry
+      tags: [finance]
+      summary: Get a journal entry by ID (full row + lines + reversal links)
+      description: |
+        Detail-page payload: the full `journal_entries` row plus the
+        reversal-link reference/description fields, the entry's lines (each
+        the full `journal_lines` row joined with the account name), and the
+        nested `reversalOf` / `reversedBy` linked-entry objects (null when not
+        a reversal). Every column is enumerated so the contract-drift guard
+        fires on any added/renamed returned field.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Journal entry details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntryDetail"
+        "404": { description: Journal entry not found }
+
+  /umrah/sub-agents/{id}:
+    get:
+      operationId: getUmrahSubAgent
+      tags: [umrah]
+      summary: Get a sub-agent by ID (full row + statement aggregates)
+      description: |
+        Detail-page payload: the full `umrah_sub_agents` row joined with
+        the linked agent / client names, plus the statement aggregates
+        the detail pane renders (pilgrim count, overstayed count, total
+        paid, and a per-status breakdown dict).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sub-agent details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahSubAgentDetail"
+        "404": { description: Sub-agent not found }
+
+  /umrah/statements/{subAgentId}:
+    get:
+      operationId: umrahSubAgentStatement
+      tags: [umrah]
+      summary: Sub-agent statement of account (JSON)
+      description: |
+        Running-balance ledger (opening balance, dated debit/credit
+        entries for invoices + violations + payments, closing balance).
+        Defaults to the detailed view; `?type=summary` collapses to a
+        monthly roll-up. JSON peer of the printable
+        `/umrah/statements/{subAgentId}/pdf`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: subAgentId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: type
+          in: query
+          schema: { type: string, enum: [detailed, summary] }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Statement payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahSubAgentStatement"
+
   /umrah/reports/reconciliation:
     get:
       operationId: umrahReconciliationReport
@@ -969,9 +1280,9 @@ paths:
                 properties:
                   summary:
                     type: object
-                  amountDiffs: { type: array }
-                  countDiffs:  { type: array }
-                  overstayGaps: { type: array }
+                  amountDiffs: { type: array, items: { type: object } }
+                  countDiffs:  { type: array, items: { type: object } }
+                  overstayGaps: { type: array, items: { type: object } }
 
   /umrah/reports/daily-runsheet:
     get:
@@ -996,9 +1307,9 @@ paths:
                 type: object
                 properties:
                   date: { type: string, format: date }
-                  arrivals: { type: array }
-                  departures: { type: array }
-                  overstays: { type: array }
+                  arrivals: { type: array, items: { type: object } }
+                  departures: { type: array, items: { type: object } }
+                  overstays: { type: array, items: { type: object } }
 
   /umrah/reports/daily-runsheet/pdf:
     get:
@@ -1062,26 +1373,29 @@ components:
       properties:
         status:
           type: string
+        redisRateLimit:
+          type: string
       required: [status]
 
     HealthSchemaStatus:
       type: object
       description: |
-        Response from `GET /api/health/schema`. Readiness verdict for the
-        DB schema — `ok: true` means expected tables/columns are present
-        and migrations are in a consistent state. Additional diagnostic
-        fields are returned by the implementation but intentionally not
-        pinned here to avoid forcing schema churn on every internal
-        change to the readiness check.
+        Response from `GET /api/health/schema`. `status` is the readiness
+        verdict (`ok` | `degraded` | `critical`). `tables` and `migrations`
+        carry diagnostic detail whose internal shape is intentionally left
+        open (bare object) to avoid forcing spec churn on every change to
+        the readiness check.
       properties:
-        ok:
-          type: boolean
         status:
           type: string
+        tables:
+          type: object
+        migrations:
+          type: object
         checkedAt:
           type: string
           format: date-time
-      required: [ok]
+      required: [status, checkedAt]
 
     LoginBody:
       type: object
@@ -1095,13 +1409,15 @@ components:
     LoginResponse:
       type: object
       properties:
-        token:
-          type: string
         assignments:
           type: array
           items:
             type: object
-      required: [token, assignments]
+        userRoles:
+          type: array
+          items:
+            type: object
+      required: [assignments, userRoles]
 
     MobileTokenPair:
       type: object
@@ -1150,25 +1466,57 @@ components:
     UserProfile:
       type: object
       properties:
+        id:
+          type: integer
         name:
           type: string
         phone:
           type: string
+          nullable: true
         email:
           type: string
+          nullable: true
+        empNumber:
+          type: string
+          nullable: true
         photoUrl:
+          type: string
+          nullable: true
+        status:
           type: string
         jobTitle:
           type: string
+          nullable: true
+        jobTitleId:
+          type: integer
+          nullable: true
         role:
           type: string
         salary:
-          type: number
+          type: string
+          nullable: true
+        companyId:
+          type: integer
+        branchId:
+          type: integer
+          nullable: true
         companyName:
           type: string
+          nullable: true
         branchName:
           type: string
-      required: [name, role, companyName, branchName]
+          nullable: true
+        preferredCalendar:
+          type: string
+          nullable: true
+        preferredLocale:
+          type: string
+          nullable: true
+        userRoles:
+          type: array
+          items:
+            type: object
+      required: [id, name, role, companyId, userRoles]
 
     DashboardData:
       type: object
@@ -1182,7 +1530,11 @@ components:
               type: integer
             overdue:
               type: integer
+            completedToday:
+              type: integer
             completedPct:
+              type: integer
+            total:
               type: integer
         todayTasks:
           type: array
@@ -1192,10 +1544,20 @@ components:
           type: array
           items:
             type: object
+        pendingFinanceApprovals:
+          type: array
+          items:
+            type: object
+        pendingPurchaseRequests:
+          type: array
+          items:
+            type: object
         notifications:
           type: array
           items:
             $ref: "#/components/schemas/Notification"
+        role:
+          type: string
       required: [cards, todayTasks, pendingApprovals, notifications]
 
     DashboardSummary:
@@ -1213,6 +1575,60 @@ components:
           type: integer
         presentToday:
           type: integer
+        vehicles:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+        tickets:
+          type: object
+          properties:
+            open:
+              type: integer
+            breached:
+              type: integer
+        projects:
+          type: object
+          properties:
+            total:
+              type: integer
+            active:
+              type: integer
+        contracts:
+          type: object
+          properties:
+            active:
+              type: integer
+            expiringSoon:
+              type: integer
+        opportunities:
+          type: object
+          properties:
+            total:
+              type: integer
+            value:
+              type: number
+        warehouseAlerts:
+          type: integer
+        pendingLeaveRequests:
+          type: integer
+        umrah:
+          type: object
+          properties:
+            activePilgrims:
+              type: integer
+            overstayPilgrims:
+              type: integer
+            openSeasons:
+              type: integer
+            monthlyRevenue:
+              type: number
+            pendingInvoices:
+              type: integer
+            openPenalties:
+              type: integer
       required: [totalEmployees, totalClients, totalRevenue, pendingInvoices, activeTasksToday, presentToday]
 
     Employee:
@@ -1224,39 +1640,662 @@ components:
           type: string
         phone:
           type: string
+          nullable: true
         email:
           type: string
-        assignmentId:
+          nullable: true
+        empNumber:
+          type: string
+          nullable: true
+        status:
+          type: string
+        activeAssignmentId:
           type: integer
+          nullable: true
+        iqamaNumber:
+          type: string
+          nullable: true
+        iqamaExpiry:
+          type: string
+          nullable: true
+        iqamaStatus:
+          type: string
+          nullable: true
         jobTitle:
           type: string
+          nullable: true
+        jobTitleId:
+          type: integer
+          nullable: true
         role:
           type: string
         salary:
-          type: number
-        status:
           type: string
-        empNumber:
+          nullable: true
+        branchId:
+          type: integer
+          nullable: true
+        branchName:
           type: string
-      required: [id, name, jobTitle, role, status]
+          nullable: true
+        govLinkCount:
+          type: integer
+      required: [id, name, role, status]
 
     EmployeeDetail:
-      allOf:
-        - $ref: "#/components/schemas/Employee"
-        - type: object
+      type: object
+      description: |
+        Full employee record returned by `GET /api/hr/employees/:id`. Combines
+        the `employees` row, the active `employee_assignments` columns, joined
+        lookup names, and nested operational arrays/objects. Numeric/decimal
+        columns serialize as JSON strings.
+      properties:
+        id: { type: integer }
+        name: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        empNumber: { type: ["string", "null"] }
+        photoUrl: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        createdAt: { type: string }
+        nationalId: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"] }
+        gender: { type: ["string", "null"] }
+        dateOfBirth: { type: ["string", "null"] }
+        iqamaNumber: { type: ["string", "null"] }
+        iqamaExpiry: { type: ["string", "null"] }
+        passportNumber: { type: ["string", "null"] }
+        passportExpiry: { type: ["string", "null"] }
+        borderNumber: { type: ["string", "null"] }
+        visaNumber: { type: ["string", "null"] }
+        visaType: { type: ["string", "null"] }
+        visaExpiry: { type: ["string", "null"] }
+        sponsorNumber: { type: ["string", "null"] }
+        workPermitNumber: { type: ["string", "null"] }
+        workPermitExpiry: { type: ["string", "null"] }
+        iqamaStatus: { type: ["string", "null"] }
+        assignmentId: { type: ["integer", "null"] }
+        jobTitle: { type: string }
+        jobTitleId: { type: ["integer", "null"] }
+        role: { type: ["string", "null"] }
+        salary: { type: ["string", "null"] }
+        hireDate: { type: ["string", "null"] }
+        companyId: { type: integer }
+        branchId: { type: ["integer", "null"] }
+        departmentId: { type: ["integer", "null"] }
+        managerId: { type: ["integer", "null"] }
+        branchName: { type: ["string", "null"] }
+        departmentName: { type: ["string", "null"] }
+        managerName: { type: ["string", "null"] }
+        tasks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        attendance:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        leaves:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        trainings:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        payroll:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        violations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        loans:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        overtime:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        userAccount:
+          type: ["object", "null"]
+          additionalProperties: true
+        roles:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        contract:
+          type: ["object", "null"]
+          additionalProperties: true
+        position:
+          type: ["object", "null"]
+          additionalProperties: true
+        custodies:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        latestScore:
+          type: ["object", "null"]
+          additionalProperties: true
+        activeSignals:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [id, jobTitle, companyId, createdAt]
+
+    UmrahSubAgentDetail:
+      type: object
+      description: |
+        Full `umrah_sub_agents` row (every persisted column — pg serializes
+        the numeric defaultPricePerMutamer as a string and timestamptz
+        columns as ISO strings) joined with the linked agent/client names,
+        plus the statement aggregates the detail pane renders. Every column
+        is enumerated rather than passthrough so the contract-drift guard
+        fires if a handler adds/renames a returned field.
+      properties:
+        id: { type: integer }
+        companyId: { type: integer }
+        branchId: { type: ["integer", "null"] }
+        nuskCode: { type: ["string", "null"] }
+        name: { type: string }
+        agentId: { type: ["integer", "null"] }
+        clientId: { type: ["integer", "null"] }
+        paymentTerms: { type: ["string", "null"] }
+        defaultPricePerMutamer: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        isActive: { type: ["boolean", "null"] }
+        notes: { type: ["string", "null"] }
+        createdBy: { type: ["integer", "null"] }
+        updatedBy: { type: ["integer", "null"] }
+        createdAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        agentName: { type: ["string", "null"] }
+        clientName: { type: ["string", "null"] }
+        pilgrimCount: { type: integer }
+        overstayedCount: { type: integer }
+        totalPaid: { type: number }
+        statusBreakdown:
+          type: object
+          additionalProperties: true
+      required: [id, companyId, name, pilgrimCount, overstayedCount, totalPaid, statusBreakdown]
+
+    UmrahSubAgentStatement:
+      type: object
+      properties:
+        openingBalance: { type: number }
+        closingBalance: { type: number }
+        entries:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [openingBalance, closingBalance, entries]
+
+    UmrahAgentDetail:
+      type: object
+      description: |
+        Full `umrah_agents` row (every persisted column — pg serializes the
+        numeric profitMargin as a string and timestamptz columns as ISO
+        strings) plus the statement aggregates the detail pane renders. Every
+        column is enumerated rather than passthrough so the contract-drift
+        guard fires if a handler adds/renames a returned field.
+      properties:
+        id: { type: integer }
+        companyId: { type: integer }
+        name: { type: string }
+        contactPerson: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        profitMargin: { type: ["string", "null"] }
+        contractRef: { type: ["string", "null"] }
+        currency: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        branchId: { type: ["integer", "null"] }
+        seasonId: { type: ["integer", "null"] }
+        nuskAgentNumber: { type: ["string", "null"] }
+        createdBy: { type: ["integer", "null"] }
+        updatedBy: { type: ["integer", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        pilgrimCount: { type: integer }
+        overstayedCount: { type: integer }
+        totalInvoiced: { type: number }
+        totalPaid: { type: number }
+        totalOutstanding: { type: number }
+        statusBreakdown:
+          type: object
+          additionalProperties: true
+      required: [id, companyId, name, pilgrimCount, overstayedCount, totalInvoiced, totalPaid, totalOutstanding, statusBreakdown]
+
+    UmrahGroupDetail:
+      type: object
+      description: |
+        Full `umrah_groups` row joined with agent/sub-agent/season names, plus
+        the roster summary, per-status breakdown dict, exemption/visa-expiring
+        counts, and nested finance + schedule objects. Every column is
+        enumerated rather than passthrough so the contract-drift guard fires
+        if a handler adds/renames a returned field.
+      properties:
+        id: { type: integer }
+        companyId: { type: integer }
+        branchId: { type: ["integer", "null"] }
+        nuskGroupNumber: { type: string }
+        internalRef: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        agentId: { type: ["integer", "null"] }
+        subAgentId: { type: ["integer", "null"] }
+        seasonId: { type: ["integer", "null"] }
+        mutamerCount: { type: ["integer", "null"] }
+        programDuration: { type: ["integer", "null"] }
+        status: { type: ["string", "null"] }
+        nuskInvoiceNumber: { type: ["string", "null"] }
+        salesInvoiceId: { type: ["integer", "null"] }
+        createdBy: { type: ["integer", "null"] }
+        updatedBy: { type: ["integer", "null"] }
+        createdAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        agentName: { type: ["string", "null"] }
+        subAgentName: { type: ["string", "null"] }
+        seasonTitle: { type: ["string", "null"] }
+        pilgrims:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              fullName: { type: string }
+              nationality: { type: ["string", "null"] }
+              status: { type: ["string", "null"] }
+              overstayExempt: { type: ["boolean", "null"] }
+              visaExpiry: { type: ["string", "null"] }
+              entryFlight: { type: ["string", "null"] }
+              exitFlight: { type: ["string", "null"] }
+            required: [id, fullName]
+        statusBreakdown:
+          type: object
+          additionalProperties: true
+        overstayExemptCount: { type: integer }
+        visaExpiringCount: { type: integer }
+        finance:
+          type: object
           properties:
-            gender:
-              type: string
-            nationality:
-              type: string
-            hireDate:
-              type: string
-            departmentName:
-              type: string
-            branchName:
-              type: string
-            companyName:
-              type: string
+            invoiceCount: { type: number }
+            invoiceTotal: { type: number }
+            invoicePaid: { type: number }
+            invoiceOutstanding: { type: number }
+            nuskCount: { type: number }
+            nuskNetCost: { type: number }
+            nuskRefund: { type: number }
+            margin: { type: number }
+          required: [invoiceCount, invoiceTotal, invoicePaid, invoiceOutstanding, nuskCount, nuskNetCost, nuskRefund, margin]
+        schedule:
+          type: object
+          properties:
+            minArrival: { type: ["string", "null"] }
+            maxDeparture: { type: ["string", "null"] }
+            entryFlights:
+              type: array
+              items: { type: string }
+            exitFlights:
+              type: array
+              items: { type: string }
+          required: [minArrival, maxDeparture, entryFlights, exitFlights]
+      required: [id, companyId, nuskGroupNumber, pilgrims, statusBreakdown, overstayExemptCount, visaExpiringCount, finance, schedule]
+
+    UmrahPilgrimDetail:
+      type: object
+      description: |
+        Full `umrah_pilgrims` row (sensitive passport/visa/border/mofa fields
+        decrypted, plus their `*_hash` lookup columns; date columns serialize
+        as ISO strings) joined with agent/package/season/group/sub-agent
+        names, followed by the pilgrim's penalty rows. Every column is
+        enumerated rather than passthrough so the contract-drift guard fires
+        if a handler adds/renames a returned field.
+      properties:
+        id: { type: integer }
+        companyId: { type: integer }
+        seasonId: { type: ["integer", "null"] }
+        agentId: { type: ["integer", "null"] }
+        packageId: { type: ["integer", "null"] }
+        fullName: { type: string }
+        passportNumber: { type: string }
+        visaNumber: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"] }
+        gender: { type: ["string", "null"] }
+        dateOfBirth: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        arrivalDate: { type: ["string", "null"] }
+        departureDate: { type: ["string", "null"] }
+        actualArrival: { type: ["string", "null"] }
+        actualDeparture: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        hotelName: { type: ["string", "null"] }
+        roomNumber: { type: ["string", "null"] }
+        transportAssigned: { type: ["boolean", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        nuskNumber: { type: ["string", "null"] }
+        entryPort: { type: ["string", "null"] }
+        exitPort: { type: ["string", "null"] }
+        overstayDays: { type: ["integer", "null"] }
+        actualStayDays: { type: ["integer", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        subAgentId: { type: ["integer", "null"] }
+        branchId: { type: ["integer", "null"] }
+        passportExpiry: { type: ["string", "null"] }
+        groupId: { type: ["integer", "null"] }
+        entryFlight: { type: ["string", "null"] }
+        exitFlight: { type: ["string", "null"] }
+        programDuration: { type: ["integer", "null"] }
+        borderNumber: { type: ["string", "null"] }
+        mofaNumber: { type: ["string", "null"] }
+        isInsideKingdom: { type: ["boolean", "null"] }
+        hasUmrahPermit: { type: ["boolean", "null"] }
+        createdBy: { type: ["integer", "null"] }
+        updatedBy: { type: ["integer", "null"] }
+        passportNumber_hash: { type: ["string", "null"] }
+        visaNumber_hash: { type: ["string", "null"] }
+        mofaNumber_hash: { type: ["string", "null"] }
+        borderNumber_hash: { type: ["string", "null"] }
+        visaExpiry: { type: ["string", "null"] }
+        entryDate: { type: ["string", "null"] }
+        exitDate: { type: ["string", "null"] }
+        overstayExempt: { type: ["boolean", "null"] }
+        overstayExemptReason: { type: ["string", "null"] }
+        overstayExemptBy: { type: ["integer", "null"] }
+        overstayExemptAt: { type: ["string", "null"] }
+        familyId: { type: ["integer", "null"] }
+        visaStatus: { type: ["string", "null"] }
+        visaRequestedAt: { type: ["string", "null"] }
+        visaIssuedAt: { type: ["string", "null"] }
+        visaRejectedAt: { type: ["string", "null"] }
+        visaRejectionReason: { type: ["string", "null"] }
+        agentName: { type: ["string", "null"] }
+        packageName: { type: ["string", "null"] }
+        seasonTitle: { type: ["string", "null"] }
+        groupName: { type: ["string", "null"] }
+        subAgentName: { type: ["string", "null"] }
+        penalties:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              companyId: { type: integer }
+              pilgrimId: { type: ["integer", "null"] }
+              agentId: { type: ["integer", "null"] }
+              seasonId: { type: ["integer", "null"] }
+              type: { type: string }
+              daysOverstayed: { type: ["integer", "null"] }
+              amount: { type: ["string", "null"] }
+              currency: { type: ["string", "null"] }
+              status: { type: ["string", "null"] }
+              invoiceId: { type: ["integer", "null"] }
+              notes: { type: ["string", "null"] }
+              createdAt: { type: ["string", "null"] }
+              deletedAt: { type: ["string", "null"] }
+              createdBy: { type: ["integer", "null"] }
+              updatedBy: { type: ["integer", "null"] }
+              branchId: { type: ["integer", "null"] }
+              journalEntryId: { type: ["integer", "null"] }
+              updatedAt: { type: ["string", "null"] }
+            required: [id, companyId, type, amount]
+      required: [id, companyId, fullName, passportNumber, penalties]
+
+    SupportTicketDetail:
+      type: object
+      description: |
+        Full `support_tickets` row joined with the client name, plus the reply
+        thread and the computed SLA fields (`isSlaBreached` boolean,
+        `slaRemainingHours` string). Every column is enumerated rather than
+        passthrough so the contract-drift guard fires if a handler
+        adds/renames a returned field.
+      properties:
+        id: { type: integer }
+        companyId: { type: integer }
+        ref: { type: ["string", "null"] }
+        title: { type: string }
+        description: { type: ["string", "null"] }
+        category: { type: ["string", "null"] }
+        priority: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        clientId: { type: ["integer", "null"] }
+        assigneeId: { type: ["integer", "null"] }
+        slaDeadline: { type: ["string", "null"] }
+        firstResponseAt: { type: ["string", "null"] }
+        resolvedAt: { type: ["string", "null"] }
+        createdAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        escalationLevel: { type: ["integer", "null"] }
+        rating: { type: ["integer", "null"] }
+        ratingComment: { type: ["string", "null"] }
+        slaBreached: { type: ["boolean", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        invoiceId: { type: ["integer", "null"] }
+        contractId: { type: ["integer", "null"] }
+        branchId: { type: ["integer", "null"] }
+        clientName: { type: ["string", "null"] }
+        replies:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        isSlaBreached: { type: boolean }
+        slaRemainingHours: { type: ["string", "null"] }
+      required: [id, companyId, title, replies, isSlaBreached]
+
+    PropertyUnitDetail:
+      type: object
+      description: |
+        Full `property_units` row (numeric area/rent columns serialize as
+        strings, timestamps as ISO strings) plus the related contracts,
+        payments, maintenance requests, and activity timeline. Every column is
+        enumerated rather than passthrough so the contract-drift guard fires
+        if a handler adds/renames a returned field.
+      properties:
+        id: { type: integer }
+        companyId: { type: integer }
+        unitNumber: { type: string }
+        buildingName: { type: ["string", "null"] }
+        type: { type: ["string", "null"] }
+        area: { type: ["string", "null"] }
+        bedrooms: { type: ["integer", "null"] }
+        bathrooms: { type: ["integer", "null"] }
+        floor: { type: ["integer", "null"] }
+        monthlyRent: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        branchId: { type: ["integer", "null"] }
+        createdAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        buildingId: { type: ["integer", "null"] }
+        features:
+          type: ["array", "null"]
+          items: { type: string }
+        direction: { type: ["string", "null"] }
+        finishing: { type: ["string", "null"] }
+        amenities: {}
+        electricityMeter: { type: ["string", "null"] }
+        waterMeter: { type: ["string", "null"] }
+        usageType: { type: ["string", "null"] }
+        ownerId: { type: ["integer", "null"] }
+        parkingSpaces: { type: ["integer", "null"] }
+        acType: { type: ["string", "null"] }
+        hasKitchen: { type: ["boolean", "null"] }
+        yearlyRent: { type: ["string", "null"] }
+        insurancePolicy: { type: ["string", "null"] }
+        insuranceExpiry: { type: ["string", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        contracts:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        payments:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        maintenance:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        timeline:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [id, companyId, unitNumber, contracts, payments, maintenance, timeline]
+
+    JournalEntryDetail:
+      type: object
+      description: |
+        Full `journal_entries` row (numeric exchangeRate/amount columns
+        serialize as strings, timestamps as ISO strings) plus the
+        reversal-link reference/description fields, the entry's lines (each the
+        full `journal_lines` row joined with the account name), and the nested
+        `reversalOf` / `reversedBy` linked-entry objects (null when not a
+        reversal). Every column is enumerated rather than passthrough so the
+        contract-drift guard fires if a handler adds/renames a returned field.
+      properties:
+        id: { type: integer }
+        companyId: { type: integer }
+        branchId: { type: ["integer", "null"] }
+        ref: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        createdBy: { type: ["integer", "null"] }
+        createdAt: { type: ["string", "null"] }
+        date: { type: ["string", "null"] }
+        type: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        balancesApplied: { type: ["boolean", "null"] }
+        sourceType: { type: ["string", "null"] }
+        sourceId: { type: ["integer", "null"] }
+        postedBy: { type: ["integer", "null"] }
+        postedAt: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+        costCenter: { type: ["string", "null"] }
+        departmentId: { type: ["integer", "null"] }
+        relatedEntityType: { type: ["string", "null"] }
+        relatedEntityId: { type: ["integer", "null"] }
+        paymentMethod: { type: ["string", "null"] }
+        reference: { type: ["string", "null"] }
+        isPaid: { type: ["boolean", "null"] }
+        attachmentUrl: { type: ["string", "null"] }
+        attachmentType: { type: ["string", "null"] }
+        expenseType: { type: ["string", "null"] }
+        operationType: { type: ["string", "null"] }
+        projectId: { type: ["integer", "null"] }
+        taxCategory: { type: ["string", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        dueDate: { type: ["string", "null"] }
+        isTaxLinked: { type: ["boolean", "null"] }
+        zatcaStatus: { type: ["string", "null"] }
+        zatcaUuid: { type: ["string", "null"] }
+        zatcaHash: { type: ["string", "null"] }
+        zatcaQrCode: { type: ["string", "null"] }
+        invoiceTypeCode: { type: ["string", "null"] }
+        taxCategoryCode: { type: ["string", "null"] }
+        exemptionReason: { type: ["string", "null"] }
+        govIntegrationId: { type: ["integer", "null"] }
+        govSyncEnabled: { type: ["boolean", "null"] }
+        govExternalRef: { type: ["string", "null"] }
+        govEntityType: { type: ["string", "null"] }
+        govEntityId: { type: ["integer", "null"] }
+        approvalStatus: { type: ["string", "null"] }
+        isManual: { type: ["boolean", "null"] }
+        reviewedBy: { type: ["integer", "null"] }
+        reviewedAt: { type: ["string", "null"] }
+        approvedBy: { type: ["integer", "null"] }
+        approvedAt: { type: ["string", "null"] }
+        approvalNotes: { type: ["string", "null"] }
+        reversalOfId: { type: ["integer", "null"] }
+        reversedById: { type: ["integer", "null"] }
+        reversedAt: { type: ["string", "null"] }
+        reversalReason: { type: ["string", "null"] }
+        sourceKey: { type: ["string", "null"] }
+        originalCurrency: { type: ["string", "null"] }
+        exchangeRate: { type: ["string", "null"] }
+        originalAmount: { type: ["string", "null"] }
+        documentStatus: { type: ["string", "null"] }
+        paymentStatus: { type: ["string", "null"] }
+        postingStatus: { type: ["string", "null"] }
+        reversalOfRef: { type: ["string", "null"] }
+        reversalOfDescription: { type: ["string", "null"] }
+        reversedByRef: { type: ["string", "null"] }
+        reversedByDescription: { type: ["string", "null"] }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              journalId: { type: integer }
+              accountCode: { type: string }
+              debit: { type: ["string", "null"] }
+              credit: { type: ["string", "null"] }
+              accountId: { type: ["integer", "null"] }
+              description: { type: ["string", "null"] }
+              costCenter: { type: ["string", "null"] }
+              createdAt: { type: ["string", "null"] }
+              departmentId: { type: ["integer", "null"] }
+              projectId: { type: ["integer", "null"] }
+              employeeId: { type: ["integer", "null"] }
+              vehicleId: { type: ["integer", "null"] }
+              propertyId: { type: ["integer", "null"] }
+              contractId: { type: ["integer", "null"] }
+              activityType: { type: ["string", "null"] }
+              templateId: { type: ["integer", "null"] }
+              productId: { type: ["integer", "null"] }
+              clientId: { type: ["integer", "null"] }
+              vendorId: { type: ["integer", "null"] }
+              driverId: { type: ["integer", "null"] }
+              originalCurrency: { type: ["string", "null"] }
+              originalDebit: { type: ["string", "null"] }
+              originalCredit: { type: ["string", "null"] }
+              exchangeRate: { type: ["string", "null"] }
+              costCenterId: { type: ["integer", "null"] }
+              unitId: { type: ["integer", "null"] }
+              assetId: { type: ["integer", "null"] }
+              umrahSeasonId: { type: ["integer", "null"] }
+              umrahAgentId: { type: ["integer", "null"] }
+              sourceLineTable: { type: ["string", "null"] }
+              sourceLineId: { type: ["integer", "null"] }
+              dimensionJson: {}
+              deletedAt: { type: ["string", "null"] }
+              branchId: { type: ["integer", "null"] }
+              accountName: { type: ["string", "null"] }
+            required: [id, journalId, accountCode]
+        reversalOf:
+          type: ["object", "null"]
+          additionalProperties: true
+        reversedBy:
+          type: ["object", "null"]
+          additionalProperties: true
+      required: [id, companyId, lines]
 
     CreateEmployeeBody:
       type: object
@@ -1287,14 +2326,30 @@ components:
 
     CreateEmployeeResponse:
       type: object
+      description: |
+        Response from `POST /api/hr/employees`. Returns the created employee
+        (list-row projection joined with the new active assignment) plus
+        onboarding metadata and the linked user account. Numeric/decimal
+        columns serialize as JSON strings.
       properties:
-        employeeId:
-          type: integer
-        assignmentId:
-          type: integer
-        empNumber:
-          type: string
-      required: [employeeId, assignmentId, empNumber]
+        id: { type: integer }
+        name: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        empNumber: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        jobTitle: { type: string }
+        role: { type: ["string", "null"] }
+        salary: { type: ["string", "null"] }
+        branchId: { type: ["integer", "null"] }
+        branchName: { type: ["string", "null"] }
+        assignmentId: { type: ["integer", "null"] }
+        onboardingTasksCreated: { type: ["integer", "null"] }
+        probationEndDate: { type: ["string", "null"] }
+        userAccount:
+          type: ["object", "null"]
+          additionalProperties: true
+      required: [id, jobTitle]
 
     Client:
       type: object
@@ -1303,23 +2358,31 @@ components:
           type: integer
         name:
           type: string
+          nullable: true
         phone:
           type: string
+          nullable: true
         email:
           type: string
+          nullable: true
         classification:
           type: string
+          nullable: true
         source:
           type: string
+          nullable: true
         totalRevenue:
-          type: number
+          type: string
+          nullable: true
+        expectedRevenue:
+          type: string
+          nullable: true
         isBlacklisted:
           type: boolean
-        assignedToName:
-          type: string
+          nullable: true
         createdAt:
           type: string
-      required: [id, classification]
+      required: [id]
 
     CreateClientBody:
       type: object
@@ -1336,12 +2399,101 @@ components:
 
     CreateClientResponse:
       type: object
+      description: |
+        Response from `POST /api/clients`. Returns the full created `clients`
+        row. Numeric/decimal columns serialize as JSON strings; `tags` and
+        `attachments` are free-form JSON.
       properties:
-        clientId:
-          type: integer
-        code:
-          type: string
-      required: [clientId, code]
+        id: { type: integer }
+        companyId: { type: integer }
+        code: { type: ["string", "null"] }
+        type: { type: ["string", "null"] }
+        name: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        email: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"] }
+        language: { type: ["string", "null"] }
+        lat: { type: ["string", "null"] }
+        lon: { type: ["string", "null"] }
+        classification: { type: ["string", "null"] }
+        source: { type: ["string", "null"] }
+        assignedTo: { type: ["integer", "null"] }
+        totalRevenue: { type: ["string", "null"] }
+        avgRating: { type: ["string", "null"] }
+        tags: {}
+        isBlacklisted: { type: ["boolean", "null"] }
+        lastActivityAt: { type: ["string", "null"] }
+        lastPaymentAt: { type: ["string", "null"] }
+        createdAt: { type: string }
+        notes: { type: ["string", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        attachments: {}
+        taxNumber: { type: ["string", "null"] }
+        expectedRevenue: { type: ["string", "null"] }
+        updatedAt: { type: string }
+      required: [id, companyId, createdAt, updatedAt]
+
+    ClientDetail:
+      description: |
+        Full client record returned by `GET /api/clients/:id`. The base
+        `clients` row plus nested related arrays/objects (invoices,
+        opportunities, tickets, projects, financials aggregate, conversations,
+        timeline, active services, tenancies, legal cases, umrah sub-agents).
+      allOf:
+        - $ref: "#/components/schemas/CreateClientResponse"
+        - type: object
+          properties:
+            invoices:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            opportunities:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            tickets:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            projects:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            financials:
+              type: ["object", "null"]
+              additionalProperties: true
+            conversations:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            timeline:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            activeServices:
+              type: ["object", "null"]
+              additionalProperties: true
+            tenancies:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            legalCases:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+            umrahSubAgents:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
 
     CheckInBody:
       type: object
@@ -1372,12 +2524,42 @@ components:
           type: string
         checkIn:
           type: string
+          nullable: true
         checkOut:
           type: string
+          nullable: true
         lateMinutes:
           type: integer
+          nullable: true
         status:
           type: string
+        employeeName:
+          type: string
+          nullable: true
+        checkInLat:
+          type: string
+          nullable: true
+        checkInLon:
+          type: string
+          nullable: true
+        checkOutLat:
+          type: string
+          nullable: true
+        checkOutLon:
+          type: string
+          nullable: true
+        workHours:
+          type: string
+          nullable: true
+        overtimeMinutes:
+          type: integer
+          nullable: true
+        deductionAmount:
+          type: string
+          nullable: true
+        violationSeverity:
+          type: string
+          nullable: true
       required: [id, date, status]
 
     LeaveType:
@@ -1387,20 +2569,26 @@ components:
           type: integer
         name:
           type: string
-        annualDays:
+        maxDays:
           type: integer
+          nullable: true
+        requiresApproval:
+          type: boolean
         isPaid:
           type: boolean
-      required: [id, name, annualDays]
+      required: [id, name]
 
     LeaveBalance:
       type: object
       properties:
         leaveTypeId:
           type: integer
-        leaveTypeName:
+        name:
           type: string
-        entitled:
+        annualDays:
+          type: integer
+          nullable: true
+        maxDays:
           type: integer
         used:
           type: integer
@@ -1408,17 +2596,19 @@ components:
           type: integer
         remaining:
           type: integer
-      required: [leaveTypeId, entitled, used, remaining]
+      required: [leaveTypeId, name, maxDays, used, remaining]
 
     LeaveRequest:
       type: object
       properties:
         id:
           type: integer
-        leaveTypeId:
-          type: integer
         leaveTypeName:
           type: string
+          nullable: true
+        employeeName:
+          type: string
+          nullable: true
         startDate:
           type: string
         endDate:
@@ -1429,6 +2619,16 @@ components:
           type: string
         reason:
           type: string
+          nullable: true
+        rejectedReason:
+          type: string
+          nullable: true
+        approvedBy:
+          type: integer
+          nullable: true
+        approvedAt:
+          type: string
+          nullable: true
         createdAt:
           type: string
       required: [id, startDate, endDate, days, status]
@@ -1473,15 +2673,23 @@ components:
           type: integer
         period:
           type: string
+        month:
+          type: string
         status:
           type: string
         totalNet:
+          type: string
+          nullable: true
+        totalAmount:
           type: number
         employeeCount:
           type: integer
+        runByName:
+          type: string
+          nullable: true
         createdAt:
           type: string
-      required: [id, period, status, totalNet]
+      required: [id, period, status]
 
     RunPayrollBody:
       type: object
@@ -1505,34 +2713,63 @@ components:
 
     Invoice:
       type: object
+      description: |
+        Monetary fields (subtotal, vatRate, vatAmount, total, paidAmount) are
+        serialized as strings (pg `numeric`). `issueDate` is the row's
+        `createdAt` timestamp, aliased by the list handler.
       properties:
         id:
           type: integer
         ref:
           type: string
+          nullable: true
         clientName:
           type: string
+          nullable: true
         clientId:
           type: integer
+          nullable: true
         description:
           type: string
+          nullable: true
         subtotal:
-          type: number
+          type: string
+          nullable: true
         vatRate:
-          type: number
+          type: string
+          nullable: true
         vatAmount:
-          type: number
+          type: string
+          nullable: true
         total:
-          type: number
+          type: string
+          nullable: true
         paidAmount:
-          type: number
+          type: string
+          nullable: true
         status:
+          type: string
+        issueDate:
           type: string
         dueDate:
           type: string
-        createdAt:
+          nullable: true
+        paymentTerms:
           type: string
-      required: [id, ref, total, status]
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        isTaxLinked:
+          type: boolean
+          nullable: true
+        zatcaStatus:
+          type: string
+          nullable: true
+        createdByName:
+          type: string
+          nullable: true
+      required: [id, status, issueDate]
 
     CreateInvoiceBody:
       type: object
@@ -1559,16 +2796,78 @@ components:
 
     CreateInvoiceResponse:
       type: object
+      description: |
+        Response from `POST /api/finance/invoices`. Returns the full created
+        `invoices` row (incl. all ZATCA columns) plus the joined `clientName`
+        and the invoice `lines`. Numeric/decimal columns serialize as JSON
+        strings.
       properties:
-        invoiceId:
-          type: integer
-        ref:
-          type: string
-        total:
-          type: number
-        dueDate:
-          type: string
-      required: [invoiceId, ref, total]
+        id: { type: integer }
+        companyId: { type: integer }
+        branchId: { type: ["integer", "null"] }
+        clientId: { type: ["integer", "null"] }
+        ref: { type: ["string", "null"] }
+        description: { type: ["string", "null"] }
+        subtotal: { type: ["string", "null"] }
+        vatRate: { type: ["string", "null"] }
+        vatAmount: { type: ["string", "null"] }
+        total: { type: ["string", "null"] }
+        paidAmount: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+        dueDate: { type: ["string", "null"] }
+        paidAt: { type: ["string", "null"] }
+        createdBy: { type: ["integer", "null"] }
+        createdAt: { type: string }
+        currency: { type: string }
+        paymentTerms: { type: ["string", "null"] }
+        poNumber: { type: ["string", "null"] }
+        discountAmount: { type: string }
+        discountPercent: { type: string }
+        journalEntryId: { type: ["integer", "null"] }
+        sentAt: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        deletedAt: { type: ["string", "null"] }
+        isTaxLinked: { type: ["boolean", "null"] }
+        zatcaStatus: { type: ["string", "null"] }
+        zatcaUuid: { type: ["string", "null"] }
+        zatcaHash: { type: ["string", "null"] }
+        zatcaQrCode: { type: ["string", "null"] }
+        invoiceTypeCode: { type: ["string", "null"] }
+        taxCategoryCode: { type: ["string", "null"] }
+        exemptionReason: { type: ["string", "null"] }
+        projectId: { type: ["integer", "null"] }
+        lastDunningStage: { type: ["integer", "null"] }
+        lastDunningAt: { type: ["string", "null"] }
+        exchangeRate: { type: ["string", "null"] }
+        updatedAt: { type: string }
+        costCenter: { type: ["string", "null"] }
+        zatcaIcv: { type: ["integer", "null"] }
+        zatcaPih: { type: ["string", "null"] }
+        zatcaSignature: { type: ["string", "null"] }
+        zatcaClearedXml: { type: ["string", "null"] }
+        zatcaClearanceStatus: { type: ["string", "null"] }
+        zatcaClearedAt: { type: ["string", "null"] }
+        zatcaReportedAt: { type: ["string", "null"] }
+        zatcaLastError: { type: ["string", "null"] }
+        approvedBy: { type: ["integer", "null"] }
+        approvedAt: { type: ["string", "null"] }
+        postedBy: { type: ["integer", "null"] }
+        postedAt: { type: ["string", "null"] }
+        taxCode: { type: ["string", "null"] }
+        taxInclusive: { type: ["boolean", "null"] }
+        cogsTotal: { type: ["string", "null"] }
+        cogsJournalEntryId: { type: ["integer", "null"] }
+        amendedFromInvoiceId: { type: ["integer", "null"] }
+        amendedToInvoiceId: { type: ["integer", "null"] }
+        amendmentReason: { type: ["string", "null"] }
+        amendedAt: { type: ["string", "null"] }
+        clientName: { type: ["string", "null"] }
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [id, companyId, currency, createdAt, updatedAt, discountAmount, discountPercent]
 
     RecordPaymentBody:
       type: object
@@ -1601,19 +2900,36 @@ components:
           type: string
         type:
           type: string
+        parentCode:
+          type: string
+          nullable: true
+        status:
+          type: string
+        branchId:
+          type: integer
+          nullable: true
+        accountUsage:
+          type: string
+          nullable: true
+        childrenUsagePolicy:
+          type: string
+          nullable: true
       required: [id, code, name, type]
 
     FinanceStats:
       type: object
+      description: |
+        Monetary aggregates are serialized as strings (PostgreSQL `numeric`
+        is returned verbatim by the driver, not coerced to a JS number).
       properties:
         totalRevenue:
-          type: number
+          type: string
         pendingAmount:
-          type: number
+          type: string
         overdueAmount:
-          type: number
+          type: string
         paidThisMonth:
-          type: number
+          type: string
         invoicesByStatus:
           type: array
           items:
@@ -1631,12 +2947,23 @@ components:
           type: string
         body:
           type: string
+          nullable: true
         priority:
           type: string
+          nullable: true
         isRead:
           type: boolean
         createdAt:
           type: string
+        refType:
+          type: string
+          nullable: true
+        refId:
+          type: integer
+          nullable: true
+        actionUrl:
+          type: string
+          nullable: true
       required: [id, type, title, isRead]
 
     Task:

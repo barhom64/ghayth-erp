@@ -27,10 +27,10 @@ import {
   computeVat,
   getCompanyVatRate,
 } from "../lib/businessHelpers.js";
-import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
+import { createCostCenterForEntity, syncEntityCostCenterAllocation } from "../lib/costCenterAutoCreate.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { registerObligation, cancelObligation, markObligationMet } from "../lib/obligationsEngine.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { applyTransition, lifecycleErrorResponse, isValidTransition, getStateMachine } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,32 +149,46 @@ const impactPreviewSchema = z.object({
 
 const closeProjectSchema = z.object({});
 
+// BOQ (Bill of Quantities) line item — quantity x unitPrice. itemType:
+// 'aggregate' (measured totals, e.g. by the metre) or 'custom' (scoped items).
+const createBoqItemSchema = z.object({
+  itemType: z.enum(["aggregate", "custom"]).optional(),
+  description: z.string().min(1, "وصف البند مطلوب"),
+  unit: z.string().optional().nullable(),
+  quantity: z.union([z.coerce.number(), z.string()]).refine((v) => Number(v) > 0, { message: "الكمية يجب أن تكون أكبر من صفر" }),
+  unitPrice: z.union([z.coerce.number(), z.string()]).refine((v) => Number(v) >= 0, { message: "سعر الوحدة يجب ألا يكون سالباً" }),
+  phaseId: z.coerce.number().optional().nullable(),
+  sortOrder: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+const updateBoqItemSchema = createBoqItemSchema.partial();
+
+// Development unit (internal build-to-sell). Cost basis is computed live as the
+// unit's area share of the project's accumulated cost until it is sold.
+const createDevUnitSchema = z.object({
+  code: z.string().optional().nullable(),
+  name: z.string().min(1, "اسم الوحدة مطلوب"),
+  area: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  salePrice: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+const updateDevUnitSchema = createDevUnitSchema.partial().extend({
+  // 'sold' is reachable only through the sell flow (Wave C.2), never a plain edit.
+  status: z.enum(["under_development", "for_sale", "cancelled"]).optional(),
+});
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LIFECYCLE STATE MACHINES — Phase C.5 Projects audit
 // ─────────────────────────────────────────────────────────────────────────────
 const PROJECT_STATUSES = ["planning", "planned", "draft", "active", "in_progress", "on_hold", "completed", "cancelled", "blocked"] as const;
-const PROJECT_TRANSITIONS: Record<string, readonly string[]> = {
-  // completion goes through /close (handled by lifecycleEngine). PATCH can
-  // only move through the non-terminal states below.
-  planning:    ["active", "in_progress", "cancelled", "on_hold"],
-  planned:     ["active", "in_progress", "cancelled", "on_hold"],
-  draft:       ["planning", "active", "cancelled"],
-  active:      ["on_hold", "blocked", "in_progress"],
-  in_progress: ["active", "on_hold", "blocked"],
-  on_hold:     ["active", "in_progress", "cancelled"],
-  blocked:     ["active", "in_progress", "cancelled"],
-  completed:   [],
-  cancelled:   [],
-};
-
-const PHASE_TRANSITIONS: Record<string, readonly string[]> = {
-  pending:     ["in_progress", "cancelled"],
-  in_progress: ["completed", "cancelled"],
-  completed:   [],
-  cancelled:   [],
-};
+// PRJ-P2 — the project and phase transition graphs are NOT local maps anymore.
+// They live in lifecycleEngine's STATE_MACHINES ("projects" / "project_phases")
+// as the single source of truth, validated below via isValidTransition and
+// enforced on the applyTransition path (/close, phase-complete) by the engine's
+// defence-in-depth. This removes the old per-route transition maps that
+// duplicated — and could drift from — the engine's canonical graph.
 
 const TASK_STATUSES = ["todo", "in_progress", "blocked", "done", "cancelled", "review"] as const;
 const TASK_TRANSITIONS: Record<string, readonly string[]> = {
@@ -472,8 +486,8 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
         for (let i = 0; i < b.phases.length; i++) {
           const phase = b.phases[i];
           await client.query(
-            `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-            [insertId, phase.name, i, phase.startDate, phase.endDate]
+            `INSERT INTO project_phases ("companyId","projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5,$6)`,
+            [scope.companyId, insertId, phase.name, i, phase.startDate, phase.endDate]
           );
         }
       }
@@ -504,6 +518,9 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
         parentEntityType: scope.branchId ? "branch" : null,
         parentEntityId: scope.branchId ?? null,
         actorUserId: scope.userId,
+        // Budget → allocatedAmount so variance (allocated vs used) reads
+        // correctly from day one; budget edits re-sync via PATCH below.
+        allocatedAmount: b.budget != null ? Number(b.budget) : null,
       },
     ).catch((e) => logger.error(e, "project cost-centre auto-create failed"));
 
@@ -663,8 +680,14 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
           { field: "status", fix: "استخدم /projects/:id/close لإقفال المشروع بالقيود المحاسبية" }
         );
       }
-      const allowedNext = PROJECT_TRANSITIONS[existing.status as string] ?? [];
-      if (!allowedNext.includes(b.status)) {
+      // Validate the transition through lifecycleEngine — the same "projects"
+      // state machine that backs /close's applyTransition. `completed` is a
+      // member of the graph (for /close) but unreachable here because the
+      // explicit guard above rejects `b.status === "completed"`, so it is
+      // filtered out of the human-readable "allowed transitions" hint.
+      if (!isValidTransition("projects", existing.status as string, b.status)) {
+        const allowedNext = (getStateMachine("projects")?.transitions[existing.status as string] ?? [])
+          .filter((s) => s !== "completed");
         throw new ConflictError(
           `لا يمكن نقل المشروع من "${existing.status}" إلى "${b.status}"`,
           { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد (حالة نهائية)"}` }
@@ -707,6 +730,13 @@ router.patch("/:id", authorize({ feature: "projects.list", action: "update" }), 
     const { affectedRows } = await rawExecute(`UPDATE projects SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
     if (!affectedRows) throw new NotFoundError("المشروع غير موجود");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM projects WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+
+    // Budget edits re-sync the project cost centre's allocatedAmount so
+    // variance reporting (allocated vs used) never reads a stale allocation.
+    if ("budget" in after) {
+      syncEntityCostCenterAllocation(scope.companyId, "project", id, Number(after.budget) || 0)
+        .catch((e) => logger.error(e, "projects background task failed"));
+    }
 
     createAuditLog({
       companyId: scope.companyId,
@@ -797,8 +827,8 @@ router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "creat
     const project = await assertProjectAccess(projectId, scope);
     assertProjectMutable(project);
     const { insertId } = await rawExecute(
-      `INSERT INTO project_phases ("projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5)`,
-      [projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
+      `INSERT INTO project_phases ("companyId","projectId",name,"orderIndex","startDate","endDate") VALUES ($1,$2,$3,$4,$5,$6)`,
+      [scope.companyId, projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
     assertInsert(insertId, "project_phases");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
@@ -838,9 +868,12 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
     const [phase] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
     if (!phase) throw new NotFoundError("المرحلة غير موجودة");
 
-    // State machine — phases must be pending or in_progress to complete
-    const allowedNext = PHASE_TRANSITIONS[(phase.status as string | null) ?? "pending"] ?? [];
-    if (!allowedNext.includes("completed")) {
+    // State machine — validated through lifecycleEngine's "project_phases"
+    // machine (single source of truth). Only an in_progress phase may complete;
+    // a pending phase must be started first.
+    const phaseStatus = (phase.status as string | null) ?? "pending";
+    if (!isValidTransition("project_phases", phaseStatus, "completed")) {
+      const allowedNext = getStateMachine("project_phases")?.transitions[phaseStatus] ?? [];
       throw new ConflictError(
         `لا يمكن إكمال مرحلة حالتها "${phase.status ?? "pending"}"`,
         { field: "status", fix: `الانتقالات المسموحة: ${allowedNext.length ? allowedNext.join(", ") : "لا يوجد"}` }
@@ -852,7 +885,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
       id: phaseId,
       scope: { companyId: scope.companyId, userId: scope.userId, branchId: scope.branchId },
       action: "project.phase.completed",
-      fromStates: ["pending", "in_progress"],
+      fromStates: ["in_progress"],
       toState: "completed",
       after: { projectId, previousStatus: phase.status ?? "pending" },
     });
@@ -892,6 +925,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
             dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
             sourceType: "project_phases",
             sourceId: phaseId,
+            projectId,
           }
         );
         milestoneInvoiceCreated = true;
@@ -1848,6 +1882,351 @@ router.get("/:id/costs", authorize({ feature: "projects.list", action: "list" })
       variance: Number(project?.budget || 0) - Number(totals?.totalActual || 0),
     }));
   } catch (err) { handleRouteError(err, res, "Project costs error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOQ (Bill of Quantities) — line-item billing data model (#1594 projects pkg).
+// Each item is quantity x unitPrice; billing (sum → invoice) lands in a follow-up.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/:id/boq", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
+    const b = zodParse(createBoqItemSchema.safeParse(req.body));
+    const quantity = Number(b.quantity);
+    const unitPrice = Number(b.unitPrice);
+    const lineTotal = Math.round(quantity * unitPrice * 100) / 100;
+    const ins = await rawExecute(
+      `INSERT INTO project_boq_items
+         ("companyId","branchId","projectId","phaseId","itemType",description,unit,quantity,"unitPrice","lineTotal","sortOrder",notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      [scope.companyId, scope.branchId ?? null, projectId, b.phaseId ?? null, b.itemType ?? "custom",
+       b.description, b.unit ?? null, quantity, unitPrice, lineTotal, b.sortOrder ?? 0, b.notes ?? null, scope.userId ?? null]
+    );
+    const boqId = assertInsert(ins.insertId, "project_boq_items");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.boq.added", entity: "project_boq_items", entityId: boqId, details: JSON.stringify({ projectId, lineTotal }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "project_boq_items", entityId: boqId, after: { projectId, description: b.description, quantity, unitPrice, lineTotal } }).catch((e) => logger.error(e, "projects background task failed"));
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2`, [boqId, scope.companyId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create BOQ item error:"); }
+});
+
+router.get("/:id/boq", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    await assertProjectAccess(projectId, scope);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM project_boq_items WHERE "projectId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY "sortOrder" ASC, id ASC`,
+      [projectId, scope.companyId]
+    );
+    const totals = rows.reduce(
+      (acc: { total: number; pending: number; billed: number }, r) => {
+        const lt = Number(r.lineTotal || 0);
+        acc.total += lt;
+        if (r.status === "pending") acc.pending += lt;
+        else if (r.status === "billed") acc.billed += lt;
+        return acc;
+      },
+      { total: 0, pending: 0, billed: 0 }
+    );
+    res.json({ items: rows, totals });
+  } catch (err) { handleRouteError(err, res, "List BOQ items error:"); }
+});
+
+router.patch("/boq/:boqId", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const boqId = parseId(req.params.boqId, "boqId");
+    const [item] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [boqId, scope.companyId]);
+    if (!item) throw new NotFoundError("بند BOQ غير موجود");
+    if (item.status === "billed") throw new ConflictError("لا يمكن تعديل بند تمّت فوترته");
+    const project = await assertProjectAccess(item.projectId as number, scope);
+    assertProjectMutable(project);
+    const b = zodParse(updateBoqItemSchema.safeParse(req.body));
+    const quantity = b.quantity !== undefined ? Number(b.quantity) : Number(item.quantity);
+    const unitPrice = b.unitPrice !== undefined ? Number(b.unitPrice) : Number(item.unitPrice);
+    const lineTotal = Math.round(quantity * unitPrice * 100) / 100;
+    const [updated] = await rawQuery<Record<string, unknown>>(
+      `UPDATE project_boq_items SET
+         "itemType"=$1, description=$2, unit=$3, quantity=$4, "unitPrice"=$5, "lineTotal"=$6,
+         "phaseId"=$7, "sortOrder"=$8, notes=$9, "updatedAt"=NOW()
+       WHERE id=$10 AND "companyId"=$11 RETURNING *`,
+      [
+        b.itemType ?? (item.itemType as string),
+        b.description ?? (item.description as string),
+        b.unit !== undefined ? b.unit : (item.unit as string | null),
+        quantity, unitPrice, lineTotal,
+        b.phaseId !== undefined ? b.phaseId : (item.phaseId as number | null),
+        b.sortOrder !== undefined && b.sortOrder !== null ? b.sortOrder : (item.sortOrder as number),
+        b.notes !== undefined ? b.notes : (item.notes as string | null),
+        boqId, scope.companyId,
+      ]
+    );
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "project_boq_items", entityId: boqId, after: { quantity, unitPrice, lineTotal } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Update BOQ item error:"); }
+});
+
+router.delete("/boq/:boqId", authorize({ feature: "projects.list", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const boqId = parseId(req.params.boqId, "boqId");
+    const [item] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [boqId, scope.companyId]);
+    if (!item) throw new NotFoundError("بند BOQ غير موجود");
+    if (item.status === "billed") throw new ConflictError("لا يمكن حذف بند تمّت فوترته");
+    const project = await assertProjectAccess(item.projectId as number, scope);
+    assertProjectMutable(project);
+    await rawExecute(`UPDATE project_boq_items SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [boqId, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "project_boq_items", entityId: boqId }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json({ message: "تم حذف البند" });
+  } catch (err) { handleRouteError(err, res, "Delete BOQ item error:"); }
+});
+
+// Bill the project's pending BOQ items: sum quantity x unitPrice into one
+// invoice (each item a line) via the existing project.invoice.requested event —
+// projects never writes invoices directly (domain boundary). Items are claimed
+// atomically (pending → billed) to prevent double-billing; the invoice handler
+// then stamps the resulting invoiceId onto them.
+router.post("/:id/boq/bill", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
+    if (!project.clientId) {
+      throw new ValidationError("لا يمكن فوترة مشروع بلا عميل", { field: "clientId", fix: "اربط المشروع بعميل أولاً" });
+    }
+    const phaseId = req.body?.phaseId != null ? Number(req.body.phaseId) : null;
+    let claimed: Record<string, unknown>[] = [];
+    await withTransaction(async (client) => {
+      const baseWhere = `"projectId"=$1 AND "companyId"=$2 AND status='pending' AND "deletedAt" IS NULL`;
+      const where = phaseId != null ? `${baseWhere} AND "phaseId"=$3` : baseWhere;
+      const params = phaseId != null ? [projectId, scope.companyId, phaseId] : [projectId, scope.companyId];
+      const sel = await client.query(`SELECT * FROM project_boq_items WHERE ${where} ORDER BY "sortOrder", id FOR UPDATE`, params);
+      claimed = sel.rows;
+      if (claimed.length > 0) {
+        await client.query(`UPDATE project_boq_items SET status='billed', "updatedAt"=NOW() WHERE id = ANY($1::int[])`, [claimed.map((r) => r.id)]);
+      }
+    });
+    if (claimed.length === 0) {
+      throw new ValidationError("لا توجد بنود BOQ معلّقة للفوترة", { fix: "أضف بنوداً أو اختر مرحلة بها بنود معلّقة" });
+    }
+    const subtotal = Math.round(claimed.reduce((s, r) => s + Number(r.lineTotal || 0), 0) * 100) / 100;
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    const vatAmount = computeVat(subtotal, vatRate);
+    // ref uniqueness via the first claimed item id (billed once) — no Date.now()
+    // in a refish string (numbering-center lint guard #1141).
+    const ref = `INV-BOQ-${String(currentYear()).slice(2)}${currentMonthPadded()}-${projectId}-${claimed[0].id}`;
+    const lines = claimed.map((r) => ({
+      description: String(r.description ?? ""),
+      quantity: Number(r.quantity ?? 1),
+      unitPrice: Number(r.unitPrice ?? 0),
+      lineTotal: Number(r.lineTotal ?? 0),
+    }));
+    const { projectsEngine } = await import("../lib/engines/index.js");
+    projectsEngine.requestInvoiceCreation(
+      { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+      {
+        clientId: project.clientId as number,
+        ref,
+        description: `فاتورة بنود (BOQ) — مشروع: ${project.name}`,
+        subtotal,
+        vatAmount,
+        total: subtotal + vatAmount,
+        dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
+        sourceType: "project_boq",
+        sourceId: projectId,
+        projectId,
+        lines,
+        boqItemIds: claimed.map((r) => r.id as number),
+      }
+    );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.boq.billed", entity: "projects", entityId: projectId, details: JSON.stringify({ ref, itemCount: claimed.length, subtotal }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bill", entity: "project_boq", entityId: projectId, after: { ref, itemCount: claimed.length, subtotal, vatAmount } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.status(201).json({ requested: true, ref, itemCount: claimed.length, subtotal, vatAmount, total: subtotal + vatAmount });
+  } catch (err) { handleRouteError(err, res, "Bill BOQ error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DEVELOPMENT UNITS (internal build-to-sell) — Wave C.1 (#1594 projects pkg).
+// Cost basis is computed live as the unit's area share of the project's
+// accumulated cost (project.spentAmount) until the unit is sold (C.2 snapshots
+// it). Selling → invoice + COGS via finance is Wave C.2.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/:id/units", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    assertProjectMutable(project);
+    const b = zodParse(createDevUnitSchema.safeParse(req.body));
+    const area = b.area != null ? Number(b.area) : 0;
+    const salePrice = b.salePrice != null ? Number(b.salePrice) : null;
+    const ins = await rawExecute(
+      `INSERT INTO development_units ("companyId","branchId","projectId",code,name,area,"salePrice",notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [scope.companyId, scope.branchId ?? null, projectId, b.code ?? null, b.name, area, salePrice, b.notes ?? null, scope.userId ?? null]
+    );
+    const uid = assertInsert(ins.insertId, "development_units");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.dev_unit.added", entity: "development_units", entityId: uid, details: JSON.stringify({ projectId, area, salePrice }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "development_units", entityId: uid, after: { projectId, name: b.name, area, salePrice } }).catch((e) => logger.error(e, "projects background task failed"));
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2`, [uid, scope.companyId]);
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create development unit error:"); }
+});
+
+router.get("/:id/units", authorize({ feature: "projects.list", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const projectId = parseId(req.params.id, "id");
+    const project = await assertProjectAccess(projectId, scope);
+    const units = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE "projectId"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL ORDER BY id`, [projectId, scope.companyId]);
+    const spent = Number(project.spentAmount || 0);
+    const totalArea = units.filter((u) => u.status !== "cancelled").reduce((s: number, u) => s + Number(u.area || 0), 0);
+    const enriched = units.map((u) => {
+      const allocatedCost = u.status === "sold"
+        ? Number(u.costBasis || 0)
+        : totalArea > 0 ? Math.round(spent * (Number(u.area || 0) / totalArea) * 100) / 100 : 0;
+      const sale = u.salePrice != null ? Number(u.salePrice) : null;
+      return { ...u, allocatedCost, projectedProfit: sale != null ? Math.round((sale - allocatedCost) * 100) / 100 : null };
+    });
+    res.json({ units: enriched, projectSpent: spent, totalArea });
+  } catch (err) { handleRouteError(err, res, "List development units error:"); }
+});
+
+router.patch("/units/:uid", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const uid = parseId(req.params.uid, "uid");
+    const [unit] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [uid, scope.companyId]);
+    if (!unit) throw new NotFoundError("الوحدة غير موجودة");
+    if (unit.status === "sold") throw new ConflictError("لا يمكن تعديل وحدة مباعة");
+    const project = await assertProjectAccess(unit.projectId as number, scope);
+    assertProjectMutable(project);
+    const b = zodParse(updateDevUnitSchema.safeParse(req.body));
+    const area = b.area !== undefined ? Number(b.area) : Number(unit.area);
+    const salePrice = b.salePrice !== undefined ? (b.salePrice != null ? Number(b.salePrice) : null) : (unit.salePrice != null ? Number(unit.salePrice) : null);
+    const [updated] = await rawQuery<Record<string, unknown>>(
+      `UPDATE development_units SET code=$1, name=$2, area=$3, "salePrice"=$4, status=$5, notes=$6, "updatedAt"=NOW()
+       WHERE id=$7 AND "companyId"=$8 RETURNING *`,
+      [
+        b.code !== undefined ? b.code : (unit.code as string | null),
+        b.name ?? (unit.name as string),
+        area, salePrice,
+        b.status ?? (unit.status as string),
+        b.notes !== undefined ? b.notes : (unit.notes as string | null),
+        uid, scope.companyId,
+      ]
+    );
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "update", entity: "development_units", entityId: uid, after: { area, salePrice, status: b.status ?? unit.status } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json(updated);
+  } catch (err) { handleRouteError(err, res, "Update development unit error:"); }
+});
+
+router.delete("/units/:uid", authorize({ feature: "projects.list", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const uid = parseId(req.params.uid, "uid");
+    const [unit] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [uid, scope.companyId]);
+    if (!unit) throw new NotFoundError("الوحدة غير موجودة");
+    if (unit.status === "sold") throw new ConflictError("لا يمكن حذف وحدة مباعة");
+    const project = await assertProjectAccess(unit.projectId as number, scope);
+    assertProjectMutable(project);
+    await rawExecute(`UPDATE development_units SET "deletedAt"=NOW(), "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`, [uid, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "delete", entity: "development_units", entityId: uid }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json({ message: "تم حذف الوحدة" });
+  } catch (err) { handleRouteError(err, res, "Delete development unit error:"); }
+});
+
+// Sell a development unit (Wave C.2): snapshot the unit's area-share cost basis,
+// mark it sold atomically, post WIP→COGS via the engine (mapping-controlled
+// accounts), and emit the sale invoice via project.invoice.requested —
+// profit = salePrice − costBasis. No journal/invoice is written from this route.
+router.post("/units/:uid/sell", authorize({ feature: "projects.list", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const uid = parseId(req.params.uid, "uid");
+    const b = zodParse(z.object({
+      buyerClientId: z.coerce.number().positive("العميل المشتري مطلوب"),
+      salePrice: z.union([z.coerce.number(), z.string()]).optional().nullable(),
+    }).safeParse(req.body ?? {}));
+    const [unit] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [uid, scope.companyId]);
+    if (!unit) throw new NotFoundError("الوحدة غير موجودة");
+    if (unit.status === "sold") throw new ConflictError("الوحدة مباعة مسبقاً");
+    if (unit.status === "cancelled") throw new ConflictError("لا يمكن بيع وحدة ملغاة");
+    const project = await assertProjectAccess(unit.projectId as number, scope);
+    const salePrice = b.salePrice != null ? Number(b.salePrice) : (unit.salePrice != null ? Number(unit.salePrice) : null);
+    if (salePrice == null || !(salePrice > 0)) {
+      throw new ValidationError("سعر البيع مطلوب", { field: "salePrice", fix: "حدّد سعر بيع للوحدة قبل البيع" });
+    }
+    const [buyer] = await rawQuery<Record<string, unknown>>(`SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [b.buyerClientId, scope.companyId]);
+    if (!buyer) throw new NotFoundError("العميل المشتري غير موجود");
+    // A sale must post its COGS — refuse cleanly when the period is closed
+    // rather than leaving a sold unit with no cost recognition.
+    const period = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+    if (!period.open) {
+      throw new ConflictError(`الفترة المالية "${period.periodName ?? ""}" مغلقة — لا يمكن إتمام البيع`, { fix: "افتح الفترة المالية أو انتظر الفترة التالية" });
+    }
+    // Snapshot the cost basis = area share of the project's accumulated cost
+    // (same formula the GET endpoint reports live).
+    const spent = Number(project.spentAmount || 0);
+    const [areaRow] = await rawQuery<Record<string, unknown>>(
+      `SELECT COALESCE(SUM(area),0) AS total FROM development_units
+       WHERE "projectId"=$1 AND "companyId"=$2 AND status <> 'cancelled' AND "deletedAt" IS NULL`,
+      [unit.projectId, scope.companyId]
+    );
+    const totalArea = Number(areaRow?.total || 0);
+    const costBasis = totalArea > 0 ? Math.round(spent * (Number(unit.area || 0) / totalArea) * 100) / 100 : 0;
+    const { projectsEngine } = await import("../lib/engines/index.js");
+    // Claim + COGS in ONE transaction: if the WIP→COGS journal fails (e.g. a
+    // missing account), the 'sold' claim rolls back too — never a sold unit
+    // without its cost recognition. rawExecute joins the ambient transaction
+    // (AsyncLocalStorage) and postJournalEntry is reentrant via SAVEPOINT.
+    let cogsJournalId: number | null = null;
+    await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE development_units SET status='sold', "costBasis"=$1, "soldAt"=NOW(), "buyerClientId"=$2, "salePrice"=$3, "updatedAt"=NOW()
+         WHERE id=$4 AND "companyId"=$5 AND status <> 'sold' AND "deletedAt" IS NULL`,
+        [costBasis, b.buyerClientId, salePrice, uid, scope.companyId]
+      );
+      if (!affectedRows) throw new ConflictError("الوحدة مباعة مسبقاً");
+      if (costBasis > 0) {
+        const glResult = await projectsEngine.postUnitSaleCogsGL(
+          // as-any-reason: justified-external - scope.activeAssignmentId is injected by authMiddleware at runtime but not exposed on the Scope type here
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: (scope as any).activeAssignmentId ?? scope.userId },
+          { unitId: uid, unitName: unit.name as string, projectId: unit.projectId as number, projectName: project.name as string, costBasis }
+        );
+        cogsJournalId = glResult.journalId;
+      }
+    });
+    // Sale invoice (revenue) via the existing cross-domain event.
+    const vatRate = await getCompanyVatRate(scope.companyId);
+    const vatAmount = computeVat(salePrice, vatRate);
+    const ref = `INV-UNIT-${String(currentYear()).slice(2)}${currentMonthPadded()}-${uid}`;
+    projectsEngine.requestInvoiceCreation(
+      { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+      {
+        clientId: b.buyerClientId,
+        ref,
+        description: `بيع وحدة تطوير "${unit.name}" — مشروع: ${project.name}`,
+        subtotal: salePrice,
+        vatAmount,
+        total: salePrice + vatAmount,
+        dueDate: toDateISO(new Date(Date.now() + 14 * 86400000)),
+        sourceType: "dev_unit_sale",
+        sourceId: uid,
+        projectId: unit.projectId as number,
+        lines: [{ description: `بيع وحدة "${unit.name}"${unit.code ? ` (${unit.code})` : ""}`, quantity: 1, unitPrice: salePrice, lineTotal: salePrice }],
+        devUnitIds: [uid],
+      }
+    );
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.dev_unit.sold", entity: "development_units", entityId: uid, details: JSON.stringify({ projectId: unit.projectId, salePrice, costBasis, profit: Math.round((salePrice - costBasis) * 100) / 100 }) }).catch((e) => logger.error(e, "projects background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "sell", entity: "development_units", entityId: uid, after: { buyerClientId: b.buyerClientId, salePrice, costBasis, cogsJournalId, ref } }).catch((e) => logger.error(e, "projects background task failed"));
+    res.status(201).json({ sold: true, ref, salePrice, costBasis, profit: Math.round((salePrice - costBasis) * 100) / 100, cogsJournalId });
+  } catch (err) { handleRouteError(err, res, "Sell development unit error:"); }
 });
 
 router.post("/:id/costs", authorize({ feature: "projects.list", action: "create" }), async (req, res) => {

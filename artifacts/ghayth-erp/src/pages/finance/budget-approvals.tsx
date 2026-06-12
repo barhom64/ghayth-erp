@@ -248,7 +248,7 @@ export default function BudgetApprovalsPage() {
   return (
     <PageShell
       title="اعتمادات تجاوز الميزانية"
-      subtitle="budget_approval_requests — طلبات التجاوز اللي تحتاج CFO (80%-99%) أو GM (99%-110%). فوق 110% مرفوض تلقائياً."
+      subtitle="طلبات تجاوز الموازنة — تحتاج اعتماد المدير المالي (80%-99%) أو المدير العام (99%-110%)، وفوق 110% تُرفض تلقائياً"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/budget", label: "الميزانية" },

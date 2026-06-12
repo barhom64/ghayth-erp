@@ -397,6 +397,58 @@ export function auditMutation(
   );
 }
 
+/**
+ * auditFromRequest — canonical audit writer that automatically extracts
+ * the full IGOC operating context from `req.scope`:
+ *
+ *   - companyId  (always)
+ *   - branchId   (when present on scope)
+ *   - userId     (always)
+ *   - activeRoleKey            (RBAC-001 — capacity the actor performed under)
+ *   - activeDepartmentId       (IGOC-001 — actor's primary assignment department)
+ *   - resolvedScope            (IGOC-001 — authz resolution at action time)
+ *   - impersonationSourceUser  (IGOC-001 — super-admin acting as another user)
+ *
+ * Use this in every route handler instead of calling `createAuditLog`
+ * directly. The previous pattern — passing only `activeRoleKey` and
+ * dropping the other three IGOC fields — leaves audit rows with
+ * NULL context, making cross-tenant / impersonation forensics
+ * impossible to reconstruct. The HR-019 «جسور المؤسسة» write was
+ * the live find that surfaced this gap.
+ *
+ * Errors are swallowed (audit must never break the business write).
+ */
+export function auditFromRequest(
+  req: { scope?: any },
+  action: string,
+  entity: string,
+  entityId: number,
+  changes: { before?: any; after?: any; reason?: string } = {},
+): Promise<void> {
+  const scope = req.scope;
+  if (!scope) {
+    logger.warn({ entity, entityId, action }, "[audit] no scope on request — audit skipped");
+    return Promise.resolve();
+  }
+  return createAuditLog({
+    companyId: scope.companyId,
+    branchId: scope.branchId ?? undefined,
+    userId: scope.userId,
+    action,
+    entity,
+    entityId,
+    before: changes.before,
+    after: changes.after,
+    reason: changes.reason,
+    activeRoleKey: scope.selectedRoleKey ?? null,
+    activeDepartmentId: scope.activeDepartmentId ?? null,
+    resolvedScope: scope.resolvedScope ?? null,
+    impersonationSourceUser: scope.impersonationSourceUser ?? null,
+  }).catch((err) =>
+    logger.warn({ err, entity, entityId, action }, "[audit] auditFromRequest failed"),
+  );
+}
+
 export async function createAuditLog(params: {
   companyId: number;
   branchId?: number;
@@ -1353,13 +1405,54 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   // postable leaf (e.g. 1111 الصندوق الرئيسي, 2160 إيرادات مقبوضة مقدماً).
   invoice_payment_cash: { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
   customer_advance_liability: { type: "liability", keywords: ["دفعات مقدمة", "مقبوضة مقدم", "عملاء", "advance", "unearned"] },
+  // #1945 FIN-03 — the AR-clearing leg of customer receipts/payments. On a
+  // SOCPA tree the literal fallback "1200" is الأصول غير المتداولة (a
+  // non-postable header), so the credit leg of every customer payment
+  // resolved to a header and the post FAILED. Intent search finds the
+  // postable receivables leaf (e.g. 1131 عملاء محليون).
+  invoice_payment_ar: { type: "asset", keywords: ["ذمم", "مدينون", "عملاء", "receivable"] },
+  // …and the AR DEBIT side of issuing the invoice itself — fallback "1200"
+  // is الأصول غير المتداولة (non-postable header) on a SOCPA tree, so
+  // approving ANY invoice failed there before this entry.
+  invoice_ar: { type: "asset", keywords: ["ذمم", "مدينون", "عملاء", "receivable"] },
+  // #1945 FIN-18 — bank reconciliation adjustments (fees out / interest in).
+  bank_fee_expense: { type: "expense", keywords: ["عمولات بنكية", "رسوم بنكية", "مصروفات بنكية", "bank fee", "bank charge"] },
+  bank_interest_income: { type: "revenue", keywords: ["فوائد", "مرابحات", "عوائد بنكية", "interest"] },
+  // #1945 item 6 — generic sales-invoice revenue. The literal fallback
+  // "4000" is the REVENUE ROOT (non-postable header) on a SOCPA tree, so an
+  // invoice with any unmapped line could never approve there. Intent search
+  // finds the postable sales leaf (e.g. 4111 مبيعات نقدية).
+  invoice_revenue: { type: "revenue", keywords: ["إيرادات المبيعات", "مبيعات", "إيرادات", "sales"] },
+  // …and the invoice's output-VAT payable leg — fallback "2300" is absent on
+  // a SOCPA tree (the leaf is e.g. 2131 ضريبة القيمة المضافة المستحقة).
+  invoice_vat_payable: { type: "liability", keywords: ["ضريبة القيمة المضافة المستحقة", "ضريبة المخرجات", "vat output", "output vat"] },
+  // #1945 FIN-SUB-01 (#2097) — GRN per-line treatment routing. The literal
+  // fallbacks in finance-purchase.ts were wrong/absent on the SOCPA chart
+  // (inventory→1250 leasehold, custody→1130 AR, plus missing expense leaves);
+  // these intents resolve the right postable leaf on any tenant chart, and the
+  // GRN nature-enforcement guarantees the posted account matches the treatment.
+  inventory_receipt:           { type: "asset",   keywords: ["مخزون البضائع", "المخزون", "مخزون"] },
+  employee_custody:            { type: "asset",   keywords: ["عهد مالية للموظف", "عهد"] },
+  supplier_prepayment:         { type: "asset",   keywords: ["مصروفات مدفوعة مقدم", "مدفوعة مقدم", "دفعات مقدمة"] },
+  fixed_asset_purchase:        { type: "asset",   keywords: ["أعمال تحت التنفيذ", "الأصول غير الملموسة", "أصول"] },
+  general_expense:             { type: "expense", keywords: ["مصروفات عمومية", "مصروفات إدارية", "قرطاسية", "مصروف"] },
+  service_expense:             { type: "expense", keywords: ["تكلفة الخدمات", "أتعاب مهنية", "خدمات"] },
+  vehicle_expense:             { type: "expense", keywords: ["صيانة وإصلاح المركبات", "الوقود", "مركبات"] },
+  property_maintenance_expense:{ type: "expense", keywords: ["صيانة المباني والوحدات", "صيانة المباني", "صيانة"] },
+  project_cost:                { type: "expense", keywords: ["تكلفة المشاريع والمقاولات", "تكلفة المشاريع", "مشاريع"] },
 };
 
 const _resolvedAccountCache = new Map<string, string>();
 const _RESOLVED_ACCOUNT_CACHE_MAX_SIZE = 5_000;
 
 async function resolveByIntent(companyId: number, operationType: string, fallbackCode: string): Promise<string> {
-  const cacheKey = `${companyId}:${operationType}`;
+  // The fallback differs per side for operations that post both legs under the
+  // SAME operationType (e.g. inventory_issue_cogs: debit→5110 COGS,
+  // credit→1151 inventory). Keying the cache by operationType alone collapsed
+  // both legs onto whichever resolved first — producing a degenerate JE that
+  // debited AND credited COGS with no inventory relief (COGS never truly
+  // posted). Include the fallbackCode so each side resolves independently.
+  const cacheKey = `${companyId}:${operationType}:${fallbackCode}`;
   const cached = _resolvedAccountCache.get(cacheKey);
   if (cached) return cached;
 
@@ -1382,7 +1475,7 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     const rows = await rawQuery<{ code: string }>(
       `SELECT code FROM chart_of_accounts
        WHERE "companyId"=$1 AND type=$2 AND "allowPosting"=true AND "deletedAt" IS NULL AND (${likeClauses})
-       ORDER BY length(code) ASC LIMIT 1`,
+       ORDER BY length(code) ASC, code ASC LIMIT 1`,
       params
     );
     if (rows.length) {
@@ -1402,7 +1495,7 @@ export async function getAccountCodeFromMapping(
   companyId: number,
   operationType: string,
   side: "debit" | "credit",
-  fallbackCode: string
+  fallbackCode: string = ""
 ): Promise<string> {
   const [mapping] = await rawQuery<{ debitAccountCode: string | null; creditAccountCode: string | null; debitCode: string | null; creditCode: string | null }>(
     `SELECT "debitAccountCode", "creditAccountCode", "debitAccountId", "creditAccountId",

@@ -24,7 +24,7 @@ const spaSrc = join(import.meta.dirname!, "../../../../artifacts/ghayth-erp/src"
 const readApi = (rel: string) => readFileSync(join(apiSrc, rel), "utf8");
 const readSpa = (rel: string) => readFileSync(join(spaSrc, rel), "utf8");
 
-const MIGRATION = readApi("migrations/281_transport_booking_lines_geo_and_kind.sql");
+const MIGRATION = readApi("migrations/292_transport_booking_lines_geo_and_kind.sql");
 const ROUTER    = readApi("routes/transport-bookings.ts");
 const EDITOR    = readSpa("components/shared/multi-leg-booking-editor.tsx");
 const CREATE    = readSpa("pages/fleet/transport-booking-create.tsx");

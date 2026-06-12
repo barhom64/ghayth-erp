@@ -132,8 +132,11 @@ describe("#1733 Vehicle profile — route surface", () => {
     }
   });
 
-  it("router is mounted with module + financial guards (via PR-5a fleetGuards helper)", () => {
+  it("router is mounted with module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("vehicleProfileRouter");
-    expect(ROUTES_INDEX).toMatch(/router\.use\(\s*fleetGuards\(\),\s*vehicleProfileRouter\)/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 });

@@ -36,7 +36,7 @@
   المفاتيح الدقيقة (`hr.payroll.runs`, `hr.payroll.wps`, …) لا
   `hr.payroll.*` التي كانت ستكون grant ميتًا.
 
-العلاج: هجرة `291_seed_standard_role_grants_fix.sql` (idempotent بنمط
+العلاج: هجرة `306_seed_standard_role_grants_fix.sql` (idempotent بنمط
 258) + إدخالا بيانات للدورين في `ROLE_DEFAULT_MODULES`/`ROLE_LEVELS`
 (`roleGuard.ts` — الخريطة التي يستشيرها `requireModule`، وبدونها تضيء
 القائمة ويرفض الـmount). الأدلة: القسم C الجديد في

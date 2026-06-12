@@ -50,6 +50,7 @@ import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
+import { fleetEngine } from "../lib/engines/index.js";
 
 export const transportBookingsRouter = Router();
 transportBookingsRouter.use(authMiddleware);
@@ -133,7 +134,7 @@ const DISPATCH_TRANSITIONS: Record<typeof DISPATCH_STATUSES[number], string[]> =
 };
 
 // ─── Zod schemas ──────────────────────────────────────────────────────
-const createBookingSchema = z.object({
+const createBookingBaseSchema = z.object({
   bookingNumber: z.string().min(1).max(64),
   bookingSource: z.enum(BOOKING_SOURCES).optional(),
   transportServiceType: z.enum(TRANSPORT_SERVICE_TYPES),
@@ -202,7 +203,26 @@ const createBookingSchema = z.object({
   lines: z.lazy(() => z.array(nestedBookingLineSchema).max(20)).optional(),
 });
 
-const updateBookingSchema = createBookingSchema.partial().extend({
+// #1812 Wave 0.2 — enforce linked source on CREATE. The base schema
+// stays a ZodObject so .partial() still works for PATCH (which has its
+// own update semantics — e.g. an admin clearing a stale link must be
+// able to do so without re-asserting a new one in the same call).
+const createBookingSchema = createBookingBaseSchema.refine(
+  (b) =>
+    b.customerId != null ||
+    b.umrahGroupId != null ||
+    b.contractId != null ||
+    b.projectId != null ||
+    b.waqfId != null ||
+    (b.beneficiaryType != null && b.beneficiaryId != null),
+  {
+    message:
+      "يجب ربط الحجز بمصدر منظَّم (عميل / مجموعة عمرة / عقد / مشروع / وقف / مستفيد) — اسم العميل النصّي وحده غير مقبول.",
+    path: ["customerId"],
+  },
+);
+
+const updateBookingSchema = createBookingBaseSchema.partial().extend({
   status: z.enum(BOOKING_STATUSES).optional(),
 });
 
@@ -579,45 +599,75 @@ transportBookingsRouter.post(
         assertInsert(headerInsert.insertId, "transport_bookings");
         const bookingId = headerInsert.insertId;
 
-        // #1812 multi-leg — atomically insert the lines payload if present.
-        // Server auto-numbers any leg that didn't supply lineNumber so the
-        // operator can just push legs onto an array without bookkeeping.
+        // #1812 multi-leg + #2079 Gate-PE-2 (Route Leg as Canon).
+        // Server auto-numbers any leg that didn't supply lineNumber so
+        // the operator can just push legs onto an array without
+        // bookkeeping. If the caller omitted `lines` entirely or sent
+        // an empty array, we synthesise a single leg derived from the
+        // booking header so the invariant «every booking has ≥1 line»
+        // holds for every new row. Single-leg posts therefore look
+        // exactly the same as before from the wire — but on the DB
+        // side they always produce a line.
         let inserted = 0;
-        if (b.lines && b.lines.length > 0) {
-          for (let i = 0; i < b.lines.length; i++) {
-            const leg = b.lines[i];
-            const lineNumber = leg.lineNumber ?? i + 1;
-            await rawExecute(
-              `INSERT INTO transport_booking_lines
-                 ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
-                  "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
-                  "fromLocationId", "toLocationId",
-                  "fromLocationText", "toLocationText",
-                  "fromLocationKind", "toLocationKind",
-                  "fromLat", "fromLng", "fromPlaceId",
-                  "toLat", "toLng", "toPlaceId",
-                  "legRouteType",
-                  "scheduledPickupAt", "scheduledDeliveryAt",
-                  "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
-               VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
-                       $14,$15,$16, $17,$18,$19, $20, $21,$22,
-                       $23,$24,$25,$26,$27)`,
-              [
-                scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
-                leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
-                leg.fromLocationId ?? null, leg.toLocationId ?? null,
-                leg.fromLocationText ?? null, leg.toLocationText ?? null,
-                leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
-                leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
-                leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
-                leg.legRouteType ?? null,
-                leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
-                leg.lineDescription ?? null, leg.quantity ?? null,
-                leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
-              ],
-            );
-            inserted++;
-          }
+        const legsToInsert: typeof bookingLineSchema._type[] = b.lines && b.lines.length > 0
+          ? b.lines
+          : [{
+              fromLocationId:   b.fromLocationId,
+              toLocationId:     b.toLocationId,
+              fromLocationText: b.fromLocationText,
+              toLocationText:   b.toLocationText,
+              fromLocationKind: b.fromLocationKind,
+              toLocationKind:   b.toLocationKind,
+              fromLat:          b.fromLat,
+              fromLng:          b.fromLng,
+              fromPlaceId:      b.fromPlaceId,
+              toLat:            b.toLat,
+              toLng:            b.toLng,
+              toPlaceId:        b.toPlaceId,
+              legRouteType:     b.routeType,
+              scheduledPickupAt:
+                b.pickupWindowStart ?? b.fixedAppointmentTime ?? undefined,
+              scheduledDeliveryAt:
+                b.dropoffWindowStart ?? undefined,
+              lineDescription:  b.cargoDescription ?? undefined,
+              quantity:         b.cargoQuantity ?? undefined,
+              unitOfMeasure:    b.cargoUnit ?? undefined,
+              passengerCount:   b.passengerCount ?? undefined,
+              notes:            "Auto-derived single leg",
+            }];
+        for (let i = 0; i < legsToInsert.length; i++) {
+          const leg = legsToInsert[i];
+          const lineNumber = leg.lineNumber ?? i + 1;
+          await rawExecute(
+            `INSERT INTO transport_booking_lines
+               ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
+                "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
+                "fromLocationId", "toLocationId",
+                "fromLocationText", "toLocationText",
+                "fromLocationKind", "toLocationKind",
+                "fromLat", "fromLng", "fromPlaceId",
+                "toLat", "toLng", "toPlaceId",
+                "legRouteType",
+                "scheduledPickupAt", "scheduledDeliveryAt",
+                "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
+             VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
+                     $14,$15,$16, $17,$18,$19, $20, $21,$22,
+                     $23,$24,$25,$26,$27)`,
+            [
+              scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
+              leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
+              leg.fromLocationId ?? null, leg.toLocationId ?? null,
+              leg.fromLocationText ?? null, leg.toLocationText ?? null,
+              leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
+              leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
+              leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
+              leg.legRouteType ?? null,
+              leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
+              leg.lineDescription ?? null, leg.quantity ?? null,
+              leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
+            ],
+          );
+          inserted++;
         }
         return { insertId: bookingId, legsInserted: inserted };
       });
@@ -679,7 +729,59 @@ transportBookingsRouter.patch(
         action: "update", entity: "transport_bookings", entityId: id,
         before: { status: existing.status }, after: b,
       }).catch((e) => logger.error(e, "booking audit failed"));
-      res.json({ data: { id } });
+
+      // #2079 TA-T18-01 — passenger booking close → Accounting Candidate.
+      // Mirrors the cargo + rental handoffs. Only fires when status
+      // actually transitions INTO `completed` (not when other fields
+      // change while already completed — idempotency still holds, but
+      // we save the query). Soft-fail: a candidate hiccup is logged
+      // and never rolls back the operational close (the insert is
+      // idempotent and the operator can re-fire the transition).
+      let passengerCandidateId: number | null = null;
+      if (b.status === "completed" && existing.status !== "completed") {
+        try {
+          const [row] = await rawQuery<{
+            tripFamily: string | null; customerId: number | null;
+            passengerCount: number | null;
+            bookingNumber: string;
+            fromLocationText: string | null; toLocationText: string | null;
+            notes: string | null;
+            vehicleId: number | null; driverId: number | null;
+          }>(
+            `SELECT b."tripFamily", b."customerId", b."passengerCount",
+                    b."bookingNumber", b."fromLocationText", b."toLocationText", b.notes,
+                    d."vehicleId", d."driverId"
+               FROM transport_bookings b
+               LEFT JOIN LATERAL (
+                 SELECT "vehicleId", "driverId"
+                   FROM transport_dispatch_orders
+                  WHERE "companyId" = b."companyId"
+                    AND "bookingId" = b.id
+                    AND status NOT IN ('declined', 'cancelled')
+                  ORDER BY id DESC LIMIT 1
+               ) d ON TRUE
+              WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
+            [id, scope.companyId],
+          );
+          if (row) {
+            const candidate = await fleetEngine.createPassengerBillingCandidate(
+              { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+              {
+                id, bookingNumber: row.bookingNumber,
+                tripFamily: row.tripFamily, customerId: row.customerId,
+                passengerCount: row.passengerCount,
+                fromLocationText: row.fromLocationText, toLocationText: row.toLocationText,
+                vehicleId: row.vehicleId, driverId: row.driverId,
+                notes: row.notes,
+              },
+            );
+            passengerCandidateId = candidate?.id ?? null;
+          }
+        } catch (err) {
+          logger.error(err, "passenger billing candidate failed");
+        }
+      }
+      res.json({ data: { id, billingCandidateId: passengerCandidateId } });
     } catch (err) {
       handleRouteError(err, res, "Update transport booking error:");
     }

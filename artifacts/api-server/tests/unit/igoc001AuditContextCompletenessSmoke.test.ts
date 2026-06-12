@@ -22,7 +22,7 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
-const MIG_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/migrations/284_audit_context_completeness.sql"), "utf8");
+const MIG_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/migrations/294_audit_context_completeness.sql"), "utf8");
 const HELPERS_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/businessHelpers.ts"), "utf8");
 const LISTENERS_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/eventListeners.ts"), "utf8");
 const AUTHMW_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/middlewares/authMiddleware.ts"), "utf8");

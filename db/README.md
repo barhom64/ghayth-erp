@@ -95,6 +95,105 @@ migration applies. Eventually `db/dump-schema.sh` is re-run and the
 new column lands inside `schema.sql` for the next generation of fresh
 clones.
 
+### `pnpm db:provision-agent` — head-of-main DB for AI agent sandboxes
+
+`scripts/provision-agent-db.sh` is the Docker-free, no-system-Postgres
+counterpart to `bootstrap.sh`, built for agent / Replit / CI sandboxes
+that have neither a system Postgres nor Docker. Unlike `bootstrap.sh`
+(which targets a `sudo`-managed cluster on 5432 and leaves post-cutoff
+migrations for the server to apply on boot), this script:
+
+1. spins up a throwaway **native** PG16 cluster (`initdb` + `pg_ctl`) on
+   port **54329** — the agreed test marker `assertTestDatabase` and the
+   dynamic integration harness gate on (so the same DB doubles as the
+   integration-test Postgres);
+2. loads `schema_pre.sql` + `schema_post.sql`;
+3. **actually applies** every post-cutoff migration (after
+   `db/.baseline-cutoff`), mirroring `guard.yml` and `migrate.ts`, so the
+   DB sits at **HEAD of main**, not just the dump baseline;
+4. seeds the deterministic admin (`owner@local.test` / `Test1234!`),
+   Al-Diyaa company defaults (chart of accounts, settings) and an open
+   fiscal period — so GL posting / accounting flows work immediately.
+
+```bash
+pnpm db:provision-agent
+# then, in the SAME shell session (the cluster is a child of this shell):
+export DATABASE_URL=postgres://ghayth_erp:ghayth_erp@127.0.0.1:54329/ghayth_erp
+export JWT_SECRET=local-dev-secret-must-be-at-least-32-characters-long-test
+```
+
+The monolithic `db/seed.sql` is **not** loaded by this script — it is
+stale (references the dropped `role_permissions` table); the per-company
+seed pipeline above is the canonical path. Env overrides: `PGPORT`,
+`PGDATA_DIR`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `KEEP_DB=1`.
+
+### Drift guard (CI-gated)
+
+Because fresh boots pre-mark every migration as applied, any migration
+whose schema change is **not** baked into the dump silently never lands
+on a fresh DB. `scripts/src/check-schema-dump-drift.mjs` catches this:
+it loads the committed dump into a disposable scratch DB, replays every
+migration in a savepoint sandbox, and fails if the result drifts beyond
+`scripts/schema-dump-drift-baseline.txt` (the baseline absorbs cosmetic
+pg_dump CHECK-constraint reformatting so it never causes a false
+failure). It runs inside the `guard` CI gate via `scripts/guard.sh`
+(`check:schema-dump-drift`) and self-skips locally when it can't
+provision a scratch DB.
+
+When it fires, follow the **dump-refresh + cutoff-advance** workflow:
+
+1. `bash db/dump-schema.sh` — regenerate `schema_pre.sql` +
+   `schema_post.sql` + `schema.sql` from the live DB.
+2. Advance `db/.baseline-cutoff` to the lex-max **and** numeric-max
+   migration filename now baked into the refreshed dump, so a fresh boot
+   marks those migrations applied instead of re-running them.
+3. `UPDATE_BASELINE=1 node scripts/src/check-schema-dump-drift.mjs` —
+   retire any baseline lines whose underlying drift is now gone and
+   re-capture the remaining cosmetic reformatting.
+4. Commit `db/schema*.sql`, `db/.baseline-cutoff`, and
+   `scripts/schema-dump-drift-baseline.txt` together.
+
+### Live-DB drift monitor (NOT a gate)
+
+The drift guard above proves *dump ↔ migrations*. It never looks at the
+real live DB, so a live/production database that has silently fallen
+**below** the canonical dump (e.g. performance indexes from migrations
+016/018/074 dropped, or `hr_leave_requests` regressing to conflicting
+CHECK constraints that reject valid statuses) stays invisible until
+someone manually re-dumps and notices the diff.
+
+`scripts/src/check-live-db-drift.mjs` (`pnpm check:live-db-drift`) closes
+that gap. It loads the committed dump into a disposable scratch DB (the
+**canonical** schema), then reads indexes, constraints, and columns from
+both the scratch DB and the live `$DATABASE_URL` via `pg_catalog` and
+diffs them object-by-object:
+
+- **MISSING in live** — present in the dump, absent in live. The loud
+  failure: live lost something it should have. Each is printed with
+  idempotent remediation SQL (`CREATE INDEX IF NOT EXISTS …`,
+  `ALTER TABLE … ADD CONSTRAINT …`, `ALTER TABLE … ADD COLUMN IF NOT
+  EXISTS …`). Apply it against the live DB to restore the object.
+- **CHANGED** — same object, different definition (e.g. a CHECK narrowed
+  so it rejects valid values). Remediation drops + re-adds the canonical
+  definition.
+- **EXTRA in live** — present in live, absent in the dump. Usually just
+  means the live DB is ahead of the last `bash db/dump-schema.sh` refresh
+  — a **warning** by default (pass `--strict` / `STRICT=1` to fail on it).
+
+Because both sides render via the same server's `pg_get_indexdef` /
+`pg_get_constraintdef`, there's no cosmetic pg_dump-text noise; the one
+known-benign deparse variance (the `ARRAY[(x)::text,…]` vs
+`(ARRAY[x::varchar,…])::text[]` rendering of an identical `ANY(ARRAY[…])`
+membership test) is normalized away before comparison so genuine changes
+still surface.
+
+Exit codes: `0` clean (or only EXTRA without `--strict`, or a benign skip
+when `DATABASE_URL` is unset / the role lacks `CREATEDB`); `1` live is
+MISSING/CHANGED objects; `2` the check could not run. This is a **monitor,
+not a PR gate** — it needs the live DB, so run it on demand
+(`pnpm check:live-db-drift`) or register it as a periodic Replit workflow
+(`node scripts/src/check-live-db-drift.mjs`).
+
 ## Why we don't use Drizzle migrate / Prisma migrate
 
 The codebase has 263+ tables that accumulated over years via

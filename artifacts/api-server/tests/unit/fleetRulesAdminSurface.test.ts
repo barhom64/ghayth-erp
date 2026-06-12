@@ -23,10 +23,13 @@ const FLEET_ROUTES = readSpa("routes/fleetRoutes.tsx");
 const BOOKINGS_LIST = readSpa("pages/fleet/transport-bookings.tsx");
 
 describe("#1733 follow-up — fleet_expense_rules backend CRUD", () => {
-  it("file exists + mounts via PR-5a fleetGuards helper", () => {
+  it("file exists + mounts under requireModule(fleet) + requireGuards(financial)", () => {
     expect(existsSync(join(apiSrc, "routes/fleet-rules-admin.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("fleetRulesAdminRouter");
-    expect(ROUTES_INDEX).toMatch(/router\.use\(fleetGuards\(\),\s*fleetRulesAdminRouter\)/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 
   it("exposes the 4 CRUD endpoints + soft-delete", () => {

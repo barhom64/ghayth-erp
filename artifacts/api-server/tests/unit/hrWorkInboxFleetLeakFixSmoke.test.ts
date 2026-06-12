@@ -2,17 +2,23 @@
  * PR-5a (#2077) — fleet-middleware leak fix smoke.
  *
  * Before PR-5a, seven `router.use(requireModule("fleet"), …, subRouter)`
- * mounts in routes/index.ts (lines around 397/400/403/410/415/417/418)
- * lacked a path prefix. Express runs middleware on EVERY incoming
- * request reaching that point — even ones the subRouter won't match —
- * so the fleet+financial guards fired for /my-space, /tasks,
- * /notifications, /work-inbox, etc., and any non-fleet operator got
- * 403 with `requiredModule: ["fleet"]`.
+ * mounts in routes/index.ts lacked a path prefix. Express runs middleware
+ * on EVERY incoming request reaching that point — even ones the subRouter
+ * won't match — so the fleet+financial guards fired for /my-space,
+ * /tasks, /notifications, /work-inbox, etc., and any non-fleet operator
+ * got 403 with `requiredModule: ["fleet"]`.
  *
  * PR-5 surfaced it on the live tenant: HR Manager couldn't load the
- * unified inbox. PR-5a fixes it by wrapping each mount in a
- * path-conditional gate (`gateForFleetPaths`) that forwards to the
- * fleet guards ONLY when req.path starts with /transport/ or /fleet/.
+ * unified inbox. PR-5a fixed it with a path-conditional gate
+ * (`gateForFleetPaths`). main independently hit the same bug under
+ * #1959 and shipped an equivalent path-conditional gate
+ * (`transportPathGate`) — when the wave branch merged into main, both
+ * collapsed onto main's symbol names. The semantic guarantee is
+ * identical: the fleet-module gate runs ONLY when req.path starts with
+ * /transport or /fleet, and EVERY one of the seven previously-leaky
+ * routers mounts without a per-mount fleet guard now that the path gate
+ * lives upstream. The pins below are rewritten against the surviving
+ * names so the regression they were designed to catch stays trapped.
  *
  * Source-only test — the live verify (re-run of verify-hr-work-inbox-
  * journey.sh with `RUN_AS_HR=1`) is the behavioral proof.
@@ -27,45 +33,45 @@ const INDEX_SRC = readFileSync(
   "utf8",
 );
 
-describe("PR-5a (#2077) — gateForFleetPaths helper exists + is path-aware", () => {
-  it("declares the helper", () => {
-    expect(INDEX_SRC).toMatch(/function gateForFleetPaths\([\s\S]{0,200}RequestHandler\b/);
+describe("PR-5a (#2077) — transportPathGate exists + is path-conditional", () => {
+  it("declares the gate as a RequestHandler", () => {
+    expect(INDEX_SRC).toMatch(/const transportPathGate: RequestHandler =/);
   });
-  it("the helper short-circuits when req.path is NOT /transport/* or /fleet/*", () => {
-    // The early-return is what makes /my-space + /tasks + /notifications
-    // reachable for non-fleet operators. Pin it.
-    expect(INDEX_SRC).toMatch(/if \(!req\.path\.startsWith\("\/transport\/"\)\s*&&\s*!req\.path\.startsWith\("\/fleet\/"\)\)\s*\{[\s\S]{0,80}return next\(\);[\s\S]{0,40}\}/);
+  it("gate short-circuits when req.path is NOT /transport* or /fleet*", () => {
+    // The else-branch (`next()`) is what makes /my-space, /tasks,
+    // /notifications, /work-inbox reachable for non-fleet operators.
+    expect(INDEX_SRC).toMatch(/if \(req\.path\.startsWith\("\/transport"\) \|\| req\.path\.startsWith\("\/fleet"\)\)/);
+    expect(INDEX_SRC).toMatch(/transportPathGate[\s\S]{0,400}next\(\);\s*\}/);
   });
-  it("the helper chains the passed middlewares (cooperates with Express next)", () => {
-    expect(INDEX_SRC).toMatch(/runNext: import\("express"\)\.NextFunction = \(err\) => \{[\s\S]{0,300}mw\(req, res, runNext\)/);
+  it("gate composes requireModule(\"fleet\") + requireGuards(\"financial\") in that order", () => {
+    expect(INDEX_SRC).toMatch(/const fleetModuleGate = requireModule\("fleet"\)/);
+    expect(INDEX_SRC).toMatch(/const transportFinancialGate = requireGuards\("financial"\)/);
+    expect(INDEX_SRC).toMatch(/fleetModuleGate\(req, res, \(err\?: unknown\) => \(err \? next\(err as Error\) : transportFinancialGate\(req, res, next\)\)\)/);
   });
 });
 
-describe("PR-5a (#2077) — the 7 previously-leaky mounts now use the gate", () => {
-  // Each subRouter mount is rewritten to `router.use(fleetGuards(), subRouter)`.
-  // The fleetGuards() factory returns a fresh gateForFleetPaths instance
-  // per mount (so each one carries its own require* closure state).
-  it("transportBookingsRouter mount uses fleetGuards()", () => {
-    expect(INDEX_SRC).toMatch(/router\.use\(fleetGuards\(\),\s*transportBookingsRouter\)/);
+describe("PR-5a (#2077) — the 7 previously-leaky routers mount without a per-mount fleet guard", () => {
+  // After main's #1959 cleanup, the gate is mounted ONCE upstream
+  // (`router.use(transportPathGate)`) and each transport/fleet sub-router
+  // mounts plainly. The semantic guarantee is the SAME as PR-5a's
+  // `router.use(fleetGuards(), subRouter)` pattern; the regression we
+  // need to catch is "fleet guards reattached to a path-less mount".
+  it("transportPathGate is mounted once, before the seven sub-routers", () => {
+    expect(INDEX_SRC).toMatch(/router\.use\(transportPathGate\);[\s\S]{0,80}router\.use\(transportBookingsRouter\)/);
   });
-  it("vehicleProfileRouter mount uses fleetGuards()", () => {
-    expect(INDEX_SRC).toMatch(/router\.use\(fleetGuards\(\),\s*vehicleProfileRouter\)/);
-  });
-  it("transportPricingRouter mount uses fleetGuards()", () => {
-    expect(INDEX_SRC).toMatch(/router\.use\(fleetGuards\(\),\s*transportPricingRouter\)/);
-  });
-  it("transportPlanningRouter mount uses fleetGuards()", () => {
-    expect(INDEX_SRC).toMatch(/router\.use\(fleetGuards\(\),\s*transportPlanningRouter\)/);
-  });
-  it("transportIntegrationRouter mount uses fleetGuards()", () => {
-    expect(INDEX_SRC).toMatch(/router\.use\(fleetGuards\(\),\s*transportIntegrationRouter\)/);
-  });
-  it("transportRoutePatternsRouter mount uses fleetGuards()", () => {
-    expect(INDEX_SRC).toMatch(/router\.use\(fleetGuards\(\),\s*transportRoutePatternsRouter\)/);
-  });
-  it("fleetRulesAdminRouter mount uses fleetGuards()", () => {
-    expect(INDEX_SRC).toMatch(/router\.use\(fleetGuards\(\),\s*fleetRulesAdminRouter\)/);
-  });
+  for (const sym of [
+    "transportBookingsRouter",
+    "vehicleProfileRouter",
+    "transportPricingRouter",
+    "transportPlanningRouter",
+    "transportIntegrationRouter",
+    "transportRoutePatternsRouter",
+    "fleetRulesAdminRouter",
+  ]) {
+    it(`${sym} mounts plain (no per-mount fleet guard)`, () => {
+      expect(INDEX_SRC).toMatch(new RegExp(`router\\.use\\(${sym}\\)`));
+    });
+  }
 });
 
 describe("PR-5a (#2077) — regression pin: the unbound pattern is GONE", () => {

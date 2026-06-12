@@ -119,7 +119,10 @@ describe("PR-10 (#2077) — translateLegacy understands dotted feature keys", ()
     // expressed in the legacy shorthand: 'hr.payroll:read' would hit
     // the module-wide path (no match: modules don't contain dots), and
     // we'd be forced to choose between hr:* (leaks discipline) and
-    // raw SQL (the fragmentation FU-1 already exposed). Pin the early
+    // raw SQL (the fragmentation FU-1 already exposed). main reached
+    // the same conclusion for #2134 (finance_manager reading clients
+    // without inheriting CRM); both PR-10 and #2134 collapsed to the
+    // same branch when this feature branch was merged. Pin the early
     // return so a refactor can't quietly delete it.
     expect(AUTO).toMatch(/if \(module\.includes\("\."\)\)\s*\{/);
     expect(AUTO).toMatch(/FEATURE_CATALOG\.find\(\(f\) => f\.key === module\)/);

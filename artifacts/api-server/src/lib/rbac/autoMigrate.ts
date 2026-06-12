@@ -123,11 +123,6 @@ function translateLegacy(permission: string): { featureKey: string; action: stri
   const [module, ...rest] = permission.split(":");
   const action = rest.join(":");
 
-  // module:* — every feature in module
-  if (action === "*" || action === "") {
-    return FEATURE_CATALOG.filter((f) => f.moduleKey === module).map((f) => ({ featureKey: f.key, action: "*" }));
-  }
-
   // Map legacy actions to catalog actions
   const actionMap: Record<string, string[]> = {
     read: ["view", "list"],
@@ -139,23 +134,27 @@ function translateLegacy(permission: string): { featureKey: string; action: stri
     self: ["view", "list", "create", "update"],
     download: ["export"],
   };
-  const catalogActions = actionMap[action] || [action];
 
-  // PR-10 (#2077) — exact-feature shorthand. Real module keys are
-  // single tokens ('hr', 'finance'), so a dotted left-hand-side
-  // ('hr.payroll', 'hr.payroll.runs') must refer to a catalog feature
-  // by key. Without this, expressing the payroll lane required either
-  // grants on the whole 'hr' module (which leaks discipline) or a
-  // separate SQL migration (the fragmentation FU-1 already exposed).
-  // Returning early keeps the existing module-wide path untouched.
+  // Feature-level key ("crm.clients:read") — the module part carries a dot →
+  // grant on exactly that catalog feature, not a whole module. #2134: lets a
+  // role default hold a narrow cross-module grant (finance_manager reading
+  // the client master for invoicing) without inheriting the rest of CRM.
   if (module.includes(".")) {
-    const direct = FEATURE_CATALOG.find((f) => f.key === module);
-    if (!direct) return [];
-    return catalogActions
-      // as-any-reason: justified-pragmatic - mirrors the loop below; the cast is bounded by availableActions.
-      .filter((a) => direct.availableActions.includes(a as any))
-      .map((a) => ({ featureKey: direct.key, action: a }));
+    const feature = FEATURE_CATALOG.find((f) => f.key === module);
+    if (!feature) return [];
+    if (action === "*" || action === "") return [{ featureKey: feature.key, action: "*" }];
+    return (actionMap[action] || [action])
+      // as-any-reason: justified-pragmatic - same availableActions narrowing as the module loop below
+      .filter((a) => feature.availableActions.includes(a as any))
+      .map((a) => ({ featureKey: feature.key, action: a }));
   }
+
+  // module:* — every feature in module
+  if (action === "*" || action === "") {
+    return FEATURE_CATALOG.filter((f) => f.moduleKey === module).map((f) => ({ featureKey: f.key, action: "*" }));
+  }
+
+  const catalogActions = actionMap[action] || [action];
 
   // Find features in this module that support these actions
   const features = FEATURE_CATALOG.filter((f) => f.moduleKey === module);
@@ -194,7 +193,11 @@ export const DEFAULT_ROLE_DEFS: RoleDef[] = [
   { role: "owner", permissions: ["*"] },
   { role: "general_manager", permissions: ["dashboard:read", "employees:*", "finance:*", "hr:*", "fleet:*", "property:*", "warehouse:*", "store:*", "operations:*", "bi:*", "reports:*", "governance:*", "legal:*", "crm:*", "marketing:*", "support:*", "documents:*", "requests:*", "comms:*", "settings:read"] },
   { role: "hr_manager", permissions: ["dashboard:read", "employees:*", "hr:*", "attendance:*", "leaves:*", "payroll:*", "documents:read", "requests:*", "comms:read"] },
-  { role: "finance_manager", permissions: ["dashboard:read", "finance:*", "invoices:*", "expenses:*", "reports:read", "documents:read", "requests:*", "comms:read"] },
+  // crm.clients read+create (#2134): the invoice/voucher forms read the client
+  // master for their picker and quick-create a client inline — without this a
+  // finance manager gets an EMPTY client field on the invoice and the billing
+  // path dead-ends. Narrow feature-level grant; the rest of CRM stays closed.
+  { role: "finance_manager", permissions: ["dashboard:read", "finance:*", "invoices:*", "expenses:*", "reports:read", "documents:read", "requests:*", "comms:read", "crm.clients:read", "crm.clients:create"] },
   { role: "fleet_manager", permissions: ["dashboard:read", "fleet:*", "documents:read", "requests:*", "comms:read"] },
   { role: "property_manager", permissions: ["dashboard:read", "property:*", "documents:read", "requests:*", "comms:read"] },
   { role: "projects_manager", permissions: ["dashboard:read", "operations:*", "documents:read", "requests:*", "comms:read"] },

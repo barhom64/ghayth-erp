@@ -161,6 +161,9 @@ export const allNavSections: NavSection[] = [
     items: [
       // 1. لوحة HR
       { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "bi" },
+      // بوابة /hr — لوحة تشغيلية خاصة بفريق الموارد البشرية (مؤشرات وروابط
+      // سريعة لا تظهر في اللوحة العامة). كانت مركّبة بلا مدخل (orphan).
+      { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr" },
 
       // 2. الموظفون — gathers recruitment, employees, onboarding,
       // org structure, transfers, documents, contracts, letters, exit
@@ -252,6 +255,7 @@ export const allNavSections: NavSection[] = [
       { label: "التقارير", path: "/hr/turnover-report", icon: FileBarChart, module: "hr", children: [
         { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
         { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
+        { label: "تحليلات التوظيف المتقدمة", path: "/hr/recruitment/advanced", icon: TrendingUp, subKey: "recruitment" },
       ]},
 
       // 9. الإعدادات — attendance policy + holidays
@@ -474,7 +478,10 @@ export const allNavSections: NavSection[] = [
         { label: "قائمة المشاريع", path: "/projects?tab=list", icon: Target },
         { label: "مخطط غانت", path: "/projects/gantt", icon: BarChart2 },
         { label: "المخاطر", path: "/projects/risks", icon: ShieldAlert },
-        { label: "مهام المشاريع", path: "/projects/tasks", icon: ListTodo },
+        // "مهام المشاريع" → /projects/tasks removed: it rendered the GENERAL
+        // operations Tasks page (the `tasks` table), mislabelling operations work
+        // as project tasks. Per-project tasks (project_tasks) live in the project
+        // detail page; general operations tasks live at /tasks (below).
         { label: "المهام", path: "/tasks", icon: ListTodo },
       ]},
     ],
@@ -493,6 +500,8 @@ export const allNavSections: NavSection[] = [
         // shows it to anyone with fleet access; non-driver managers who click it
         // hit a graceful "لا يوجد سجل سائق" empty state, never an error.
         { label: "لوحة السائق", path: "/me/driver", icon: User, module: "fleet" },
+        // ملاحة السائق — نفس بوابة لوحة السائق (module بدل perm) ولنفس السبب.
+        { label: "ملاحة السائق", path: "/me/driver/navigation", icon: Navigation, module: "fleet" },
         // Agent-5: explicit module="bi" matches backend gate.
         { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "bi" },
         // Management children are gated by the exact backend feature:action each
@@ -505,6 +514,9 @@ export const allNavSections: NavSection[] = [
         { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
         { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
         { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
+        // تأجير المركبات — كانت الصفحة مركّبة بلا مدخل في القائمة (orphan).
+        // بوابة الـ backend: fleet.vehicles:list (fleet.ts /rental-contracts).
+        { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.vehicles:list" },
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
         { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock, perm: "fleet.maintenance:list" },
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle, perm: "fleet.vehicles:list" },
@@ -613,6 +625,7 @@ export const allNavSections: NavSection[] = [
         { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
         { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
+        { label: "التقويم التشغيلي", path: "/umrah/calendar", icon: CalendarClock },
         { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
         { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
         { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
@@ -624,6 +637,17 @@ export const allNavSections: NavSection[] = [
           { label: "أرصدة الوكلاء", path: "/umrah/reports/agent-balances", icon: DollarSign },
           { label: "أرصدة الوكلاء الفرعيين", path: "/umrah/reports/subagent-balances", icon: DollarSign },
           { label: "حركات المعتمرين", path: "/umrah/reports/pilgrim-movements", icon: Activity },
+          // بقية التقارير كانت مركّبة وتُفتح من مركز التقارير فقط (orphans) —
+          // أُضيفت هنا حتى تكون كل المسارات قابلة للوصول من القائمة أيضاً.
+          { label: "ربحية المجموعات", path: "/umrah/reports/group-profitability", icon: TrendingUp },
+          { label: "ربحية الوكلاء", path: "/umrah/reports/agent-profitability", icon: TrendingUp },
+          { label: "ملخّص العمولات", path: "/umrah/reports/commissions-summary", icon: Calculator },
+          { label: "تكاليف العمرة", path: "/umrah/reports/umrah-costs", icon: DollarSign },
+          { label: "ملخّص فواتير نُسك", path: "/umrah/reports/nusk-invoices-summary", icon: Receipt },
+          { label: "ملخّص فواتير العملاء", path: "/umrah/reports/sales-invoices-summary", icon: Receipt },
+          { label: "النقل المرتبط بالعمرة", path: "/umrah/reports/transport-requests", icon: Truck },
+          { label: "ملخّص المخالفات", path: "/umrah/reports/violations-summary", icon: Shield },
+          { label: "ملخّص أخطاء الاستيراد", path: "/umrah/reports/import-errors-summary", icon: AlertTriangle },
         ]},
       ]},
     ],

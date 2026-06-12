@@ -84,9 +84,12 @@ describe("#1733 Pricing — route surface", () => {
     expect(block).toMatch(/finance\.transport_billing\.batch\.ready/);
   });
 
-  it("router is mounted with fleet module + financial guards (via PR-5a fleetGuards helper)", () => {
+  it("router is mounted with fleet module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("transportPricingRouter");
-    expect(ROUTES_INDEX).toMatch(/router\.use\(\s*fleetGuards\(\),\s*transportPricingRouter\)/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 });
 

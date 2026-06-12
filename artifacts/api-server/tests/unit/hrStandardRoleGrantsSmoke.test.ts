@@ -30,7 +30,7 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const MIGRATION = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/migrations/291_seed_standard_role_grants_fix.sql"), "utf8");
+  join(REPO_ROOT, "artifacts/api-server/src/migrations/306_seed_standard_role_grants_fix.sql"), "utf8");
 const ROLE_GUARD = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/middlewares/roleGuard.ts"), "utf8");
 const JOURNEY = readFileSync(

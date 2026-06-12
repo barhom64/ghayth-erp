@@ -173,17 +173,46 @@ export async function calculateCommissionForPlan(
     }).catch((e) => logger.error(e, "umrah commission background task failed"));
 
     if (result.finalAmount > 0) {
-      // GL: Debit Commission Expense, Credit Commission Payable (accrual) — BLOCKING
+      // §5 of #1870 — operator directive: «العمولة (مسوّق/راتب+عمولة)
+      // تُرحَّل عبر HR». The commission obligation now joins the HR
+      // payroll obligation pool by routing the CR to salary_payable
+      // (same account as HR's payroll JE) — so when HR runs payroll
+      // for this employee the SAME payable is cleared in one shot
+      // instead of two separate liabilities ("salary owed" +
+      // "commission owed" → both surfaced as "owed to employee").
+      //
+      // Configurable via system_settings.commission_via_hr:
+      //   'true'  (default) — credit salary_payable  ← unified-HR mode
+      //   'false'           — credit commission_payable ← legacy split mode
+      // Operations can flip the flag without a code change for tenants
+      // that explicitly want the old separation.
+      const viaHrRow = (await client.query(
+        `SELECT value FROM system_settings
+          WHERE "companyId" = $1 AND "branchId" IS NULL AND key = 'commission_via_hr'
+          LIMIT 1`,
+        [plan.companyId]
+      )).rows[0];
+      const viaHr = ((viaHrRow?.value as string | undefined) ?? "true") !== "false";
+
       const [expenseCode, payableCode] = await Promise.all([
         getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "6200"),
-        getAccountCodeFromMapping(plan.companyId, "commission_payable", "credit", "2150"),
+        viaHr
+          ? getAccountCodeFromMapping(plan.companyId, "salary_payable",      "credit", "2120")
+          : getAccountCodeFromMapping(plan.companyId, "commission_payable",  "credit", "2150"),
       ]);
+
+      const payableDescription = viaHr
+        ? `عمولة مستحقة عبر HR — موظف #${plan.employeeId}`
+        : `عمولة مستحقة — موظف #${plan.employeeId}`;
+
       await createGuardedJournalEntry({
         companyId: plan.companyId,
         branchId: plan.branchId,
         createdBy: userId,
         ref: `JE-COMM-${planId}-${year}${String(month).padStart(2, "0")}`,
-        description: `استحقاق عمولة — ${plan.planName} — ${month}/${year} — موظف #${plan.employeeId}`,
+        description: viaHr
+          ? `استحقاق عمولة (عبر HR) — ${plan.planName} — ${month}/${year} — موظف #${plan.employeeId}`
+          : `استحقاق عمولة — ${plan.planName} — ${month}/${year} — موظف #${plan.employeeId}`,
         type: "accrual",
         sourceType: "employee_commission_calculations",
         sourceId: planId,
@@ -191,9 +220,13 @@ export async function calculateCommissionForPlan(
         // umrahSeasonId carries the season tied to this commission plan
         // so commission-expense reports can drill by season alongside
         // the existing employee dimension (financial-integrity audit #5).
+        // umrahAgentId would carry the marketer's agent attribution but
+        // employee_commission_plans has no agentId column today — the
+        // dimension is left undefined here and will be added when the
+        // plan schema gains an agent FK in a follow-up.
         lines: [
           { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
-          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: `عمولة مستحقة — موظف #${plan.employeeId}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
+          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: payableDescription, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
         ],
       }, { table: "employee_commission_calculations", id: planId });
     }

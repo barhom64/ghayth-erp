@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -71,7 +71,14 @@ function QuickCreateDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
           }
           onSubmit={(values) => {
-            createMut.mutate(values, {
+            // #2134 — drop untouched optional fields instead of sending "".
+            // The backend zod schemas validate present values strictly (an
+            // empty-string email fails z.email()), so a quick-create with
+            // «البريد» left blank 422'd and the entity silently never existed.
+            const payload = Object.fromEntries(
+              Object.entries(values).filter(([, v]) => String(v ?? "").trim() !== "")
+            );
+            createMut.mutate(payload, {
               onSuccess: (data: any) => {
                 onCreated?.(data);
                 onOpenChange(false);
@@ -173,6 +180,37 @@ interface EntitySelectConfig {
   getName: (row: any) => string;
   getSublabel?: (row: any) => string;
   getValueField?: string;
+  /**
+   * #2134 — when set, typing in the dropdown also queries the endpoint with
+   * `&search=...` (server-side) and merges the matches into the options. The
+   * preloaded list is capped (e.g. /clients?limit=500 sorted by name), so an
+   * entity beyond that window — like a freshly added client — was invisible
+   * AND unfindable, since cmdk only filters what's already loaded.
+   */
+  serverSearch?: boolean;
+}
+
+/**
+ * Merge picker options from the three sources, deduped by value, in priority
+ * order: just-created entities first (they must appear instantly, before any
+ * refetch lands — #2134 acceptance), then the preloaded window, then
+ * server-side search matches. Pure — unit-tested in entity-selects.test.tsx.
+ */
+export function mergeEntityOptions(
+  created: SelectOption[],
+  base: SelectOption[],
+  searchResults: SelectOption[],
+): SelectOption[] {
+  const seen = new Set<string>();
+  const out: SelectOption[] = [];
+  for (const list of [created, base, searchResults]) {
+    for (const o of list) {
+      if (!o.value || seen.has(o.value)) continue;
+      seen.add(o.value);
+      out.push(o);
+    }
+  }
+  return out;
 }
 
 interface EntitySelectProps {
@@ -200,19 +238,44 @@ function buildEntitySelect(config: EntitySelectConfig) {
     filter,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
+    // #2134 — entities created from «+ جديد» are appended locally so they
+    // show (and stay selected) the instant the dialog closes, independent of
+    // the list refetch round-trip or the 500-row preload window.
+    const [createdOptions, setCreatedOptions] = useState<SelectOption[]>([]);
+    const [searchText, setSearchText] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    useEffect(() => {
+      const t = setTimeout(() => setDebouncedSearch(searchText.trim()), 250);
+      return () => clearTimeout(t);
+    }, [searchText]);
+
     const { data, refetch } = useApiQuery<{ data: any[] }>([config.queryKey], config.endpoint);
+    // #2134 — server-side search companion query: the preloaded list is a
+    // capped window, so typing also asks the server (same scope injection,
+    // same company filters) and the matches are merged in below.
+    const searchActive = !!config.serverSearch && debouncedSearch.length >= 2;
+    const searchPath = searchActive
+      ? `${config.endpoint}${config.endpoint.includes("?") ? "&" : "?"}search=${encodeURIComponent(debouncedSearch)}`
+      : null;
+    const { data: searchData } = useApiQuery<{ data: any[] }>(
+      [`${config.queryKey}-search`, debouncedSearch],
+      searchPath,
+      { enabled: searchActive },
+    );
+
     let rows = data?.data || [];
     if (filter) rows = rows.filter(filter);
+    let searchRows = searchData?.data || [];
+    if (filter) searchRows = searchRows.filter(filter);
 
-    const options = useMemo(
-      () =>
-        rows.map((r: any) => ({
-          value: String(r[config.getValueField || "id"]),
-          label: config.getName(r),
-          sublabel: config.getSublabel?.(r),
-        })),
-      [rows]
-    );
+    const options = useMemo(() => {
+      const toOption = (r: any): SelectOption => ({
+        value: String(r[config.getValueField || "id"]),
+        label: config.getName(r),
+        sublabel: config.getSublabel?.(r),
+      });
+      return mergeEntityOptions(createdOptions, rows.map(toOption), searchRows.map(toOption));
+    }, [rows, searchRows, createdOptions]);
 
     return (
       <>
@@ -229,6 +292,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           fieldClassName={className}
           onCreateNew={allowCreate ? () => setShowCreate(true) : undefined}
           createNewLabel={config.createLabel}
+          onSearchChange={config.serverSearch ? setSearchText : undefined}
         />
         {allowCreate && (
           <QuickCreateDialog
@@ -239,8 +303,15 @@ function buildEntitySelect(config: EntitySelectConfig) {
             apiPath={config.createApiPath}
             invalidateKey={config.queryKey}
             onCreated={(res) => {
-              const newId = String(res?.id || res?.data?.id || "");
-              if (newId) onChange(newId);
+              const row = res?.data && res.data.id ? res.data : res;
+              const newId = String(row?.id || "");
+              if (newId) {
+                setCreatedOptions((prev) => mergeEntityOptions(
+                  [{ value: newId, label: config.getName(row), sublabel: config.getSublabel?.(row) }],
+                  prev, [],
+                ));
+                onChange(newId);
+              }
               refetch();
             }}
           />
@@ -271,6 +342,10 @@ export const EmployeeSelect = buildEntitySelect({
 export const ClientSelect = buildEntitySelect({
   queryKey: "clients-list",
   endpoint: "/clients?limit=500",
+  // #2134 — the client master can exceed the 500-row preload window (sorted
+  // by name), making a newly added client invisible and unfindable in the
+  // invoice form. GET /clients supports ?search= over name/email/phone.
+  serverSearch: true,
   defaultLabel: "العميل",
   defaultPlaceholder: "اختر العميل",
   searchPlaceholder: "ابحث عن عميل...",
@@ -491,12 +566,34 @@ export const JobTitleSelect = buildEntitySelect({
   getSublabel: (r) => r?.defaultRoleKey || r?.category || "",
 });
 
+// HR-Wave-0/0.4 — CostCenterMasterSelect: master-data picker for the
+// `cost_centers` table (real CC id/code/name). Distinct from the
+// legacy `CostCenterSelect` above, which composes synthetic «فرع/قسم/مشروع»
+// labels for forms that still store free-text cost-center tags.
+// Used by payroll/expense/advance forms to bind HR-touching financial
+// movements to a cost center. allowCreate=true lets finance open a
+// missing center from inside the form. Backend endpoint is POST
+// /finance/cost-centers (authorize finance.cost_centers:create).
+export const CostCenterMasterSelect = buildEntitySelect({
+  queryKey: "cost-centers-list",
+  endpoint: "/finance/cost-centers?limit=500",
+  defaultLabel: "مركز التكلفة",
+  defaultPlaceholder: "اختر مركز التكلفة",
+  searchPlaceholder: "ابحث عن مركز تكلفة (اسم أو رمز)...",
+  createTitle: "إضافة مركز تكلفة جديد",
+  createLabel: "+ مركز تكلفة جديد",
+  createApiPath: "/finance/cost-centers",
+  createFields: [
+    { key: "code", label: "رمز المركز", required: true },
+    { key: "name", label: "اسم المركز", required: true },
+  ],
+  getName: (r) => r?.name ? `${r.code ?? ""}${r.code ? " - " : ""}${r.name}` : r?.code || `#${r?.id}`,
+  getSublabel: (r) => r?.type || "",
+});
+
 // PR-1 (#2077) — PositionSelect: master-data picker for `positions`
-// (the administrative role: مدير قسم / نائب / مشرف). Distinct from
-// JobTitleSelect (functional role / responsibility). The employee
-// creation wizard binds the assignment to one position via
-// `employee_assignments.positionId`. Backend endpoint: /org/positions
-// (system positions surface when companyId IS NULL).
+// (institutional matrix). The new-employee wizard binds the user via
+// `employee_assignments.positionId`. Backend: /org/positions.
 export const PositionSelect = buildEntitySelect({
   queryKey: "positions-list",
   endpoint: "/org/positions",
@@ -576,29 +673,4 @@ export const EmployeeCategorySelect = buildEntitySelect({
   getValueField: "categoryKey",
   getName: (r) => r?.labelAr || r?.labelEn || r?.categoryKey || `#${r?.id}`,
   getSublabel: (r) => r?.exemptFromAutoDeduction ? "مُعفاة من الخصم التلقائي" : "",
-});
-
-// HR-Wave-0/0.4 — CostCenterMasterSelect: master-data picker for the
-// `cost_centers` table (real CC id/code/name). Distinct from the
-// legacy `CostCenterSelect` above, which composes synthetic «فرع/قسم/مشروع»
-// labels for forms that still store free-text cost-center tags.
-// Used by payroll/expense/advance forms to bind HR-touching financial
-// movements to a cost center. allowCreate=true lets finance open a
-// missing center from inside the form. Backend endpoint is POST
-// /finance/cost-centers (authorize finance.cost_centers:create).
-export const CostCenterMasterSelect = buildEntitySelect({
-  queryKey: "cost-centers-list",
-  endpoint: "/finance/cost-centers?limit=500",
-  defaultLabel: "مركز التكلفة",
-  defaultPlaceholder: "اختر مركز التكلفة",
-  searchPlaceholder: "ابحث عن مركز تكلفة (اسم أو رمز)...",
-  createTitle: "إضافة مركز تكلفة جديد",
-  createLabel: "+ مركز تكلفة جديد",
-  createApiPath: "/finance/cost-centers",
-  createFields: [
-    { key: "code", label: "رمز المركز", required: true },
-    { key: "name", label: "اسم المركز", required: true },
-  ],
-  getName: (r) => r?.name ? `${r.code ?? ""}${r.code ? " - " : ""}${r.name}` : r?.code || `#${r?.id}`,
-  getSublabel: (r) => r?.type || "",
 });

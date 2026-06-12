@@ -40,7 +40,7 @@ COL="$(psql "$DSN" -tA -c "SELECT count(*) FROM information_schema.columns WHERE
 [ "$COL" = "1" ] && ok "isAccessGrant column exists" || { no "column missing"; exit 1; }
 
 # PR-9a — FU-1 seed fix: standard grants for department_manager + payroll_officer.
-psql "$DSN" -q -f /home/user/ghayth-erp/artifacts/api-server/src/migrations/291_seed_standard_role_grants_fix.sql >/dev/null 2>&1
+psql "$DSN" -q -f /home/user/ghayth-erp/artifacts/api-server/src/migrations/306_seed_standard_role_grants_fix.sql >/dev/null 2>&1
 G_DEPT="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_role_grants g JOIN rbac_roles r ON r.id=g.role_id WHERE r.role_key='department_manager' AND r.\"companyId\" IS NULL;")"
 G_PAY="$(psql "$DSN" -tA -c "SELECT count(*) FROM rbac_role_grants g JOIN rbac_roles r ON r.id=g.role_id WHERE r.role_key='payroll_officer' AND r.\"companyId\" IS NULL;")"
 [ "${G_DEPT:-0}" -ge 1 ] && ok "department_manager carries $G_DEPT grants (was 0 — no role row at all)" || no "department_manager still 0 grants"

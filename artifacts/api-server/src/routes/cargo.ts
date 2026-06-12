@@ -112,7 +112,7 @@ const BILLING_STATUSES = [
   "excluded",
 ] as const;
 
-const createManifestSchema = z.object({
+const createManifestBaseSchema = z.object({
   manifestNumber: z.string().min(1, "رقم البوليصة مطلوب").max(64),
   customerId: z.coerce.number().int().positive().optional().nullable(),
   customerName: z.string().max(255).optional().nullable(),
@@ -133,7 +133,19 @@ const createManifestSchema = z.object({
   transportServiceType: z.enum(TRANSPORT_SERVICE_TYPES).optional(),
 });
 
-const updateManifestSchema = createManifestSchema.partial().extend({
+// #1812 Wave 0.2 — manifest CREATE must link a structured customer.
+// The free-text customerName is allowed only as display metadata
+// alongside a customerId; alone it's rejected.
+const createManifestSchema = createManifestBaseSchema.refine(
+  (b) => b.customerId != null,
+  {
+    message:
+      "يجب اختيار العميل من السجل (CRM). اسم العميل النصّي وحده غير مقبول.",
+    path: ["customerId"],
+  },
+);
+
+const updateManifestSchema = createManifestBaseSchema.partial().extend({
   status: z.enum(CARGO_STATUSES).optional(),
   // #1733 Foundation — read-only finance badge; only the accountant
   // materialize / reject paths flip this to `invoiced` / `excluded`.

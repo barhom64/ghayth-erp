@@ -8,11 +8,36 @@
 import * as zod from "zod";
 
 /**
- * @summary Health check
+ * Lightweight liveness check. Proves the process is up. Does NOT
+verify DB connectivity or schema completeness — use
+`GET /api/health/schema` for readiness verification.
+
+ * @summary Liveness probe (lightweight)
  */
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+  redisRateLimit: zod.string().optional(),
 });
+
+/**
+ * Readiness probe. Verifies that the expected tables/columns exist
+and that pending migrations have been applied. This is the
+endpoint that post-deploy verification scripts should poll —
+`/api/health` and `/api/healthz` only prove connectivity /
+liveness, not schema completeness.
+
+ * @summary Schema/readiness verification
+ */
+export const HealthSchemaResponse = zod
+  .object({
+    status: zod.string(),
+    tables: zod.object({}).passthrough().optional(),
+    migrations: zod.object({}).passthrough().optional(),
+    checkedAt: zod.coerce.date(),
+  })
+  .describe(
+    "Response from `GET \/api\/health\/schema`. `status` is the readiness\nverdict (`ok` | `degraded` | `critical`). `tables` and `migrations`\ncarry diagnostic detail whose internal shape is intentionally left\nopen (bare object) to avoid forcing spec churn on every change to\nthe readiness check.\n",
+  );
 
 /**
  * @summary Login
@@ -23,24 +48,106 @@ export const LoginBody = zod.object({
 });
 
 export const LoginResponse = zod.object({
-  token: zod.string(),
   assignments: zod.array(zod.object({}).passthrough()),
+  userRoles: zod.array(zod.object({}).passthrough()),
 });
 
 /**
  * @summary Get current user
  */
 export const GetMeResponse = zod.object({
+  id: zod.number(),
   name: zod.string(),
-  phone: zod.string().optional(),
-  email: zod.string().optional(),
-  photoUrl: zod.string().optional(),
-  jobTitle: zod.string().optional(),
+  phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  empNumber: zod.string().nullish(),
+  photoUrl: zod.string().nullish(),
+  status: zod.string().optional(),
+  jobTitle: zod.string().nullish(),
+  jobTitleId: zod.number().nullish(),
   role: zod.string(),
-  salary: zod.number().optional(),
-  companyName: zod.string(),
-  branchName: zod.string(),
+  salary: zod.string().nullish(),
+  companyId: zod.number(),
+  branchId: zod.number().nullish(),
+  companyName: zod.string().nullish(),
+  branchName: zod.string().nullish(),
+  preferredCalendar: zod.string().nullish(),
+  preferredLocale: zod.string().nullish(),
+  userRoles: zod.array(zod.object({}).passthrough()),
 });
+
+/**
+ * Employee login for native/mobile clients. Returns the access and refresh tokens in the JSON body (NOT as cookies). The access token is the same JWT used by the web cookie flow, so it carries identical RBAC / allowedModules / feature-flag scope — send it as `Authorization: Bearer <accessToken>` on subsequent requests. When the access token expires (HTTP 401), call `/auth/mobile/refresh` with the stored refresh token to obtain a new pair. To sign out, POST the refresh token to `/auth/logout`.
+
+ * @summary Mobile (Bearer-token) login
+ */
+export const MobileLoginBody = zod.object({
+  email: zod.string(),
+  password: zod.string(),
+});
+
+export const MobileLoginResponse = zod
+  .object({
+    tokenType: zod.enum(["Bearer"]),
+    accessToken: zod
+      .string()
+      .describe(
+        "Short-lived JWT — send as `Authorization: Bearer <accessToken>`.",
+      ),
+    refreshToken: zod
+      .string()
+      .describe(
+        "Long-lived opaque token used to obtain a new pair via \/auth\/mobile\/refresh.",
+      ),
+    accessTokenExpiresIn: zod
+      .number()
+      .describe("Access-token lifetime in seconds."),
+    refreshTokenExpiresIn: zod
+      .number()
+      .describe("Refresh-token lifetime in seconds."),
+  })
+  .describe(
+    "Access + refresh token pair returned in the body for mobile clients.",
+  )
+  .and(
+    zod.object({
+      assignments: zod.array(zod.object({}).passthrough()),
+      userRoles: zod.array(zod.object({}).passthrough()),
+    }),
+  );
+
+/**
+ * Exchanges a valid refresh token for a new access + refresh token pair (returned in the body). Refresh tokens are rotated on every use; re-using an already-rotated token revokes the entire session (reuse detection).
+
+ * @summary Mobile refresh-token rotation
+ */
+export const MobileRefreshBody = zod.object({
+  refreshToken: zod.string(),
+});
+
+export const MobileRefreshResponse = zod
+  .object({
+    tokenType: zod.enum(["Bearer"]),
+    accessToken: zod
+      .string()
+      .describe(
+        "Short-lived JWT — send as `Authorization: Bearer <accessToken>`.",
+      ),
+    refreshToken: zod
+      .string()
+      .describe(
+        "Long-lived opaque token used to obtain a new pair via \/auth\/mobile\/refresh.",
+      ),
+    accessTokenExpiresIn: zod
+      .number()
+      .describe("Access-token lifetime in seconds."),
+    refreshTokenExpiresIn: zod
+      .number()
+      .describe("Refresh-token lifetime in seconds."),
+  })
+  .describe(
+    "Access + refresh token pair returned in the body for mobile clients.",
+  );
 
 /**
  * @summary Get dashboard stats
@@ -50,7 +157,9 @@ export const GetDashboardResponse = zod.object({
     todayTasks: zod.number().optional(),
     awaitingMe: zod.number().optional(),
     overdue: zod.number().optional(),
+    completedToday: zod.number().optional(),
     completedPct: zod.number().optional(),
+    total: zod.number().optional(),
   }),
   todayTasks: zod.array(
     zod.object({
@@ -66,17 +175,23 @@ export const GetDashboardResponse = zod.object({
     }),
   ),
   pendingApprovals: zod.array(zod.object({}).passthrough()),
+  pendingFinanceApprovals: zod.array(zod.object({}).passthrough()).optional(),
+  pendingPurchaseRequests: zod.array(zod.object({}).passthrough()).optional(),
   notifications: zod.array(
     zod.object({
       id: zod.number(),
       type: zod.string(),
       title: zod.string(),
-      body: zod.string().optional(),
-      priority: zod.string().optional(),
+      body: zod.string().nullish(),
+      priority: zod.string().nullish(),
       isRead: zod.boolean(),
       createdAt: zod.string().optional(),
+      refType: zod.string().nullish(),
+      refId: zod.number().nullish(),
+      actionUrl: zod.string().nullish(),
     }),
   ),
+  role: zod.string().optional(),
 });
 
 /**
@@ -89,6 +204,48 @@ export const GetDashboardSummaryResponse = zod.object({
   pendingInvoices: zod.number(),
   activeTasksToday: zod.number(),
   presentToday: zod.number(),
+  vehicles: zod
+    .object({
+      total: zod.number().optional(),
+      active: zod.number().optional(),
+    })
+    .optional(),
+  tickets: zod
+    .object({
+      open: zod.number().optional(),
+      breached: zod.number().optional(),
+    })
+    .optional(),
+  projects: zod
+    .object({
+      total: zod.number().optional(),
+      active: zod.number().optional(),
+    })
+    .optional(),
+  contracts: zod
+    .object({
+      active: zod.number().optional(),
+      expiringSoon: zod.number().optional(),
+    })
+    .optional(),
+  opportunities: zod
+    .object({
+      total: zod.number().optional(),
+      value: zod.number().optional(),
+    })
+    .optional(),
+  warehouseAlerts: zod.number().optional(),
+  pendingLeaveRequests: zod.number().optional(),
+  umrah: zod
+    .object({
+      activePilgrims: zod.number().optional(),
+      overstayPilgrims: zod.number().optional(),
+      openSeasons: zod.number().optional(),
+      monthlyRevenue: zod.number().optional(),
+      pendingInvoices: zod.number().optional(),
+      openPenalties: zod.number().optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -103,19 +260,32 @@ export const ListEmployeesQueryParams = zod.object({
   limit: zod.coerce.number().default(listEmployeesQueryLimitDefault),
 });
 
-export const ListEmployeesResponseItem = zod.object({
-  id: zod.number(),
-  name: zod.string(),
-  phone: zod.string().optional(),
-  email: zod.string().optional(),
-  assignmentId: zod.number().optional(),
-  jobTitle: zod.string(),
-  role: zod.string(),
-  salary: zod.number().optional(),
-  status: zod.string(),
-  empNumber: zod.string().optional(),
+export const ListEmployeesResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      phone: zod.string().nullish(),
+      email: zod.string().nullish(),
+      empNumber: zod.string().nullish(),
+      status: zod.string(),
+      activeAssignmentId: zod.number().nullish(),
+      iqamaNumber: zod.string().nullish(),
+      iqamaExpiry: zod.string().nullish(),
+      iqamaStatus: zod.string().nullish(),
+      jobTitle: zod.string().nullish(),
+      jobTitleId: zod.number().nullish(),
+      role: zod.string(),
+      salary: zod.string().nullish(),
+      branchId: zod.number().nullish(),
+      branchName: zod.string().nullish(),
+      govLinkCount: zod.number().optional(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const ListEmployeesResponse = zod.array(ListEmployeesResponseItem);
 
 /**
  * @summary Create employee
@@ -134,11 +304,27 @@ export const CreateEmployeeBody = zod.object({
   hireDate: zod.string(),
 });
 
-export const CreateEmployeeResponse = zod.object({
-  employeeId: zod.number(),
-  assignmentId: zod.number(),
-  empNumber: zod.string(),
-});
+export const CreateEmployeeResponse = zod
+  .object({
+    id: zod.number(),
+    name: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    email: zod.string().nullish(),
+    empNumber: zod.string().nullish(),
+    status: zod.string().nullish(),
+    jobTitle: zod.string(),
+    role: zod.string().nullish(),
+    salary: zod.string().nullish(),
+    branchId: zod.number().nullish(),
+    branchName: zod.string().nullish(),
+    assignmentId: zod.number().nullish(),
+    onboardingTasksCreated: zod.number().nullish(),
+    probationEndDate: zod.string().nullish(),
+    userAccount: zod.record(zod.string(), zod.unknown()).nullish(),
+  })
+  .describe(
+    "Response from `POST \/api\/hr\/employees`. Returns the created employee\n(list-row projection joined with the new active assignment) plus\nonboarding metadata and the linked user account. Numeric\/decimal\ncolumns serialize as JSON strings.\n",
+  );
 
 /**
  * @summary Get employee by ID
@@ -150,25 +336,62 @@ export const GetEmployeeParams = zod.object({
 export const GetEmployeeResponse = zod
   .object({
     id: zod.number(),
-    name: zod.string(),
-    phone: zod.string().optional(),
-    email: zod.string().optional(),
-    assignmentId: zod.number().optional(),
+    name: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    email: zod.string().nullish(),
+    empNumber: zod.string().nullish(),
+    photoUrl: zod.string().nullish(),
+    status: zod.string().nullish(),
+    createdAt: zod.string(),
+    nationalId: zod.string().nullish(),
+    nationality: zod.string().nullish(),
+    gender: zod.string().nullish(),
+    dateOfBirth: zod.string().nullish(),
+    iqamaNumber: zod.string().nullish(),
+    iqamaExpiry: zod.string().nullish(),
+    passportNumber: zod.string().nullish(),
+    passportExpiry: zod.string().nullish(),
+    borderNumber: zod.string().nullish(),
+    visaNumber: zod.string().nullish(),
+    visaType: zod.string().nullish(),
+    visaExpiry: zod.string().nullish(),
+    sponsorNumber: zod.string().nullish(),
+    workPermitNumber: zod.string().nullish(),
+    workPermitExpiry: zod.string().nullish(),
+    iqamaStatus: zod.string().nullish(),
+    assignmentId: zod.number().nullish(),
     jobTitle: zod.string(),
-    role: zod.string(),
-    salary: zod.number().optional(),
-    status: zod.string(),
-    empNumber: zod.string().optional(),
+    jobTitleId: zod.number().nullish(),
+    role: zod.string().nullish(),
+    salary: zod.string().nullish(),
+    hireDate: zod.string().nullish(),
+    companyId: zod.number(),
+    branchId: zod.number().nullish(),
+    departmentId: zod.number().nullish(),
+    managerId: zod.number().nullish(),
+    branchName: zod.string().nullish(),
+    departmentName: zod.string().nullish(),
+    managerName: zod.string().nullish(),
+    tasks: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    attendance: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    leaves: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    trainings: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    payroll: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    violations: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    loans: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    overtime: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    userAccount: zod.record(zod.string(), zod.unknown()).nullish(),
+    roles: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    contract: zod.record(zod.string(), zod.unknown()).nullish(),
+    position: zod.record(zod.string(), zod.unknown()).nullish(),
+    custodies: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+    latestScore: zod.record(zod.string(), zod.unknown()).nullish(),
+    activeSignals: zod
+      .array(zod.record(zod.string(), zod.unknown()))
+      .optional(),
   })
-  .and(
-    zod.object({
-      gender: zod.string().optional(),
-      nationality: zod.string().optional(),
-      hireDate: zod.string().optional(),
-      departmentName: zod.string().optional(),
-      branchName: zod.string().optional(),
-      companyName: zod.string().optional(),
-    }),
+  .describe(
+    "Full employee record returned by `GET \/api\/hr\/employees\/:id`. Combines\nthe `employees` row, the active `employee_assignments` columns, joined\nlookup names, and nested operational arrays\/objects. Numeric\/decimal\ncolumns serialize as JSON strings.\n",
   );
 
 /**
@@ -182,19 +405,25 @@ export const ListClientsQueryParams = zod.object({
   page: zod.coerce.number().default(listClientsQueryPageDefault),
 });
 
-export const ListClientsResponseItem = zod.object({
-  id: zod.number(),
-  name: zod.string().optional(),
-  phone: zod.string().optional(),
-  email: zod.string().optional(),
-  classification: zod.string(),
-  source: zod.string().optional(),
-  totalRevenue: zod.number().optional(),
-  isBlacklisted: zod.boolean().optional(),
-  assignedToName: zod.string().optional(),
-  createdAt: zod.string().optional(),
+export const ListClientsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      email: zod.string().nullish(),
+      classification: zod.string().nullish(),
+      source: zod.string().nullish(),
+      totalRevenue: zod.string().nullish(),
+      expectedRevenue: zod.string().nullish(),
+      isBlacklisted: zod.boolean().nullish(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const ListClientsResponse = zod.array(ListClientsResponseItem);
 
 /**
  * @summary Create client
@@ -206,10 +435,39 @@ export const CreateClientBody = zod.object({
   source: zod.string().optional(),
 });
 
-export const CreateClientResponse = zod.object({
-  clientId: zod.number(),
-  code: zod.string(),
-});
+export const CreateClientResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    code: zod.string().nullish(),
+    type: zod.string().nullish(),
+    name: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    email: zod.string().nullish(),
+    nationality: zod.string().nullish(),
+    language: zod.string().nullish(),
+    lat: zod.string().nullish(),
+    lon: zod.string().nullish(),
+    classification: zod.string().nullish(),
+    source: zod.string().nullish(),
+    assignedTo: zod.number().nullish(),
+    totalRevenue: zod.string().nullish(),
+    avgRating: zod.string().nullish(),
+    tags: zod.unknown().optional(),
+    isBlacklisted: zod.boolean().nullish(),
+    lastActivityAt: zod.string().nullish(),
+    lastPaymentAt: zod.string().nullish(),
+    createdAt: zod.string(),
+    notes: zod.string().nullish(),
+    deletedAt: zod.string().nullish(),
+    attachments: zod.unknown().optional(),
+    taxNumber: zod.string().nullish(),
+    expectedRevenue: zod.string().nullish(),
+    updatedAt: zod.string(),
+  })
+  .describe(
+    "Response from `POST \/api\/clients`. Returns the full created `clients`\nrow. Numeric\/decimal columns serialize as JSON strings; `tags` and\n`attachments` are free-form JSON.\n",
+  );
 
 /**
  * @summary Get client by ID
@@ -218,18 +476,63 @@ export const GetClientParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const GetClientResponse = zod.object({
-  id: zod.number(),
-  name: zod.string().optional(),
-  phone: zod.string().optional(),
-  email: zod.string().optional(),
-  classification: zod.string(),
-  source: zod.string().optional(),
-  totalRevenue: zod.number().optional(),
-  isBlacklisted: zod.boolean().optional(),
-  assignedToName: zod.string().optional(),
-  createdAt: zod.string().optional(),
-});
+export const GetClientResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    code: zod.string().nullish(),
+    type: zod.string().nullish(),
+    name: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    email: zod.string().nullish(),
+    nationality: zod.string().nullish(),
+    language: zod.string().nullish(),
+    lat: zod.string().nullish(),
+    lon: zod.string().nullish(),
+    classification: zod.string().nullish(),
+    source: zod.string().nullish(),
+    assignedTo: zod.number().nullish(),
+    totalRevenue: zod.string().nullish(),
+    avgRating: zod.string().nullish(),
+    tags: zod.unknown().optional(),
+    isBlacklisted: zod.boolean().nullish(),
+    lastActivityAt: zod.string().nullish(),
+    lastPaymentAt: zod.string().nullish(),
+    createdAt: zod.string(),
+    notes: zod.string().nullish(),
+    deletedAt: zod.string().nullish(),
+    attachments: zod.unknown().optional(),
+    taxNumber: zod.string().nullish(),
+    expectedRevenue: zod.string().nullish(),
+    updatedAt: zod.string(),
+  })
+  .describe(
+    "Response from `POST \/api\/clients`. Returns the full created `clients`\nrow. Numeric\/decimal columns serialize as JSON strings; `tags` and\n`attachments` are free-form JSON.\n",
+  )
+  .and(
+    zod.object({
+      invoices: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+      opportunities: zod
+        .array(zod.record(zod.string(), zod.unknown()))
+        .optional(),
+      tickets: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+      projects: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+      financials: zod.record(zod.string(), zod.unknown()).nullish(),
+      conversations: zod
+        .array(zod.record(zod.string(), zod.unknown()))
+        .optional(),
+      timeline: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+      activeServices: zod.record(zod.string(), zod.unknown()).nullish(),
+      tenancies: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+      legalCases: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+      umrahSubAgents: zod
+        .array(zod.record(zod.string(), zod.unknown()))
+        .optional(),
+    }),
+  )
+  .describe(
+    "Full client record returned by `GET \/api\/clients\/:id`. The base\n`clients` row plus nested related arrays\/objects (invoices,\nopportunities, tickets, projects, financials aggregate, conversations,\ntimeline, active services, tenancies, legal cases, umrah sub-agents).\n",
+  );
 
 /**
  * @summary Record attendance check-in
@@ -252,39 +555,68 @@ export const GetAttendanceQueryParams = zod.object({
   month: zod.coerce.string().optional(),
 });
 
-export const GetAttendanceResponseItem = zod.object({
-  id: zod.number(),
-  date: zod.string(),
-  checkIn: zod.string().optional(),
-  checkOut: zod.string().optional(),
-  lateMinutes: zod.number().optional(),
-  status: zod.string(),
+export const GetAttendanceResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      date: zod.string(),
+      checkIn: zod.string().nullish(),
+      checkOut: zod.string().nullish(),
+      lateMinutes: zod.number().nullish(),
+      status: zod.string(),
+      employeeName: zod.string().nullish(),
+      checkInLat: zod.string().nullish(),
+      checkInLon: zod.string().nullish(),
+      checkOutLat: zod.string().nullish(),
+      checkOutLon: zod.string().nullish(),
+      workHours: zod.string().nullish(),
+      overtimeMinutes: zod.number().nullish(),
+      deductionAmount: zod.string().nullish(),
+      violationSeverity: zod.string().nullish(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const GetAttendanceResponse = zod.array(GetAttendanceResponseItem);
 
 /**
  * @summary List leave types
  */
-export const ListLeaveTypesResponseItem = zod.object({
-  id: zod.number(),
-  name: zod.string(),
-  annualDays: zod.number(),
-  isPaid: zod.boolean().optional(),
+export const ListLeaveTypesResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      maxDays: zod.number().nullish(),
+      requiresApproval: zod.boolean().optional(),
+      isPaid: zod.boolean().optional(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const ListLeaveTypesResponse = zod.array(ListLeaveTypesResponseItem);
 
 /**
  * @summary Get leave balances
  */
-export const GetLeaveBalanceResponseItem = zod.object({
-  leaveTypeId: zod.number(),
-  leaveTypeName: zod.string().optional(),
-  entitled: zod.number(),
-  used: zod.number(),
-  reserved: zod.number().optional(),
-  remaining: zod.number(),
+export const GetLeaveBalanceResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      leaveTypeId: zod.number(),
+      name: zod.string(),
+      annualDays: zod.number().nullish(),
+      maxDays: zod.number(),
+      used: zod.number(),
+      reserved: zod.number().optional(),
+      remaining: zod.number(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const GetLeaveBalanceResponse = zod.array(GetLeaveBalanceResponseItem);
 
 /**
  * @summary List leave requests
@@ -293,20 +625,27 @@ export const ListLeaveRequestsQueryParams = zod.object({
   status: zod.coerce.string().optional(),
 });
 
-export const ListLeaveRequestsResponseItem = zod.object({
-  id: zod.number(),
-  leaveTypeId: zod.number().optional(),
-  leaveTypeName: zod.string().optional(),
-  startDate: zod.string(),
-  endDate: zod.string(),
-  days: zod.number(),
-  status: zod.string(),
-  reason: zod.string().optional(),
-  createdAt: zod.string().optional(),
+export const ListLeaveRequestsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      leaveTypeName: zod.string().nullish(),
+      employeeName: zod.string().nullish(),
+      startDate: zod.string(),
+      endDate: zod.string(),
+      days: zod.number(),
+      status: zod.string(),
+      reason: zod.string().nullish(),
+      rejectedReason: zod.string().nullish(),
+      approvedBy: zod.number().nullish(),
+      approvedAt: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const ListLeaveRequestsResponse = zod.array(
-  ListLeaveRequestsResponseItem,
-);
 
 /**
  * @summary Submit leave request
@@ -343,15 +682,24 @@ export const ApproveLeaveResponse = zod.object({
 /**
  * @summary List payroll runs
  */
-export const ListPayrollRunsResponseItem = zod.object({
-  id: zod.number(),
-  period: zod.string(),
-  status: zod.string(),
-  totalNet: zod.number(),
-  employeeCount: zod.number().optional(),
-  createdAt: zod.string().optional(),
+export const ListPayrollRunsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      period: zod.string(),
+      month: zod.string().optional(),
+      status: zod.string(),
+      totalNet: zod.string().nullish(),
+      totalAmount: zod.number().optional(),
+      employeeCount: zod.number().optional(),
+      runByName: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const ListPayrollRunsResponse = zod.array(ListPayrollRunsResponseItem);
 
 /**
  * @summary Run payroll for a period
@@ -377,22 +725,37 @@ export const ListInvoicesQueryParams = zod.object({
   page: zod.coerce.number().default(listInvoicesQueryPageDefault),
 });
 
-export const ListInvoicesResponseItem = zod.object({
-  id: zod.number(),
-  ref: zod.string(),
-  clientName: zod.string().optional(),
-  clientId: zod.number().optional(),
-  description: zod.string().optional(),
-  subtotal: zod.number().optional(),
-  vatRate: zod.number().optional(),
-  vatAmount: zod.number().optional(),
+export const ListInvoicesResponse = zod.object({
+  data: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        ref: zod.string().nullish(),
+        clientName: zod.string().nullish(),
+        clientId: zod.number().nullish(),
+        description: zod.string().nullish(),
+        subtotal: zod.string().nullish(),
+        vatRate: zod.string().nullish(),
+        vatAmount: zod.string().nullish(),
+        total: zod.string().nullish(),
+        paidAmount: zod.string().nullish(),
+        status: zod.string(),
+        issueDate: zod.string(),
+        dueDate: zod.string().nullish(),
+        paymentTerms: zod.string().nullish(),
+        notes: zod.string().nullish(),
+        isTaxLinked: zod.boolean().nullish(),
+        zatcaStatus: zod.string().nullish(),
+        createdByName: zod.string().nullish(),
+      })
+      .describe(
+        "Monetary fields (subtotal, vatRate, vatAmount, total, paidAmount) are\nserialized as strings (pg `numeric`). `issueDate` is the row's\n`createdAt` timestamp, aliased by the list handler.\n",
+      ),
+  ),
   total: zod.number(),
-  paidAmount: zod.number().optional(),
-  status: zod.string(),
-  dueDate: zod.string().optional(),
-  createdAt: zod.string().optional(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
 
 /**
  * @summary Create invoice
@@ -410,12 +773,73 @@ export const CreateInvoiceBody = zod.object({
   dueInDays: zod.number().optional(),
 });
 
-export const CreateInvoiceResponse = zod.object({
-  invoiceId: zod.number(),
-  ref: zod.string(),
-  total: zod.number(),
-  dueDate: zod.string().optional(),
-});
+export const CreateInvoiceResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    branchId: zod.number().nullish(),
+    clientId: zod.number().nullish(),
+    ref: zod.string().nullish(),
+    description: zod.string().nullish(),
+    subtotal: zod.string().nullish(),
+    vatRate: zod.string().nullish(),
+    vatAmount: zod.string().nullish(),
+    total: zod.string().nullish(),
+    paidAmount: zod.string().nullish(),
+    status: zod.string().nullish(),
+    dueDate: zod.string().nullish(),
+    paidAt: zod.string().nullish(),
+    createdBy: zod.number().nullish(),
+    createdAt: zod.string(),
+    currency: zod.string(),
+    paymentTerms: zod.string().nullish(),
+    poNumber: zod.string().nullish(),
+    discountAmount: zod.string(),
+    discountPercent: zod.string(),
+    journalEntryId: zod.number().nullish(),
+    sentAt: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    deletedAt: zod.string().nullish(),
+    isTaxLinked: zod.boolean().nullish(),
+    zatcaStatus: zod.string().nullish(),
+    zatcaUuid: zod.string().nullish(),
+    zatcaHash: zod.string().nullish(),
+    zatcaQrCode: zod.string().nullish(),
+    invoiceTypeCode: zod.string().nullish(),
+    taxCategoryCode: zod.string().nullish(),
+    exemptionReason: zod.string().nullish(),
+    projectId: zod.number().nullish(),
+    lastDunningStage: zod.number().nullish(),
+    lastDunningAt: zod.string().nullish(),
+    exchangeRate: zod.string().nullish(),
+    updatedAt: zod.string(),
+    costCenter: zod.string().nullish(),
+    zatcaIcv: zod.number().nullish(),
+    zatcaPih: zod.string().nullish(),
+    zatcaSignature: zod.string().nullish(),
+    zatcaClearedXml: zod.string().nullish(),
+    zatcaClearanceStatus: zod.string().nullish(),
+    zatcaClearedAt: zod.string().nullish(),
+    zatcaReportedAt: zod.string().nullish(),
+    zatcaLastError: zod.string().nullish(),
+    approvedBy: zod.number().nullish(),
+    approvedAt: zod.string().nullish(),
+    postedBy: zod.number().nullish(),
+    postedAt: zod.string().nullish(),
+    taxCode: zod.string().nullish(),
+    taxInclusive: zod.boolean().nullish(),
+    cogsTotal: zod.string().nullish(),
+    cogsJournalEntryId: zod.number().nullish(),
+    amendedFromInvoiceId: zod.number().nullish(),
+    amendedToInvoiceId: zod.number().nullish(),
+    amendmentReason: zod.string().nullish(),
+    amendedAt: zod.string().nullish(),
+    clientName: zod.string().nullish(),
+    lines: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  })
+  .describe(
+    "Response from `POST \/api\/finance\/invoices`. Returns the full created\n`invoices` row (incl. all ZATCA columns) plus the joined `clientName`\nand the invoice `lines`. Numeric\/decimal columns serialize as JSON\nstrings.\n",
+  );
 
 /**
  * @summary Record invoice payment
@@ -443,6 +867,11 @@ export const GetChartOfAccountsResponseItem = zod.object({
   code: zod.string(),
   name: zod.string(),
   type: zod.string(),
+  parentCode: zod.string().nullish(),
+  status: zod.string().optional(),
+  branchId: zod.number().nullish(),
+  accountUsage: zod.string().nullish(),
+  childrenUsagePolicy: zod.string().nullish(),
 });
 export const GetChartOfAccountsResponse = zod.array(
   GetChartOfAccountsResponseItem,
@@ -451,29 +880,80 @@ export const GetChartOfAccountsResponse = zod.array(
 /**
  * @summary Get finance statistics
  */
-export const GetFinanceStatsResponse = zod.object({
-  totalRevenue: zod.number(),
-  pendingAmount: zod.number(),
-  overdueAmount: zod.number(),
-  paidThisMonth: zod.number(),
-  invoicesByStatus: zod.array(zod.object({}).passthrough()).optional(),
+export const GetFinanceStatsResponse = zod
+  .object({
+    totalRevenue: zod.string(),
+    pendingAmount: zod.string(),
+    overdueAmount: zod.string(),
+    paidThisMonth: zod.string(),
+    invoicesByStatus: zod.array(zod.object({}).passthrough()).optional(),
+  })
+  .describe(
+    "Monetary aggregates are serialized as strings (PostgreSQL `numeric`\nis returned verbatim by the driver, not coerced to a JS number).\n",
+  );
+
+/**
+ * The **only** supported way to create a project. Used by the
+projects module *and* by finance UI screens that need to spin up
+a new project (e.g. "إنشاء مشروع جديد" shortcut on
+`project-costing`). Enforces:
+  - RBAC `projects.list:create` (or role `projects_manager`).
+  - Manager assignment (auto-pinned to caller for `projects_manager`).
+  - Delivery obligation registration on `endDate`.
+  - `project.created` event + audit log.
+The historical `POST /api/finance/projects` was removed because
+it bypassed all of the above.
+
+ * @summary Create a project (canonical entrypoint)
+ */
+export const createProjectBodyBudgetMin = 0;
+
+export const createProjectBodyStatusDefault = `planning`;
+
+export const CreateProjectBody = zod.object({
+  name: zod.string(),
+  description: zod.string().optional(),
+  clientId: zod.number().nullish(),
+  managerId: zod.number().nullish(),
+  startDate: zod.coerce.date(),
+  endDate: zod.coerce.date(),
+  budget: zod.number().min(createProjectBodyBudgetMin).optional(),
+  status: zod
+    .enum(["planning", "active", "on_hold", "completed", "cancelled"])
+    .default(createProjectBodyStatusDefault),
+  phases: zod
+    .array(
+      zod.object({
+        name: zod.string(),
+        startDate: zod.coerce.date().optional(),
+        endDate: zod.coerce.date().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**
  * @summary List notifications
  */
-export const ListNotificationsResponseItem = zod.object({
-  id: zod.number(),
-  type: zod.string(),
-  title: zod.string(),
-  body: zod.string().optional(),
-  priority: zod.string().optional(),
-  isRead: zod.boolean(),
-  createdAt: zod.string().optional(),
+export const ListNotificationsResponse = zod.object({
+  data: zod.array(
+    zod.object({
+      id: zod.number(),
+      type: zod.string(),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      priority: zod.string().nullish(),
+      isRead: zod.boolean(),
+      createdAt: zod.string().optional(),
+      refType: zod.string().nullish(),
+      refId: zod.number().nullish(),
+      actionUrl: zod.string().nullish(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  pageSize: zod.number(),
 });
-export const ListNotificationsResponse = zod.array(
-  ListNotificationsResponseItem,
-);
 
 /**
  * @summary Mark notification as read
@@ -506,3 +986,723 @@ export const ListTasksResponseItem = zod.object({
   createdAt: zod.string().optional(),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
+
+/**
+ * Moves the listed pilgrims out of the source group into a fresh
+child group. Rejects 409 if the source group is already linked to
+a sales invoice (issue credit note first). agentId / subAgentId /
+seasonId / programDuration are inherited from the source.
+
+ * @summary Split a group into a new group (move N pilgrims)
+ */
+export const SplitUmrahGroupParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SplitUmrahGroupBody = zod.object({
+  pilgrimIds: zod.array(zod.number()),
+  newGroupName: zod.string().optional(),
+  newNuskGroupNumber: zod.string().optional(),
+});
+
+export const SplitUmrahGroupResponse = zod.object({
+  success: zod.boolean().optional(),
+  newGroup: zod.object({}).passthrough().optional(),
+  movedCount: zod.number().optional(),
+});
+
+/**
+ * Moves every pilgrim from each source group into the target, then
+soft-deletes the now-empty source groups. Rejects 409 if any
+source is already invoiced. Idempotent on re-runs because
+deleted groups are skipped on subsequent calls.
+
+ * @summary Merge multiple source groups into a target group
+ */
+export const MergeUmrahGroupsBody = zod.object({
+  sourceGroupIds: zod.array(zod.number()),
+  targetGroupId: zod.number(),
+});
+
+export const MergeUmrahGroupsResponse = zod.object({
+  success: zod.boolean().optional(),
+  movedCount: zod.number().optional(),
+  mergedSourceIds: zod.array(zod.number()).optional(),
+});
+
+/**
+ * Loops each penaltyId through `applyTransition` +
+`postPenaltyWaiverGL`. A single bad row does not break the batch
+— failures + skips are reported back so the UI can render a
+non-atomic summary. Posts one consolidated reversal journal
+entry per successful row.
+
+ * @summary Waive multiple penalties under one reason
+ */
+export const BulkWaiveUmrahPenaltiesBody = zod.object({
+  penaltyIds: zod.array(zod.number()),
+  reason: zod.string(),
+});
+
+export const BulkWaiveUmrahPenaltiesResponse = zod.object({
+  successCount: zod.number().optional(),
+  successIds: zod.array(zod.number()).optional(),
+  totalWaivedAmount: zod.number().optional(),
+  skipped: zod.array(zod.object({}).passthrough()).optional(),
+  errors: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+/**
+ * @summary List polymorphic attachments
+ */
+export const ListUmrahAttachmentsQueryParams = zod.object({
+  entityType: zod
+    .enum([
+      "mutamer",
+      "sub_agent",
+      "group",
+      "agent",
+      "nusk_invoice",
+      "season",
+      "sales_invoice",
+      "violation",
+    ])
+    .optional(),
+  entityId: zod.coerce.number().optional(),
+  type: zod
+    .enum([
+      "passport",
+      "visa",
+      "contract",
+      "nusk_file",
+      "identity",
+      "transfer_receipt",
+      "other",
+    ])
+    .optional(),
+});
+
+export const ListUmrahAttachmentsResponse = zod.object({
+  data: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+/**
+ * Verifies ownership of the target row via an entityType→table
+whitelist before insert (no raw table-name injection). The
+attached file is described by metadata only; uploads go through
+the central storage service and `storageKey` + `fileUrl` are
+recorded here.
+
+ * @summary Attach a file to an umrah entity
+ */
+export const CreateUmrahAttachmentBody = zod.object({
+  entityType: zod.string(),
+  entityId: zod.number(),
+  type: zod.string(),
+  title: zod.string(),
+  notes: zod.string().optional(),
+  fileUrl: zod.string().url().optional(),
+  storageKey: zod.string().optional(),
+  fileSize: zod.number().optional(),
+  mimeType: zod.string().optional(),
+});
+
+/**
+ * @summary Soft-delete an attachment
+ */
+export const DeleteUmrahAttachmentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteUmrahAttachmentResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * Detail-page payload: the full `umrah_agents` row plus the statement
+aggregates the detail pane renders (pilgrim count, overstayed count,
+total invoiced/paid/outstanding, and a per-status breakdown dict).
+Every column is enumerated rather than passthrough so the
+contract-drift guard fires on any added/renamed returned field.
+
+ * @summary Get an umrah agent by ID (full row + statement aggregates)
+ */
+export const GetUmrahAgentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetUmrahAgentResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    name: zod.string(),
+    contactPerson: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    email: zod.string().nullish(),
+    country: zod.string().nullish(),
+    profitMargin: zod.string().nullish(),
+    contractRef: zod.string().nullish(),
+    currency: zod.string().nullish(),
+    status: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    createdAt: zod.string().nullish(),
+    updatedAt: zod.string().nullish(),
+    branchId: zod.number().nullish(),
+    seasonId: zod.number().nullish(),
+    nuskAgentNumber: zod.string().nullish(),
+    createdBy: zod.number().nullish(),
+    updatedBy: zod.number().nullish(),
+    deletedAt: zod.string().nullish(),
+    pilgrimCount: zod.number(),
+    overstayedCount: zod.number(),
+    totalInvoiced: zod.number(),
+    totalPaid: zod.number(),
+    totalOutstanding: zod.number(),
+    statusBreakdown: zod.record(zod.string(), zod.unknown()),
+  })
+  .describe(
+    "Full `umrah_agents` row (every persisted column — pg serializes the\nnumeric profitMargin as a string and timestamptz columns as ISO\nstrings) plus the statement aggregates the detail pane renders. Every\ncolumn is enumerated rather than passthrough so the contract-drift\nguard fires if a handler adds\/renames a returned field.\n",
+  );
+
+/**
+ * Detail-page payload: the full `umrah_groups` row joined with the
+agent/sub-agent/season names, the pilgrim roster summary, a per-status
+breakdown dict, exemption/visa-expiring counts, and nested finance
+(invoice/NUSK totals + margin) and schedule (date range + flight
+codes) objects. Every column is enumerated so the contract-drift
+guard fires on any added/renamed returned field.
+
+ * @summary Get an umrah group by ID (full row + roster + aggregates)
+ */
+export const GetUmrahGroupParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetUmrahGroupResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    branchId: zod.number().nullish(),
+    nuskGroupNumber: zod.string(),
+    internalRef: zod.string().nullish(),
+    name: zod.string().nullish(),
+    agentId: zod.number().nullish(),
+    subAgentId: zod.number().nullish(),
+    seasonId: zod.number().nullish(),
+    mutamerCount: zod.number().nullish(),
+    programDuration: zod.number().nullish(),
+    status: zod.string().nullish(),
+    nuskInvoiceNumber: zod.string().nullish(),
+    salesInvoiceId: zod.number().nullish(),
+    createdBy: zod.number().nullish(),
+    updatedBy: zod.number().nullish(),
+    createdAt: zod.string().nullish(),
+    updatedAt: zod.string().nullish(),
+    deletedAt: zod.string().nullish(),
+    agentName: zod.string().nullish(),
+    subAgentName: zod.string().nullish(),
+    seasonTitle: zod.string().nullish(),
+    pilgrims: zod.array(
+      zod.object({
+        id: zod.number(),
+        fullName: zod.string(),
+        nationality: zod.string().nullish(),
+        status: zod.string().nullish(),
+        overstayExempt: zod.boolean().nullish(),
+        visaExpiry: zod.string().nullish(),
+        entryFlight: zod.string().nullish(),
+        exitFlight: zod.string().nullish(),
+      }),
+    ),
+    statusBreakdown: zod.record(zod.string(), zod.unknown()),
+    overstayExemptCount: zod.number(),
+    visaExpiringCount: zod.number(),
+    finance: zod.object({
+      invoiceCount: zod.number(),
+      invoiceTotal: zod.number(),
+      invoicePaid: zod.number(),
+      invoiceOutstanding: zod.number(),
+      nuskCount: zod.number(),
+      nuskNetCost: zod.number(),
+      nuskRefund: zod.number(),
+      margin: zod.number(),
+    }),
+    schedule: zod.object({
+      minArrival: zod.string().nullable(),
+      maxDeparture: zod.string().nullable(),
+      entryFlights: zod.array(zod.string()),
+      exitFlights: zod.array(zod.string()),
+    }),
+  })
+  .describe(
+    "Full `umrah_groups` row joined with agent\/sub-agent\/season names, plus\nthe roster summary, per-status breakdown dict, exemption\/visa-expiring\ncounts, and nested finance + schedule objects. Every column is\nenumerated rather than passthrough so the contract-drift guard fires\nif a handler adds\/renames a returned field.\n",
+  );
+
+/**
+ * Detail-page payload: the full `umrah_pilgrims` row (sensitive
+passport/visa/border/mofa fields decrypted, plus their `*_hash`
+lookup columns) joined with the agent/package/season/group/sub-agent
+names, followed by the pilgrim's penalty rows. Every column is
+enumerated so the contract-drift guard fires on any added/renamed
+returned field.
+
+ * @summary Get an umrah pilgrim by ID (decrypted row + penalties)
+ */
+export const GetUmrahPilgrimParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetUmrahPilgrimResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    seasonId: zod.number().nullish(),
+    agentId: zod.number().nullish(),
+    packageId: zod.number().nullish(),
+    fullName: zod.string(),
+    passportNumber: zod.string(),
+    visaNumber: zod.string().nullish(),
+    nationality: zod.string().nullish(),
+    gender: zod.string().nullish(),
+    dateOfBirth: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    arrivalDate: zod.string().nullish(),
+    departureDate: zod.string().nullish(),
+    actualArrival: zod.string().nullish(),
+    actualDeparture: zod.string().nullish(),
+    status: zod.string().nullish(),
+    hotelName: zod.string().nullish(),
+    roomNumber: zod.string().nullish(),
+    transportAssigned: zod.boolean().nullish(),
+    notes: zod.string().nullish(),
+    createdAt: zod.string().nullish(),
+    updatedAt: zod.string().nullish(),
+    nuskNumber: zod.string().nullish(),
+    entryPort: zod.string().nullish(),
+    exitPort: zod.string().nullish(),
+    overstayDays: zod.number().nullish(),
+    actualStayDays: zod.number().nullish(),
+    deletedAt: zod.string().nullish(),
+    subAgentId: zod.number().nullish(),
+    branchId: zod.number().nullish(),
+    passportExpiry: zod.string().nullish(),
+    groupId: zod.number().nullish(),
+    entryFlight: zod.string().nullish(),
+    exitFlight: zod.string().nullish(),
+    programDuration: zod.number().nullish(),
+    borderNumber: zod.string().nullish(),
+    mofaNumber: zod.string().nullish(),
+    isInsideKingdom: zod.boolean().nullish(),
+    hasUmrahPermit: zod.boolean().nullish(),
+    createdBy: zod.number().nullish(),
+    updatedBy: zod.number().nullish(),
+    passportNumber_hash: zod.string().nullish(),
+    visaNumber_hash: zod.string().nullish(),
+    mofaNumber_hash: zod.string().nullish(),
+    borderNumber_hash: zod.string().nullish(),
+    visaExpiry: zod.string().nullish(),
+    entryDate: zod.string().nullish(),
+    exitDate: zod.string().nullish(),
+    overstayExempt: zod.boolean().nullish(),
+    overstayExemptReason: zod.string().nullish(),
+    overstayExemptBy: zod.number().nullish(),
+    overstayExemptAt: zod.string().nullish(),
+    familyId: zod.number().nullish(),
+    visaStatus: zod.string().nullish(),
+    visaRequestedAt: zod.string().nullish(),
+    visaIssuedAt: zod.string().nullish(),
+    visaRejectedAt: zod.string().nullish(),
+    visaRejectionReason: zod.string().nullish(),
+    agentName: zod.string().nullish(),
+    packageName: zod.string().nullish(),
+    seasonTitle: zod.string().nullish(),
+    groupName: zod.string().nullish(),
+    subAgentName: zod.string().nullish(),
+    penalties: zod.array(
+      zod.object({
+        id: zod.number(),
+        companyId: zod.number(),
+        pilgrimId: zod.number().nullish(),
+        agentId: zod.number().nullish(),
+        seasonId: zod.number().nullish(),
+        type: zod.string(),
+        daysOverstayed: zod.number().nullish(),
+        amount: zod.string().nullable(),
+        currency: zod.string().nullish(),
+        status: zod.string().nullish(),
+        invoiceId: zod.number().nullish(),
+        notes: zod.string().nullish(),
+        createdAt: zod.string().nullish(),
+        deletedAt: zod.string().nullish(),
+        createdBy: zod.number().nullish(),
+        updatedBy: zod.number().nullish(),
+        branchId: zod.number().nullish(),
+        journalEntryId: zod.number().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    ),
+  })
+  .describe(
+    "Full `umrah_pilgrims` row (sensitive passport\/visa\/border\/mofa fields\ndecrypted, plus their `\*_hash` lookup columns; date columns serialize\nas ISO strings) joined with agent\/package\/season\/group\/sub-agent\nnames, followed by the pilgrim's penalty rows. Every column is\nenumerated rather than passthrough so the contract-drift guard fires\nif a handler adds\/renames a returned field.\n",
+  );
+
+/**
+ * Detail-page payload: the full `support_tickets` row joined with the
+client name, the reply thread, and the computed SLA fields
+(`isSlaBreached` boolean + `slaRemainingHours` string). Every column
+is enumerated so the contract-drift guard fires on any added/renamed
+returned field.
+
+ * @summary Get a support ticket by ID (full row + replies + SLA)
+ */
+export const GetSupportTicketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetSupportTicketResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    ref: zod.string().nullish(),
+    title: zod.string(),
+    description: zod.string().nullish(),
+    category: zod.string().nullish(),
+    priority: zod.string().nullish(),
+    status: zod.string().nullish(),
+    clientId: zod.number().nullish(),
+    assigneeId: zod.number().nullish(),
+    slaDeadline: zod.string().nullish(),
+    firstResponseAt: zod.string().nullish(),
+    resolvedAt: zod.string().nullish(),
+    createdAt: zod.string().nullish(),
+    updatedAt: zod.string().nullish(),
+    escalationLevel: zod.number().nullish(),
+    rating: zod.number().nullish(),
+    ratingComment: zod.string().nullish(),
+    slaBreached: zod.boolean().nullish(),
+    deletedAt: zod.string().nullish(),
+    invoiceId: zod.number().nullish(),
+    contractId: zod.number().nullish(),
+    branchId: zod.number().nullish(),
+    clientName: zod.string().nullish(),
+    replies: zod.array(zod.record(zod.string(), zod.unknown())),
+    isSlaBreached: zod.boolean(),
+    slaRemainingHours: zod.string().nullish(),
+  })
+  .describe(
+    "Full `support_tickets` row joined with the client name, plus the reply\nthread and the computed SLA fields (`isSlaBreached` boolean,\n`slaRemainingHours` string). Every column is enumerated rather than\npassthrough so the contract-drift guard fires if a handler\nadds\/renames a returned field.\n",
+  );
+
+/**
+ * Detail-page payload: the full `property_units` row plus the related
+contracts, payments, maintenance requests, and an activity timeline.
+Every column is enumerated so the contract-drift guard fires on any
+added/renamed returned field.
+
+ * @summary Get a property unit by ID (full row + related collections)
+ */
+export const GetPropertyUnitParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetPropertyUnitResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    unitNumber: zod.string(),
+    buildingName: zod.string().nullish(),
+    type: zod.string().nullish(),
+    area: zod.string().nullish(),
+    bedrooms: zod.number().nullish(),
+    bathrooms: zod.number().nullish(),
+    floor: zod.number().nullish(),
+    monthlyRent: zod.string().nullish(),
+    status: zod.string().nullish(),
+    address: zod.string().nullish(),
+    branchId: zod.number().nullish(),
+    createdAt: zod.string().nullish(),
+    updatedAt: zod.string().nullish(),
+    buildingId: zod.number().nullish(),
+    features: zod.array(zod.string()).nullish(),
+    direction: zod.string().nullish(),
+    finishing: zod.string().nullish(),
+    amenities: zod.unknown().optional(),
+    electricityMeter: zod.string().nullish(),
+    waterMeter: zod.string().nullish(),
+    usageType: zod.string().nullish(),
+    ownerId: zod.number().nullish(),
+    parkingSpaces: zod.number().nullish(),
+    acType: zod.string().nullish(),
+    hasKitchen: zod.boolean().nullish(),
+    yearlyRent: zod.string().nullish(),
+    insurancePolicy: zod.string().nullish(),
+    insuranceExpiry: zod.string().nullish(),
+    deletedAt: zod.string().nullish(),
+    contracts: zod.array(zod.record(zod.string(), zod.unknown())),
+    payments: zod.array(zod.record(zod.string(), zod.unknown())),
+    maintenance: zod.array(zod.record(zod.string(), zod.unknown())),
+    timeline: zod.array(zod.record(zod.string(), zod.unknown())),
+  })
+  .describe(
+    "Full `property_units` row (numeric area\/rent columns serialize as\nstrings, timestamps as ISO strings) plus the related contracts,\npayments, maintenance requests, and activity timeline. Every column is\nenumerated rather than passthrough so the contract-drift guard fires\nif a handler adds\/renames a returned field.\n",
+  );
+
+/**
+ * Detail-page payload: the full `journal_entries` row plus the
+reversal-link reference/description fields, the entry's lines (each
+the full `journal_lines` row joined with the account name), and the
+nested `reversalOf` / `reversedBy` linked-entry objects (null when not
+a reversal). Every column is enumerated so the contract-drift guard
+fires on any added/renamed returned field.
+
+ * @summary Get a journal entry by ID (full row + lines + reversal links)
+ */
+export const GetJournalEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetJournalEntryResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    branchId: zod.number().nullish(),
+    ref: zod.string().nullish(),
+    description: zod.string().nullish(),
+    createdBy: zod.number().nullish(),
+    createdAt: zod.string().nullish(),
+    date: zod.string().nullish(),
+    type: zod.string().nullish(),
+    status: zod.string().nullish(),
+    balancesApplied: zod.boolean().nullish(),
+    sourceType: zod.string().nullish(),
+    sourceId: zod.number().nullish(),
+    postedBy: zod.number().nullish(),
+    postedAt: zod.string().nullish(),
+    updatedAt: zod.string().nullish(),
+    costCenter: zod.string().nullish(),
+    departmentId: zod.number().nullish(),
+    relatedEntityType: zod.string().nullish(),
+    relatedEntityId: zod.number().nullish(),
+    paymentMethod: zod.string().nullish(),
+    reference: zod.string().nullish(),
+    isPaid: zod.boolean().nullish(),
+    attachmentUrl: zod.string().nullish(),
+    attachmentType: zod.string().nullish(),
+    expenseType: zod.string().nullish(),
+    operationType: zod.string().nullish(),
+    projectId: zod.number().nullish(),
+    taxCategory: zod.string().nullish(),
+    deletedAt: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    dueDate: zod.string().nullish(),
+    isTaxLinked: zod.boolean().nullish(),
+    zatcaStatus: zod.string().nullish(),
+    zatcaUuid: zod.string().nullish(),
+    zatcaHash: zod.string().nullish(),
+    zatcaQrCode: zod.string().nullish(),
+    invoiceTypeCode: zod.string().nullish(),
+    taxCategoryCode: zod.string().nullish(),
+    exemptionReason: zod.string().nullish(),
+    govIntegrationId: zod.number().nullish(),
+    govSyncEnabled: zod.boolean().nullish(),
+    govExternalRef: zod.string().nullish(),
+    govEntityType: zod.string().nullish(),
+    govEntityId: zod.number().nullish(),
+    approvalStatus: zod.string().nullish(),
+    isManual: zod.boolean().nullish(),
+    reviewedBy: zod.number().nullish(),
+    reviewedAt: zod.string().nullish(),
+    approvedBy: zod.number().nullish(),
+    approvedAt: zod.string().nullish(),
+    approvalNotes: zod.string().nullish(),
+    reversalOfId: zod.number().nullish(),
+    reversedById: zod.number().nullish(),
+    reversedAt: zod.string().nullish(),
+    reversalReason: zod.string().nullish(),
+    sourceKey: zod.string().nullish(),
+    originalCurrency: zod.string().nullish(),
+    exchangeRate: zod.string().nullish(),
+    originalAmount: zod.string().nullish(),
+    documentStatus: zod.string().nullish(),
+    paymentStatus: zod.string().nullish(),
+    postingStatus: zod.string().nullish(),
+    reversalOfRef: zod.string().nullish(),
+    reversalOfDescription: zod.string().nullish(),
+    reversedByRef: zod.string().nullish(),
+    reversedByDescription: zod.string().nullish(),
+    lines: zod.array(
+      zod.object({
+        id: zod.number(),
+        journalId: zod.number(),
+        accountCode: zod.string(),
+        debit: zod.string().nullish(),
+        credit: zod.string().nullish(),
+        accountId: zod.number().nullish(),
+        description: zod.string().nullish(),
+        costCenter: zod.string().nullish(),
+        createdAt: zod.string().nullish(),
+        departmentId: zod.number().nullish(),
+        projectId: zod.number().nullish(),
+        employeeId: zod.number().nullish(),
+        vehicleId: zod.number().nullish(),
+        propertyId: zod.number().nullish(),
+        contractId: zod.number().nullish(),
+        activityType: zod.string().nullish(),
+        templateId: zod.number().nullish(),
+        productId: zod.number().nullish(),
+        clientId: zod.number().nullish(),
+        vendorId: zod.number().nullish(),
+        driverId: zod.number().nullish(),
+        originalCurrency: zod.string().nullish(),
+        originalDebit: zod.string().nullish(),
+        originalCredit: zod.string().nullish(),
+        exchangeRate: zod.string().nullish(),
+        costCenterId: zod.number().nullish(),
+        unitId: zod.number().nullish(),
+        assetId: zod.number().nullish(),
+        umrahSeasonId: zod.number().nullish(),
+        umrahAgentId: zod.number().nullish(),
+        sourceLineTable: zod.string().nullish(),
+        sourceLineId: zod.number().nullish(),
+        dimensionJson: zod.unknown().optional(),
+        deletedAt: zod.string().nullish(),
+        branchId: zod.number().nullish(),
+        accountName: zod.string().nullish(),
+      }),
+    ),
+    reversalOf: zod.record(zod.string(), zod.unknown()).nullish(),
+    reversedBy: zod.record(zod.string(), zod.unknown()).nullish(),
+  })
+  .describe(
+    "Full `journal_entries` row (numeric exchangeRate\/amount columns\nserialize as strings, timestamps as ISO strings) plus the\nreversal-link reference\/description fields, the entry's lines (each the\nfull `journal_lines` row joined with the account name), and the nested\n`reversalOf` \/ `reversedBy` linked-entry objects (null when not a\nreversal). Every column is enumerated rather than passthrough so the\ncontract-drift guard fires if a handler adds\/renames a returned field.\n",
+  );
+
+/**
+ * Detail-page payload: the full `umrah_sub_agents` row joined with
+the linked agent / client names, plus the statement aggregates
+the detail pane renders (pilgrim count, overstayed count, total
+paid, and a per-status breakdown dict).
+
+ * @summary Get a sub-agent by ID (full row + statement aggregates)
+ */
+export const GetUmrahSubAgentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetUmrahSubAgentResponse = zod
+  .object({
+    id: zod.number(),
+    companyId: zod.number(),
+    branchId: zod.number().nullish(),
+    nuskCode: zod.string().nullish(),
+    name: zod.string(),
+    agentId: zod.number().nullish(),
+    clientId: zod.number().nullish(),
+    paymentTerms: zod.string().nullish(),
+    defaultPricePerMutamer: zod.string().nullish(),
+    phone: zod.string().nullish(),
+    email: zod.string().nullish(),
+    country: zod.string().nullish(),
+    isActive: zod.boolean().nullish(),
+    notes: zod.string().nullish(),
+    createdBy: zod.number().nullish(),
+    updatedBy: zod.number().nullish(),
+    createdAt: zod.string().nullish(),
+    updatedAt: zod.string().nullish(),
+    deletedAt: zod.string().nullish(),
+    agentName: zod.string().nullish(),
+    clientName: zod.string().nullish(),
+    pilgrimCount: zod.number(),
+    overstayedCount: zod.number(),
+    totalPaid: zod.number(),
+    statusBreakdown: zod.record(zod.string(), zod.unknown()),
+  })
+  .describe(
+    "Full `umrah_sub_agents` row (every persisted column — pg serializes\nthe numeric defaultPricePerMutamer as a string and timestamptz\ncolumns as ISO strings) joined with the linked agent\/client names,\nplus the statement aggregates the detail pane renders. Every column\nis enumerated rather than passthrough so the contract-drift guard\nfires if a handler adds\/renames a returned field.\n",
+  );
+
+/**
+ * Running-balance ledger (opening balance, dated debit/credit
+entries for invoices + violations + payments, closing balance).
+Defaults to the detailed view; `?type=summary` collapses to a
+monthly roll-up. JSON peer of the printable
+`/umrah/statements/{subAgentId}/pdf`.
+
+ * @summary Sub-agent statement of account (JSON)
+ */
+export const UmrahSubAgentStatementParams = zod.object({
+  subAgentId: zod.coerce.number(),
+});
+
+export const UmrahSubAgentStatementQueryParams = zod.object({
+  type: zod.enum(["detailed", "summary"]).optional(),
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+});
+
+export const UmrahSubAgentStatementResponse = zod.object({
+  openingBalance: zod.number(),
+  closingBalance: zod.number(),
+  entries: zod.array(zod.record(zod.string(), zod.unknown())),
+});
+
+/**
+ * Read-only diff across three dimensions:
+  1. amountDiffs — nuskInvoice.totalAmount vs posted JE total
+  2. countDiffs — nuskInvoice.mutamerCount vs actual pilgrims
+  3. overstayGaps — pilgrims with overstayDays>0 and no open
+     violation row
+
+ * @summary NUSK file ↔ system reconciliation
+ */
+export const UmrahReconciliationReportQueryParams = zod.object({
+  seasonId: zod.coerce.number().optional(),
+});
+
+export const UmrahReconciliationReportResponse = zod.object({
+  summary: zod.object({}).passthrough().optional(),
+  amountDiffs: zod.array(zod.object({}).passthrough()).optional(),
+  countDiffs: zod.array(zod.object({}).passthrough()).optional(),
+  overstayGaps: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+/**
+ * Returns arrivals + departures for a given date plus everyone
+currently overstaying. Defaults to today (ISO yyyy-mm-dd).
+Companion PDF at `/umrah/reports/daily-runsheet/pdf`.
+
+ * @summary Daily operations run-sheet (JSON)
+ */
+export const UmrahDailyRunsheetQueryParams = zod.object({
+  date: zod.date().optional(),
+});
+
+export const UmrahDailyRunsheetResponse = zod.object({
+  date: zod.coerce.date().optional(),
+  arrivals: zod.array(zod.object({}).passthrough()).optional(),
+  departures: zod.array(zod.object({}).passthrough()).optional(),
+  overstays: zod.array(zod.object({}).passthrough()).optional(),
+});
+
+/**
+ * @summary Daily operations run-sheet (Arabic PDF)
+ */
+export const UmrahDailyRunsheetPdfQueryParams = zod.object({
+  date: zod.date().optional(),
+});
+
+/**
+ * Detailed running-balance ledger (invoices + violations + payments
+with opening + closing balance), rendered as a printable PDF for
+WhatsApp / email / hand delivery.
+
+ * @summary Sub-agent statement of account (Arabic PDF)
+ */
+export const UmrahSubAgentStatementPdfParams = zod.object({
+  subAgentId: zod.coerce.number(),
+});
+
+export const UmrahSubAgentStatementPdfQueryParams = zod.object({
+  from: zod.date().optional(),
+  to: zod.date().optional(),
+});

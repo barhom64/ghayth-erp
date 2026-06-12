@@ -198,7 +198,7 @@ export default function CollectionStagesPage() {
   return (
     <PageShell
       title="مراحل تحصيل الفواتير المتأخرة"
-      subtitle="invoice_collection_stages — 6 مراحل من تذكير لطيف إلى إحالة قانونية، مع توصية تلقائية حسب أيام التأخر"
+      subtitle="6 مراحل تحصيل من تذكير لطيف إلى إحالة قانونية، مع توصية تلقائية حسب أيام التأخر"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/receivables", label: "الذمم" },

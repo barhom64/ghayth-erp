@@ -24,7 +24,7 @@ const repoRoot = join(import.meta.dirname!, "../../../..");
 const readApi = (rel: string) => readFileSync(join(apiSrc, rel), "utf8");
 const readDoc = (rel: string) => readFileSync(join(repoRoot, rel), "utf8");
 
-const MIGRATION = readApi("migrations/284_transport_cargo_passenger_canon.sql");
+const MIGRATION = readApi("migrations/295_transport_cargo_passenger_canon.sql");
 const ROUTER    = readApi("routes/transport-bookings.ts");
 const PATTERNS  = readApi("routes/transport-route-patterns.ts");
 const INDEX     = readApi("routes/index.ts");
@@ -130,9 +130,12 @@ describe("#1812 §K4 — route-patterns CRUD + materialise", () => {
     expect(PATTERNS).toMatch(/\(mask & \(1 << dayOfWeek\)\) !== 0/);
   });
 
-  it("router mounted in index.ts with fleet+financial guards (PR-5a path-conditional wrap)", () => {
+  it("router mounted in index.ts with fleet+financial guards", () => {
     expect(INDEX).toContain("transportRoutePatternsRouter");
-    expect(INDEX).toMatch(/router\.use\(fleetGuards\(\), transportRoutePatternsRouter\)/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 });
 

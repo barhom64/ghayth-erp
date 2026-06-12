@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import healthRouter from "./health.js";
@@ -27,6 +27,8 @@ import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
 import warehouseRouter from "./warehouse.js";
+import { warehouseCycleCountsRouter } from "./warehouse-cycle-counts.js";
+import { warehouseAdvancedRouter } from "./warehouse-advanced.js";
 import propertiesRouter from "./properties.js";
 import legalRouter from "./legal.js";
 import projectsRouter from "./projects.js";
@@ -338,7 +340,11 @@ const hrUserLimiter = createPerUserLimiter({
 
 router.use("/dashboard", dashboardRouter);
 router.use("/employees", requireModule("hr"), employeesRouter);
-router.use("/clients", requireModule("crm"), clientsRouter);
+// #2134 — clients are the finance counterparty master data: the invoice and
+// voucher forms (finance module) read this list for their client picker, so a
+// finance-module user must reach it without holding the CRM module. The
+// per-route authorize (crm.clients) still gates every action.
+router.use("/clients", requireModule("crm", "finance"), clientsRouter);
 // Per-user HR limiter mounted once on /hr so it runs exactly once per
 // request, regardless of which sub-router handles it. See umrah notes below.
 router.use("/hr", hrUserLimiter);
@@ -391,67 +397,42 @@ router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTe
 // URLs stay /cargo/* at the top level (not /fleet/cargo/*) because
 // cargo is its own RBAC feature (fleet.cargo) and its own SPA tab.
 router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
-// #1733 Booking + Dispatch (Issue Comment 9). The routers carry their
-// own full paths (/transport/bookings, /transport/dispatch-orders,
-// /fleet/vehicles/:vehicleId/...) so they mount without a prefix.
-// Same fleet-module + financial guards.
-// PR-5a (#2077) — wrap the 7 unbound `router.use(requireModule("fleet"), …,
-// subRouter)` mounts below so the fleet+financial guards only fire for
-// /transport/* and /fleet/* requests — NOT for every request that
-// happens to reach this point in the chain. Express runs `router.use(mw,
-// subRouter)` middleware unconditionally on every incoming request
-// (even those the subRouter won't match), so the previous code blocked
-// /my-space, /tasks, /notifications, /work-inbox, etc. for any operator
-// without the fleet module. Surfaced by PR-5's verify journey — the
-// HR Manager's صندوق الأعمال 403'd until this fix landed.
+// #1733/#1812 Booking/Dispatch/VehicleProfile/Pricing/Planning/Integration/
+// RoutePatterns/Rules routers carry their OWN absolute paths (/transport/* and
+// /fleet/*), so they mount WITHOUT a prefix.
 //
-// `gateForFleetPaths` is path-conditional: it forwards to the next
-// middleware when req.path matches one of the fleet/transport prefixes,
-// otherwise it skips straight to the subRouter (which then no-matches
-// and Express moves on to the rest of the chain). Each subRouter still
-// owns its own authMiddleware (applied via subRouter.use(authMiddleware)),
-// so the auth surface doesn't widen.
-function gateForFleetPaths(...middlewares: import("express").RequestHandler[]): import("express").RequestHandler {
-  return function fleetPrefixGate(req, res, next) {
-    if (!req.path.startsWith("/transport/") && !req.path.startsWith("/fleet/")) {
-      return next();
-    }
-    let i = 0;
-    const runNext: import("express").NextFunction = (err) => {
-      if (err) return next(err);
-      const mw = middlewares[i++];
-      if (!mw) return next();
-      mw(req, res, runNext);
-    };
-    runNext();
-  };
-}
-const fleetGuards = () => gateForFleetPaths(requireModule("fleet"), requireGuards("financial"));
-
-router.use(fleetGuards(), transportBookingsRouter);
-// #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
-// /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
-router.use(fleetGuards(), vehicleProfileRouter);
-// #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
-// /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
-router.use(fleetGuards(), transportPricingRouter);
-// #1812 Planning engine — assignment-suggestion + maps + ops dashboard +
-// itineraries + in-app driver navigation sessions. URLs land at
-// /transport/planning-settings, /transport/bookings/:id/suggest-assignment,
-// /transport/ops-dashboard, /transport/itineraries, and
-// /transport/dispatch-orders/:id/navigation/*. Fleet-module + financial
-// guards (same as the other transport routers).
-router.use(fleetGuards(), transportPlanningRouter);
-// #1812 integration bridges — pulls bookings FROM umrah groups + lists
-// linked sources that don't yet have transport materialized + iCalendar
-// feed for the central calendar. The user's governing comment: "النقل
-// ليس جزيرة" — this router is the proof.
-router.use(fleetGuards(), transportIntegrationRouter);
-// #1812 Comment 4663005810 — cargo recurring route patterns.
-router.use(fleetGuards(), transportRoutePatternsRouter);
-router.use(fleetGuards(), fleetRulesAdminRouter);
+// CRITICAL (#1959): the fleet-module + financial guards must be applied BY PATH,
+// not as a path-less `router.use(requireModule("fleet"), …)`. A path-less
+// requireModule runs for EVERY later request and 403'd every NON-OWNER user out
+// of every module mounted after this point (projects / crm / legal / properties
+// / support / …) — owner short-circuits requireModule, so only non-admins hit
+// it (admin-passes / non-admin-fails). `transportPathGate` is path-CONDITIONAL
+// with NO mount path (so Express never strips the prefix — requireGuards reads
+// the real req.path), and gates ONLY /transport + /fleet; every route in these 7
+// routers lives under those two prefixes (verified: 56 /transport + 14 /fleet,
+// zero others). PR-5a (#2077) hit the SAME bug for HR's صندوق الأعمال
+// and merged into main's #1959 solution.
+const fleetModuleGate = requireModule("fleet");
+const transportFinancialGate = requireGuards("financial");
+const transportPathGate: RequestHandler = (req, res, next) => {
+  if (req.path.startsWith("/transport") || req.path.startsWith("/fleet")) {
+    fleetModuleGate(req, res, (err?: unknown) => (err ? next(err as Error) : transportFinancialGate(req, res, next)));
+    return;
+  }
+  next();
+};
+router.use(transportPathGate);
+router.use(transportBookingsRouter);
+router.use(vehicleProfileRouter);
+router.use(transportPricingRouter);
+router.use(transportPlanningRouter);
+router.use(transportIntegrationRouter);
+router.use(transportRoutePatternsRouter);
+router.use(fleetRulesAdminRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
+router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseCycleCountsRouter);
+router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseAdvancedRouter);
 router.use("/properties", propertiesUserLimiter);
 router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
 // Agent 7 (visibility consistency sweep) — sidebar gates /legal/cases at

@@ -4,7 +4,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SlidersHorizontal, CheckCircle, Settings2 } from "lucide-react";
+import { SlidersHorizontal, CheckCircle, Settings2, Boxes } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { FormShell } from "@workspace/ui-core";
@@ -23,6 +23,9 @@ const systemControlsSchema = z.object({
   system_notifications_enabled: z.boolean(),
   system_attachment_max_size_mb: z.coerce.number().int().nonnegative(),
   system_attachment_max_count: z.coerce.number().int().nonnegative(),
+  warehouse_require_movement_reference: z.boolean(),
+  warehouse_auto_purchase_request_on_min_stock: z.boolean(),
+  warehouse_enforce_lot_fefo: z.boolean(),
 });
 type SystemControlsForm = z.infer<typeof systemControlsSchema>;
 
@@ -36,6 +39,9 @@ const KEY_MAP: Record<keyof SystemControlsForm, string> = {
   system_notifications_enabled: "system.notifications_enabled",
   system_attachment_max_size_mb: "system.attachment_max_size_mb",
   system_attachment_max_count: "system.attachment_max_count",
+  warehouse_require_movement_reference: "warehouse.require_movement_reference",
+  warehouse_auto_purchase_request_on_min_stock: "warehouse.auto_purchase_request_on_min_stock",
+  warehouse_enforce_lot_fefo: "warehouse.enforce_lot_fefo",
 };
 
 const SETTINGS_GROUPS = [
@@ -57,6 +63,15 @@ const SETTINGS_GROUPS = [
       { name: "system_notifications_enabled" as const, label: "تفعيل الإشعارات", type: "toggle" as const },
       { name: "system_attachment_max_size_mb" as const, label: "حجم الملف الأقصى (ميجابايت)", type: "number" as const },
       { name: "system_attachment_max_count" as const, label: "عدد الملفات الأقصى لكل طلب", type: "number" as const },
+    ],
+  },
+  {
+    title: "سياسات المستودع",
+    icon: Boxes,
+    items: [
+      { name: "warehouse_require_movement_reference" as const, label: "إلزام مرجع لكل حركة مخزون (لا حركة بلا سبب)", type: "toggle" as const },
+      { name: "warehouse_auto_purchase_request_on_min_stock" as const, label: "طلب شراء تلقائي عند بلوغ الحد الأدنى", type: "toggle" as const },
+      { name: "warehouse_enforce_lot_fefo" as const, label: "إلزام FEFO ومنع صرف الدفعات المنتهية/المستدعاة (للأصناف ذات تتبّع الدفعات)", type: "toggle" as const },
     ],
   },
 ];
@@ -81,6 +96,9 @@ export function SystemControlsTab() {
     system_notifications_enabled: (controls["system.notifications_enabled"] as boolean) ?? true,
     system_attachment_max_size_mb: Number(controls["system.attachment_max_size_mb"] ?? 5),
     system_attachment_max_count: Number(controls["system.attachment_max_count"] ?? 10),
+    warehouse_require_movement_reference: (controls["warehouse.require_movement_reference"] as boolean) ?? false,
+    warehouse_auto_purchase_request_on_min_stock: (controls["warehouse.auto_purchase_request_on_min_stock"] as boolean) ?? true,
+    warehouse_enforce_lot_fefo: (controls["warehouse.enforce_lot_fefo"] as boolean) ?? false,
   };
   const remountKey = JSON.stringify(defaults);
 

@@ -135,15 +135,14 @@ describe("#1733 Booking + Dispatch — route surface", () => {
     expect(block).toMatch(/declinedReason/);
   });
 
-  it("router is mounted under /api with module + financial guards (via PR-5a's fleetGuards helper)", () => {
-    // PR-5a (#2077) wrapped the previously-unbound guards in a
-    // path-conditional helper `fleetGuards()` so the fleet middleware
-    // no longer leaks onto unrelated routes (/my-space, /tasks, …).
-    // The guards still fire — only for /transport/* and /fleet/* paths.
+  it("router is mounted under /api with module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("transportBookingsRouter");
-    expect(ROUTES_INDEX).toMatch(
-      /router\.use\(\s*fleetGuards\(\),\s*transportBookingsRouter\)/,
-    );
+    // #1959: gated by the path-conditional fleet+financial transportPathGate (a
+    // path-less requireModule used to globally lock non-admins out of all later
+    // modules). The router mounts path-less; the gate runs only for /transport+/fleet.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toContain('const transportFinancialGate = requireGuards("financial")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 });
 

@@ -454,6 +454,242 @@ class FleetEngineImpl implements DomainEngine {
   }
 
   /**
+   * #1812 — rental close → Accounting Candidate (الإيراد عند الإغلاق).
+   * Mirrors createCargoBillingCandidate for the third transport leg.
+   * Fired from the rental /return endpoint after the contract flips
+   * to `completed`. The candidate carries:
+   *
+   *   • quantity = rental days (startDate → actualEndDate inclusive
+   *     of the first day) + unitOfMeasure 'day', so the accountant
+   *     can recognise the revenue over the rental DURATION (التأجير
+   *     على مدى المدة) rather than as a single-day event.
+   *   • suggestedRevenue = totalAmount + overageAmount (the overage
+   *     is itemised in notes so it can become a separate invoice line).
+   *   • serviceDate = actualEndDate — the operational close date.
+   *
+   * Idempotent on (companyId, 'fleet_rental_contract', contractId):
+   * re-firing the return transition is a no-op once the candidate
+   * exists. NO journal entry is posted here — the accountant
+   * materializes from the finance side, same as cargo.
+   */
+  async createRentalBillingCandidate(
+    ctx: FleetGLContext,
+    contract: {
+      id: number;
+      ref?: string | null;
+      clientId: number;
+      vehicleId: number;
+      driverId?: number | null;
+      startDate: string;
+      actualEndDate: string;
+      totalAmount?: number | null;
+      overageAmount?: number | null;
+      notes?: string | null;
+    }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const baseRevenue = Number(contract.totalAmount) || 0;
+    const overage = Number(contract.overageAmount) || 0;
+    const revenue = baseRevenue + overage;
+    // A zero-value contract (courtesy loan, internal use) is a pure
+    // operational record — no handoff needed.
+    if (revenue <= 0) return null;
+
+    // Rental days: difference + 1 so a same-day rent-and-return counts
+    // as one day. Falls back to 1 on unparsable dates.
+    const start = new Date(contract.startDate);
+    const end = new Date(contract.actualEndDate);
+    const rentalDays =
+      Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())
+        ? 1
+        : Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+
+    const periodNote =
+      `إيجار مركبة للفترة ${contract.startDate} → ${contract.actualEndDate} (${rentalDays} يوم)` +
+      (overage > 0 ? ` — يشمل زائد إرجاع ${overage} (بند منفصل مقترح)` : "") +
+      (contract.notes ? `\n${contract.notes}` : "");
+
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "customerId", "serviceType", "serviceDate",
+           "vehicleId", "driverId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'fleet_rental_contract', $3, $4,
+           $5, 'rental', COALESCE($6::date, CURRENT_DATE),
+           $7, $8,
+           $9, 'day',
+           'returned',
+           $10,
+           $11,
+           $12
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'fleet_rental_contract' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        contract.id,
+        contract.ref ?? `RENT-${contract.id}`,
+        contract.clientId,
+        contract.actualEndDate,
+        contract.vehicleId,
+        contract.driverId ?? null,
+        rentalDays,
+        revenue,
+        periodNote,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (!row.existed) {
+      eventBus.emit("fleet.rental.billing_candidate.created", {
+        companyId: ctx.companyId,
+        contractId: contract.id,
+        candidateId: row.id,
+      });
+    }
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #1812 / #2079 TA-T18-01 — passenger booking close → Accounting
+   * Candidate (إيراد رحلة الركاب يصل طابور المحاسب).
+   * Mirrors createCargoBillingCandidate + createRentalBillingCandidate
+   * for the passenger leg. Fired from the booking PATCH when status
+   * transitions to `completed` AND tripFamily = 'passenger'. The
+   * candidate carries:
+   *
+   *   • quantity = passengerCount + unitOfMeasure 'pax', so the
+   *     accountant prices by head count (umrah groups, charter trips,
+   *     daily passenger runs).
+   *   • suggestedRevenue is NOT set here — passenger pricing is rule-
+   *     driven downstream (transport_price_rules + pricingEngine on
+   *     the service-line side), unlike cargo/rental where the trip
+   *     row already carries the agreed amount. The candidate signals
+   *     «جاهز للتسعير» and the accountant materialises it through
+   *     the existing pricing pipeline.
+   *   • serviceDate = current Riyadh date (booking row carries no
+   *     completedAt column; the operational close moment IS now).
+   *
+   * Idempotent on (companyId, 'transport_booking_passenger', bookingId):
+   * re-firing the completed transition is a no-op once the candidate
+   * exists. NO journal entry is posted here — the accountant
+   * materialises from the finance side, same boundary as cargo + rental.
+   *
+   * Skip cases (return null without inserting):
+   *   • passengerCount <= 0 — pure operational record (internal
+   *     transfer / equipment booking misclassified at intake), no
+   *     billable headcount.
+   *   • tripFamily != 'passenger' — guard against accidental calls
+   *     from cargo bookings (those go through createCargoBillingCandidate).
+   */
+  async createPassengerBillingCandidate(
+    ctx: FleetGLContext,
+    booking: {
+      id: number;
+      bookingNumber: string;
+      tripFamily: string | null;
+      customerId: number | null;
+      passengerCount: number | null;
+      fromLocationText: string | null;
+      toLocationText: string | null;
+      vehicleId?: number | null;
+      driverId?: number | null;
+      notes?: string | null;
+    }
+  ): Promise<{ id: number; created: boolean } | null> {
+    if (booking.tripFamily !== "passenger") return null;
+    const pax = Number(booking.passengerCount) || 0;
+    if (pax <= 0) return null;
+
+    const route =
+      booking.fromLocationText && booking.toLocationText
+        ? `${booking.fromLocationText} → ${booking.toLocationText}`
+        : (booking.fromLocationText ?? booking.toLocationText ?? "بدون مسار");
+    const note =
+      `نقل ركاب — حجز ${booking.bookingNumber}، ${pax} راكب على المسار ${route}` +
+      (booking.notes ? `\n${booking.notes}` : "");
+
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "customerId", "serviceType", "serviceDate",
+           "routeFrom", "routeTo",
+           "vehicleId", "driverId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'transport_booking_passenger', $3, $4,
+           $5, 'passenger', CURRENT_DATE,
+           $6, $7,
+           $8, $9,
+           $10, 'pax',
+           'completed',
+           $11,
+           $12
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'transport_booking_passenger' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        booking.id,
+        booking.bookingNumber,
+        booking.customerId,
+        booking.fromLocationText,
+        booking.toLocationText,
+        booking.vehicleId ?? null,
+        booking.driverId ?? null,
+        pax,
+        note,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (!row.existed) {
+      eventBus.emit("fleet.passenger.billing_candidate.created", {
+        companyId: ctx.companyId,
+        bookingId: booking.id,
+        candidateId: row.id,
+      });
+    }
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
    * Post the financial impact of a delivered cargo manifest in ONE
    * balanced journal entry. A road-freight shipment has two money
    * flows that net to a single balanced JE:

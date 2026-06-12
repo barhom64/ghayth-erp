@@ -15,7 +15,7 @@
  *   - Compose button (top right) opens a dialog that sends through
  *     the same DLP-aware backend
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { PageShell } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
@@ -39,7 +39,7 @@ import {
   ArrowDownLeft, ArrowUpRight, AlertOctagon, Sparkles,
   PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed,
   Inbox as InboxIcon, FileEdit, Star, Archive, Trash2, AlertTriangle,
-  Save, PenSquare, Settings,
+  Save, PenSquare, Settings, Clock, BellOff,
 } from "lucide-react";
 
 type Folder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash" | "spam";
@@ -73,6 +73,7 @@ interface ThreadRow {
   createdAt: string;
   total_messages: number;
   inbound_count: number;
+  unread_count: number;
 }
 
 interface MessageRow {
@@ -85,6 +86,8 @@ interface MessageRow {
   body: string;
   status: string;
   createdAt: string;
+  isRead?: boolean;
+  readAt?: string | null;
 }
 
 interface CallRow {
@@ -419,6 +422,26 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
       apiFetch(`/inbox/messages/${id}/folder`, { method: "POST", body: JSON.stringify({ folder }) }),
     onSuccess: () => { toast({ title: "تم النقل" }); onChange?.(); },
   });
+  // Retry a failed outbound message — see /inbox/messages/:id/retry.
+  // The endpoint resets the queue row to status='pending' so the next
+  // worker tick picks it up. Most useful after fixing SMTP credentials
+  // or a recipient typo without rewriting the message.
+  const retryMut = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch<{ status: string }>(`/inbox/messages/${id}/retry`, { method: "POST" }),
+    onSuccess: () => { toast({ title: "أُعيد إلى قائمة الإرسال" }); onChange?.(); },
+    onError: (e: Error) => toast({ title: "فشل إعادة المحاولة", description: e.message, variant: "destructive" }),
+  });
+  // Cancel a scheduled outbound message — backend enforces it must be
+  // a pending row with a future scheduledAt. Surfacing for any pending
+  // outbound row; if the user clicks on one that's actually immediate
+  // the backend returns 422 with a clear reason.
+  const cancelMut = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/inbox/messages/${id}/cancel`, { method: "POST" }),
+    onSuccess: () => { toast({ title: "تم إلغاء الإرسال المجدول" }); onChange?.(); },
+    onError: (e: Error) => toast({ title: "تعذّر الإلغاء", description: e.message, variant: "destructive" }),
+  });
 
   // Bulk selection: selected message ids. Single round-trip move via
   // /inbox/messages/bulk-folder so 50 threads → 1 request, not 50.
@@ -525,6 +548,7 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
             const Icon = meta.icon;
             const isActive = active?.channel === t.channel && active.address === t.peer;
             const isChecked = selected.has(t.id);
+            const hasUnread = (t.unread_count ?? 0) > 0;
             return (
               <div
                 key={`${t.channel}-${t.peer}-${t.id}`}
@@ -532,6 +556,7 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
                   "p-3 hover:bg-surface-subtle/60 flex gap-2 items-start transition-colors group",
                   isActive && "bg-status-info-surface",
                   isChecked && "bg-indigo-50/30",
+                  hasUnread && !isActive && "bg-status-info-surface/30",
                   t.channel === "pbx" && "opacity-60",
                 )}
               >
@@ -552,23 +577,55 @@ function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
                   className="flex-1 min-w-0 text-start"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-sm truncate">{t.peer}</span>
-                    {t.inbound_count > 0 && (
-                      <Badge variant="outline" className="text-[10px] shrink-0">{t.inbound_count} وارد</Badge>
-                    )}
+                    <span className={cn("text-sm truncate", hasUnread ? "font-bold" : "font-medium")}>{t.peer}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {hasUnread && (
+                        <Badge className="text-[10px] bg-primary text-primary-foreground">{t.unread_count} جديد</Badge>
+                      )}
+                      {t.inbound_count > 0 && (
+                        <Badge variant="outline" className="text-[10px]">{t.inbound_count} وارد</Badge>
+                      )}
+                    </div>
                   </div>
                   {t.subject && (
-                    <p className="text-xs font-medium text-muted-foreground truncate">{t.subject}</p>
+                    <p className={cn("text-xs truncate", hasUnread ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>{t.subject}</p>
                   )}
                   <p className="text-xs text-muted-foreground truncate">
                     {t.direction === "outbound" ? "← " : "→ "}{t.body_preview}
                   </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-[10px] text-muted-foreground">{formatDateAr(t.createdAt)}</span>
-                    <span className="text-[10px] text-muted-foreground">{t.total_messages} رسالة</span>
+                  <div className="flex items-center justify-between gap-1 mt-1">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[10px] text-muted-foreground shrink-0">{formatDateAr(t.createdAt)}</span>
+                      {t.direction === "outbound" && t.status && <SendStatusBadge status={t.status} />}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{t.total_messages} رسالة</span>
                   </div>
                 </button>
                 <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {t.direction === "outbound" && t.status === "failed" && (
+                    <button
+                      type="button"
+                      onClick={() => retryMut.mutate(t.id)}
+                      disabled={retryMut.isPending}
+                      className="p-1 hover:bg-status-success-surface/60 rounded"
+                      title="إعادة محاولة الإرسال"
+                      data-testid={`retry-${t.id}`}
+                    >
+                      <RefreshCw className={cn("w-3 h-3 text-status-success-foreground", retryMut.isPending && "animate-spin")} />
+                    </button>
+                  )}
+                  {t.direction === "outbound" && t.status === "pending" && (
+                    <button
+                      type="button"
+                      onClick={() => cancelMut.mutate(t.id)}
+                      disabled={cancelMut.isPending}
+                      className="p-1 hover:bg-status-error-surface rounded"
+                      title="إلغاء الإرسال المجدول"
+                      data-testid={`cancel-scheduled-${t.id}`}
+                    >
+                      <Trash2 className={cn("w-3 h-3 text-status-error-foreground", cancelMut.isPending && "opacity-50")} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => toggleStar.mutate(t.id)}
@@ -673,6 +730,22 @@ function ThreadView({ channel, address, onBack, onSent }: {
   const [reply, setReply] = useState("");
   const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
 
+  // Mark every inbound message in this thread as read once the thread
+  // is loaded. We dedupe via the (channel,address) key so the network
+  // call doesn't fire on every refetch — only when the user first
+  // opens (or switches to) this thread. The server-side endpoint is
+  // idempotent so a stale fire-and-forget would be harmless anyway.
+  const lastReadKey = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${channel}:${address}`;
+    if (lastReadKey.current === key) return;
+    if (!messages.some((m) => m.direction === "inbound" && !m.isRead)) return;
+    lastReadKey.current = key;
+    apiFetch(`/inbox/threads/${channel}/${encodeURIComponent(address)}/read`, { method: "POST" })
+      .then(() => onSent())
+      .catch(() => { lastReadKey.current = null; });
+  }, [channel, address, messages, onSent]);
+
   const send = useMutation({
     mutationFn: () => {
       const lastId = messages[messages.length - 1]?.id;
@@ -710,14 +783,17 @@ function ThreadView({ channel, address, onBack, onSent }: {
             <span>{address}</span>
             <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="w-3 h-3" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <ThreadSnoozeMenu channel={channel} address={address} onSnoozed={onBack} />
+            <Button variant="ghost" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
       <CardContent className="flex-1 overflow-y-auto p-4 space-y-3">
-        {isLoading && messages.length === 0 && <p className="text-xs text-muted-foreground">جارٍ التحميل...</p>}
+        {isLoading && messages.length === 0 && <p className="text-xs text-muted-foreground">جاري التحميل...</p>}
         {messages.map((m) => (
           <div key={m.id} className={cn(
             "rounded-lg p-3 max-w-[80%]",
@@ -730,6 +806,9 @@ function ThreadView({ channel, address, onBack, onSent }: {
               <span>{m.direction === "outbound" ? "أنت" : address}</span>
               <span>•</span>
               <span>{formatDateAr(m.createdAt)}</span>
+              {m.direction === "inbound" && m.isRead === false && (
+                <Badge className="text-[9px] bg-primary text-primary-foreground">جديد</Badge>
+              )}
               {m.status === "blocked_dlp" && (
                 <Badge variant="outline" className="text-[9px] text-status-error-foreground border-status-error-surface">حُجبت DLP</Badge>
               )}
@@ -780,6 +859,80 @@ function ThreadView({ channel, address, onBack, onSent }: {
         <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter للإرسال السريع</p>
       </div>
     </Card>
+  );
+}
+
+// ─────────────────────── Thread snooze menu ────────────────────────────
+
+const SNOOZE_PRESETS: { label: string; hours: number }[] = [
+  { label: "ساعة", hours: 1 },
+  { label: "4 ساعات", hours: 4 },
+  { label: "غداً ٩ صباحًا", hours: snoozeUntilTomorrowMorning() },
+  { label: "أسبوع", hours: 24 * 7 },
+];
+
+function snoozeUntilTomorrowMorning(): number {
+  const now = new Date();
+  const tomorrow9 = new Date(now);
+  tomorrow9.setDate(tomorrow9.getDate() + 1);
+  tomorrow9.setHours(9, 0, 0, 0);
+  return Math.max(1, (tomorrow9.getTime() - now.getTime()) / 3600_000);
+}
+
+function ThreadSnoozeMenu({ channel, address, onSnoozed }: {
+  channel: Channel;
+  address: string;
+  onSnoozed: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const snooze = useMutation({
+    mutationFn: (hours: number) => {
+      const wakeAt = new Date(Date.now() + hours * 3600_000).toISOString();
+      return apiFetch(`/inbox/threads/${channel}/${encodeURIComponent(address)}/snooze`, {
+        method: "POST",
+        body: JSON.stringify({ wakeAt }),
+      });
+    },
+    onSuccess: () => {
+      setOpen(false);
+      toast({ title: "تم تأجيل المحادثة", description: "سيتم تذكيرك في الوقت المحدد" });
+      onSnoozed();
+    },
+    onError: (e: Error) => toast({ title: "تعذّر التأجيل", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)} title="تأجيل المحادثة">
+        <Clock className="w-3 h-3" />
+      </Button>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <BellOff className="w-4 h-4" />
+            تأجيل المحادثة
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            ستختفي المحادثة من الوارد، ثم تظهر مهمّة متابعة تلقائية عند الوقت المحدد.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-2 py-2">
+          {SNOOZE_PRESETS.map((p) => (
+            <Button
+              key={p.label}
+              variant="outline"
+              size="sm"
+              disabled={snooze.isPending}
+              onClick={() => snooze.mutate(p.hours)}
+              className="justify-start"
+            >
+              <Clock className="w-3 h-3 me-2" />{p.label}
+            </Button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1183,7 +1336,7 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             onClick={() => saveDraft.mutate()}
           >
             <Save className="w-4 h-4 me-1" />
-            {saveDraft.isPending ? "جارٍ الحفظ..." : (draftId ? "تحديث المسوّدة" : "حفظ كمسوّدة")}
+            {saveDraft.isPending ? "جاري الحفظ..." : (draftId ? "تحديث المسوّدة" : "حفظ كمسوّدة")}
           </Button>
           <Button
             rateLimitAware
@@ -1191,7 +1344,7 @@ export function ComposeDialog({ open, onClose, onSent, initialChannel, initialRe
             onClick={() => send.mutate()}
           >
             <Send className="w-4 h-4 me-1" />
-            {send.isPending ? "جارٍ الإرسال..." : (scheduledAt ? "جدولة الإرسال" : "أرسل")}
+            {send.isPending ? "جاري الإرسال..." : (scheduledAt ? "جدولة الإرسال" : "أرسل")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1458,5 +1611,32 @@ function SearchHitsList({ hits, isLoading, query }: {
         })}
       </CardContent>
     </Card>
+  );
+}
+
+// ─── SendStatusBadge ────────────────────────────────────────────
+// Outbound messages carry a delivery status: pending (in the queue),
+// queued (worker has it), sent (provider accepted), failed (worker
+// gave up after retries), blocked_dlp (DLP blocked the send). Until
+// now the inbox didn't show this — the user had to assume their
+// message went out. Tiny badge that surfaces it inline.
+function SendStatusBadge({ status }: { status: string }) {
+  const meta: Record<string, { label: string; tone: string }> = {
+    pending:     { label: "في الانتظار",  tone: "bg-muted text-muted-foreground" },
+    queued:      { label: "في الطابور",   tone: "bg-status-info-surface text-status-info-foreground" },
+    sending:     { label: "يُرسَل",       tone: "bg-status-info-surface text-status-info-foreground" },
+    sent:        { label: "أُرسلت",       tone: "bg-status-success-surface text-status-success-foreground" },
+    delivered:   { label: "وصلت",         tone: "bg-status-success-surface text-status-success-foreground" },
+    failed:      { label: "فشل الإرسال",  tone: "bg-status-error-surface text-status-error-foreground" },
+    cancelled:   { label: "أُلغيت",       tone: "bg-muted text-muted-foreground" },
+    blocked_dlp: { label: "حُجبت DLP",    tone: "bg-status-error-surface text-status-error-foreground" },
+    received:    { label: "وارد",         tone: "bg-status-info-surface text-status-info-foreground" },
+  };
+  const m = meta[status];
+  if (!m) return null;
+  return (
+    <span className={cn("text-[9px] rounded px-1.5 py-0.5 font-medium shrink-0", m.tone)} data-testid={`send-status-${status}`}>
+      {m.label}
+    </span>
   );
 }

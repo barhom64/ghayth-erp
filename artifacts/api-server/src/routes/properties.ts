@@ -614,7 +614,7 @@ router.post("/units", authorize({ feature: "properties.units", action: "create" 
     }).catch((e) => logger.error(e, "properties background task failed"));
     createSubsidiaryAccountsForEntity(
       scope.companyId, "property", insertId,
-      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`
+      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`, { branchId: scope.branchId, actorUserId: scope.userId }
     ).catch((e) => logger.error(e, "properties background task failed"));
     // #1715 (owner feedback) — consistent entity-provisioning policy: every
     // trackable entity gets a cost centre for per-entity P&L. The unit's CC
@@ -1183,7 +1183,7 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
          $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
          RETURNING id`,
         [scope.companyId, b.unitId, tenantId, b.tenantName, b.tenantPhone, b.tenantEmail, b.tenantIdNumber, b.startDate, b.endDate, monthlyRent, b.depositAmount || 0, b.paymentDay || 1, b.notes, b.status || "active",
-         contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
+         contractNumber, b.ejarNumber || null, b.contractType || 'residential_rent', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
       );
       const contractId = contractRes.rows[0].id;
 
@@ -2954,7 +2954,7 @@ router.post("/buildings", authorize({ feature: "properties.buildings", action: "
     // #1715 (owner feedback) — consistent entity-provisioning policy: a new
     // property building gets BOTH a subsidiary account (per-property ledger)
     // and a cost centre (per-property P&L), mirroring vehicle creation.
-    createSubsidiaryAccountsForEntity(scope.companyId, "property", insertId, b.name)
+    createSubsidiaryAccountsForEntity(scope.companyId, "property", insertId, b.name, { branchId: scope.branchId, actorUserId: scope.userId })
       .catch((e) => logger.error(e, "property subsidiary auto-create failed"));
     createCostCenterForEntity(
       scope.companyId, "property", insertId, b.name,

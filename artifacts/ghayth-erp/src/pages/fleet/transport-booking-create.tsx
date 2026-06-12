@@ -137,10 +137,27 @@ export default function TransportBookingCreate() {
   const isUmrah = transportServiceType === "passenger_umrah";
   const isPassenger = transportServiceType.startsWith("passenger_");
 
+  // #1812 Wave 0.2 — linked-source guard. Any one of these IDs being
+  // set means the booking is anchored to a structured upstream entity
+  // (CRM / umrah / contract / project). Free-text customerName alone
+  // is no longer accepted by the backend (see transport-bookings.ts
+  // createBookingSchema refinement).
+  const hasLinkedSource = Boolean(
+    customerId || umrahGroupId || contractId || projectId,
+  );
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookingNumber.trim()) {
       toast({ variant: "destructive", title: "رقم الحجز مطلوب" });
+      return;
+    }
+    if (!hasLinkedSource) {
+      toast({
+        variant: "destructive",
+        title: "اختر مصدر الحجز أولاً",
+        description: "يجب ربط الحجز بعميل من CRM أو مجموعة عمرة أو عقد أو مشروع. اسم العميل النصّي وحده غير مقبول.",
+      });
       return;
     }
     setSubmitting(true);
@@ -283,24 +300,37 @@ export default function TransportBookingCreate() {
                 </SelectContent>
               </Select>
             </div>
+            {/* #1812 Wave 0.2 — customer name/phone are READ-ONLY here.
+                They come from the BookingSourceSelector above so a
+                downstream invoice always points to a real CRM /
+                umrah / contract / project record. */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label htmlFor="customerName">اسم العميل</Label>
+                <Label htmlFor="customerName">اسم العميل (من المصدر)</Label>
                 <Input
                   id="customerName"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  readOnly
+                  className="bg-surface-subtle"
+                  placeholder={hasLinkedSource ? customerName : "اختر مصدر الحجز أعلاه"}
                 />
               </div>
               <div>
-                <Label htmlFor="customerPhone">جوال العميل</Label>
+                <Label htmlFor="customerPhone">جوال العميل (من المصدر)</Label>
                 <Input
                   id="customerPhone"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  readOnly
+                  className="bg-surface-subtle"
+                  placeholder={hasLinkedSource ? customerPhone : "—"}
                 />
               </div>
             </div>
+            {!hasLinkedSource && (
+              <div className="md:col-span-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md p-2">
+                لا يمكن إنشاء الحجز بدون مصدر منظَّم (عميل CRM / مجموعة عمرة / عقد / مشروع). اختر مصدراً من القسم أعلاه.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -648,9 +678,9 @@ export default function TransportBookingCreate() {
           <Link href="/fleet/transport/bookings">
             <Button type="button" variant="outline">إلغاء</Button>
           </Link>
-          <Button type="submit" disabled={submitting} rateLimitAware>
+          <Button type="submit" disabled={submitting || !hasLinkedSource} rateLimitAware>
             <Plus className="h-4 w-4 me-1" />
-            {submitting ? "جارٍ الإنشاء…" : "إنشاء الحجز"}
+            {submitting ? "جاري الإنشاء…" : "إنشاء الحجز"}
           </Button>
         </div>
       </form>
