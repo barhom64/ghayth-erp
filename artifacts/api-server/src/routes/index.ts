@@ -340,7 +340,11 @@ const hrUserLimiter = createPerUserLimiter({
 
 router.use("/dashboard", dashboardRouter);
 router.use("/employees", requireModule("hr"), employeesRouter);
-router.use("/clients", requireModule("crm"), clientsRouter);
+// #2134 — clients are the finance counterparty master data: the invoice and
+// voucher forms (finance module) read this list for their client picker, so a
+// finance-module user must reach it without holding the CRM module. The
+// per-route authorize (crm.clients) still gates every action.
+router.use("/clients", requireModule("crm", "finance"), clientsRouter);
 // Per-user HR limiter mounted once on /hr so it runs exactly once per
 // request, regardless of which sub-router handles it. See umrah notes below.
 router.use("/hr", hrUserLimiter);

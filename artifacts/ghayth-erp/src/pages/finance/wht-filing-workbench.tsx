@@ -412,7 +412,7 @@ export default function WhtFilingWorkbenchPage() {
                         <th className="text-end py-2 px-2 w-20">النسبة</th>
                         <th className="text-end py-2 px-2 w-20">عدد</th>
                         <th className="text-end py-2 px-2">قاعدة الحساب</th>
-                        <th className="text-end py-2 px-2">WHT</th>
+                        <th className="text-end py-2 px-2">الاستقطاع</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -509,7 +509,7 @@ export default function WhtFilingWorkbenchPage() {
                                     <th className="text-start py-1 px-2">فئة</th>
                                     <th className="text-end py-1 px-2">نسبة</th>
                                     <th className="text-end py-1 px-2">قاعدة</th>
-                                    <th className="text-end py-1 px-2">WHT</th>
+                                    <th className="text-end py-1 px-2">الاستقطاع</th>
                                     <th className="py-1 px-2 w-8"></th>
                                   </tr>
                                 </thead>

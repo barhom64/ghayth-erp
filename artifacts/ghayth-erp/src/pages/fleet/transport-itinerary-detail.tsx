@@ -42,7 +42,7 @@ const LEG_STATUSES = [
   { value: "pending", label: "بانتظار" },
   { value: "scheduled", label: "مجدول" },
   { value: "assigned", label: "مسند" },
-  { value: "in_progress", label: "جارٍ التنفيذ" },
+  { value: "in_progress", label: "جاري التنفيذ" },
   { value: "completed", label: "اكتمل" },
   { value: "cancelled", label: "ملغى" },
   { value: "skipped", label: "تم تجاوزه" },
@@ -493,7 +493,7 @@ export default function TransportItineraryDetail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
             <Button onClick={saveLeg} disabled={submitting} rateLimitAware>
-              {submitting ? "جارٍ الحفظ…" : form.id ? "حفظ" : "إضافة"}
+              {submitting ? "جاري الحفظ…" : form.id ? "حفظ" : "إضافة"}
             </Button>
           </DialogFooter>
         </DialogContent>

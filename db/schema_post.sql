@@ -3393,7 +3393,7 @@ ALTER TABLE ONLY public.chart_of_accounts
 --
 
 ALTER TABLE public.chart_of_accounts
-    ADD CONSTRAINT chart_of_accounts_nature_check CHECK (((nature)::text = ANY ((ARRAY['debit'::character varying, 'credit'::character varying])::text[]))) NOT VALID;
+    ADD CONSTRAINT chart_of_accounts_nature_check CHECK (((nature)::text = ANY (ARRAY[('debit'::character varying)::text, ('credit'::character varying)::text]))) NOT VALID;
 
 
 --
@@ -3409,7 +3409,7 @@ ALTER TABLE ONLY public.chart_of_accounts
 --
 
 ALTER TABLE public.chart_of_accounts
-    ADD CONSTRAINT chart_of_accounts_type_check CHECK (((type)::text = ANY ((ARRAY['asset'::character varying, 'liability'::character varying, 'equity'::character varying, 'revenue'::character varying, 'expense'::character varying])::text[]))) NOT VALID;
+    ADD CONSTRAINT chart_of_accounts_type_check CHECK (((type)::text = ANY (ARRAY[('asset'::character varying)::text, ('liability'::character varying)::text, ('equity'::character varying)::text, ('revenue'::character varying)::text, ('expense'::character varying)::text]))) NOT VALID;
 
 
 --

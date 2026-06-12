@@ -262,7 +262,7 @@ export default function AdminAiGovernance() {
     { key: "defaultModel", header: "النموذج الافتراضي", render: (r) => (
       <span className="font-mono text-xs">{r.defaultModel ?? "—"}</span>
     )},
-    { key: "apiKey", header: "API Key", render: (r) => {
+    { key: "apiKey", header: "مفتاح API", render: (r) => {
       // The list endpoint returns "*****" when a key is set, empty
       // string when not — operator sees at a glance whether the
       // provider can actually be called.
@@ -356,7 +356,7 @@ export default function AdminAiGovernance() {
           <TabsList>
             <TabsTrigger value="overview"><BookOpen className="w-4 h-4 me-1" />نظرة عامة</TabsTrigger>
             <TabsTrigger value="providers"><Server className="w-4 h-4 me-1" />المزوّدون</TabsTrigger>
-            <TabsTrigger value="prompts"><Sparkles className="w-4 h-4 me-1" />الـ Prompts</TabsTrigger>
+            <TabsTrigger value="prompts"><Sparkles className="w-4 h-4 me-1" />الموجّهات (Prompts)</TabsTrigger>
             <TabsTrigger value="review"><ClipboardCheck className="w-4 h-4 me-1" />مركز المراجعة ({reviewQueue.length})</TabsTrigger>
           </TabsList>
 
@@ -384,7 +384,7 @@ export default function AdminAiGovernance() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Sparkles className="w-4 h-4" />الـ Prompts
+                    <Sparkles className="w-4 h-4" />الموجّهات (Prompts)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-1">
@@ -612,11 +612,11 @@ function NewProviderDialog({ open, onClose, onSubmit, isSubmitting }: {
             </div>
           </div>
           <div>
-            <Label>Endpoint (اختياري — للـ STT و custom hosts)</Label>
+            <Label>نقطة الاتصال (Endpoint) — اختياري للـ STT و custom hosts</Label>
             <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://api.openai.com/v1/audio/transcriptions" />
           </div>
           <div>
-            <Label>API Key (يُشفَّر قبل الحفظ)</Label>
+            <Label>مفتاح API (يُشفَّر قبل الحفظ)</Label>
             <Input
               type="password"
               value={apiKey}
@@ -686,7 +686,7 @@ function NewPromptDialog({ open, onClose, onSubmit, isSubmitting }: {
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
           <div>
-            <Label>System Prompt</Label>
+            <Label>موجّه النظام (System Prompt)</Label>
             <Textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
@@ -695,7 +695,7 @@ function NewPromptDialog({ open, onClose, onSubmit, isSubmitting }: {
             />
           </div>
           <div>
-            <Label>User Template (اختياري)</Label>
+            <Label>قالب المستخدم (اختياري)</Label>
             <Textarea
               value={userTemplate}
               onChange={(e) => setUserTemplate(e.target.value)}
@@ -806,12 +806,12 @@ function ViewPromptDialog({ promptId, onClose }: {
                   <Textarea value={draftDesc} onChange={(e) => setDraftDesc(e.target.value)} rows={2} />
                 </div>
                 <div>
-                  <Label className="text-xs">System Prompt *</Label>
+                  <Label className="text-xs">موجّه النظام (System Prompt) *</Label>
                   <Textarea value={draftSystem} onChange={(e) => setDraftSystem(e.target.value)} rows={8}
                     className="font-mono text-xs" />
                 </div>
                 <div>
-                  <Label className="text-xs">User Template</Label>
+                  <Label className="text-xs">قالب المستخدم</Label>
                   <Textarea value={draftUser} onChange={(e) => setDraftUser(e.target.value)} rows={4}
                     className="font-mono text-xs" />
                 </div>
@@ -831,14 +831,14 @@ function ViewPromptDialog({ promptId, onClose }: {
                   </div>
                 )}
                 <div>
-                  <Label className="text-xs text-muted-foreground">System Prompt</Label>
+                  <Label className="text-xs text-muted-foreground">موجّه النظام (System Prompt)</Label>
                   <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
                     {prompt.systemPrompt}
                   </pre>
                 </div>
                 {prompt.userTemplate && (
                   <div>
-                    <Label className="text-xs text-muted-foreground">User Template</Label>
+                    <Label className="text-xs text-muted-foreground">قالب المستخدم</Label>
                     <pre className="bg-surface-subtle rounded p-3 text-xs font-mono whitespace-pre-wrap break-words">
                       {prompt.userTemplate}
                     </pre>
@@ -971,16 +971,16 @@ function SimulatePromptDialog({ promptId, onClose }: {
         <div className="space-y-3">
           {prompt && (
             <div>
-              <Label className="text-xs text-muted-foreground">System Prompt (مرجعي)</Label>
+              <Label className="text-xs text-muted-foreground">موجّه النظام (System Prompt) — مرجعي</Label>
               <pre className="bg-surface-subtle p-2 rounded text-[11px] font-mono whitespace-pre-wrap max-h-32 overflow-y-auto">{prompt.systemPrompt}</pre>
             </div>
           )}
           <div>
-            <Label>User Input</Label>
+            <Label>مدخل المستخدم</Label>
             <Textarea value={userPrompt} onChange={(e) => setUserPrompt(e.target.value)} rows={5} className="font-mono text-xs" />
           </div>
           <Button rateLimitAware disabled={run.isPending || !userPrompt || !prompt} onClick={() => run.mutate()}>
-            <PlayCircle className="w-4 h-4 me-1" />{run.isPending ? "جارٍ التشغيل..." : "شغّل"}
+            <PlayCircle className="w-4 h-4 me-1" />{run.isPending ? "جاري التشغيل..." : "شغّل"}
           </Button>
           {result && (
             <div className="space-y-2 border-t pt-3">
@@ -992,8 +992,8 @@ function SimulatePromptDialog({ promptId, onClose }: {
                 <>
                   <div className="grid grid-cols-4 gap-2 text-xs">
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">المدة</span><br /><span className="font-mono font-semibold">{result.durationMs}ms</span></div>
-                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">Prompt tokens</span><br /><span className="font-mono font-semibold">{result.promptTokens}</span></div>
-                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">Completion tokens</span><br /><span className="font-mono font-semibold">{result.completionTokens}</span></div>
+                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الموجّه</span><br /><span className="font-mono font-semibold">{result.promptTokens}</span></div>
+                    <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الإكمال</span><br /><span className="font-mono font-semibold">{result.completionTokens}</span></div>
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">التكلفة</span><br /><span className="font-mono font-semibold">${result.costUsdRounded.toFixed(4)}</span></div>
                   </div>
                   <div>
@@ -1073,7 +1073,7 @@ function EvaluatePromptDialog({ prompt, onClose }: {
             )}
             <div className="mt-3">
               <Button rateLimitAware disabled={run.isPending || cases.length === 0} onClick={() => run.mutate()}>
-                <TestTube className="w-4 h-4 me-1" />{run.isPending ? "جارٍ التقييم..." : `شغّل التقييم (${cases.length} حالة)`}
+                <TestTube className="w-4 h-4 me-1" />{run.isPending ? "جاري التقييم..." : `شغّل التقييم (${cases.length} حالة)`}
               </Button>
             </div>
           </div>
@@ -1287,9 +1287,9 @@ function EditProviderDialog({ provider, onClose, onSubmit, isSubmitting }: {
             <div><Label>الأولوية</Label><Input type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} /></div>
             <div><Label>النموذج الافتراضي</Label><Input value={defaultModel} onChange={(e) => setDefaultModel(e.target.value)} /></div>
           </div>
-          <div><Label>Endpoint</Label><Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} /></div>
+          <div><Label>نقطة الاتصال (Endpoint)</Label><Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} /></div>
           <div>
-            <Label>API Key</Label>
+            <Label>مفتاح API</Label>
             <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="اتركه على ***** للإبقاء على القيمة الحالية" />
           </div>
           <div><Label>ملاحظات</Label><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>

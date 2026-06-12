@@ -138,14 +138,33 @@ describe("U-02b M5a §B — legacy tab + page remain untouched", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §C — Calendar is NOT rewired (that's M5b — separate authorisation)
+// §C — Calendar (M5a-era invariant; superseded by M5b)
+//
+// During M5a's PR window this section asserted the calendar was
+// untouched, since calendar rewiring was held for M5b. M5b
+// (#2080 thread) merged the additive `transport_request` layer
+// into pages/umrah/calendar.tsx, so the original "no reference"
+// assertion is no longer accurate.
+//
+// The current calendar invariants now live in
+// umrahTransportRequestCalendarLayerSmoke.test.ts, which pins both
+// the additive new layer AND the unchanged legacy `transport_trip`
+// layer. To avoid double-pinning the same surface from two smokes,
+// this §C is intentionally a no-op holder. Renumbering downstream
+// sections (§D / §E) would invalidate the M5a merge SHA's audit
+// trail in #2080, so the block stays as a documented sentinel.
 // ─────────────────────────────────────────────────────────────────────────────
-describe("U-02b M5a §C — calendar links unchanged", () => {
-  it("umrah calendar page does NOT reference the new contract-path route", () => {
-    // The owner explicitly held calendar rewiring for M5b. If a
-    // calendar link starts pointing at the new page, M5b would have
-    // been silently merged into M5a — this smoke surfaces that.
-    expect(CALENDAR_PAGE).not.toMatch(/\/umrah\/transport-requests/);
+describe("U-02b M5a §C — calendar invariants moved to M5b smoke", () => {
+  it("M5b calendar-layer smoke owns the post-M5b calendar invariants", () => {
+    // Defensive: assert the downstream M5b smoke file exists, so if
+    // someone deletes it (and thus loses calendar coverage), this
+    // §C surfaces the gap.
+    const m5bSmoke = readFileSync(
+      join(REPO_ROOT, "artifacts/api-server/tests/unit/umrahTransportRequestCalendarLayerSmoke.test.ts"),
+      "utf8",
+    );
+    expect(m5bSmoke).toMatch(/transport_request/);
+    expect(m5bSmoke).toMatch(/transport_trip/);
   });
 });
 
