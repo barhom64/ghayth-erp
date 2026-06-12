@@ -112,6 +112,11 @@ const linkSubAgentSchema = z.object({
 const linkByNuskSchema = z.object({
   nuskCode: z.string().min(1, "رمز نسك مطلوب"),
   clientId: z.coerce.number({ required_error: "معرف العميل مطلوب" }),
+  // U-11 Phase 3b (#2080) — optional free-text justification recorded
+  // on the audit log + emitted event. Surfaces the operator's intent
+  // ("matched by phone", "merger with #123", ...) for downstream
+  // review. Limited to 500 chars to keep the audit row sane.
+  reason: z.string().max(500).optional(),
 });
 
 const linkClientSchema = z.object({
@@ -478,20 +483,70 @@ router.post("/sub-agents/link-by-nusk", authorize({ feature: "umrah", action: "c
   try {
     const scope = req.scope!;
     const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
-    const { nuskCode, clientId } = parsed;
+    const { nuskCode, clientId, reason } = parsed;
     const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
     if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
+    // U-11 Phase 3b (#2080) — explicit-confirmation link from the
+    // import wizard. Look up the matching sub-agent BEFORE the
+    // UPDATE so the audit log captures `before.clientId` (a real
+    // before/after pair) and so we have a concrete entityId to
+    // attach to the event instead of the legacy `entityId: 0`.
+    // If multiple sub-agents share the nuskCode under this tenant
+    // (rare but legal in the current schema), we audit the first
+    // one — the UPDATE still touches all matching rows for
+    // backward compatibility.
+    const [existingSubAgent] = await rawQuery<{ id: number; clientId: number | null }>(
+      `SELECT id, "clientId" FROM umrah_sub_agents
+        WHERE "companyId"=$1 AND "nuskCode"=$2 AND "deletedAt" IS NULL
+        ORDER BY id LIMIT 1`,
+      [scope.companyId, nuskCode]
+    );
+    if (!existingSubAgent) throw new NotFoundError("الوكيل الفرعي غير موجود أو لا ينتمي لهذه الشركة");
+    const beforeClientId = existingSubAgent.clientId;
+    const subAgentId = existingSubAgent.id;
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
       [clientId, scope.userId, scope.companyId, nuskCode]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: 0, after: { nuskCode, clientId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.linked_by_nusk", entity: "umrah_sub_agents", entityId: 0, details: JSON.stringify({ nuskCode, clientId }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.json({ success: true });
+    // U-11 Phase 3b — enriched audit. `before` carries the prior
+    // clientId (often null in the import-wizard flow), `after`
+    // carries the new linkage + the nuskCode that drove the match,
+    // `reason` is the operator's free-text justification, and the
+    // entity id is the real sub-agent row (no longer 0).
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "umrah_sub_agents",
+      entityId: subAgentId,
+      before: { clientId: beforeClientId },
+      after: { nuskCode, clientId },
+      reason,
+    }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    // U-11 Phase 3b — enriched event. `source` flags this as the
+    // explicit-confirmation path from the import wizard so
+    // downstream consumers (notification rules, audit dashboards)
+    // can distinguish it from the detail-page linker.
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "umrah.sub_agent.linked_by_nusk",
+      entity: "umrah_sub_agents",
+      entityId: subAgentId,
+      details: JSON.stringify({
+        nuskCode,
+        clientId,
+        beforeClientId,
+        reason: reason ?? null,
+        source: "import_wizard_explicit_confirmation",
+      }),
+    }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    res.json({ success: true, subAgentId, beforeClientId });
   } catch (err) { handleRouteError(err, res, "Link sub-agent by nusk"); }
 });
 
