@@ -5,6 +5,7 @@ import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
 import { logger } from "./logger.js";
 import { encryptField, blindIndex } from "./fieldEncryption.js";
+import { resolveSettings } from "./settings.js";
 
 // ---------------------------------------------------------------------------
 // Arabic header → DB column mapping
@@ -644,6 +645,33 @@ export interface ImportDiff {
   rowsWithoutSubAgent: number;
   totalRows: number;
   financialImpactCount: number;
+  /**
+   * U-11 Phase 3a (#2080) — detection-only enrichment.
+   *
+   * The active `umrah.auto_link.clientLinkagePolicy` value at preview
+   * time. Surfaced verbatim so the FE banner can name the company's
+   * declared stance ("operational_until_linked" by default). The
+   * preview engine NEVER acts on the policy — it does not auto-link,
+   * does not auto-create clients, does not change behaviour by
+   * policy. The value is purely informational; Phase 3b will decide
+   * whether to use the policy for operator-confirmed suggestions.
+   */
+  clientLinkagePolicy: string;
+  /**
+   * Non-null when the import would create or reference sub-agents
+   * that lack a `clientId`. Tells the operator BEFORE confirm that
+   * invoicing on these rows will fail at `generateSalesInvoice` until
+   * the sub-agent is explicitly linked. The hint NEVER triggers a
+   * linkage — surfacing is the whole point of Phase 3a.
+   */
+  unlinkedSubAgentInvoicingHint:
+    | {
+        willBlockInvoicing: boolean;
+        unlinkedSubAgentCount: number;
+        activePolicy: string;
+        arabicHint: string;
+      }
+    | null;
 }
 
 export async function previewMutamersImport(scope: ImportScope, rows: ParsedRow[]): Promise<ImportDiff> {
@@ -655,6 +683,21 @@ export async function previewVouchersImport(scope: ImportScope, rows: ParsedRow[
 }
 
 async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "mutamers" | "vouchers"): Promise<ImportDiff> {
+  // U-11 Phase 3a — resolve the active client-linkage policy ONCE,
+  // up front, and stash it on the diff. The preview engine is
+  // deliberately read-only on the policy: the value is surfaced for
+  // the operator's banner, never used to mutate import behaviour.
+  // Same `umrah.auto_link.clientLinkagePolicy` key as the invoicing
+  // engine reads — single source of truth, no rival key.
+  const policyRaw = await resolveSettings(
+    "umrah.auto_link.clientLinkagePolicy",
+    scope.companyId,
+  );
+  const activePolicy =
+    typeof policyRaw === "string" && policyRaw.length > 0
+      ? policyRaw
+      : "operational_until_linked";
+
   const diff: ImportDiff = {
     newRows: [],
     updatedRows: [],
@@ -667,6 +710,8 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     rowsWithoutSubAgent: 0,
     totalRows: rows.length,
     financialImpactCount: 0,
+    clientLinkagePolicy: activePolicy,
+    unlinkedSubAgentInvoicingHint: null,
   };
 
   if (fileType === "mutamers") {
@@ -814,6 +859,22 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
       agentName: v.agentName,
       rowCount: v.count,
     }));
+
+    // U-11 Phase 3a — invoicing-block hint. The message is the SAME
+    // signal the operator will eventually receive from
+    // `generateSalesInvoice`'s ConflictError, surfaced UP-front so
+    // the operator can link before confirming, not after a failed
+    // invoice draft. The hint is non-null whenever the import would
+    // create/reference any sub-agent that lacks a clientId.
+    if (diff.unlinkedSubAgents.length > 0) {
+      diff.unlinkedSubAgentInvoicingHint = {
+        willBlockInvoicing: true,
+        unlinkedSubAgentCount: diff.unlinkedSubAgents.length,
+        activePolicy,
+        arabicHint:
+          "السياسة الحالية للربط: " + activePolicy + ". الاستيراد سيُنشئ/يُحدِّث هؤلاء الوكلاء الفرعيين ككيانات تشغيلية فقط (بلا عميل مالي تلقائي وبلا ربط صامت). محاولة إصدار فاتورة عليهم ستفشل حتى يتم الربط الصريح عبر PUT /umrah/sub-agents/:id/link.",
+      };
+    }
   } else {
     const invoiceNumbers = rows.map((r) => r.nuskInvoiceNumber).filter(Boolean) as string[];
 
