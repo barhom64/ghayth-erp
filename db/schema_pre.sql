@@ -6128,6 +6128,91 @@ ALTER SEQUENCE public.contract_payment_schedule_id_seq OWNED BY public.contract_
 
 
 --
+-- Name: conversation_links; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conversation_links (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "conversationId" integer NOT NULL,
+    "relatedType" character varying(60) NOT NULL,
+    "relatedId" integer NOT NULL,
+    "linkedBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone
+);
+
+
+--
+-- Name: conversation_links_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conversation_links_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conversation_links_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.conversation_links_id_seq OWNED BY public.conversation_links.id;
+
+
+--
+-- Name: conversations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conversations (
+    id integer NOT NULL,
+    "companyId" integer NOT NULL,
+    "channelPrimary" character varying(20) NOT NULL,
+    title character varying(500),
+    "participantType" character varying(60),
+    "participantId" integer,
+    "participantName" character varying(300),
+    "participantAddress" character varying(300) NOT NULL,
+    status character varying(20) DEFAULT 'open'::character varying NOT NULL,
+    priority character varying(10) DEFAULT 'normal'::character varying NOT NULL,
+    "assignedTo" integer,
+    "ownerPath" character varying(120),
+    "lastMessageAt" timestamp with time zone,
+    "slaStatus" character varying(20),
+    "riskLevel" character varying(10),
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "deletedAt" timestamp with time zone,
+    CONSTRAINT conversations_channel_primary_check CHECK ((("channelPrimary")::text = ANY ((ARRAY['email'::character varying, 'whatsapp'::character varying, 'sms'::character varying, 'pbx'::character varying, 'push'::character varying, 'in_app'::character varying, 'internal'::character varying])::text[]))),
+    CONSTRAINT conversations_priority_check CHECK (((priority)::text = ANY ((ARRAY['low'::character varying, 'normal'::character varying, 'high'::character varying, 'urgent'::character varying])::text[]))),
+    CONSTRAINT conversations_status_check CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'awaiting_reply'::character varying, 'closed'::character varying, 'escalated'::character varying])::text[])))
+);
+
+
+--
+-- Name: conversations_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.conversations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: conversations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.conversations_id_seq OWNED BY public.conversations.id;
+
+
+--
 -- Name: correspondence; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -13561,6 +13646,7 @@ CREATE TABLE public.message_log (
     "errorMessage" text,
     "legacySource" character varying(30) DEFAULT 'message_log'::character varying NOT NULL,
     "legacyId" integer,
+    "conversationId" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
     CONSTRAINT message_log_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'in_app'::character varying, 'internal'::character varying, 'pbx'::character varying])::text[]))),
