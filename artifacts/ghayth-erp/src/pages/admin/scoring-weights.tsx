@@ -14,6 +14,7 @@
 //   GET    /org/scoring-ranking        — Top N employees by composite
 // ════════════════════════════════════════════════════════════════════════════
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,7 +73,14 @@ const DEFAULT_FORM = {
   development: "0.050",
 };
 
-const PERM_WRITE = "admin:update";
+// PR-4 (#2077) — same shift as PR-3 did for attendance-categories:
+// page is HR-domain (drives the institutional scoring engine's per-
+// category weights). Moving the GuardedButton key to hr.employees:update
+// so the new HR-side mount at /hr/scoring-weights shows the buttons
+// for the HR Manager whose role grants `hr.employees:update` but not
+// `admin:*`. Backend gates on /org/scoring-weights were flipped to the
+// same key in routes/org.ts.
+const PERM_WRITE = "hr.employees:update";
 
 function WeightsTab() {
   const { toast } = useToast();
@@ -304,11 +312,21 @@ function RankingTab() {
 }
 
 export default function ScoringWeightsPage() {
+  // PR-4 (#2077) — the page is mounted at /admin/scoring-weights
+  // (back-compat) and /hr/scoring-weights (new canonical HR mount).
+  // Same path-aware breadcrumb trick as the attendance-categories page
+  // so the parent crumb tracks the user's actual navigation lane.
+  const [location] = useLocation();
+  const onHrRoute = location.startsWith("/hr/");
   return (
     <PageShell
       title="أوزان التقييم وترتيب الموظفين"
       subtitle="تخصيص أوزان الأبعاد الستة + عرض ترتيب الموظفين حسب composite score (HR-020)"
-      breadcrumbs={[
+      breadcrumbs={onHrRoute ? [
+        { href: "/dashboard", label: "لوحة التحكم" },
+        { href: "/hr", label: "الموارد البشرية" },
+        { label: "أوزان التقييم" },
+      ] : [
         { href: "/dashboard", label: "لوحة التحكم" },
         { href: "/admin", label: "الإدارة" },
         { label: "أوزان التقييم" },

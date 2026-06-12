@@ -126,7 +126,12 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: "http://localhost:8080",
+        // Mirror the preview-server pattern below: honor
+        // API_PROXY_TARGET so local dev pointing at a self-hosted
+        // api-server (e.g. on :5000 in the bootstrap-pack) works
+        // without hand-editing this file. Falls back to :8080 for
+        // operators who run the Replit-shaped dev backend.
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:8080",
         changeOrigin: true,
       },
     },
