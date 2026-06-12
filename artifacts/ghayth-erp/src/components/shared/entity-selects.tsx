@@ -590,3 +590,87 @@ export const CostCenterMasterSelect = buildEntitySelect({
   getName: (r) => r?.name ? `${r.code ?? ""}${r.code ? " - " : ""}${r.name}` : r?.code || `#${r?.id}`,
   getSublabel: (r) => r?.type || "",
 });
+
+// PR-1 (#2077) — PositionSelect: master-data picker for `positions`
+// (institutional matrix). The new-employee wizard binds the user via
+// `employee_assignments.positionId`. Backend: /org/positions.
+export const PositionSelect = buildEntitySelect({
+  queryKey: "positions-list",
+  endpoint: "/org/positions",
+  defaultLabel: "المنصب الإداري",
+  defaultPlaceholder: "اختر المنصب",
+  searchPlaceholder: "ابحث عن منصب...",
+  createTitle: "إضافة منصب جديد",
+  createLabel: "+ منصب جديد",
+  createApiPath: "/org/positions",
+  createFields: [
+    { key: "positionKey", label: "مفتاح المنصب", required: true },
+    { key: "labelAr", label: "الاسم بالعربية", required: true },
+  ],
+  getName: (r) => r?.labelAr || r?.labelEn || r?.positionKey || `#${r?.id}`,
+  getSublabel: (r) => r?.level != null ? `مستوى ${r.level}` : "",
+});
+
+// PR-1 (#2077) — TeamSelect: master-data picker for `teams` (sub-unit
+// within a department). The wizard binds the new employee to one team
+// via `employee_team_memberships`. Backend: /org/teams.
+export const TeamSelect = buildEntitySelect({
+  queryKey: "teams-list",
+  endpoint: "/org/teams",
+  defaultLabel: "الفريق",
+  defaultPlaceholder: "اختر الفريق",
+  searchPlaceholder: "ابحث عن فريق...",
+  createTitle: "إضافة فريق جديد",
+  createLabel: "+ فريق جديد",
+  createApiPath: "/org/teams",
+  createFields: [
+    { key: "name", label: "اسم الفريق", required: true },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.departmentName || "",
+});
+
+// PR-1 (#2077) — CommitteeSelect: master-data picker for `committees`
+// (cross-department, time-bounded). Optional binding via
+// `employee_committee_memberships`. Backend: /org/committees.
+export const CommitteeSelect = buildEntitySelect({
+  queryKey: "committees-list",
+  endpoint: "/org/committees",
+  defaultLabel: "اللجنة",
+  defaultPlaceholder: "اختر اللجنة",
+  searchPlaceholder: "ابحث عن لجنة...",
+  createTitle: "إضافة لجنة جديدة",
+  createLabel: "+ لجنة جديدة",
+  createApiPath: "/org/committees",
+  createFields: [
+    { key: "name", label: "اسم اللجنة", required: true },
+    { key: "type", label: "نوع اللجنة", required: true },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.type || "",
+});
+
+// PR-1 (#2077) — EmployeeCategorySelect: master-data picker for
+// `employee_categories` (workforce type: worker / driver / manager …).
+// Binds via `employee_assignments.categoryKey` (VARCHAR(40)), NOT the
+// id, since the per-category attendance policy keys off the string key.
+// Backend: /org/employee-categories. Quick-create disabled here — the
+// 6 system categories are seeded by migration 270 and a per-company
+// override needs a richer form than what the QuickCreateDialog offers.
+export const EmployeeCategorySelect = buildEntitySelect({
+  queryKey: "employee-categories-list",
+  endpoint: "/org/employee-categories",
+  defaultLabel: "فئة الموظف",
+  defaultPlaceholder: "اختر الفئة",
+  searchPlaceholder: "ابحث عن فئة...",
+  createTitle: "إضافة فئة موظفين",
+  createLabel: "+ فئة جديدة",
+  createApiPath: "/org/employee-categories",
+  createFields: [
+    { key: "categoryKey", label: "مفتاح الفئة", required: true },
+    { key: "labelAr", label: "الاسم بالعربية", required: true },
+  ],
+  getValueField: "categoryKey",
+  getName: (r) => r?.labelAr || r?.labelEn || r?.categoryKey || `#${r?.id}`,
+  getSublabel: (r) => r?.exemptFromAutoDeduction ? "مُعفاة من الخصم التلقائي" : "",
+});
