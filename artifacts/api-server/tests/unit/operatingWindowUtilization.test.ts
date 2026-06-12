@@ -198,10 +198,12 @@ describe("#2079 PE-04 — engine wiring", () => {
     expect(ENGINE).toMatch(/utilScore\s+\* 0\.05/);
   });
 
-  it("weights still sum to 1.00 — distance dropped to 0.05 to fund utilization", () => {
-    expect(ENGINE).toMatch(/distanceScore\s+\* 0\.05/);
-    const weights = [0.20, 0.10, 0.25, 0.15, 0.10, 0.05, 0.10, 0.05];
-    expect(weights.reduce((a, b) => a + b, 0)).toBeCloseTo(1.0);
+  it("PE-04 weighting baseline (distance + utilization) — PE-06 re-balanced further but the PE-04 axes remain", () => {
+    // PE-04 introduced distance 0.10 → 0.05 + utilization 0.05.
+    // PE-06 later split distance again (0.05 → 0.025) to fund a new
+    // umrahFamiliarity 0.025 axis. utilization stayed at 0.05.
+    expect(ENGINE).toMatch(/utilScore\s+\* 0\.05/);
+    expect(ENGINE).toMatch(/distanceScore\s+\* 0\.0(?:25|5)/);
   });
 
   it("utilization NEVER pushes into blockers — only a soft reason above 80%", () => {
