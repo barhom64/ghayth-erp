@@ -622,6 +622,7 @@ export const allNavSections: NavSection[] = [
         { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
         { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: Sparkles },
         { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
+        { label: "طلبات الاسترداد", path: "/umrah/refund-requests", icon: RefreshCw },
         { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
         { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
