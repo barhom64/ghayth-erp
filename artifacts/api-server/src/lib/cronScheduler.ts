@@ -29,6 +29,13 @@ import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
 import { processFallbackChains } from "./notificationEngine.js";
+import {
+  resolveSystemSmtpConfig,
+  formatFromHeader,
+  scrubSmtpSecrets,
+  smtpTransportOptions,
+  type SystemSmtpConfig,
+} from "./systemSmtp.js";
 import { runPendingTranscription } from "./pbxControl.js";
 import { aiEngine } from "./aiEngine.js";
 import { rawQuery as rawQueryShared, rawExecute as rawExecuteShared } from "./rawdb.js";
@@ -2160,26 +2167,21 @@ async function retryStuckOfficialLetters(): Promise<string> {
 
 
 
-async function processEmailQueue(): Promise<string> {
+// Exported (like the other workers above) so the #2137 integration
+// suite can drive a real queue → SMTP lifecycle without the cron loop.
+export async function processEmailQueue(): Promise<string> {
   // Phase 4 contract slice 6: read directly from outbound_queue
-  // (channel='email'). All writers landed there via messageSender's
-  // dual-write since slice 3 (#1292), and slice 4 (#1293) mirrored
-  // legacy status updates into outbound_queue so backfilled rows
-  // are in sync. Slice 5 (#1294) migrated every reader off the
-  // legacy queue tables. The legacy email_queue is now status-mirror
-  // only (see updateBothEmail below) for the soak window before the
-  // final DROP.
+  // (channel='email').
+  //
+  // #2137 slice 1: SMTP config no longer comes from a per-row LATERAL
+  // join on integrations.config (which the UI never wrote, and whose
+  // password was read still-encrypted). Every send resolves through
+  // resolveSystemSmtpConfig(companyId) — the SAME single source the
+  // /admin/vendor-settings UI saves to and its test endpoints read.
   const pending = await rawQuery<Record<string, unknown>>(
     `SELECT oq.id, oq."companyId", oq.recipient AS "toEmail",
-            oq."recipientName", oq.subject, oq.body,
-            oq.metadata, oq."legacyId", oq."legacySource",
-            i.config AS "smtpSettings"
+            oq."recipientName", oq.subject, oq.body, oq.metadata
      FROM outbound_queue oq
-     LEFT JOIN LATERAL (
-       SELECT config FROM integrations
-       WHERE "companyId" = oq."companyId" AND type IN ('smtp', 'email') AND status = 'active'
-       ORDER BY id DESC LIMIT 1
-     ) i ON true
      WHERE oq.status = 'pending' AND oq.channel = 'email'
        AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
      ORDER BY oq."createdAt" ASC
@@ -2190,9 +2192,6 @@ async function processEmailQueue(): Promise<string> {
 
   let sent = 0, failed = 0;
 
-  // Phase 4 final contract: outbound_queue is the only store. The
-  // reverse-mirror to email_queue (slice 6 leftover) is gone with the
-  // table itself.
   const updateBothEmail = async (
     row: Record<string, unknown>,
     status: "sent" | "failed",
@@ -2210,30 +2209,44 @@ async function processEmailQueue(): Promise<string> {
     );
   };
 
-  for (const email of pending) {
-    try {
-      const smtp = (email.smtpSettings as { host?: string; port?: number; secure?: boolean; user?: string; password?: string; from?: string } | null) ?? null;
+  // One resolver call per company per run — not per row.
+  const smtpByCompany = new Map<number, SystemSmtpConfig | null>();
+  const resolveFor = async (companyId: number): Promise<SystemSmtpConfig | null> => {
+    if (!smtpByCompany.has(companyId)) {
+      smtpByCompany.set(companyId, await resolveSystemSmtpConfig(companyId));
+    }
+    return smtpByCompany.get(companyId) ?? null;
+  };
 
-      if (!smtp || !smtp.host) {
-        await updateBothEmail(email, "failed", "No active SMTP integration configured for this company");
+  for (const email of pending) {
+    const smtp = await resolveFor(Number(email.companyId));
+    try {
+      if (!smtp) {
+        await updateBothEmail(
+          email,
+          "failed",
+          "لا يوجد إعداد SMTP صالح — اضبط بريد النظام من /admin/vendor-settings (أو متغيّرات البيئة)",
+        );
         failed++;
         continue;
       }
 
-      const { createTransport } = await import("nodemailer");
-      const transporter = createTransport({
-        host: smtp.host,
-        port: Number(smtp.port ?? 587),
-        secure: smtp.secure === true || smtp.port === 465,
-        auth: smtp.user && smtp.password ? { user: smtp.user, pass: smtp.password } : undefined,
-      });
+      // Visible lifecycle: pending → sending → sent/failed. A crash
+      // mid-send leaves the row in 'sending' for the operator to spot
+      // instead of silently re-pending forever.
+      await rawExecute(
+        `UPDATE outbound_queue SET status = 'sending', "updatedAt" = NOW() WHERE id = $1`,
+        [email.id],
+      );
 
+      const { createTransport } = await import("nodemailer");
       const mailOptions: Record<string, unknown> = {
-        from: smtp.from ?? smtp.user ?? "noreply@ghayth.app",
+        from: formatFromHeader(smtp),
         to: email.toEmail,
         subject: email.subject,
         html: email.body ?? email.text,
       };
+      if (smtp.replyTo) mailOptions.replyTo = smtp.replyTo;
       const meta = (email.metadata as { attachments?: Array<{ filename: string; content: string; contentType: string; encoding?: string }> } | null) ?? null;
       if (meta?.attachments && Array.isArray(meta.attachments) && meta.attachments.length > 0) {
         mailOptions.attachments = meta.attachments.map((a) => ({
@@ -2242,12 +2255,24 @@ async function processEmailQueue(): Promise<string> {
           contentType: a.contentType,
         }));
       }
-      await transporter.sendMail(mailOptions);
+
+      try {
+        await createTransport(smtpTransportOptions(smtp)).sendMail(mailOptions);
+      } catch (primaryErr) {
+        // Hostinger-style fallback: 465 SSL refused → one retry on the
+        // configured fallback port (587 STARTTLS). Only when configured.
+        if (smtp.fallbackPort && smtp.fallbackPort !== smtp.port) {
+          await createTransport(smtpTransportOptions(smtp, smtp.fallbackPort)).sendMail(mailOptions);
+        } else {
+          throw primaryErr;
+        }
+      }
 
       await updateBothEmail(email, "sent", null);
       sent++;
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const raw = err instanceof Error ? err.message : String(err);
+      const errMsg = scrubSmtpSecrets(raw, smtp);
       await updateBothEmail(email, "failed", errMsg).catch((e) =>
         logger.error(e, "[cronScheduler] background task failed"),
       );
