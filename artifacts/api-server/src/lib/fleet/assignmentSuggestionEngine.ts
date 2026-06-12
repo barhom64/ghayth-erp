@@ -147,6 +147,14 @@ export interface SuggestionCriteria {
   fromLat: number | null;
   fromLng: number | null;
   limit?: number;
+  /** #2079 PE-05 — continuity bonus.
+   *  When the engine is invoked as part of an itinerary walk, the
+   *  caller threads through the (vehicle, driver) pair that won the
+   *  PREVIOUS leg. The matching pair in THIS leg's results receives
+   *  a +10 score bonus (capped at 100) so the same crew gets ranked
+   *  to the top of the chain — keeps a multi-leg umrah / cargo
+   *  itinerary on one team unless a hard guard ejects them. */
+  continuityPair?: { vehicleId: number; driverId: number } | null;
 }
 
 interface VehicleRow {
@@ -363,6 +371,136 @@ export async function suggestForLeg(
     fromLng: leg.fromLng,
     limit: options?.limit,
   });
+}
+
+/**
+ * #2079 PE-05 — itinerary-aware walker.
+ *
+ * Owner's mandate (file 20 §13): «الـmulti-leg ليس استثناء — هذا
+ * تشغيل يومي... يبني فوق LEG canon وسلسلة الحراس الحالية».
+ *
+ * Walks the itinerary's legs in `legNumber` order and runs the
+ * shared engine on each one, threading the previous leg's top
+ * (vehicleId, driverId) pair forward as `continuityPair`. The
+ * matching pair in the next leg's results gets +10 (capped at 100)
+ * so the same crew naturally rises to the top of the chain —
+ * unless one of the hard guards (VCM / readiness / window / rest)
+ * ejects them at that leg, in which case the engine simply
+ * recommends a fresh pair without forcing continuity.
+ *
+ * This function does NOT mutate the legs. It only reads.
+ *
+ * Returns one entry per leg in legNumber order, each carrying:
+ *   - legId / legNumber  (for the UI to render the chain)
+ *   - candidates         (the engine's normal SuggestionResult[])
+ *   - skipped:string|null (null → engine ran; non-null → reason
+ *                         the engine wasn't run for this leg, e.g.
+ *                         missing time window or transit-only leg)
+ */
+export interface ItineraryLegSuggestion {
+  legId: number;
+  legNumber: number;
+  legType: string;
+  candidates: SuggestionResult[];
+  skipped: string | null;
+}
+
+export async function suggestForItinerary(
+  companyId: number,
+  itineraryId: number,
+  options?: { limit?: number },
+): Promise<ItineraryLegSuggestion[]> {
+  const legs = await rawQuery<{
+    id: number;
+    legNumber: number;
+    legType: string;
+    transportServiceType: string;
+    requiredVehicleClass: string | null;
+    scheduledStart: string | null;
+    scheduledEnd: string | null;
+    pickupWindowStart: string | null;
+    pickupWindowEnd: string | null;
+    fromLat: number | null;
+    fromLng: number | null;
+  }>(
+    `SELECT l.id, l."legNumber", l."legType",
+            i."transportServiceType",
+            l."requiredVehicleClass",
+            l."scheduledStart", l."scheduledEnd",
+            l."pickupWindowStart", l."pickupWindowEnd",
+            fl."latitude"  AS "fromLat",
+            fl."longitude" AS "fromLng"
+       FROM transport_itinerary_legs l
+            JOIN transport_itineraries i
+              ON i.id = l."itineraryId" AND i."companyId" = l."companyId"
+            LEFT JOIN transport_locations fl
+              ON fl.id = l."originLocationId" AND fl."companyId" = l."companyId"
+      WHERE l."itineraryId" = $1 AND l."companyId" = $2
+      ORDER BY l."legNumber" ASC`,
+    [itineraryId, companyId],
+  );
+  if (legs.length === 0) return [];
+
+  const out: ItineraryLegSuggestion[] = [];
+  let lastTopPair: { vehicleId: number; driverId: number } | null = null;
+
+  for (const leg of legs) {
+    const start = leg.scheduledStart ?? leg.pickupWindowStart;
+    const end   = leg.scheduledEnd   ?? leg.pickupWindowEnd;
+
+    // Transit / rest / fuel / inspection legs without a time window
+    // are routinely book-keeping rows the operator carries in the
+    // itinerary for visibility (e.g. "30-min rest at Madinah gate").
+    // Don't run the engine on them — they have no candidate concept.
+    if (!start || !end) {
+      out.push({
+        legId: leg.id,
+        legNumber: leg.legNumber,
+        legType: leg.legType,
+        candidates: [],
+        skipped: "لا توجد نافذة زمنية لهذه المرحلة",
+      });
+      continue;
+    }
+
+    const candidates = await suggestForCriteria({
+      companyId,
+      branchId: null,
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      transportServiceType: leg.transportServiceType,
+      passengerCount: null,
+      cargoWeight: null,
+      requestedVehicleClass: leg.requiredVehicleClass,
+      vehicleSubstitutionPolicy: "equivalent_allowed",
+      allowUpgrade: false,
+      requiredExactVehicleId: null,
+      requiredExactDriverId: null,
+      fromLat: leg.fromLat,
+      fromLng: leg.fromLng,
+      limit: options?.limit,
+      continuityPair: lastTopPair,
+    });
+
+    out.push({
+      legId: leg.id,
+      legNumber: leg.legNumber,
+      legType: leg.legType,
+      candidates,
+      skipped: null,
+    });
+
+    // Thread the new top pair forward. Only consider candidates
+    // with score > 0 (those without hard blockers). If this leg
+    // produced no clean candidate the chain breaks cleanly — the
+    // next leg starts without a continuity bias.
+    const top = candidates.find((r) => r.score > 0);
+    lastTopPair = top
+      ? { vehicleId: top.vehicleId, driverId: top.driverId }
+      : null;
+  }
+
+  return out;
 }
 
 /** The actual engine: load candidates + score against criteria. */
@@ -899,6 +1037,22 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
         utilScore         * 0.05,
       );
 
+      // #2079 PE-05 — continuity bonus. Only applies when the caller
+      // is walking an itinerary (suggestForItinerary threads the
+      // previous leg's top pair via `continuityPair`). The bonus is
+      // capped so a candidate with hard blockers still stays at 0
+      // and the score never exceeds 100.
+      let continuityBonus = 0;
+      if (
+        c.continuityPair &&
+        c.continuityPair.vehicleId === v.id &&
+        c.continuityPair.driverId === d.id &&
+        blockers.length === 0
+      ) {
+        continuityBonus = 10;
+        reasons.push("استمرار نفس الطاقم من المرحلة السابقة");
+      }
+
       // Drop candidates with HARD blockers UNLESS the dispatcher
       // explicitly asks for "include with overrides". For now we
       // surface them at the bottom with score=0 so the operator sees
@@ -909,7 +1063,9 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
         vehicleType: v.vehicleType,
         driverId: d.id,
         driverName: d.name,
-        score: blockers.length > 0 ? 0 : finalScore,
+        score: blockers.length > 0
+          ? 0
+          : Math.min(100, finalScore + continuityBonus),
         scores: {
           capacity: capacityScore,
           availability: availabilityScore,
