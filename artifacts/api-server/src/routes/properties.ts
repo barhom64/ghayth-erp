@@ -1727,6 +1727,9 @@ router.post("/contracts/:id/terminate", authorize({ feature: "properties.contrac
       action: "property.contract.terminated",
       entity: "rental_contract",
       entityId: id,
+      contractId: id,
+      reason: b.reason,
+      settlementAmount: earlyFee,
       details: `إنهاء عقد ${contract.contractNumber}: ${b.reason}`,
     });
     await createAuditLog({
