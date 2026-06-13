@@ -896,13 +896,13 @@ export async function retrySubsidiaryProvisioningFailure(failureId: number, comp
  * GET /api/accounting/classification-center
  * Returns summary counts for the operator dashboard.
  */
-router.get("/classification-center", authorize(FINANCE_ROLES), async (req, res) => {
+router.get("/classification-center", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const companyId = (req as any).user.companyId as number;
     const summary = await getClassificationCenterSummary(companyId);
     res.json(summary);
   } catch (err) {
-    handleRouteError(res, err);
+    handleRouteError(err, res, "Classification center summary error:");
   }
 });
 
@@ -910,7 +910,7 @@ router.get("/classification-center", authorize(FINANCE_ROLES), async (req, res) 
  * GET /api/accounting/classification-center/analytic-accounts
  * Lists analytic accounts that need linking (needsLinking=true).
  */
-router.get("/classification-center/analytic-accounts", authorize(FINANCE_ROLES), async (req, res) => {
+router.get("/classification-center/analytic-accounts", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const companyId = (req as any).user.companyId as number;
     const page = Math.max(1, Number(req.query.page ?? 1));
@@ -940,7 +940,7 @@ router.get("/classification-center/analytic-accounts", authorize(FINANCE_ROLES),
 
     res.json({ data: rows, total: Number(count), page, limit });
   } catch (err) {
-    handleRouteError(res, err);
+    handleRouteError(err, res, "List analytic accounts error:");
   }
 });
 
@@ -961,12 +961,12 @@ const linkAnalyticSchema = z.object({
  * PATCH /api/accounting/classification-center/analytic-accounts/:id/link
  * Link a needs_linking analytic account to a party/season/contract.
  */
-router.patch("/classification-center/analytic-accounts/:id/link", authorize(FINANCE_ROLES), async (req, res) => {
+router.patch("/classification-center/analytic-accounts/:id/link", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const companyId = (req as any).user.companyId as number;
     const userId    = (req as any).user.id as number;
     const id = parseId(req.params.id);
-    const body = zodParse(linkAnalyticSchema, req.body);
+    const body = zodParse(linkAnalyticSchema.safeParse(req.body));
 
     await linkAnalyticAccount({
       analyticAccountId: id,
@@ -989,7 +989,7 @@ router.patch("/classification-center/analytic-accounts/:id/link", authorize(FINA
 
     res.json({ ok: true });
   } catch (err) {
-    handleRouteError(res, err);
+    handleRouteError(err, res, "Link analytic account error:");
   }
 });
 
@@ -997,7 +997,7 @@ router.patch("/classification-center/analytic-accounts/:id/link", authorize(FINA
  * GET /api/accounting/classification-center/posting-failures
  * Lists unresolved posting failures classified by category.
  */
-router.get("/classification-center/posting-failures", authorize(FINANCE_ROLES), async (req, res) => {
+router.get("/classification-center/posting-failures", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
   try {
     const companyId = (req as any).user.companyId as number;
     const category = req.query.category as string | undefined;
@@ -1028,7 +1028,7 @@ router.get("/classification-center/posting-failures", authorize(FINANCE_ROLES), 
 
     res.json({ data: rows, total: Number(count), page, limit });
   } catch (err) {
-    handleRouteError(res, err);
+    handleRouteError(err, res, "List posting failures error:");
   }
 });
 
@@ -1042,12 +1042,12 @@ const classifyFailureSchema = z.object({
   suggestedFix:   z.string().optional(),
 });
 
-router.post("/classification-center/posting-failures/:id/classify", authorize(FINANCE_ROLES), async (req, res) => {
+router.post("/classification-center/posting-failures/:id/classify", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
   try {
     const companyId = (req as any).user.companyId as number;
     const userId    = (req as any).user.id as number;
     const id = parseId(req.params.id);
-    const body = zodParse(classifyFailureSchema, req.body);
+    const body = zodParse(classifyFailureSchema.safeParse(req.body));
 
     // Read before-state for audit diff
     const [before] = await rawQuery<{ failureCategory: string | null; failureReason: string | null }>(
@@ -1080,7 +1080,7 @@ router.post("/classification-center/posting-failures/:id/classify", authorize(FI
 
     res.json({ ok: true });
   } catch (err) {
-    handleRouteError(res, err);
+    handleRouteError(err, res, "Classify posting failure error:");
   }
 });
 
@@ -1089,7 +1089,7 @@ router.post("/classification-center/posting-failures/:id/classify", authorize(FI
  * Dev/admin helper — verify a code is postable without posting.
  * Used by CI guards and the settings UI.
  */
-router.get("/assert-postable", authorize(FINANCE_ROLES), async (req, res) => {
+router.get("/assert-postable", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
   try {
     const companyId = (req as any).user.companyId as number;
     const code = String(req.query.code ?? "").trim();
