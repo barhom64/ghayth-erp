@@ -19,11 +19,16 @@ const Warehouse = lazy(() => import("@/pages/warehouse"));
 const WarehouseCreate = lazy(() => import("@/pages/create/warehouse-create"));
 const WarehouseMovementsCreate = lazy(() => import("@/pages/create/warehouse/movements-create"));
 const WarehouseCategoriesCreate = lazy(() => import("@/pages/create/warehouse/categories-create"));
-// Warehouse supplier form deleted — the warehouse/suppliers + finance/
-// vendors UI duplication wrote to the same `suppliers` table. The
-// /warehouse/suppliers/create route below now lazy-loads the unified
-// finance/vendors-create form (same table, fuller field set).
-const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
+// PR-3 (#2163) — Canonical Ownership wrapper-split. The previous
+// arrangement bound /warehouse/suppliers/create to the finance vendor
+// page (same WHT-aware form, POSTing to /finance/vendors); a warehouse
+// operator was answering finance questions and the audit lane lied
+// about who made the change. After PR-3 each path has its own wrapper
+// over a shared form body (`components/shared/vendor-party-form.tsx`).
+// The finance and warehouse wrappers carry their own POST URL, intent
+// fields, draft slot, and toast copy. The Party-master row is the
+// same; the path that issues it is not.
+const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/warehouse/suppliers-create"));
 const WarehouseProductDetail = lazy(() => import("@/pages/details/warehouse-product-detail"));
 const WarehouseMovementDetail = lazy(() => import("@/pages/details/warehouse-movement-detail"));
 const WarehouseCategoryDetail = lazy(() => import("@/pages/details/warehouse-category-detail"));

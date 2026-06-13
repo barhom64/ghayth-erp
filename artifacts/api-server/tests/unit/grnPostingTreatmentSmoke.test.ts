@@ -92,7 +92,7 @@ describe("per-treatment bucket grouping", () => {
 
   it("treatment with no mapping falls back to default inventory account", () => {
     expect(ROUTE).toContain("defaultInvAccount");
-    expect(ROUTE).toContain('"inventory_receipt", "debit", "1150"');
+    expect(ROUTE).toContain('"inventory_receipt", "debit", "1151"');
   });
 });
 

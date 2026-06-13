@@ -207,15 +207,26 @@ describe("HR-020 — Scoring Weights frontend", () => {
     expect(WEIGHTS_SRC).toMatch(/r\.trend === 1 \? " ↑" : r\.trend === -1 \? " ↓"/);
   });
 
-  it("registered at /admin/scoring-weights (back-compat) + /hr/scoring-weights (new canonical) + nav entry", () => {
-    // PR-4 (#2077) mirrors the page under /hr so the HR Manager can
-    // reach it without crossing the /admin/* level-90 floor. The
-    // /admin route stays as a back-compat alias (same shape PR-3
-    // applied to /admin/attendance-categories).
-    expect(ADMIN_ROUTES_SRC).toMatch(/const AdminScoringWeights = lazy/);
-    expect(ADMIN_ROUTES_SRC).toMatch(/path: "\/admin\/scoring-weights"/);
-    // The nav entry was MOVED from /admin to /hr — the «أوزان التقييم»
-    // link is now in the HR navigation, not the admin one.
+  it("/admin/scoring-weights is now a wouter <Redirect> to /hr (canonical = HR)", () => {
+    // PR-4 (#2077) mirrored the page under /hr so the HR Manager could
+    // reach it without crossing /admin/*'s level-90 floor — the /admin
+    // route stayed as a back-compat alias (alias = same component
+    // bound twice).
+    //
+    // Wave-2 PR-3 (#2163) — Canonical Ownership ruling: scoring weights
+    // drive evaluation / promotion / penalties — HR business, not
+    // platform admin. The legacy /admin/* path stays reachable but
+    // bound to a wouter <Redirect> wrapper now; only HR owns the
+    // policy.
+    expect(ADMIN_ROUTES_SRC).toMatch(/RedirectToHrScoringWeights\s*=\s*redirectTo\("\/hr\/scoring-weights"\)/);
+    expect(ADMIN_ROUTES_SRC).toMatch(
+      /path:\s*"\/admin\/scoring-weights",\s*component:\s*RedirectToHrScoringWeights/,
+    );
+    // Regression trap: re-importing AdminScoringWeights as a lazy
+    // live page would re-establish dual ownership.
+    expect(ADMIN_ROUTES_SRC).not.toMatch(/const AdminScoringWeights = lazy/);
+    // The nav entry was moved from /admin to /hr by PR-4 of #2077 —
+    // the «أوزان التقييم» link is in HR navigation only.
     expect(NAV_SRC).toMatch(/path: "\/hr\/scoring-weights"/);
   });
 });

@@ -33,11 +33,11 @@ describe("/reports/vat-reconciliation endpoint registration", () => {
 });
 
 describe("VAT account resolution", () => {
-  it("resolves vat_output operation type with fallback 2300", () => {
-    expect(HANDLER).toMatch(/"vat_output",\s*"credit",\s*"2300"/);
+  it("resolves vat_output operation type with fallback 2131", () => {
+    expect(HANDLER).toMatch(/"vat_output",\s*"credit",\s*"2131"/);
   });
-  it("resolves vat_input operation type with fallback 1400", () => {
-    expect(HANDLER).toMatch(/"vat_input",\s*"debit",\s*"1400"/);
+  it("resolves vat_input operation type with fallback 1180", () => {
+    expect(HANDLER).toMatch(/"vat_input",\s*"debit",\s*"1180"/);
   });
 });
 
