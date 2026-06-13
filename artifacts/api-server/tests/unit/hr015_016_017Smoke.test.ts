@@ -32,53 +32,54 @@ const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const ORG_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/org.ts"), "utf8");
 const FIELD_TRACK_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx"), "utf8");
 const ATT_CAT_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/admin/attendance-categories.tsx"), "utf8");
-const WORK_QUEUE_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/my/work-queue.tsx"), "utf8");
+// PR-4 (#2163): work-queue.tsx is now a back-compat redirect shell; the
+// canonical unified inbox is work-inbox.tsx (WorkInboxPage).
+const WORK_QUEUE_SRC  = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/my/work-queue.tsx"), "utf8");
+const WORK_INBOX_SRC  = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/work-inbox.tsx"), "utf8");
 const MISC_ROUTES_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/routes/miscRoutes.tsx"), "utf8");
 const ADMIN_ROUTES_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/routes/adminRoutes.tsx"), "utf8");
 const NAV_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"), "utf8");
 
-describe("HR-016 — Unified Work Queue", () => {
-  it("page has default export", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/export default function WorkQueuePage/);
+describe("HR-016 — Unified Work Queue (canonical = /work-inbox after PR-4 #2163)", () => {
+  // PR-4 (#2163) ruling: /my/work-queue is a back-compat redirect shell.
+  // The canonical unified inbox lives at work-inbox.tsx (WorkInboxPage).
+  // Tests below now pin work-inbox.tsx; the redirect-shell behaviour of
+  // work-queue.tsx is pinned separately.
+
+  it("canonical page has default export WorkInboxPage", () => {
+    expect(WORK_INBOX_SRC).toMatch(/export default function WorkInboxPage/);
   });
 
-  it("aggregates from 4 backend sources", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/"\/my-space"/);
-    expect(WORK_QUEUE_SRC).toMatch(/"\/tasks\?[^"]*"/);
-    expect(WORK_QUEUE_SRC).toMatch(/"\/notifications\?[^"]*"/);
-    expect(WORK_QUEUE_SRC).toMatch(/"\/inbox\/threads/);
+  it("aggregates from backend sources: /my-space, /tasks, /notifications", () => {
+    expect(WORK_INBOX_SRC).toMatch(/["'"]\/my-space["'"]/);
+    expect(WORK_INBOX_SRC).toMatch(/["'"]\/tasks\?[^"']*/);
+    expect(WORK_INBOX_SRC).toMatch(/["'"]\/notifications\?[^"']*/);
   });
 
-  it("Tabs: الكل / للاعتماد / مهامي / إشعارات (+ optional محادثات)", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="all"/);
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="approval"/);
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="task"/);
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="notification"/);
-    expect(WORK_QUEUE_SRC).toMatch(/value="thread"/);
-    expect(WORK_QUEUE_SRC).toContain("للاعتماد");
-    expect(WORK_QUEUE_SRC).toContain("مهامي");
-    expect(WORK_QUEUE_SRC).toContain("إشعارات");
-  });
-
-  it("each item has consistent shape: source, icon, typeLabel, title, meta, href", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/type QueueItem = \{/);
-    for (const f of ["source:", "icon:", "typeLabel:", "title:", "href:", "createdAt:"]) {
-      expect(WORK_QUEUE_SRC).toContain(f);
-    }
-  });
-
-  it("items sorted by createdAt descending", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/\.sort\(\(a, b\) => \(b\.createdAt[^)]*\)\.localeCompare\(a\.createdAt/);
+  it("Tabs: موافقات (actions) / مهامي (tasks) / إشعارات (notifs) / متابعات (followups)", () => {
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="actions"/);
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="tasks"/);
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="notifs"/);
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="followups"/);
+    expect(WORK_INBOX_SRC).toContain("مهامي");
+    expect(WORK_INBOX_SRC).toContain("إشعارات");
   });
 
   it("deep-link bar to original screens at bottom", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/hr\/approvals"/);
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/tasks"/);
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/notifications"/);
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/inbox"/);
+    expect(WORK_INBOX_SRC).toMatch(/href="\/tasks"/);
+    expect(WORK_INBOX_SRC).toMatch(/href="\/notifications"/);
+    expect(WORK_INBOX_SRC).toMatch(/href="\/inbox"/);
   });
 
-  it("route registered at /my/work-queue", () => {
+  it("/my/work-queue is a back-compat redirect shell (PR-4 #2163) — no PageShell", () => {
+    // The route stays mounted (back-compat for old bookmarks/prints)
+    // but the page component is now a wouter redirect shell, not a live page.
+    expect(WORK_QUEUE_SRC).not.toMatch(/export default function WorkQueuePage/);
+    expect(WORK_QUEUE_SRC).not.toMatch(/PageShell/);
+    expect(WORK_QUEUE_SRC).toMatch(/setLocation\("\/work-inbox"\)/);
+  });
+
+  it("route registered at /my/work-queue (back-compat mount stays)", () => {
     expect(MISC_ROUTES_SRC).toMatch(/const WorkQueue = lazy\(\(\) => import\("@\/pages\/my\/work-queue"\)\)/);
     expect(MISC_ROUTES_SRC).toMatch(/\{ path: "\/my\/work-queue", component: WorkQueue \}/);
   });

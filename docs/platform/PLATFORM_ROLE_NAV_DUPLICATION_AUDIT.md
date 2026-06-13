@@ -128,26 +128,26 @@ wrapper-shared-form فقط. الجدول أدناه يعكس الـ**post-PR-3**
 
 | المسار | بديله الحالي | حالة |
 |---|---|---|
-| `/my/work-queue` | `/work-inbox` (PR-5) | الـcanonical الجديد يستوعب كل ما كان يخدمه — يحتاج تأكيد صاحب المنتج قبل الحذف |
+| `/my/work-queue` | `/work-inbox` (PR-5) | ✅ PR-4 (#2163) — تحوّل إلى redirect shell (useEffect → setLocation) بدون PageShell. يُحذف نهائيًا في PR منفصل بعد موافقة صاحب المنتج. |
 
-**العدد**: 1. **القرار**: redirect → `/work-inbox` ثم إزالة (PR منفصل).
+**العدد**: 1. **القرار**: ✅ مُنجَز في PR-4 — redirect shell مكتوب.
 
 ### 6.D — nav-add candidates (route صالح، nav فقدته)
 
 | المسار | nav-section المقترح |
 |---|---|
-| `/umrah/transport-requests` | «العمرة → النقل» |
+| `/umrah/transport-requests` | «العمرة → النقل» ✅ PR-4 (#2163) — أضيف `{ label: "طلبات النقل", path: "/umrah/transport-requests", icon: Truck, perm: "umrah:list" }` |
 
-**العدد**: 1. **القرار**: إضافة nav item تحت السكشن المقترح.
+**العدد**: 1. **القرار**: ✅ مُنجَز في PR-4 — nav item مضاف تحت النقل والمواصلات.
 
 ### 6.E — orphan + cross-module-duplicate (تُحَل بحل الـduplicate)
 
 | المسار | ملاحظة |
 |---|---|
-| `/admin/attendance-categories` | الـ`/hr/attendance-categories` المرآة في nav؛ بعد تثبيت canonical في §4، هذا الـorphan يختفي تلقائيًا |
-| `/admin/scoring-weights` | نفس النمط |
+| `/admin/attendance-categories` | ✅ PR-3 (#2163) — تحوّل إلى redirect shell إلى `/hr/attendance-categories` |
+| `/admin/scoring-weights` | ✅ PR-3 (#2163) — تحوّل إلى redirect shell إلى `/hr/scoring-weights` |
 
-**العدد**: 2. **القرار**: لا قرار مستقل — يُحَل ضمن PR-3 (تنظيف الـduplicates).
+**العدد**: 2. **القرار**: ✅ مُنجَز في PR-3 — redirect shells في `adminRoutes.tsx`.
 
 ### مجموع §6
 
