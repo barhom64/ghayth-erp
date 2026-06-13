@@ -257,8 +257,13 @@ describe("#2079 PE-06 — boundary pins", () => {
     expect(LIB).not.toMatch(/vrp|optimi[sz]er|tsp/i);
   });
 
-  it("PE-07 surfaces stay absent (no per-family ladder split)", () => {
-    expect(ENGINE).not.toMatch(/PAX_LADDER|CARGO_LADDER/);
+  it("umrahFamiliarity stays disentangled from PE-07 ladder logic", () => {
+    // PE-07 (per-family ladder) landed after PE-06. The two axes are
+    // independent — neither references the other. This pin guards
+    // the boundary: umrah scoring never touches the ladder, and the
+    // ladder never references umrah symbols.
+    const umrahBlock = ENGINE.slice(ENGINE.indexOf("─ umrahFamiliarity"));
+    expect(umrahBlock.slice(0, 1500)).not.toMatch(/evaluateLadder|crossesFamily|PASSENGER_LADDER|CARGO_LADDER/);
   });
 
   it("non-umrah bookings continue to score umrahFamiliarity=0 (verified by the scoring code path)", () => {

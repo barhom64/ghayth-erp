@@ -288,7 +288,14 @@ class PropertiesEngineImpl implements DomainEngine {
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
-      ref: `JE-DEP-${deposit.id}`,
+      // ref carries the deposit direction (received / refunded) the same
+      // way sourceKey does — otherwise the refund call collides with the
+      // receive call on `uniq_journal_entries_ref` because both share the
+      // same deposit.id. Caught live by the extended rent journey
+      // (verify-property-rent-journey.sh) when the refund step started
+      // returning 502 with "duplicate key value violates unique
+      // constraint uniq_journal_entries_ref".
+      ref: `JE-DEP-${deposit.id}-${deposit.type === "received" ? "R" : "F"}`,
       description: `${isReceived ? "استلام" : "رد"} تأمين — عقد #${deposit.contractId}`,
       type: "general",
       sourceType: "property_security_deposits",

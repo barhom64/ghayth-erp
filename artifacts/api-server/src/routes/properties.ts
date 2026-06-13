@@ -11,7 +11,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { applyTransition, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, computeVat, getCompanyVatRate } from "../lib/businessHelpers.js";
@@ -21,6 +21,7 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import { getEjarReader, isValidEjarFormat } from "../lib/ejarContractReader.js";
 
 const createUnitSchema = z.object({
@@ -446,15 +447,14 @@ const router = Router();
 // Lifecycle transitions to terminal states (terminated/expired/refunded)
 // must go through dedicated endpoints — PATCH refuses them with 409.
 // ─────────────────────────────────────────────────────────────────────────────
-const UNIT_STATUSES = ["available", "rented", "maintenance", "under_maintenance", "out_of_service", "reserved"] as const;
-const UNIT_TRANSITIONS: Record<string, readonly string[]> = {
-  available:         ["rented", "maintenance", "under_maintenance", "out_of_service", "reserved"],
-  rented:            ["available", "maintenance", "under_maintenance"],
-  maintenance:       ["available", "out_of_service"],
-  under_maintenance: ["available", "out_of_service"],
-  reserved:          ["available", "rented"],
-  out_of_service:    ["available", "maintenance", "under_maintenance"],
-};
+// P0-4 — the unit status graph lives in ONE place: lifecycleEngine's
+// STATE_MACHINES (entity "property_units"). This route derives its
+// guard from that machine (SUP-016 pattern, same as support.ts) so
+// the two can never diverge again. The statuses list is the machine's
+// key set — every state that exists as a source in the graph.
+const UNIT_TRANSITIONS: Record<string, readonly string[]> =
+  STATE_MACHINES.find((sm) => sm.entity === "property_units")?.transitions ?? {};
+const UNIT_STATUSES = Object.keys(UNIT_TRANSITIONS);
 
 const CONTRACT_STATUSES = ["draft", "active", "terminated", "expired", "cancelled", "renewed"] as const;
 const CONTRACT_TRANSITIONS: Record<string, readonly string[]> = {
@@ -2849,6 +2849,11 @@ router.post("/tenants", authorize({ feature: "properties.tenants", action: "crea
       action: "tenant.created", entity: "tenants", entityId: insertId,
       details: `مستأجر جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "tenants", insertId, "tenant", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.tenantType === "company" || b.tenantType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] tenants registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
@@ -3662,6 +3667,11 @@ router.post("/owners", authorize({ feature: "properties.owners", action: "create
       action: "property.owner.created", entity: "property_owners", entityId: insertId,
       details: `مالك جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "property_owners", insertId, "owner", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.ownerType === "company" || b.ownerType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] property_owners registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
