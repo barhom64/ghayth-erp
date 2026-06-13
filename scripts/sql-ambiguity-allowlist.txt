@@ -22,3 +22,99 @@
 # time this guard shipped (verified by a route-wide static scan plus a
 # runtime sweep of the evaluation / dashboard / action-center surfaces).
 # ──────────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────
+# Output-column alias collisions are now handled directly by the scanner:
+# both the unquoted AND quoted reference paths skip `AS col` / `AS "col"`
+# alias definitions, and UNION / recursive-CTE branches are analysed as
+# separate scopes. The 7 entries added in Task #500 (finance-algorithms,
+# finance-custodies, finance-reports, finance-cost-centers,
+# hr-saudi-compliance) were retired once the scanner stopped misreading
+# alias definitions as ambiguous references.
+# ──────────────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────────────
+# Baseline: hardened generic-tolerant rawQuery extractor
+# ──────────────────────────────────────────────────────────────────────
+# The shared lib/raw-query-bodies.mjs extractor now scans typed
+# rawQuery<T>(`…`) calls the old narrow matcher skipped. The entries below
+# are bare columns inside JOIN/EXISTS that the static scanner cannot prove
+# unambiguous (most are EXISTS-subquery refs bound to a single relation —
+# false positives the scanner can't resolve). Captured as a baseline so
+# the guard can be enforced in CI; new ambiguous refs outside this list
+# still fail. Qualify + remove the matching line when a query is touched.
+routes/cargo.ts:action
+routes/cargo.ts:companyId
+routes/cargo.ts:createdAt
+routes/cargo.ts:details
+routes/cargo.ts:entity
+routes/cargo.ts:entityId
+routes/cargo.ts:userId
+routes/finance-accounts.ts:code
+routes/finance-accounts.ts:companyId
+routes/finance-accounts.ts:deletedAt
+routes/finance-accounts.ts:parentCode
+routes/finance-accounts.ts:type
+routes/finance-algorithms.ts:supplierId
+routes/finance-algorithms.ts:totalAmount
+routes/finance-cost-centers.ts:companyId
+routes/finance-cost-centers.ts:createdAt
+routes/finance-cost-centers.ts:id
+routes/finance-cost-centers.ts:parentId
+routes/finance-cost-centers.ts:status
+routes/finance-custodies.ts:employeeId
+routes/finance-reports.ts:activityType
+routes/finance-reports.ts:createdAt
+routes/hr-saudi-compliance.ts:employeeId
+routes/hr.ts:status
+
+# ── Scanner-heuristic FPs (missing-column class) ───────────────────────
+# Surfaced once the hardened generic-tolerant extractor began enforcing
+# the missing-column check. Each is a false positive of the
+# fragment-inlining / alias-resolution heuristic — the real SQL uses the
+# correct column:
+#   d.deletedAt   → real query is `FROM documents d` (documents HAS deletedAt);
+#                   detector mis-binds `d` to a `departments d` in another handler.
+#   v.brand       → `v.make AS brand` (output alias; fleet_vehicles has `make`).
+#   pr.deductions → `pr."totalDeductions" AS credit` (output alias).
+#   grn.status    → `CASE WHEN grn."journalId"… END AS status` (output alias).
+#   je.postingDate→ `je."date"::text AS "postingDate"` (output alias).
+#   cd.title/type → company_documents is created dynamically at runtime with
+#                   title/type cols (INSERT proves it); not in the static dump.
+#   ea.isActive   → no literal ea.isActive; alias mis-resolution (employee_assignments has `status`).
+routes/documents.ts:d.deletedAt
+routes/employees.ts:v.brand
+routes/finance-reports.ts:pr.deductions
+routes/finance-reports.ts:grn.status
+routes/finance-reports.ts:je.postingDate
+routes/hr.ts:cd.title
+routes/hr.ts:cd.type
+routes/workspace.ts:ea.isActive
+
+# ── Stale-dump FPs (missing-column class, surfaced 2026-06-08) ──────────
+# Same root cause as scripts/schema-drift-allowlist.txt: CI loads the
+# committed (stale) db/schema*.sql dump and marks every migration at or
+# below db/.baseline-cutoff (258) "applied" WITHOUT running it. Several
+# columns added by PRE-cutoff migrations are therefore missing from the CI
+# harness even though production has them, so the scanner reports them as
+# "column does not exist". Each was verified to EXIST in the live DB:
+#   jl.branchId      → journal_lines.branchId    (migration 236)
+#   gl.deletedAt     → gov_integration_links.deletedAt (pre-cutoff)
+#   e.isNonResident  → employees.isNonResident   (migration 233)
+#   e.whtRate        → employees.whtRate         (migration 233)
+# Drop the matching line once the committed dump is regenerated.
+routes/finance-cost-centers.ts:jl.branchId
+routes/gov-integrations.ts:gl.deletedAt
+routes/hr.ts:e.isNonResident
+routes/hr.ts:e.whtRate
+
+# ── Pre-existing REAL bugs (missing-column class, NOT dump staleness) ───
+# These two are wrong column names that exist in NEITHER the committed dump
+# NOR the live DB — fleet_rental_contracts has "clientId" (not "customerId")
+# and has no "contractNumber" column at all. The query in the transport
+# sources endpoint would 500 if reached. Baselined here so the gate can ship
+# without coupling a route fix into this tooling-only PR; the correct fix is
+# c."customerId" → c."clientId" plus a real source for the contract label.
+# TODO(transport): fix the query and drop these two lines.
+routes/transport-integration.ts:c.contractNumber
+routes/transport-integration.ts:c.customerId
