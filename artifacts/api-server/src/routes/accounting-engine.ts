@@ -1049,6 +1049,16 @@ router.post("/classification-center/posting-failures/:id/classify", authorize(FI
     const id = parseId(req.params.id);
     const body = zodParse(classifyFailureSchema, req.body);
 
+    // Read before-state for audit diff
+    const [before] = await rawQuery<{ failureCategory: string | null; failureReason: string | null }>(
+      `SELECT "failureCategory", "failureReason" FROM financial_posting_failures WHERE id=$1 AND "companyId"=$2`,
+      [id, companyId]
+    );
+    if (!before) {
+      res.status(404).json({ error: "سجل الخطأ غير موجود" });
+      return;
+    }
+
     await rawExecute(
       `UPDATE financial_posting_failures
        SET "failureCategory"=$1, "failureReason"=$2, "suggestedFix"=$3,
@@ -1056,6 +1066,17 @@ router.post("/classification-center/posting-failures/:id/classify", authorize(FI
        WHERE id=$5 AND "companyId"=$6`,
       [body.failureCategory, body.failureReason ?? null, body.suggestedFix ?? null, userId, id, companyId]
     );
+
+    // Audit trail — who classified what and when
+    await rawExecute(
+      `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","before","after")
+       VALUES ($1,$2,'classify_failure','financial_posting_failures',$3,$4,$5)`,
+      [
+        companyId, userId, id,
+        JSON.stringify(before),
+        JSON.stringify({ failureCategory: body.failureCategory, failureReason: body.failureReason, suggestedFix: body.suggestedFix }),
+      ]
+    ).catch((e) => logger.warn(e, "[classification-center] audit insert failed"));
 
     res.json({ ok: true });
   } catch (err) {

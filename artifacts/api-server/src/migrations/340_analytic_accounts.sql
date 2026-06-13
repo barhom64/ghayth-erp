@@ -3,9 +3,17 @@
 -- attach operational context to every journal line without multiplying the
 -- chart of accounts for each branch / season / agent / custody.
 --
+-- CRITICAL DESIGN NOTE:
+--   analytic_accounts is NOT a chart of accounts. NO journal entries are ever
+--   posted TO an analytic_account. Posting always goes to a chart_of_accounts
+--   row (GL control account) that has allowPosting=true.
+--   analytic_accounts is a pure DIMENSION store — it carries operational
+--   metadata (who/what/when/where) that the reporting layer uses for drill-down.
+--   It is attached to journal_lines as a nullable FK for context, never as a debit/credit target.
+--
 -- Design:
 --   analytic_accounts  — named dimension containers (auto-created per entity)
---   journal_lines gets an optional analyticAccountId FK
+--   journal_lines gets an optional analyticAccountId FK (context-only, not debit/credit)
 --   financial_posting_failures gets failureCategory + failureReason columns
 --   posting_config_requirements — per-module required account mappings
 --

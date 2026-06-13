@@ -141,10 +141,9 @@ d("CI Guard #2197 — parent-account posting prevention", () => {
     ).rejects.toThrow(/تجميعي|رئيسي/i);
   });
 
-  // ── getAccountCodeFromMapping — mapping JOIN guards allowPosting ──────────
+  // ── getAccountCodeFromMapping — mapping pointing at parent → explicit config error ──
 
-  it("getAccountCodeFromMapping: a mapping that points at a non-postable debitAccountId is NOT returned", async () => {
-    // Temporarily insert a bad mapping that uses a non-postable account id
+  it("getAccountCodeFromMapping: a mapping that points at a non-postable debitAccountId raises a clear config ValidationError — NOT a silent fallback", async () => {
     const [parentRow] = await rawQuery<{ id: number }>(
       `SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "deletedAt" IS NULL LIMIT 1`,
       [COMPANY, PARENT_1100]
@@ -153,18 +152,39 @@ d("CI Guard #2197 — parent-account posting prevention", () => {
 
     const [badMapping] = await rawQuery<{ id: number }>(
       `INSERT INTO accounting_mappings ("companyId","operationType","debitAccountId","creditAccountId","isActive")
-       VALUES ($1,'ci_guard_bad_mapping_2197',$2,(SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$3 AND "deletedAt" IS NULL LIMIT 1),true)
+       VALUES ($1,'ci_guard_bad_debit_2197',$2,(SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$3 AND "deletedAt" IS NULL LIMIT 1),true)
        RETURNING id`,
       [COMPANY, parentRow.id, LEAF_CASH2]
     );
 
     try {
-      // The JOIN in getAccountCodeFromMapping requires allowPosting=true — so it
-      // won't return the parent code. The function should fall through to intent
-      // search or return the fallback.
-      const resolved = await getAccountCodeFromMapping(COMPANY, "ci_guard_bad_mapping_2197", "debit", LEAF_CASH);
-      // Whatever comes back must NOT be the parent code
-      expect(resolved).not.toBe(PARENT_1100);
+      // Must THROW a ValidationError mentioning "تجميعي" or "إعداد" or "parent"
+      // — NOT silently fall back to another account.
+      await expect(
+        getAccountCodeFromMapping(COMPANY, "ci_guard_bad_debit_2197", "debit", LEAF_CASH)
+      ).rejects.toThrow(/تجميعي|إعداد|رئيسي|non-postable|parent/i);
+    } finally {
+      await rawExecute(`DELETE FROM accounting_mappings WHERE id=$1`, [badMapping.id]);
+    }
+  });
+
+  it("getAccountCodeFromMapping: a mapping pointing at a non-postable creditAccountId raises a clear config error", async () => {
+    const [parentRow] = await rawQuery<{ id: number }>(
+      `SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [COMPANY, PARENT_1100]
+    );
+
+    const [badMapping] = await rawQuery<{ id: number }>(
+      `INSERT INTO accounting_mappings ("companyId","operationType","debitAccountId","creditAccountId","isActive")
+       VALUES ($1,'ci_guard_bad_credit_2197',(SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "deletedAt" IS NULL LIMIT 1),$3,true)
+       RETURNING id`,
+      [COMPANY, LEAF_CASH, parentRow.id]
+    );
+
+    try {
+      await expect(
+        getAccountCodeFromMapping(COMPANY, "ci_guard_bad_credit_2197", "credit", LEAF_CASH2)
+      ).rejects.toThrow(/تجميعي|إعداد|رئيسي|non-postable|parent/i);
     } finally {
       await rawExecute(`DELETE FROM accounting_mappings WHERE id=$1`, [badMapping.id]);
     }

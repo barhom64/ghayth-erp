@@ -1659,19 +1659,47 @@ export async function getAccountCodeFromMapping(
   side: "debit" | "credit",
   fallbackCode: string = ""
 ): Promise<string> {
-  const [mapping] = await rawQuery<{ debitAccountCode: string | null; creditAccountCode: string | null; debitCode: string | null; creditCode: string | null }>(
-    `SELECT "debitAccountCode", "creditAccountCode", "debitAccountId", "creditAccountId",
-            da.code AS "debitCode", ca.code AS "creditCode"
+  // Fetch both the mapping row AND the joined account info in one query.
+  // Two separate joins: one that checks allowPosting=true (valid), one that
+  // doesn't — so we can distinguish "no mapping at all" from "mapping exists
+  // but the account is a non-postable parent" and raise a CLEAR config error
+  // in the latter case rather than silently falling back to intent search.
+  const [mapping] = await rawQuery<{
+    debitAccountId:   number | null;
+    creditAccountId:  number | null;
+    debitCode:        string | null;  // null if account deleted/non-postable
+    creditCode:       string | null;
+    debitAllows:      boolean | null; // the actual allowPosting of the linked account
+    creditAllows:     boolean | null;
+    debitAccountCode: string | null;  // legacy text column (fallback)
+    creditAccountCode:string | null;
+  }>(
+    `SELECT am."debitAccountId", am."creditAccountId",
+            am."debitAccountCode", am."creditAccountCode",
+            valid_da.code    AS "debitCode",
+            valid_ca.code    AS "creditCode",
+            raw_da."allowPosting" AS "debitAllows",
+            raw_ca."allowPosting" AS "creditAllows"
      FROM accounting_mappings am
-     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
-       AND da."allowPosting" = true AND da."deletedAt" IS NULL
-     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
-       AND ca."allowPosting" = true AND ca."deletedAt" IS NULL
+     -- join to get postable account code (null when non-postable / deleted)
+     LEFT JOIN chart_of_accounts valid_da
+       ON valid_da.id = am."debitAccountId"
+       AND valid_da."allowPosting" = true AND valid_da."deletedAt" IS NULL
+     LEFT JOIN chart_of_accounts valid_ca
+       ON valid_ca.id = am."creditAccountId"
+       AND valid_ca."allowPosting" = true AND valid_ca."deletedAt" IS NULL
+     -- join WITHOUT allowPosting filter to detect misconfigured parent accounts
+     LEFT JOIN chart_of_accounts raw_da
+       ON raw_da.id = am."debitAccountId" AND raw_da."deletedAt" IS NULL
+     LEFT JOIN chart_of_accounts raw_ca
+       ON raw_ca.id = am."creditAccountId" AND raw_ca."deletedAt" IS NULL
      WHERE am."companyId" = $1 AND am."operationType" = $2 AND am."isActive" = true
      LIMIT 1`,
     [companyId, operationType]
   );
+
   if (!mapping) {
+    // No mapping configured at all — fall through to intent search.
     const resolved = await resolveByIntent(companyId, operationType, fallbackCode);
     if (resolved !== fallbackCode) return resolved;
     logger.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
@@ -1682,6 +1710,31 @@ export async function getAccountCodeFromMapping(
     ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
     return fallbackCode;
   }
+
+  // If a mapping row EXISTS but its linked account is a non-postable parent,
+  // raise an explicit config error — do NOT silently fall back to intent search.
+  // Silent fallback would hide the misconfiguration from the operator.
+  if (side === "debit" && mapping.debitAccountId !== null && !mapping.debitAllows) {
+    throw new ValidationError(
+      `إعداد المحاسبة غير صحيح: العملية "${operationType}" مرتبطة بحساب مدين غير قابل للترحيل ` +
+      `(حساب تجميعي/رئيسي أو محذوف). أصلح الإعداد في قائمة ربط الحسابات.`,
+      {
+        field: "debitAccountId",
+        fix: `افتح إعدادات المحاسبة → ربط الحسابات → اختر حساباً فرعياً (تفصيلياً) يقبل الحركة للعملية "${operationType}"`,
+      }
+    );
+  }
+  if (side === "credit" && mapping.creditAccountId !== null && !mapping.creditAllows) {
+    throw new ValidationError(
+      `إعداد المحاسبة غير صحيح: العملية "${operationType}" مرتبطة بحساب دائن غير قابل للترحيل ` +
+      `(حساب تجميعي/رئيسي أو محذوف). أصلح الإعداد في قائمة ربط الحسابات.`,
+      {
+        field: "creditAccountId",
+        fix: `افتح إعدادات المحاسبة → ربط الحسابات → اختر حساباً فرعياً (تفصيلياً) يقبل الحركة للعملية "${operationType}"`,
+      }
+    );
+  }
+
   const explicitCode = side === "debit"
     ? (mapping.debitCode || mapping.debitAccountCode)
     : (mapping.creditCode || mapping.creditAccountCode);
