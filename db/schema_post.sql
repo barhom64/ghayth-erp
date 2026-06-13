@@ -9581,6 +9581,16 @@ CREATE INDEX idx_financial_periods_status ON public.financial_periods USING btre
 
 CREATE INDEX idx_fixed_assets_company ON public.fixed_assets USING btree ("companyId");
 
+-- Name: idx_fixed_assets_department; Type: INDEX; Schema: public; Owner: -
+-- Added by migration 338_fixed_assets_anchors (#2140 slice 5-a)
+
+CREATE INDEX idx_fixed_assets_department ON public.fixed_assets USING btree ("departmentId") WHERE ("departmentId" IS NOT NULL);
+
+-- Name: idx_fixed_assets_cost_center; Type: INDEX; Schema: public; Owner: -
+-- Added by migration 338_fixed_assets_anchors (#2140 slice 5-a)
+
+CREATE INDEX idx_fixed_assets_cost_center ON public.fixed_assets USING btree ("costCenterId") WHERE ("costCenterId" IS NOT NULL);
+
 
 --
 -- Name: idx_fleet_ai_alerts_company_time; Type: INDEX; Schema: public; Owner: -
