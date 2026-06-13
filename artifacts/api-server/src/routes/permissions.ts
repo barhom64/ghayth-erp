@@ -9,6 +9,10 @@ import { getActiveDelegationsFor, delegationCoversFeature } from "../lib/rbac/de
 import { auditLog } from "../lib/audit.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import {
+  ROLE_MODULE_DEFAULTS,
+  canonicalizeModules,
+} from "../lib/rbac/roleModulesCatalog.js";
 
 const router = Router();
 
@@ -71,22 +75,13 @@ const userPermissionDeleteSchema = z.object({
   permission: z.string().min(1, "الصلاحية مطلوبة"),
 });
 
-const PREDEFINED_ROLE_DEFAULTS: Record<string, { modules: string[]; level: number }> = {
-  owner:            { modules: ["home","hr","finance","fleet","property","operations","warehouse","governance","bi","requests","documents","reports","admin","comms","legal","crm","marketing","store","support","settings"], level: 100 },
-  general_manager:  { modules: ["home","hr","finance","fleet","property","operations","warehouse","governance","bi","requests","documents","reports","comms","legal","crm","marketing","store","support","settings"], level: 90 },
-  hr_manager:       { modules: ["home","hr","requests","documents","comms"], level: 70 },
-  finance_manager:  { modules: ["home","finance","requests","documents","comms"], level: 70 },
-  fleet_manager:    { modules: ["home","fleet","requests","documents","comms"], level: 70 },
-  property_manager: { modules: ["home","property","requests","documents","comms"], level: 70 },
-  projects_manager: { modules: ["home","operations","requests","documents","comms"], level: 70 },
-  warehouse_manager:{ modules: ["home","warehouse","store","requests","documents","comms"], level: 70 },
-  legal_manager:    { modules: ["home","legal","governance","requests","documents","comms"], level: 70 },
-  support_manager:  { modules: ["home","support","requests","documents","comms"], level: 70 },
-  crm_manager:      { modules: ["home","crm","marketing","requests","documents","comms"], level: 70 },
-  bi_manager:       { modules: ["home","bi","reports","requests","documents","comms"], level: 70 },
-  branch_manager:   { modules: ["home","hr","finance","requests","documents","comms","support"], level: 60 },
-  employee:         { modules: ["home","requests","documents","comms"], level: 10 },
-};
+// PR-2 / #2163 — re-export from the single source so this map and
+// roleGuard's ROLE_DEFAULT_MODULES can never drift apart again. The
+// old duplicate-by-hand layout was the FU-1-style root cause from the
+// audit (#2166 §8): PR-9a added two roles here in roleGuard but the
+// hand-copy here didn't keep up — sidebar fallback fell back to the
+// stale map.
+const PREDEFINED_ROLE_DEFAULTS = ROLE_MODULE_DEFAULTS;
 
 function parseModules(raw: unknown, roleKey?: string): string[] {
   if (raw && typeof raw === "object" && !Array.isArray(raw) && (raw as any).all === true) {
@@ -174,7 +169,16 @@ router.get("/my", async (req, res) => {
     } catch (e) { logger.warn(e, "[permissions/my] RBAC modules derive skipped"); }
 
     const highestLevel = Math.max(0, ...roles.map((r) => Number(r.level) || 0));
-    const allModules = Array.from(new Set([...roles.flatMap((r) => parseModules(r.modules, r.roleKey)), ...rbacModules]));
+    // PR-2 / #2163 — canonicalize the dynamic projection. The split_part
+    // above yields feature-key first-segment names (e.g. "dashboard",
+    // "properties", "projects", "communications") which differ from the
+    // nav-registry vocabulary ("home", "property", "operations", "comms").
+    // canonicalizeModules collapses them so the sidebar filter agrees
+    // with requireModule. PR-0 §8 caught this drift live.
+    const allModules = canonicalizeModules([
+      ...roles.flatMap((r) => parseModules(r.modules, r.roleKey)),
+      ...rbacModules,
+    ]);
 
     // Per-user explicit overrides now live in RBAC v2 (rbac_user_grants),
     // enforced by authzEngine. Mirror them here as grant/revoke (feature.action

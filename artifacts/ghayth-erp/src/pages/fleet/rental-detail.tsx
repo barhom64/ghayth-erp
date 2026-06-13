@@ -196,7 +196,7 @@ export default function RentalDetailPage() {
         {c.status === "draft" && (
           <Button size="sm" onClick={activate} disabled={busy === "activate"} rateLimitAware>
             <CheckCircle2 className="h-4 w-4 me-1" />
-            {busy === "activate" ? "جارٍ التفعيل…" : "R8 — تفعيل العقد"}
+            {busy === "activate" ? "جاري التفعيل…" : "R8 — تفعيل العقد"}
           </Button>
         )}
       </div>
@@ -292,7 +292,7 @@ export default function RentalDetailPage() {
             <div className="md:col-span-3 text-end">
               <Button onClick={submitHandover} disabled={busy === "handover"} rateLimitAware>
                 <PackageOpen className="h-4 w-4 me-1" />
-                {busy === "handover" ? "جارٍ التسجيل…" : "سجّل التسليم"}
+                {busy === "handover" ? "جاري التسجيل…" : "سجّل التسليم"}
               </Button>
             </div>
           </CardContent>
@@ -356,7 +356,7 @@ export default function RentalDetailPage() {
             <div className="md:col-span-2 text-end self-end">
               <Button onClick={submitReturn} disabled={busy === "return"} rateLimitAware>
                 <PackageCheck className="h-4 w-4 me-1" />
-                {busy === "return" ? "جارٍ الإغلاق…" : "سجّل الإرجاع وأغلق"}
+                {busy === "return" ? "جاري الإغلاق…" : "سجّل الإرجاع وأغلق"}
               </Button>
             </div>
             {c.handoverOdometer != null && rtOdo && Number(rtOdo) > c.handoverOdometer && (

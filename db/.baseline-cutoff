@@ -1,1 +1,12 @@
+# Last migration whose effects the fresh-install path may ASSUME without
+# re-running: provision-agent-db.sh / db/bootstrap.sh / migrate.ts mark
+# migrations <= this as applied and ACTUALLY APPLY anything after it.
+#
+# NOTE the deliberate gap vs db/schema_pre.sql (regenerated 2026-06-12 at
+# head=330): the dump is SCHEMA-ONLY, but several post-297 migrations also
+# seed reference DATA (e.g. 312 finance intent account mappings, 306 role
+# grants) that the posting engine needs. Keeping the cutoff at 297 replays
+# 298..330 on fresh installs — their DDL is idempotent (verified: all 15
+# re-apply cleanly over a DB that already contains them) and their seed
+# rows land. Only bump this after extracting such data into db/seed.sql.
 297_rename_collided_migration_filenames.sql

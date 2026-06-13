@@ -137,6 +137,10 @@ async function main() {
   for (const file of pageFiles) {
     const key = pageKey(file);
     if (ALLOWLIST.has(key)) continue;
+    // Vitest specs colocated with their page (pages/foo.test.tsx) are
+    // discovered by the test runner, never imported by a routes file —
+    // they are not routable pages, so the orphan rule doesn't apply.
+    if (key.endsWith(".test.ts") || key.endsWith(".test.tsx")) continue;
     if (!importedSet.has(file)) orphans.push(key);
   }
 

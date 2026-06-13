@@ -1798,8 +1798,12 @@ reportsRouter.get("/reports/unmapped-lines", authorize({ feature: "finance.repor
     }
 
     if (tableFilter("goods_receipt_items")) {
+      // goods_receipts has no workflow `status` column (no migration ever
+      // added one) — selecting grn.status 500'd this whole report. The
+      // frontend treats source status as optional, so NULL is honest.
       const rows = await rawQuery<Record<string, unknown>>(
-        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef", grn.status,
+        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef",
+                NULL::text AS status,
                 gri."allocationStatus", grn."createdAt"
            FROM goods_receipt_items gri
            JOIN goods_receipts grn ON grn.id = gri."grnId"
@@ -1846,8 +1850,8 @@ reportsRouter.get(
 
       const params: unknown[] = [scope.companyId];
       let whereExtra = "";
-      if (startDate) { params.push(startDate); whereExtra += ` AND je."postingDate" >= $${params.length}`; }
-      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (startDate) { params.push(startDate); whereExtra += ` AND je."date" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."date" < ($${params.length}::date + 1)`; }
       if (supplierId) {
         const sid = Number(supplierId);
         if (Number.isFinite(sid) && sid > 0) {
@@ -1914,7 +1918,7 @@ reportsRouter.get(
         `SELECT spa.id           AS "allocationId",
                 spa."journalEntryId",
                 je.ref            AS "journalRef",
-                je."postingDate"::text AS "postingDate",
+                je."date"::text AS "postingDate",
                 spa."obligationType",
                 spa."obligationId",
                 spa.amount::float8        AS amount,
@@ -1929,7 +1933,7 @@ reportsRouter.get(
                 sup."residencyStatus"     AS "supplierResidencyStatus",
                 sup."taxResidenceCountry" AS "supplierTaxResidenceCountry"
          ${baseSql}
-         ORDER BY je."postingDate" DESC NULLS LAST, spa.id DESC
+         ORDER BY je."date" DESC NULLS LAST, spa.id DESC
          LIMIT 5000`,
         params,
       );
@@ -3008,14 +3012,14 @@ reportsRouter.get(
       // 2300 / 1400 defaults via accounting_mappings).
       const { financialEngine } = await import("../lib/engines/index.js");
       const [outputVatCode, inputVatCode] = await Promise.all([
-        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300"),
-        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1400"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2131"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1180"),
       ]);
 
       const params: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
       let dateFilter = "";
-      if (startDate) { params.push(startDate); dateFilter += ` AND je."postingDate" >= $${params.length}`; }
-      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (startDate) { params.push(startDate); dateFilter += ` AND je."date" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."date" < ($${params.length}::date + 1)`; }
       const branchFilter = getBranchCondition(scope, undefined, params, "je");
 
       // ── 1. Period movement on the two VAT accounts ──────────────────

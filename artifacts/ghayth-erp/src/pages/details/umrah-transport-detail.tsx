@@ -160,7 +160,7 @@ export default function UmrahTransportDetail() {
               onChange={(e) => setAssignIds(e.target.value)}
               dir="ltr"
               className="flex-1 h-8 text-xs border rounded px-2"
-              placeholder="IDs..."
+              placeholder="أرقام المعرّفات..."
             />
             <button
               type="button"

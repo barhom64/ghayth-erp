@@ -59,8 +59,12 @@ describe("HR-Wave-0 / 0.4 — buildEntitySelect defaults + plumbing", () => {
     // Proves the inline-create result actually FLOWS BACK into the parent
     // form (newId → onChange) and the picker refreshes (refetch). Without
     // this, the new entity exists in the DB but the form never sees it.
-    expect(ENTITY_SELECTS_SRC).toMatch(/const newId = String\(res\?\.id \|\| res\?\.data\?\.id \|\| ""\);/);
-    expect(ENTITY_SELECTS_SRC).toMatch(/if \(newId\) onChange\(newId\);/);
+    // #2134 strengthened the handler: the created entity is ALSO injected
+    // into the options locally (mergeEntityOptions) so it renders instantly,
+    // before the refetch lands and regardless of the 500-row preload window.
+    expect(ENTITY_SELECTS_SRC).toMatch(/const newId = String\(row\?\.id \|\| ""\);/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/onChange\(newId\);/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/setCreatedOptions\(/);
     expect(ENTITY_SELECTS_SRC).toMatch(/refetch\(\);/);
   });
 });

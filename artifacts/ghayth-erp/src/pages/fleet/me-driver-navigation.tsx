@@ -314,7 +314,7 @@ export default function MeDriverNavigation() {
             {next ? (
               <Button onClick={advance} disabled={advancing} className="flex-1" size="lg" rateLimitAware>
                 {(() => { const Icon = next.icon; return <Icon className="h-5 w-5 me-2" />; })()}
-                {advancing ? "جارٍ التحديث…" : next.label}
+                {advancing ? "جاري التحديث…" : next.label}
               </Button>
             ) : !isFinished ? (
               <Button onClick={complete} size="lg" className="flex-1" rateLimitAware>

@@ -38,6 +38,7 @@ import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
 import inboxRouter from "./inbox.js";
+import inboxConversationsRouter from "./inboxConversations.js";
 import mailboxesRouter from "./mailboxes.js";
 import governanceRouter from "./governance.js";
 import biRouter from "./bi.js";
@@ -70,6 +71,7 @@ import impactPreviewRouter from "./impactPreview.js";
 import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
+import myFieldTrackingRouter from "./myFieldTracking.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
@@ -339,7 +341,11 @@ const hrUserLimiter = createPerUserLimiter({
 
 router.use("/dashboard", dashboardRouter);
 router.use("/employees", requireModule("hr"), employeesRouter);
-router.use("/clients", requireModule("crm"), clientsRouter);
+// #2134 — clients are the finance counterparty master data: the invoice and
+// voucher forms (finance module) read this list for their client picker, so a
+// finance-module user must reach it without holding the CRM module. The
+// per-route authorize (crm.clients) still gates every action.
+router.use("/clients", requireModule("crm", "finance"), clientsRouter);
 // Per-user HR limiter mounted once on /hr so it runs exactly once per
 // request, regardless of which sub-router handles it. See umrah notes below.
 router.use("/hr", hrUserLimiter);
@@ -405,7 +411,8 @@ router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRo
 // with NO mount path (so Express never strips the prefix — requireGuards reads
 // the real req.path), and gates ONLY /transport + /fleet; every route in these 7
 // routers lives under those two prefixes (verified: 56 /transport + 14 /fleet,
-// zero others).
+// zero others). PR-5a (#2077) hit the SAME bug for HR's صندوق الأعمال
+// and merged into main's #1959 solution.
 const fleetModuleGate = requireModule("fleet");
 const transportFinancialGate = requireGuards("financial");
 const transportPathGate: RequestHandler = (req, res, next) => {
@@ -453,6 +460,11 @@ router.use("/communications", requireModule("comms"), requireMinLevel(40), commu
 // User-facing inbox: compose/send + thread view + call log. Lives next
 // to /communications (read-only logs) so the SPA can navigate between
 // them without crossing module boundaries.
+// /inbox/conversations is the persisted Conversation canon (#2138,
+// migration 335) — mounted before the legacy /inbox router so its
+// paths win; the computed /inbox/threads view keeps serving the
+// current UI until the conversation-first frontend slice lands.
+router.use("/inbox/conversations", requireModule("comms"), inboxConversationsRouter);
 router.use("/inbox", requireModule("comms"), inboxRouter);
 router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
 // Agent 7 — sidebar gates الحوكمة والامتثال at level 60 and ذكاء الأعمال
@@ -474,7 +486,17 @@ router.use("/settings", requireModule("settings"), requireMinLevel(70), settings
 // per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
 router.use("/numbering", requireModule("settings"), requireMinLevel(70), numberingRouter);
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
-router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
+// PR-1 / #2163 — decouple /module-dashboards/* from requireModule("bi").
+// Each tab endpoint inside moduleDashboardsRouter (/hr, /finance, /fleet,
+// /crm, /store, /support, /legal, /properties, /projects, /tasks,
+// /warehouse) already carries its own `authorize({ feature: "<module>",
+// action: "list" })` per-route gate. The mount-level requireModule("bi")
+// was an over-reach (FU-2 from #2077, PR-0 §7 of #2163): it blocked
+// every manager that owned their own module but not BI — e.g. مدير HR
+// couldn't open «لوحة الموارد البشرية» despite holding the hr module.
+// The per-route authorize() is the canonical gate; the mount stays
+// auth-only.
+router.use("/module-dashboards", moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
 // Observability operator pane (#1139 §5). Mounted under /admin/observability
 // so the same module + minLevel guards apply; each endpoint inside also
@@ -500,7 +522,18 @@ router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90)
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
 // and is defence-in-depth against any future unguarded route.
-router.use("/permissions", requireMinLevel(90), permissionsRouter);
+// PR-10 (#2077) — pre-existing FND-004 (#866) over-reach: the guard
+// was added when this router only carried admin endpoints, but the
+// only route here today is /permissions/my, the self-introspection
+// surface that drives sidebar/button gating for EVERY user. The route
+// file's own comment is explicit: «self-introspection endpoint that
+// every authenticated user must be able to call regardless of role».
+// Without dropping this gate, hr_manager / department_manager /
+// payroll_officer would silently lose all perm-gated UI because their
+// /permissions/my call 403s and `apiData.permissions` stays empty —
+// exactly the symptom PR-10's nav gate hit. The route is scoped to
+// the caller (scope.userId/companyId) — no admin surface exposed.
+router.use("/permissions", permissionsRouter);
 router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
 // GAP_MATRIX item #16 — sidebar advertises this with perm=audit:read but
 // the mount only checked level≥70. Add requirePermission so direct-URL
@@ -516,6 +549,13 @@ router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
+// PR-9 (#2077) — self-service field tracking. Same lane as /my-space:
+// authMiddleware + per-route authorize (hr.attendance.checkin is
+// selfService:true), NO module gate — plain employees (field workers,
+// drivers) don't carry the hr module but must reach their own ping
+// endpoint. The category policy inside fieldTrackingService stays the
+// single authority on WHO is trackable.
+router.use("/my/field", myFieldTrackingRouter);
 // IGOC-006 — /me/proactive-insights aggregates 9 role-adaptive categories
 // (my docs/iqama, my pending requests, team approvals, company iqama/journals/
 // invoices/obligations, critical notifications). Same surface for every role,

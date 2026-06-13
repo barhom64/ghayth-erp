@@ -43,6 +43,13 @@ interface SearchableSelectProps {
   className?: string;
   onCreateNew?: () => void;
   createNewLabel?: string;
+  /**
+   * Notifies the parent of the live search text typed in the dropdown.
+   * Lets pickers with server-side search (#2134: the client picker only
+   * preloads the first 500 rows) fetch matches the preloaded window
+   * misses; cmdk still filters the merged options client-side.
+   */
+  onSearchChange?: (text: string) => void;
 }
 
 export function SearchableSelect({
@@ -56,6 +63,7 @@ export function SearchableSelect({
   className,
   onCreateNew,
   createNewLabel = "إضافة جديد",
+  onSearchChange,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
@@ -82,7 +90,7 @@ export function SearchableSelect({
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={searchPlaceholder} onValueChange={onSearchChange} />
           <CommandList className="max-h-[60vh]">
             <CommandEmpty>{emptyText}</CommandEmpty>
             {(() => {
