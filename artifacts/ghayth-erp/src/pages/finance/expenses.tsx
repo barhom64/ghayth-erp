@@ -206,7 +206,20 @@ export default function ExpensesPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (e) => <PageStatusBadge status={e.status || "draft"} />,
+      // FIN-CORRECTION (A3): keep the legacy document badge, and surface the
+      // truthful posting axis (from /finance/expenses, migration-311 trigger)
+      // in the list so a directly-posted expense (status='draft' +
+      // balancesApplied=true) reads «مرحّل» here, not just in the expanded row.
+      render: (e) => (
+        <span className="inline-flex items-center gap-1">
+          <PageStatusBadge status={e.status || "draft"} />
+          {e.postingStatus && (
+            <span className={`text-[10px] ${e.postingStatus === "posted" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+              {POSTING_STATUS_LABELS[e.postingStatus as keyof typeof POSTING_STATUS_LABELS]}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: "createdAt",
@@ -407,21 +420,26 @@ export default function ExpensesPage() {
                       <span className="block font-medium">{e.relatedEntityType} #{e.relatedEntityId}</span>
                     </div>
                   )}
-                  {/* #1945 — الحالة على ثلاثة محاور منفصلة (مستند/دفع/ترحيل)،
-                      مشتقّة من نموذج الحالة المركزي بدل الخلط في حقل واحد. */}
+                  {/* #1945 — الحالة على ثلاثة محاور منفصلة (مستند/دفع/ترحيل).
+                      FIN-CORRECTION (A3): تُقرأ الآن من محاور الـAPI (محاور
+                      trigger 311 عبر /finance/expenses، مُتاحة منذ #2150) بدل
+                      اشتقاقها محليًا عبر mapJournalStatus(e.status) — الذي كان
+                      يُضلِّل في حالة المصروف المُرحَّل مباشرةً (status='draft'
+                      مع balancesApplied=true → يظهر «غير مرحّل» خطأً). fallback
+                      دفاعي للاشتقاق المحلي إن غاب الحقل عن صف قديم. */}
                   <div>
                     <span className="text-muted-foreground">حالة المستند:</span>
-                    <span className="block font-medium">{DOCUMENT_STATUS_LABELS[mapJournalStatus(e.status).documentStatus]}</span>
+                    <span className="block font-medium">{DOCUMENT_STATUS_LABELS[(e.documentStatus ?? mapJournalStatus(e.status).documentStatus) as keyof typeof DOCUMENT_STATUS_LABELS]}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">حالة الدفع:</span>
-                    <span className={`block font-medium ${e.isPaid ? "text-status-success-foreground" : "text-orange-600"}`}>
-                      {PAYMENT_STATUS_LABELS[e.isPaid ? "paid" : "unpaid"]}
+                    <span className={`block font-medium ${(e.paymentStatus ?? (e.isPaid ? "paid" : "unpaid")) === "paid" ? "text-status-success-foreground" : "text-orange-600"}`}>
+                      {PAYMENT_STATUS_LABELS[(e.paymentStatus ?? (e.isPaid ? "paid" : "unpaid")) as keyof typeof PAYMENT_STATUS_LABELS]}
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">حالة الترحيل:</span>
-                    <span className="block font-medium">{POSTING_STATUS_LABELS[mapJournalStatus(e.status).postingStatus]}</span>
+                    <span className="block font-medium">{POSTING_STATUS_LABELS[(e.postingStatus ?? mapJournalStatus(e.status).postingStatus) as keyof typeof POSTING_STATUS_LABELS]}</span>
                   </div>
                   {e.attachmentUrl && (
                     <div>
