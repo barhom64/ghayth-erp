@@ -24,6 +24,7 @@ import {
 } from "@workspace/ui-core";
 import { Banknote, DollarSign, Plus, X, Clock, CheckCircle } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { POSTING_STATUS_LABELS, PAYMENT_STATUS_LABELS } from "@/lib/finance/status-model";
 import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { useAppContext } from "@/contexts/app-context";
 import { ApprovalActions } from "@workspace/workflow-kit";
@@ -110,7 +111,28 @@ export default function SalaryAdvancesPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (s) => <PageStatusBadge status={s.status || "pending"} />,
+      // FIN-CORRECTION (A6): keep the approval badge, and surface the truthful
+      // posting + payment axes from the API (documentStatus/paymentStatus/
+      // postingStatus are maintained by the migration-311 trigger; #2118
+      // slice 5) instead of inferring them from the approval `status` alone — so
+      // a directly-posted advance (status='draft' + balancesApplied=true) reads
+      // «مرحّل», and a disbursed one reads «مدفوع». documentStatus is already
+      // conveyed by the badge above, so it is not duplicated.
+      render: (s) => (
+        <span className="inline-flex items-center gap-1">
+          <PageStatusBadge status={s.status || "pending"} />
+          {s.postingStatus && (
+            <span className={`text-[10px] ${s.postingStatus === "posted" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+              {POSTING_STATUS_LABELS[s.postingStatus as keyof typeof POSTING_STATUS_LABELS]}
+            </span>
+          )}
+          {s.paymentStatus && (
+            <span className={`text-[10px] ${s.paymentStatus === "paid" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+              {PAYMENT_STATUS_LABELS[s.paymentStatus as keyof typeof PAYMENT_STATUS_LABELS]}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: "date",
