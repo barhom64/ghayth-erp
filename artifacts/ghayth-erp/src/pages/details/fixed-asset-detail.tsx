@@ -467,9 +467,9 @@ function TransferAssetDialog({
 }) {
   const [result, setResult] = useState<{ journalEntryId: number | null; transferDate: string } | null>(null);
 
-  const { data: branchesData } = useApiQuery<any>(["branches-list"], "/branches", open);
-  const { data: deptsData } = useApiQuery<any>(["departments-list"], "/departments", open);
-  const { data: ccData } = useApiQuery<any>(["cost-centers-list"], "/cost-centers", open);
+  const { data: branchesData } = useApiQuery<any>(["branches-list"], "/settings/branches", open);
+  const { data: deptsData } = useApiQuery<any>(["departments-list"], "/settings/departments", open);
+  const { data: ccData } = useApiQuery<any>(["cost-centers-list"], "/finance/cost-centers", open);
 
   const branches = (branchesData?.data ?? branchesData ?? []) as any[];
   const departments = (deptsData?.data ?? deptsData ?? []) as any[];
