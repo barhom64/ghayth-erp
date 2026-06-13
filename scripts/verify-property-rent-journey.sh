@@ -91,4 +91,15 @@ echo "$CMP_ST" | grep -qiE "completed|closed" && ok "maintenance completed (stat
 MNT_BAL="$(psql "$DSN" -tA -c "select count(*) from (select je.id from journal_entries je join journal_lines jl on jl.\"journalId\"=je.id where je.\"companyId\"=2 and je.\"sourceType\"='maintenance_requests' and je.\"sourceId\"=$MRID group by je.id having sum(jl.debit)=sum(jl.credit) and sum(jl.debit)=1500) t;")"
 [ "${MNT_BAL:-0}" -ge 1 ] && ok "maintenance GL exists and balanced @ 1500" || no "maintenance GL not balanced (${MNT_BAL:-0})"
 
+# ── Early termination ────────────────────────────────────────────────
+TERM="$(curl -fsS -b "$J" -H "x-csrf-token: $CSRF" -H "Content-Type: application/json" -X POST "$BASE/properties/contracts/$CID/terminate" -d '{"reason":"إنهاء بطلب المستأجر","earlyTerminationFee":2500,"terminationDate":"2026-06-30"}')"
+TERM_ST="$(echo "$TERM" | py 'import sys,json;d=json.load(sys.stdin);print(d.get("status") or d.get("state") or "")')"
+echo "$TERM_ST" | grep -qi terminated && ok "contract terminated (status=terminated)" || no "terminate: $(echo "$TERM"|py 'import sys,json;d=json.load(sys.stdin);print(d.get("error") or d)')"
+UNIT_STATE="$(psql "$DSN" -tA -c "select status from property_units where id=$UID_;")"
+[ "$UNIT_STATE" = "available" ] && ok "unit freed back to 'available' on termination" || no "unit status after terminate: $UNIT_STATE (expected available)"
+TERM_BAL="$(psql "$DSN" -tA -c "select count(*) from (select je.id from journal_entries je join journal_lines jl on jl.\"journalId\"=je.id where je.\"companyId\"=2 and je.\"sourceType\"='rental_contracts' and je.\"sourceId\"=$CID and je.\"sourceKey\"='property:termination:$CID' group by je.id having sum(jl.debit)=sum(jl.credit) and sum(jl.debit)=2500) t;")"
+[ "${TERM_BAL:-0}" -ge 1 ] && ok "early-termination GL exists and balanced @ 2500" || no "termination GL not balanced (${TERM_BAL:-0})"
+TERM_REV="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"companyId\"=2 and je.\"sourceType\"='rental_contracts' and je.\"sourceId\"=$CID and jl.credit>0 and jl.\"accountCode\"='4130';")"
+[ "${TERM_REV:-0}" -ge 1 ] && ok "termination penalty routed to 4130 (service revenue, not fleet 4150)" || no "termination revenue not routed to 4130 ($TERM_REV)"
+
 rm -f "$J"; echo; echo "▶ Result: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ] || exit 1
