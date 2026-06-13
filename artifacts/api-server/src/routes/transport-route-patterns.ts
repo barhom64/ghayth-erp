@@ -416,6 +416,7 @@ transportRoutePatternsRouter.post(
            SELECT id, TRUE AS existed
              FROM transport_bookings
             WHERE "companyId" = $1 AND "bookingNumber" = $3
+              AND "deletedAt" IS NULL
               AND NOT EXISTS (SELECT 1 FROM ins)
            LIMIT 1`,
           [
