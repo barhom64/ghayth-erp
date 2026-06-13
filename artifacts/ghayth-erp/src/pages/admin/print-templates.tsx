@@ -555,7 +555,7 @@ function TemplateEditor(props: {
       // hasn't customised) we fall back to entity defaults + payload only.
       const w = window.open("", "_blank");
       if (w) {
-        w.document.write("<!doctype html><html><body>جارٍ التحضير…</body></html>");
+        w.document.write("<!doctype html><html><body>جاري التحضير…</body></html>");
       }
       const resp = await fetch(`/api/print/preview`, {
         method: "POST",
@@ -786,7 +786,7 @@ function TemplateEditor(props: {
             معاينة
           </Button>
           <Button onClick={save} disabled={saving}>
-            {saving ? "جارٍ الحفظ…" : "حفظ"}
+            {saving ? "جاري الحفظ…" : "حفظ"}
           </Button>
         </DialogFooter>
       </DialogContent>

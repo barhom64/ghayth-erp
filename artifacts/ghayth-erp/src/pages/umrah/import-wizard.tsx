@@ -45,6 +45,25 @@ interface PreviewSummary {
   rowsWithoutSubAgent?: number;
   violationsDetected?: number;
   rows?: any[];
+  /**
+   * U-11 Phase 3a — current `umrah.auto_link.clientLinkagePolicy`.
+   * Surfaced verbatim so the banner can name the company's declared
+   * stance. The preview engine never acts on this; Phase 3a is
+   * detection-only.
+   */
+  clientLinkagePolicy?: string;
+  /**
+   * Non-null when the import would touch sub-agents lacking a
+   * `clientId`. The same signal `generateSalesInvoice` would raise
+   * later — surfaced up-front so the operator can link before
+   * confirm rather than after a failed invoice draft.
+   */
+  unlinkedSubAgentInvoicingHint?: {
+    willBlockInvoicing: boolean;
+    unlinkedSubAgentCount: number;
+    activePolicy: string;
+    arabicHint: string;
+  } | null;
 }
 
 // Arabic labels for the `umrah_import_changes` audit trail. Engine writes
@@ -158,6 +177,12 @@ export default function UmrahImportWizard() {
   } | null>(null);
   const [linkingSubAgent, setLinkingSubAgent] = useState<{ nuskCode: string; name: string } | null>(null);
   const [linkClientId, setLinkClientId] = useState("");
+  const [linkReason, setLinkReason] = useState("");
+  // U-11 Phase 3b — two-step UX. Step 1 = pick existing client.
+  // Step 2 = summary review + explicit confirm. The dialog only
+  // posts to /sub-agents/link-by-nusk when the operator clicks
+  // "تأكيد الربط الصريح" on step 2.
+  const [linkReviewStep, setLinkReviewStep] = useState(false);
   const [linking, setLinking] = useState(false);
   // Voucher-only fields (gaps #2 + #3): pick the cash box that funds
   // NUSK payments + optionally override the umrah-nusk-cost DR account.
@@ -426,19 +451,40 @@ export default function UmrahImportWizard() {
     if (!linkingSubAgent || !linkClientId) return;
     setLinking(true);
     try {
+      const reasonTrimmed = linkReason.trim();
       await apiFetch(`/umrah/sub-agents/link-by-nusk`, {
         method: "POST",
         body: JSON.stringify({
           nuskCode: linkingSubAgent.nuskCode,
           clientId: Number(linkClientId),
+          // U-11 Phase 3b — optional operator justification recorded
+          // on the server audit log + event details. Empty string is
+          // omitted so the backend's `reason?` stays unset rather
+          // than a literal "".
+          ...(reasonTrimmed ? { reason: reasonTrimmed } : {}),
         }),
       });
       toast({ title: "تم ربط الوكيل الفرعي بالعميل" });
-      setPreview((p) => p
-        ? { ...p, unlinkedSubAgents: (p.unlinkedSubAgents ?? []).filter((u) => u.nuskCode !== linkingSubAgent.nuskCode) }
-        : p);
+      setPreview((p) => {
+        if (!p) return p;
+        const remaining = (p.unlinkedSubAgents ?? []).filter(
+          (u) => u.nuskCode !== linkingSubAgent.nuskCode,
+        );
+        return {
+          ...p,
+          unlinkedSubAgents: remaining,
+          // U-11 Phase 3b — clear the invoicing-block hint when the
+          // last unlinked sub-agent is linked. Keeps the banner +
+          // hint in lockstep with the row-level list so the operator
+          // doesn't see a stale warning after resolving all rows.
+          unlinkedSubAgentInvoicingHint:
+            remaining.length === 0 ? null : p.unlinkedSubAgentInvoicingHint,
+        };
+      });
       setLinkingSubAgent(null);
       setLinkClientId("");
+      setLinkReason("");
+      setLinkReviewStep(false);
     } catch (err: any) {
       toast({ variant: "destructive", title: err?.message ?? "تعذّر الربط" });
     } finally {
@@ -857,6 +903,41 @@ export default function UmrahImportWizard() {
             </Card>
           )}
 
+          {/* U-11 Phase 3a — invoicing-block banner. Renders ONLY when
+              the backend surfaces a non-null hint, which itself fires
+              ONLY when unlinked sub-agents are present. The banner is
+              purely informational: it names the active policy and the
+              three guarantees Phase 3a ships under (operational ok,
+              no auto-link, invoicing blocked until explicit linkage). */}
+          {preview.unlinkedSubAgentInvoicingHint && (
+            <Card className="border-status-warning-surface bg-status-warning-surface/30">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 text-status-warning-foreground shrink-0" />
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-status-warning-foreground">
+                      الفوترة محظورة حتى الربط الصريح ({formatNumber(preview.unlinkedSubAgentInvoicingHint.unlinkedSubAgentCount)} وكيل فرعي)
+                    </h3>
+                    <p className="text-xs">
+                      السياسة الحالية للربط:{" "}
+                      <span className="font-mono" dir="ltr">
+                        {preview.unlinkedSubAgentInvoicingHint.activePolicy}
+                      </span>
+                    </p>
+                    <ul className="text-xs space-y-1 list-disc ps-5">
+                      <li>التشغيل مسموح — الوكلاء الفرعيون يُنشأون ككيانات عمرة فقط.</li>
+                      <li>الفوترة ممنوعة — `generateSalesInvoice` سيرفض حتى الربط الصريح.</li>
+                      <li>لا يوجد ربط تلقائي — لا يُنشأ عميل مالي ولا يُربط أحد بصمت.</li>
+                    </ul>
+                    <p className="text-xs text-muted-foreground">
+                      اربط الوكلاء الفرعيين أدناه عبر زر "ربط الآن" قبل التأكيد، أو اربطهم لاحقاً من صفحة الوكلاء الفرعيين.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Unlinked sub-agents */}
           {preview.unlinkedSubAgents && preview.unlinkedSubAgents.length > 0 && (
             <Card>
@@ -1108,11 +1189,31 @@ export default function UmrahImportWizard() {
         </div>
       )}
 
-      {/* Link sub-agent dialog */}
-      <Dialog open={!!linkingSubAgent} onOpenChange={(o) => { if (!o) { setLinkingSubAgent(null); setLinkClientId(""); } }}>
+      {/* U-11 Phase 3b — explicit-confirmation link dialog.
+          Step 1: pick existing client (no client creation surfaced).
+          Step 2: review summary + optional reason, then explicitly
+                  confirm with "تأكيد الربط الصريح".
+          The two-step UX matches the owner's directive that linkage
+          happens only after explicit operator confirmation — silent /
+          one-click linking is intentionally NOT supported here. */}
+      <Dialog
+        open={!!linkingSubAgent}
+        onOpenChange={(o) => {
+          if (!o) {
+            setLinkingSubAgent(null);
+            setLinkClientId("");
+            setLinkReason("");
+            setLinkReviewStep(false);
+          }
+        }}
+      >
         <DialogContent dir="rtl">
           <DialogHeader>
-            <DialogTitle>ربط الوكيل الفرعي بعميل</DialogTitle>
+            <DialogTitle>
+              {linkReviewStep
+                ? "تأكيد الربط الصريح"
+                : "ربط الوكيل الفرعي بعميل موجود"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             {linkingSubAgent && (
@@ -1121,30 +1222,119 @@ export default function UmrahImportWizard() {
                 <p><span className="text-muted-foreground">الاسم:</span> <strong>{linkingSubAgent.name}</strong></p>
               </div>
             )}
-            <div>
-              <Label className="text-xs">اختر العميل</Label>
-              <SearchableSelect
-                options={clients.map((c: any) => ({
-                  value: String(c.id),
-                  label: c.name ?? c.companyName ?? `#${c.id}`,
-                  sublabel: c.phone,
-                }))}
-                value={linkClientId}
-                onValueChange={setLinkClientId}
-                placeholder="اختر عميلاً..."
-                searchPlaceholder="ابحث في العملاء..."
-              />
-            </div>
+            {!linkReviewStep ? (
+              <>
+                <div>
+                  <Label className="text-xs">اختر عميلاً موجوداً</Label>
+                  <SearchableSelect
+                    options={clients.map((c: any) => ({
+                      value: String(c.id),
+                      label: c.name ?? c.companyName ?? `#${c.id}`,
+                      sublabel: c.phone,
+                    }))}
+                    value={linkClientId}
+                    onValueChange={setLinkClientId}
+                    placeholder="اختر عميلاً..."
+                    searchPlaceholder="ابحث في العملاء..."
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    اختيار عميل موجود فقط. لا يُنشأ عميل جديد من هذه الشاشة.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                {(() => {
+                  const selectedClient = clients.find(
+                    (c: any) => String(c.id) === linkClientId,
+                  );
+                  const selectedLabel = selectedClient
+                    ? (selectedClient.name ?? selectedClient.companyName ?? `#${selectedClient.id}`)
+                    : "";
+                  const selectedPhone = selectedClient?.phone ?? "";
+                  return (
+                    <div className="p-3 rounded border bg-status-warning-surface/30 text-sm space-y-2">
+                      <p className="font-semibold">راجع التفاصيل قبل التأكيد:</p>
+                      <ul className="text-xs space-y-1 list-disc ps-5">
+                        <li>
+                          <span className="text-muted-foreground">الوكيل الفرعي: </span>
+                          <strong>{linkingSubAgent?.name}</strong>{" "}
+                          <span className="font-mono text-[10px]" dir="ltr">({linkingSubAgent?.nuskCode})</span>
+                        </li>
+                        <li>
+                          <span className="text-muted-foreground">العميل المختار: </span>
+                          <strong>{selectedLabel}</strong>
+                          {selectedPhone ? (
+                            <span className="text-[10px] text-muted-foreground" dir="ltr"> · {selectedPhone}</span>
+                          ) : null}
+                        </li>
+                        <li>
+                          <span className="text-muted-foreground">السياسة الحالية: </span>
+                          <span className="font-mono text-[10px]" dir="ltr">
+                            {preview?.clientLinkagePolicy ?? "operational_until_linked"}
+                          </span>
+                        </li>
+                      </ul>
+                      <p className="text-[10px] text-muted-foreground">
+                        لن يُنشأ عميل، ولن تُفتح ذمة، ولا قيد محاسبي. فقط ربط
+                        صريح للوكيل الفرعي بهذا العميل.
+                      </p>
+                    </div>
+                  );
+                })()}
+                <div>
+                  <Label className="text-xs">سبب الربط (اختياري)</Label>
+                  <textarea
+                    value={linkReason}
+                    onChange={(e) => setLinkReason(e.target.value)}
+                    placeholder="مثال: مطابقة برقم الهاتف، اندماج مع #123، إلخ"
+                    maxLength={500}
+                    rows={2}
+                    className="w-full mt-1 px-2 py-1 text-sm border rounded resize-y"
+                    data-testid="link-reason-input"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    يُسجَّل في سجل التدقيق وفي الـevent emitted بعد الربط.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setLinkingSubAgent(null); setLinkClientId(""); }}>إلغاء</Button>
-            <GuardedButton
-              perm="umrah:write"
-              disabled={!linkClientId || linking}
-              onClick={doLinkSubAgent}
-            >
-              {linking ? "جاري الربط..." : "ربط"}
-            </GuardedButton>
+            {!linkReviewStep ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => { setLinkingSubAgent(null); setLinkClientId(""); setLinkReason(""); }}
+                >
+                  إلغاء
+                </Button>
+                <Button
+                  disabled={!linkClientId}
+                  onClick={() => setLinkReviewStep(true)}
+                >
+                  متابعة للمراجعة
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={linking}
+                  onClick={() => setLinkReviewStep(false)}
+                >
+                  رجوع
+                </Button>
+                <GuardedButton
+                  perm="umrah:write"
+                  disabled={!linkClientId || linking}
+                  onClick={doLinkSubAgent}
+                  data-testid="link-confirm-button"
+                >
+                  {linking ? "جاري الربط..." : "تأكيد الربط الصريح"}
+                </GuardedButton>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

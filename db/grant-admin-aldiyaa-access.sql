@@ -61,12 +61,17 @@ BEGIN
          AND "branchId"   = rec.id
          AND status = 'active'
     ) THEN
+      -- PR-8a (#2077): these are ACCESS grants, not employment. The
+      -- isAccessGrant flag keeps the admin out of the employee list,
+      -- payroll lines, absence marking, and scoring (one person =
+      -- one operational identity). authMiddleware expands branch
+      -- access for owner/GM roles regardless.
       INSERT INTO employee_assignments (
         "employeeId", "companyId", "branchId",
-        "jobTitle", role, "isPrimary", status
+        "jobTitle", role, "isPrimary", status, "isAccessGrant"
       ) VALUES (
         v_admin_emp_id, v_aldiyaa_id, rec.id,
-        'مدير النظام', 'owner', false, 'active'
+        'مدير النظام', 'owner', false, 'active', TRUE
       );
       RAISE NOTICE 'granted admin owner on branch: %', rec.name;
     END IF;

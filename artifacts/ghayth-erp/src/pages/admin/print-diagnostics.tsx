@@ -344,7 +344,7 @@ export default function PrintDiagnosticsPage() {
             </div>
             <Button onClick={runProbe} disabled={probing} className="gap-2">
               <PlayCircle className="h-4 w-4" />
-              {probing ? "جارٍ…" : "تشغيل"}
+              {probing ? "جاري…" : "تشغيل"}
             </Button>
           </div>
           {diagnostics.length > 0 && (
