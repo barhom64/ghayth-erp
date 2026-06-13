@@ -596,13 +596,22 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    // P0-4 (Properties plan) — single source of truth for the unit
+    // status graph. properties.ts used to carry its own richer copy
+    // (under_maintenance / out_of_service were missing here), so the
+    // two maps silently diverged: a transition the route allowed was
+    // illegal by this machine and vice versa. The route now derives
+    // its guard from THIS map (same pattern as SUP-016 for
+    // support_tickets), so there is no second copy to drift.
     entity: "property_units",
     label: "وحدة عقارية",
     transitions: {
-      available: ["reserved", "rented", "maintenance"],
-      reserved: ["rented", "available"],
-      rented: ["available", "maintenance"],
-      maintenance: ["available"],
+      available:         ["rented", "maintenance", "under_maintenance", "out_of_service", "reserved"],
+      rented:            ["available", "maintenance", "under_maintenance"],
+      maintenance:       ["available", "out_of_service"],
+      under_maintenance: ["available", "out_of_service"],
+      reserved:          ["available", "rented"],
+      out_of_service:    ["available", "maintenance", "under_maintenance"],
     },
   },
   {

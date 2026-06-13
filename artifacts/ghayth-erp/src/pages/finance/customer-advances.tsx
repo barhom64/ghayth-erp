@@ -180,7 +180,7 @@ export default function CustomerAdvancesPage() {
   return (
     <PageShell
       title="دفعات مقدمة من العملاء"
-      subtitle="customer advances — مبالغ مستلمة قبل الفاتورة، تُسجّل في حساب الالتزامات وتُطبَّق لاحقاً على فواتير العميل"
+      subtitle="دفعات العملاء المقدمة — مبالغ مستلمة قبل الفاتورة، تُسجّل في حساب الالتزامات وتُطبَّق لاحقاً على فواتير العميل"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { label: "دفعات مقدمة" },

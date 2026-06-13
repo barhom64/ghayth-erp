@@ -48,8 +48,8 @@ class FleetEngineImpl implements DomainEngine {
     fuelLog: { id: number; vehicleId: number; amount: number; driverId?: number; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5510"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, fuelLog.vehicleId);
 
@@ -77,8 +77,8 @@ class FleetEngineImpl implements DomainEngine {
     maintenance: { id: number; vehicleId: number; totalCost: number; type?: string; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, maintenance.vehicleId);
@@ -107,8 +107,8 @@ class FleetEngineImpl implements DomainEngine {
     insurance: { id: number; vehicleId: number; premium: number; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_prepaid_insurance", "debit", "1350"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_prepaid_insurance", "debit", "1172"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, insurance.vehicleId);
@@ -137,8 +137,8 @@ class FleetEngineImpl implements DomainEngine {
     violation: { id: number; vehicleId: number; driverId?: number; amount: number; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5290"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5560"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2150"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, violation.vehicleId);
@@ -167,8 +167,8 @@ class FleetEngineImpl implements DomainEngine {
     violation: { id: number; vehicleId?: number; amount: number }
   ) {
     const [payableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -195,8 +195,8 @@ class FleetEngineImpl implements DomainEngine {
     vehicle: { id: number; purchasePrice: number; plateNumber: string; make?: string; model?: string }
   ) {
     const [assetCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1510"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_purchase_cash", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_purchase_cash", "credit", "1111"),
     ]);
 
     const vName = `${vehicle.plateNumber} ${vehicle.make || ""} ${vehicle.model || ""}`.trim();
@@ -330,8 +330,8 @@ class FleetEngineImpl implements DomainEngine {
     if (trip.totalCost <= 0) return null;
 
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_expense", "debit", "6300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_expense", "debit", "5140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2150"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -723,10 +723,10 @@ class FleetEngineImpl implements DomainEngine {
     if (revenue <= 0 && cost <= 0) return null;
 
     const [arCode, revenueCode, costCode, payableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5310"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1131"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2150"),
     ]);
 
     const lines: JournalEntryLine[] = [];
@@ -769,9 +769,9 @@ class FleetEngineImpl implements DomainEngine {
     }
   ) {
     const [assetAccountCode, depreciationAccountCode, accDepreciationAccountCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1510"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "6100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_acc_depreciation", "credit", "1590"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "5710"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_acc_depreciation", "credit", "1211"),
     ]);
 
     eventBus.emit("finance.fixed_asset.requested", {

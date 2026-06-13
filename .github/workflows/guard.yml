@@ -57,6 +57,11 @@ jobs:
       # This is a CI-only value, not a secret — it never authenticates a
       # production session.
       JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
+      # secrets.ts (AES-256-GCM at-rest encryption for vendor_secrets)
+      # refuses to derive a key from nothing. CI-only value, same policy
+      # as JWT_SECRET above — required by the #2137 systemSmtp dynamic
+      # suite which round-trips an encrypted SMTP password.
+      SECRETS_ENCRYPTION_KEY: ci-only-secrets-key-thirty-two-chars-aaaaaaaaaaaa
 
     steps:
       - name: Diagnostic — confirm job reached runner

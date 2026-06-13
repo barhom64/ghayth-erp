@@ -73,7 +73,7 @@ export default function UmrahReconciliation() {
     { key: "nuskInvoiceNumber", header: "رقم نسك", render: (r) => <span className="font-medium">{r.nuskInvoiceNumber}</span> },
     { key: "nuskStatus", header: "الحالة" },
     { key: "fileTotal", header: "إجمالي الملف (ريال)", render: (r) => formatCurrency(Number(r.fileTotal)) },
-    { key: "postedAp", header: "AP مرحّل (ريال)", render: (r) => formatCurrency(Number(r.postedAp)) },
+    { key: "postedAp", header: "ذمم دائنة مرحّلة (ريال)", render: (r) => formatCurrency(Number(r.postedAp)) },
     { key: "postedRefund", header: "إرجاع مرحّل (ريال)", render: (r) => formatCurrency(Number(r.postedRefund)) },
     {
       key: "diff",

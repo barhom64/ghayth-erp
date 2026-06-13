@@ -38,6 +38,11 @@ interface JournalEntry {
   type: string;
   status: string;
   balancesApplied: boolean;
+  // FIN-CORRECTION (A1): the /finance/journal read now returns the canonical
+  // posting axis (migration-311 trigger). Consume it instead of deriving from
+  // the raw balancesApplied boolean — it is the truthful posting state even for
+  // a directly-posted entry that still carries status='draft'.
+  postingStatus: string;
   reversedById: number | null;
   sourceType: string | null;
   sourceId: number | null;
@@ -231,9 +236,9 @@ export default function PostingActivityPage() {
       key: "status",
       header: "الحالة",
       render: (r) => {
-        if (r.reversedById) return <Badge className="bg-orange-100 text-orange-800 text-[10px]">معكوس</Badge>;
-        if (!r.balancesApplied) return <Badge variant="outline" className="text-[10px]">غير مرحَّل</Badge>;
-        return <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">مرحَّل</Badge>;
+        if (r.reversedById || r.postingStatus === "reversed") return <Badge className="bg-orange-100 text-orange-800 text-[10px]">معكوس</Badge>;
+        if (r.postingStatus === "posted") return <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">مرحَّل</Badge>;
+        return <Badge variant="outline" className="text-[10px]">غير مرحَّل</Badge>;
       },
     },
   ];
@@ -241,7 +246,7 @@ export default function PostingActivityPage() {
   return (
     <PageShell
       title="نشاط الترحيل المحاسبي اليومي"
-      subtitle="Real-time GL activity feed — كل قيد رُحِّل اليوم، من أنشأه، كم بلغ، هل غير اعتيادي؟"
+      subtitle="نشاط الترحيل اللحظي — كل قيد رُحِّل اليوم، من أنشأه، كم بلغ، وهل هو غير اعتيادي"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/journal", label: "القيود" },

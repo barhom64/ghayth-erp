@@ -7,12 +7,17 @@
 #   • companies              — at least 1 company so scope works
 #   • branches               — at least 1 branch per company
 #   • job_titles             — referenced by employee_assignments
-#   • permissions            — the catalog
-#   • roles + role_permissions  — RBAC seed
 #   • chart_of_accounts      — needed for any GL posting test
 #   • currencies             — referenced by invoices
 #   • system_settings        — currency / timezone defaults
 #   • module_dashboards (catalog) — needed by /module-dashboards routes
+#
+# REMOVED (legacy RBAC, dropped by migration 269):
+#   ✗ permissions / roles / role_permissions
+#     RBAC v2 (rbac_roles + rbac_user_roles + authzEngine) is now the
+#     sole authority. The legacy tables no longer exist in the schema;
+#     including them in the dump produced a fatal "relation does not
+#     exist" on every fresh bootstrap.
 #
 # What is DELIBERATELY NOT dumped:
 #   ✗ users          — created by db/seed-admin-user.sql with a known
@@ -47,9 +52,6 @@ REFERENCE_TABLES=(
   companies
   branches
   job_titles
-  permissions
-  roles
-  role_permissions
   chart_of_accounts
   currencies
   system_settings

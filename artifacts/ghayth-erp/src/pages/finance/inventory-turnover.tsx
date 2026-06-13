@@ -140,7 +140,7 @@ export default function InventoryTurnoverPage() {
       render: (r) => <span className="text-emerald-700">{formatCurrency(r.currentValue)}</span>,
     },
     {
-      key: "periodCogs", header: "COGS الفترة", sortable: true,
+      key: "periodCogs", header: "تكلفة البضاعة المباعة", sortable: true,
       render: (r) => <span className="text-orange-700">{formatCurrency(r.periodCogs)}</span>,
     },
     {

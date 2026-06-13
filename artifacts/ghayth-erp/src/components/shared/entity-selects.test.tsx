@@ -1,0 +1,127 @@
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import { useState } from "react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+// jsdom lacks the pointer-capture + scroll + ResizeObserver APIs that
+// Radix/cmdk call when the listbox opens — same shims as product-select.
+beforeAll(() => {
+  const proto = Element.prototype as any;
+  proto.hasPointerCapture ??= () => false;
+  proto.setPointerCapture ??= () => {};
+  proto.releasePointerCapture ??= () => {};
+  proto.scrollIntoView ??= () => {};
+  (globalThis as any).ResizeObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
+// #2134 fixture — the preloaded window (think: first 500 clients by name)
+// does NOT contain the target client; only the server-side search returns it.
+const BASE_CLIENTS = [
+  { id: 1, name: "أحمد التجريبي", phone: "0500000001" },
+  { id: 2, name: "بدر التجريبي", phone: "0500000002" },
+];
+const SEARCH_ONLY_CLIENT = { id: 777, name: "زبون خارج النافذة", phone: "0500000777" };
+
+const mutateSpy = vi.fn();
+
+vi.mock("@/lib/api", () => ({
+  useApiQuery: (key: string[], path: string | null, options?: any) => {
+    const enabled = !(options && options.enabled === false) && !!path;
+    if (String(key[0]).endsWith("-search")) {
+      // server-search companion query — only answers when active and the
+      // request actually carries the typed term.
+      if (enabled && /[?&]search=/.test(String(path))) {
+        return { data: { data: [SEARCH_ONLY_CLIENT] }, refetch: vi.fn() };
+      }
+      return { data: undefined, refetch: vi.fn() };
+    }
+    return { data: { data: BASE_CLIENTS }, refetch: vi.fn() };
+  },
+  useApiMutation: () => ({ mutate: mutateSpy, isPending: false }),
+}));
+
+import { ClientSelect, mergeEntityOptions } from "./entity-selects";
+
+function Harness() {
+  const [clientId, setClientId] = useState("");
+  return (
+    <div>
+      <ClientSelect value={clientId} onChange={setClientId} label="العميل" />
+      <div data-testid="selected">{clientId}</div>
+    </div>
+  );
+}
+
+const hasText = (needle: string) => (content: string) => content.includes(needle);
+
+describe("mergeEntityOptions (#2134)", () => {
+  it("dedupes by value with created-first priority", () => {
+    const merged = mergeEntityOptions(
+      [{ value: "9", label: "جديد" }],
+      [{ value: "1", label: "قديم" }, { value: "9", label: "نسخة قائمة" }],
+      [{ value: "1", label: "نسخة بحث" }, { value: "5", label: "نتيجة بحث" }],
+    );
+    expect(merged.map((o) => o.value)).toEqual(["9", "1", "5"]);
+    expect(merged[0].label).toBe("جديد"); // the created entry wins the duplicate
+  });
+
+  it("ignores empty values", () => {
+    expect(mergeEntityOptions([], [{ value: "", label: "x" }], [])).toEqual([]);
+  });
+});
+
+describe("ClientSelect (#2134)", () => {
+  it("shows the preloaded window's clients", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("combobox"));
+    expect(await screen.findByText(hasText("أحمد التجريبي"))).toBeInTheDocument();
+  });
+
+  it("finds a client OUTSIDE the preloaded window via server-side search and selects it", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.click(screen.getByRole("combobox"));
+
+    // not in the preloaded list before typing
+    expect(screen.queryByText(hasText("زبون خارج النافذة"))).not.toBeInTheDocument();
+
+    // typing (≥2 chars, after the 250ms debounce) triggers the &search= query
+    await user.type(screen.getByPlaceholderText("ابحث عن عميل..."), "زبون");
+    expect(await screen.findByText(hasText("زبون خارج النافذة"), undefined, { timeout: 2000 })).toBeInTheDocument();
+
+    await user.click(screen.getByText(hasText("زبون خارج النافذة")));
+    expect(screen.getByTestId("selected")).toHaveTextContent("777");
+  });
+
+  it("quick-create strips empty optional fields and the new client appears + is selected immediately", async () => {
+    const user = userEvent.setup();
+    mutateSpy.mockImplementation((_payload: any, opts: any) => {
+      opts?.onSuccess?.({ id: 901, name: "عميل لحظي", phone: null, email: null });
+    });
+    render(<Harness />);
+
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByText(hasText("+ عميل جديد")));
+
+    await user.type(await screen.findByPlaceholderText("اسم العميل"), "عميل لحظي");
+    await user.click(screen.getByRole("button", { name: "إنشاء" }));
+
+    // payload: only the typed field — phone/email left blank are OMITTED,
+    // not sent as "" (the "" used to 422 on the backend email validator).
+    const payload = mutateSpy.mock.calls.at(-1)?.[0];
+    expect(payload).toEqual({ name: "عميل لحظي" });
+
+    // selected instantly (before any refetch): the form holds the id AND the
+    // trigger button already renders the new client's label; reopening the
+    // dropdown lists it too (trigger + option ⇒ ≥ 2 matches).
+    expect(screen.getByTestId("selected")).toHaveTextContent("901");
+    await user.click(screen.getByRole("combobox"));
+    const matches = await screen.findAllByText(hasText("عميل لحظي"));
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+});

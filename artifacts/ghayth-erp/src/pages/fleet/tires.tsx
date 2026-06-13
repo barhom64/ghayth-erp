@@ -227,7 +227,7 @@ export default function TiresPage() {
                 }
               }}
             >
-              {createMut.isPending ? "جارٍ الحفظ..." : "حفظ"}
+              {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
             </Button>
             <Button variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
           </div>

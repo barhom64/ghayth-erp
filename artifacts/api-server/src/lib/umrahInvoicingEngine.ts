@@ -5,6 +5,36 @@ import { NotFoundError, ConflictError, ValidationError } from "./errorHandler.js
 import { logger } from "./logger.js";
 import { getProvider as getEInvoiceProvider } from "./einvoice/index.js";
 import { resolveRevenueAccount } from "./revenueAccountResolver.js";
+import { resolveSettings } from "./settings.js";
+
+// U-11 — Client-linkage policy. The values mirror the catalog field
+// `umrah.auto_link.clientLinkagePolicy`. The default kicks in whenever
+// the company has not explicitly chosen — see
+// docs/governance/umrah-inventory-organization-repair/findings/
+// U-11_agent_client_linkage_audit.md for the policy rationale.
+const KNOWN_CLIENT_LINKAGE_POLICIES = [
+  "operational_until_linked",
+  "sub_agent_client_required",
+  "main_agent_client",
+  "operator_confirmed_on_import",
+] as const;
+type ClientLinkagePolicy = (typeof KNOWN_CLIENT_LINKAGE_POLICIES)[number];
+
+async function resolveClientLinkagePolicy(
+  companyId: number,
+): Promise<ClientLinkagePolicy> {
+  const raw = await resolveSettings(
+    "umrah.auto_link.clientLinkagePolicy",
+    companyId,
+  );
+  if (
+    typeof raw === "string" &&
+    (KNOWN_CLIENT_LINKAGE_POLICIES as readonly string[]).includes(raw)
+  ) {
+    return raw as ClientLinkagePolicy;
+  }
+  return "operational_until_linked";
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -86,7 +116,34 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     [subAgentId, scope.companyId]
   );
   if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
-  if (!subAgent.clientId) throw new ConflictError("الوكيل الفرعي غير مربوط بعميل — يرجى ربطه أولاً", { field: "clientId" });
+  // U-11 — policy-aware block. The gate itself is unchanged: a sub-
+  // agent without `clientId` is NEVER invoiced. Only the error message
+  // varies per policy so the operator gets a hint that matches the
+  // company's declared stance. `main_agent_client` is deliberately
+  // routed to the same hard block today — the agent-side fallback
+  // needs a migration on `umrah_agents.clientId` (U-11 audit §4) which
+  // is out of scope for this PR.
+  if (!subAgent.clientId) {
+    const policy = await resolveClientLinkagePolicy(scope.companyId);
+    let message: string;
+    switch (policy) {
+      case "main_agent_client":
+        message =
+          "السياسة الحالية (main_agent_client) تتطلب ربط الوكيل الرئيسي بعميل، وهذه القناة لم تُفعَّل بعد (تحتاج migration مستقلة). الحلّ الفوري: اربط الوكيل الفرعي بعميل صريح عبر PUT /umrah/sub-agents/:id/link.";
+        break;
+      case "sub_agent_client_required":
+        message =
+          "السياسة تتطلب ربط الوكيل الفرعي بعميل صريح قبل إصدار الفاتورة. استخدم PUT /umrah/sub-agents/:id/link.";
+        break;
+      case "operator_confirmed_on_import":
+      case "operational_until_linked":
+      default:
+        message =
+          "الوكيل الفرعي تشغيلي ولم يُربط بعميل بعد. اربطه عبر PUT /umrah/sub-agents/:id/link قبل إصدار الفاتورة.";
+        break;
+    }
+    throw new ConflictError(message, { field: "clientId" });
+  }
 
   // Was N+1: correlated MIN("arrivalDate") per group over umrah_pilgrims.
   // For batch invoicing 20-50 groups that's 20-50 lookups against the

@@ -27,9 +27,9 @@ class CRMEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode, vatCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "sales_revenue", "credit", "4100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1131"),
+      financialEngine.resolveAccountCode(ctx.companyId, "sales_revenue", "credit", "4111"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
     ]);
 
     const lines = [

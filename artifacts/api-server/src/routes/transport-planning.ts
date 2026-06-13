@@ -47,7 +47,11 @@ import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
-import { suggestAssignments, suggestForLeg } from "../lib/fleet/assignmentSuggestionEngine.js";
+import {
+  suggestAssignments,
+  suggestForLeg,
+  suggestForItinerary,
+} from "../lib/fleet/assignmentSuggestionEngine.js";
 import { diagnoseEmptySuggest } from "../lib/fleet/suggestDiagnostics.js";
 
 export const transportPlanningRouter = Router();
@@ -591,6 +595,48 @@ const updateLegSchema = createLegSchema.partial().extend({
   ]).optional(),
 });
 
+// #2079 PE-05 — self-overlap guard.
+//
+// Refuses to accept a leg whose [scheduledStart, scheduledEnd] window
+// overlaps another leg in the SAME itinerary. The audit (file 20 §2
+// MULTI-02) flagged silent self-overlap as a latent itinerary bug:
+// the engine would later produce a contradictory plan.
+//
+// Skips when either bound is null (transit / rest legs with no
+// schedule). `excludeLegId` lets PATCH ignore the row being updated.
+async function assertLegDoesNotOverlap(args: {
+  companyId: number;
+  itineraryId: number;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  excludeLegId?: number;
+}): Promise<void> {
+  if (!args.scheduledStart || !args.scheduledEnd) return;
+  const rows = await rawQuery<{ legNumber: number }>(
+    `SELECT "legNumber" FROM transport_itinerary_legs
+      WHERE "companyId" = $1
+        AND "itineraryId" = $2
+        AND ($5::int IS NULL OR id <> $5)
+        AND "scheduledStart" IS NOT NULL
+        AND "scheduledEnd" IS NOT NULL
+        AND tstzrange("scheduledStart", "scheduledEnd", '[)')
+            && tstzrange($3::timestamptz, $4::timestamptz, '[)')
+      LIMIT 1`,
+    [
+      args.companyId,
+      args.itineraryId,
+      args.scheduledStart,
+      args.scheduledEnd,
+      args.excludeLegId ?? null,
+    ],
+  );
+  if (rows.length > 0) {
+    throw new ValidationError(
+      `تتعارض نافذة هذه المرحلة زمنيًّا مع المرحلة ${rows[0].legNumber} في نفس البرنامج`,
+    );
+  }
+}
+
 transportPlanningRouter.post(
   "/transport/itineraries/:id/legs",
   authorize({ feature: "fleet.bookings", action: "create" }),
@@ -607,6 +653,14 @@ transportPlanningRouter.post(
         [itineraryId, scope.companyId],
       );
       if (!itin) throw new NotFoundError("البرنامج غير موجود");
+
+      // #2079 PE-05 — block self-overlap before INSERT.
+      await assertLegDoesNotOverlap({
+        companyId: scope.companyId,
+        itineraryId,
+        scheduledStart: b.scheduledStart ?? null,
+        scheduledEnd:   b.scheduledEnd   ?? null,
+      });
 
       const { insertId } = await rawExecute(
         `INSERT INTO transport_itinerary_legs
@@ -652,6 +706,32 @@ transportPlanningRouter.patch(
       const itineraryId = parseId(req.params.id, "id");
       const legId = parseId(req.params.legId, "legId");
       const b = zodParse(updateLegSchema.safeParse(req.body));
+
+      // #2079 PE-05 — block self-overlap on PATCH. When the operator
+      // moves a leg's window, we honour the NEW value for the row
+      // being updated (PATCH semantics: omitted fields keep DB value)
+      // and exclude the row itself from the overlap probe.
+      if (b.scheduledStart !== undefined || b.scheduledEnd !== undefined) {
+        const [current] = await rawQuery<{
+          scheduledStart: string | null;
+          scheduledEnd: string | null;
+        }>(
+          `SELECT "scheduledStart", "scheduledEnd"
+             FROM transport_itinerary_legs
+            WHERE id = $1 AND "itineraryId" = $2 AND "companyId" = $3`,
+          [legId, itineraryId, scope.companyId],
+        );
+        if (current) {
+          await assertLegDoesNotOverlap({
+            companyId: scope.companyId,
+            itineraryId,
+            scheduledStart: b.scheduledStart !== undefined ? (b.scheduledStart ?? null) : current.scheduledStart,
+            scheduledEnd:   b.scheduledEnd   !== undefined ? (b.scheduledEnd   ?? null) : current.scheduledEnd,
+            excludeLegId: legId,
+          });
+        }
+      }
+
       const sets: string[] = [];
       const params: unknown[] = [];
       let p = 1;
@@ -741,6 +821,44 @@ transportPlanningRouter.post(
       res.json({ data: candidates });
     } catch (err) {
       handleRouteError(err, res, "Suggest assignment for leg error:");
+    }
+  },
+);
+
+// #2079 PE-05 — itinerary-aware suggest.
+//
+// Walks the itinerary's legs in legNumber order and runs the engine
+// on each. The previous leg's top (vehicle, driver) pair is threaded
+// forward so the same crew naturally ranks first on the next leg
+// (continuity bonus +10). The full hard-guard chain (Operating
+// Window → VCM → Vehicle Readiness → Driver Readiness) still runs
+// on every leg — continuity NEVER bypasses an ejection.
+const itinerarySuggestSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+transportPlanningRouter.post(
+  "/transport/itineraries/:id/suggest",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const itineraryId = parseId(req.params.id, "id");
+      const b = zodParse(itinerarySuggestSchema.safeParse(req.body ?? {}));
+      const [itin] = await rawQuery<{ id: number }>(
+        `SELECT id FROM transport_itineraries
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [itineraryId, scope.companyId],
+      );
+      if (!itin) throw new NotFoundError("البرنامج غير موجود");
+      const legs = await suggestForItinerary(
+        scope.companyId,
+        itineraryId,
+        { limit: b.limit },
+      );
+      res.json({ data: legs });
+    } catch (err) {
+      handleRouteError(err, res, "Itinerary suggest error:");
     }
   },
 );
