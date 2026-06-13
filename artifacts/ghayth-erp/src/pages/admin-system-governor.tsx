@@ -533,7 +533,7 @@ export default function AdminSystemGovernor() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setStopOpen(false)}>إلغاء</Button>
             <Button onClick={submitNewStop} disabled={createStopMut.isPending}>
-              {createStopMut.isPending ? "جارٍ التفعيل..." : "تفعيل الإيقاف"}
+              {createStopMut.isPending ? "جاري التفعيل..." : "تفعيل الإيقاف"}
             </Button>
           </DialogFooter>
         </DialogContent>

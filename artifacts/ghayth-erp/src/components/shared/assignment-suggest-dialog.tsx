@@ -433,7 +433,7 @@ export function AssignmentSuggestDialog({
                     disabled={creating}
                     rateLimitAware
                   >
-                    {creating ? "جارٍ الإنشاء…" :
+                    {creating ? "جاري الإنشاء…" :
                      c.blockers.length > 0 ? "اعتمد رغم العوائق" :
                      effectiveAutoCreate && effectiveSource.kind === "leg" ? "اعتمد + إسناد المرحلة" :
                      effectiveAutoCreate ? "اعتمد + أنشئ أمر التوزيع" :
@@ -448,7 +448,7 @@ export function AssignmentSuggestDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>إغلاق</Button>
           <Button onClick={run} disabled={loading} rateLimitAware>
-            {loading ? "جارٍ الحساب…" : "إعادة الحساب"}
+            {loading ? "جاري الحساب…" : "إعادة الحساب"}
           </Button>
         </DialogFooter>
       </DialogContent>

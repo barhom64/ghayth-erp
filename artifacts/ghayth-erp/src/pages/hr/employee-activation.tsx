@@ -355,7 +355,7 @@ export default function EmployeeActivationPage() {
               onClick={(e) => { e.preventDefault(); confirmActivate(); }}
               disabled={lifecyclePending}
             >
-              {lifecyclePending ? "جارٍ التنفيذ..." : cfg?.confirmLabel}
+              {lifecyclePending ? "جاري التنفيذ..." : cfg?.confirmLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

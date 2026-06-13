@@ -54,6 +54,17 @@ import {
   type DriverDrivingMinutes,
   type LeaveOverlap,
 } from "./driverReadiness.js";
+import {
+  checkOperatingWindow,
+  dailyOperatingMinutes,
+  utilizationScore,
+  type OperatingWindowSettings,
+} from "./operatingWindow.js";
+import {
+  scoreUmrahFamiliarity,
+  type UmrahFamiliarityHistory,
+} from "./umrahFamiliarity.js";
+import { evaluateLadder } from "./vehicleClassLadder.js";
 
 export interface SuggestionRequest {
   companyId: number;
@@ -85,6 +96,12 @@ export interface SuggestionResult {
     license: number;
     distance: number;
     agreement: number;
+    /** #2079 PE-04 — trailing-7-day utilisation balancing axis.
+     *  Scoring only, never a blocker. */
+    utilization: number;
+    /** #2079 PE-06 — umrah-familiarity bonus axis.
+     *  Active ONLY for passenger_umrah bookings; 0 otherwise. */
+    umrahFamiliarity: number;
   };
   /** Arabic explanation strings — direct user-facing. */
   reasons: string[];
@@ -116,6 +133,10 @@ interface BookingRow {
   toLat: number | null;
   toLng: number | null;
   priority: number;
+  // #2079 PE-06 — needed by the umrah-familiarity scorer ONLY when
+  // transportServiceType === 'passenger_umrah'. Both nullable.
+  customerId: number | null;
+  umrahGroupId: number | null;
 }
 
 /** #1812 — internal criteria shared between booking-based and
@@ -138,6 +159,19 @@ export interface SuggestionCriteria {
   fromLat: number | null;
   fromLng: number | null;
   limit?: number;
+  /** #2079 PE-05 — continuity bonus.
+   *  When the engine is invoked as part of an itinerary walk, the
+   *  caller threads through the (vehicle, driver) pair that won the
+   *  PREVIOUS leg. The matching pair in THIS leg's results receives
+   *  a +10 score bonus (capped at 100) so the same crew gets ranked
+   *  to the top of the chain — keeps a multi-leg umrah / cargo
+   *  itinerary on one team unless a hard guard ejects them. */
+  continuityPair?: { vehicleId: number; driverId: number } | null;
+  /** #2079 PE-06 — umrah-familiarity context. Both nullable. The
+   *  scorer no-ops unless transportServiceType === 'passenger_umrah'
+   *  AND at least one of these is set. */
+  umrahGroupId?: number | null;
+  customerId?: number | null;
 }
 
 interface VehicleRow {
@@ -217,23 +251,17 @@ const CLASS_EQUIVALENCES: Record<string, string[]> = {
   pickup:    ["pickup", "van"],
 };
 
-// Higher class (for upgrade detection).
-const UPGRADE_LADDER = [
-  "compact", "sedan", "suv", "crossover",
-  "van", "minivan", "pickup",
-  "bus_22", "bus_29", "bus_45", "bus_50",
-  "truck", "trailer",
-];
-
 function classesAreEquivalent(a: string, b: string): boolean {
   return a === b || (CLASS_EQUIVALENCES[a] ?? []).includes(b);
 }
 
-function isUpgrade(from: string, to: string): boolean {
-  const fi = UPGRADE_LADDER.indexOf(from);
-  const ti = UPGRADE_LADDER.indexOf(to);
-  return fi >= 0 && ti >= 0 && ti > fi;
-}
+// #2079 PE-07 — the legacy monolithic UPGRADE_LADDER + isUpgrade()
+// helper were removed; their cross-family mistakes (sedan→truck
+// "upgrade" on a passenger booking) are now caught by the per-family
+// `evaluateLadder` helper in vehicleClassLadder.ts. The ladders live
+// there: PASSENGER_LADDER and CARGO_LADDER, with EQUIPMENT_LADDER for
+// completeness. The owner's rule («أي ladder عام مشترك ممنوع») is
+// enforced structurally — there is no single mixed list anymore.
 
 // ── Public API ───────────────────────────────────────────────────────
 
@@ -258,7 +286,9 @@ export async function suggestAssignments(
             fl."longitude" AS "fromLng",
             tl."latitude"  AS "toLat",
             tl."longitude" AS "toLng",
-            b.priority
+            b.priority,
+            b."customerId",
+            b."umrahGroupId"
        FROM transport_bookings b
             LEFT JOIN transport_locations fl ON fl.id = b."fromLocationId" AND fl."companyId" = b."companyId"
             LEFT JOIN transport_locations tl ON tl.id = b."toLocationId"   AND tl."companyId" = b."companyId"
@@ -287,6 +317,10 @@ export async function suggestAssignments(
     fromLat: booking.fromLat,
     fromLng: booking.fromLng,
     limit: req.limit,
+    // #2079 PE-06 — thread the umrah context through. The criteria
+    // wrapper does NOT touch these unless the scorer activates.
+    umrahGroupId: booking.umrahGroupId,
+    customerId:   booking.customerId,
   });
 }
 
@@ -354,6 +388,136 @@ export async function suggestForLeg(
     fromLng: leg.fromLng,
     limit: options?.limit,
   });
+}
+
+/**
+ * #2079 PE-05 — itinerary-aware walker.
+ *
+ * Owner's mandate (file 20 §13): «الـmulti-leg ليس استثناء — هذا
+ * تشغيل يومي... يبني فوق LEG canon وسلسلة الحراس الحالية».
+ *
+ * Walks the itinerary's legs in `legNumber` order and runs the
+ * shared engine on each one, threading the previous leg's top
+ * (vehicleId, driverId) pair forward as `continuityPair`. The
+ * matching pair in the next leg's results gets +10 (capped at 100)
+ * so the same crew naturally rises to the top of the chain —
+ * unless one of the hard guards (VCM / readiness / window / rest)
+ * ejects them at that leg, in which case the engine simply
+ * recommends a fresh pair without forcing continuity.
+ *
+ * This function does NOT mutate the legs. It only reads.
+ *
+ * Returns one entry per leg in legNumber order, each carrying:
+ *   - legId / legNumber  (for the UI to render the chain)
+ *   - candidates         (the engine's normal SuggestionResult[])
+ *   - skipped:string|null (null → engine ran; non-null → reason
+ *                         the engine wasn't run for this leg, e.g.
+ *                         missing time window or transit-only leg)
+ */
+export interface ItineraryLegSuggestion {
+  legId: number;
+  legNumber: number;
+  legType: string;
+  candidates: SuggestionResult[];
+  skipped: string | null;
+}
+
+export async function suggestForItinerary(
+  companyId: number,
+  itineraryId: number,
+  options?: { limit?: number },
+): Promise<ItineraryLegSuggestion[]> {
+  const legs = await rawQuery<{
+    id: number;
+    legNumber: number;
+    legType: string;
+    transportServiceType: string;
+    requiredVehicleClass: string | null;
+    scheduledStart: string | null;
+    scheduledEnd: string | null;
+    pickupWindowStart: string | null;
+    pickupWindowEnd: string | null;
+    fromLat: number | null;
+    fromLng: number | null;
+  }>(
+    `SELECT l.id, l."legNumber", l."legType",
+            i."transportServiceType",
+            l."requiredVehicleClass",
+            l."scheduledStart", l."scheduledEnd",
+            l."pickupWindowStart", l."pickupWindowEnd",
+            fl."latitude"  AS "fromLat",
+            fl."longitude" AS "fromLng"
+       FROM transport_itinerary_legs l
+            JOIN transport_itineraries i
+              ON i.id = l."itineraryId" AND i."companyId" = l."companyId"
+            LEFT JOIN transport_locations fl
+              ON fl.id = l."originLocationId" AND fl."companyId" = l."companyId"
+      WHERE l."itineraryId" = $1 AND l."companyId" = $2
+      ORDER BY l."legNumber" ASC`,
+    [itineraryId, companyId],
+  );
+  if (legs.length === 0) return [];
+
+  const out: ItineraryLegSuggestion[] = [];
+  let lastTopPair: { vehicleId: number; driverId: number } | null = null;
+
+  for (const leg of legs) {
+    const start = leg.scheduledStart ?? leg.pickupWindowStart;
+    const end   = leg.scheduledEnd   ?? leg.pickupWindowEnd;
+
+    // Transit / rest / fuel / inspection legs without a time window
+    // are routinely book-keeping rows the operator carries in the
+    // itinerary for visibility (e.g. "30-min rest at Madinah gate").
+    // Don't run the engine on them — they have no candidate concept.
+    if (!start || !end) {
+      out.push({
+        legId: leg.id,
+        legNumber: leg.legNumber,
+        legType: leg.legType,
+        candidates: [],
+        skipped: "لا توجد نافذة زمنية لهذه المرحلة",
+      });
+      continue;
+    }
+
+    const candidates = await suggestForCriteria({
+      companyId,
+      branchId: null,
+      scheduledStartAt: start,
+      scheduledEndAt: end,
+      transportServiceType: leg.transportServiceType,
+      passengerCount: null,
+      cargoWeight: null,
+      requestedVehicleClass: leg.requiredVehicleClass,
+      vehicleSubstitutionPolicy: "equivalent_allowed",
+      allowUpgrade: false,
+      requiredExactVehicleId: null,
+      requiredExactDriverId: null,
+      fromLat: leg.fromLat,
+      fromLng: leg.fromLng,
+      limit: options?.limit,
+      continuityPair: lastTopPair,
+    });
+
+    out.push({
+      legId: leg.id,
+      legNumber: leg.legNumber,
+      legType: leg.legType,
+      candidates,
+      skipped: null,
+    });
+
+    // Thread the new top pair forward. Only consider candidates
+    // with score > 0 (those without hard blockers). If this leg
+    // produced no clean candidate the chain breaks cleanly — the
+    // next leg starts without a continuity bias.
+    const top = candidates.find((r) => r.score > 0);
+    lastTopPair = top
+      ? { vehicleId: top.vehicleId, driverId: top.driverId }
+      : null;
+  }
+
+  return out;
 }
 
 /** The actual engine: load candidates + score against criteria. */
@@ -539,6 +703,52 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     });
   }
 
+  // 4e) #2079 PE-06 — umrah familiarity history.
+  //
+  // ONLY runs when this suggest call is for a passenger_umrah booking
+  // AND we have at least one matching key (umrahGroupId or customerId).
+  // For every driver, counts completed dispatch trips in the trailing
+  // 90 days against (a) the same umrahGroupId and (b) the same
+  // customerId. Single SQL — independent of the candidate count.
+  const umrahHistory: UmrahFamiliarityHistory = new Map();
+  if (
+    c.transportServiceType === "passenger_umrah" &&
+    (c.umrahGroupId != null || c.customerId != null)
+  ) {
+    const familiarityRows = await rawQuery<{
+      driverId: number;
+      groupTrips: string;
+      customerTrips: string;
+    }>(
+      `SELECT d."driverId",
+              COUNT(*) FILTER (
+                WHERE $3::int IS NOT NULL AND b."umrahGroupId" = $3
+              )::int AS "groupTrips",
+              COUNT(*) FILTER (
+                WHERE $4::int IS NOT NULL AND b."customerId" = $4
+              )::int AS "customerTrips"
+         FROM transport_dispatch_orders d
+              JOIN transport_booking_lines  l ON l.id = d."bookingLineId"
+              JOIN transport_bookings       b ON b.id = l."bookingId"
+        WHERE d."companyId" = $1
+          AND d.status NOT IN ('declined', 'cancelled')
+          AND d."scheduledStartAt" >= $2::timestamptz - INTERVAL '90 days'
+          AND d."scheduledStartAt" <  $2::timestamptz
+          AND (
+            ($3::int IS NOT NULL AND b."umrahGroupId" = $3)
+         OR ($4::int IS NOT NULL AND b."customerId"   = $4)
+          )
+        GROUP BY d."driverId"`,
+      [req.companyId, start, c.umrahGroupId ?? null, c.customerId ?? null],
+    );
+    for (const r of familiarityRows) {
+      umrahHistory.set(r.driverId, {
+        groupTrips:    Number(r.groupTrips)    || 0,
+        customerTrips: Number(r.customerTrips) || 0,
+      });
+    }
+  }
+
   // 5) Settings (for the manual maps haversine baseline).
   const settings = await loadPlanningSettings(req.companyId);
 
@@ -547,12 +757,20 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
   // (13h / day, 60h / week). One row per company, so this is a fast
   // PK lookup. Falling back to industry defaults when the row is
   // missing keeps the suggest path resilient on fresh tenants.
+  // #2079 PE-04 — the same row also carries the operating window
+  // (migration 330): nullable TIME bounds + 7-bit days mask.
   const [capsRow] = await rawQuery<{
     dailyMinutes: number;
     weeklyMinutes: number;
+    operatingStartTime: string | null;
+    operatingEndTime: string | null;
+    operatingDaysMask: number | null;
   }>(
     `SELECT "defaultMaxDailyDrivingMinutes"  AS "dailyMinutes",
-            "defaultMaxWeeklyDrivingMinutes" AS "weeklyMinutes"
+            "defaultMaxWeeklyDrivingMinutes" AS "weeklyMinutes",
+            "operatingStartTime",
+            "operatingEndTime",
+            "operatingDaysMask"
        FROM transport_planning_settings
       WHERE "companyId" = $1`,
     [req.companyId],
@@ -561,6 +779,24 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     dailyMinutes:  capsRow?.dailyMinutes  ?? 780,
     weeklyMinutes: capsRow?.weeklyMinutes ?? 3600,
   };
+  const operatingWindow: OperatingWindowSettings | null = capsRow
+    ? {
+        operatingStartTime: capsRow.operatingStartTime,
+        operatingEndTime:   capsRow.operatingEndTime,
+        operatingDaysMask:  capsRow.operatingDaysMask,
+      }
+    : null;
+
+  // #2079 PE-04 — HARD operating-window guard. The trip START must
+  // fall inside the company's configured transport operating hours
+  // (Asia/Riyadh wall-clock). Outside → no candidates at all; the
+  // route layer's diagnoseEmptySuggest then surfaces the same Arabic
+  // reason to the operator. NULL configuration skips the gate.
+  const windowVerdict = checkOperatingWindow(start, operatingWindow);
+  if (windowVerdict.blocked) {
+    return [];
+  }
+
   // Estimated trip duration in minutes. Used for the projected sum
   // against the caps — chaining a 5h trip onto a driver who has
   // already done 9h triggers the daily ejection.
@@ -570,6 +806,30 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       (new Date(end).getTime() - new Date(start).getTime()) / 60_000,
     ),
   );
+
+  // #2079 PE-04 — trailing 7-day booked minutes per vehicle. ONE
+  // grouped query; feeds the utilization SCORING axis (never blocks)
+  // + the predictedUtilisation field the interface promised since
+  // #1812 but never computed (audit file 20 §0).
+  const vehicleMinutesRows = await rawQuery<{ vehicleId: number; minutes: string }>(
+    `SELECT "vehicleId",
+            COALESCE(SUM(
+              EXTRACT(EPOCH FROM ("scheduledEndAt" - "scheduledStartAt")) / 60
+            ), 0)::int AS minutes
+       FROM transport_dispatch_orders
+      WHERE "companyId" = $1
+        AND status NOT IN ('declined', 'cancelled')
+        AND "scheduledStartAt" >= $2::timestamptz - INTERVAL '7 days'
+        AND "scheduledStartAt" <  $2::timestamptz
+      GROUP BY "vehicleId"`,
+    [req.companyId, start],
+  );
+  const bookedMinutesByVehicleId = new Map<number, number>();
+  for (const r of vehicleMinutesRows) {
+    bookedMinutesByVehicleId.set(r.vehicleId, Number(r.minutes) || 0);
+  }
+  // Denominator honours the configured window (UTIL-02), else 12h/day.
+  const weeklyOperatingMinutes = dailyOperatingMinutes(operatingWindow) * 7;
 
   // 6) Score every (vehicle, driver) pair.
   const results: SuggestionResult[] = [];
@@ -777,6 +1037,18 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       }
 
       // ─ agreement (weight 10) ─────────────────────────────────────
+      //
+      // #2079 PE-07 — ladder evaluation is now per-family. The legacy
+      // monolithic UPGRADE_LADDER was happy to call sedan→truck an
+      // "upgrade" on a passenger booking; the per-family helper
+      // (`vehicleClassLadder.evaluateLadder`) refuses such jumps with
+      // an explicit cross-family blocker, while still rewarding real
+      // within-family upgrades when the customer's policy permits.
+      //
+      // This is a REINFORCEMENT, not a replacement of VCM. The VCM
+      // gate already removes cross-family vehicles upstream; PE-07
+      // ensures the scorer never accidentally rewards one if VCM
+      // missed it (e.g. an over-broad vehicleServiceTypes list).
       let agreementScore = 80;
       if (booking.requestedVehicleClass && v.vehicleType) {
         if (v.vehicleType === booking.requestedVehicleClass) {
@@ -791,30 +1063,104 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           } else {
             reasons.push("المركبة تنتمي لفئة مكافئة للفئة المطلوبة");
           }
-        } else if (isUpgrade(booking.requestedVehicleClass, v.vehicleType)) {
-          if (booking.allowUpgrade || booking.vehicleSubstitutionPolicy === "upgrade_allowed") {
-            agreementScore = 70;
-            reasons.push("ترقية مسموحة على فئة المركبة");
-          } else {
-            agreementScore = 20;
-            blockers.push("اتفاق العميل لا يسمح بترقية فئة المركبة");
-          }
         } else {
-          agreementScore = 15;
-          blockers.push(`فئة المركبة (${v.vehicleType}) لا تطابق الفئة المطلوبة (${booking.requestedVehicleClass})`);
+          const ladder = evaluateLadder(
+            booking.requestedVehicleClass,
+            v.vehicleType,
+            tripFamily,
+          );
+          if (ladder.crossesFamily) {
+            agreementScore = 0;
+            blockers.push(ladder.reason!);
+          } else if (ladder.isUpgrade) {
+            if (booking.allowUpgrade || booking.vehicleSubstitutionPolicy === "upgrade_allowed") {
+              agreementScore = 70;
+              reasons.push(ladder.reason!);
+            } else {
+              agreementScore = 20;
+              blockers.push("اتفاق العميل لا يسمح بترقية فئة المركبة");
+            }
+          } else {
+            agreementScore = 15;
+            blockers.push(`فئة المركبة (${v.vehicleType}) لا تطابق الفئة المطلوبة (${booking.requestedVehicleClass})`);
+          }
         }
       }
 
-      // ─ Aggregate ─────────────────────────────────────────────────
-      const finalScore = Math.round(
-        capacityScore     * 0.20 +
-        availabilityScore * 0.10 +
-        conflictScore     * 0.25 +
-        restScore         * 0.15 +
-        licenseScore      * 0.10 +
-        distanceScore     * 0.10 +
-        agreementScore    * 0.10,
+      // ─ utilization (weight 5, scoring only — NEVER blocks) ───────
+      // #2079 PE-04. Trailing-7-day booked minutes against the
+      // operating-window-aware denominator. Owner's rule: balancing
+      // factor, not a gate — a 100%-busy vehicle still appears, just
+      // ranked below an equivalent idle one.
+      const bookedMinutes = bookedMinutesByVehicleId.get(v.id) ?? 0;
+      const utilisationPct = weeklyOperatingMinutes > 0
+        ? (bookedMinutes / weeklyOperatingMinutes) * 100
+        : 0;
+      const utilScore = utilizationScore(utilisationPct);
+      if (utilisationPct > 80) {
+        reasons.push(
+          `استخدام المركبة مرتفع (${Math.round(utilisationPct)}٪ آخر 7 أيام) — يُفضَّل توزيع الحمل`,
+        );
+      }
+      const predictedUtilisation = Math.round(
+        weeklyOperatingMinutes > 0
+          ? ((bookedMinutes + tripDurationMinutes) / weeklyOperatingMinutes) * 100
+          : 0,
       );
+
+      // ─ umrahFamiliarity (weight 2.5, scoring only) ───────────────
+      // #2079 PE-06. Active ONLY for passenger_umrah bookings. The
+      // pure scorer guards the trigger itself; the bonus reaches 100
+      // when the driver has ≥3 trips for this group (+15 → 15 * 1.0
+      // weight inside the axis, equivalent to ~0.375 on the final
+      // score after re-weighting).
+      let umrahFamiliarityScore = 0;
+      const fam = scoreUmrahFamiliarity({
+        transportServiceType: booking.transportServiceType,
+        driverId: d.id,
+        umrahGroupId: c.umrahGroupId ?? null,
+        customerId:   c.customerId   ?? null,
+        history: umrahHistory,
+      });
+      if (fam.bonus > 0) {
+        // Project the 0..15 bonus onto a 0..100 axis so the weighted
+        // sum stays consistent with the other axes (each axis is
+        // 0..100 then multiplied by its weight).
+        umrahFamiliarityScore = Math.min(100, Math.round((fam.bonus / 15) * 100));
+        if (fam.reason) reasons.push(fam.reason);
+      }
+
+      // ─ Aggregate ─────────────────────────────────────────────────
+      // PE-06: weights re-balanced one more time — distance 0.05 →
+      // 0.025, the freed 0.025 funds the new umrahFamiliarity axis.
+      // utilization stays at 0.05. Total still 1.00.
+      const finalScore = Math.round(
+        capacityScore        * 0.20 +
+        availabilityScore    * 0.10 +
+        conflictScore        * 0.25 +
+        restScore            * 0.15 +
+        licenseScore         * 0.10 +
+        distanceScore        * 0.025 +
+        agreementScore       * 0.10 +
+        utilScore            * 0.05 +
+        umrahFamiliarityScore * 0.025,
+      );
+
+      // #2079 PE-05 — continuity bonus. Only applies when the caller
+      // is walking an itinerary (suggestForItinerary threads the
+      // previous leg's top pair via `continuityPair`). The bonus is
+      // capped so a candidate with hard blockers still stays at 0
+      // and the score never exceeds 100.
+      let continuityBonus = 0;
+      if (
+        c.continuityPair &&
+        c.continuityPair.vehicleId === v.id &&
+        c.continuityPair.driverId === d.id &&
+        blockers.length === 0
+      ) {
+        continuityBonus = 10;
+        reasons.push("استمرار نفس الطاقم من المرحلة السابقة");
+      }
 
       // Drop candidates with HARD blockers UNLESS the dispatcher
       // explicitly asks for "include with overrides". For now we
@@ -826,7 +1172,9 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
         vehicleType: v.vehicleType,
         driverId: d.id,
         driverName: d.name,
-        score: blockers.length > 0 ? 0 : finalScore,
+        score: blockers.length > 0
+          ? 0
+          : Math.min(100, finalScore + continuityBonus),
         scores: {
           capacity: capacityScore,
           availability: availabilityScore,
@@ -835,10 +1183,13 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           license: licenseScore,
           distance: distanceScore,
           agreement: agreementScore,
+          utilization: utilScore,
+          umrahFamiliarity: umrahFamiliarityScore,
         },
         reasons,
         blockers,
         estimatedDistanceKm,
+        predictedUtilisation,
       });
     }
   }

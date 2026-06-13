@@ -423,7 +423,7 @@ export default function PrintTemplatesPage() {
           </div>
 
           {isLoading ? (
-            <div className="text-sm text-muted-foreground p-4">جارٍ التحميل…</div>
+            <div className="text-sm text-muted-foreground p-4">جاري التحميل…</div>
           ) : filtered.length === 0 ? (
             <div className="text-sm text-muted-foreground p-4 text-center">
               لا توجد قوالب بعد. أنشئ قالباً جديداً للبدء.
@@ -1096,7 +1096,7 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <Eye className="h-4 w-4" /> المعاينة
-              {previewLoading && <span className="text-xs text-muted-foreground">(جارٍ التحديث…)</span>}
+              {previewLoading && <span className="text-xs text-muted-foreground">(جاري التحديث…)</span>}
             </CardTitle>
             <div className="flex items-center gap-2">
               <label className="text-xs flex items-center gap-1 cursor-pointer">
@@ -1117,14 +1117,14 @@ function TemplateEditor({ templateId, templates, branches, entities, onClose }: 
             {previewHtml ? (
               <iframe
                 srcDoc={previewHtml}
-                title="preview"
+                title="معاينة"
                 className="w-full border rounded bg-white"
                 style={{ minHeight: 600 }}
               />
             ) : (
               <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded">
                 {previewLoading
-                  ? "جارٍ توليد المعاينة الأولى…"
+                  ? "جاري توليد المعاينة الأولى…"
                   : "ستظهر المعاينة هنا بمجرد ما تبدأ التعديل (المعاينة المباشرة مُفعّلة)."}
               </div>
             )}

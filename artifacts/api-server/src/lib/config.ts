@@ -197,6 +197,11 @@ const EnvSchema = z.object({
   EJAR_CLIENT_SECRET: optStr(),
   EJAR_LANDLORD_NID: optStr(),
   EJAR_TEST_MODE: optStr(),
+  /** Reader mode for the read-side adapter (ejarContractReader.ts).
+   *  Accepted values: 'mock' (default, deterministic fixtures) or
+   *  'real' (calls the real Ejar read endpoint — not yet wired,
+   *  throws by design until that lands). */
+  EJAR_READER_MODE: optStr(),
 
   // -- N16 Sadad (SAMA bill payment) --------------------------------------
   SADAD_API_BASE: optStr(),
@@ -392,6 +397,7 @@ export interface AppConfig {
     readonly clientSecret: string | undefined;
     readonly landlordNid: string | undefined;
     readonly testMode: boolean;
+    readonly readerMode: "mock" | "real";
   };
 
   readonly sadad: {
@@ -584,6 +590,7 @@ function buildConfig(env: RawEnv): AppConfig {
       clientSecret: env.EJAR_CLIENT_SECRET,
       landlordNid: env.EJAR_LANDLORD_NID,
       testMode: env.EJAR_TEST_MODE === "1",
+      readerMode: (env.EJAR_READER_MODE ?? "mock").toLowerCase() === "real" ? "real" : "mock",
     },
 
     sadad: {

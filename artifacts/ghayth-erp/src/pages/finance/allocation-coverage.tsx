@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -163,7 +163,7 @@ export default function AllocationCoveragePage() {
   }, [rows]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <div>Error</div>;
+  if (isError) return <ErrorState />;
 
   const total = rows.length;
   const overallCoverage = statusBuckets.find((s) => s.status === "resolved")?.pct ?? 0;

@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { STATUSES } from "@/lib/constants";
 import {
   PageShell,
   DataTable,
@@ -396,7 +397,7 @@ function DunningHistoryTab() {
       key: "status",
       header: "الحالة",
       render: (r) => (
-        <Badge variant={r.status === "sent" ? "default" : "outline"}>{r.status}</Badge>
+        <Badge variant={r.status === "sent" ? "default" : "outline"}>{STATUSES[r.status] ?? r.status}</Badge>
       ),
     },
   ];

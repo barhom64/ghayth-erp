@@ -114,7 +114,7 @@ export default function NuskInvoicesSummaryReport() {
   return (
     <PageShell
       title="تقرير فواتير نُسك (ملخص)"
-      subtitle="KPIs + حالة الترحيل لـ AP + تفصيل حسب الحالة / الشهر / الوكيل"
+      subtitle="مؤشرات إجمالية + حالة الترحيل للذمم الدائنة + تفصيل حسب الحالة / الشهر / الوكيل"
       breadcrumbs={[
         { href: "/umrah", label: "إدارة العمرة" },
         { href: "/umrah/reports", label: "التقارير" },
