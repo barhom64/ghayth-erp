@@ -532,6 +532,11 @@ export interface JournalEntryLine {
   /** Free-form dimension bag for future allocation rules that don't
    *  warrant a dedicated column yet. */
   dimensionJson?: Record<string, unknown>;
+  /** Optional FK to analytic_accounts (Issue #2197).
+   *  Carries operational context (party/season/branch/employee/…) for
+   *  reporting drill-down. NOT a posting target — the debit/credit always
+   *  goes to a chart_of_accounts row (allowPosting=true). */
+  analyticAccountId?: number | null;
 }
 
 export async function createJournalEntry(params: {
@@ -707,14 +712,16 @@ export async function createJournalEntry(params: {
           "activityType","templateId",
           "productId","clientId","vendorId","driverId",
           "costCenterId","unitId","assetId","umrahSeasonId","umrahAgentId",
-          "sourceLineTable","sourceLineId","dimensionJson","branchId"
+          "sourceLineTable","sourceLineId","dimensionJson","branchId",
+          "analyticAccountId"
          ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,
           $8,$9,$10,$11,$12,$13,
           $14,$15,
           $16,$17,$18,$19,
           $20,$21,$22,$23,$24,
-          $25,$26,$27,$28
+          $25,$26,$27,$28,
+          $29
          )`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
@@ -728,6 +735,7 @@ export async function createJournalEntry(params: {
           line.sourceLineTable ?? null, line.sourceLineId ?? null,
           line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
           lineBranchId,
+          line.analyticAccountId ?? null,
         ]
       );
     }
@@ -1584,18 +1592,19 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     }
   }
 
-  // 3. Last resort — fallbackCode provided but doesn't exist / not postable.
-  // Return it so the downstream createJournalEntry / preflightAccountCodes
-  // can surface a focused "account not found / not postable" ValidationError.
-  // We log a warning here so the audit trail captures the miss.
-  if (fallbackCode) {
-    logger.warn(
-      `[resolveByIntent] operationType="${operationType}" company=${companyId}: ` +
-      `fallback "${fallbackCode}" not found or not postable, and no intent match. ` +
-      `Downstream validation will reject the journal entry with a clear config error.`
-    );
-  }
-  return fallbackCode;
+  // 3. Neither the fallback nor intent search found a postable account.
+  // Throw immediately with a clear config error rather than returning an
+  // unverified code that would travel silently through the system and
+  // produce a cryptic failure at the DB level much later.
+  throw new ValidationError(
+    `لا يمكن تحديد حساب قابل للترحيل للعملية "${operationType}"` +
+    (fallbackCode ? ` (الكود الافتراضي "${fallbackCode}" غير موجود أو غير قابل للترحيل)` : "") +
+    `. أضف ربطاً في إعدادات المحاسبة → ربط الحسابات.`,
+    {
+      field: "accountCode",
+      fix: `افتح إعدادات المحاسبة → ربط الحسابات وأضف إعداداً للعملية "${operationType}" يشير إلى حساب فرعي (تفصيلي) يقبل الحركة`,
+    }
+  );
 }
 
 /**
@@ -1708,6 +1717,12 @@ export async function getAccountCodeFromMapping(
        VALUES ($1,0,'mapping_fallback','accounting_mappings',0,$2)`,
       [companyId, JSON.stringify({ operationType, side, fallbackCode })]
     ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
+    // resolveByIntent already throws if it cannot find a postable account,
+    // so reaching here means it returned the fallback — which means it DID
+    // find it postable (step 1 in resolveByIntent). Return it.
+    // NOTE: the only way we reach this line is if resolveByIntent returned
+    // the same fallbackCode it was given — i.e. it found it postable in step 1
+    // but there was no explicit mapping. That is a valid "configured fallback" path.
     return fallbackCode;
   }
 
