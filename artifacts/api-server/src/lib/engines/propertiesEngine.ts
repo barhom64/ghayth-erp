@@ -257,6 +257,165 @@ class PropertiesEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * postSaleGL — property disposal at sale.
+   *
+   * The fourth Properties activity branch (#1999). Removes the building
+   * asset from the books at its CARRYING VALUE (book value — credit to
+   * the asset account), debits the buyer's receivable for the full
+   * sale price (gross — including VAT when commercial), and recognises
+   * the realised gain or loss as the delta between net sale price and
+   * book value. Mirrors the rent VAT split (#PR-4) for commercial
+   * sales: VAT is its own CR to vat_output, and the gain calc uses
+   * NET (post-VAT) sale price, never the gross — otherwise the
+   * realised gain would be inflated by the tax the company is
+   * collecting on ZATCA's behalf.
+   *
+   * Every account code resolves through `resolveAccountCode`, so an
+   * operator's `accounting_mappings` row beats the engine's
+   * fallback. The literal codes here (1130 receivable, 1520 asset,
+   * 4910 gain, 6910 loss, 2200 VAT) are last-resort defaults only.
+   *
+   * Bookkeeping invariants enforced by this method:
+   *   - Exactly one of gain or loss appears, never both (a break-even
+   *     sale emits two lines, no realised gain/loss).
+   *   - SUM(debit) === SUM(credit) for every shape.
+   *   - propertyId + clientId(buyer) tagged on every line so the
+   *     per-property P&L and per-buyer A/R drill through.
+   *
+   * Idempotency: `guardTable=property_sales` + `guardId=sale.id` so a
+   * double-call surfaces a unique-violation rather than two journal
+   * entries against the same sale.
+   */
+  async postSaleGL(
+    ctx: PropertyGLContext,
+    sale: {
+      /** Identifies the sale row that owns this posting. Used as
+       *  sourceId, guardId, and inside sourceKey. */
+      id: number;
+      /** property_buildings.id — the asset coming off the books. */
+      propertyId: number;
+      /** clients.id of the buyer. Carried on every line for per-
+       *  buyer drilldown; nullable for cash sales with no recorded
+       *  buyer entity. */
+      buyerId: number | null;
+      /** Full price the buyer pays — GROSS, including any VAT. */
+      salePrice: number;
+      /** Carrying value of the asset on the books at the moment of
+       *  sale. For now the engine takes this as-is from the caller
+       *  (the route reads it off property_buildings); when
+       *  depreciation tracking arrives the caller will compute NBV
+       *  before passing it. */
+      bookValue: number;
+      /** Optional VAT amount when the sale is taxable (commercial
+       *  property under ZATCA). The caller computes it the same way
+       *  the rent route does (`getCompanyVatRate` * net) — the
+       *  engine just takes the number. */
+      vatAmount?: number;
+      saleDate: string;
+    },
+  ) {
+    const vatAmount = sale.vatAmount ?? 0;
+    // The realised gain/loss is measured against NET sale price, not
+    // gross. The VAT portion is owed to ZATCA, not earned.
+    const netSalePrice = sale.salePrice - vatAmount;
+    const gainOrLoss = netSalePrice - sale.bookValue;
+    const hasGain = gainOrLoss > 0;
+    const hasLoss = gainOrLoss < 0;
+    const hasVat = vatAmount > 0;
+
+    // Resolve every code in parallel — including the gain AND loss
+    // codes even when only one is used, because doing so unlocks
+    // operator overrides for both directions in one round-trip and
+    // means a future regression that swaps gain/loss can't bypass
+    // the mappings seam.
+    const [
+      receivableCode,
+      assetCode,
+      gainCode,
+      lossCode,
+      vatCode,
+    ] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_receivable", "debit", "1130"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_gain", "credit", "4910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_loss", "debit", "6910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+    ]);
+
+    const lineDims = {
+      propertyId: sale.propertyId,
+      clientId: sale.buyerId ?? undefined,
+    };
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: receivableCode,
+        debit: sale.salePrice,
+        credit: 0,
+        description: `بيع عقار — مستحق على المشتري`,
+        ...lineDims,
+      },
+      {
+        accountCode: assetCode,
+        debit: 0,
+        credit: sale.bookValue,
+        description: `استبعاد أصل عقاري بالقيمة الدفترية`,
+        ...lineDims,
+      },
+    ];
+
+    if (hasVat) {
+      lines.push({
+        accountCode: vatCode,
+        debit: 0,
+        credit: vatAmount,
+        description: `ضريبة القيمة المضافة — بيع عقار`,
+        ...lineDims,
+      });
+    }
+
+    if (hasGain) {
+      lines.push({
+        accountCode: gainCode,
+        debit: 0,
+        credit: gainOrLoss,
+        description: `مكسب بيع أصل عقاري`,
+        ...lineDims,
+      });
+    } else if (hasLoss) {
+      lines.push({
+        accountCode: lossCode,
+        debit: -gainOrLoss, // positive magnitude
+        credit: 0,
+        description: `خسارة بيع أصل عقاري`,
+        ...lineDims,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-SALE-${sale.id}`,
+      description: `بيع عقار #${sale.propertyId} بتاريخ ${sale.saleDate}`,
+      type: "general",
+      sourceType: "property_sales",
+      sourceId: sale.id,
+      sourceKey: `property:sale:${sale.id}`,
+      guardTable: "property_sales",
+      guardId: sale.id,
+      lines,
+    });
+  }
+
   async postInstallmentPaymentGL(
     ctx: PropertyGLContext,
     payment: {
