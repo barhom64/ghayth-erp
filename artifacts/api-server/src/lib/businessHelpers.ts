@@ -1584,9 +1584,73 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     }
   }
 
-  // 3. Last resort — return the (missing) fallback and let the caller surface
-  // a clear ValidationError. Better than picking a random account.
+  // 3. Last resort — fallbackCode provided but doesn't exist / not postable.
+  // Return it so the downstream createJournalEntry / preflightAccountCodes
+  // can surface a focused "account not found / not postable" ValidationError.
+  // We log a warning here so the audit trail captures the miss.
+  if (fallbackCode) {
+    logger.warn(
+      `[resolveByIntent] operationType="${operationType}" company=${companyId}: ` +
+      `fallback "${fallbackCode}" not found or not postable, and no intent match. ` +
+      `Downstream validation will reject the journal entry with a clear config error.`
+    );
+  }
   return fallbackCode;
+}
+
+/**
+ * Verify that a resolved account code is postable in the given company.
+ * Throws a descriptive ValidationError when:
+ *   - the code is empty / blank (missing mapping / fallback)
+ *   - the account does not exist in the company's chart
+ *   - the account is a grouping / summary account (allowPosting=false)
+ *   - the account is inactive
+ *
+ * Call this immediately after resolveAccountCode / getAccountCodeFromMapping
+ * before building journal lines — it is the single centralised choke-point
+ * that prevents ANY non-postable account from ever reaching the GL engine,
+ * regardless of the path (UI, API, mapping, fallback, import, seed).
+ */
+export async function assertPostableAccount(
+  companyId: number,
+  code: string,
+  context: { operationType?: string; side?: string; field?: string } = {}
+): Promise<void> {
+  if (!code || !code.trim()) {
+    const hint = context.operationType
+      ? `لم يُعثر على حساب مرتبط بالعملية "${context.operationType}" (${context.side ?? ""}). أضف ربطاً في إعدادات المحاسبة.`
+      : "لم يُحدَّد رقم الحساب.";
+    throw new ValidationError(hint, {
+      field: context.field ?? "accountCode",
+      fix: "افتح إعدادات المحاسبة → ربط الحسابات وأضف الإعداد الناقص",
+    });
+  }
+  const [acc] = await rawQuery<{ allowPosting: boolean; isActive: boolean; name: string }>(
+    `SELECT "allowPosting", "isActive", name FROM chart_of_accounts
+     WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [companyId, code]
+  );
+  if (!acc) {
+    throw new ValidationError(
+      `الحساب "${code}" غير موجود في شجرة الحسابات` +
+      (context.operationType ? ` (العملية: ${context.operationType})` : ""),
+      { field: context.field ?? "accountCode", fix: "تأكد من وجود الحساب في شجرة الحسابات أو أضف إعداد ربط صحيح" }
+    );
+  }
+  if (!acc.allowPosting) {
+    throw new ValidationError(
+      `الحساب "${code}" (${acc.name}) حساب تجميعي/رئيسي لا يقبل الترحيل المباشر` +
+      (context.operationType ? ` — العملية: ${context.operationType}` : "") +
+      ". استخدم حساباً فرعياً تفصيلياً أو أضف ربطاً صحيحاً في إعدادات المحاسبة.",
+      { field: context.field ?? "accountCode", fix: "اختر حساباً فرعياً (تفصيلياً) يقبل الحركة أو أصلح ربط الحسابات" }
+    );
+  }
+  if (!acc.isActive) {
+    throw new ValidationError(
+      `الحساب "${code}" (${acc.name}) معطّل — لا يمكن الترحيل عليه`,
+      { field: context.field ?? "accountCode", fix: "فعّل الحساب أو اختر حساباً نشطاً" }
+    );
+  }
 }
 
 export async function getAccountCodeFromMapping(
@@ -1600,7 +1664,9 @@ export async function getAccountCodeFromMapping(
             da.code AS "debitCode", ca.code AS "creditCode"
      FROM accounting_mappings am
      LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
+       AND da."allowPosting" = true AND da."deletedAt" IS NULL
      LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
+       AND ca."allowPosting" = true AND ca."deletedAt" IS NULL
      WHERE am."companyId" = $1 AND am."operationType" = $2 AND am."isActive" = true
      LIMIT 1`,
     [companyId, operationType]
