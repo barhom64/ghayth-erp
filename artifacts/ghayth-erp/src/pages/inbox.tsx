@@ -1,26 +1,36 @@
 /**
- * /inbox — employee-facing unified inbox.
+ * /inbox — conversation-first unified inbox (#2138 slice 2).
  *
- * What the previous /communications page was missing: actual ability
- * for an employee to:
- *   - compose a new email / WhatsApp / SMS from the UI (Compose button)
- *   - reply to a conversation thread inline
- *   - browse calls + see their AI summaries
- *   - manually log a phone call made from a personal mobile
+ * Slice 2 converts this page from the computed-thread model (grouped on
+ * the fly by channel+address via GET /inbox/threads) to the persisted
+ * Conversation Canon (#2154):
  *
- * Layout:
- *   - Left rail: list of conversation threads grouped by recipient,
- *     filterable by channel
- *   - Right pane: selected thread's full history + reply box
- *   - Compose button (top right) opens a dialog that sends through
- *     the same DLP-aware backend
+ *   - conversation list  ← GET  /inbox/conversations
+ *   - thread + reply     ← GET  /inbox/conversations/:id
+ *                          POST /inbox/conversations/:id/messages
+ *   - context panel      ← conversation meta + conversation_links
+ *
+ * Three-column layout (the UX mandated by #2138 §2):
+ *   [قائمة المحادثات] [Thread الرسائل] [Context Panel]
+ *
+ * Every send still flows through the canon endpoint → sendMessage()
+ * (DLP / message_log / outbound_queue / audit / events). The legacy
+ * /inbox/threads endpoints are NOT touched — they stay serving as the
+ * compatibility surface per the slice-2 mandate.
+ *
+ * Existing features preserved: compose dialog, drafts, calls tab,
+ * manual call logging, signatures, snooze (thread-keyed adapter on the
+ * conversation's channel+address). The legacy message-folder sidebar
+ * (starred/archive/trash/spam) is superseded by conversation status
+ * (open / awaiting_reply / closed / escalated) — the folder endpoints
+ * remain untouched server-side.
  */
 import { useState, useEffect, useRef } from "react";
 import { PageShell } from "@workspace/ui-core";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { PageStatusBadge } from "@workspace/ui-core";
+import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,56 +48,90 @@ import {
   Mail, MessageSquare, Phone, Send, Plus, RefreshCw,
   ArrowDownLeft, ArrowUpRight, AlertOctagon, Sparkles,
   PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed,
-  Inbox as InboxIcon, FileEdit, Star, Archive, Trash2, AlertTriangle,
+  FileEdit, AlertTriangle, Link2, User, Lock, Unlock, Trash2,
   Save, PenSquare, Settings, Clock, BellOff,
 } from "lucide-react";
 
-type Folder = "inbox" | "sent" | "drafts" | "starred" | "archive" | "trash" | "spam";
-
-const FOLDER_META: Record<Folder, { icon: typeof InboxIcon; label: string }> = {
-  inbox:    { icon: InboxIcon,     label: "الوارد" },
-  sent:     { icon: Send,          label: "المرسلة" },
-  drafts:   { icon: FileEdit,      label: "المسودّات" },
-  starred:  { icon: Star,          label: "بنجمة" },
-  archive:  { icon: Archive,       label: "الأرشيف" },
-  trash:    { icon: Trash2,        label: "المحذوفة" },
-  spam:     { icon: AlertTriangle, label: "السبام" },
-};
-
 type Channel = "email" | "whatsapp" | "sms";
 
-interface ThreadRow {
+type ConversationStatus = "open" | "awaiting_reply" | "closed" | "escalated";
+
+const STATUS_LABELS: Record<ConversationStatus, string> = {
+  open: "مفتوحة",
+  awaiting_reply: "بانتظار رد",
+  closed: "مغلقة",
+  escalated: "مصعدة",
+};
+
+const PRIORITY_LABELS: Record<string, { label: string; tone: string }> = {
+  low:    { label: "منخفضة", tone: "text-muted-foreground border-muted" },
+  high:   { label: "عالية",  tone: "text-orange-700 border-orange-200 bg-orange-50" },
+  urgent: { label: "عاجلة",  tone: "text-status-error-foreground border-status-error-surface bg-status-error-surface/40" },
+};
+
+/** Arabic labels for conversation_links relatedType — mirrors the
+ *  backend LINKABLE_ENTITIES contract (routes/inboxConversations.ts). */
+const LINK_TYPE_LABELS: Record<string, string> = {
+  clients: "عميل",
+  suppliers: "مورد",
+  employees: "موظف",
+  invoices: "فاتورة",
+  legal_cases: "قضية",
+  legal_contracts: "عقد",
+  projects: "مشروع",
+  support_tickets: "تذكرة دعم",
+  fleet_vehicles: "مركبة",
+  fleet_trips: "رحلة",
+  transport_bookings: "حجز نقل",
+  hr_leave_requests: "طلب إجازة",
+};
+
+interface ConversationRow {
   id: number;
-  channel: Channel | "pbx";
-  direction: "inbound" | "outbound";
-  peer: string;
-  fromNumber: string | null;
-  toNumber: string | null;
-  subject: string | null;
-  body_preview: string;
-  status: string;
-  folder: Folder | string;
-  isStarred: boolean;
-  relatedType: string | null;
-  relatedId: number | null;
+  channelPrimary: string;
+  title: string | null;
+  participantType: string | null;
+  participantId: number | null;
+  participantName: string | null;
+  participantAddress: string;
+  status: ConversationStatus;
+  priority: "low" | "normal" | "high" | "urgent";
+  assignedTo: number | null;
+  lastMessageAt: string | null;
+  slaStatus: string | null;
+  riskLevel: string | null;
+  lastMessagePreview: string | null;
+  lastDirection: "inbound" | "outbound" | null;
+  lastMessageStatus: string | null;
+  totalMessages: number;
+  unreadCount: number;
+}
+
+interface ConversationLinkRow {
+  id: number;
+  relatedType: string;
+  relatedId: number;
+  linkedBy: number | null;
   createdAt: string;
-  total_messages: number;
-  inbound_count: number;
-  unread_count: number;
 }
 
 interface MessageRow {
   id: number;
   channel: string;
   direction: "inbound" | "outbound";
-  fromNumber: string | null;
-  toNumber: string | null;
+  fromAddress: string | null;
+  toAddress: string | null;
   subject: string | null;
   body: string;
   status: string;
   createdAt: string;
   isRead?: boolean;
   readAt?: string | null;
+}
+
+interface ConversationDetail extends ConversationRow {
+  links: ConversationLinkRow[];
+  messages: MessageRow[];
 }
 
 interface CallRow {
@@ -111,6 +155,24 @@ interface SendResult {
   blocked: boolean;
   reason?: string;
   dlpMatches?: Array<{ rule: string; action: string }>;
+}
+
+/** DLP info distilled from either a 2xx body or a 422 ApiError whose
+ *  meta carries the block details (code DLP_BLOCKED). */
+interface DlpBlock {
+  reason: string;
+  rules: string[];
+}
+
+function dlpFromError(e: unknown): DlpBlock | null {
+  if (e instanceof ApiError && e.code === "DLP_BLOCKED") {
+    const meta = (e.meta ?? {}) as { reason?: string; dlpMatches?: Array<{ rule: string }> };
+    return {
+      reason: meta.reason ?? e.message,
+      rules: (meta.dlpMatches ?? []).map((m) => m.rule),
+    };
+  }
+  return null;
 }
 
 interface DraftRow {
@@ -142,28 +204,29 @@ const CHANNEL_META: Record<string, { icon: typeof Mail; label: string; color: st
   whatsapp: { icon: MessageSquare, label: "واتساب",  color: "text-emerald-600 bg-emerald-50" },
   sms:      { icon: MessageSquare, label: "رسالة",  color: "text-sky-600 bg-sky-50" },
   pbx:      { icon: Phone,         label: "مكالمة", color: "text-orange-600 bg-orange-50" },
+  in_app:   { icon: MessageSquare, label: "نظام",   color: "text-slate-600 bg-slate-50" },
+  internal: { icon: MessageSquare, label: "داخلي",  color: "text-slate-600 bg-slate-50" },
+  push:     { icon: MessageSquare, label: "إشعار",  color: "text-slate-600 bg-slate-50" },
 };
 
+const SENDABLE_CHANNELS = new Set(["email", "whatsapp", "sms"]);
+
 export default function Inbox() {
-  const [tab, setTab] = useState<"all" | Channel | "calls">("all");
-  const [folder, setFolder] = useState<Folder>("inbox");
+  const [tab, setTab] = useState<"all" | Channel | "calls" | "drafts">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ConversationStatus>("all");
   const [composeOpen, setComposeOpen] = useState(false);
   const [callLogOpen, setCallLogOpen] = useState(false);
   const [signaturesOpen, setSignaturesOpen] = useState(false);
-  const [activeThread, setActiveThread] = useState<{ channel: Channel; address: string } | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [editingDraft, setEditingDraft] = useState<DraftRow | null>(null);
 
-  // Build the threads URL with channel + folder filters. The drafts
-  // folder reads from /inbox/drafts not /inbox/threads, so we branch
-  // the query path entirely.
-  const isDraftsFolder = folder === "drafts";
+  const isDraftsTab = tab === "drafts";
   const isCallsTab = tab === "calls";
 
   // Entity filter — when the page is opened via /inbox?clientId=N (or
-  // ?supplierId / ?employeeId), narrow threads to that entity. Powers the
-  // "عرض كل المراسلات" link on client/supplier/employee detail pages so
-  // the inbox shows only their thread without forcing the operator to
-  // hunt with the search box.
+  // ?supplierId / ?employeeId), narrow conversations to the ones linked
+  // to that entity through conversation_links. Powers the
+  // "عرض كل المراسلات" link on entity detail pages.
   const entityFilter = (() => {
     if (typeof window === "undefined") return null;
     const sp = new URLSearchParams(window.location.search);
@@ -179,67 +242,54 @@ export default function Inbox() {
     return null;
   })();
 
-  const threadsParams: string[] = [];
-  if (tab !== "all" && tab !== "calls") threadsParams.push(`channel=${tab}`);
-  if (folder !== "inbox") threadsParams.push(`folder=${folder}`);
-  if (entityFilter) {
-    threadsParams.push(`relatedType=${entityFilter.relatedType}`);
-    threadsParams.push(`relatedId=${entityFilter.relatedId}`);
-  }
-  const threadsQs = threadsParams.length ? `?${threadsParams.join("&")}` : "";
+  // Free-text search rides the same canon list endpoint (?q=) — no
+  // separate search surface needed for conversations.
+  const [searchTerm, setSearchTerm] = useState("");
+  const trimmedSearch = searchTerm.trim();
 
-  const { data: threadsResp, isLoading, refetch: refetchThreads } = useApiQuery<{ data: ThreadRow[] }>(
-    ["inbox-threads", tab, folder, entityFilter?.relatedType ?? "", String(entityFilter?.relatedId ?? "")],
-    `/inbox/threads${threadsQs}`,
-    { enabled: !isCallsTab && !isDraftsFolder },
+  const listParams: string[] = [];
+  if (tab !== "all" && tab !== "calls" && tab !== "drafts") listParams.push(`channel=${tab}`);
+  if (statusFilter !== "all") listParams.push(`status=${statusFilter}`);
+  if (trimmedSearch.length >= 2) listParams.push(`q=${encodeURIComponent(trimmedSearch)}`);
+  if (entityFilter) {
+    listParams.push(`relatedType=${entityFilter.relatedType}`);
+    listParams.push(`relatedId=${entityFilter.relatedId}`);
+  }
+  const listQs = listParams.length ? `?${listParams.join("&")}` : "";
+
+  const {
+    data: conversationsResp,
+    isLoading,
+    isError: listFailed,
+    refetch: refetchConversations,
+  } = useApiQuery<{ data: ConversationRow[] }>(
+    [
+      "inbox-conversations", tab, statusFilter, trimmedSearch,
+      entityFilter?.relatedType ?? "", String(entityFilter?.relatedId ?? ""),
+    ],
+    `/inbox/conversations${listQs}`,
+    { enabled: !isCallsTab && !isDraftsTab },
   );
   const { data: draftsResp, refetch: refetchDrafts } = useApiQuery<{ data: DraftRow[] }>(
     ["inbox-drafts"],
     "/inbox/drafts",
-    { enabled: isDraftsFolder },
+    { enabled: isDraftsTab },
   );
   const { data: callsResp, refetch: refetchCalls } = useApiQuery<{ data: CallRow[] }>(
     ["inbox-calls"],
     "/inbox/calls",
     { enabled: isCallsTab },
   );
-  const { data: countsResp, refetch: refetchCounts } = useApiQuery<Record<Folder, number>>(
-    ["inbox-folder-counts"],
-    "/inbox/folder-counts",
-  );
 
-  // Free-text search across subject + body + addresses. Only enabled
-  // when the user has typed a 2+ char query; otherwise the regular
-  // threads listing renders.
-  const [searchTerm, setSearchTerm] = useState("");
-  const trimmedSearch = searchTerm.trim();
-  const isSearching = trimmedSearch.length >= 2;
-  const { data: searchHitsResp, isLoading: searchLoading } = useApiQuery<{
-    data: Array<{
-      id: number; channel: string; direction: "inbound" | "outbound";
-      fromNumber: string | null; toNumber: string | null;
-      subject: string | null; body_preview: string;
-      status: string; folder: string; isStarred: boolean;
-      relatedType: string | null; relatedId: number | null;
-      createdAt: string;
-    }>;
-  }>(
-    ["inbox-search", trimmedSearch, tab],
-    `/inbox/search?q=${encodeURIComponent(trimmedSearch)}${tab !== "all" && tab !== "calls" ? `&channel=${tab}` : ""}`,
-    { enabled: isSearching },
-  );
-  const searchHits = searchHitsResp?.data ?? [];
-
-  const threads = threadsResp?.data ?? [];
+  const conversations = conversationsResp?.data ?? [];
   const drafts = draftsResp?.data ?? [];
   const calls = callsResp?.data ?? [];
-  const counts = countsResp ?? { inbox: 0, sent: 0, drafts: 0, starred: 0, archive: 0, trash: 0, spam: 0 };
+  const activeConversation = conversations.find((c) => c.id === activeConversationId) ?? null;
 
   const refreshAll = () => {
-    void refetchThreads();
+    void refetchConversations();
     void refetchDrafts();
     void refetchCalls();
-    void refetchCounts();
   };
 
   const openCompose = () => { setEditingDraft(null); setComposeOpen(true); };
@@ -252,7 +302,7 @@ export default function Inbox() {
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "صندوقي الموحّد" },
       ]}
-      subtitle="بريد إلكتروني، واتساب، رسائل نصية، ومكالمات — كلها في مكان واحد، مع إمكانية الإرسال والرد"
+      subtitle="كل التواصل كمحادثات: بريد، واتساب، رسائل نصية، ومكالمات — طرف + محادثة + سياق"
       actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={refreshAll}>
@@ -270,119 +320,117 @@ export default function Inbox() {
         </div>
       }
     >
-      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_2fr] gap-4">
-        {/* Folder sidebar */}
-        <Card className="lg:row-span-2 h-fit">
-          <CardContent className="p-2 space-y-0.5">
-            {(["inbox","sent","drafts","starred","archive","trash","spam"] as Folder[]).map((f) => {
-              const meta = FOLDER_META[f];
-              const Icon = meta.icon;
-              const isActive = folder === f;
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => { setFolder(f); setActiveThread(null); }}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors",
-                    isActive
-                      ? "bg-status-info-surface text-status-info-foreground font-medium"
-                      : "hover:bg-surface-subtle",
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="flex-1 text-start">{meta.label}</span>
-                  {counts[f] > 0 && (
-                    <Badge variant="outline" className="text-[10px]">{counts[f]}</Badge>
-                  )}
-                </button>
-              );
-            })}
-          </CardContent>
-        </Card>
-
-        {/* Tabs (channel filter) — only relevant when browsing threads, not drafts/calls */}
-        <div className="lg:col-span-2 space-y-2">
-          {entityFilter && (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2">
-              <span className="text-xs text-indigo-800">
-                مفلتر بمراسلات هذا الكيان:{" "}
-                <span className="font-mono font-semibold">{entityFilter.relatedType}#{entityFilter.relatedId}</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => { if (typeof window !== "undefined") window.location.href = "/inbox"; }}
-                className="text-[11px] text-indigo-700 hover:underline"
-                data-testid="inbox-clear-entity-filter"
-              >
-                إلغاء الفلتر
-              </button>
-            </div>
-          )}
-          <Input
-            placeholder="ابحث في الرسائل (الموضوع، النص، العنوان...)"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="text-sm"
-            data-testid="inbox-search-input"
-          />
-          <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setActiveThread(null); }} className="space-y-4">
+      <div className="space-y-2">
+        {entityFilter && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2">
+            <span className="text-xs text-indigo-800">
+              مفلتر بمحادثات هذا الكيان:{" "}
+              <span className="font-mono font-semibold">{entityFilter.relatedType}#{entityFilter.relatedId}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => { if (typeof window !== "undefined") window.location.href = "/inbox"; }}
+              className="text-[11px] text-indigo-700 hover:underline"
+              data-testid="inbox-clear-entity-filter"
+            >
+              إلغاء الفلتر
+            </button>
+          </div>
+        )}
+        <div className="flex flex-col lg:flex-row gap-2 lg:items-center">
+          <Tabs value={tab} onValueChange={(v) => { setTab(v as typeof tab); setActiveConversationId(null); }}>
             <TabsList>
               <TabsTrigger value="all">الكل</TabsTrigger>
               <TabsTrigger value="email"><Mail className="w-4 h-4 me-1" />بريد</TabsTrigger>
               <TabsTrigger value="whatsapp"><MessageSquare className="w-4 h-4 me-1" />واتساب</TabsTrigger>
               <TabsTrigger value="sms"><MessageSquare className="w-4 h-4 me-1" />رسائل</TabsTrigger>
               <TabsTrigger value="calls"><Phone className="w-4 h-4 me-1" />مكالمات</TabsTrigger>
+              <TabsTrigger value="drafts"><FileEdit className="w-4 h-4 me-1" />مسودّات</TabsTrigger>
             </TabsList>
           </Tabs>
-        </div>
-
-        {/* Left content: search hits / thread list / draft list / call list */}
-        <div className={cn(activeThread && "hidden lg:block")}>
-          {isSearching ? (
-            <SearchHitsList hits={searchHits} isLoading={searchLoading} query={trimmedSearch} />
-          ) : isCallsTab ? (
-            <CallList calls={calls} />
-          ) : isDraftsFolder ? (
-            <DraftsList drafts={drafts} onOpen={openDraft} onChange={refreshAll} />
-          ) : (
-            <ThreadList
-              threads={threads}
-              isLoading={isLoading}
-              active={activeThread}
-              onSelect={(channel, address) => setActiveThread({ channel, address })}
-              onChange={refreshAll}
-            />
+          {!isCallsTab && !isDraftsTab && (
+            <>
+              <Input
+                placeholder="ابحث في المحادثات (العنوان، الطرف...)"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="text-sm lg:max-w-xs"
+                data-testid="inbox-search-input"
+              />
+              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); setActiveConversationId(null); }}>
+                <SelectTrigger className="w-[150px] text-sm" data-testid="inbox-status-filter">
+                  <SelectValue placeholder="الحالة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">كل الحالات</SelectItem>
+                  <SelectItem value="open">مفتوحة</SelectItem>
+                  <SelectItem value="awaiting_reply">بانتظار رد</SelectItem>
+                  <SelectItem value="closed">مغلقة</SelectItem>
+                  <SelectItem value="escalated">مصعدة</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
           )}
         </div>
 
-        {/* Right pane: detail / placeholder */}
-        <div>
-          {isCallsTab ? (
+        {isCallsTab ? (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4">
+            <CallList calls={calls} />
             <CallsHelp />
-          ) : activeThread ? (
-            <ThreadView
-              channel={activeThread.channel}
-              address={activeThread.address}
-              onBack={() => setActiveThread(null)}
-              onSent={refreshAll}
-            />
-          ) : isDraftsFolder ? (
+          </div>
+        ) : isDraftsTab ? (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4">
+            <DraftsList drafts={drafts} onOpen={openDraft} onChange={refreshAll} />
             <Card>
               <CardContent className="p-12 text-center text-sm text-muted-foreground">
                 <FileEdit className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
                 اختر مسودّة من القائمة لمتابعة تعديلها أو إرسالها.
               </CardContent>
             </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-12 text-center text-sm text-muted-foreground">
-                <MessageSquare className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
-                اختر محادثة من القائمة لقراءتها والرد عليها، أو ابدأ رسالة جديدة من زرّ "رسالة جديدة" بالأعلى.
-              </CardContent>
-            </Card>
-          )}
-        </div>
+          </div>
+        ) : (
+          // The conversation-first three columns (#2138 §2):
+          // قائمة المحادثات | Thread | Context Panel
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(260px,1fr)_2fr_minmax(220px,1fr)] gap-4">
+            <div className={cn(activeConversationId && "hidden lg:block")}>
+              <ConversationList
+                conversations={conversations}
+                isLoading={isLoading}
+                isError={listFailed}
+                activeId={activeConversationId}
+                onSelect={setActiveConversationId}
+                onRetry={() => void refetchConversations()}
+              />
+            </div>
+            {activeConversationId ? (
+              <ConversationThread
+                key={activeConversationId}
+                conversationId={activeConversationId}
+                onBack={() => setActiveConversationId(null)}
+                onChanged={refreshAll}
+              />
+            ) : (
+              <Card>
+                <CardContent className="p-12 text-center text-sm text-muted-foreground" data-testid="inbox-no-selection">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
+                  اختر محادثة من القائمة لقراءتها والرد عليها، أو ابدأ رسالة جديدة من زرّ "رسالة جديدة" بالأعلى.
+                </CardContent>
+              </Card>
+            )}
+            <div className="hidden lg:block">
+              {activeConversationId ? (
+                <ContextPanel conversationId={activeConversationId} onChanged={refreshAll} />
+              ) : (
+                <Card>
+                  <CardContent className="p-6 text-center text-xs text-muted-foreground">
+                    <Link2 className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+                    سياق المحادثة: الطرف، الحالة، والكيانات المرتبطة تظهر هنا عند اختيار محادثة.
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <ComposeDialog
@@ -404,258 +452,112 @@ export default function Inbox() {
   );
 }
 
-// ─────────────────────── Thread list ────────────────────────────────────
+// ─────────────────────── Conversation list (canon) ──────────────────────
 
-function ThreadList({ threads, isLoading, active, onSelect, onChange }: {
-  threads: ThreadRow[];
+function ConversationList({ conversations, isLoading, isError, activeId, onSelect, onRetry }: {
+  conversations: ConversationRow[];
   isLoading: boolean;
-  active: { channel: Channel; address: string } | null;
-  onSelect: (channel: Channel, address: string) => void;
-  onChange?: () => void;
+  isError: boolean;
+  activeId: number | null;
+  onSelect: (id: number) => void;
+  onRetry: () => void;
 }) {
-  const toggleStar = useMutation({
-    mutationFn: (id: number) => apiFetch(`/inbox/messages/${id}/star`, { method: "POST" }),
-    onSuccess: () => onChange?.(),
-  });
-  const moveTo = useMutation({
-    mutationFn: ({ id, folder }: { id: number; folder: string }) =>
-      apiFetch(`/inbox/messages/${id}/folder`, { method: "POST", body: JSON.stringify({ folder }) }),
-    onSuccess: () => { toast({ title: "تم النقل" }); onChange?.(); },
-  });
-  // Retry a failed outbound message — see /inbox/messages/:id/retry.
-  // The endpoint resets the queue row to status='pending' so the next
-  // worker tick picks it up. Most useful after fixing SMTP credentials
-  // or a recipient typo without rewriting the message.
-  const retryMut = useMutation({
-    mutationFn: (id: number) =>
-      apiFetch<{ status: string }>(`/inbox/messages/${id}/retry`, { method: "POST" }),
-    onSuccess: () => { toast({ title: "أُعيد إلى قائمة الإرسال" }); onChange?.(); },
-    onError: (e: Error) => toast({ title: "فشل إعادة المحاولة", description: e.message, variant: "destructive" }),
-  });
-  // Cancel a scheduled outbound message — backend enforces it must be
-  // a pending row with a future scheduledAt. Surfacing for any pending
-  // outbound row; if the user clicks on one that's actually immediate
-  // the backend returns 422 with a clear reason.
-  const cancelMut = useMutation({
-    mutationFn: (id: number) =>
-      apiFetch(`/inbox/messages/${id}/cancel`, { method: "POST" }),
-    onSuccess: () => { toast({ title: "تم إلغاء الإرسال المجدول" }); onChange?.(); },
-    onError: (e: Error) => toast({ title: "تعذّر الإلغاء", description: e.message, variant: "destructive" }),
-  });
-
-  // Bulk selection: selected message ids. Single round-trip move via
-  // /inbox/messages/bulk-folder so 50 threads → 1 request, not 50.
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const allOnPageSelected = threads.length > 0 && threads.every((t) => selected.has(t.id));
-  const toggleOne = (id: number) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const toggleAll = () =>
-    setSelected((prev) => {
-      if (threads.every((t) => prev.has(t.id))) {
-        const next = new Set(prev);
-        for (const t of threads) next.delete(t.id);
-        return next;
-      }
-      const next = new Set(prev);
-      for (const t of threads) next.add(t.id);
-      return next;
-    });
-  const bulkMove = useMutation({
-    mutationFn: (folder: string) =>
-      apiFetch<{ affected: number }>("/inbox/messages/bulk-folder", {
-        method: "POST",
-        body: JSON.stringify({ ids: Array.from(selected), folder }),
-      }),
-    onSuccess: (r) => {
-      toast({ title: `نُقلت ${r?.affected ?? "—"} رسالة` });
-      setSelected(new Set());
-      onChange?.();
-    },
-    onError: (e: Error) => toast({ title: "فشل النقل", description: e.message, variant: "destructive" }),
-  });
-
-  if (threads.length === 0 && !isLoading) {
+  if (isLoading) {
     return (
       <Card>
-        <CardContent className="p-6 text-center text-sm text-muted-foreground">
-          لا توجد محادثات في هذا المجلد.
+        <CardContent className="p-6 text-center text-sm text-muted-foreground" data-testid="inbox-list-loading">
+          جاري تحميل المحادثات...
+        </CardContent>
+      </Card>
+    );
+  }
+  if (isError) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-sm space-y-2" data-testid="inbox-list-error">
+          <AlertTriangle className="w-8 h-8 mx-auto text-status-error-foreground/60" />
+          <p className="text-status-error-foreground">تعذّر تحميل المحادثات.</p>
+          <Button variant="outline" size="sm" onClick={onRetry}>
+            <RefreshCw className="w-3.5 h-3.5 me-1" />أعد المحاولة
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  if (conversations.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-sm text-muted-foreground" data-testid="inbox-list-empty">
+          لا توجد محادثات مطابقة. جرّب تغيير الفلتر أو ابدأ "رسالة جديدة".
         </CardContent>
       </Card>
     );
   }
   return (
     <Card>
-      {(selected.size > 0 || threads.length > 0) && (
-        <div className="flex items-center justify-between gap-2 border-b px-3 py-2 bg-muted/30">
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={allOnPageSelected}
-              onChange={toggleAll}
-              className="cursor-pointer"
-              data-testid="inbox-bulk-toggle-all"
-              aria-label="تحديد الكل"
-            />
-            <span className="text-xs text-muted-foreground">
-              {selected.size > 0 ? `${selected.size} محدّدة` : "اختر للنقل الجماعي"}
-            </span>
-          </div>
-          {selected.size > 0 && (
-            <div className="flex items-center gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={bulkMove.isPending}
-                onClick={() => bulkMove.mutate("archive")}
-                title="أرشفة المحدّدة"
-              >
-                <Archive className="w-3.5 h-3.5 me-1" />
-                أرشفة
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={bulkMove.isPending}
-                onClick={() => bulkMove.mutate("trash")}
-                title="نقل للسلّة"
-              >
-                <Trash2 className="w-3.5 h-3.5 me-1 text-status-error-foreground" />
-                سلّة
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={bulkMove.isPending}
-                onClick={() => bulkMove.mutate("spam")}
-                title="رسائل سبام"
-              >
-                <AlertTriangle className="w-3.5 h-3.5 me-1 text-orange-600" />
-                سبام
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
       <CardContent className="p-0">
         <div className="divide-y">
-          {threads.map((t) => {
-            const meta = CHANNEL_META[t.channel] ?? CHANNEL_META.email;
+          {conversations.map((c) => {
+            const meta = CHANNEL_META[c.channelPrimary] ?? CHANNEL_META.email;
             const Icon = meta.icon;
-            const isActive = active?.channel === t.channel && active.address === t.peer;
-            const isChecked = selected.has(t.id);
-            const hasUnread = (t.unread_count ?? 0) > 0;
+            const isActive = activeId === c.id;
+            const hasUnread = (c.unreadCount ?? 0) > 0;
+            const priority = c.priority !== "normal" ? PRIORITY_LABELS[c.priority] : null;
             return (
-              <div
-                key={`${t.channel}-${t.peer}-${t.id}`}
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onSelect(c.id)}
+                data-testid={`conversation-row-${c.id}`}
                 className={cn(
-                  "p-3 hover:bg-surface-subtle/60 flex gap-2 items-start transition-colors group",
+                  "w-full p-3 hover:bg-surface-subtle/60 flex gap-2 items-start transition-colors text-start",
                   isActive && "bg-status-info-surface",
-                  isChecked && "bg-indigo-50/30",
                   hasUnread && !isActive && "bg-status-info-surface/30",
-                  t.channel === "pbx" && "opacity-60",
                 )}
               >
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={() => toggleOne(t.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="mt-2 shrink-0 cursor-pointer"
-                  aria-label="تحديد الرسالة"
-                />
                 <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", meta.color.split(" ")[1])}>
                   <Icon className={cn("w-4 h-4", meta.color.split(" ")[0])} />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => t.channel !== "pbx" && onSelect(t.channel as Channel, t.peer)}
-                  className="flex-1 min-w-0 text-start"
-                >
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className={cn("text-sm truncate", hasUnread ? "font-bold" : "font-medium")}>{t.peer}</span>
+                    <span className={cn("text-sm truncate", hasUnread ? "font-bold" : "font-medium")}>
+                      {c.participantName || c.participantAddress}
+                    </span>
                     <div className="flex items-center gap-1 shrink-0">
                       {hasUnread && (
-                        <Badge className="text-[10px] bg-primary text-primary-foreground">{t.unread_count} جديد</Badge>
+                        <Badge className="text-[10px] bg-primary text-primary-foreground">{c.unreadCount} جديد</Badge>
                       )}
-                      {t.inbound_count > 0 && (
-                        <Badge variant="outline" className="text-[10px]">{t.inbound_count} وارد</Badge>
+                      {priority && (
+                        <span className={cn("text-[9px] rounded border px-1.5 py-0.5 font-medium", priority.tone)}>
+                          {priority.label}
+                        </span>
                       )}
                     </div>
                   </div>
-                  {t.subject && (
-                    <p className={cn("text-xs truncate", hasUnread ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>{t.subject}</p>
+                  {c.title && (
+                    <p className={cn("text-xs truncate", hasUnread ? "font-semibold text-foreground" : "font-medium text-muted-foreground")}>{c.title}</p>
                   )}
-                  <p className="text-xs text-muted-foreground truncate">
-                    {t.direction === "outbound" ? "← " : "→ "}{t.body_preview}
-                  </p>
+                  {c.lastMessagePreview && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {c.lastDirection === "outbound" ? "← " : "→ "}{c.lastMessagePreview}
+                    </p>
+                  )}
                   <div className="flex items-center justify-between gap-1 mt-1">
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className="text-[10px] text-muted-foreground shrink-0">{formatDateAr(t.createdAt)}</span>
-                      {t.direction === "outbound" && t.status && <SendStatusBadge status={t.status} />}
+                      {c.lastMessageAt && (
+                        <span className="text-[10px] text-muted-foreground shrink-0">{formatDateAr(c.lastMessageAt)}</span>
+                      )}
+                      <PageStatusBadge status={c.status} minimal className="text-[9px]">
+                        {STATUS_LABELS[c.status] ?? c.status}
+                      </PageStatusBadge>
+                      {c.lastDirection === "outbound" && c.lastMessageStatus && (
+                        <SendStatusBadge status={c.lastMessageStatus} />
+                      )}
                     </div>
-                    <span className="text-[10px] text-muted-foreground shrink-0">{t.total_messages} رسالة</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{c.totalMessages} رسالة</span>
                   </div>
-                </button>
-                <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {t.direction === "outbound" && t.status === "failed" && (
-                    <button
-                      type="button"
-                      onClick={() => retryMut.mutate(t.id)}
-                      disabled={retryMut.isPending}
-                      className="p-1 hover:bg-status-success-surface/60 rounded"
-                      title="إعادة محاولة الإرسال"
-                      data-testid={`retry-${t.id}`}
-                    >
-                      <RefreshCw className={cn("w-3 h-3 text-status-success-foreground", retryMut.isPending && "animate-spin")} />
-                    </button>
-                  )}
-                  {t.direction === "outbound" && t.status === "pending" && (
-                    <button
-                      type="button"
-                      onClick={() => cancelMut.mutate(t.id)}
-                      disabled={cancelMut.isPending}
-                      className="p-1 hover:bg-status-error-surface rounded"
-                      title="إلغاء الإرسال المجدول"
-                      data-testid={`cancel-scheduled-${t.id}`}
-                    >
-                      <Trash2 className={cn("w-3 h-3 text-status-error-foreground", cancelMut.isPending && "opacity-50")} />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => toggleStar.mutate(t.id)}
-                    className="p-1 hover:bg-status-warning-surface/40 rounded"
-                    title={t.isStarred ? "إزالة النجمة" : "تمييز بنجمة"}
-                  >
-                    <Star className={cn("w-3 h-3", t.isStarred ? "fill-yellow-500 text-yellow-500" : "text-muted-foreground")} />
-                  </button>
-                  {t.folder !== "archive" && (
-                    <button
-                      type="button"
-                      onClick={() => moveTo.mutate({ id: t.id, folder: "archive" })}
-                      className="p-1 hover:bg-status-info-surface rounded"
-                      title="أرشفة"
-                    >
-                      <Archive className="w-3 h-3 text-muted-foreground" />
-                    </button>
-                  )}
-                  {t.folder !== "trash" && (
-                    <button
-                      type="button"
-                      onClick={() => moveTo.mutate({ id: t.id, folder: "trash" })}
-                      className="p-1 hover:bg-status-error-surface rounded"
-                      title="حذف"
-                    >
-                      <Trash2 className="w-3 h-3 text-muted-foreground" />
-                    </button>
-                  )}
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -714,64 +616,102 @@ function DraftsList({ drafts, onOpen, onChange }: {
   );
 }
 
-// ─────────────────────── Thread view ────────────────────────────────────
+// ─────────────────────── Conversation thread (canon) ────────────────────
 
-function ThreadView({ channel, address, onBack, onSent }: {
-  channel: Channel;
-  address: string;
+function ConversationThread({ conversationId, onBack, onChanged }: {
+  conversationId: number;
   onBack: () => void;
-  onSent: () => void;
+  onChanged: () => void;
 }) {
-  const { data, isLoading, refetch } = useApiQuery<{ data: MessageRow[]; peer: string; channel: string }>(
-    ["inbox-thread", channel, address],
-    `/inbox/threads/${channel}/${encodeURIComponent(address)}`,
+  const { data, isLoading, isError, refetch } = useApiQuery<{ data: ConversationDetail }>(
+    ["inbox-conversation", String(conversationId)],
+    `/inbox/conversations/${conversationId}`,
   );
-  const messages = data?.data ?? [];
+  const conversation = data?.data ?? null;
+  const messages = conversation?.messages ?? [];
+  const peerLabel = conversation?.participantName || conversation?.participantAddress || "";
   const [reply, setReply] = useState("");
-  const [dlpInfo, setDlpInfo] = useState<SendResult | null>(null);
+  const [dlpInfo, setDlpInfo] = useState<DlpBlock | null>(null);
 
-  // Mark every inbound message in this thread as read once the thread
-  // is loaded. We dedupe via the (channel,address) key so the network
-  // call doesn't fire on every refetch — only when the user first
-  // opens (or switches to) this thread. The server-side endpoint is
-  // idempotent so a stale fire-and-forget would be harmless anyway.
-  const lastReadKey = useRef<string | null>(null);
+  // Mark inbound messages read once per conversation open. The read
+  // marker endpoint is the existing per-(channel,address) one — the
+  // conversation carries exactly that key, so this is a pure adapter
+  // call, no new API. Idempotent server-side.
+  const lastReadKey = useRef<number | null>(null);
   useEffect(() => {
-    const key = `${channel}:${address}`;
-    if (lastReadKey.current === key) return;
+    if (!conversation) return;
+    if (lastReadKey.current === conversationId) return;
     if (!messages.some((m) => m.direction === "inbound" && !m.isRead)) return;
-    lastReadKey.current = key;
-    apiFetch(`/inbox/threads/${channel}/${encodeURIComponent(address)}/read`, { method: "POST" })
-      .then(() => onSent())
+    lastReadKey.current = conversationId;
+    apiFetch(
+      `/inbox/threads/${conversation.channelPrimary}/${encodeURIComponent(conversation.participantAddress)}/read`,
+      { method: "POST" },
+    )
+      .then(() => onChanged())
       .catch(() => { lastReadKey.current = null; });
-  }, [channel, address, messages, onSent]);
+  }, [conversation, conversationId, messages, onChanged]);
 
+  // The single send path of this page: the canon endpoint, which goes
+  // through sendMessage() server-side (DLP / queue / audit / events).
   const send = useMutation({
-    mutationFn: () => {
-      const lastId = messages[messages.length - 1]?.id;
-      if (!lastId) throw new Error("لا يمكن الرد على محادثة فارغة");
-      return apiFetch<SendResult>(`/inbox/threads/${lastId}/reply`, {
+    mutationFn: () =>
+      apiFetch<SendResult>(`/inbox/conversations/${conversationId}/messages`, {
         method: "POST",
         body: JSON.stringify({ body: reply }),
-      });
-    },
+      }),
     onSuccess: (r) => {
-      if (r.blocked) {
-        setDlpInfo(r);
+      if (r?.blocked) {
+        setDlpInfo({ reason: r.reason ?? "حُجبت بواسطة DLP", rules: (r.dlpMatches ?? []).map((m) => m.rule) });
         toast({ title: "حُجبت بواسطة DLP", description: r.reason ?? "", variant: "destructive" });
-      } else {
-        setReply("");
-        setDlpInfo(null);
-        toast({ title: "أُرسلت" });
-        void refetch();
-        onSent();
+        return;
       }
+      setReply("");
+      setDlpInfo(null);
+      toast({ title: "أُرسلت" });
+      void refetch();
+      onChanged();
     },
-    onError: (e: Error) => toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => {
+      const dlp = dlpFromError(e);
+      if (dlp) {
+        setDlpInfo(dlp);
+        toast({ title: "حُجبت بواسطة DLP", description: dlp.reason, variant: "destructive" });
+        return;
+      }
+      toast({ title: "فشل الإرسال", description: e.message, variant: "destructive" });
+    },
   });
 
-  const meta = CHANNEL_META[channel] ?? CHANNEL_META.email;
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center text-sm text-muted-foreground" data-testid="inbox-thread-loading">
+          جاري تحميل المحادثة...
+        </CardContent>
+      </Card>
+    );
+  }
+  if (isError || !conversation) {
+    return (
+      <Card>
+        <CardContent className="p-12 text-center text-sm space-y-2" data-testid="inbox-thread-error">
+          <AlertTriangle className="w-8 h-8 mx-auto text-status-error-foreground/60" />
+          <p className="text-status-error-foreground">تعذّر تحميل المحادثة — قد تكون محذوفة أو خارج صلاحيتك.</p>
+          <div className="flex items-center justify-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="w-3.5 h-3.5 me-1" />أعد المحاولة
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onBack}>رجوع</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const meta = CHANNEL_META[conversation.channelPrimary] ?? CHANNEL_META.email;
   const Icon = meta.icon;
+  const canReply = SENDABLE_CHANNELS.has(conversation.channelPrimary);
+  const sendable = conversation.channelPrimary as Channel;
 
   return (
     <Card className="flex flex-col h-[calc(100vh-260px)] min-h-[400px]">
@@ -780,11 +720,20 @@ function ThreadView({ channel, address, onBack, onSent }: {
           <CardTitle className="text-base flex items-center gap-2">
             <Button variant="ghost" size="sm" className="lg:hidden me-2" onClick={onBack}>←</Button>
             <Icon className="w-5 h-5 text-muted-foreground" />
-            <span>{address}</span>
+            <span className="truncate">{peerLabel}</span>
             <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
+            <PageStatusBadge status={conversation.status} minimal className="text-[10px]">
+              {STATUS_LABELS[conversation.status] ?? conversation.status}
+            </PageStatusBadge>
           </CardTitle>
           <div className="flex items-center gap-1">
-            <ThreadSnoozeMenu channel={channel} address={address} onSnoozed={onBack} />
+            {canReply && (
+              <ThreadSnoozeMenu
+                channel={sendable}
+                address={conversation.participantAddress}
+                onSnoozed={onBack}
+              />
+            )}
             <Button variant="ghost" size="sm" onClick={() => refetch()}>
               <RefreshCw className="w-3 h-3" />
             </Button>
@@ -793,7 +742,6 @@ function ThreadView({ channel, address, onBack, onSent }: {
       </CardHeader>
 
       <CardContent className="flex-1 overflow-y-auto p-4 space-y-3">
-        {isLoading && messages.length === 0 && <p className="text-xs text-muted-foreground">جاري التحميل...</p>}
         {messages.map((m) => (
           <div key={m.id} className={cn(
             "rounded-lg p-3 max-w-[80%]",
@@ -803,7 +751,7 @@ function ThreadView({ channel, address, onBack, onSent }: {
           )}>
             <div className="flex items-center gap-2 mb-1 text-[11px] text-muted-foreground">
               {m.direction === "outbound" ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownLeft className="w-3 h-3" />}
-              <span>{m.direction === "outbound" ? "أنت" : address}</span>
+              <span>{m.direction === "outbound" ? "أنت" : peerLabel}</span>
               <span>•</span>
               <span>{formatDateAr(m.createdAt)}</span>
               {m.direction === "inbound" && m.isRead === false && (
@@ -812,53 +760,209 @@ function ThreadView({ channel, address, onBack, onSent }: {
               {m.status === "blocked_dlp" && (
                 <Badge variant="outline" className="text-[9px] text-status-error-foreground border-status-error-surface">حُجبت DLP</Badge>
               )}
+              {m.direction === "outbound" && m.status === "failed" && (
+                <SendStatusBadge status={m.status} />
+              )}
             </div>
             {m.subject && <p className="text-xs font-semibold mb-1">{m.subject}</p>}
             <p className="text-sm whitespace-pre-wrap break-words">{m.body}</p>
           </div>
         ))}
-        {messages.length === 0 && !isLoading && (
-          <p className="text-xs text-muted-foreground text-center py-8">لا توجد رسائل في هذه المحادثة بعد.</p>
+        {messages.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-8" data-testid="inbox-thread-empty">
+            لا توجد رسائل في هذه المحادثة بعد.
+          </p>
         )}
       </CardContent>
 
       <div className="border-t p-3 shrink-0">
-        {dlpInfo?.blocked && (
-          <div className="mb-2 p-2 bg-status-error-surface text-status-error-foreground rounded text-xs flex items-start gap-2">
+        {dlpInfo && (
+          <div className="mb-2 p-2 bg-status-error-surface text-status-error-foreground rounded text-xs flex items-start gap-2" data-testid="inbox-dlp-blocked">
             <AlertOctagon className="w-3 h-3 mt-0.5 shrink-0" />
             <div>
               <p className="font-semibold">حُجبت بواسطة DLP</p>
               <p>{dlpInfo.reason}</p>
-              {dlpInfo.dlpMatches && dlpInfo.dlpMatches.length > 0 && (
-                <p className="text-[10px] mt-1">القواعد المُفعَّلة: {dlpInfo.dlpMatches.map((m) => m.rule).join(", ")}</p>
+              {dlpInfo.rules.length > 0 && (
+                <p className="text-[10px] mt-1">القواعد المُفعَّلة: {dlpInfo.rules.join(", ")}</p>
               )}
             </div>
           </div>
         )}
-        <div className="flex gap-2">
-          <Textarea
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            placeholder="اكتب ردّك..."
-            rows={2}
-            className="flex-1 text-sm"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && reply.trim()) {
-                send.mutate();
-              }
-            }}
-          />
-          <Button
-            rateLimitAware
-            disabled={!reply.trim() || send.isPending}
-            onClick={() => send.mutate()}
-          >
-            <Send className="w-4 h-4 me-1" />{send.isPending ? "..." : "أرسل"}
-          </Button>
-        </div>
-        <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter للإرسال السريع</p>
+        {canReply ? (
+          <>
+            <div className="flex gap-2">
+              <Textarea
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                placeholder="اكتب ردّك..."
+                rows={2}
+                className="flex-1 text-sm"
+                data-testid="inbox-reply-input"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && reply.trim()) {
+                    send.mutate();
+                  }
+                }}
+              />
+              <Button
+                rateLimitAware
+                disabled={!reply.trim() || send.isPending}
+                onClick={() => send.mutate()}
+                data-testid="inbox-reply-send"
+              >
+                <Send className="w-4 h-4 me-1" />{send.isPending ? "..." : "أرسل"}
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">Ctrl+Enter للإرسال السريع</p>
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground text-center" data-testid="inbox-reply-unavailable">
+            قناة "{meta.label}" لا تدعم الرد المباشر من هنا.
+          </p>
+        )}
       </div>
     </Card>
+  );
+}
+
+// ─────────────────────── Context panel (canon) ──────────────────────────
+
+/**
+ * Third column of the conversation-first layout: the conversation's
+ * context — participant identity, status/priority, and the business
+ * entities linked through conversation_links. Read-only display plus
+ * the two canon lifecycle actions (close / reopen); linking and
+ * assignment management arrive in a later #2138 slice.
+ */
+function ContextPanel({ conversationId, onChanged }: {
+  conversationId: number;
+  onChanged: () => void;
+}) {
+  const { data, isLoading, refetch } = useApiQuery<{ data: ConversationDetail }>(
+    ["inbox-conversation", String(conversationId)],
+    `/inbox/conversations/${conversationId}`,
+  );
+  const conversation = data?.data ?? null;
+
+  const lifecycle = useMutation({
+    mutationFn: (action: "close" | "reopen") =>
+      apiFetch(`/inbox/conversations/${conversationId}/${action}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    onSuccess: () => {
+      toast({ title: "تم تحديث حالة المحادثة" });
+      void refetch();
+      onChanged();
+    },
+    onError: (e: Error) => toast({ title: "تعذّر تحديث الحالة", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading || !conversation) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center text-xs text-muted-foreground">
+          {isLoading ? "جاري تحميل السياق..." : "لا يوجد سياق متاح."}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const meta = CHANNEL_META[conversation.channelPrimary] ?? CHANNEL_META.email;
+  const priority = conversation.priority !== "normal" ? PRIORITY_LABELS[conversation.priority] : null;
+
+  return (
+    <div className="space-y-3" data-testid="inbox-context-panel">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <User className="w-4 h-4 text-muted-foreground" />الطرف
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0 space-y-1 text-xs">
+          {conversation.participantName && (
+            <p className="font-semibold text-sm">{conversation.participantName}</p>
+          )}
+          <p className="font-mono text-muted-foreground break-all">{conversation.participantAddress}</p>
+          <div className="flex items-center gap-1 flex-wrap pt-1">
+            <Badge variant="outline" className="text-[10px]">{meta.label}</Badge>
+            <PageStatusBadge status={conversation.status} className="text-[10px]">
+              {STATUS_LABELS[conversation.status] ?? conversation.status}
+            </PageStatusBadge>
+            {priority && (
+              <span className={cn("text-[9px] rounded border px-1.5 py-0.5 font-medium", priority.tone)}>
+                أولوية {priority.label}
+              </span>
+            )}
+            {conversation.participantType && (
+              <Badge variant="outline" className="text-[10px]">
+                {LINK_TYPE_LABELS[conversation.participantType] ?? conversation.participantType}
+                {conversation.participantId ? ` #${conversation.participantId}` : ""}
+              </Badge>
+            )}
+          </div>
+          <div className="text-[10px] text-muted-foreground pt-1 space-y-0.5">
+            <p>{conversation.totalMessages} رسالة{conversation.unreadCount > 0 ? ` — ${conversation.unreadCount} غير مقروءة` : ""}</p>
+            {conversation.lastMessageAt && <p>آخر نشاط: {formatDateAr(conversation.lastMessageAt)}</p>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-muted-foreground" />الكيانات المرتبطة
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {conversation.links.length === 0 ? (
+            <p className="text-xs text-muted-foreground" data-testid="inbox-links-empty">
+              لا توجد كيانات مرتبطة بهذه المحادثة بعد.
+            </p>
+          ) : (
+            <ul className="space-y-1" data-testid="inbox-links-list">
+              {conversation.links.map((l) => (
+                <li key={l.id} className="flex items-center gap-2 text-xs">
+                  <Badge variant="outline" className="text-[10px] shrink-0">
+                    {LINK_TYPE_LABELS[l.relatedType] ?? l.relatedType}
+                  </Badge>
+                  <span className="font-mono text-muted-foreground">#{l.relatedId}</span>
+                  <span className="text-[10px] text-muted-foreground ms-auto">{formatDateAr(l.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-3 flex items-center gap-2">
+          {conversation.status === "closed" ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              disabled={lifecycle.isPending}
+              onClick={() => lifecycle.mutate("reopen")}
+              data-testid="inbox-reopen-conversation"
+            >
+              <Unlock className="w-3.5 h-3.5 me-1" />إعادة فتح
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              disabled={lifecycle.isPending}
+              onClick={() => lifecycle.mutate("close")}
+              data-testid="inbox-close-conversation"
+            >
+              <Lock className="w-3.5 h-3.5 me-1" />إغلاق المحادثة
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -1536,81 +1640,6 @@ function SignaturesDialog({ open, onClose }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-// ─── SearchHitsList ─────────────────────────────────────────────
-// Renders /inbox/search hits as a flat list (no thread grouping —
-// the user typed a query, they want to see every match). Each row
-// shows channel + direction + subject + body preview + date, and
-// the user can click to open the original thread.
-function SearchHitsList({ hits, isLoading, query }: {
-  hits: Array<{
-    id: number; channel: string; direction: "inbound" | "outbound";
-    fromNumber: string | null; toNumber: string | null;
-    subject: string | null; body_preview: string;
-    folder: string; isStarred: boolean; createdAt: string;
-  }>;
-  isLoading: boolean;
-  query: string;
-}) {
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-4 space-y-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </CardContent>
-      </Card>
-    );
-  }
-  if (hits.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-12 text-center text-sm text-muted-foreground">
-          لا توجد نتائج لـ <span className="font-mono">{query}</span>
-        </CardContent>
-      </Card>
-    );
-  }
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-xs flex items-center justify-between">
-          <span>{hits.length} نتيجة لـ <span className="font-mono">{query}</span></span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-0 divide-y">
-        {hits.map((h) => {
-          const meta = CHANNEL_META[h.channel] ?? CHANNEL_META.sms;
-          const Icon = meta.icon;
-          return (
-            <div key={h.id} className="p-3 hover:bg-muted/30 cursor-pointer">
-              <div className="flex items-start gap-3">
-                <div className={cn("rounded-md p-1.5", meta.color)}>
-                  <Icon className="w-3.5 h-3.5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium" dir="ltr">
-                      {h.direction === "inbound" ? (h.fromNumber ?? "—") : (h.toNumber ?? "—")}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {formatDateAr(h.createdAt)}
-                    </span>
-                  </div>
-                  {h.subject && (
-                    <p className="text-sm font-medium line-clamp-1 mt-1">{h.subject}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{h.body_preview}</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
   );
 }
 
