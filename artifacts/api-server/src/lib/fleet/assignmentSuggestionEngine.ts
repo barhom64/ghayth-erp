@@ -64,6 +64,7 @@ import {
   scoreUmrahFamiliarity,
   type UmrahFamiliarityHistory,
 } from "./umrahFamiliarity.js";
+import { evaluateLadder } from "./vehicleClassLadder.js";
 
 export interface SuggestionRequest {
   companyId: number;
@@ -250,23 +251,17 @@ const CLASS_EQUIVALENCES: Record<string, string[]> = {
   pickup:    ["pickup", "van"],
 };
 
-// Higher class (for upgrade detection).
-const UPGRADE_LADDER = [
-  "compact", "sedan", "suv", "crossover",
-  "van", "minivan", "pickup",
-  "bus_22", "bus_29", "bus_45", "bus_50",
-  "truck", "trailer",
-];
-
 function classesAreEquivalent(a: string, b: string): boolean {
   return a === b || (CLASS_EQUIVALENCES[a] ?? []).includes(b);
 }
 
-function isUpgrade(from: string, to: string): boolean {
-  const fi = UPGRADE_LADDER.indexOf(from);
-  const ti = UPGRADE_LADDER.indexOf(to);
-  return fi >= 0 && ti >= 0 && ti > fi;
-}
+// #2079 PE-07 — the legacy monolithic UPGRADE_LADDER + isUpgrade()
+// helper were removed; their cross-family mistakes (sedan→truck
+// "upgrade" on a passenger booking) are now caught by the per-family
+// `evaluateLadder` helper in vehicleClassLadder.ts. The ladders live
+// there: PASSENGER_LADDER and CARGO_LADDER, with EQUIPMENT_LADDER for
+// completeness. The owner's rule («أي ladder عام مشترك ممنوع») is
+// enforced structurally — there is no single mixed list anymore.
 
 // ── Public API ───────────────────────────────────────────────────────
 
@@ -1042,6 +1037,18 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       }
 
       // ─ agreement (weight 10) ─────────────────────────────────────
+      //
+      // #2079 PE-07 — ladder evaluation is now per-family. The legacy
+      // monolithic UPGRADE_LADDER was happy to call sedan→truck an
+      // "upgrade" on a passenger booking; the per-family helper
+      // (`vehicleClassLadder.evaluateLadder`) refuses such jumps with
+      // an explicit cross-family blocker, while still rewarding real
+      // within-family upgrades when the customer's policy permits.
+      //
+      // This is a REINFORCEMENT, not a replacement of VCM. The VCM
+      // gate already removes cross-family vehicles upstream; PE-07
+      // ensures the scorer never accidentally rewards one if VCM
+      // missed it (e.g. an over-broad vehicleServiceTypes list).
       let agreementScore = 80;
       if (booking.requestedVehicleClass && v.vehicleType) {
         if (v.vehicleType === booking.requestedVehicleClass) {
@@ -1056,17 +1063,27 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           } else {
             reasons.push("المركبة تنتمي لفئة مكافئة للفئة المطلوبة");
           }
-        } else if (isUpgrade(booking.requestedVehicleClass, v.vehicleType)) {
-          if (booking.allowUpgrade || booking.vehicleSubstitutionPolicy === "upgrade_allowed") {
-            agreementScore = 70;
-            reasons.push("ترقية مسموحة على فئة المركبة");
-          } else {
-            agreementScore = 20;
-            blockers.push("اتفاق العميل لا يسمح بترقية فئة المركبة");
-          }
         } else {
-          agreementScore = 15;
-          blockers.push(`فئة المركبة (${v.vehicleType}) لا تطابق الفئة المطلوبة (${booking.requestedVehicleClass})`);
+          const ladder = evaluateLadder(
+            booking.requestedVehicleClass,
+            v.vehicleType,
+            tripFamily,
+          );
+          if (ladder.crossesFamily) {
+            agreementScore = 0;
+            blockers.push(ladder.reason!);
+          } else if (ladder.isUpgrade) {
+            if (booking.allowUpgrade || booking.vehicleSubstitutionPolicy === "upgrade_allowed") {
+              agreementScore = 70;
+              reasons.push(ladder.reason!);
+            } else {
+              agreementScore = 20;
+              blockers.push("اتفاق العميل لا يسمح بترقية فئة المركبة");
+            }
+          } else {
+            agreementScore = 15;
+            blockers.push(`فئة المركبة (${v.vehicleType}) لا تطابق الفئة المطلوبة (${booking.requestedVehicleClass})`);
+          }
         }
       }
 

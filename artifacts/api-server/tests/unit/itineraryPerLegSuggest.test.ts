@@ -184,9 +184,16 @@ describe("#2079 PE-05 — boundary intact", () => {
     expect(eligible).not.toMatch(/continuityBonus/);
   });
 
-  it("PE-07 surface is NOT present in this diff (PE-06 landed in a separate PR)", () => {
-    // PE-06 (umrahFamiliarity) merged after PE-05; this test pins
-    // only the remaining future surface (PE-07 per-family ladder).
-    expect(ENGINE).not.toMatch(/PAX_LADDER|CARGO_LADDER/);
+  it("PE-05 continuity is independent of later PE-06/PE-07 axes (they live in their own scoring slots)", () => {
+    // PE-06 (umrahFamiliarity) + PE-07 (per-family ladder) landed
+    // after PE-05. This test now only pins that the continuity bonus
+    // still runs INSIDE the per-pair scoring loop, not as an
+    // eligibility check.
+    const eligible = ENGINE.slice(
+      ENGINE.indexOf("const eligibleVehicles: VehicleRow[] = [];"),
+      ENGINE.indexOf("for (const v of eligibleVehicles)"),
+    );
+    expect(eligible).not.toMatch(/continuityPair/);
+    expect(eligible).not.toMatch(/continuityBonus/);
   });
 });
