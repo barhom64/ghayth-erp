@@ -658,6 +658,22 @@ export interface ImportDiff {
    */
   clientLinkagePolicy: string;
   /**
+   * BILL-MAIN P6 (#2080) — main-agent linkage detection. Lists the
+   * main agents referenced by this import file that exist in
+   * `umrah_agents` but carry `clientId = NULL`. Surfaced so the
+   * operator preparing to switch the company to `main_agent_client`
+   * mode (a future hard-pause phase) can see which main agents
+   * still need an explicit `PUT /umrah/agents/:id/link-client` call
+   * before invoicing in that mode would succeed. The preview engine
+   * NEVER acts on this list — no auto-link, no client creation, no
+   * behaviour change.
+   */
+  unlinkedMainAgents: {
+    agentId: number;
+    name: string;
+    nuskAgentNumber: string | null;
+  }[];
+  /**
    * Non-null when the import would create or reference sub-agents
    * that lack a `clientId`. Tells the operator BEFORE confirm that
    * invoicing on these rows will fail at `generateSalesInvoice` until
@@ -712,6 +728,7 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     financialImpactCount: 0,
     clientLinkagePolicy: activePolicy,
     unlinkedSubAgentInvoicingHint: null,
+    unlinkedMainAgents: [],
   };
 
   if (fileType === "mutamers") {
@@ -755,19 +772,45 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     }
     const knownByNuskNumber = new Set<string>();
     const knownByName = new Set<string>();
+    // BILL-MAIN P6 — track every referenced main agent's clientId so
+    // the preview can list main agents that are still unlinked. The
+    // map is keyed by `umrah_agents.id` so a duplicate-by-name +
+    // duplicate-by-nuskNumber match collapses to one entry.
+    const matchedMainAgents = new Map<
+      number,
+      { agentId: number; name: string; nuskAgentNumber: string | null; clientId: number | null }
+    >();
     if (agentNuskNumbers.size > 0) {
-      const found = await rawQuery<Record<string, unknown>>(
-        `SELECT "contractRef" FROM umrah_agents WHERE "companyId" = $1 AND "contractRef" = ANY($2) AND "deletedAt" IS NULL`,
+      const found = await rawQuery<{ id: number; name: string; contractRef: string | null; clientId: number | null }>(
+        `SELECT id, name, "contractRef", "clientId" FROM umrah_agents WHERE "companyId" = $1 AND "contractRef" = ANY($2) AND "deletedAt" IS NULL`,
         [scope.companyId, [...agentNuskNumbers]]
       );
-      for (const r of found) knownByNuskNumber.add(String(r.contractRef));
+      for (const r of found) {
+        knownByNuskNumber.add(String(r.contractRef));
+        matchedMainAgents.set(r.id, {
+          agentId: r.id,
+          name: String(r.name ?? ""),
+          nuskAgentNumber: r.contractRef ?? null,
+          clientId: r.clientId,
+        });
+      }
     }
     if (agentNames.size > 0) {
-      const found = await rawQuery<Record<string, unknown>>(
-        `SELECT name FROM umrah_agents WHERE "companyId" = $1 AND name = ANY($2) AND "deletedAt" IS NULL`,
+      const found = await rawQuery<{ id: number; name: string; contractRef: string | null; clientId: number | null }>(
+        `SELECT id, name, "contractRef", "clientId" FROM umrah_agents WHERE "companyId" = $1 AND name = ANY($2) AND "deletedAt" IS NULL`,
         [scope.companyId, [...agentNames]]
       );
-      for (const r of found) knownByName.add(String(r.name));
+      for (const r of found) {
+        knownByName.add(String(r.name));
+        if (!matchedMainAgents.has(r.id)) {
+          matchedMainAgents.set(r.id, {
+            agentId: r.id,
+            name: String(r.name ?? ""),
+            nuskAgentNumber: r.contractRef ?? null,
+            clientId: r.clientId,
+          });
+        }
+      }
     }
 
     const unlinkedMap = new Map<string, { name: string; count: number }>();
@@ -859,6 +902,21 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
       agentName: v.agentName,
       rowCount: v.count,
     }));
+
+    // BILL-MAIN P6 — main agents this file references that already
+    // exist in `umrah_agents` but have `clientId IS NULL`. Sorted by
+    // name for stable display. Only matters in `main_agent_client`
+    // policy mode (engine fallback still hard-pause); surfaced
+    // unconditionally so the operator can prep linkage ahead of any
+    // future mode switch.
+    diff.unlinkedMainAgents = [...matchedMainAgents.values()]
+      .filter((a) => a.clientId == null)
+      .map((a) => ({
+        agentId: a.agentId,
+        name: a.name,
+        nuskAgentNumber: a.nuskAgentNumber,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
     // U-11 Phase 3a — invoicing-block hint. The message is the SAME
     // signal the operator will eventually receive from
