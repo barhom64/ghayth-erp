@@ -64,6 +64,18 @@ interface PreviewSummary {
     activePolicy: string;
     arabicHint: string;
   } | null;
+  /**
+   * BILL-MAIN P6 — main agents referenced by this file that exist
+   * in `umrah_agents` but lack a `clientId`. Only the operator
+   * preparing to switch to `main_agent_client` mode needs to act on
+   * this; otherwise it's a forward-looking notice. The list is
+   * authoritative on the BACKEND — the FE only renders.
+   */
+  unlinkedMainAgents?: {
+    agentId: number;
+    name: string;
+    nuskAgentNumber: string | null;
+  }[];
 }
 
 // Arabic labels for the `umrah_import_changes` audit trail. Engine writes
@@ -932,6 +944,68 @@ export default function UmrahImportWizard() {
                     <p className="text-xs text-muted-foreground">
                       اربط الوكلاء الفرعيين أدناه عبر زر "ربط الآن" قبل التأكيد، أو اربطهم لاحقاً من صفحة الوكلاء الفرعيين.
                     </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* BILL-MAIN P6 — forward-looking notice for main agents
+              referenced by the file that exist in umrah_agents but
+              carry clientId = NULL. Renders ONLY when the backend
+              surfaces a non-empty list. The banner is purely
+              informational: under today's default policy
+              (operational_until_linked) nothing breaks, but if the
+              company ever flips to main_agent_client mode these
+              agents would block invoicing. The link path is the
+              main-agent linker shipped in BILL-MAIN P3
+              (PUT /umrah/agents/:id/link-client) — operator-
+              confirmed, no auto-link. */}
+          {preview.unlinkedMainAgents && preview.unlinkedMainAgents.length > 0 && (
+            <Card className="border-blue-200 bg-blue-50/50" data-testid="import-unlinked-main-agents-banner">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-2">
+                  <Link2 className="h-4 w-4 mt-0.5 text-blue-700 shrink-0" />
+                  <div className="space-y-2 flex-1">
+                    <h3 className="font-semibold text-blue-900">
+                      وكلاء رئيسيون غير مربوطين بعميل ({formatNumber(preview.unlinkedMainAgents.length)})
+                    </h3>
+                    <p className="text-xs">
+                      هؤلاء الوكلاء الرئيسيون موجودون في النظام لكن بدون
+                      ربط بعميل مالي. تحت السياسة الافتراضية{" "}
+                      <span className="font-mono" dir="ltr">operational_until_linked</span>{" "}
+                      هذا لا يمنع الفوترة (الفوترة تمر عبر العميل
+                      المربوط بالوكيل الفرعي). لكن لو أرادت الشركة
+                      التحوّل إلى{" "}
+                      <span className="font-mono" dir="ltr">main_agent_client</span>{" "}
+                      مستقبلاً، فستحتاج إلى ربط هؤلاء الوكلاء بعميل
+                      صريح أولاً (عبر <span className="font-mono" dir="ltr">PUT /umrah/agents/:id/link-client</span>).
+                    </p>
+                    <div className="rounded border border-blue-200 bg-white overflow-hidden">
+                      <table className="w-full text-xs" data-testid="import-unlinked-main-agents-table">
+                        <thead className="bg-blue-100/50">
+                          <tr>
+                            <th className="p-2 text-start font-medium">الاسم</th>
+                            <th className="p-2 text-start font-medium">رقم العقد (NUSK)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.unlinkedMainAgents.slice(0, 10).map((a) => (
+                            <tr key={a.agentId} className="border-t border-blue-100">
+                              <td className="p-2">{a.name}</td>
+                              <td className="p-2 font-mono text-[10px]" dir="ltr">
+                                {a.nuskAgentNumber ?? "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {preview.unlinkedMainAgents.length > 10 && (
+                        <p className="px-2 py-1 text-[10px] text-muted-foreground border-t border-blue-100">
+                          + {formatNumber(preview.unlinkedMainAgents.length - 10)} آخرين
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
