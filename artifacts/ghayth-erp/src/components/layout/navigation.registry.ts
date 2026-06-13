@@ -331,6 +331,7 @@ export const allNavSections: NavSection[] = [
         { label: "طلبات الشراء (PR)", path: "/finance/purchase-requests", icon: ClipboardList },
         { label: "أوامر الشراء (PO)", path: "/finance/purchase-orders", icon: ShoppingCart },
         { label: "الموردين", path: "/finance/vendors", icon: Users },
+        { label: "مستندات الموردين", path: "/finance/vendor-documents", icon: FileText },
         { label: "منضدة التسوية", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
         { label: "كشف حساب مورد للطباعة", path: "/finance/vendor-statement-print", icon: Printer },
         { label: "ملف المورد 360°", path: "/finance/vendor-360-sheet", icon: Users },

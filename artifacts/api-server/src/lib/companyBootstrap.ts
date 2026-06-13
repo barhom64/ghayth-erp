@@ -251,6 +251,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1172", name: "تأمينات مدفوعة مقدماً", nameEn: "Prepaid Insurance", type: "asset", level: 4, parentCode: "1170" },
   { code: "1173", name: "اشتراكات ورخص مدفوعة مقدماً", nameEn: "Prepaid Subscriptions", type: "asset", level: 4, parentCode: "1170" },
   { code: "1180", name: "ضريبة قيمة مضافة مدفوعة (مدخلات)", nameEn: "Input VAT", type: "asset", level: 3, parentCode: "1100" },
+  // دفعات مقدمة للموردين — أصل متداول قابل للترحيل (سلفة لمورد مقابل أمر شراء/فاتورة
+  // لاحقة). مرآة AP لـ"customer_advance_liability". موضوع L3 مباشرة تحت 1100 على
+  // نمط 1160 "إيرادات مستحقة" (أقرب سابقة لحساب فرعي قابل للترحيل تحت مجموعة الأصول
+  // المتداولة)، والرقم 1190 هو التالي بعد 1180 فلا يكسر تسلسل القالب. #2140 شريحة 2-أ.
+  { code: "1190", name: "دفعات مقدمة للموردين", nameEn: "Advances to Suppliers", type: "asset", level: 3, parentCode: "1100" },
 
   // 12xx الأصول غير المتداولة
   { code: "1200", name: "الأصول غير المتداولة", nameEn: "Non-Current Assets", type: "asset", level: 2, parentCode: "1000", allowPosting: false },
