@@ -161,12 +161,12 @@ describe("postJournalEntry — INSERT shape", () => {
     expect(firstLineCall[1].slice(0, 6)).toEqual([
       4242, 100, "1100", 30, 0, "FX gain Q1",
     ]);
-    expect(firstLineCall[1].length).toBe(28);
+    expect(firstLineCall[1].length).toBe(29);
     const secondLineCall = mockRawExecute.mock.calls[1];
     expect(secondLineCall[1].slice(0, 6)).toEqual([
       4242, 490, "4900", 0, 30, "FX gain Q1",
     ]);
-    expect(secondLineCall[1].length).toBe(28);
+    expect(secondLineCall[1].length).toBe(29);
     // currentBalance moves by debit−credit per account: +30 on the debit
     // account (1100), −30 on the credit account (4900).
     const firstBalanceCall = mockRawExecute.mock.calls[2];

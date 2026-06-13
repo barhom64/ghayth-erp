@@ -248,7 +248,8 @@ export async function postJournalEntry(
            "vehicleId", "propertyId", "contractId", "unitId", "assetId",
            "umrahSeasonId", "umrahAgentId", "productId", "clientId", "vendorId",
            "driverId", "activityType", "templateId",
-           "sourceLineTable", "sourceLineId", "dimensionJson", "branchId"
+           "sourceLineTable", "sourceLineId", "dimensionJson", "branchId",
+           "analyticAccountId"
          ) VALUES (
            $1, $2, $3,
            $4, $5, $6,
@@ -256,7 +257,8 @@ export async function postJournalEntry(
            $12, $13, $14, $15, $16,
            $17, $18, $19, $20, $21,
            $22, $23, $24,
-           $25, $26, $27, $28
+           $25, $26, $27, $28,
+           $29
          )`,
         [
           journalEntryId, line.accountId, accountCode,
@@ -271,6 +273,7 @@ export async function postJournalEntry(
           line.sourceLineTable ?? null, line.sourceLineId ?? null,
           line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
           lineBranchId,
+          line.analyticAccountId ?? null,
         ],
       );
       balanceDeltas.set(

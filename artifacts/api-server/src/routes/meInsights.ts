@@ -139,15 +139,15 @@ router.get(
               rawQuery<Record<string, unknown>>(
                 `SELECT id::text, 'leave' AS kind, 'طلب إجازة' AS label, status, "createdAt"
                    FROM hr_leave_requests
-                  WHERE "assignmentId" = $1 AND status = 'pending' AND "deletedAt" IS NULL
+                  WHERE "assignmentId" = $1 AND status = 'pending' AND hr_leave_requests."deletedAt" IS NULL
                  UNION ALL
                  SELECT id::text, 'loan', CONCAT('سلفة ', "loanNumber"), status, "createdAt"
                    FROM hr_employee_loans
-                  WHERE "assignmentId" = $1 AND status = 'pending' AND "deletedAt" IS NULL
+                  WHERE "assignmentId" = $1 AND status = 'pending' AND hr_employee_loans."deletedAt" IS NULL
                  UNION ALL
                  SELECT id::text, 'overtime', CONCAT('وقت إضافي ', "requestNumber"), status, "createdAt"
                    FROM hr_overtime_requests
-                  WHERE "assignmentId" = $1 AND status = 'pending' AND "deletedAt" IS NULL
+                  WHERE "assignmentId" = $1 AND status = 'pending' AND hr_overtime_requests."deletedAt" IS NULL
                  ORDER BY "createdAt" DESC LIMIT 5`,
                 [assignmentId],
               ),
@@ -164,7 +164,7 @@ router.get(
               `SELECT lr.id, e.name AS "employeeName", lt.name AS "leaveType",
                       lr."startDate", lr."endDate", lr.days, lr."createdAt"
                  FROM hr_leave_requests lr
-                 JOIN employees e       ON e.id  = lr."employeeId"
+                 JOIN employees e       ON e.id  = lr."employeeId" AND e."deletedAt" IS NULL
                  JOIN hr_leave_types lt ON lt.id = lr."leaveTypeId"
             LEFT JOIN leave_approval_stages las
                    ON las."leaveRequestId" = lr.id AND las.status = 'pending'
@@ -225,9 +225,10 @@ router.get(
                       i."dueDate", c.name AS "clientName",
                       (CURRENT_DATE - i."dueDate"::date) AS "daysOverdue"
                  FROM invoices i
-            LEFT JOIN clients c ON c.id = i."clientId"
+            LEFT JOIN clients c ON c.id = i."clientId" AND c."deletedAt" IS NULL
                 WHERE i."companyId" = $1 AND i.status NOT IN ('paid','cancelled')
                   AND i."dueDate" < CURRENT_DATE
+                  AND i."deletedAt" IS NULL
                 ORDER BY i."dueDate" ASC LIMIT 5`,
               [companyId],
             ),
