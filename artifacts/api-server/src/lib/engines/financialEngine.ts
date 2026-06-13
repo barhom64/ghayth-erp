@@ -16,6 +16,7 @@ import {
   createGuardedJournalEntry,
   checkFinancialPeriodOpen,
   getAccountCodeFromMapping,
+  assertPostableAccount,
   validateBudget,
   updateBudgetUsed,
   todayISO,
@@ -286,7 +287,14 @@ class FinancialEngineImpl implements DomainEngine {
     side: "debit" | "credit",
     fallbackCode?: string
   ): Promise<string> {
-    return getAccountCodeFromMapping(companyId, operationType, side, fallbackCode);
+    const code = await getAccountCodeFromMapping(companyId, operationType, side, fallbackCode);
+    // Second-layer guard: even if getAccountCodeFromMapping succeeded, verify
+    // the returned code is postable before it leaves the engine. This catches
+    // any code-path that bypasses getAccountCodeFromMapping (e.g. a caller
+    // passing a raw fallback string directly) and acts as defence-in-depth
+    // against future regressions.
+    await assertPostableAccount(companyId, code, { operationType, side });
+    return code;
   }
 
   async resolveAccountCodes(
@@ -297,12 +305,14 @@ class FinancialEngineImpl implements DomainEngine {
     await Promise.all(
       mappings.map(async (m) => {
         const key = `${m.operationType}_${m.side}`;
-        results[key] = await getAccountCodeFromMapping(
+        const code = await getAccountCodeFromMapping(
           companyId,
           m.operationType,
           m.side,
           m.fallbackCode
         );
+        await assertPostableAccount(companyId, code, { operationType: m.operationType, side: m.side });
+        results[key] = code;
       })
     );
     return results;

@@ -7,8 +7,12 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, assertPostableAccount } from "../lib/businessHelpers.js";
 import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
+import {
+  getClassificationCenterSummary,
+  linkAnalyticAccount,
+} from "../lib/gl/analytic-accounts.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -885,5 +889,215 @@ export async function retrySubsidiaryProvisioningFailure(failureId: number, comp
   );
   return after ?? null;
 }
+
+// ─── مركز التصنيف والمطابقة — Issue #2197 ────────────────────────────────────
+
+/**
+ * GET /api/accounting/classification-center
+ * Returns summary counts for the operator dashboard.
+ */
+router.get("/classification-center", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
+  try {
+    const companyId = (req as any).user.companyId as number;
+    const summary = await getClassificationCenterSummary(companyId);
+    res.json(summary);
+  } catch (err) {
+    handleRouteError(err, res, "Classification center summary error:");
+  }
+});
+
+/**
+ * GET /api/accounting/classification-center/analytic-accounts
+ * Lists analytic accounts that need linking (needsLinking=true).
+ */
+router.get("/classification-center/analytic-accounts", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
+  try {
+    const companyId = (req as any).user.companyId as number;
+    const page = Math.max(1, Number(req.query.page ?? 1));
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit ?? 50)));
+    const offset = (page - 1) * limit;
+    const statusFilter = req.query.status ?? "needs_linking";
+
+    const rows = await rawQuery<{
+      id: number; name: string; code: string | null; status: string;
+      sourceModule: string | null; seasonId: number | null; partyId: number | null;
+      partyRole: string | null; branchId: number | null; needsLinking: boolean;
+      linkingNote: string | null; createdAt: string;
+    }>(
+      `SELECT id, name, code, status, "sourceModule", "seasonId", "partyId",
+              "partyRole", "branchId", "needsLinking", "linkingNote", "createdAt"
+       FROM analytic_accounts
+       WHERE "companyId" = $1 AND status = $2 AND "deletedAt" IS NULL
+       ORDER BY "createdAt" DESC LIMIT $3 OFFSET $4`,
+      [companyId, statusFilter, limit, offset]
+    );
+
+    const [{ count }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM analytic_accounts
+       WHERE "companyId" = $1 AND status = $2 AND "deletedAt" IS NULL`,
+      [companyId, statusFilter]
+    );
+
+    res.json({ data: rows, total: Number(count), page, limit });
+  } catch (err) {
+    handleRouteError(err, res, "List analytic accounts error:");
+  }
+});
+
+const linkAnalyticSchema = z.object({
+  partyId:       z.coerce.number().optional(),
+  partyRole:     z.string().optional(),
+  parentPartyId: z.coerce.number().optional(),
+  seasonId:      z.coerce.number().optional(),
+  contractId:    z.coerce.number().optional(),
+  projectId:     z.coerce.number().optional(),
+  employeeId:    z.coerce.number().optional(),
+  custodyId:     z.coerce.number().optional(),
+  status:        z.enum(["active","needs_linking","closed","archived"]).optional(),
+  reason:        z.string().optional(),
+});
+
+/**
+ * PATCH /api/accounting/classification-center/analytic-accounts/:id/link
+ * Link a needs_linking analytic account to a party/season/contract.
+ */
+router.patch("/classification-center/analytic-accounts/:id/link", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
+  try {
+    const companyId = (req as any).user.companyId as number;
+    const userId    = (req as any).user.id as number;
+    const id = parseId(req.params.id);
+    const body = zodParse(linkAnalyticSchema.safeParse(req.body));
+
+    await linkAnalyticAccount({
+      analyticAccountId: id,
+      companyId,
+      updatedBy: userId,
+      reason: body.reason,
+      updates: {
+        partyId:       body.partyId,
+        partyRole:     body.partyRole,
+        parentPartyId: body.parentPartyId,
+        seasonId:      body.seasonId,
+        contractId:    body.contractId,
+        projectId:     body.projectId,
+        employeeId:    body.employeeId,
+        custodyId:     body.custodyId,
+        status:        body.status,
+        needsLinking:  body.status === "active" ? false : undefined,
+      },
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Link analytic account error:");
+  }
+});
+
+/**
+ * GET /api/accounting/classification-center/posting-failures
+ * Lists unresolved posting failures classified by category.
+ */
+router.get("/classification-center/posting-failures", authorize({ feature: "finance.accounting_engine", action: "list" }), async (req, res) => {
+  try {
+    const companyId = (req as any).user.companyId as number;
+    const category = req.query.category as string | undefined;
+    const page = Math.max(1, Number(req.query.page ?? 1));
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
+    const offset = (page - 1) * limit;
+
+    const whereClauses = [`"companyId" = $1`, `resolved = false`];
+    const params: unknown[] = [companyId];
+    if (category) { whereClauses.push(`"failureCategory" = $${params.length + 1}`); params.push(category); }
+
+    const rows = await rawQuery<{
+      id: number; sourceType: string; sourceId: number | null;
+      error: string; failureCategory: string | null; failureReason: string | null;
+      suggestedFix: string | null; createdAt: string;
+    }>(
+      `SELECT id, "sourceType", "sourceId", error, "failureCategory", "failureReason", "suggestedFix", "createdAt"
+       FROM financial_posting_failures
+       WHERE ${whereClauses.join(" AND ")}
+       ORDER BY "createdAt" DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
+    );
+
+    const [{ count }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM financial_posting_failures WHERE ${whereClauses.join(" AND ")}`,
+      params
+    );
+
+    res.json({ data: rows, total: Number(count), page, limit });
+  } catch (err) {
+    handleRouteError(err, res, "List posting failures error:");
+  }
+});
+
+/**
+ * POST /api/accounting/classification-center/posting-failures/:id/classify
+ * Manually set or override the category/fix for a failure row.
+ */
+const classifyFailureSchema = z.object({
+  failureCategory: z.enum(["parent_account","missing_mapping","missing_party","missing_config","unlinked_analytic","period_closed","unbalanced_entry","other"]),
+  failureReason:  z.string().optional(),
+  suggestedFix:   z.string().optional(),
+});
+
+router.post("/classification-center/posting-failures/:id/classify", authorize({ feature: "finance.accounting_engine", action: "create" }), async (req, res) => {
+  try {
+    const companyId = (req as any).user.companyId as number;
+    const userId    = (req as any).user.id as number;
+    const id = parseId(req.params.id);
+    const body = zodParse(classifyFailureSchema.safeParse(req.body));
+
+    // Read before-state for audit diff
+    const [before] = await rawQuery<{ failureCategory: string | null; failureReason: string | null }>(
+      `SELECT "failureCategory", "failureReason" FROM financial_posting_failures WHERE id=$1 AND "companyId"=$2`,
+      [id, companyId]
+    );
+    if (!before) {
+      res.status(404).json({ error: "سجل الخطأ غير موجود" });
+      return;
+    }
+
+    await rawExecute(
+      `UPDATE financial_posting_failures
+       SET "failureCategory"=$1, "failureReason"=$2, "suggestedFix"=$3,
+           "classifiedAt"=NOW(), "classifiedBy"=$4
+       WHERE id=$5 AND "companyId"=$6`,
+      [body.failureCategory, body.failureReason ?? null, body.suggestedFix ?? null, userId, id, companyId]
+    );
+
+    // Audit trail — who classified what and when
+    await rawExecute(
+      `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","before","after")
+       VALUES ($1,$2,'classify_failure','financial_posting_failures',$3,$4,$5)`,
+      [
+        companyId, userId, id,
+        JSON.stringify(before),
+        JSON.stringify({ failureCategory: body.failureCategory, failureReason: body.failureReason, suggestedFix: body.suggestedFix }),
+      ]
+    ).catch((e) => logger.warn(e, "[classification-center] audit insert failed"));
+
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "Classify posting failure error:");
+  }
+});
+
+/**
+ * GET /api/accounting/assert-postable?code=XXXX
+ * Dev/admin helper — verify a code is postable without posting.
+ * Used by CI guards and the settings UI.
+ */
+router.get("/assert-postable", authorize({ feature: "finance.accounting_engine", action: "view" }), async (req, res) => {
+  try {
+    const companyId = (req as any).user.companyId as number;
+    const code = String(req.query.code ?? "").trim();
+    await assertPostableAccount(companyId, code, { field: "code" });
+    res.json({ ok: true, code, postable: true });
+  } catch (err: any) {
+    res.status(422).json({ ok: false, code: req.query.code, postable: false, message: err.message });
+  }
+});
 
 export default router;
