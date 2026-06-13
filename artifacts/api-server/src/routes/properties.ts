@@ -2022,6 +2022,7 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
         `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId",
+                c."contractType" AS "contractType",
                 NULL::int AS "contractBranchId",
                 u."unitNumber", u."buildingName", u.id AS "unitId", u."branchId" AS "unitBranchId"
            FROM rent_payments rp
@@ -2065,9 +2066,38 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
         const rentBranchId = (existing.contractBranchId as number | null)
           ?? (existing.unitBranchId as number | null)
           ?? scope.branchId;
+
+        // Commercial rent is a VATable supply under ZATCA; residential
+        // rent is exempt. The `paidAmount` the operator enters is the
+        // GROSS receipt — split it into the net (revenue) and the tax
+        // (output VAT) so the GL reflects the two distinct movements.
+        // The rate itself flows through `getCompanyVatRate` which reads
+        // system_settings, so operators can override it per company
+        // without code changes (FIN-AUD-03).
+        const isCommercial = ["commercial_rent", "commercial"].includes(
+          (existing.contractType as string | null) ?? "",
+        );
+        let netAmount = paidAmount;
+        let vatAmount = 0;
+        if (isCommercial) {
+          const rate = await getCompanyVatRate(scope.companyId);
+          if (rate > 0) {
+            // VAT-inclusive split: gross = net * (1 + rate/100)
+            netAmount = roundTo2(paidAmount / (1 + rate / 100));
+            vatAmount = roundTo2(paidAmount - netAmount);
+          }
+        }
+
         const glResult = await propertiesEngine.postRentRevenueGL(
           { companyId: scope.companyId, branchId: rentBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-          { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
+          {
+            id: Number(id),
+            contractId: existing.contractId,
+            propertyId: existing.unitId,
+            amount: netAmount,
+            vatAmount: vatAmount > 0 ? vatAmount : undefined,
+            tenantId: existing.tenantId,
+          }
         );
         journalEntryId = glResult.journalId;
       } catch (jErr) {
