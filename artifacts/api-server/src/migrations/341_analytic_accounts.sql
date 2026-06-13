@@ -1,4 +1,17 @@
--- Migration 340: Dynamic Analytic Accounts
+-- Migration 341: Dynamic Analytic Accounts
+-- @rollback:
+--   BEGIN;
+--   ALTER TABLE journal_lines DROP COLUMN IF EXISTS "analyticAccountId";
+--   ALTER TABLE financial_posting_failures
+--     DROP COLUMN IF EXISTS "failureCategory",
+--     DROP COLUMN IF EXISTS "failureReason",
+--     DROP COLUMN IF EXISTS "suggestedFix",
+--     DROP COLUMN IF EXISTS "classifiedAt",
+--     DROP COLUMN IF EXISTS "classifiedBy";
+--   DROP TABLE IF EXISTS analytic_seasons CASCADE;
+--   DROP TABLE IF EXISTS posting_config_requirements CASCADE;
+--   DROP TABLE IF EXISTS analytic_accounts CASCADE;
+--   COMMIT;
 -- Issue #2197 — build the analytic dimension layer that lets the GL engine
 -- attach operational context to every journal line without multiplying the
 -- chart of accounts for each branch / season / agent / custody.
