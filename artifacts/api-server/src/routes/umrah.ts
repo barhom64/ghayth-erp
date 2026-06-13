@@ -241,6 +241,16 @@ const patchAgentSchema = z.object({
   notes: z.string().optional(),
 });
 
+// BILL-MAIN P3 (#2080) — explicit-confirmation linker payload for
+// linking a main umrah agent to an EXISTING financial client. No
+// `createNew` branch, no engine activation. Optional free-text
+// `reason` (max 500) is recorded on the audit log + event details
+// for downstream review.
+const linkAgentClientSchema = z.object({
+  clientId: z.coerce.number({ required_error: "معرف العميل مطلوب" }),
+  reason: z.string().max(500).optional(),
+});
+
 const patchPackageSchema = z.object({
   name: z.string().optional(),
   seasonId: z.coerce.number().optional(),
@@ -813,6 +823,98 @@ router.delete("/agents/:id", authorize({ feature: "umrah", action: "delete" }), 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.deleted", entity: "umrah_agents", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete agent error"); }
+});
+
+// BILL-MAIN P3 (#2080) — explicit-confirmation linker that ties a main
+// umrah agent to an EXISTING financial client. Mirrors the safe shape of
+// the sub-agent linker shipped in BILL-LINK Phase 3b: existing-client
+// only (no `createNew` branch), single-target (no bulk path), reads the
+// before-state for proper audit before/after, and records an optional
+// operator-provided `reason`.
+//
+// What this route does NOT do (explicit Permanent Hard Rails carried
+// from #2080 / UMRAH_REMAINING_WORK_ROADMAP.md):
+//   • No client creation.
+//   • No AR opening (no subsidiary or receivable provisioning here —
+//     the existing client's subsidiary chain takes over naturally).
+//   • No engine touch — `generateSalesInvoice` still gates exclusively
+//     on `subAgent.clientId` until BILL-MAIN P4 (hard-pause, separate
+//     authorisation).
+//   • No `main_agent_client` activation; the catalog default stays
+//     `operational_until_linked`.
+//   • No bulk variant. Each call links exactly one agent.
+//   • No edit to issued invoices.
+router.put("/agents/:id/link-client", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { clientId, reason } = zodParse(linkAgentClientSchema.safeParse(req.body));
+
+    // 1. Verify the target client exists under this tenant. We do NOT
+    //    create it — the route is operator-confirmed linkage of an
+    //    EXISTING client.
+    const [existingClient] = await rawQuery<{ id: number }>(
+      `SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [clientId, scope.companyId]
+    );
+    if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
+
+    // 2. Read the agent's current `clientId` BEFORE the UPDATE so the
+    //    audit log carries a real before/after pair (often null → newId).
+    const [existingAgent] = await rawQuery<{ id: number; clientId: number | null; name: string | null }>(
+      `SELECT id, "clientId", name FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existingAgent) throw new NotFoundError("الوكيل غير موجود");
+    const beforeClientId = existingAgent.clientId;
+
+    // 3. The link itself. Just `UPDATE umrah_agents SET "clientId"=...`.
+    //    No subsidiary_accounts row is created here: the linked
+    //    `clients` row already carries its own receivable subsidiary
+    //    (provisioned automatically at client creation time by the
+    //    finance-side helper, outside this file). AR resolution chains
+    //    to that automatically once the engine fallback ships in P4 —
+    //    until then this column is just data, no behaviour change.
+    await rawExecute(
+      `UPDATE umrah_agents SET "clientId"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+      [clientId, id, scope.companyId]
+    );
+
+    // 4. Read the row back so the response shape mirrors PATCH /agents/:id.
+    const [row] = await rawQuery(
+      `SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+
+    // 5. Full audit + event. The `source` flag distinguishes this
+    //    explicit-confirmation linker from any future automated path.
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "umrah_agents",
+      entityId: id,
+      before: { clientId: beforeClientId },
+      after: { clientId },
+      reason,
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "umrah.agent.linked_to_client",
+      entity: "umrah_agents",
+      entityId: id,
+      details: JSON.stringify({
+        clientId,
+        beforeClientId,
+        reason: reason ?? null,
+        source: "operator_confirmed_link_agent_client",
+      }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    res.json({ success: true, agentId: id, beforeClientId, ...row });
+  } catch (err) { handleRouteError(err, res, "Link agent to client"); }
 });
 
 router.get("/packages", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
