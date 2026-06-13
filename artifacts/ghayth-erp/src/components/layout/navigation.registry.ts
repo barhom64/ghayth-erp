@@ -629,6 +629,9 @@ export const allNavSections: NavSection[] = [
         { label: "طلبات الاسترداد", path: "/umrah/refund-requests", icon: RefreshCw },
         { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
+        // PR-4 (#2163) — nav-add: كان orphan في PR-0. طلبات النقل التشغيلية
+        // (M4 من U-02b) لها route ولكن لم يكن لها مدخل في القائمة.
+        { label: "طلبات النقل", path: "/umrah/transport-requests", icon: Truck, perm: "umrah:list" },
         { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
         { label: "التقويم التشغيلي", path: "/umrah/calendar", icon: CalendarClock },
         { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },

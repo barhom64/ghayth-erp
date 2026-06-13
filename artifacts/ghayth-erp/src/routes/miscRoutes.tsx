@@ -55,11 +55,8 @@ const ManagerBoard = lazy(() => import("@/pages/manager-board"));
 const Workspace = lazy(() => import("@/pages/workspace"));
 const ManagerWorkspace = lazy(() => import("@/pages/manager-workspace"));
 const WorkQueue = lazy(() => import("@/pages/my/work-queue"));
-// PR-5 (#2077) — صندوق الأعمال الموحّد. New canonical inbox replaces
-// the experimental /my/work-queue with a 4-section page (actions /
-// tasks / important notifications / follow-ups) that matches the
-// product owner's exact spec. The /my/work-queue route stays as a
-// back-compat alias.
+// PR-4 (#2163) — /my/work-queue أصبح back-compat redirect إلى /work-inbox.
+// canonical هو /work-inbox (PR-5 #2077).
 const WorkInbox = lazy(() => import("@/pages/work-inbox"));
 // PR-9 (#2077) — رفيق الميدان: mobile-first field-ping companion.
 const FieldCompanion = lazy(() => import("@/pages/my/field-companion"));

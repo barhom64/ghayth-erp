@@ -120,32 +120,32 @@ forbidden-visible           ❓   انظر §10a
 
 | المسار | بديله الحالي | حالة |
 |---|---|---|
-| `/my/work-queue` | `/work-inbox` (PR-5) | الـcanonical الجديد يستوعب كل ما كان يخدمه — يحتاج تأكيد صاحب المنتج قبل الحذف |
+| `/my/work-queue` | `/work-inbox` (PR-5) | ✅ **PR-4**: أصبح redirect shell — route يبقى للروابط القديمة |
 
-**العدد**: 1. **القرار**: redirect → `/work-inbox` ثم إزالة (PR منفصل).
+**العدد**: 1. **القرار**: ✅ منجز في PR-4.
 
 ### 6.D — nav-add candidates (route صالح، nav فقدته)
 
-| المسار | nav-section المقترح |
+| المسار | nav-section المضاف |
 |---|---|
-| `/umrah/transport-requests` | «العمرة → النقل» |
+| `/umrah/transport-requests` | ✅ **PR-4**: أُضيف تحت «العمرة → طلبات النقل» بـ`perm: "umrah:list"` |
 
-**العدد**: 1. **القرار**: إضافة nav item تحت السكشن المقترح.
+**العدد**: 1. **القرار**: ✅ منجز في PR-4.
 
 ### 6.E — orphan + cross-module-duplicate (تُحَل بحل الـduplicate)
 
-| المسار | ملاحظة |
+| المسار | حالة بعد PR-3 + PR-4 |
 |---|---|
-| `/admin/attendance-categories` | الـ`/hr/attendance-categories` المرآة في nav؛ بعد تثبيت canonical في §4، هذا الـorphan يختفي تلقائيًا |
-| `/admin/scoring-weights` | نفس النمط |
+| `/admin/attendance-categories` | ✅ **PR-3**: أصبح back-compat redirect إلى `/hr/attendance-categories` — لم يعد orphan |
+| `/admin/scoring-weights` | ✅ **PR-3**: أصبح back-compat redirect إلى `/hr/scoring-weights` — لم يعد orphan |
 
-**العدد**: 2. **القرار**: لا قرار مستقل — يُحَل ضمن PR-3 (تنظيف الـduplicates).
+**العدد**: 2. **القرار**: ✅ حُلّا ضمن PR-3.
 
 ### مجموع §6
 
-**5 orphans = 0 actual + 1 deep-link-only + 1 back-compat + 1 nav-add + 2 cross-duplicate-resolved**
+**5 orphans = 0 actual + 1 deep-link-only ✅ + 1 back-compat ✅ (PR-4) + 1 nav-add ✅ (PR-4) + 2 cross-duplicate-resolved ✅ (PR-3)**
 
-(يطابق التوزيع في §3 ويطابق صف #4 في جدول القرار §11.)
+كل الـ5 orphans محسومة الآن.
 
 ---
 
@@ -326,3 +326,33 @@ owner    /auth/me modules: [dashboard, properties, projects, …]   (27 module)
 
 **الـSmoke Pin:**
 - `tests/unit/platformWave2Pr3CanonicalOwnershipSmoke.test.ts` — 14 فحصًا يحرسون رجوع أي تكرار
+
+---
+
+## 17. تقرير PR-4 — تنظيف orphans المصنفة (مكتمل)
+
+> **PR**: #2163 PR-4 · **التاريخ**: 2026-06-13 · **الفرع**: `claude/ecstatic-franklin-psjwmd`
+
+### البنود الأربعة
+
+| البند | التصنيف | الإجراء | النتيجة |
+|---|---|---|---|
+| `/umrah/commission-plans/new` | deep-link-only | لا nav-add — الصفحة الأم `/umrah/commission-plans` تحتوي زر «جديد» يفتحه | موثق، لا تغيير |
+| `/my/work-queue` | back-compat | `pages/my/work-queue.tsx` أصبح redirect shell إلى `/work-inbox` | ✅ منجز |
+| `/umrah/transport-requests` | nav-add | أُضيف مدخل «طلبات النقل» في العمرة بـ`perm: "umrah:list"` | ✅ منجز |
+| `/admin/attendance-categories` + `/admin/scoring-weights` | cross-duplicate-resolved | أصبحا back-compat redirects في PR-3 — لم يعودا orphan | ✅ محسوم في PR-3، موثق هنا |
+
+### ما تغيّر
+
+**الملفات المعدَّلة:**
+- `pages/my/work-queue.tsx` — redirect shell إلى `/work-inbox` (لا منطق عمل)
+- `components/layout/navigation.registry.ts` — إضافة «طلبات النقل» تحت العمرة
+- `routes/miscRoutes.tsx` — تحديث التعليق ليعكس الحالة الجديدة
+
+**لم يتغير:**
+- route `/my/work-queue` في miscRoutes — يبقى لإبقاء الروابط القديمة تعمل
+- `/umrah/commission-plans/new` — لا nav إضافي (deep-link-only بزر واضح في الأم)
+- authMiddleware أو RBAC أو backend
+
+**الـSmoke Pin:**
+- `tests/unit/platformWave2Pr4OrphansCleanupSmoke.test.ts`
