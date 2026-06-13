@@ -134,7 +134,7 @@ async function assertGrnTreatmentNature(
 
   const { financialEngine } = await import("../lib/engines/index.js");
   const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
-  const defaultInvAccount = await financialEngine.resolveAccountCode(companyId, "inventory_receipt", "debit", "1150");
+  const defaultInvAccount = await financialEngine.resolveAccountCode(companyId, "inventory_receipt", "debit", "1151");
 
   const resolved = await Promise.all(
     constrained.map(async (l) => ({ line: l, acct: await resolveGrnDrAccount(companyId, l, vendorId, financialEngine, resolveLineAllocation, defaultInvAccount) })),
@@ -1330,7 +1330,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // a safety net so unclassified receipts still post somewhere
     // sensible until Phase 6 forces every line to carry a treatment.
     const defaultInvAccount = await financialEngine.resolveAccountCode(
-      scope.companyId, "inventory_receipt", "debit", "1150"
+      scope.companyId, "inventory_receipt", "debit", "1151"
     );
 
     // Phase 5.4 — run the allocation resolver on every receipt line.
@@ -1847,7 +1847,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apAccount, cashAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1124"),
     ]);
 
     // ── WHT computation ─────────────────────────────────────────────────
@@ -1892,7 +1892,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     // paying 50 POs to 30 different non-residents still produces one
     // CR line per ZATCA-payable account (typically just '2330').
     const whtPayableFallback = await financialEngine.resolveAccountCode(
-      scope.companyId, "wht_payable", "credit", "2330",
+      scope.companyId, "wht_payable", "credit", "2132",
     );
     const whtCreditByAccount = new Map<string, number>();
     for (const w of whtByPo) {
@@ -2624,7 +2624,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
     // anchor kicks in on retry.
     const { financialEngine } = await import("../lib/engines/index.js");
     const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111");
-    const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100");
+    const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1124");
 
     let schedAlreadyExists = false;
     await withTransaction(async (client: any) => {

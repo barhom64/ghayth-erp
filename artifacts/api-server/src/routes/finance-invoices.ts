@@ -312,9 +312,9 @@ invoicesRouter.post("/invoices/impact-preview", authorize({ feature: "finance.in
     // resolves the account at save.
     const { financialEngine } = await import("../lib/engines/index.js");
     const [arAccountCode, revenueAccountCode, vatAccountCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
     ]);
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
@@ -691,9 +691,9 @@ invoicesRouter.post("/invoices", authorize({ feature: "finance.invoices", action
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_ar", "debit", "1200"),
-      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_revenue", "credit", "4000"),
-      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_ar", "debit", "1131"),
+      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_revenue", "credit", "4111"),
+      financialEngine.resolveAccountCode(effectiveCompanyId, "invoice_vat_payable", "credit", "2131"),
     ]);
 
     // Numbering center (Issue #1141) — invoice number from central authority.
@@ -949,9 +949,9 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
     // GL accounts resolved up-front (reads, no transaction needed).
     const { financialEngine } = await import("../lib/engines/index.js");
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
     ]);
 
     // Atomic approval: status flip + GL post + denormalised counters
@@ -1532,9 +1532,9 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     // Resolve GL accounts (read-only; doesn't post).
     const { financialEngine } = await import("../lib/engines/index.js");
     const [invArCode, invRevenueCode, invVatPayableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
     ]);
 
     // Read invoice_lines with dimensional fields (migration 200).
@@ -1934,7 +1934,7 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashAccountCode, arAccountCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_ar", "credit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_ar", "credit", "1131"),
     ]);
 
     let invoiceRef!: string;
@@ -2325,7 +2325,7 @@ invoicesRouter.delete("/invoices/:id", authorize({ feature: "finance.invoices", 
         if (net > 0) {
           const { financialEngine } = await import("../lib/engines/index.js");
           const invRevenueCode = await financialEngine.resolveAccountCode(
-            scope.companyId, "invoice_revenue", "credit", "4000"
+            scope.companyId, "invoice_revenue", "credit", "4111"
           );
           const approvalPeriod = String(je.createdAt).slice(0, 7);
           await client.query(
@@ -2468,7 +2468,7 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
               if (net > 0) {
                 const { financialEngine } = await import("../lib/engines/index.js");
                 const invRevenueCode = await financialEngine.resolveAccountCode(
-                  scope.companyId, "invoice_revenue", "credit", "4000"
+                  scope.companyId, "invoice_revenue", "credit", "4111"
                 );
                 const approvalPeriod = String(je.createdAt).slice(0, 7); // YYYY-MM
                 await client.query(
@@ -2696,9 +2696,9 @@ invoicesRouter.post("/invoices/:id/credit-memo/preview", authorize({
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [previewSalesReturnsCode, previewVatPayableCode, previewArCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4113"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2131"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1131"),
     ]);
 
     const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
@@ -2797,9 +2797,9 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4113"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2131"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1131"),
     ]);
 
     let memoId: number | null = null;
@@ -2987,7 +2987,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         if (origJe && origJe.createdAt) {
           const { financialEngine } = await import("../lib/engines/index.js");
           const invRevenueCode = await financialEngine.resolveAccountCode(
-            scope.companyId, "invoice_revenue", "credit", "4000"
+            scope.companyId, "invoice_revenue", "credit", "4111"
           );
           const approvalPeriod = String(origJe.createdAt).slice(0, 7);
           await client.query(
@@ -3217,9 +3217,9 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         "../lib/inventory/cogsPosting.js"
       );
       const [salesReturnsCode, vatPayableCode, arCode] = await Promise.all([
-        financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4100"),
-        financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2300"),
-        financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
+        financialEngine.resolveAccountCode(scope.companyId, "invoice_sales_returns", "debit", "4113"),
+        financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "debit", "2131"),
+        financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1131"),
       ]);
       const originalVat = roundTo2(Number(original.vatAmount));
       const originalNet = roundTo2(originalTotal - originalVat);
@@ -3309,7 +3309,7 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
         const origJe = origJeRes.rows[0];
         if (origJe && origJe.createdAt) {
           const invRevenueCode = await financialEngine.resolveAccountCode(
-            scope.companyId, "invoice_revenue", "credit", "4000"
+            scope.companyId, "invoice_revenue", "credit", "4111"
           );
           const approvalPeriod = String(origJe.createdAt).slice(0, 7);
           await client.query(
@@ -3548,9 +3548,9 @@ invoicesRouter.post("/invoices/:id/debit-memo/preview", authorize({
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [arCode, revenueCode, vatPayableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
     ]);
 
     const vatRate = Number(invoice.vatRate ?? await getCompanyVatRate(scope.companyId));
@@ -3622,9 +3622,9 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [arCode, revenueCode, vatPayableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1200"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4000"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2300"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "debit", "1131"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_revenue", "credit", "4111"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_vat_payable", "credit", "2131"),
     ]);
 
     let memoId: number | null = null;
@@ -3937,8 +3937,8 @@ invoicesRouter.post("/bad-debt/post", authorize({ feature: "finance.collection",
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [expenseCode, allowanceCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_expense", "debit", "5170"),
-      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_allowance", "credit", "1210"),
+      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_expense", "debit", "5820"),
+      financialEngine.resolveAccountCode(scope.companyId, "bad_debt_allowance", "credit", "1135"),
     ]);
 
     let journalId: number | null = null;
@@ -4075,7 +4075,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
       // debit-side mapping, so it fell through to the non-postable header 1100 and
       // the advance failed to post on tenants whose 1100 isn't a posting account.
       financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
-      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2400"),
+      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2160"),
     ]);
 
     let journalId: number | null = null;
@@ -4255,8 +4255,8 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [advLiabCode, arCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "debit", "2400"),
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1200"),
+      financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "debit", "2160"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_ar", "credit", "1131"),
     ]);
 
     let advance: any;
