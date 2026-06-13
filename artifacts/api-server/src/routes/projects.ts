@@ -1908,7 +1908,7 @@ router.post("/:id/boq", authorize({ feature: "projects.list", action: "create" }
     const boqId = assertInsert(ins.insertId, "project_boq_items");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.boq.added", entity: "project_boq_items", entityId: boqId, details: JSON.stringify({ projectId, lineTotal }) }).catch((e) => logger.error(e, "projects background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "project_boq_items", entityId: boqId, after: { projectId, description: b.description, quantity, unitPrice, lineTotal } }).catch((e) => logger.error(e, "projects background task failed"));
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2`, [boqId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_boq_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [boqId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create BOQ item error:"); }
 });
@@ -2073,7 +2073,7 @@ router.post("/:id/units", authorize({ feature: "projects.list", action: "create"
     const uid = assertInsert(ins.insertId, "development_units");
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.dev_unit.added", entity: "development_units", entityId: uid, details: JSON.stringify({ projectId, area, salePrice }) }).catch((e) => logger.error(e, "projects background task failed"));
     createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "create", entity: "development_units", entityId: uid, after: { projectId, name: b.name, area, salePrice } }).catch((e) => logger.error(e, "projects background task failed"));
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2`, [uid, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM development_units WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [uid, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create development unit error:"); }
 });
