@@ -1933,7 +1933,7 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [cashAccountCode, arAccountCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1111" : "1124"),
       financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_ar", "credit", "1131"),
     ]);
 
@@ -4074,7 +4074,7 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
       // not the payroll-payout purpose. The old "payroll_bank_payout" key has no
       // debit-side mapping, so it fell through to the non-postable header 1100 and
       // the advance failed to post on tenants whose 1100 isn't a posting account.
-      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
+      financialEngine.resolveAccountCode(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1111" : "1124"),
       financialEngine.resolveAccountCode(scope.companyId, "customer_advance_liability", "credit", "2160"),
     ]);
 
