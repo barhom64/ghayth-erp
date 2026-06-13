@@ -241,8 +241,8 @@ export default function FxRevaluationPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <Badge variant="outline">AR</Badge>
-                الفواتير (Accounts Receivable)
+                <Badge variant="outline">مدينة</Badge>
+                الفواتير (ذمم مدينة)
               </span>
               <Badge>{arRows.length}</Badge>
             </CardTitle>
@@ -258,8 +258,8 @@ export default function FxRevaluationPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <Badge variant="outline">AP</Badge>
-                أوامر الشراء (Accounts Payable)
+                <Badge variant="outline">دائنة</Badge>
+                أوامر الشراء (ذمم دائنة)
               </span>
               <Badge>{apRows.length}</Badge>
             </CardTitle>

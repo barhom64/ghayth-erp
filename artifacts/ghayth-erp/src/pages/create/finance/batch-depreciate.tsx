@@ -62,7 +62,7 @@ export default function BatchDepreciatePage() {
         </div>
         <Button onClick={handleBatchDepreciate} disabled={batchDepMutation.isPending} className="gap-2" rateLimitAware>
           <Save className="h-4 w-4" />
-          {batchDepMutation.isPending ? "جارٍ الإهلاك..." : `إهلاك جميع الأصول — ${form.depPeriod}`}
+          {batchDepMutation.isPending ? "جاري الإهلاك..." : `إهلاك جميع الأصول — ${form.depPeriod}`}
         </Button>
         {batchResult && (
           <div className="bg-status-success-surface p-4 rounded-lg border border-status-success-surface space-y-1">

@@ -54,9 +54,9 @@ describe("VAT period query scopes to active entries", () => {
   it("requires balancesApplied = true (drafts don't count)", () => {
     expect(HANDLER).toMatch(/je\."balancesApplied" = true/);
   });
-  it("date filters bind against je.postingDate (ledger date)", () => {
-    expect(HANDLER).toMatch(/je\."postingDate" >= \$\$\{params\.length\}/);
-    expect(HANDLER).toMatch(/je\."postingDate" < \(\$\$\{params\.length\}::date \+ 1\)/);
+  it("date filters bind against je.date (ledger date — journal_entries has no postingDate column)", () => {
+    expect(HANDLER).toMatch(/je\."date" >= \$\$\{params\.length\}/);
+    expect(HANDLER).toMatch(/je\."date" < \(\$\$\{params\.length\}::date \+ 1\)/);
   });
   it("filters journal_lines by the resolved VAT account codes", () => {
     expect(HANDLER).toMatch(/jl\."accountCode" IN \(\$2, \$3\)/);
@@ -71,8 +71,8 @@ describe("VAT live-balance query has NO date filter", () => {
     expect(balStart).toBeGreaterThan(-1);
     const balEnd = HANDLER.indexOf("GROUP BY jl.\"accountCode\"`,", balStart);
     const balBlock = HANDLER.slice(balStart, balEnd);
-    expect(balBlock).not.toMatch(/postingDate >= /);
-    expect(balBlock).not.toMatch(/postingDate < /);
+    expect(balBlock).not.toMatch(/je\."date" >= /);
+    expect(balBlock).not.toMatch(/je\."date" < /);
   });
 });
 

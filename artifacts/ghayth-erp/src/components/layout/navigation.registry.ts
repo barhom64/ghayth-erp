@@ -22,7 +22,7 @@ import {
   Target, Network, Receipt, Wallet, Car, Wrench, Fuel, User,
   FileCheck, AlertTriangle, ClipboardCheck, Building, FileSignature, Users2,
   Hammer, TrendingUp, FileBarChart, FolderOpen, Archive, ListTodo, GitBranch,
-  FilePlus, CalendarClock, ScrollText, Cog, Bell, Mail,
+  FilePlus, CalendarClock, ScrollText, Cog, Bell, Mail, Inbox,
   MessageSquare, Scale, Briefcase, Megaphone, ShoppingCart, Package, Activity,
   LineChart, Menu, X, LogOut, Headphones, CheckCircle,
   KeyRound, CloudRain, MapPin, QrCode, FileSignature as FileSignature2,
@@ -76,10 +76,20 @@ export const allNavSections: NavSection[] = [
     title: "الرئيسية",
     items: [
       { label: "لوحة التحكم", path: "/dashboard", icon: LayoutDashboard, module: "home" },
+      // PR-5 (#2077) — صندوق الأعمال الموحّد. Promoted to the top of
+      // «الرئيسية» so it's the first thing every operator sees on
+      // login. Replaces the 5-screen morning routine (notifications +
+      // action-center + hr/approval-inbox + finance/approvals-inbox +
+      // tasks) with a single canonical page.
+      { label: "صندوق الأعمال", path: "/work-inbox", icon: Inbox },
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
-        { label: "ما ينتظر إجراءاتي", path: "/my/work-queue", icon: ListChecks },
+        { label: "ما ينتظر إجراءاتي", path: "/work-inbox", icon: ListChecks },
+        // PR-9 (#2077) — رفيق الميدان. The page itself checks the
+        // category-policy eligibility; non-field categories see the
+        // «فئتك لا تخضع للتتبع» banner and never get a location prompt.
+        { label: "رفيق الميدان", path: "/my/field-companion", icon: MapPin },
         { label: "مساحتي", path: "/my-space", icon: User },
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
@@ -150,7 +160,11 @@ export const allNavSections: NavSection[] = [
     // bookmarks + deep-links keep working.
     items: [
       // 1. لوحة HR
-      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "bi" },
+      // PR-1 / #2163 — was module:"bi" (FU-2). hr_manager owns hr, not bi.
+      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
+      // بوابة /hr — لوحة تشغيلية خاصة بفريق الموارد البشرية (مؤشرات وروابط
+      // سريعة لا تظهر في اللوحة العامة). كانت مركّبة بلا مدخل (orphan).
+      { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr" },
 
       // 2. الموظفون — gathers recruitment, employees, onboarding,
       // org structure, transfers, documents, contracts, letters, exit
@@ -195,16 +209,25 @@ export const allNavSections: NavSection[] = [
       ]},
 
       // 5. الامتثال والجزاءات — gathers all violations + memos +
-      // regulations + Saudization (previously 3 separate clusters)
-      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr", children: [
-        { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations" },
-        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations" },
-        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations" },
-        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations" },
-        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations" },
-        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees" },
-        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll" },
+      // regulations + Saudization (previously 3 separate clusters).
+      // PR-10 (#2077) — Closure Gate: explicit perm guard on the
+      // group + the discipline/violations children so the رابط لا يظهر
+      // for users without violations/discipline visibility (e.g.
+      // payroll_officer). Backend authorize() still 403s either way —
+      // this just keeps «نظهرَ ثم 403» out of the UX. السعودة + WPS
+      // children stay on their own permissions so finance/payroll
+      // personas can still reach them.
+      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
+        perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
+        children: [
+        { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees", perm: ["hr.saudization:view","hr.saudization:list"], permMode: "any" },
+        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
       ]},
 
       // 6. الأداء والتطوير — gathers performance + 360 + IDP + training
@@ -233,6 +256,7 @@ export const allNavSections: NavSection[] = [
       { label: "التقارير", path: "/hr/turnover-report", icon: FileBarChart, module: "hr", children: [
         { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
         { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
+        { label: "تحليلات التوظيف المتقدمة", path: "/hr/recruitment/advanced", icon: TrendingUp, subKey: "recruitment" },
       ]},
 
       // 9. الإعدادات — attendance policy + holidays
@@ -240,10 +264,11 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
+        { label: "الشجرة التنظيمية", path: "/hr/org-tree", icon: Network, subKey: "employees" },
         { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
-        { label: "أوزان التقييم وترتيب الأداء", path: "/admin/scoring-weights", icon: TrendingUp, subKey: "settings" },
+        { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
-        { label: "فئات الموظفين وسياسات الحضور", path: "/admin/attendance-categories", icon: Users, subKey: "settings" },
+        { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },
       ]},
     ],
   },
@@ -476,8 +501,11 @@ export const allNavSections: NavSection[] = [
         // shows it to anyone with fleet access; non-driver managers who click it
         // hit a graceful "لا يوجد سجل سائق" empty state, never an error.
         { label: "لوحة السائق", path: "/me/driver", icon: User, module: "fleet" },
+        // ملاحة السائق — نفس بوابة لوحة السائق (module بدل perm) ولنفس السبب.
+        { label: "ملاحة السائق", path: "/me/driver/navigation", icon: Navigation, module: "fleet" },
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "fleet" },
         // Management children are gated by the exact backend feature:action each
         // page requires, so a role lacking the grant (e.g. driver) never sees a
         // link that would 403 into "حدث خطأ في تحميل البيانات". Owner bypasses
@@ -488,6 +516,9 @@ export const allNavSections: NavSection[] = [
         { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
         { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
         { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
+        // تأجير المركبات — كانت الصفحة مركّبة بلا مدخل في القائمة (orphan).
+        // بوابة الـ backend: fleet.vehicles:list (fleet.ts /rental-contracts).
+        { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.vehicles:list" },
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
         { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock, perm: "fleet.maintenance:list" },
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle, perm: "fleet.vehicles:list" },
@@ -527,7 +558,8 @@ export const allNavSections: NavSection[] = [
     items: [
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard, module: "warehouse" },
         { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
         { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
@@ -536,7 +568,8 @@ export const allNavSections: NavSection[] = [
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=store", icon: LayoutDashboard, module: "store" },
         { label: "المنتجات", path: "/store/products", icon: Package },
         { label: "الطلبات", path: "/store/orders", icon: ShoppingCart },
       ]},
@@ -593,9 +626,11 @@ export const allNavSections: NavSection[] = [
         { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
         { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: Sparkles },
         { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
+        { label: "طلبات الاسترداد", path: "/umrah/refund-requests", icon: RefreshCw },
         { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
         { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
         { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
+        { label: "التقويم التشغيلي", path: "/umrah/calendar", icon: CalendarClock },
         { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
         { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
         { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
@@ -607,6 +642,17 @@ export const allNavSections: NavSection[] = [
           { label: "أرصدة الوكلاء", path: "/umrah/reports/agent-balances", icon: DollarSign },
           { label: "أرصدة الوكلاء الفرعيين", path: "/umrah/reports/subagent-balances", icon: DollarSign },
           { label: "حركات المعتمرين", path: "/umrah/reports/pilgrim-movements", icon: Activity },
+          // بقية التقارير كانت مركّبة وتُفتح من مركز التقارير فقط (orphans) —
+          // أُضيفت هنا حتى تكون كل المسارات قابلة للوصول من القائمة أيضاً.
+          { label: "ربحية المجموعات", path: "/umrah/reports/group-profitability", icon: TrendingUp },
+          { label: "ربحية الوكلاء", path: "/umrah/reports/agent-profitability", icon: TrendingUp },
+          { label: "ملخّص العمولات", path: "/umrah/reports/commissions-summary", icon: Calculator },
+          { label: "تكاليف العمرة", path: "/umrah/reports/umrah-costs", icon: DollarSign },
+          { label: "ملخّص فواتير نُسك", path: "/umrah/reports/nusk-invoices-summary", icon: Receipt },
+          { label: "ملخّص فواتير العملاء", path: "/umrah/reports/sales-invoices-summary", icon: Receipt },
+          { label: "النقل المرتبط بالعمرة", path: "/umrah/reports/transport-requests", icon: Truck },
+          { label: "ملخّص المخالفات", path: "/umrah/reports/violations-summary", icon: Shield },
+          { label: "ملخّص أخطاء الاستيراد", path: "/umrah/reports/import-errors-summary", icon: AlertTriangle },
         ]},
       ]},
     ],
@@ -619,14 +665,16 @@ export const allNavSections: NavSection[] = [
     items: [
       { label: "العملاء والمبيعات", path: "/clients", icon: Target, module: "crm", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=crm", icon: LayoutDashboard, module: "crm" },
         { label: "الفرص التجارية", path: "/crm", icon: Target },
         { label: "قمع المبيعات", path: "/crm/pipeline", icon: TrendingUp },
         { label: "أنشطة علاقات العملاء", path: "/crm/activities", icon: Activity },
       ]},
       { label: "الدعم الفني", path: "/support", icon: Headphones, module: "support", children: [
         // Agent-5: explicit module="bi" matches backend gate.
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard, module: "bi" },
+        // PR-1 / #2163 — was module:"bi" (FU-2).
+        { label: "لوحة التحكم", path: "/module-dashboards?tab=support", icon: LayoutDashboard, module: "support" },
         { label: "التذاكر", path: "/support", icon: Headphones },
         { label: "قاعدة المعرفة", path: "/support/kb", icon: BookOpen },
         { label: "الردود الجاهزة", path: "/support/replies", icon: MessageSquare },
