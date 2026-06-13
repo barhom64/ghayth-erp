@@ -164,13 +164,13 @@ describe("postBuildingAssetGL — happy path", () => {
       2,
       "property_building_asset",
       "debit",
-      "1520",
+      "1240",
     );
     expect(resolveAccountCodeMock).toHaveBeenCalledWith(
       2,
       "property_building_purchase_cash",
       "credit",
-      "1100",
+      "1111",
     );
   });
 });
@@ -292,7 +292,7 @@ describe("postEarlyTerminationGL — happy path", () => {
       2,
       "rent_receivable",
       "debit",
-      "1200",
+      "1132",
     );
     expect(resolveAccountCodeMock).toHaveBeenCalledWith(
       2,
@@ -407,7 +407,7 @@ describe("postOwnerPayoutGL — happy path", () => {
       2,
       "cash",
       "credit",
-      "1010",
+      "1111",
     );
   });
 });
