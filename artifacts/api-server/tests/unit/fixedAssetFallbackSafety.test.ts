@@ -130,3 +130,38 @@ describe("#2140 شريحة 5-أ — سلامة fallbacks الأصول الثاب
     expect(hasCorrect, 'asset_disposal_cash fallback must be "1111" (postable cash leaf)').toBe(true);
   });
 });
+
+// ── حارس انجراف schema_pre.sql ─────────────────────────────────────────────
+// يتحقق من أن db/schema_pre.sql يحتوي على الأعمدة التي أضافتها migration 338.
+// إذا أُضيف عمود جديد لجدول fixed_assets عبر migration مستقبلي، يجب تحديث
+// هذا الاختبار وschema_pre.sql معًا.
+
+const SCHEMA_PRE = resolve(__dirname, "../../../../db/schema_pre.sql");
+
+describe("#2140 شريحة 5-أ — حارس انجراف schema_pre.sql", () => {
+  const schema = readFileSync(SCHEMA_PRE, "utf-8");
+
+  // استخرج تعريف جدول fixed_assets فقط (من CREATE TABLE حتى نهايته)
+  const tableMatch = schema.match(
+    /CREATE TABLE public\.fixed_assets \([\s\S]*?\);/
+  );
+  const tableDef = tableMatch ? tableMatch[0] : "";
+
+  it("schema_pre.sql يحتوي على عمود departmentId في fixed_assets", () => {
+    expect(tableDef, "migration 338: departmentId missing from schema_pre.sql").toMatch(
+      /"departmentId"/
+    );
+  });
+
+  it("schema_pre.sql يحتوي على عمود costCenterId في fixed_assets", () => {
+    expect(tableDef, "migration 338: costCenterId missing from schema_pre.sql").toMatch(
+      /"costCenterId"/
+    );
+  });
+
+  it("schema_pre.sql يحتوي على عمود accumulatedImpairment في fixed_assets", () => {
+    expect(tableDef, "migration 338: accumulatedImpairment missing from schema_pre.sql").toMatch(
+      /"accumulatedImpairment"/
+    );
+  });
+});
