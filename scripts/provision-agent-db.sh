@@ -183,6 +183,14 @@ SEED_REPLAY_ALLOWLIST=(
   "289_seed_project_gl_mappings.sql"
   "291_seed_purchase_grni_mapping.sql"
   "312_seed_finance_intent_account_mappings.sql"
+  # 336 is POST-cutoff (applied at step 4) but, like 312, CROSS JOINs
+  # `companies` which is empty at step 4 — so its 1190 insert + AP intent
+  # mappings land on 0 rows there. Replay it here, after companies seed, so
+  # the vendor AP anchors actually exist on a clean install. Idempotent
+  # (ON CONFLICT DO NOTHING / fill-empty-only). On a real api-server boot
+  # (migrate.ts) the DB already has companies, so this ordering gap is
+  # provision-harness-only. #2140 slice 2-أ.
+  "336_vendor_ap_accounting_anchors.sql"
 )
 is_replay_seed() {
   for s in "${SEED_REPLAY_ALLOWLIST[@]}"; do

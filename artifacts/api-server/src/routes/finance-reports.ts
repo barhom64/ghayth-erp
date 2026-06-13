@@ -2977,8 +2977,8 @@ reportsRouter.get(
       // 2300 / 1400 defaults via accounting_mappings).
       const { financialEngine } = await import("../lib/engines/index.js");
       const [outputVatCode, inputVatCode] = await Promise.all([
-        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300"),
-        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1400"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2131"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1180"),
       ]);
 
       const params: unknown[] = [scope.companyId, outputVatCode, inputVatCode];

@@ -33,9 +33,9 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode, vatCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "rent_revenue", "credit", "4100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1132"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rent_revenue", "credit", "4121"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
     ]);
 
     const lines = [
@@ -102,8 +102,8 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_expense", "debit", "6400"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_expense", "debit", "5610"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2150"),
     ]);
 
     // Carry unitId + clientId on every line — caller (properties.ts:complete)
@@ -147,8 +147,8 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [depositLiability, cashAccount] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "security_deposit_liability", "credit", "2300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "security_deposit_liability", "credit", "2170"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1111"),
     ]);
 
     const isReceived = deposit.type === "received";
@@ -204,7 +204,7 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1132"),
       financialEngine.resolveAccountCode(ctx.companyId, "early_termination_revenue", "credit", "4150"),
     ]);
 
@@ -234,8 +234,8 @@ class PropertiesEngineImpl implements DomainEngine {
     building: { id: number; purchasePrice: number; name: string }
   ) {
     const [assetCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1520"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_purchase_cash", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1240"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_purchase_cash", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -258,6 +258,118 @@ class PropertiesEngineImpl implements DomainEngine {
   }
 
   /**
+  /**
+   * postManagementCollectionGL — collection on a managed contract.
+   *
+   * The third Properties activity branch (#1999, contractType=management).
+   * We collect rent on behalf of a third-party owner and keep a
+   * commission. The rent is NOT our revenue; the commission is.
+   *
+   * Splits the cash receipt three ways:
+   *   - DR property_cash               (gross rent — what the bank shows)
+   *   - CR property_owner_payable      (rent − commission — what we owe
+   *     the owner, the line the periodic owner statement aggregates)
+   *   - CR property_management_commission (commission — OUR revenue)
+   *
+   * The commission rate is per-contract and lives in the data layer —
+   * the engine just takes a resolved commission amount. The route adds
+   * a column to rental_contracts in PR-6b and multiplies before calling.
+   * Account codes resolve through `resolveAccountCode`; the fallbacks
+   * (1100 cash / 2150 owner payable / 4130 commission revenue) only
+   * fire when a tenant hasn't seeded a mapping.
+   *
+   * Dimensions: every line carries propertyId + contractId. The CASH
+   * line is tagged with the tenant's clientId (per-tenant collection
+   * drilldowns); the OWNER PAYABLE line is tagged with the owner's
+   * clientId so the owner statement aggregates straight from
+   * journal_lines.
+   *
+   * Zero-commission edge case: an introductory month / pro-bono
+   * arrangement passes commissionAmount=0; the engine omits the
+   * commission line entirely (financialEngine rejects zero-amount
+   * lines as a balanced-pair safeguard).
+   *
+   * Idempotency: guardTable=property_management_collections +
+   * guardId=collection.id so a double-post surfaces as a unique
+   * violation against the future collection row's id.
+   */
+  async postManagementCollectionGL(
+    ctx: PropertyGLContext,
+    collection: {
+      id: number;
+      contractId: number;
+      propertyId: number;
+      ownerId: number;
+      tenantId: number;
+      rentAmount: number;
+      commissionAmount: number;
+    },
+  ) {
+    const [cashCode, ownerPayableCode, commissionCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1111"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_management_commission", "credit", "4130"),
+    ]);
+
+    const ownerShare = collection.rentAmount - collection.commissionAmount;
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      contractId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: cashCode,
+        debit: collection.rentAmount,
+        credit: 0,
+        description: `تحصيل إيجار — عقد إدارة #${collection.contractId}`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+        clientId: collection.tenantId,
+      },
+      {
+        accountCode: ownerPayableCode,
+        debit: 0,
+        credit: ownerShare,
+        description: `مستحق للمالك — عقد إدارة #${collection.contractId}`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+        clientId: collection.ownerId,
+      },
+    ];
+
+    if (collection.commissionAmount > 0) {
+      lines.push({
+        accountCode: commissionCode,
+        debit: 0,
+        credit: collection.commissionAmount,
+        description: `عمولة إدارة عقار`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-MGMT-${collection.id}`,
+      description: `تحصيل عقد إدارة #${collection.contractId} — عقار #${collection.propertyId}`,
+      type: "general",
+      sourceType: "property_management_collections",
+      sourceId: collection.id,
+      sourceKey: `property:mgmt_collection:${collection.id}`,
+      guardTable: "property_management_collections",
+      guardId: collection.id,
+      lines,
+    });
+  }
+
+  /**
    * postSaleGL — property disposal at sale.
    *
    * The fourth Properties activity branch (#1999). Removes the building
@@ -265,70 +377,27 @@ class PropertiesEngineImpl implements DomainEngine {
    * the asset account), debits the buyer's receivable for the full
    * sale price (gross — including VAT when commercial), and recognises
    * the realised gain or loss as the delta between net sale price and
-   * book value. Mirrors the rent VAT split (#PR-4) for commercial
-   * sales: VAT is its own CR to vat_output, and the gain calc uses
-   * NET (post-VAT) sale price, never the gross — otherwise the
-   * realised gain would be inflated by the tax the company is
-   * collecting on ZATCA's behalf.
-   *
-   * Every account code resolves through `resolveAccountCode`, so an
-   * operator's `accounting_mappings` row beats the engine's
-   * fallback. The literal codes here (1130 receivable, 1520 asset,
-   * 4910 gain, 6910 loss, 2200 VAT) are last-resort defaults only.
-   *
-   * Bookkeeping invariants enforced by this method:
-   *   - Exactly one of gain or loss appears, never both (a break-even
-   *     sale emits two lines, no realised gain/loss).
-   *   - SUM(debit) === SUM(credit) for every shape.
-   *   - propertyId + clientId(buyer) tagged on every line so the
-   *     per-property P&L and per-buyer A/R drill through.
-   *
-   * Idempotency: `guardTable=property_sales` + `guardId=sale.id` so a
-   * double-call surfaces a unique-violation rather than two journal
-   * entries against the same sale.
+   * book value.
    */
   async postSaleGL(
     ctx: PropertyGLContext,
     sale: {
-      /** Identifies the sale row that owns this posting. Used as
-       *  sourceId, guardId, and inside sourceKey. */
       id: number;
-      /** property_buildings.id — the asset coming off the books. */
       propertyId: number;
-      /** clients.id of the buyer. Carried on every line for per-
-       *  buyer drilldown; nullable for cash sales with no recorded
-       *  buyer entity. */
       buyerId: number | null;
-      /** Full price the buyer pays — GROSS, including any VAT. */
       salePrice: number;
-      /** Carrying value of the asset on the books at the moment of
-       *  sale. For now the engine takes this as-is from the caller
-       *  (the route reads it off property_buildings); when
-       *  depreciation tracking arrives the caller will compute NBV
-       *  before passing it. */
       bookValue: number;
-      /** Optional VAT amount when the sale is taxable (commercial
-       *  property under ZATCA). The caller computes it the same way
-       *  the rent route does (`getCompanyVatRate` * net) — the
-       *  engine just takes the number. */
       vatAmount?: number;
       saleDate: string;
     },
   ) {
     const vatAmount = sale.vatAmount ?? 0;
-    // The realised gain/loss is measured against NET sale price, not
-    // gross. The VAT portion is owed to ZATCA, not earned.
     const netSalePrice = sale.salePrice - vatAmount;
     const gainOrLoss = netSalePrice - sale.bookValue;
     const hasGain = gainOrLoss > 0;
     const hasLoss = gainOrLoss < 0;
     const hasVat = vatAmount > 0;
 
-    // Resolve every code in parallel — including the gain AND loss
-    // codes even when only one is used, because doing so unlocks
-    // operator overrides for both directions in one round-trip and
-    // means a future regression that swaps gain/loss can't bypass
-    // the mappings seam.
     const [
       receivableCode,
       assetCode,
@@ -336,11 +405,11 @@ class PropertiesEngineImpl implements DomainEngine {
       lossCode,
       vatCode,
     ] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_receivable", "debit", "1130"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_receivable", "debit", "1131"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1240"),
       financialEngine.resolveAccountCode(ctx.companyId, "property_sale_gain", "credit", "4910"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_loss", "debit", "6910"),
-      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_loss", "debit", "5810"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
     ]);
 
     const lineDims = {
@@ -393,7 +462,7 @@ class PropertiesEngineImpl implements DomainEngine {
     } else if (hasLoss) {
       lines.push({
         accountCode: lossCode,
-        debit: -gainOrLoss, // positive magnitude
+        debit: -gainOrLoss,
         credit: 0,
         description: `خسارة بيع أصل عقاري`,
         ...lineDims,
@@ -432,7 +501,7 @@ class PropertiesEngineImpl implements DomainEngine {
     const cashDefault = payment.method === "cash" ? "1100" : "1110";
     const [cashCode, revenueCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "rental_cash_receipt", "debit", cashDefault),
-      financialEngine.resolveAccountCode(ctx.companyId, "rental_revenue", "credit", "4100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rental_revenue", "credit", "4121"),
     ]);
 
     // unitId belongs in the unitId slot. The previous shape wrote
@@ -502,9 +571,9 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [assetAccountCode, depreciationAccountCode, accDepreciationAccountCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1520"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_depreciation", "debit", "6100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_acc_depreciation", "credit", "1590"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1240"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_depreciation", "debit", "5740"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_acc_depreciation", "credit", "1241"),
     ]);
 
     eventBus.emit("finance.fixed_asset.requested", {
@@ -567,7 +636,7 @@ class PropertiesEngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "owner_payable", "debit", "2150"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1010"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({

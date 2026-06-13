@@ -832,7 +832,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     // only half the picture).
     const journalLines: any[] = [{ accountCode: overrideAccountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
     if (computedVat > 0) {
-      const inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1400");
+      const inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1180");
       journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0, ...entityLink });
     }
     journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat, ...entityLink });
@@ -1451,8 +1451,8 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       await assertOperationValid(opCtx);
     }
 
-    const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300") : "2300";
-    const inputVatCode2 = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1400") : "1400";
+    const outputVatCode = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2131") : "2300";
+    const inputVatCode2 = computedVat > 0 ? await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180") : "1400";
 
     // ── WHT computation for payment vouchers w/ purchase-order allocations ──
     // Walk every allocation pointing at a purchase_order, look up the
@@ -1468,7 +1468,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     if (!isReceipt && allocations && allocations.length > 0) {
       const { computeWHT } = await import("../lib/withholdingTax.js");
       whtPayableFallback = await financialEngine.resolveAccountCode(
-        scope.companyId, "wht_payable", "credit", "2330",
+        scope.companyId, "wht_payable", "credit", "2132",
       );
       for (let i = 0; i < allocations.length; i++) {
         const a = allocations[i];
@@ -1968,7 +1968,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
     const ref = `SALARY-ADV-${idempotencyToken}`;
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    let advanceAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "salary_advance_receivable", "debit", "1410");
+    let advanceAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "salary_advance_receivable", "debit", "1141");
     if (employeeId) {
       const [subAcc] = await rawQuery<Record<string, unknown>>(
         `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"

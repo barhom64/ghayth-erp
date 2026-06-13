@@ -26,8 +26,8 @@ class SupportEngineImpl implements DomainEngine {
     }
   ) {
     const [arCode, revenueCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "support_ar", "debit", "1200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "support_service_revenue", "credit", "4300"),
+      financialEngine.resolveAccountCode(ctx.companyId, "support_ar", "debit", "1131"),
+      financialEngine.resolveAccountCode(ctx.companyId, "support_service_revenue", "credit", "4130"),
     ]);
 
     return financialEngine.postJournalEntry({

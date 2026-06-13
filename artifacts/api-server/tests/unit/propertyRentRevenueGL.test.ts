@@ -198,25 +198,25 @@ describe("postRentRevenueGL — VAT path (commercial)", () => {
       tenantId: 55,
     });
     // The mock returns 1131/4121/2310; if the engine had bypassed
-    // resolveAccountCode and written the literal fallbacks (1200/4100/2200),
+    // resolveAccountCode and written the literal fallbacks (1132/4121/2131),
     // the byCode lookup above would have failed already.
     expect(resolveAccountCodeMock).toHaveBeenCalledWith(
       2,
       "rent_receivable",
       "debit",
-      "1200",
+      "1132",
     );
     expect(resolveAccountCodeMock).toHaveBeenCalledWith(
       2,
       "rent_revenue",
       "credit",
-      "4100",
+      "4121",
     );
     expect(resolveAccountCodeMock).toHaveBeenCalledWith(
       2,
       "vat_output",
       "credit",
-      "2200",
+      "2131",
     );
   });
 });
