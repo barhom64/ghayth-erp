@@ -118,3 +118,7 @@ routes/hr.ts:e.whtRate
 # TODO(transport): fix the query and drop these two lines.
 routes/transport-integration.ts:c.contractNumber
 routes/transport-integration.ts:c.customerId
+# umrah_pilgrims has "fullName", not "name" — the pilgrim-attachments list
+# query (`p.name AS "pilgrimName"`) would 500 if reached.
+# TODO(umrah): p.name → p."fullName" and drop this line.
+routes/umrah-entities.ts:p.name
