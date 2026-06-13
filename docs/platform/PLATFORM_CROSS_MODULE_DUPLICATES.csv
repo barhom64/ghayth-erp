@@ -1,0 +1,5 @@
+page_file,paths,segments
+pages/admin/attendance-categories,/admin/attendance-categories;/hr/attendance-categories,admin;hr
+pages/admin/scoring-weights,/admin/scoring-weights;/hr/scoring-weights,admin;hr
+pages/create/finance/vendors-create,/finance/vendors/create;/warehouse/suppliers/create,finance;warehouse
+pages/properties-guide,/guide/properties;/properties/guide,guide;properties

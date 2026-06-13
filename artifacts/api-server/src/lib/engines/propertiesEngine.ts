@@ -384,6 +384,234 @@ class PropertiesEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+  /**
+   * postManagementCollectionGL — collection on a managed contract.
+   *
+   * The third Properties activity branch (#1999, contractType=management).
+   * We collect rent on behalf of a third-party owner and keep a
+   * commission. The rent is NOT our revenue; the commission is.
+   *
+   * Splits the cash receipt three ways:
+   *   - DR property_cash               (gross rent — what the bank shows)
+   *   - CR property_owner_payable      (rent − commission — what we owe
+   *     the owner, the line the periodic owner statement aggregates)
+   *   - CR property_management_commission (commission — OUR revenue)
+   *
+   * The commission rate is per-contract and lives in the data layer —
+   * the engine just takes a resolved commission amount. The route adds
+   * a column to rental_contracts in PR-6b and multiplies before calling.
+   * Account codes resolve through `resolveAccountCode`; the fallbacks
+   * (1100 cash / 2150 owner payable / 4130 commission revenue) only
+   * fire when a tenant hasn't seeded a mapping.
+   *
+   * Dimensions: every line carries propertyId + contractId. The CASH
+   * line is tagged with the tenant's clientId (per-tenant collection
+   * drilldowns); the OWNER PAYABLE line is tagged with the owner's
+   * clientId so the owner statement aggregates straight from
+   * journal_lines.
+   *
+   * Zero-commission edge case: an introductory month / pro-bono
+   * arrangement passes commissionAmount=0; the engine omits the
+   * commission line entirely (financialEngine rejects zero-amount
+   * lines as a balanced-pair safeguard).
+   *
+   * Idempotency: guardTable=property_management_collections +
+   * guardId=collection.id so a double-post surfaces as a unique
+   * violation against the future collection row's id.
+   */
+  async postManagementCollectionGL(
+    ctx: PropertyGLContext,
+    collection: {
+      id: number;
+      contractId: number;
+      propertyId: number;
+      ownerId: number;
+      tenantId: number;
+      rentAmount: number;
+      commissionAmount: number;
+    },
+  ) {
+    const [cashCode, ownerPayableCode, commissionCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_management_commission", "credit", "4130"),
+    ]);
+
+    const ownerShare = collection.rentAmount - collection.commissionAmount;
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      contractId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: cashCode,
+        debit: collection.rentAmount,
+        credit: 0,
+        description: `تحصيل إيجار — عقد إدارة #${collection.contractId}`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+        clientId: collection.tenantId,
+      },
+      {
+        accountCode: ownerPayableCode,
+        debit: 0,
+        credit: ownerShare,
+        description: `مستحق للمالك — عقد إدارة #${collection.contractId}`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+        clientId: collection.ownerId,
+      },
+    ];
+
+    if (collection.commissionAmount > 0) {
+      lines.push({
+        accountCode: commissionCode,
+        debit: 0,
+        credit: collection.commissionAmount,
+        description: `عمولة إدارة عقار`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-MGMT-${collection.id}`,
+      description: `تحصيل عقد إدارة #${collection.contractId} — عقار #${collection.propertyId}`,
+      type: "general",
+      sourceType: "property_management_collections",
+      sourceId: collection.id,
+      sourceKey: `property:mgmt_collection:${collection.id}`,
+      guardTable: "property_management_collections",
+      guardId: collection.id,
+      lines,
+    });
+  }
+
+  /**
+   * postSaleGL — property disposal at sale.
+   *
+   * The fourth Properties activity branch (#1999). Removes the building
+   * asset from the books at its CARRYING VALUE (book value — credit to
+   * the asset account), debits the buyer's receivable for the full
+   * sale price (gross — including VAT when commercial), and recognises
+   * the realised gain or loss as the delta between net sale price and
+   * book value.
+   */
+  async postSaleGL(
+    ctx: PropertyGLContext,
+    sale: {
+      id: number;
+      propertyId: number;
+      buyerId: number | null;
+      salePrice: number;
+      bookValue: number;
+      vatAmount?: number;
+      saleDate: string;
+    },
+  ) {
+    const vatAmount = sale.vatAmount ?? 0;
+    const netSalePrice = sale.salePrice - vatAmount;
+    const gainOrLoss = netSalePrice - sale.bookValue;
+    const hasGain = gainOrLoss > 0;
+    const hasLoss = gainOrLoss < 0;
+    const hasVat = vatAmount > 0;
+
+    const [
+      receivableCode,
+      assetCode,
+      gainCode,
+      lossCode,
+      vatCode,
+    ] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_receivable", "debit", "1130"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_gain", "credit", "4910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_loss", "debit", "6910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+    ]);
+
+    const lineDims = {
+      propertyId: sale.propertyId,
+      clientId: sale.buyerId ?? undefined,
+    };
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: receivableCode,
+        debit: sale.salePrice,
+        credit: 0,
+        description: `بيع عقار — مستحق على المشتري`,
+        ...lineDims,
+      },
+      {
+        accountCode: assetCode,
+        debit: 0,
+        credit: sale.bookValue,
+        description: `استبعاد أصل عقاري بالقيمة الدفترية`,
+        ...lineDims,
+      },
+    ];
+
+    if (hasVat) {
+      lines.push({
+        accountCode: vatCode,
+        debit: 0,
+        credit: vatAmount,
+        description: `ضريبة القيمة المضافة — بيع عقار`,
+        ...lineDims,
+      });
+    }
+
+    if (hasGain) {
+      lines.push({
+        accountCode: gainCode,
+        debit: 0,
+        credit: gainOrLoss,
+        description: `مكسب بيع أصل عقاري`,
+        ...lineDims,
+      });
+    } else if (hasLoss) {
+      lines.push({
+        accountCode: lossCode,
+        debit: -gainOrLoss,
+        credit: 0,
+        description: `خسارة بيع أصل عقاري`,
+        ...lineDims,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-SALE-${sale.id}`,
+      description: `بيع عقار #${sale.propertyId} بتاريخ ${sale.saleDate}`,
+      type: "general",
+      sourceType: "property_sales",
+      sourceId: sale.id,
+      sourceKey: `property:sale:${sale.id}`,
+      guardTable: "property_sales",
+      guardId: sale.id,
+      lines,
+    });
+  }
+
   async postInstallmentPaymentGL(
     ctx: PropertyGLContext,
     payment: {

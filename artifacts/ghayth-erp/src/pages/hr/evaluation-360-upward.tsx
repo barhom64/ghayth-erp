@@ -231,7 +231,7 @@ export default function Evaluation360UpwardPage() {
           rateLimitAware
         >
           <Shield className="w-4 h-4 me-1" />
-          {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال بشكل سري"}
+          {submitMutation.isPending ? "جاري الإرسال..." : "إرسال بشكل سري"}
         </GuardedButton>
       </div>
     </PageShell>

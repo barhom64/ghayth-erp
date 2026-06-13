@@ -1155,6 +1155,23 @@ export const EVENT_CATALOG: EventDefinition[] = [
   { name: "employee.created", label: "إنشاء موظف", domain: "hr", description: "تُصدر عند إنشاء موظف", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "employee.terminated", label: "إنهاء موظف", domain: "hr", description: "تُصدر عند إنهاء موظف", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit"], critical: true },
   { name: "employee.updated", label: "تحديث موظف", domain: "hr", description: "تُصدر عند تحديث موظف", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit"] },
+  // PR-4 (#2077) — institutional scoring event. Fired by the on-demand
+  // recompute route and by the weekly/monthly cron (cronScheduler.ts
+  // weeklyEmployeeScoring + monthlyEmployeeScoring). `critical: true` so
+  // event_logs persists every fire — the audit dashboard can then
+  // answer «من أعاد حساب الدرجة لهذا الموظف هذا الشهر؟» from a single
+  // row without joining audit_logs.
+  // PR-4 (#2077) — the rich payload (composite, dimensions, weights,
+  // trigger, context) lives in `details` JSON. The catalog requires
+  // `entityId` (the employee id) so emitEvent's validator can confirm
+  // the event is bound to a row before it persists. The integrity
+  // pin (eventBusIntegrity.test.ts) also requires at least one
+  // declared field per catalog entry.
+  { name: "employee.scored", label: "حساب درجة الموظف", domain: "hr", description: "تُصدر عند حساب الدرجة المؤسسية لموظف (يدويًا أو من الكرون)", payload: {"entityId":"number"}, consumers: ["auditTrail","scoreReports"], sideEffects: ["audit"], critical: true },
+  // PR-8 (#2077) — lifecycle transition. Critical so event_logs
+  // persists every fire — the lifecycle ledger is the system of
+  // record for «من قرر، متى، ولماذا».
+  { name: "employee.lifecycle.transitioned", label: "انتقال دورة حياة موظف", domain: "hr", description: "تُصدر عند كل انتقال حالة (تجهيز، تجربة، تثبيت، نقل، إيقاف، استقالة، إنهاء، مخالصة)", payload: {"entityId":"number"}, consumers: ["auditTrail","workInbox"], sideEffects: ["audit"], critical: true },
   { name: "employee_document.created", label: "إنشاء مستند موظف", domain: "hr", description: "تُصدر عند إنشاء مستند موظف", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "evaluation.created", label: "إنشاء تقييم", domain: "hr", description: "تُصدر عند إنشاء تقييم", payload: {"id":"number","name":"string"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"] },
   { name: "excuse.approved", label: "اعتماد عذر", domain: "hr", description: "تُصدر عند اعتماد عذر", payload: {"id":"number"}, consumers: ["auditTrail"], sideEffects: ["audit","notification"], critical: true },

@@ -96,10 +96,16 @@ interface PortalAccountRow {
   createdAt: string;
 }
 
+// #2134 — quick-create dialogs submit untouched optional fields as "" (empty
+// string). A bare z.string().email() REJECTS "", so leaving «البريد» empty in
+// «+ عميل جديد» 422'd the whole create and the client silently never existed.
+// Treat "" as absent; a non-empty value is still validated as a real email.
+const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+
 const createClientSchema = z.object({
   name: z.string().min(1, "اسم العميل مطلوب"),
   phone: z.string().optional().nullable(),
-  email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
+  email: z.preprocess(emptyToNull, z.string().email("البريد الإلكتروني غير صالح").optional().nullable()),
   classification: z.enum(["regular", "vip", "prospect", "wholesale", "new", "inactive"]).optional().default("regular"),
   source: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
@@ -111,7 +117,7 @@ const createClientSchema = z.object({
 const updateClientSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional().nullable(),
-  email: z.string().email("البريد الإلكتروني غير صالح").optional().nullable(),
+  email: z.preprocess(emptyToNull, z.string().email("البريد الإلكتروني غير صالح").optional().nullable()),
   classification: z.enum(["regular", "vip", "prospect", "wholesale", "new", "inactive"]).optional(),
   source: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),

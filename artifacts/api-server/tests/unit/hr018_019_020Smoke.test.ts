@@ -207,9 +207,15 @@ describe("HR-020 — Scoring Weights frontend", () => {
     expect(WEIGHTS_SRC).toMatch(/r\.trend === 1 \? " ↑" : r\.trend === -1 \? " ↓"/);
   });
 
-  it("registered at /admin/scoring-weights + nav entry", () => {
+  it("registered at /admin/scoring-weights (back-compat) + /hr/scoring-weights (new canonical) + nav entry", () => {
+    // PR-4 (#2077) mirrors the page under /hr so the HR Manager can
+    // reach it without crossing the /admin/* level-90 floor. The
+    // /admin route stays as a back-compat alias (same shape PR-3
+    // applied to /admin/attendance-categories).
     expect(ADMIN_ROUTES_SRC).toMatch(/const AdminScoringWeights = lazy/);
     expect(ADMIN_ROUTES_SRC).toMatch(/path: "\/admin\/scoring-weights"/);
-    expect(NAV_SRC).toMatch(/path: "\/admin\/scoring-weights"/);
+    // The nav entry was MOVED from /admin to /hr — the «أوزان التقييم»
+    // link is now in the HR navigation, not the admin one.
+    expect(NAV_SRC).toMatch(/path: "\/hr\/scoring-weights"/);
   });
 });
