@@ -10301,7 +10301,7 @@ CREATE TABLE public.fleet_telematics_integrations (
     "offlineThresholdSec" integer DEFAULT 600 NOT NULL,
     "videoAccessLogRetentionDays" smallint DEFAULT 90 NOT NULL,
     CONSTRAINT fleet_telematics_integrations_provider_check CHECK (((provider)::text = ANY (ARRAY[('cmsv6'::character varying)::text, ('wialon'::character varying)::text, ('teltonika'::character varying)::text, ('manual'::character varying)::text]))),
-    CONSTRAINT fleet_telematics_integrations_retention_check CHECK (((("positionRetentionDays" >= 1) AND ("positionRetentionDays" <= 3650)) AND (("syncLogRetentionDays" >= 1) AND ("syncLogRetentionDays" <= 365)) AND (("offlineThresholdSec" >= 60) AND ("offlineThresholdSec" <= 86400)))),
+    CONSTRAINT fleet_telematics_integrations_retention_check CHECK ((("positionRetentionDays" >= 1) AND ("positionRetentionDays" <= 3650) AND (("syncLogRetentionDays" >= 1) AND ("syncLogRetentionDays" <= 365)) AND (("offlineThresholdSec" >= 60) AND ("offlineThresholdSec" <= 86400)))),
     CONSTRAINT fleet_telematics_integrations_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('error'::character varying)::text, ('paused'::character varying)::text]))),
     CONSTRAINT fleet_telematics_integrations_video_log_retention_check CHECK ((("videoAccessLogRetentionDays" >= 1) AND ("videoAccessLogRetentionDays" <= 365)))
 );
@@ -13649,7 +13649,7 @@ CREATE TABLE public.message_log (
     "conversationId" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT message_log_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'in_app'::character varying, 'internal'::character varying, 'pbx'::character varying])::text[]))),
+    CONSTRAINT message_log_channel_check CHECK (((channel)::text = ANY (ARRAY[('email'::character varying)::text, ('sms'::character varying)::text, ('whatsapp'::character varying)::text, ('push'::character varying)::text, ('in_app'::character varying)::text, ('internal'::character varying)::text, ('pbx'::character varying)::text]))),
     CONSTRAINT message_log_direction_check CHECK (((direction)::text = ANY (ARRAY[('inbound'::character varying)::text, ('outbound'::character varying)::text]))),
     CONSTRAINT message_log_legacy_source_check CHECK ((("legacySource")::text = ANY (ARRAY[('message_log'::character varying)::text, ('communications_log'::character varying)::text, ('notification_log'::character varying)::text])))
 );
@@ -13745,7 +13745,7 @@ CREATE TABLE public.mudad_settlements (
     "acknowledgedAt" timestamp with time zone,
     "journalEntryId" integer,
     CONSTRAINT chk_mudad_status CHECK (((status)::text = ANY (ARRAY[('submitted'::character varying)::text, ('acknowledged'::character varying)::text, ('rejected'::character varying)::text, ('retry'::character varying)::text]))),
-    CONSTRAINT chk_mudad_type CHECK (((type)::text = ANY ((ARRAY['salary'::character varying, 'leave_unpaid'::character varying, 'exit_reentry'::character varying, 'termination'::character varying, 'contract_renewal'::character varying, 'contract_register'::character varying])::text[])))
+    CONSTRAINT chk_mudad_type CHECK (((type)::text = ANY (ARRAY[('salary'::character varying)::text, ('leave_unpaid'::character varying)::text, ('exit_reentry'::character varying)::text, ('termination'::character varying)::text, ('contract_renewal'::character varying)::text, ('contract_register'::character varying)::text])))
 );
 
 
@@ -14472,7 +14472,7 @@ CREATE TABLE public.outbound_queue (
     "legacyId" integer,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT outbound_queue_channel_check CHECK (((channel)::text = ANY ((ARRAY['email'::character varying, 'sms'::character varying, 'whatsapp'::character varying, 'push'::character varying, 'internal'::character varying, 'pbx'::character varying])::text[]))),
+    CONSTRAINT outbound_queue_channel_check CHECK (((channel)::text = ANY (ARRAY[('email'::character varying)::text, ('sms'::character varying)::text, ('whatsapp'::character varying)::text, ('push'::character varying)::text, ('internal'::character varying)::text, ('pbx'::character varying)::text]))),
     CONSTRAINT outbound_queue_legacy_source_check CHECK ((("legacySource")::text = ANY (ARRAY[('outbound_queue'::character varying)::text, ('email_queue'::character varying)::text, ('sms_queue'::character varying)::text, ('whatsapp_queue'::character varying)::text]))),
     CONSTRAINT outbound_queue_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('sending'::character varying)::text, ('sent'::character varying)::text, ('failed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
@@ -18142,7 +18142,7 @@ CREATE TABLE public.subsidiary_accounts (
     "isActive" boolean DEFAULT true NOT NULL,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
     "deletedAt" timestamp with time zone,
-    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY ((ARRAY['employee'::character varying, 'client'::character varying, 'vendor'::character varying, 'project'::character varying, 'property'::character varying, 'umrah_agent'::character varying, 'umrah_sub_agent'::character varying, 'umrah_season'::character varying, 'property_unit'::character varying, 'vehicle'::character varying, 'driver'::character varying])::text[])))
+    CONSTRAINT "subsidiary_accounts_entityType_check" CHECK ((("entityType")::text = ANY (ARRAY[('employee'::character varying)::text, ('client'::character varying)::text, ('vendor'::character varying)::text, ('project'::character varying)::text, ('property'::character varying)::text, ('umrah_agent'::character varying)::text, ('umrah_sub_agent'::character varying)::text, ('umrah_season'::character varying)::text, ('property_unit'::character varying)::text, ('vehicle'::character varying)::text, ('driver'::character varying)::text])))
 );
 
 
@@ -20539,7 +20539,7 @@ CREATE TABLE public.umrah_pilgrims (
     "visaIssuedAt" timestamp with time zone,
     "visaRejectedAt" timestamp with time zone,
     "visaRejectionReason" text,
-    CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'arrived'::character varying, 'active'::character varying, 'overstayed'::character varying, 'overstay_penalized'::character varying, 'departed'::character varying, 'violated'::character varying, 'absconded'::character varying, 'deceased'::character varying, 'visa_rejected'::character varying, 'visa_printed'::character varying, 'cancelled'::character varying])::text[])))
+    CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
 
