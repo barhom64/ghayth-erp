@@ -21,6 +21,7 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
+import { registerEntityParty } from "../lib/partyService.js";
 import { getEjarReader, isValidEjarFormat } from "../lib/ejarContractReader.js";
 
 const createUnitSchema = z.object({
@@ -2848,6 +2849,11 @@ router.post("/tenants", authorize({ feature: "properties.tenants", action: "crea
       action: "tenant.created", entity: "tenants", entityId: insertId,
       details: `مستأجر جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "tenants", insertId, "tenant", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.tenantType === "company" || b.tenantType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] tenants registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
@@ -3661,6 +3667,11 @@ router.post("/owners", authorize({ feature: "properties.owners", action: "create
       action: "property.owner.created", entity: "property_owners", entityId: insertId,
       details: `مالك جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "property_owners", insertId, "owner", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.ownerType === "company" || b.ownerType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] property_owners registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
