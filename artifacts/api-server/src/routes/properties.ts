@@ -11,7 +11,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { applyTransition, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, computeVat, getCompanyVatRate } from "../lib/businessHelpers.js";
@@ -446,15 +446,14 @@ const router = Router();
 // Lifecycle transitions to terminal states (terminated/expired/refunded)
 // must go through dedicated endpoints — PATCH refuses them with 409.
 // ─────────────────────────────────────────────────────────────────────────────
-const UNIT_STATUSES = ["available", "rented", "maintenance", "under_maintenance", "out_of_service", "reserved"] as const;
-const UNIT_TRANSITIONS: Record<string, readonly string[]> = {
-  available:         ["rented", "maintenance", "under_maintenance", "out_of_service", "reserved"],
-  rented:            ["available", "maintenance", "under_maintenance"],
-  maintenance:       ["available", "out_of_service"],
-  under_maintenance: ["available", "out_of_service"],
-  reserved:          ["available", "rented"],
-  out_of_service:    ["available", "maintenance", "under_maintenance"],
-};
+// P0-4 — the unit status graph lives in ONE place: lifecycleEngine's
+// STATE_MACHINES (entity "property_units"). This route derives its
+// guard from that machine (SUP-016 pattern, same as support.ts) so
+// the two can never diverge again. The statuses list is the machine's
+// key set — every state that exists as a source in the graph.
+const UNIT_TRANSITIONS: Record<string, readonly string[]> =
+  STATE_MACHINES.find((sm) => sm.entity === "property_units")?.transitions ?? {};
+const UNIT_STATUSES = Object.keys(UNIT_TRANSITIONS);
 
 const CONTRACT_STATUSES = ["draft", "active", "terminated", "expired", "cancelled", "renewed"] as const;
 const CONTRACT_TRANSITIONS: Record<string, readonly string[]> = {
