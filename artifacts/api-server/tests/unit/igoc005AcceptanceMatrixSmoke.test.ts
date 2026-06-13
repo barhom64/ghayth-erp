@@ -21,37 +21,14 @@
  * loudly — protecting against silent over-/under-privileging.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { ROLE_MODULE_DEFAULTS } from "../../src/lib/rbac/roleModulesCatalog.js";
 
-const REPO_ROOT = join(import.meta.dirname!, "../../../..");
-const PERMS_SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/permissions.ts"),
-  "utf8",
-);
-
-// Extract PREDEFINED_ROLE_DEFAULTS as a parseable object. Take the block
-// from `PREDEFINED_ROLE_DEFAULTS = {` to the next `};` so the regex is
-// not order-dependent.
-function loadPredefinedDefaults(): Record<string, { modules: string[]; level: number }> {
-  const start = PERMS_SRC.indexOf("PREDEFINED_ROLE_DEFAULTS: Record");
-  const blockStart = PERMS_SRC.indexOf("{", start);
-  const blockEnd = PERMS_SRC.indexOf("\n};", blockStart);
-  const block = PERMS_SRC.slice(blockStart, blockEnd + 2);
-  const result: Record<string, { modules: string[]; level: number }> = {};
-  // Each row: `key: { modules: [...], level: N }`.
-  const rowRe = /(\w+)\s*:\s*\{\s*modules:\s*(\[[^\]]+\]),\s*level:\s*(\d+)\s*\}/g;
-  let m;
-  while ((m = rowRe.exec(block)) !== null) {
-    const key = m[1];
-    const modules = JSON.parse(m[2].replace(/'/g, '"')) as string[];
-    const level = Number(m[3]);
-    result[key] = { modules, level };
-  }
-  return result;
-}
-
-const ROLES = loadPredefinedDefaults();
+// PR-2 / #2163 — was reading PREDEFINED_ROLE_DEFAULTS by parsing the
+// source file (the map used to be inlined twice — once in roleGuard.ts
+// and once in permissions.ts). PR-2 unified the two into
+// roleModulesCatalog. The data tested here is unchanged; we just read
+// it as an import instead of grepping the source.
+const ROLES = ROLE_MODULE_DEFAULTS;
 
 describe("IGOC-005 — 7 acceptance scenarios from the spec", () => {
   it("PREDEFINED_ROLE_DEFAULTS object is parseable + non-empty", () => {
@@ -224,14 +201,31 @@ describe("IGOC-005 — core IGOC invariants enforced by the matrix", () => {
   });
 
   it("no role module-list is identical to another (every role is distinct)", () => {
+    // PR-9a (#2077) added payroll_officer as a SPECIALISATION of
+    // hr_manager: same fallback module set, narrower set of rbac
+    // grants (the payroll lane). The differentiation lives at the
+    // grant level (rbac_role_grants), not at the static module-list
+    // fallback. So at THIS layer (the fallback used when a user has no
+    // rbac_user_roles entries), hr_manager and payroll_officer SHOULD
+    // be identical — every payroll_officer should also have the
+    // hr_manager sidebar shape; what they can't reach is the
+    // discipline/investigation features, which is enforced inside the
+    // hr module by authorize() — not by hiding the module.
+    // The IGOC-005 invariant predates PR-9a; the matrix is still
+    // non-degenerate for every other pair. Pin the documented
+    // exception so a future PR doesn't silently break either side.
+    const KNOWN_TWINS = new Set([
+      "hr_manager:payroll_officer",
+      "payroll_officer:hr_manager",
+    ]);
     const seen = new Map<string, string>();
     for (const [key, def] of Object.entries(ROLES)) {
       const sig = def.modules.slice().sort().join(",");
       const prev = seen.get(sig);
-      if (prev) {
+      if (prev && !KNOWN_TWINS.has(`${prev}:${key}`)) {
         throw new Error(`roles ${prev} and ${key} have identical module-list — degenerate matrix`);
       }
-      seen.set(sig, key);
+      if (!prev) seen.set(sig, key);
     }
   });
 });

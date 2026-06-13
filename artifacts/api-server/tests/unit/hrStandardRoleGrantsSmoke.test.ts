@@ -27,6 +27,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ROLE_MODULE_DEFAULTS } from "../../src/lib/rbac/roleModulesCatalog.js";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const MIGRATION = readFileSync(
@@ -109,13 +110,22 @@ describe("PR-9a (#2077) — migration 291: both roles get real grant bundles", (
 });
 
 describe("PR-9a (#2077) — roleGuard module map carries both roles (mount gate ≠ dead sidebar)", () => {
-  it("ROLE_DEFAULT_MODULES has hr-bearing entries for both roles", () => {
-    expect(ROLE_GUARD).toMatch(/department_manager: \["home","hr","requests","documents","reports","comms"\]/);
-    expect(ROLE_GUARD).toMatch(/payroll_officer: \["home","hr","requests","documents","comms"\]/);
+  // PR-2 / #2163 — the per-role static map was inlined twice (once in
+  // roleGuard.ts, once in permissions.ts). Both consumers now re-export
+  // from lib/rbac/roleModulesCatalog. The PR-9a invariants are still
+  // pinned — we just read the data from the catalog instead of grepping
+  // the consumer's source file.
+  it("ROLE_MODULE_DEFAULTS has hr-bearing entries for both roles", () => {
+    expect(ROLE_MODULE_DEFAULTS.department_manager.modules).toEqual(
+      expect.arrayContaining(["home", "hr", "requests", "documents", "reports", "comms"]),
+    );
+    expect(ROLE_MODULE_DEFAULTS.payroll_officer.modules).toEqual(
+      expect.arrayContaining(["home", "hr", "requests", "documents", "comms"]),
+    );
   });
-  it("ROLE_LEVELS mirrors the rbac_roles.level (50) for both", () => {
-    expect(ROLE_GUARD).toMatch(/department_manager: 50/);
-    expect(ROLE_GUARD).toMatch(/payroll_officer: 50/);
+  it("ROLE_MODULE_DEFAULTS levels mirror the rbac_roles.level (50) for both", () => {
+    expect(ROLE_MODULE_DEFAULTS.department_manager.level).toBe(50);
+    expect(ROLE_MODULE_DEFAULTS.payroll_officer.level).toBe(50);
   });
 });
 

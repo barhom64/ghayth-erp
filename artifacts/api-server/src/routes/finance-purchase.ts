@@ -1289,7 +1289,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     const { financialEngine } = await import("../lib/engines/index.js");
     const [vatAccount, grniAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2115"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2150"),
     ]);
 
     // Per-line DR routing uses the module-scope GRN_TREATMENT_PURPOSE map
@@ -1846,7 +1846,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apAccount, cashAccount] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
       financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100"),
     ]);
 
@@ -2505,8 +2505,8 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
     await withTransaction(async (client: any) => {
       if (isMatched) {
         const [matchGrniCode, matchApCode] = await Promise.all([
-          financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "debit", "2115"),
-          financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+          financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "debit", "2150"),
+          financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
         ]);
         const grniRowRes = await client.query(
           `SELECT COALESCE(SUM(jl.credit), 0) AS grni
@@ -2623,7 +2623,7 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
     // also carries guardTable/guardId now, so the engine's idempotency
     // anchor kicks in on retry.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100");
+    const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111");
     const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100");
 
     let schedAlreadyExists = false;
@@ -2742,8 +2742,8 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
     // withTransaction. Same shape as customer-advances fix.
     const { financialEngine } = await import("../lib/engines/index.js");
     const [advReceivableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1190"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1111"),
     ]);
 
     let advanceId: number | null = null;
@@ -2849,8 +2849,8 @@ purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, advReceivableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "credit", "1420"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "credit", "1190"),
     ]);
 
     let advance: any;
@@ -2967,9 +2967,9 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     // withTransaction. Same shape as customer-advances fix.
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, returnsCode, vatInputCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
-      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5110"),
+      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1180"),
     ]);
 
     let memoId: number | null = null;
@@ -3076,8 +3076,8 @@ purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.p
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, creditClearingCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_credit_clearing", "credit", "2110"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_credit_clearing", "credit", "2111"),
     ]);
 
     let memo: any;
@@ -3270,10 +3270,10 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     // overruns stay accurate.
     const { financialEngine } = await import("../lib/engines/index.js");
     const expenseCode = b.expenseAccountCode
-      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5340");
     const [vatInputCode, apCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
     ]);
 
     let invoiceId: number | null = null;
