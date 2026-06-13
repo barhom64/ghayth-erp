@@ -46,6 +46,7 @@ const AdminEffectivePermissions = lazy(() => import("@/pages/admin/effective-per
 const AdminAttendanceCategories = lazy(() => import("@/pages/admin/attendance-categories"));
 const AdminOrgMemberships = lazy(() => import("@/pages/admin/org-memberships"));
 const AdminScoringWeights = lazy(() => import("@/pages/admin/scoring-weights"));
+const AdminExpiringDocs = lazy(() => import("@/pages/admin/expiring-docs"));
 
 export const adminRoutes = [
   { path: "/admin/expiring-docs", component: AdminExpiringDocs },
@@ -93,4 +94,5 @@ export const adminRoutes = [
   { path: "/admin/attendance-categories", component: AdminAttendanceCategories },
   { path: "/admin/org-memberships", component: AdminOrgMemberships },
   { path: "/admin/scoring-weights", component: AdminScoringWeights },
+  { path: "/admin/expiring-docs", component: AdminExpiringDocs },
 ];
