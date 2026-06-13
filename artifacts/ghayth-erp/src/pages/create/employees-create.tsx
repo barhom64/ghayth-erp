@@ -14,12 +14,20 @@ import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { ROLES } from "@/lib/constants";
 import { NATIONALITIES } from "@/lib/nationalities";
-import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight } from "lucide-react";
+import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight, Network } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
 import { fieldErrorClass, TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import {
+  PositionSelect,
+  TeamSelect,
+  CommitteeSelect,
+  EmployeeCategorySelect,
+  ProjectSelect,
+  CostCenterMasterSelect,
+} from "@/components/shared/entity-selects";
 
 const OPERATIONS = [
   { key: "employee", label: "إنشاء سجل الموظف", icon: User },
@@ -63,6 +71,17 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "الوظيفة والعقد",
     icon: Briefcase,
     isComplete: (f) => Boolean(f.contractType && f.salary && Number(f.salary) > 0),
+  },
+  {
+    // PR-1 (#2077) — institutional binding step. The five mandatory
+    // fields close «الموظف ككيان تشغيلي مؤسسي» at create time so the
+    // engineer never has to remember a follow-up step.
+    key: "institutional",
+    label: "الربط المؤسسي",
+    icon: Network,
+    isComplete: (f) => Boolean(
+      f.positionId && f.categoryKey && f.teamId && f.projectId && f.costCenterId && f.managerId,
+    ),
   },
   {
     key: "accounts",
@@ -204,6 +223,12 @@ export default function EmployeesCreate() {
     // bind (existing id or a freshly minted number).
     emailDomain: "", emailLocalPart: "",
     pbxExtensionId: "", pbxExtensionNew: "",
+    // PR-1 (#2077) — institutional binding. Five fields are required
+    // by the wizard; committeeId is optional (cross-department council
+    // bindings are not always relevant at hire time).
+    positionId: "", categoryKey: "",
+    teamId: "", projectId: "", costCenterId: "",
+    committeeId: "",
   });
 
   // Fleet vehicles — only fetched when role implies driver, but the
@@ -312,6 +337,16 @@ export default function EmployeesCreate() {
       jobTitle: form.jobTitle ? null : "يرجى اختيار المسمى الوظيفي",
       contractType: form.contractType ? null : "يرجى اختيار نوع العقد",
       salary: !form.salary || Number(form.salary) <= 0 ? "يرجى إدخال الراتب الأساسي" : null,
+      // PR-1 (#2077) — institutional mandatoriness. The backend has a
+      // bootstrap carve-out for the first employee in a company; the
+      // UI doesn't, because once the company has any employees, every
+      // new hire must be bound to the institutional matrix.
+      managerId: form.managerId ? null : "يرجى اختيار المدير المباشر",
+      positionId: form.positionId ? null : "يرجى اختيار المنصب الإداري",
+      categoryKey: form.categoryKey ? null : "يرجى اختيار فئة الموظف",
+      teamId: form.teamId ? null : "يرجى اختيار الفريق",
+      projectId: form.projectId ? null : "يرجى اختيار المشروع",
+      costCenterId: form.costCenterId ? null : "يرجى اختيار مركز التكلفة",
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
@@ -331,6 +366,15 @@ export default function EmployeesCreate() {
         vehicleId: form.vehicleId ? Number(form.vehicleId) : undefined,
         pbxExtensionId: form.pbxExtensionId ? Number(form.pbxExtensionId) : undefined,
         pbxExtensionNew: form.pbxExtensionNew || undefined,
+        // PR-1 (#2077) — institutional binding payload. Backend
+        // validates each id belongs to the company and inserts the
+        // bridge rows inside the create transaction.
+        positionId: form.positionId ? Number(form.positionId) : undefined,
+        categoryKey: form.categoryKey || undefined,
+        teamId: form.teamId ? Number(form.teamId) : undefined,
+        projectId: form.projectId ? Number(form.projectId) : undefined,
+        costCenterId: form.costCenterId ? Number(form.costCenterId) : undefined,
+        committeeId: form.committeeId ? Number(form.committeeId) : undefined,
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
       });
@@ -432,6 +476,10 @@ export default function EmployeesCreate() {
               vehicleId: "",
               emailDomain: "", emailLocalPart: "",
               pbxExtensionId: "", pbxExtensionNew: "",
+              // PR-1 (#2077) — institutional binding reset.
+              positionId: "", categoryKey: "",
+              teamId: "", projectId: "", costCenterId: "",
+              committeeId: "",
             });
           }}>
             إضافة موظف آخر
@@ -654,6 +702,64 @@ export default function EmployeesCreate() {
         </FormFieldWrapper>
         <NumberField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} error={fieldErrors.salary} />
         <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
+
+        {/* PR-1 (#2077) — institutional binding. Five mandatory bindings
+            + 1 optional. The wizard step indicator (above) tracks
+            completion via WIZARD_STEPS[institutional].isComplete. */}
+        <div id="wizard-step-institutional" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-1 flex items-center gap-2">
+            <Network className="w-4 h-4" />
+            الربط المؤسسي
+          </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            هذه الحقول تربط الموظف بهيكل المؤسسة (المنصب الإداري، فريق العمل، المشروع، مركز التكلفة، فئة القوى العاملة).
+            بدونها لا تظهر تقاريرك مكتملة ولا تتفعّل سياسة الحضور بالفئة.
+          </p>
+        </div>
+        <FormFieldWrapper label="المنصب الإداري" required error={fieldErrors.positionId}>
+          <PositionSelect
+            value={form.positionId}
+            onChange={(v) => setForm((f) => ({ ...f, positionId: v }))}
+            error={fieldErrors.positionId}
+            allowCreate={false}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="فئة الموظف (سياسة الحضور)" required error={fieldErrors.categoryKey}>
+          <EmployeeCategorySelect
+            value={form.categoryKey}
+            onChange={(v) => setForm((f) => ({ ...f, categoryKey: v }))}
+            error={fieldErrors.categoryKey}
+            allowCreate={false}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفريق" required error={fieldErrors.teamId}>
+          <TeamSelect
+            value={form.teamId}
+            onChange={(v) => setForm((f) => ({ ...f, teamId: v }))}
+            error={fieldErrors.teamId}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="المشروع" required error={fieldErrors.projectId}>
+          <ProjectSelect
+            value={form.projectId}
+            onChange={(v) => setForm((f) => ({ ...f, projectId: v }))}
+            error={fieldErrors.projectId}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="مركز التكلفة" required error={fieldErrors.costCenterId}>
+          <CostCenterMasterSelect
+            value={form.costCenterId}
+            onChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
+            error={fieldErrors.costCenterId}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="اللجنة (اختياري)" error={fieldErrors.committeeId}>
+          <CommitteeSelect
+            value={form.committeeId}
+            onChange={(v) => setForm((f) => ({ ...f, committeeId: v }))}
+            error={fieldErrors.committeeId}
+          />
+        </FormFieldWrapper>
 
         {/* Integrated HR — accounts + finance binding section. */}
         <div id="wizard-step-accounts" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">

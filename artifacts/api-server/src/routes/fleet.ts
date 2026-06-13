@@ -1008,7 +1008,10 @@ router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }),
     const scope = req.scope!;
     const { search, status } = req.query as Record<string, string | undefined>;
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"' });
+    // fleet_drivers has no branchId column; the joined employees +
+    // employee_assignments BOTH have one, so an unqualified branch filter
+    // 500'd with `column reference "branchId" is ambiguous`.
+    const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'd."companyId"', disableBranchScope: true });
     let where = baseWhere;
     let paramIdx = nextParamIndex;
     if (search) { params.push(`%${search}%`); where += ` AND (d.name ILIKE $${paramIdx} OR d.phone ILIKE $${paramIdx} OR d."licenseNumber" ILIKE $${paramIdx})`; paramIdx++; }
@@ -4711,8 +4714,8 @@ router.post("/rental-payments/:id/pay", authorize({ feature: "fleet.vehicles", a
       // Engine.postJournalEntry with the same shape so the GL still posts.
       try {
         const [cashCode, revCode] = await Promise.all([
-          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1100"),
-          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_rental_revenue", "credit", "4220"),
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1111"),
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_rental_revenue", "credit", "4150"),
         ]);
         const fe = (await import("../lib/engines/financialEngine.js")).financialEngine;
         const result = await fe.postJournalEntry({

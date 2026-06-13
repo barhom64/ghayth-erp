@@ -41,9 +41,9 @@ class HREngineImpl implements DomainEngine {
 
     const [salaryExpense, allowanceExpense, deductionAccount, salaryPayable] =
       await Promise.all([
-        financialEngine.resolveAccountCode(ctx.companyId, "salary_expense", "debit", "6100"),
-        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "6110"),
-        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2130"),
+        financialEngine.resolveAccountCode(ctx.companyId, "salary_expense", "debit", "5210"),
+        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "5820"),
+        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2120"),
         financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       ]);
 
@@ -106,8 +106,8 @@ class HREngineImpl implements DomainEngine {
     loan: { id: number; employeeId: number; amount: number; departmentId?: number | null }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1400"),
-      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1143"),
+      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1111"),
     ]);
 
     // departmentId carries the employee's home cost-centre so per-dept
@@ -146,8 +146,8 @@ class HREngineImpl implements DomainEngine {
     }
   ) {
     const [eosExpense, leaveExpense, settlementPayable] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_expense", "debit", "6150"),
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_settlement_expense", "debit", "6160"),
+      financialEngine.resolveAccountCode(ctx.companyId, "eos_expense", "debit", "5260"),
+      financialEngine.resolveAccountCode(ctx.companyId, "leave_settlement_expense", "debit", "5270"),
       financialEngine.resolveAccountCode(ctx.companyId, "settlement_payable", "credit", "2140"),
     ]);
 
@@ -210,7 +210,7 @@ class HREngineImpl implements DomainEngine {
     accrual: { period: string; totalAmount: number; employeeCount: number }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_expense", "debit", "6170"),
+      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_expense", "debit", "5270"),
       financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_liability", "credit", "2150"),
     ]);
 
@@ -238,8 +238,8 @@ class HREngineImpl implements DomainEngine {
     accrual: { period: string; totalAmount: number; employeeCount: number }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_expense", "debit", "6180"),
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_liability", "credit", "2160"),
+      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_expense", "debit", "5260"),
+      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_liability", "credit", "2220"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -319,13 +319,13 @@ class HREngineImpl implements DomainEngine {
     // run is posted. Crediting the bank here (and again at posting) was the
     // source of the double-count.
     const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode, whtPayableCode, commissionExpenseCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5250"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5230"),
       financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2330"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2132"),
       // Umrah commission expense — seeded by migration 288 to 5240
       // (المكافآت والحوافز); the fallback matches the seed.
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_commission_expense", "debit", "5240"),
@@ -496,7 +496,7 @@ class HREngineImpl implements DomainEngine {
 
     const [salaryPayableCode, bankCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "debit", "2120"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1124"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -529,10 +529,10 @@ class HREngineImpl implements DomainEngine {
     }
   ) {
     const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_expense", "debit", "5120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_expense", "debit", "5270"),
       financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_liability", "credit", "2220"),
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_expense", "debit", "5130"),
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2230"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_expense", "debit", "5260"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2220"),
     ]);
 
     const lines = [

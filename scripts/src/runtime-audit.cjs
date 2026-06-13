@@ -170,7 +170,7 @@ function loadRoutes() {
 async function login() {
   const r = await fetch(`${BASE}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-E2E-Test": "1" },
     body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
   });
   if (!r.ok) throw new Error(`login failed ${r.status}`);
@@ -268,7 +268,7 @@ async function resolveParams(routePath, cookieHeader) {
   let id;
   try {
     const r = await fetch(`${BASE}${resolver}?limit=1`, {
-      headers: { Cookie: cookieHeader, "Accept-Language": "ar" },
+      headers: { Cookie: cookieHeader, "Accept-Language": "ar", "X-E2E-Test": "1" },
     });
     if (!r.ok) return { ok: false, reason: `${resolver} → ${r.status}` };
     const j = await r.json();
@@ -792,20 +792,36 @@ async function probe(page, routePath, resolvedUrl, cls) {
     browser = await puppeteer.launch(chromiumLaunchArgs);
     page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900 });
-    await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
+    await page.setExtraHTTPHeaders({ "Accept-Language": "ar", "X-E2E-Test": "1" });
   }
   await launchChromium();
   // seed cookie via in-page fetch (HttpOnly cookies don't round-trip via setCookie)
   async function inPageLogin() {
     await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.evaluate(async ({ email, password }) => {
+    const loginStatus = await page.evaluate(async ({ email, password }) => {
       const r = await fetch("/api/auth/login", {
         method: "POST", headers: { "Content-Type": "application/json" },
         credentials: "include", body: JSON.stringify({ email, password }),
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       localStorage.setItem("erp_assignments", JSON.stringify(d.assignments || []));
+      // Seed the ACTIVE context too (selected company/branch). Create/edit
+      // pages are gated behind the "سياق نشط" guard — without this the A3/A5
+      // axes probe the guard screen, not the form, and every create page
+      // reads as "no save button".
+      const a = (d.assignments || [])[0];
+      if (a) {
+        localStorage.setItem("erp_selected_companies", JSON.stringify([a.companyId].filter(Boolean)));
+        localStorage.setItem("erp_selected_branches", JSON.stringify([a.branchId].filter(Boolean)));
+      }
+      return r.status;
     }, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    // Fail fast (Phase 9 spirit): a silently-429'd/failed in-page login used
+    // to leave the whole run unauthenticated, producing 600 phantom
+    // login-bounce FAILs that look like app defects.
+    if (loginStatus !== 200) {
+      throw new Error(`in-page login returned HTTP ${loginStatus} (rate-limited?) — aborting instead of walking unauthenticated`);
+    }
     await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded", timeout: 30000 });
     await new Promise((r) => setTimeout(r, 800));
     reloginCount++;
@@ -950,7 +966,7 @@ async function probe(page, routePath, resolvedUrl, cls) {
       try {
         page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 900 });
-        await page.setExtraHTTPHeaders({ "Accept-Language": "ar" });
+        await page.setExtraHTTPHeaders({ "Accept-Language": "ar", "X-E2E-Test": "1" });
         pageRecycleCount++;
         console.log(`[audit] page recycled (#${pageRecycleCount}) at routeIdx=${routeIdx}`);
       } catch (e) {

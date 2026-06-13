@@ -1440,6 +1440,104 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   vehicle_expense:             { type: "expense", keywords: ["صيانة وإصلاح المركبات", "الوقود", "مركبات"] },
   property_maintenance_expense:{ type: "expense", keywords: ["صيانة المباني والوحدات", "صيانة المباني", "صيانة"] },
   project_cost:                { type: "expense", keywords: ["تكلفة المشاريع والمقاولات", "تكلفة المشاريع", "مشاريع"] },
+  // Root-cause sweep — intent coverage for EVERY operationType whose static
+  // fallback used to point at a non-postable header/missing code (now fixed at
+  // the call sites to the canonical postable leaf). These entries guarantee the
+  // SAME correct leaf is auto-resolved on ANY tenant chart whose codes differ
+  // from DEFAULT_CHART_OF_ACCOUNTS. Each opType maps to a SINGLE account type;
+  // dual-leg/cross-type opTypes (e.g. project_cost_transfer: debit→expense
+  // 5130, credit→asset 1270) are deliberately OMITTED — a one-type intent would
+  // mis-route one of their legs, so they rely on their now-postable fallbacks.
+  // --- Cash (→ الصندوق الرئيسي 1111) ---
+  cash:                          { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  fleet_cash_source:             { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  vendor_advance_cash:           { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  cip_funding_cash:              { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  property_cash:                 { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  property_building_purchase_cash:{ type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  fleet_vehicle_purchase_cash:   { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  asset_disposal_cash:           { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  employee_loan_disbursement:    { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  // --- Bank (→ بنوك 1124/112x) ---
+  payroll_bank_payout:           { type: "asset", keywords: ["البنك", "بنوك", "مصرف", "bank"] },
+  // --- Receivables (→ عملاء محليون 1131) ---
+  accounts_receivable:           { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  legal_receivable:              { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  support_ar:                    { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  cargo_receivable:              { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  rent_receivable:               { type: "asset", keywords: ["عملاء العقارات", "إيجارات", "ذمم", "عملاء"] },
+  bad_debt_allowance:            { type: "asset", keywords: ["مخصص الديون", "الديون المشكوك", "مخصص"] },
+  salary_advance_receivable:     { type: "asset", keywords: ["سلف الموظفين", "سلف", "عهد"] },
+  employee_loan_receivable:      { type: "asset", keywords: ["قروض موظفين", "قروض"] },
+  vendor_return_revenue:         { type: "asset", keywords: ["مخزون البضائع", "المخزون", "مخزون"] },
+  fleet_prepaid_insurance:       { type: "asset", keywords: ["تأمينات مدفوعة مقدم", "مدفوعة مقدم", "مصروفات مدفوعة مقدم"] },
+  // --- Fixed assets & accumulated depreciation ---
+  fleet_vehicle_asset:           { type: "asset", keywords: ["المركبات", "أسطول النقل", "مركبات"] },
+  fleet_acc_depreciation:        { type: "asset", keywords: ["مجمع إهلاك المركبات", "مجمع إهلاك"] },
+  asset_accumulated_impairment:  { type: "asset", keywords: ["مجمع إهلاك", "إهلاك متراكم"] },
+  property_building_asset:        { type: "asset", keywords: ["المباني والعقارات", "المباني", "عقارات"] },
+  property_sale_receivable:     { type: "asset", keywords: ["عملاء", "ذمم مدينة", "مدينون"] },
+  property_sale_loss:            { type: "expense", keywords: ["خسائر بيع أصول", "بيع أصول", "خسائر"] },
+  property_acc_depreciation:     { type: "asset", keywords: ["مجمع إهلاك المباني", "مجمع إهلاك"] },
+  project_wip:                   { type: "asset", keywords: ["أعمال تحت التنفيذ", "تحت التنفيذ"] },
+  // --- Payables (→ موردون محليون 2111) ---
+  purchase_vendor_ap:            { type: "liability", keywords: ["موردون", "دائنون", "ذمم دائنة"] },
+  vendor_credit_clearing:        { type: "liability", keywords: ["موردون", "دائنون", "ذمم دائنة"] },
+  vendor_advance_receivable:     { type: "liability", keywords: ["موردون", "دائنون", "ذمم دائنة"] },
+  // --- Payroll & statutory payables ---
+  payroll_deductions_payable:    { type: "liability", keywords: ["مستحقات الرواتب", "الرواتب", "استقطاعات"] },
+  employee_deductions:           { type: "liability", keywords: ["مستحقات الرواتب", "الرواتب", "استقطاعات"] },
+  payroll_gosi_payable:          { type: "liability", keywords: ["التأمينات الاجتماعية", "تأمينات اجتماعية", "gosi"] },
+  // --- Accrued expenses (→ مصروفات مستحقة الدفع 2150) ---
+  legal_payable:                 { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  legal_fee_payable:             { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  property_maintenance_payable:  { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  cargo_freight_payable:         { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  fleet_trip_payable:            { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  fleet_fines_payable:           { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  purchase_grni:                 { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  // --- Other liabilities ---
+  wht_payable:                   { type: "liability", keywords: ["ضريبة الاستقطاع", "استقطاع", "withholding"] },
+  security_deposit_liability:    { type: "liability", keywords: ["تأمينات وضمانات", "تأمينات من العملاء", "ضمانات"] },
+  hr_eos_accrual_liability:      { type: "liability", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  eos_accrual_liability:         { type: "liability", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  // --- Revenue ---
+  sales_revenue:                 { type: "revenue", keywords: ["مبيعات", "إيرادات المبيعات", "إيرادات", "sales"] },
+  invoice_sales_returns:         { type: "revenue", keywords: ["مردودات", "مسموحات المبيعات", "مردودات المبيعات"] },
+  rent_revenue:                  { type: "revenue", keywords: ["إيجارات", "إيرادات الإيجارات", "إيرادات"] },
+  rental_revenue:                { type: "revenue", keywords: ["إيجارات", "إيرادات الإيجارات", "إيرادات"] },
+  support_service_revenue:       { type: "revenue", keywords: ["إيرادات الخدمات", "خدمات", "إيرادات"] },
+  fleet_rental_revenue:          { type: "revenue", keywords: ["إيرادات النقل", "النقل", "الأسطول", "إيرادات"] },
+  cargo_freight_revenue:         { type: "revenue", keywords: ["إيرادات النقل", "شحن", "النقل", "إيرادات"] },
+  asset_disposal_gain:           { type: "revenue", keywords: ["أرباح بيع أصول", "بيع أصول", "أرباح"] },
+  legal_settlement_revenue:      { type: "revenue", keywords: ["إيرادات متنوعة", "متنوعة", "إيرادات"] },
+  // --- Expenses ---
+  salary_expense:                { type: "expense", keywords: ["الرواتب الأساسية", "رواتب", "أجور"] },
+  payroll_salary_expense:        { type: "expense", keywords: ["الرواتب الأساسية", "رواتب", "أجور"] },
+  payroll_overtime_expense:      { type: "expense", keywords: ["العمل الإضافي", "إضافي", "أوفر تايم"] },
+  payroll_gosi_expense:          { type: "expense", keywords: ["حصة المنشأة في التأمينات", "التأمينات", "gosi"] },
+  eos_expense:                   { type: "expense", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  eos_accrual_expense:           { type: "expense", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  hr_eos_accrual_expense:        { type: "expense", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  leave_settlement_expense:      { type: "expense", keywords: ["الإجازات", "تذاكر السفر", "إجازات"] },
+  leave_accrual_expense:         { type: "expense", keywords: ["الإجازات", "إجازات"] },
+  hr_leave_accrual_expense:      { type: "expense", keywords: ["الإجازات", "إجازات"] },
+  fleet_trip_expense:            { type: "expense", keywords: ["تكاليف نقل وشحن", "نقل وشحن", "نقل", "شحن"] },
+  cargo_freight_cost:            { type: "expense", keywords: ["تكاليف نقل وشحن", "نقل وشحن", "شحن", "نقل"] },
+  fleet_maintenance_expense:     { type: "expense", keywords: ["صيانة وإصلاح المركبات", "صيانة المركبات", "صيانة"] },
+  fleet_fuel_expense:            { type: "expense", keywords: ["الوقود", "وقود", "fuel"] },
+  fleet_fines_expense:           { type: "expense", keywords: ["مخالفات مرورية", "مخالفات"] },
+  fleet_depreciation:            { type: "expense", keywords: ["إهلاك المركبات", "إهلاك"] },
+  property_depreciation:         { type: "expense", keywords: ["إهلاك المباني", "إهلاك"] },
+  vendor_invoice_expense:        { type: "expense", keywords: ["أتعاب مهنية واستشارية", "أتعاب مهنية", "استشارية"] },
+  legal_fee:                     { type: "expense", keywords: ["أتعاب محاماة", "محاماة", "أتعاب قانونية"] },
+  legal_expense:                 { type: "expense", keywords: ["أتعاب محاماة", "محاماة", "أتعاب قانونية"] },
+  legal_settlement_expense:      { type: "expense", keywords: ["رسوم محاكم وتقاضي", "رسوم محاكم", "تقاضي"] },
+  bad_debt_expense:              { type: "expense", keywords: ["ديون معدومة", "معدومة"] },
+  allowance_expense:             { type: "expense", keywords: ["ديون معدومة", "مخصص", "معدومة"] },
+  asset_revaluation_loss:        { type: "expense", keywords: ["خسائر بيع أصول", "خسائر", "اضمحلال"] },
+  asset_impairment_loss:         { type: "expense", keywords: ["خسائر بيع أصول", "خسائر", "اضمحلال"] },
+  asset_disposal_loss:           { type: "expense", keywords: ["خسائر بيع أصول", "بيع أصول", "خسائر"] },
 };
 
 const _resolvedAccountCache = new Map<string, string>();

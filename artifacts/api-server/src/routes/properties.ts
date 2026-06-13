@@ -11,7 +11,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { applyTransition, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, computeVat, getCompanyVatRate } from "../lib/businessHelpers.js";
@@ -21,6 +21,8 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
+import { registerEntityParty } from "../lib/partyService.js";
+import { getEjarReader, isValidEjarFormat } from "../lib/ejarContractReader.js";
 
 const createUnitSchema = z.object({
   unitNumber: z.string().min(1, "رقم الوحدة مطلوب"),
@@ -117,6 +119,7 @@ const updateContractSchema = z.object({
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
+  contractSource: z.enum(["ejar", "manual"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
   totalContractValue: z.coerce.number().optional().nullable(),
@@ -169,6 +172,7 @@ const createContractSchema = z.object({
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
+  contractSource: z.enum(["ejar", "manual"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
   totalContractValue: z.coerce.number().optional().nullable(),
@@ -443,15 +447,14 @@ const router = Router();
 // Lifecycle transitions to terminal states (terminated/expired/refunded)
 // must go through dedicated endpoints — PATCH refuses them with 409.
 // ─────────────────────────────────────────────────────────────────────────────
-const UNIT_STATUSES = ["available", "rented", "maintenance", "under_maintenance", "out_of_service", "reserved"] as const;
-const UNIT_TRANSITIONS: Record<string, readonly string[]> = {
-  available:         ["rented", "maintenance", "under_maintenance", "out_of_service", "reserved"],
-  rented:            ["available", "maintenance", "under_maintenance"],
-  maintenance:       ["available", "out_of_service"],
-  under_maintenance: ["available", "out_of_service"],
-  reserved:          ["available", "rented"],
-  out_of_service:    ["available", "maintenance", "under_maintenance"],
-};
+// P0-4 — the unit status graph lives in ONE place: lifecycleEngine's
+// STATE_MACHINES (entity "property_units"). This route derives its
+// guard from that machine (SUP-016 pattern, same as support.ts) so
+// the two can never diverge again. The statuses list is the machine's
+// key set — every state that exists as a source in the graph.
+const UNIT_TRANSITIONS: Record<string, readonly string[]> =
+  STATE_MACHINES.find((sm) => sm.entity === "property_units")?.transitions ?? {};
+const UNIT_STATUSES = Object.keys(UNIT_TRANSITIONS);
 
 const CONTRACT_STATUSES = ["draft", "active", "terminated", "expired", "cancelled", "renewed"] as const;
 const CONTRACT_TRANSITIONS: Record<string, readonly string[]> = {
@@ -885,6 +888,40 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
 });
 
+// Preview from Ejar — Mock-First read by ejarNumber. The form calls
+// this when the operator chooses contractSource='ejar' and enters an
+// Ejar number; the response pre-fills the contract fields and the UI
+// locks the reference ones (parties, unit, amounts) so they can't be
+// edited locally — the doctrine rule for Ejar-bound contracts.
+//
+// The underlying reader is swappable (mock vs real) via the
+// EJAR_READER_MODE env. Today only mock returns data; flipping to
+// real fails loudly until the platform read endpoint is wired up.
+router.post("/contracts/preview-from-ejar", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
+  try {
+    const ejarNumber = String(req.body?.ejarNumber ?? "").trim();
+    if (!isValidEjarFormat(ejarNumber)) {
+      res.status(400).json({
+        error: "صيغة رقم إيجار غير صحيحة. المتوقع: EJ-XXXX",
+        field: "ejarNumber",
+      });
+      return;
+    }
+    const reader = getEjarReader();
+    const data = await reader.read(ejarNumber);
+    if (!data) {
+      res.status(404).json({
+        error: "لم يُعثر على عقد بهذا الرقم في إيجار",
+        ejarNumber,
+      });
+      return;
+    }
+    res.json({ data, source: "ejar" });
+  } catch (err) {
+    handleRouteError(err, res, "Preview from Ejar error:");
+  }
+});
+
 // Impact preview — shows what will happen when the rental contract is created
 router.post("/contracts/impact-preview", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
   try {
@@ -1178,12 +1215,12 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
     const insertId = await withTransaction(async (client) => {
       const contractRes = await client.query(
         `INSERT INTO rental_contracts ("companyId","unitId","tenantId","tenantName","tenantPhone","tenantEmail","tenantIdNumber","startDate","endDate","monthlyRent","depositAmount","paymentDay",notes,status,
-         "contractNumber","ejarNumber","contractType","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
+         "contractNumber","ejarNumber","contractType","contractSource","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
          RETURNING id`,
         [scope.companyId, b.unitId, tenantId, b.tenantName, b.tenantPhone, b.tenantEmail, b.tenantIdNumber, b.startDate, b.endDate, monthlyRent, b.depositAmount || 0, b.paymentDay || 1, b.notes, b.status || "active",
-         contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
+         contractNumber, b.ejarNumber || null, b.contractType || 'residential_rent', b.contractSource || (b.ejarNumber ? 'ejar' : 'manual'), frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
       );
       const contractId = contractRes.rows[0].id;
 
@@ -1379,6 +1416,7 @@ router.patch("/contracts/:id", authorize({ feature: "properties.contracts", acti
     addField("contractNumber", b.contractNumber);
     addField("ejarNumber", b.ejarNumber);
     addField("contractType", b.contractType);
+    addField("contractSource", b.contractSource);
     addField("paymentFrequency", b.paymentFrequency);
     addField("yearlyRent", b.yearlyRent);
     addField("totalContractValue", b.totalContractValue);
@@ -1984,6 +2022,7 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
         `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId",
+                c."contractType" AS "contractType",
                 NULL::int AS "contractBranchId",
                 u."unitNumber", u."buildingName", u.id AS "unitId", u."branchId" AS "unitBranchId"
            FROM rent_payments rp
@@ -2027,9 +2066,38 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
         const rentBranchId = (existing.contractBranchId as number | null)
           ?? (existing.unitBranchId as number | null)
           ?? scope.branchId;
+
+        // Commercial rent is a VATable supply under ZATCA; residential
+        // rent is exempt. The `paidAmount` the operator enters is the
+        // GROSS receipt — split it into the net (revenue) and the tax
+        // (output VAT) so the GL reflects the two distinct movements.
+        // The rate itself flows through `getCompanyVatRate` which reads
+        // system_settings, so operators can override it per company
+        // without code changes (FIN-AUD-03).
+        const isCommercial = ["commercial_rent", "commercial"].includes(
+          (existing.contractType as string | null) ?? "",
+        );
+        let netAmount = paidAmount;
+        let vatAmount = 0;
+        if (isCommercial) {
+          const rate = await getCompanyVatRate(scope.companyId);
+          if (rate > 0) {
+            // VAT-inclusive split: gross = net * (1 + rate/100)
+            netAmount = roundTo2(paidAmount / (1 + rate / 100));
+            vatAmount = roundTo2(paidAmount - netAmount);
+          }
+        }
+
         const glResult = await propertiesEngine.postRentRevenueGL(
           { companyId: scope.companyId, branchId: rentBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-          { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
+          {
+            id: Number(id),
+            contractId: existing.contractId,
+            propertyId: existing.unitId,
+            amount: netAmount,
+            vatAmount: vatAmount > 0 ? vatAmount : undefined,
+            tenantId: existing.tenantId,
+          }
         );
         journalEntryId = glResult.journalId;
       } catch (jErr) {
@@ -2781,6 +2849,11 @@ router.post("/tenants", authorize({ feature: "properties.tenants", action: "crea
       action: "tenant.created", entity: "tenants", entityId: insertId,
       details: `مستأجر جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "tenants", insertId, "tenant", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.tenantType === "company" || b.tenantType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] tenants registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
@@ -3594,6 +3667,11 @@ router.post("/owners", authorize({ feature: "properties.owners", action: "create
       action: "property.owner.created", entity: "property_owners", entityId: insertId,
       details: `مالك جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "property_owners", insertId, "owner", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.ownerType === "company" || b.ownerType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] property_owners registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
