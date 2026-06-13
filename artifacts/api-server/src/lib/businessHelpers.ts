@@ -1390,7 +1390,7 @@ export async function checkFinancialPeriodOpen(
  * This stops "الحساب 1400 غير موجود في شجرة الحسابات" from blocking saves
  * when the company's chart uses different codes than the legacy defaults.
  */
-const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
+export const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   vat_input: { type: "asset", keywords: ["ضريبة قيمة مضافة مدفوعة", "ضريبة المدخلات", "vat input", "input vat"] },
   vat_output: { type: "liability", keywords: ["ضريبة القيمة المضافة المستحقة", "ضريبة المخرجات", "vat output", "output vat"] },
   withholding_tax: { type: "liability", keywords: ["ضريبة الاستقطاع", "withholding"] },
