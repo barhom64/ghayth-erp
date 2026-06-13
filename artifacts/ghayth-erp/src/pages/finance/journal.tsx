@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, ScrollText, ArrowLeftRight, Undo2, Calendar, FileEdit, Repeat, FileText, Activity } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
 import {
   AdvancedFilters,
   useFilters,
@@ -148,6 +149,15 @@ export default function JournalPage() {
             <PageStatusBadge status={isBalanced ? "active" : "rejected"}>
               {isBalanced ? "متوازن" : "غير متوازن"}
             </PageStatusBadge>
+            {/* FIN-CORRECTION (A5): surface the truthful posting axis
+                (postingStatus from /finance/journal, migration-311 trigger,
+                #2133) so a directly-posted entry (status='draft' +
+                balancesApplied=true) reads «مرحّل» in the list. */}
+            {j.postingStatus && (
+              <span className={`text-[10px] ${j.postingStatus === "posted" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+                {POSTING_STATUS_LABELS[j.postingStatus as keyof typeof POSTING_STATUS_LABELS]}
+              </span>
+            )}
             {j.reversedById && <PageStatusBadge status="reversed" />}
             {j.reversalOfId && (
               <PageStatusBadge status="active">قيد عاكس</PageStatusBadge>
