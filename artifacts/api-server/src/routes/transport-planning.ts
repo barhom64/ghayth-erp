@@ -221,10 +221,10 @@ transportPlanningRouter.get(
                 b.id AS "bookingId", b."bookingNumber", b."transportServiceType",
                 b."fromLocationText", b."toLocationText"
            FROM transport_dispatch_orders d
-                JOIN transport_booking_lines l ON l.id = d."bookingLineId"
-                JOIN transport_bookings b      ON b.id = l."bookingId"
-                LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId"
-                LEFT JOIN fleet_drivers dr ON dr.id = d."driverId"
+                JOIN transport_booking_lines l ON l.id = d."bookingLineId" AND l."deletedAt" IS NULL
+                JOIN transport_bookings b      ON b.id = l."bookingId" AND b."deletedAt" IS NULL
+                LEFT JOIN fleet_vehicles v ON v.id = d."vehicleId" AND v."deletedAt" IS NULL
+                LEFT JOIN fleet_drivers dr ON dr.id = d."driverId" AND dr."deletedAt" IS NULL
           WHERE d."companyId" = $1
             AND d."scheduledStartAt"::date = $2::date
           ORDER BY d."scheduledStartAt" ASC LIMIT 500`,
@@ -265,6 +265,7 @@ transportPlanningRouter.get(
               SELECT 1 FROM transport_booking_lines l
                 JOIN transport_dispatch_orders d ON d."bookingLineId" = l.id
                WHERE l."bookingId" = b.id
+                 AND l."deletedAt" IS NULL
                  AND d.status NOT IN ('declined', 'cancelled')
             )
           ORDER BY b.priority DESC, b."pickupWindowStart" ASC NULLS LAST
@@ -885,10 +886,10 @@ async function loadDispatchOrderForDriver(
             tl.latitude  AS "toLat",
             tl.longitude AS "toLng"
        FROM transport_dispatch_orders d
-            JOIN transport_booking_lines bl ON bl.id = d."bookingLineId"
-            JOIN transport_bookings b ON b.id = bl."bookingId"
-            LEFT JOIN transport_locations fl ON fl.id = b."fromLocationId"
-            LEFT JOIN transport_locations tl ON tl.id = b."toLocationId"
+            JOIN transport_booking_lines bl ON bl.id = d."bookingLineId" AND bl."deletedAt" IS NULL
+            JOIN transport_bookings b ON b.id = bl."bookingId" AND b."deletedAt" IS NULL
+            LEFT JOIN transport_locations fl ON fl.id = b."fromLocationId" AND fl."deletedAt" IS NULL
+            LEFT JOIN transport_locations tl ON tl.id = b."toLocationId" AND tl."deletedAt" IS NULL
       WHERE d.id = $1 AND d."companyId" = $2`,
     [dispatchOrderId, companyId],
   );
@@ -1116,9 +1117,9 @@ transportPlanningRouter.get(
                 b."fromLocationText", b."toLocationText"
            FROM driver_navigation_sessions s
                 JOIN transport_dispatch_orders d ON d.id = s."dispatchOrderId"
-                JOIN transport_booking_lines bl  ON bl.id = d."bookingLineId"
-                JOIN transport_bookings b        ON b.id = bl."bookingId"
-                JOIN fleet_drivers fd            ON fd.id = s."driverId"
+                JOIN transport_booking_lines bl  ON bl.id = d."bookingLineId" AND bl."deletedAt" IS NULL
+                JOIN transport_bookings b        ON b.id = bl."bookingId" AND b."deletedAt" IS NULL
+                JOIN fleet_drivers fd            ON fd.id = s."driverId" AND fd."deletedAt" IS NULL
           WHERE s."companyId" = $1
             AND fd."employeeId" = $2
             AND s.status NOT IN ('ended', 'cancelled')
