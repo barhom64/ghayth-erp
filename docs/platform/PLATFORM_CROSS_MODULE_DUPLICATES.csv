@@ -1,5 +1,5 @@
-page_file,paths,segments
-pages/admin/attendance-categories,/admin/attendance-categories;/hr/attendance-categories,admin;hr
-pages/admin/scoring-weights,/admin/scoring-weights;/hr/scoring-weights,admin;hr
-pages/create/finance/vendors-create,/finance/vendors/create;/warehouse/suppliers/create,finance;warehouse
-pages/properties-guide,/guide/properties;/properties/guide,guide;properties
+page_file,paths,segments,resolved_in,canonical_path,legacy_paths,resolution
+pages/admin/attendance-categories,/admin/attendance-categories;/hr/attendance-categories,admin;hr,PR-3 (#2179),/hr/attendance-categories,/admin/attendance-categories,canonical=HR (attendance policy is HR business); legacy=admin path now wouter <Redirect to=/hr/attendance-categories/>
+pages/admin/scoring-weights,/admin/scoring-weights;/hr/scoring-weights,admin;hr,PR-3 (#2179),/hr/scoring-weights,/admin/scoring-weights,canonical=HR (weights drive evaluation/promotion/penalties — HR business); legacy=admin path now wouter <Redirect to=/hr/scoring-weights/>
+pages/create/finance/vendors-create,/finance/vendors/create;/warehouse/suppliers/create,finance;warehouse,PR-3 (#2179) wrapper-split,both kept — separate intents,(none — neither is legacy),wrapper split into FinanceVendorCreate (WHT-aware, POST /finance/vendors) and WarehouseSupplierCreate (no WHT, POST /warehouse/suppliers) over shared vendor-party-form.tsx; same suppliers table party master, different domain wrappers per #2163 §3
+pages/properties-guide,/guide/properties;/properties/guide,guide;properties,PR-3 (#2179),/properties/guide,/guide/properties,canonical=Properties (the guide is the properties module's onboarding doc); legacy=guide path now wouter <Redirect to=/properties/guide/>
