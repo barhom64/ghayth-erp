@@ -258,6 +258,7 @@ class PropertiesEngineImpl implements DomainEngine {
   }
 
   /**
+  /**
    * postManagementCollectionGL — collection on a managed contract.
    *
    * The third Properties activity branch (#1999, contractType=management).
@@ -295,22 +296,12 @@ class PropertiesEngineImpl implements DomainEngine {
   async postManagementCollectionGL(
     ctx: PropertyGLContext,
     collection: {
-      /** Identifies the collection row. Used as sourceId, guardId,
-       *  and inside sourceKey. */
       id: number;
       contractId: number;
-      /** property_buildings.id — for per-property P&L drilldowns. */
       propertyId: number;
-      /** clients.id of the owner — the entity we owe the rent minus
-       *  commission to. Carried on the owner_payable line. */
       ownerId: number;
-      /** clients.id of the tenant — carried on the cash line for
-       *  per-tenant collection drilldowns. */
       tenantId: number;
-      /** Full rent the tenant paid (gross — what hit the bank). */
       rentAmount: number;
-      /** Our cut — already resolved by the caller from the
-       *  contract's commission %. */
       commissionAmount: number;
     },
   ) {
@@ -374,6 +365,122 @@ class PropertiesEngineImpl implements DomainEngine {
       sourceKey: `property:mgmt_collection:${collection.id}`,
       guardTable: "property_management_collections",
       guardId: collection.id,
+      lines,
+    });
+  }
+
+  /**
+   * postSaleGL — property disposal at sale.
+   *
+   * The fourth Properties activity branch (#1999). Removes the building
+   * asset from the books at its CARRYING VALUE (book value — credit to
+   * the asset account), debits the buyer's receivable for the full
+   * sale price (gross — including VAT when commercial), and recognises
+   * the realised gain or loss as the delta between net sale price and
+   * book value.
+   */
+  async postSaleGL(
+    ctx: PropertyGLContext,
+    sale: {
+      id: number;
+      propertyId: number;
+      buyerId: number | null;
+      salePrice: number;
+      bookValue: number;
+      vatAmount?: number;
+      saleDate: string;
+    },
+  ) {
+    const vatAmount = sale.vatAmount ?? 0;
+    const netSalePrice = sale.salePrice - vatAmount;
+    const gainOrLoss = netSalePrice - sale.bookValue;
+    const hasGain = gainOrLoss > 0;
+    const hasLoss = gainOrLoss < 0;
+    const hasVat = vatAmount > 0;
+
+    const [
+      receivableCode,
+      assetCode,
+      gainCode,
+      lossCode,
+      vatCode,
+    ] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_receivable", "debit", "1130"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_gain", "credit", "4910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_loss", "debit", "6910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+    ]);
+
+    const lineDims = {
+      propertyId: sale.propertyId,
+      clientId: sale.buyerId ?? undefined,
+    };
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: receivableCode,
+        debit: sale.salePrice,
+        credit: 0,
+        description: `بيع عقار — مستحق على المشتري`,
+        ...lineDims,
+      },
+      {
+        accountCode: assetCode,
+        debit: 0,
+        credit: sale.bookValue,
+        description: `استبعاد أصل عقاري بالقيمة الدفترية`,
+        ...lineDims,
+      },
+    ];
+
+    if (hasVat) {
+      lines.push({
+        accountCode: vatCode,
+        debit: 0,
+        credit: vatAmount,
+        description: `ضريبة القيمة المضافة — بيع عقار`,
+        ...lineDims,
+      });
+    }
+
+    if (hasGain) {
+      lines.push({
+        accountCode: gainCode,
+        debit: 0,
+        credit: gainOrLoss,
+        description: `مكسب بيع أصل عقاري`,
+        ...lineDims,
+      });
+    } else if (hasLoss) {
+      lines.push({
+        accountCode: lossCode,
+        debit: -gainOrLoss,
+        credit: 0,
+        description: `خسارة بيع أصل عقاري`,
+        ...lineDims,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-SALE-${sale.id}`,
+      description: `بيع عقار #${sale.propertyId} بتاريخ ${sale.saleDate}`,
+      type: "general",
+      sourceType: "property_sales",
+      sourceId: sale.id,
+      sourceKey: `property:sale:${sale.id}`,
+      guardTable: "property_sales",
+      guardId: sale.id,
       lines,
     });
   }

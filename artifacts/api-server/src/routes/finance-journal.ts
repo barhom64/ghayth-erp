@@ -357,7 +357,15 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 2 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status + isPaid (both KEPT, nothing removed). The axes are maintained
+      // by the migration-311 trigger, and postingStatus derives from the
+      // ACTUAL posting (balancesApplied), so a directly-posted expense that
+      // still carries status='draft' (balancesApplied=true) reads truthfully
+      // as postingStatus='posted' here — where status alone would mislabel it.
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
               je."paymentMethod", je.reference, je."isPaid", je."attachmentUrl", je."attachmentType",
               je."expenseType", je."operationType",
@@ -380,6 +388,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je.ref LIKE 'EXP%' AND je."deletedAt" IS NULL
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
+                je."documentStatus", je."paymentStatus", je."postingStatus",
                 je."costCenter", je."departmentId", je."relatedEntityType", je."relatedEntityId",
                 je."paymentMethod", je.reference, je."isPaid", je."attachmentUrl", je."attachmentType",
                 je."expenseType", je."operationType",
@@ -1235,11 +1244,21 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 3 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status (KEPT, nothing removed). The axes are maintained by the
+      // migration-311 trigger, and postingStatus derives from the ACTUAL
+      // posting (balancesApplied), so a directly-posted voucher that still
+      // carries status='draft' (balancesApplied=true) reads truthfully as
+      // postingStatus='posted' here — where status alone would mislabel it.
+      // (This list historically never exposed isPaid; paymentStatus now
+      // conveys the payment state truthfully, gated by the canBePaid rule.)
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS type,
               je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
               je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
               COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               e_cre.name AS "createdByName"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
@@ -1247,6 +1266,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
+                je."documentStatus", je."paymentStatus", je."postingStatus",
                 je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
                 je."relatedEntityType", je."relatedEntityId", je."operationType", je."costCenter",
                 e_cre.name
@@ -1265,11 +1285,21 @@ journalRouter.get("/vouchers/:id", authorize({ feature: "finance.journal", actio
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [row] = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 4 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status (KEPT, nothing removed). The axes are maintained by the
+      // migration-311 trigger, and postingStatus derives from the ACTUAL
+      // posting (balancesApplied), so a directly-posted voucher that still
+      // carries status='draft' (balancesApplied=true) reads truthfully as
+      // postingStatus='posted' here — where status alone would mislabel it.
+      // (This detail read never exposed isPaid; paymentStatus now conveys the
+      // payment state truthfully, gated by the canBePaid rule — not added.)
       `SELECT je.id, je.ref, je.description,
               CASE WHEN je.ref LIKE 'RV%' THEN 'receipt' ELSE 'payment' END AS "voucherType",
               je."paymentMethod", je.reference, je."attachmentUrl", je."attachmentType",
               je."relatedEntityType", je."relatedEntityId", je."operationType",
-              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status
+              COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
@@ -1880,7 +1910,16 @@ journalRouter.delete("/vouchers/:id", authorize({ feature: "finance.journal", ac
 journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
+    // FIN-SUB-03b (#2118) slice 5 — surface the three status axes
+    // (documentStatus/paymentStatus/postingStatus) alongside the legacy status
+    // (KEPT, nothing removed). The axes are maintained by the migration-311
+    // trigger, and postingStatus derives from the ACTUAL posting
+    // (balancesApplied), so a directly-posted advance that still carries
+    // status='draft' (balancesApplied=true) reads truthfully as
+    // postingStatus='posted' here — where status alone would mislabel it.
+    // (This list never exposed isPaid; not added — paymentStatus conveys the
+    // payment state truthfully, gated by the canBePaid rule.)
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status, je."documentStatus", je."paymentStatus", je."postingStatus" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."documentStatus", je."paymentStatus", je."postingStatus", je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } }));
   } catch (err) {
     res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
@@ -1892,14 +1931,25 @@ journalRouter.get("/salary-advances/:id", authorize({ feature: "finance.journal"
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [item] = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 6 — surface the three status axes
+      // (documentStatus/paymentStatus/postingStatus) alongside the legacy
+      // status (KEPT, nothing removed). The axes are maintained by the
+      // migration-311 trigger, and postingStatus derives from the ACTUAL
+      // posting (balancesApplied), so a directly-posted advance that still
+      // carries status='draft' (balancesApplied=true) reads truthfully as
+      // postingStatus='posted' here — where status alone would mislabel it.
+      // (This detail never exposed isPaid; not added — paymentStatus conveys
+      // the payment state truthfully, gated by the canBePaid rule.)
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."branchId", je."companyId",
               COALESCE(SUM(jl.debit), 0) AS amount,
               CONCAT('SA-', je.id) AS "refDisplay"
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
-       GROUP BY je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt", je."branchId", je."companyId"`,
+       GROUP BY je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
+                je."documentStatus", je."paymentStatus", je."postingStatus", je."branchId", je."companyId"`,
       [id, scope.companyId]
     );
     if (!item) throw new NotFoundError("السلفة غير موجودة");
@@ -2062,7 +2112,15 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
     const filters = parseScopeFilters(req);
     const { where, params } = buildScopedWhere(scope, filters, { companyColumn: 'je."companyId"', branchColumn: 'je."branchId"', enforceBranchScope: true, includeNullBranch: true });
     const rows = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 1 — this read now surfaces the three status
+      // axes alongside the legacy `status` (kept, not removed). The axes are
+      // maintained by the trigger from migration 311, and `postingStatus` is
+      // derived from the ACTUAL posting (`balancesApplied`), so a directly
+      // posted entry that still carries status='draft' (balancesApplied=true)
+      // reads truthfully as postingStatus='posted' here — where the legacy
+      // `status` alone would mislabel it as a draft/unposted entry.
       `SELECT je.id, je.ref, je.description, je.status, je."createdAt",
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."reversalOfId", je."reversedById", je."operationType",
               COALESCE(SUM(jl.debit), 0) AS "totalDebit",
               COALESCE(SUM(jl.credit), 0) AS "totalCredit",
@@ -2882,7 +2940,17 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
     }
 
     const entries = await rawQuery<Record<string, unknown>>(
+      // FIN-SUB-03b (#2118) slice 7 — this read IS journal-entry-bound (OB-%
+      // entries in journal_entries), so surfacing the three status axes is
+      // meaningful, not artificial. Add documentStatus/paymentStatus/
+      // postingStatus alongside the legacy status (KEPT, nothing removed). The
+      // axes are maintained by the migration-311 trigger; postingStatus derives
+      // from the ACTUAL posting (balancesApplied), so a directly-posted opening
+      // balance that still carries status='draft' (balancesApplied=true) reads
+      // truthfully as postingStatus='posted' here — where status alone would
+      // mislabel it. (This read never exposed isPaid; not added.)
       `SELECT je.id, je.ref, je.description, je."createdAt", je.status,
+              je."documentStatus", je."paymentStatus", je."postingStatus",
               je."branchId", je."companyId",
               COALESCE(SUM(jl.debit), 0) AS "totalDebit",
               COALESCE(SUM(jl.credit), 0) AS "totalCredit",
@@ -2896,7 +2964,8 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
        LEFT JOIN journal_lines jl ON jl."journalId" = je.id
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${where}${extraWhere}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."branchId", je."companyId"
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
+                je."documentStatus", je."paymentStatus", je."postingStatus", je."branchId", je."companyId"
        ORDER BY je."createdAt" DESC`,
       params
     );

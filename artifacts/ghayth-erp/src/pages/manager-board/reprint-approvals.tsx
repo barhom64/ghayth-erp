@@ -129,7 +129,7 @@ export default function ReprintApprovalsPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="text-sm text-muted-foreground p-4 text-center">جارٍ التحميل…</div>
+            <div className="text-sm text-muted-foreground p-4 text-center">جاري التحميل…</div>
           ) : !data?.items?.length ? (
             <div className="text-sm text-muted-foreground p-6 text-center">
               {statusFilter === "pending"

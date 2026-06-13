@@ -56,6 +56,14 @@ const ManagerBoard = lazy(() => import("@/pages/manager-board"));
 const Workspace = lazy(() => import("@/pages/workspace"));
 const ManagerWorkspace = lazy(() => import("@/pages/manager-workspace"));
 const WorkQueue = lazy(() => import("@/pages/my/work-queue"));
+// PR-5 (#2077) — صندوق الأعمال الموحّد. New canonical inbox replaces
+// the experimental /my/work-queue with a 4-section page (actions /
+// tasks / important notifications / follow-ups) that matches the
+// product owner's exact spec. The /my/work-queue route stays as a
+// back-compat alias.
+const WorkInbox = lazy(() => import("@/pages/work-inbox"));
+// PR-9 (#2077) — رفيق الميدان: mobile-first field-ping companion.
+const FieldCompanion = lazy(() => import("@/pages/my/field-companion"));
 const ReprintApprovals = lazy(() => import("@/pages/manager-board/reprint-approvals"));
 const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
 const OperationsCenter = lazy(() => import("@/pages/operations-center"));
@@ -85,6 +93,9 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/workspace", component: Workspace },
   { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
   { path: "/my/work-queue", component: WorkQueue },
+  // PR-5 (#2077) — صندوق الأعمال الموحّد (canonical).
+  { path: "/work-inbox", component: WorkInbox },
+  { path: "/my/field-companion", component: FieldCompanion },
   { path: "/obligations", component: Obligations, module: "operations" },
   { path: "/calendar", component: CalendarPage },
   // Agent-5 (route↔backend consistency): /api/exec-dashboard mounts with

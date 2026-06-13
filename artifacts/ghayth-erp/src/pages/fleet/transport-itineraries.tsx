@@ -324,7 +324,7 @@ export default function TransportItineraries() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
             <Button onClick={save} disabled={submitting} rateLimitAware>
-              {submitting ? "جارٍ الحفظ…" : "إنشاء + إضافة مراحل"}
+              {submitting ? "جاري الحفظ…" : "إنشاء + إضافة مراحل"}
             </Button>
           </DialogFooter>
         </DialogContent>

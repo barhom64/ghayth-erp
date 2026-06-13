@@ -117,3 +117,19 @@ describe("classifyAbc — realistic 100-item distribution", () => {
     expect(c).toBe(50);  // bottom 5%
   });
 });
+
+describe("classifyAbc — boundary-crossing items keep the higher class", () => {
+  it("a single dominant product (share 1.0) is A, not C", () => {
+    // Degenerate but real: a warehouse whose entire consumption value is
+    // one product. Pareto's "top 80%" must include it.
+    const out = classifyAbc(buildInputs(30));
+    expect(out.map((r) => r.category)).toEqual(["A"]);
+  });
+
+  it("the product that crosses the 80% boundary is still A", () => {
+    // shares [0.85, 0.15]: the first item crosses 0.8 — under
+    // cumulative-after semantics it fell to B and NO item was A.
+    const out = classifyAbc(buildInputs(85, 15));
+    expect(out.map((r) => r.category)).toEqual(["A", "B"]);
+  });
+});
