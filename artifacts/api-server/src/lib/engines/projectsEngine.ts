@@ -39,7 +39,7 @@ class ProjectsEngineImpl implements DomainEngine {
       creditFallback = "1151";
 
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "debit", "1350"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "debit", "1270"),
       financialEngine.resolveAccountCode(ctx.companyId, "project_cost_cash", "credit", creditFallback),
     ]);
 
@@ -71,8 +71,8 @@ class ProjectsEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "debit", "5225"),
-      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "credit", "1350"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "debit", "5130"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "credit", "1270"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -112,7 +112,7 @@ class ProjectsEngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "dev_unit_cogs", "debit", "5110"),
-      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "credit", "1350"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "credit", "1270"),
     ]);
 
     return financialEngine.postJournalEntry({

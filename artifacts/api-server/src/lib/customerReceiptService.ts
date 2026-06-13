@@ -134,9 +134,9 @@ export async function postCustomerReceipt(p: CustomerReceiptParams): Promise<Cus
   const { financialEngine } = await import("./engines/index.js");
   const [cashCode, arCode, advCode] = await Promise.all([
     financialEngine.resolveAccountCode(p.companyId, "invoice_payment_cash", "debit", isCash ? "1100" : "1110"),
-    financialEngine.resolveAccountCode(p.companyId, "invoice_payment_ar", "credit", "1200"),
+    financialEngine.resolveAccountCode(p.companyId, "invoice_payment_ar", "credit", "1131"),
     leftover > 0.005
-      ? financialEngine.resolveAccountCode(p.companyId, "customer_advance_liability", "credit", "2400")
+      ? financialEngine.resolveAccountCode(p.companyId, "customer_advance_liability", "credit", "2160")
       : Promise.resolve(""),
   ]);
 

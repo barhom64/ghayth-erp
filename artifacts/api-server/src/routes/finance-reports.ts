@@ -1246,43 +1246,32 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     dateFilter += getBranchCondition(scope, branchId, params);
 
     const custodies = await rawQuery<Record<string, unknown>>(
-      // #2176 finding → fix: this report was the ONLY GL report lacking a
-      // posting filter, so it counted UNPOSTED (draft) entries in the custody
-      // totals and returned raw je.status. Align it with every other GL report
-      // (trial-balance et al.): gate on the ACTUAL posting (balancesApplied),
-      // and surface the truthful axes (documentStatus/paymentStatus/
-      // postingStatus from the migration-311 trigger) alongside the legacy
-      // status (KEPT). Report-read change only — no posting/journal/balance logic.
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date, je.status,
-              je."documentStatus", je."paymentStatus", je."postingStatus",
               e.name AS "employeeName", 'custody' AS type
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je.ref LIKE 'CUSTODY%' ${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."documentStatus", je."paymentStatus", je."postingStatus", e.name
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
        ORDER BY je."createdAt" DESC
        LIMIT 500`,
       params
     );
 
     const advances = await rawQuery<Record<string, unknown>>(
-      // Same alignment as the custody query above (#2176): posting-gated on
-      // balancesApplied, axes surfaced, legacy status kept.
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
               je."createdAt" AS date, je.status,
-              je."documentStatus", je."paymentStatus", je."postingStatus",
               e.name AS "employeeName", 'advance' AS type
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je.ref LIKE 'ADV%' ${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."documentStatus", je."paymentStatus", je."postingStatus", e.name
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'ADV%' ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
        ORDER BY je."createdAt" DESC
        LIMIT 500`,
       params
@@ -2988,8 +2977,8 @@ reportsRouter.get(
       // 2300 / 1400 defaults via accounting_mappings).
       const { financialEngine } = await import("../lib/engines/index.js");
       const [outputVatCode, inputVatCode] = await Promise.all([
-        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300"),
-        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1400"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2131"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1180"),
       ]);
 
       const params: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
