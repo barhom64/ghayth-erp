@@ -19,11 +19,10 @@ const Warehouse = lazy(() => import("@/pages/warehouse"));
 const WarehouseCreate = lazy(() => import("@/pages/create/warehouse-create"));
 const WarehouseMovementsCreate = lazy(() => import("@/pages/create/warehouse/movements-create"));
 const WarehouseCategoriesCreate = lazy(() => import("@/pages/create/warehouse/categories-create"));
-// Warehouse supplier form deleted — the warehouse/suppliers + finance/
-// vendors UI duplication wrote to the same `suppliers` table. The
-// /warehouse/suppliers/create route below now lazy-loads the unified
-// finance/vendors-create form (same table, fuller field set).
-const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
+// PR-3 (#2163) — wrapper split: /warehouse/suppliers/create يستهلك
+// /warehouse/suppliers (POST) بصلاحية warehouse.inventory:create.
+// /finance/vendors/create مسار منفصل يملكه مسار المالية.
+const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/warehouse/suppliers-create"));
 const WarehouseProductDetail = lazy(() => import("@/pages/details/warehouse-product-detail"));
 const WarehouseMovementDetail = lazy(() => import("@/pages/details/warehouse-movement-detail"));
 const WarehouseCategoryDetail = lazy(() => import("@/pages/details/warehouse-category-detail"));

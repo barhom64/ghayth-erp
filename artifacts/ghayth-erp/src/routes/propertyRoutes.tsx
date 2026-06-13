@@ -1,6 +1,8 @@
 import { lazy } from "react";
 
 const PropertiesGuide = lazy(() => import("@/pages/properties-guide"));
+// PR-3 (#2163) — /properties/guide هو canonical. /guide/properties back-compat redirect.
+const PropertiesGuideRedirect = lazy(() => import("@/pages/properties/guide-redirect"));
 const Properties = lazy(() => import("@/pages/properties"));
 const PropertiesDashboard = lazy(() => import("@/pages/properties-dashboard"));
 const PropertiesBuildings = lazy(() => import("@/pages/properties-buildings"));
@@ -58,7 +60,7 @@ export const propertyRoutes = [
   { path: "/properties/inspections", component: PropertyInspections },
   { path: "/properties/deposits", component: PropertyDeposits },
   { path: "/properties/occupancy-report", component: OccupancyReport },
-  { path: "/guide/properties", component: PropertiesGuide },
+  { path: "/guide/properties", component: PropertiesGuideRedirect },
   { path: "/properties/guide", component: PropertiesGuide },
   { path: "/properties/:id/status", component: UnitStatusChange },
   { path: "/properties/:id", component: UnitDetail },

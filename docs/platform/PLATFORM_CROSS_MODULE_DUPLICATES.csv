@@ -1,5 +1,5 @@
-page_file,paths,segments
-pages/admin/attendance-categories,/admin/attendance-categories;/hr/attendance-categories,admin;hr
-pages/admin/scoring-weights,/admin/scoring-weights;/hr/scoring-weights,admin;hr
-pages/create/finance/vendors-create,/finance/vendors/create;/warehouse/suppliers/create,finance;warehouse
-pages/properties-guide,/guide/properties;/properties/guide,guide;properties
+page_file,paths,segments,action,owner_path,legacy_path,reason,pr
+pages/admin/attendance-categories,/admin/attendance-categories;/hr/attendance-categories,admin;hr,canonical+redirect,/hr/attendance-categories,/admin/attendance-categories,HR owns attendance policy — not a platform setting,PR-3 #2163
+pages/admin/scoring-weights,/admin/scoring-weights;/hr/scoring-weights,admin;hr,canonical+redirect,/hr/scoring-weights,/admin/scoring-weights,HR owns scoring weights — drives employee evaluation engine,PR-3 #2163
+pages/create/finance/vendors-create;pages/create/warehouse/suppliers-create,/finance/vendors/create;/warehouse/suppliers/create,finance;warehouse,wrapper-split,/finance/vendors/create (finance) + /warehouse/suppliers/create (warehouse),none,Vendor=financial entity (finance.vendors API) vs Supplier=operational entity (warehouse.inventory API) — different modules different APIs,PR-3 #2163
+pages/properties-guide,/guide/properties;/properties/guide,guide;properties,canonical+redirect,/properties/guide,/guide/properties,Property track owns the guide — /guide/properties is back-compat redirect,PR-3 #2163

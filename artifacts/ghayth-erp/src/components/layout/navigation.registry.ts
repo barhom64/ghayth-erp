@@ -596,7 +596,6 @@ export const allNavSections: NavSection[] = [
         { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
         { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
         { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
-        { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
       ]},
     ],
   },

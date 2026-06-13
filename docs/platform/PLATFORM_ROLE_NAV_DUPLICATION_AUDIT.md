@@ -292,3 +292,37 @@ owner    /auth/me modules: [dashboard, properties, projects, …]   (27 module)
 ## 15. التوصية
 
 اعتمد هذا الجرد ثم ابدأ الموجة الثانية بـPR-1 (فصل module-dashboards عن bi) — أعلى أثر يومي وأبسط نطاقًا.
+
+---
+
+## 16. تقرير PR-3 — Canonical Ownership for Cross-Module Duplicates (مكتمل)
+
+> **PR**: #2163 PR-3 · **التاريخ**: 2026-06-13 · **الفرع**: `claude/ecstatic-franklin-psjwmd`
+
+### جدول القرارات النهائي
+
+| التكرار | المسار المالك (canonical) | المسار الموروث (legacy) | الإجراء | السبب المعماري |
+|---|---|---|---|---|
+| attendance-categories | `/hr/attendance-categories` | `/admin/attendance-categories` | canonical + back-compat redirect | HR يملك سياسة الحضور والفئات — ليست إعداد منصة |
+| scoring-weights | `/hr/scoring-weights` | `/admin/scoring-weights` | canonical + back-compat redirect | HR يملك أوزان التقييم — تؤثر في الترقيات والجزاءات |
+| vendors vs suppliers | `/finance/vendors/create` (مالية) + `/warehouse/suppliers/create` (مستودع) | — | wrapper split | Vendor = كيان مالي (API: `/finance/vendors`، perm: `finance.vendors:create`) · Supplier = كيان تشغيلي (API: `/warehouse/suppliers`، perm: `warehouse.inventory:create`) |
+| properties guide | `/properties/guide` | `/guide/properties` | canonical + redirect | مسار العقارات يملك الدليل — `/guide/properties` back-compat redirect |
+
+### ما تغيّر
+
+**الملفات الجديدة:**
+- `pages/hr/attendance-categories.tsx` — الصفحة الكاملة انتقلت هنا
+- `pages/hr/scoring-weights.tsx` — الصفحة الكاملة انتقلت هنا
+- `pages/create/warehouse/suppliers-create.tsx` — wrapper مستقل يستهلك `/warehouse/suppliers`
+- `pages/properties/guide-redirect.tsx` — redirect shell من `/guide/properties` إلى `/properties/guide`
+
+**الملفات المعدَّلة:**
+- `pages/admin/attendance-categories.tsx` — أصبح redirect shell (لا منطق عمل)
+- `pages/admin/scoring-weights.tsx` — أصبح redirect shell (لا منطق عمل)
+- `routes/hrRoutes.tsx` — imports من `pages/hr/` بدل `pages/admin/`
+- `routes/miscRoutes.tsx` — `WarehouseSuppliersCreate` من `warehouse/suppliers-create`
+- `routes/propertyRoutes.tsx` — `/guide/properties` يستخدم `PropertiesGuideRedirect`
+- `components/layout/navigation.registry.ts` — حذف مدخل `/guide/properties` المكرر
+
+**الـSmoke Pin:**
+- `tests/unit/platformWave2Pr3CanonicalOwnershipSmoke.test.ts` — 14 فحصًا يحرسون رجوع أي تكرار

@@ -66,12 +66,10 @@ const Evaluation360Upward = lazy(() => import("@/pages/hr/evaluation-360-upward"
 const Evaluation360History = lazy(() => import("@/pages/hr/evaluation-360-history"));
 const PublicHolidays = lazy(() => import("@/pages/hr/public-holidays"));
 const AttendancePolicy = lazy(() => import("@/pages/hr/attendance-policy"));
-// PR-3 (#2077) — per-category attendance overrides. Page module already
-// existed under /admin (HR-015) but was only reachable by admins; mount
-// it under /hr too so the HR Manager can manage policies without
-// crossing into the admin module. The /admin route stays as a back-
-// compat alias for any bookmark/print/notification deep-link.
-const AttendanceCategoriesHr = lazy(() => import("@/pages/admin/attendance-categories"));
+// PR-3 (#2163) — canonical ownership confirmed: HR owns attendance-categories.
+// Page moved to pages/hr/. /admin/attendance-categories is now a back-compat
+// redirect to /hr/attendance-categories.
+const AttendanceCategoriesHr = lazy(() => import("@/pages/hr/attendance-categories"));
 // PR-4 (#2077) — institutional scoring detail page (NEW) + scoring-weights
 // admin page mirrored under /hr so the HR Manager can edit weights
 // without crossing the /admin/* boundary. The engine + cron already
@@ -79,7 +77,9 @@ const AttendanceCategoriesHr = lazy(() => import("@/pages/admin/attendance-categ
 // adds the HTTP entry points for on-demand recompute/history and this
 // detail page that visualizes them.
 const EmployeeScore = lazy(() => import("@/pages/hr/employee-score"));
-const ScoringWeightsHr = lazy(() => import("@/pages/admin/scoring-weights"));
+// PR-3 (#2163) — canonical ownership confirmed: HR owns scoring-weights.
+// Page moved to pages/hr/. /admin/scoring-weights is now a back-compat redirect.
+const ScoringWeightsHr = lazy(() => import("@/pages/hr/scoring-weights"));
 // PR-7 (#2077) — unified org tree page (شركة → فرع → إدارة → قسم → فريق).
 const OrgTree = lazy(() => import("@/pages/hr/org-tree"));
 const Delegations = lazy(() => import("@/pages/hr/delegations"));
@@ -189,13 +189,9 @@ export const hrRoutes = [
   { path: "/hr/evaluation-360/:id", component: Evaluation360Detail, subKey: "performance" },
   { path: "/hr/public-holidays", component: PublicHolidays, subKey: "leaves" },
   { path: "/hr/attendance-policy", component: AttendancePolicy, subKey: "attendance" },
-  // PR-3 (#2077) — per-category overrides. Same component as the legacy
-  // /admin/attendance-categories route; just exposed under /hr so HR
-  // managers can reach it via the HR navigation.
+  // PR-3 (#2163) — canonical: /hr/attendance-categories. المالك HR.
   { path: "/hr/attendance-categories", component: AttendanceCategoriesHr, subKey: "attendance" },
-  // PR-4 (#2077) — institutional score for one employee + scoring-weights
-  // editor mirrored under /hr. The /admin route for weights stays as a
-  // back-compat alias just like /admin/attendance-categories did.
+  // PR-3 (#2163) — canonical: /hr/scoring-weights. المالك HR.
   { path: "/hr/employees/:id/score", component: EmployeeScore, subKey: "performance" },
   { path: "/hr/scoring-weights", component: ScoringWeightsHr, subKey: "performance" },
   // PR-7 (#2077) — الشجرة التنظيمية الموحّدة.
