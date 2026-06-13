@@ -150,14 +150,24 @@ describe("HR-015 — Attendance Categories admin (frontend)", () => {
     expect(ATT_CAT_SRC).toMatch(/SelectItem value="false"/);
   });
 
-  it("page registered at /admin/attendance-categories (back-compat alias)", () => {
-    // PR-3 (#2077) added a canonical /hr/attendance-categories mount so HR
-    // Managers can reach the page without crossing the admin module
-    // boundary. The /admin route stays as a back-compat alias for any
-    // bookmark/print/notification deep-link. Both routes resolve to the
-    // same component.
-    expect(ADMIN_ROUTES_SRC).toMatch(/const AdminAttendanceCategories = lazy/);
-    expect(ADMIN_ROUTES_SRC).toMatch(/\{ path: "\/admin\/attendance-categories", component: AdminAttendanceCategories \}/);
+  it("page registered at /admin/attendance-categories as a wouter <Redirect> (canonical = HR)", () => {
+    // PR-3 (#2077) added a canonical /hr/attendance-categories mount so
+    // HR Managers can reach the page without crossing the admin module
+    // boundary. The /admin route stayed as a back-compat alias (alias =
+    // same component bound twice).
+    //
+    // Wave-2 PR-3 (#2163) — Canonical Ownership ruling: «canonical يتبع
+    // ملكية الأعمال، لا مكان الملف». Attendance categories is HR
+    // business policy; admin had no business owning it. The legacy
+    // path stays reachable (bookmarks/prints) but is bound to a wouter
+    // <Redirect> wrapper now — only ONE route owns the policy.
+    expect(ADMIN_ROUTES_SRC).toMatch(/RedirectToHrAttendanceCategories\s*=\s*redirectTo\("\/hr\/attendance-categories"\)/);
+    expect(ADMIN_ROUTES_SRC).toMatch(
+      /path:\s*"\/admin\/attendance-categories",\s*component:\s*RedirectToHrAttendanceCategories/,
+    );
+    // Regression trap: re-importing AdminAttendanceCategories as a
+    // lazy live page would re-establish dual ownership.
+    expect(ADMIN_ROUTES_SRC).not.toMatch(/const AdminAttendanceCategories = lazy/);
   });
 
   it("nav entry under «إعدادات الموارد البشرية» (now points at /hr after PR-3)", () => {
