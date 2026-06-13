@@ -5,6 +5,7 @@ import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { setCsrfCookie } from "../middlewares/csrfMiddleware.js";
+import { canonicalizeModules } from "../lib/rbac/roleModulesCatalog.js";
 import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -173,6 +174,13 @@ const refreshLimiter = rateLimit({
   message: { error: "تم تجاوز الحد الأقصى لطلبات تحديث الرمز. يرجى المحاولة بعد دقيقة" },
   validate: { ip: false, trustProxy: false },
   store: makeRateLimitStore("auth:refresh"),
+  // Same canonical e2e bypass as loginLimiter above: automated suites
+  // (Playwright, the 604-route runtime audit) walk pages far faster than a
+  // human and each expiry-triggered silent refresh counts against this
+  // per-IP cap — mid-run the whole walk bounced to /login. Non-production
+  // only; production traffic never carries the header.
+  skip: (req) =>
+    !config.isProduction && req.headers["x-e2e-test"] === "1",
 });
 
 const registerLimiter = rateLimit({
@@ -606,7 +614,19 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
       [scope.userId, scope.companyId]
     );
 
-    res.json({ ...employee, userRoles });
+    // PR-2 / #2163 — canonicalise. split_part above emits feature-key
+    // first-segment names (dashboard/properties/projects/communications);
+    // the canonical vocabulary the nav + requireModule consume is
+    // (home/property/operations/comms). authSession.ts (the /login
+    // counterpart of this handler) does the same.
+    const userRolesCanon = userRoles.map((r) => ({
+      ...r,
+      modules: Array.isArray((r as any).modules)
+        ? canonicalizeModules((r as any).modules as string[])
+        : (r as any).modules,
+    }));
+
+    res.json({ ...employee, userRoles: userRolesCanon });
   } catch (err) {
     handleRouteError(err, res, "GetMe error:");
   }

@@ -23,6 +23,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 
 import { PAYMENT_METHODS, VOUCHER_OPERATIONS } from "@/lib/finance-type-maps";
+import { POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 
@@ -123,7 +124,20 @@ export default function VouchersPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (v) => <PageStatusBadge status={v.status || "posted"} domain="journal" />,
+      // FIN-CORRECTION (A4): keep the legacy status badge, and surface the
+      // truthful posting axis (postingStatus from /finance/vouchers, migration-
+      // 311 trigger, #2156) so a directly-posted voucher (status='draft' +
+      // balancesApplied=true) reads «مرحّل» here, not just by the loose status.
+      render: (v) => (
+        <span className="inline-flex items-center gap-1">
+          <PageStatusBadge status={v.status || "posted"} domain="journal" />
+          {v.postingStatus && (
+            <span className={`text-[10px] ${v.postingStatus === "posted" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+              {POSTING_STATUS_LABELS[v.postingStatus as keyof typeof POSTING_STATUS_LABELS]}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: "_expand",

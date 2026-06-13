@@ -680,7 +680,7 @@ export default function TransportBookingCreate() {
           </Link>
           <Button type="submit" disabled={submitting || !hasLinkedSource} rateLimitAware>
             <Plus className="h-4 w-4 me-1" />
-            {submitting ? "جارٍ الإنشاء…" : "إنشاء الحجز"}
+            {submitting ? "جاري الإنشاء…" : "إنشاء الحجز"}
           </Button>
         </div>
       </form>

@@ -68,9 +68,9 @@ describe("preview builds the correct AR-side JE", () => {
     expect(HANDLER).toMatch(/previewVat > 0\s*\?\s*\[\{ accountCode: vatPayableCode, debit: 0, credit: previewVat/);
   });
   it("resolves the SAME accounts the commit handler uses", () => {
-    expect(HANDLER).toMatch(/"invoice_ar", "debit", "1200"/);
-    expect(HANDLER).toMatch(/"invoice_revenue", "credit", "4000"/);
-    expect(HANDLER).toMatch(/"invoice_vat_payable", "credit", "2300"/);
+    expect(HANDLER).toMatch(/"invoice_ar", "debit", "1131"/);
+    expect(HANDLER).toMatch(/"invoice_revenue", "credit", "4111"/);
+    expect(HANDLER).toMatch(/"invoice_vat_payable", "credit", "2131"/);
   });
 });
 

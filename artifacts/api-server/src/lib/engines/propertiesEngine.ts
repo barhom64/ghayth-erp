@@ -33,9 +33,9 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode, vatCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "rent_revenue", "credit", "4100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1132"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rent_revenue", "credit", "4121"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
     ]);
 
     const lines = [
@@ -102,8 +102,8 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_expense", "debit", "6400"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_expense", "debit", "5610"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2150"),
     ]);
 
     // Carry unitId + clientId on every line — caller (properties.ts:complete)
@@ -133,6 +133,133 @@ class PropertiesEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * postMaintenanceOwnerBillingGL — maintenance billed to a
+   * third-party owner.
+   *
+   * Per the doctrine: maintenance falls on the OWNER. If we OWN the
+   * property → `postMaintenanceExpenseGL` already handles it (debits
+   * a property maintenance expense). But when we MANAGE a property
+   * for a third party, the maintenance cost is a receivable from
+   * that owner — they will pay us via a tax invoice we issue.
+   *
+   * Bookkeeping:
+   *   - DR property_owner_receivable     = cost + VAT (gross)
+   *   - CR property_maintenance_payable  = cost (net) — what we owe
+   *     the vendor / our maintenance team
+   *   - CR vat_output                    = VAT (when applicable)
+   *
+   * The routing decision (which of the two engine methods to call)
+   * is the route's concern: it reads property_buildings.ownerType or
+   * rental_contracts.contractType='management' and picks. PR-7b
+   * wires that. This method only owns the GL contract.
+   *
+   * Account codes resolve through `resolveAccountCode`, so an
+   * operator's `accounting_mappings` row beats the engine's
+   * fallbacks (1140 receivable / 2160 payable / 2200 VAT).
+   *
+   * Idempotency: `guardTable=maintenance_requests` + `guardId=id`
+   * AND a `sourceKey` that DIFFERS from the company-paid path
+   * (`property:maintenance:<id>` vs `property:maintenance_owner:<id>`)
+   * so a maintenance request that gets reclassified from "we pay"
+   * to "owner pays" correctly posts a NEW entry — the dedupe guard
+   * treats them as distinct events rather than colliding.
+   */
+  async postMaintenanceOwnerBillingGL(
+    ctx: PropertyGLContext,
+    maintenance: {
+      /** maintenance_requests.id — identifies the source request.
+       *  Used as sourceId, guardId, and inside sourceKey. */
+      id: number;
+      /** property_buildings.id — for per-property AR drilldowns. */
+      propertyId: number;
+      /** property_units.id — when the maintenance is unit-scoped
+       *  (not building-wide). Optional. */
+      unitId?: number | null;
+      /** clients.id of the third-party owner being billed. Carried
+       *  on every line so owner AR aging aggregates straight from
+       *  journal_lines (filter by accountCode=1141 + clientId). */
+      ownerId: number;
+      /** Net cost owed to the maintenance vendor / our team. */
+      totalCost: number;
+      /** Optional VAT on the tax invoice issued to the owner. The
+       *  rate/decision live on the route (PR-7b will read
+       *  getCompanyVatRate + owner.vatRegistered for the call). */
+      vatAmount?: number;
+      /** Free-form maintenance type for description text. */
+      type?: string;
+    },
+  ) {
+    const vatAmount = maintenance.vatAmount ?? 0;
+    const hasVat = vatAmount > 0;
+
+    const [receivableCode, payableCode, vatCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_receivable", "debit", "1140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2160"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+    ]);
+
+    const unitId = maintenance.unitId ?? undefined;
+    const clientId = maintenance.ownerId;
+    const description = `صيانة عقار — ${maintenance.type ?? "عامة"} (على المالك)`;
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      unitId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: receivableCode,
+        debit: maintenance.totalCost + vatAmount,
+        credit: 0,
+        description,
+        propertyId: maintenance.propertyId,
+        unitId,
+        clientId,
+      },
+      {
+        accountCode: payableCode,
+        debit: 0,
+        credit: maintenance.totalCost,
+        description: "مستحقات صيانة",
+        propertyId: maintenance.propertyId,
+        unitId,
+        clientId,
+      },
+    ];
+
+    if (hasVat) {
+      lines.push({
+        accountCode: vatCode,
+        debit: 0,
+        credit: vatAmount,
+        description: `ضريبة القيمة المضافة — صيانة محمّلة على المالك`,
+        propertyId: maintenance.propertyId,
+        unitId,
+        clientId,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-MAINT-OWNER-${maintenance.id}`,
+      description: `صيانة عقار #${maintenance.propertyId} — ${maintenance.type ?? "عامة"} — على المالك`,
+      type: "general",
+      sourceType: "maintenance_requests",
+      sourceId: maintenance.id,
+      sourceKey: `property:maintenance_owner:${maintenance.id}`,
+      guardTable: "maintenance_requests",
+      guardId: maintenance.id,
+      lines,
+    });
+  }
+
   async postSecurityDepositGL(
     ctx: PropertyGLContext,
     deposit: {
@@ -147,8 +274,8 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [depositLiability, cashAccount] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "security_deposit_liability", "credit", "2300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "security_deposit_liability", "credit", "2170"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1111"),
     ]);
 
     const isReceived = deposit.type === "received";
@@ -204,7 +331,7 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1132"),
       financialEngine.resolveAccountCode(ctx.companyId, "early_termination_revenue", "credit", "4150"),
     ]);
 
@@ -234,8 +361,8 @@ class PropertiesEngineImpl implements DomainEngine {
     building: { id: number; purchasePrice: number; name: string }
   ) {
     const [assetCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1520"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_purchase_cash", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1240"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_purchase_cash", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -257,6 +384,234 @@ class PropertiesEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+  /**
+   * postManagementCollectionGL — collection on a managed contract.
+   *
+   * The third Properties activity branch (#1999, contractType=management).
+   * We collect rent on behalf of a third-party owner and keep a
+   * commission. The rent is NOT our revenue; the commission is.
+   *
+   * Splits the cash receipt three ways:
+   *   - DR property_cash               (gross rent — what the bank shows)
+   *   - CR property_owner_payable      (rent − commission — what we owe
+   *     the owner, the line the periodic owner statement aggregates)
+   *   - CR property_management_commission (commission — OUR revenue)
+   *
+   * The commission rate is per-contract and lives in the data layer —
+   * the engine just takes a resolved commission amount. The route adds
+   * a column to rental_contracts in PR-6b and multiplies before calling.
+   * Account codes resolve through `resolveAccountCode`; the fallbacks
+   * (1100 cash / 2150 owner payable / 4130 commission revenue) only
+   * fire when a tenant hasn't seeded a mapping.
+   *
+   * Dimensions: every line carries propertyId + contractId. The CASH
+   * line is tagged with the tenant's clientId (per-tenant collection
+   * drilldowns); the OWNER PAYABLE line is tagged with the owner's
+   * clientId so the owner statement aggregates straight from
+   * journal_lines.
+   *
+   * Zero-commission edge case: an introductory month / pro-bono
+   * arrangement passes commissionAmount=0; the engine omits the
+   * commission line entirely (financialEngine rejects zero-amount
+   * lines as a balanced-pair safeguard).
+   *
+   * Idempotency: guardTable=property_management_collections +
+   * guardId=collection.id so a double-post surfaces as a unique
+   * violation against the future collection row's id.
+   */
+  async postManagementCollectionGL(
+    ctx: PropertyGLContext,
+    collection: {
+      id: number;
+      contractId: number;
+      propertyId: number;
+      ownerId: number;
+      tenantId: number;
+      rentAmount: number;
+      commissionAmount: number;
+    },
+  ) {
+    const [cashCode, ownerPayableCode, commissionCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1111"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_management_commission", "credit", "4130"),
+    ]);
+
+    const ownerShare = collection.rentAmount - collection.commissionAmount;
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      contractId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: cashCode,
+        debit: collection.rentAmount,
+        credit: 0,
+        description: `تحصيل إيجار — عقد إدارة #${collection.contractId}`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+        clientId: collection.tenantId,
+      },
+      {
+        accountCode: ownerPayableCode,
+        debit: 0,
+        credit: ownerShare,
+        description: `مستحق للمالك — عقد إدارة #${collection.contractId}`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+        clientId: collection.ownerId,
+      },
+    ];
+
+    if (collection.commissionAmount > 0) {
+      lines.push({
+        accountCode: commissionCode,
+        debit: 0,
+        credit: collection.commissionAmount,
+        description: `عمولة إدارة عقار`,
+        propertyId: collection.propertyId,
+        contractId: collection.contractId,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-MGMT-${collection.id}`,
+      description: `تحصيل عقد إدارة #${collection.contractId} — عقار #${collection.propertyId}`,
+      type: "general",
+      sourceType: "property_management_collections",
+      sourceId: collection.id,
+      sourceKey: `property:mgmt_collection:${collection.id}`,
+      guardTable: "property_management_collections",
+      guardId: collection.id,
+      lines,
+    });
+  }
+
+  /**
+   * postSaleGL — property disposal at sale.
+   *
+   * The fourth Properties activity branch (#1999). Removes the building
+   * asset from the books at its CARRYING VALUE (book value — credit to
+   * the asset account), debits the buyer's receivable for the full
+   * sale price (gross — including VAT when commercial), and recognises
+   * the realised gain or loss as the delta between net sale price and
+   * book value.
+   */
+  async postSaleGL(
+    ctx: PropertyGLContext,
+    sale: {
+      id: number;
+      propertyId: number;
+      buyerId: number | null;
+      salePrice: number;
+      bookValue: number;
+      vatAmount?: number;
+      saleDate: string;
+    },
+  ) {
+    const vatAmount = sale.vatAmount ?? 0;
+    const netSalePrice = sale.salePrice - vatAmount;
+    const gainOrLoss = netSalePrice - sale.bookValue;
+    const hasGain = gainOrLoss > 0;
+    const hasLoss = gainOrLoss < 0;
+    const hasVat = vatAmount > 0;
+
+    const [
+      receivableCode,
+      assetCode,
+      gainCode,
+      lossCode,
+      vatCode,
+    ] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_receivable", "debit", "1131"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1240"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_gain", "credit", "4910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_loss", "debit", "5810"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
+    ]);
+
+    const lineDims = {
+      propertyId: sale.propertyId,
+      clientId: sale.buyerId ?? undefined,
+    };
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: receivableCode,
+        debit: sale.salePrice,
+        credit: 0,
+        description: `بيع عقار — مستحق على المشتري`,
+        ...lineDims,
+      },
+      {
+        accountCode: assetCode,
+        debit: 0,
+        credit: sale.bookValue,
+        description: `استبعاد أصل عقاري بالقيمة الدفترية`,
+        ...lineDims,
+      },
+    ];
+
+    if (hasVat) {
+      lines.push({
+        accountCode: vatCode,
+        debit: 0,
+        credit: vatAmount,
+        description: `ضريبة القيمة المضافة — بيع عقار`,
+        ...lineDims,
+      });
+    }
+
+    if (hasGain) {
+      lines.push({
+        accountCode: gainCode,
+        debit: 0,
+        credit: gainOrLoss,
+        description: `مكسب بيع أصل عقاري`,
+        ...lineDims,
+      });
+    } else if (hasLoss) {
+      lines.push({
+        accountCode: lossCode,
+        debit: -gainOrLoss,
+        credit: 0,
+        description: `خسارة بيع أصل عقاري`,
+        ...lineDims,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-SALE-${sale.id}`,
+      description: `بيع عقار #${sale.propertyId} بتاريخ ${sale.saleDate}`,
+      type: "general",
+      sourceType: "property_sales",
+      sourceId: sale.id,
+      sourceKey: `property:sale:${sale.id}`,
+      guardTable: "property_sales",
+      guardId: sale.id,
+      lines,
+    });
+  }
+
   async postInstallmentPaymentGL(
     ctx: PropertyGLContext,
     payment: {
@@ -273,7 +628,7 @@ class PropertiesEngineImpl implements DomainEngine {
     const cashDefault = payment.method === "cash" ? "1100" : "1110";
     const [cashCode, revenueCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "rental_cash_receipt", "debit", cashDefault),
-      financialEngine.resolveAccountCode(ctx.companyId, "rental_revenue", "credit", "4100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "rental_revenue", "credit", "4121"),
     ]);
 
     // unitId belongs in the unitId slot. The previous shape wrote
@@ -343,9 +698,9 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [assetAccountCode, depreciationAccountCode, accDepreciationAccountCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1520"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_depreciation", "debit", "6100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_acc_depreciation", "credit", "1590"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "debit", "1240"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_depreciation", "debit", "5740"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_acc_depreciation", "credit", "1241"),
     ]);
 
     eventBus.emit("finance.fixed_asset.requested", {
@@ -408,7 +763,7 @@ class PropertiesEngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "owner_payable", "debit", "2150"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1010"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({

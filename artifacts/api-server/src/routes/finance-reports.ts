@@ -819,6 +819,37 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const totalCredit = movements.reduce((s, m) => s + Number(m.credit), 0);
     const endingBalance = roundTo2(openingBalance + totalDebit - totalCredit);
 
+    // ── Security deposits held for this customer ─────────────────────
+    // Property security deposits post to the GL as a LIABILITY
+    // (security_deposit_liability / 2300 — see propertiesEngine.
+    // postSecurityDepositGL), so they must NOT enter the AR running
+    // balance above: a held deposit is money we owe the tenant, the
+    // opposite direction of the receivable. Pre-fix the statement was
+    // blind to them entirely — an operator settling a departing
+    // tenant had to hunt the deposit in the property module while the
+    // statement implied a clean slate. Surface them as a separate
+    // block: per-deposit rows + the total still held as of `asOf`.
+    // Join chain: deposit → rental_contract → tenants.clientId.
+    const depositParams: unknown[] = [clientId, scope.companyId, asOf];
+    const heldDeposits = await rawQuery<Record<string, unknown>>(
+      `SELECT psd.id, psd.amount, psd."receivedDate", psd.status,
+              rc.id AS "contractId", rc."contractNumber",
+              COALESCE(psd."refundAmount", 0) AS "refundedAmount",
+              (psd.amount - COALESCE(psd."refundAmount", 0)) AS "heldAmount"
+         FROM property_security_deposits psd
+         JOIN rental_contracts rc ON rc.id = psd."contractId" AND rc."deletedAt" IS NULL
+         JOIN tenants t ON t.id = rc."tenantId"
+        WHERE t."clientId" = $1
+          AND psd."companyId" = $2
+          AND psd."receivedDate" <= $3
+          AND (psd.amount - COALESCE(psd."refundAmount", 0)) > 0.01
+        ORDER BY psd."receivedDate"`,
+      depositParams
+    );
+    const totalHeldDeposits = roundTo2(
+      heldDeposits.reduce((s, d) => s + Number(d.heldAmount), 0)
+    );
+
     res.json(maskFields(req, {
       client,
       period: { from, to: asOf },
@@ -838,6 +869,10 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
         "90+": roundTo2(buckets.d90plus),
         total: roundTo2(
           (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus)),
+      },
+      securityDeposits: {
+        totalHeld: totalHeldDeposits,
+        rows: heldDeposits,
       },
     }));
   } catch (err) {
@@ -1763,8 +1798,12 @@ reportsRouter.get("/reports/unmapped-lines", authorize({ feature: "finance.repor
     }
 
     if (tableFilter("goods_receipt_items")) {
+      // goods_receipts has no workflow `status` column (no migration ever
+      // added one) — selecting grn.status 500'd this whole report. The
+      // frontend treats source status as optional, so NULL is honest.
       const rows = await rawQuery<Record<string, unknown>>(
-        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef", grn.status,
+        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef",
+                NULL::text AS status,
                 gri."allocationStatus", grn."createdAt"
            FROM goods_receipt_items gri
            JOIN goods_receipts grn ON grn.id = gri."grnId"
@@ -1811,8 +1850,8 @@ reportsRouter.get(
 
       const params: unknown[] = [scope.companyId];
       let whereExtra = "";
-      if (startDate) { params.push(startDate); whereExtra += ` AND je."postingDate" >= $${params.length}`; }
-      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (startDate) { params.push(startDate); whereExtra += ` AND je."date" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."date" < ($${params.length}::date + 1)`; }
       if (supplierId) {
         const sid = Number(supplierId);
         if (Number.isFinite(sid) && sid > 0) {
@@ -1879,7 +1918,7 @@ reportsRouter.get(
         `SELECT spa.id           AS "allocationId",
                 spa."journalEntryId",
                 je.ref            AS "journalRef",
-                je."postingDate"::text AS "postingDate",
+                je."date"::text AS "postingDate",
                 spa."obligationType",
                 spa."obligationId",
                 spa.amount::float8        AS amount,
@@ -1894,7 +1933,7 @@ reportsRouter.get(
                 sup."residencyStatus"     AS "supplierResidencyStatus",
                 sup."taxResidenceCountry" AS "supplierTaxResidenceCountry"
          ${baseSql}
-         ORDER BY je."postingDate" DESC NULLS LAST, spa.id DESC
+         ORDER BY je."date" DESC NULLS LAST, spa.id DESC
          LIMIT 5000`,
         params,
       );
@@ -2973,14 +3012,14 @@ reportsRouter.get(
       // 2300 / 1400 defaults via accounting_mappings).
       const { financialEngine } = await import("../lib/engines/index.js");
       const [outputVatCode, inputVatCode] = await Promise.all([
-        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300"),
-        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1400"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2131"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1180"),
       ]);
 
       const params: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
       let dateFilter = "";
-      if (startDate) { params.push(startDate); dateFilter += ` AND je."postingDate" >= $${params.length}`; }
-      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (startDate) { params.push(startDate); dateFilter += ` AND je."date" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."date" < ($${params.length}::date + 1)`; }
       const branchFilter = getBranchCondition(scope, undefined, params, "je");
 
       // ── 1. Period movement on the two VAT accounts ──────────────────
