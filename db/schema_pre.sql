@@ -9435,6 +9435,9 @@ CREATE TABLE public.fixed_assets (
     "assetAccountCode" character varying(20) DEFAULT '1500'::character varying,
     "depreciationAccountCode" character varying(20) DEFAULT '6100'::character varying,
     "accDepreciationAccountCode" character varying(20) DEFAULT '1590'::character varying,
+    "departmentId" integer,
+    "costCenterId" integer,
+    "accumulatedImpairment" numeric(15,2) DEFAULT 0 NOT NULL,
     CONSTRAINT fixed_assets_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('disposed'::character varying)::text, ('under_maintenance'::character varying)::text])))
 );
 
