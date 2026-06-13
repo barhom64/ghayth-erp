@@ -1689,9 +1689,9 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
     const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
     const accDepCode = (asset.accDepreciationAccountCode as string | null) ?? "1590";
     const [cashCode, lossCode, gainCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_cash", "debit", "1100"),
-      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_loss", "debit", "5999"),
-      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_gain", "credit", "4999"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_cash", "debit", "1111"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_loss", "debit", "5810"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_gain", "credit", "4920"),
     ]);
 
     const lines: any[] = [];
@@ -1780,8 +1780,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/impair", authorize({ feature: "f
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [lossCode, accImpairmentCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "asset_impairment_loss", "debit", "5995"),
-      financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_impairment", "credit", "1591"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_impairment_loss", "debit", "5810"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_impairment", "credit", "1211"),
     ]);
 
     const newAccumulated = roundTo2(Number(asset.accumulatedDepreciation) + b.impairmentAmount);
@@ -1870,7 +1870,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "
     const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
     const [surplusCode, lossCode] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_surplus", "credit", "3300"),
-      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_loss", "debit", "5996"),
+      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_loss", "debit", "5810"),
     ]);
 
     const lines = delta > 0
@@ -2056,7 +2056,7 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
     const { financialEngine } = await import("../lib/engines/index.js");
     const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
     const cashCode = b.cashAccountCode
-      ?? await financialEngine.resolveAccountCode(scope.companyId, "cip_funding_cash", "credit", "1100");
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "cip_funding_cash", "credit", "1111");
 
     let costId: number | null = null;
     let journalId: number | null = null;
@@ -2754,8 +2754,8 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
 
     // Account codes (configurable via accounting_mappings)
     const { financialEngine } = await import("../lib/engines/index.js");
-    const arCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ar", "debit", "1200");
-    const apCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ap", "credit", "2100");
+    const arCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ar", "debit", "1131");
+    const apCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ap", "credit", "2111");
     const gainCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_gain", "credit", "4910");
     const lossCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_loss", "debit", "5910");
 

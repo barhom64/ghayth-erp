@@ -4714,8 +4714,8 @@ router.post("/rental-payments/:id/pay", authorize({ feature: "fleet.vehicles", a
       // Engine.postJournalEntry with the same shape so the GL still posts.
       try {
         const [cashCode, revCode] = await Promise.all([
-          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1100"),
-          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_rental_revenue", "credit", "4220"),
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_cash_source", "credit", "1111"),
+          (await import("../lib/engines/financialEngine.js")).financialEngine.resolveAccountCode(scope.companyId, "fleet_rental_revenue", "credit", "4150"),
         ]);
         const fe = (await import("../lib/engines/financialEngine.js")).financialEngine;
         const result = await fe.postJournalEntry({

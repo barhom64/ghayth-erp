@@ -81,20 +81,20 @@ export interface AccountResolution {
  * table on miss.
  */
 const FALLBACK_CODE: Record<AccountPurpose, string> = {
-  fx_revaluation_ar:        "1130",
-  fx_revaluation_ap:        "2100",
+  fx_revaluation_ar:        "1131",
+  fx_revaluation_ap:        "2111",
   fx_revaluation_gain:      "4900",
   fx_revaluation_loss:      "5900",
   realized_fx_gain:         "4910",
   realized_fx_loss:         "5910",
-  inventory_asset:          "1400",
+  inventory_asset:          "1151",
   inventory_writeoff_loss:  "5610",
   inventory_writeup_gain:   "4610",
   cycle_count_variance_gain:"4620",
   cycle_count_variance_loss:"5620",
   cogs_default:             "5100",
   salary_expense:           "5200",
-  salary_payable:           "2200",
+  salary_payable:           "2120",
   salary_deductions_payable:"2210",
 };
 
