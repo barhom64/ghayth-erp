@@ -133,6 +133,133 @@ class PropertiesEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * postMaintenanceOwnerBillingGL — maintenance billed to a
+   * third-party owner.
+   *
+   * Per the doctrine: maintenance falls on the OWNER. If we OWN the
+   * property → `postMaintenanceExpenseGL` already handles it (debits
+   * a property maintenance expense). But when we MANAGE a property
+   * for a third party, the maintenance cost is a receivable from
+   * that owner — they will pay us via a tax invoice we issue.
+   *
+   * Bookkeeping:
+   *   - DR property_owner_receivable     = cost + VAT (gross)
+   *   - CR property_maintenance_payable  = cost (net) — what we owe
+   *     the vendor / our maintenance team
+   *   - CR vat_output                    = VAT (when applicable)
+   *
+   * The routing decision (which of the two engine methods to call)
+   * is the route's concern: it reads property_buildings.ownerType or
+   * rental_contracts.contractType='management' and picks. PR-7b
+   * wires that. This method only owns the GL contract.
+   *
+   * Account codes resolve through `resolveAccountCode`, so an
+   * operator's `accounting_mappings` row beats the engine's
+   * fallbacks (1140 receivable / 2160 payable / 2200 VAT).
+   *
+   * Idempotency: `guardTable=maintenance_requests` + `guardId=id`
+   * AND a `sourceKey` that DIFFERS from the company-paid path
+   * (`property:maintenance:<id>` vs `property:maintenance_owner:<id>`)
+   * so a maintenance request that gets reclassified from "we pay"
+   * to "owner pays" correctly posts a NEW entry — the dedupe guard
+   * treats them as distinct events rather than colliding.
+   */
+  async postMaintenanceOwnerBillingGL(
+    ctx: PropertyGLContext,
+    maintenance: {
+      /** maintenance_requests.id — identifies the source request.
+       *  Used as sourceId, guardId, and inside sourceKey. */
+      id: number;
+      /** property_buildings.id — for per-property AR drilldowns. */
+      propertyId: number;
+      /** property_units.id — when the maintenance is unit-scoped
+       *  (not building-wide). Optional. */
+      unitId?: number | null;
+      /** clients.id of the third-party owner being billed. Carried
+       *  on every line so owner AR aging aggregates straight from
+       *  journal_lines (filter by accountCode=1141 + clientId). */
+      ownerId: number;
+      /** Net cost owed to the maintenance vendor / our team. */
+      totalCost: number;
+      /** Optional VAT on the tax invoice issued to the owner. The
+       *  rate/decision live on the route (PR-7b will read
+       *  getCompanyVatRate + owner.vatRegistered for the call). */
+      vatAmount?: number;
+      /** Free-form maintenance type for description text. */
+      type?: string;
+    },
+  ) {
+    const vatAmount = maintenance.vatAmount ?? 0;
+    const hasVat = vatAmount > 0;
+
+    const [receivableCode, payableCode, vatCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_receivable", "debit", "1140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2160"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+    ]);
+
+    const unitId = maintenance.unitId ?? undefined;
+    const clientId = maintenance.ownerId;
+    const description = `صيانة عقار — ${maintenance.type ?? "عامة"} (على المالك)`;
+
+    const lines: Array<{
+      accountCode: string;
+      debit: number;
+      credit: number;
+      description?: string;
+      propertyId?: number;
+      unitId?: number;
+      clientId?: number;
+    }> = [
+      {
+        accountCode: receivableCode,
+        debit: maintenance.totalCost + vatAmount,
+        credit: 0,
+        description,
+        propertyId: maintenance.propertyId,
+        unitId,
+        clientId,
+      },
+      {
+        accountCode: payableCode,
+        debit: 0,
+        credit: maintenance.totalCost,
+        description: "مستحقات صيانة",
+        propertyId: maintenance.propertyId,
+        unitId,
+        clientId,
+      },
+    ];
+
+    if (hasVat) {
+      lines.push({
+        accountCode: vatCode,
+        debit: 0,
+        credit: vatAmount,
+        description: `ضريبة القيمة المضافة — صيانة محمّلة على المالك`,
+        propertyId: maintenance.propertyId,
+        unitId,
+        clientId,
+      });
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `JE-MAINT-OWNER-${maintenance.id}`,
+      description: `صيانة عقار #${maintenance.propertyId} — ${maintenance.type ?? "عامة"} — على المالك`,
+      type: "general",
+      sourceType: "maintenance_requests",
+      sourceId: maintenance.id,
+      sourceKey: `property:maintenance_owner:${maintenance.id}`,
+      guardTable: "maintenance_requests",
+      guardId: maintenance.id,
+      lines,
+    });
+  }
+
   async postSecurityDepositGL(
     ctx: PropertyGLContext,
     deposit: {
