@@ -40,8 +40,21 @@ describe("umrahImportEngine — preview agent-linking warnings", () => {
     // resolveAgent matches by contractRef first, then by name. The preview
     // mirror must hit BOTH columns or it'll false-flag rows that confirm
     // would silently match.
-    expect(ENGINE).toMatch(/SELECT "contractRef"\s+FROM umrah_agents/);
-    expect(ENGINE).toMatch(/SELECT name\s+FROM umrah_agents/);
+    //
+    // BILL-MAIN P6 (#2080) extended both SELECTs from a single column to
+    // `id, name, "contractRef", "clientId"` so the preview can also flag
+    // main agents that exist but carry clientId = NULL (forward-looking
+    // banner). The mirror semantics — "must hit BOTH the contractRef
+    // path and the name path" — are preserved: we now anchor on the
+    // wider SELECT shape against the same `umrah_agents` table.
+    const wideSelects =
+      ENGINE.match(
+        /SELECT\s+id,\s*name,\s*"contractRef",\s*"clientId"\s+FROM\s+umrah_agents/g,
+      ) ?? [];
+    // One for the contractRef-keyed lookup, one for the name-keyed
+    // lookup. If a future refactor collapses them to a single query,
+    // this assertion is the visible diff that prompts review.
+    expect(wideSelects.length).toBeGreaterThanOrEqual(2);
   });
 
   it("increments rowsWithoutAgent when no agent info present", () => {
