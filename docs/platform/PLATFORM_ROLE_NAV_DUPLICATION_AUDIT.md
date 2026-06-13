@@ -69,17 +69,25 @@ forbidden-visible           ❓   انظر §10a
 
 ---
 
-## 4. الـ4 cross-module duplicates (مكسوبة بدقة)
+## 4. الـ4 cross-module duplicates — **مُعالَجة في PR-3 (#2179)**
 
-كل واحدة = نفس مكوّن React مسجَّل في الـrouter تحت segment أعلى مختلف.
-كل واحدة تتطلب قرار «من المالك؟».
+PR-0 طرح القرار المبدئي «admin canonical» لكل تكرار. صاحب المنتج
+صحَّحه في PR-3 بقاعدة ملكية المسار: المالك صاحب منطق العمل، لا مكان
+الملف. أيضًا قرر صراحةً أن vendor/supplier ليسا duplicate بل
+wrapper-shared-form فقط. الجدول أدناه يعكس الـ**post-PR-3** state؛
+السطر الأصلي ما زال في الـPR-0 history للمرجع.
 
-| المكوّن | المسارات | القرار المقترح |
-|---|---|---|
-| `pages/admin/attendance-categories` | `/admin/attendance-categories` + `/hr/attendance-categories` | تثبيت `/admin/*` كـcanonical، إعادة توجيه الـHR mirror |
-| `pages/admin/scoring-weights` | `/admin/scoring-weights` + `/hr/scoring-weights` | نفس نمط 1 |
-| `pages/create/finance/vendors-create` | `/finance/vendors/create` + `/warehouse/suppliers/create` | **يحتاج قرار صاحب منتج**: vendor (مالي) و supplier (لوجستي) كيانان مختلفان معماريًا، شراكة المكوّن خلط مفهوم |
-| `pages/properties-guide` | `/guide/properties` + `/properties/guide` | تثبيت `/properties/guide`، حذف `/guide/properties` كـlegacy alias |
+| المكوّن | canonical | legacy | إجراء PR-3 | السبب |
+|---|---|---|---|---|
+| `pages/admin/attendance-categories` | `/hr/attendance-categories` | `/admin/attendance-categories` | wouter `<Redirect>` | سياسة حضور وفئات موظفين — منطق HR، ليس إعداد منصة عام |
+| `pages/admin/scoring-weights` | `/hr/scoring-weights` | `/admin/scoring-weights` | wouter `<Redirect>` | تؤثر على تقييم/ترقية/جزاءات — منطق HR، ليس إعداد منصة عام |
+| (form body) `components/shared/vendor-party-form.tsx` | **كلاهما canonical** بنواياه: `/finance/vendors/create` (`FinanceVendorCreate`) و `/warehouse/suppliers/create` (`WarehouseSupplierCreate`) | — | **wrapper split على form مشترك** | vendor (AP/ذمم/WHT) ≠ supplier (تشغيلي/مشتريات/مخزون)؛ يشتركان في Party Master فقط. كل wrapper له: عنوان، POST خاص، intent fields (WHT أو لا)، draft slot، audit lane |
+| `pages/properties-guide` | `/properties/guide` | `/guide/properties` | wouter `<Redirect>` | الـguide دليل وحدة العقارات — المالك واضح؛ `/guide/*` كان alias قديم |
+
+**حالة بعد PR-3**: cross-module-duplicates = 0 (الكل له canonical
+واضح + معالجة legacy موثَّقة). أي محاولة لاحقة لإعادة `module:"bi"` على
+صفحة HR، أو ربط نفس الـpath canonically في مسارين، تُكسر مسمار
+`platformWave2Pr3CanonicalOwnershipSmoke`.
 
 ---
 
