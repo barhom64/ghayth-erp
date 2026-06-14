@@ -4409,7 +4409,7 @@ const rentalReturnSchema = z.object({
   overageAmount: z.coerce.number().nonnegative().optional(),
 });
 
-router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+router.get("/rental-contracts", authorize({ feature: "fleet.rentals", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
@@ -4431,7 +4431,7 @@ router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "
   } catch (err) { handleRouteError(err, res, "rental contracts list error"); }
 });
 
-router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+router.post("/rental-contracts", authorize({ feature: "fleet.rentals", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createRentalContractSchema.safeParse(req.body));
@@ -4495,7 +4495,7 @@ router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: 
 // (rental-detail.tsx) needs the full row + joined vehicle/client/
 // driver labels so the handover + return forms can render without
 // re-fetching three lookup endpoints.
-router.get("/rental-contracts/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+router.get("/rental-contracts/:id", authorize({ feature: "fleet.rentals", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4515,7 +4515,7 @@ router.get("/rental-contracts/:id", authorize({ feature: "fleet.vehicles", actio
   } catch (err) { handleRouteError(err, res, "rental contract detail error"); }
 });
 
-router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.rentals", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4537,7 +4537,7 @@ router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicl
 // vehicle state (odometer + fuel level + any pre-existing damage
 // notes) at the moment the customer takes the keys. Allowed only when
 // the contract is `active` (not draft / completed / cancelled).
-router.post("/rental-contracts/:id/handover", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.post("/rental-contracts/:id/handover", authorize({ feature: "fleet.rentals", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4575,7 +4575,7 @@ router.post("/rental-contracts/:id/handover", authorize({ feature: "fleet.vehicl
 // supplies here is what will surface as a separate line in the
 // downstream Accounting Candidate — no JE is posted in this screen
 // (per the user's "السائق/الشاشة لا ترى المال — Candidate فقط" rule).
-router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.rentals", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
