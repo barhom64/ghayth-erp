@@ -322,6 +322,14 @@ export default function ExpensesCreate() {
       toast({ variant: "destructive", title: `مجموع نسب توزيع مراكز التكلفة يجب أن يساوي 100% (الحالي ${ccPctTotal}%)` });
       return;
     }
+    // #2234 — vehicle fuel must carry a SAVED supplier (the gas station is a
+    // supplier, not free text). The unregistered exception is draft-only and
+    // policy-gated on the backend; the form still requires an explicit choice.
+    if (allocTarget.target === "vehicle" && allocTarget.createFuelLog &&
+        !allocTarget.fuelSupplierUnregistered && !allocTarget.allocation.vendorId) {
+      toast({ variant: "destructive", title: "اختر مورد محطة الوقود — أو فعّل «مورد غير مسجّل» للمسودة" });
+      return;
+    }
     try {
       await createMut.mutateAsync({
         accountCode: form.accountCode || undefined,

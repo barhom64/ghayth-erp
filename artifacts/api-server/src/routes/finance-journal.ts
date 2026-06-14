@@ -136,6 +136,11 @@ const operationalEffectsShape = {
     costPerLiter: z.coerce.number().optional(),
     odometer: z.coerce.number().optional(),
     stationName: z.string().optional(),
+    // #2234 — the SAVED fuel supplier (vendorId references suppliers.id) is the
+    // commercial party; unregisteredSupplierName is the temporary draft-only
+    // exception. stationName degrades to a derived display label.
+    supplierId: z.coerce.number().int().positive().optional(),
+    unregisteredSupplierName: z.string().optional(),
   }).optional(),
 };
 
@@ -1024,6 +1029,48 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     });
     let overrideAccountCode = accountCodeOverride ?? accountCode;
 
+    // #2234 (FIN-P4-SUPPLIER-FUEL-CONTRACT) — a vehicle-fuel expense must carry
+    // a SAVED supplier (the commercial party that issues the invoice), not a
+    // free-text station. The supplier rides as vendorId on the JE line (the
+    // canonical `suppliers.id` reference — no separate vendor entity). The only
+    // sanctioned exception is a temporary unregistered name, and ONLY when the
+    // company policy `allowUnregisteredFuelSupplier` is on (draft-only intent).
+    // forward-only: applies at save; legacy fuel logs are untouched.
+    if (fuelLog?.create && entityLink.vehicleId != null) {
+      const fuelSupplierId = (entityLink.vendorId as number | undefined) ?? fuelLog.supplierId ?? null;
+      if (fuelSupplierId) {
+        const [supplierRow] = await rawQuery<{ id: number }>(
+          `SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+          [Number(fuelSupplierId), effectiveCompanyId],
+        );
+        if (!supplierRow) {
+          throw new ValidationError("المورد المحدّد لتعبئة الوقود غير موجود أو لا يتبع الشركة", {
+            field: "fuelLog.supplierId",
+            fix: "اختر موردًا محفوظًا صحيحًا من قائمة الموردين",
+          });
+        }
+        // mirror onto the line dimension so the JE carries vendorId even when
+        // the supplier came via fuelLog.supplierId rather than lineAllocation.
+        if (entityLink.vendorId == null) entityLink.vendorId = Number(fuelSupplierId);
+      } else if (fuelLog.unregisteredSupplierName) {
+        const [allowRow] = await rawQuery<{ value: string }>(
+          `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'allowUnregisteredFuelSupplier' LIMIT 1`,
+          [effectiveCompanyId],
+        ).catch(() => [] as { value: string }[]);
+        if (allowRow?.value !== "true") {
+          throw new ValidationError("لا يُسمح بترحيل وقود مركبة على مورد غير مسجّل — احفظ المحطة كمورد أولاً", {
+            field: "fuelLog.supplierId",
+            fix: "اختر موردًا محفوظًا، أو فعّل سياسة «السماح بمورد وقود غير مسجّل» للمسودات",
+          });
+        }
+      } else {
+        throw new ValidationError("المورد مطلوب لتسجيل تعبئة وقود المركبة", {
+          field: "fuelLog.supplierId",
+          fix: "اختر المورد (محطة الوقود المحفوظة) في سيناريو وقود المركبة",
+        });
+      }
+    }
+
     // Activate the centralised resolver (migration 256 seeds the
     // default Saudi rules). When the operator left accountCode empty
     // but picked an operationType + relatedEntity, the resolver looks
@@ -1267,6 +1314,10 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
           costPerLiter: fuelLog.costPerLiter ?? null,
           mileageAtFuel: fuelLog.odometer ?? null,
           stationName: fuelLog.stationName ?? null,
+          // #2234 — the saved supplier (vendorId on the JE line) is the truth;
+          // its name becomes the derived stationName label.
+          supplierId: (entityLink.vendorId as number | undefined) ?? fuelLog.supplierId ?? null,
+          unregisteredSupplierName: fuelLog.unregisteredSupplierName ?? null,
           fuelDate: expenseDate ?? null,
         });
         logger.info({ journalId: posted.journalId, fuelLogId: fl.fuelLogId }, "[finance] fuel log created from expense");
