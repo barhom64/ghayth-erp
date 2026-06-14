@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { statusLabel } from "@/lib/transport-status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,21 +61,15 @@ const TRIP_STATUS: Record<string, { label: string; tone: string }> = {
   cancelled:   { label: "ملغاة",    tone: "bg-surface-subtle text-muted-foreground" },
 };
 
-const CARGO_STATUS: Record<string, { label: string; tone: string }> = {
-  draft:      { label: "مسودة",     tone: "bg-surface-subtle text-muted-foreground" },
-  confirmed:  { label: "مؤكدة",     tone: "bg-status-info-surface text-status-info-foreground" },
-  loading:    { label: "تحميل",     tone: "bg-purple-50 text-purple-700" },
-  in_transit: { label: "في الطريق", tone: "bg-status-warning-surface text-status-warning-foreground" },
-  delivered:  { label: "مسلّمة",    tone: "bg-status-success-surface text-status-success-foreground" },
-  closed:     { label: "مغلقة",     tone: "bg-status-success-surface text-status-success-foreground" },
-  cancelled:  { label: "ملغاة",     tone: "bg-rose-100 text-rose-700" },
-};
-
+// #2079 TA-T18-06 — labels from shared dictionary. Driver-side
+// statuses (available/on_trip/off_duty/suspended) are local to this
+// surface and stay inline; cargo manifest statuses come from the
+// shared dictionary (server enum source of truth: CARGO_STATUSES).
 const DRIVER_STATUS: Record<string, { label: string; tone: string }> = {
-  available: { label: "متاح",      tone: "bg-status-success-surface text-status-success-foreground" },
-  on_trip:   { label: "في رحلة",   tone: "bg-status-info-surface text-status-info-foreground" },
+  available: { label: "متاح",       tone: "bg-status-success-surface text-status-success-foreground" },
+  on_trip:   { label: "في رحلة",    tone: "bg-status-info-surface text-status-info-foreground" },
   off_duty:  { label: "خارج الدوام", tone: "bg-status-warning-surface text-status-warning-foreground" },
-  suspended: { label: "موقوف",     tone: "bg-rose-100 text-rose-700" },
+  suspended: { label: "موقوف",      tone: "bg-rose-100 text-rose-700" },
 };
 
 export default function MeDriver() {
@@ -283,7 +278,7 @@ export default function MeDriver() {
               <Package className="h-10 w-10 mx-auto opacity-30 mb-2" />لا توجد بوالص مسندة إليك
             </CardContent></Card>
           ) : cargo.map((m) => {
-            const tone = CARGO_STATUS[m.status] ?? { label: m.status, tone: "bg-surface-subtle" };
+            const tone = statusLabel("cargo", m.status);
             return (
               <Card key={m.id}>
                 <CardHeader className="pb-2">

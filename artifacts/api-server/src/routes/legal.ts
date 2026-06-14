@@ -520,7 +520,7 @@ router.post("/contracts/:id/renew", authorize({ feature: "legal.contracts", acti
     const setExtras: Record<string, any> = {
       endDate: newEndDate,
       renewedAt: { raw: "NOW()" },
-      renewalCount: { raw: `COALESCE("renewalCount", 0) + 1` },
+      renewalCount: (Number(current.renewalCount) || 0) + 1,
     };
     if (newValue !== undefined && newValue !== null) {
       setExtras.value = newValue;
@@ -977,7 +977,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
         const [lawyerEmp] = await rawQuery<Record<string, unknown>>(
           `SELECT ea.id AS "assignmentId" FROM employees e
            JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
-           WHERE ea."companyId"=$1 AND e.name ILIKE $2 LIMIT 1`,
+           WHERE ea."companyId"=$1 AND e.name ILIKE $2 AND e."deletedAt" IS NULL LIMIT 1`,
           [scope.companyId, `%${legalCase.lawyerName}%`]
         );
         if (lawyerEmp?.assignmentId) {

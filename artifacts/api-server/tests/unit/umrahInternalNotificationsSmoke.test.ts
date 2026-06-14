@@ -98,7 +98,7 @@ describe("POST /umrah/notifications/test", () => {
     expect(ROUTE).toMatch(/router\.post\("\/notifications\/test"/);
     // No phone input — the test target is the caller's own
     // employee_assignment.
-    expect(ROUTE).toMatch(/SELECT ea\.id FROM employee_assignments ea[\s\S]{0,200}ea\."userId" = \$1/);
+    expect(ROUTE).toMatch(/SELECT ea\.id FROM employee_assignments ea[\s\S]{0,200}u\.id = \$1/);
     expect(ROUTE).toMatch(/createNotification \} = await import\("\.\.\/lib\/businessHelpers\.js"\)/);
     expect(ROUTE).toMatch(/title: "🔔 إشعار تجريبي من نظام العمرة"/);
   });

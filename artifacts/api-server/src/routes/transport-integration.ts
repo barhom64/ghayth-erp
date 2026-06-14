@@ -109,8 +109,8 @@ transportIntegrationRouter.get(
         endDate: string | null;
         existingBookings: number;
       }>(
-        `SELECT c.id, c."contractNumber",
-                c."customerId",
+        `SELECT c.id, c."ref" AS "contractNumber",
+                c."clientId" AS "customerId",
                 cl.name AS "customerName",
                 c."startDate", c."endDate",
                 (
@@ -120,7 +120,7 @@ transportIntegrationRouter.get(
                      AND b."deletedAt" IS NULL
                 ) AS "existingBookings"
            FROM fleet_rental_contracts c
-                LEFT JOIN clients cl ON cl.id = c."customerId" AND cl."companyId" = c."companyId" AND cl."deletedAt" IS NULL
+                LEFT JOIN clients cl ON cl.id = c."clientId" AND cl."companyId" = c."companyId" AND cl."deletedAt" IS NULL
           WHERE c."companyId" = $1
             AND c."deletedAt" IS NULL
             AND c.status IN ('active', 'pending')
