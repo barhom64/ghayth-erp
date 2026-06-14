@@ -6267,4 +6267,127 @@ router.get(
   },
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// U-15-P5 — Packages vs. allocations pricing-drift report.
+//
+// For each umrah_packages row that has been linked to a hotel via the
+// U-15-P1 column `defaultHotelId`, compare the package's `costPrice`
+// to the *expected* cost computed from the latest active room block
+// at that hotel: `expectedCost = duration × ratePerNight`. Surface
+// the rows whose drift exceeds the threshold (default 10%) so an
+// operator preparing prices for a new season can see the gap before
+// signing.
+//
+// Read-only. Tenant-scoped via p."companyId"+p."deletedAt" IS NULL on
+// the packages anchor, with the hotel/block joins inheriting the
+// same companyId through their join predicates.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/reports/packages-vs-allocations-pricing-drift",
+  authorize({ feature: "umrah", action: "list" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      // The threshold lets the operator pick a tighter window when
+      // they're chasing tiny drift, or a wider one when they only
+      // want to see major divergence. Default = 10%.
+      const thresholdPct = req.query.thresholdPct
+        ? Number(req.query.thresholdPct)
+        : 10;
+      const thresholdFraction = thresholdPct / 100;
+
+      // One round-trip: for each package with a defaultHotelId, fetch
+      // the latest active block at that hotel and compute the
+      // expected cost. The CASE pegs drift to NULL when the package
+      // costPrice is 0 (avoids divide-by-zero), so the FE can render
+      // a "not comparable" badge for fresh rows.
+      const rows = await rawQuery<{
+        packageId: number;
+        packageName: string;
+        defaultHotelId: number;
+        hotelName: string | null;
+        duration: number;
+        costPrice: string;
+        sellPrice: string;
+        latestRatePerNight: string | null;
+        expectedCost: string | null;
+        driftAmount: string | null;
+        driftFraction: string | null;
+      }>(
+        `WITH latest_block AS (
+           SELECT DISTINCT ON ("hotelId")
+                  "hotelId",
+                  "ratePerNight"
+             FROM umrah_room_blocks
+            WHERE "companyId" = $1
+              AND "deletedAt" IS NULL
+              AND "ratePerNight" IS NOT NULL
+            ORDER BY "hotelId", id DESC
+         )
+         SELECT
+           p.id   AS "packageId",
+           p.name AS "packageName",
+           p."defaultHotelId"        AS "defaultHotelId",
+           h.name                    AS "hotelName",
+           COALESCE(p.duration, 7)   AS duration,
+           p."costPrice"::text       AS "costPrice",
+           p."sellPrice"::text       AS "sellPrice",
+           lb."ratePerNight"::text   AS "latestRatePerNight",
+           (lb."ratePerNight" * COALESCE(p.duration, 7))::text
+                                     AS "expectedCost",
+           (p."costPrice" - lb."ratePerNight" * COALESCE(p.duration, 7))::text
+                                     AS "driftAmount",
+           CASE
+             WHEN p."costPrice" = 0 THEN NULL
+             ELSE ((p."costPrice" - lb."ratePerNight" * COALESCE(p.duration, 7))
+                   / p."costPrice")::text
+           END                       AS "driftFraction"
+         FROM umrah_packages p
+         JOIN latest_block lb
+           ON lb."hotelId" = p."defaultHotelId"
+         LEFT JOIN umrah_hotels h
+           ON h.id = p."defaultHotelId"
+          AND h."companyId" = p."companyId"
+          AND h."deletedAt" IS NULL
+         WHERE p."companyId" = $1
+           AND p."defaultHotelId" IS NOT NULL
+           AND p."deletedAt" IS NULL
+         ORDER BY p.name
+         LIMIT 500`,
+        [scope.companyId],
+      );
+
+      // The SQL emits one row per linked package; filter to the rows
+      // whose drift exceeds the threshold. Numbers come back as
+      // strings to preserve precision; convert here for the FE.
+      const driftRows = rows
+        .map((r) => ({
+          packageId: r.packageId,
+          packageName: r.packageName,
+          defaultHotelId: r.defaultHotelId,
+          hotelName: r.hotelName,
+          duration: Number(r.duration),
+          costPrice: Number(r.costPrice),
+          sellPrice: Number(r.sellPrice),
+          latestRatePerNight: r.latestRatePerNight === null ? null : Number(r.latestRatePerNight),
+          expectedCost: r.expectedCost === null ? null : Number(r.expectedCost),
+          driftAmount: r.driftAmount === null ? null : Number(r.driftAmount),
+          driftFraction: r.driftFraction === null ? null : Number(r.driftFraction),
+        }))
+        .filter((r) => r.driftFraction !== null
+          && Math.abs(r.driftFraction) >= thresholdFraction);
+
+      res.json(
+        maskFields(req, {
+          thresholdPct,
+          totalPackagesLinked: rows.length,
+          driftRows,
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Pricing-drift report");
+    }
+  },
+);
+
 export default router;
