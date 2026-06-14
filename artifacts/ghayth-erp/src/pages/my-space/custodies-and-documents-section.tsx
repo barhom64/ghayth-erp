@@ -22,11 +22,9 @@ export function CustodiesAndDocumentsSection({ custodies, documents }: Custodies
             العُهد المسلمة لي
             {custodies.length > 0 && <Badge className="text-xs bg-indigo-100 text-indigo-700">{custodies.length}</Badge>}
           </CardTitle>
-          <Link href="/finance/custodies">
-            <Button variant="ghost" size="sm" className="text-xs gap-1">
+          <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/finance/custodies">
               عرض الكل <ChevronLeft className="w-3 h-3" />
-            </Button>
-          </Link>
+            </Link></Button>
         </CardHeader>
         <CardContent>
           {custodies.length === 0 ? (

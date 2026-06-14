@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useIdempotencyKey } from "@/lib/idempotency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -148,6 +149,7 @@ export default function InvoiceDetailPage() {
   // FORBIDDEN with requiredRoles) surface through R.1.2's toast
   // pipeline automatically. The old handlers swallowed the server's
   // structured detail into a generic "حدث خطأ" toast.
+  const paymentIdem = useIdempotencyKey();
   const paymentMut = useApiMutation<unknown, { amount: number; method: string }>(
     () => `/finance/invoices/${id}/payment`,
     "POST",
@@ -158,7 +160,11 @@ export default function InvoiceDetailPage() {
     ],
     {
       successMessage: "تم تسجيل الدفعة",
-      onSuccess: () => setShowPayment(false),
+      headers: () => paymentIdem.headers,
+      onSuccess: () => {
+        paymentIdem.reset();
+        setShowPayment(false);
+      },
     },
   );
 
@@ -223,12 +229,10 @@ export default function InvoiceDetailPage() {
   const actions = (
     <div className="flex items-center gap-2">
       <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
-      <Link href={`/finance/invoices/create?copyFrom=${id}`}>
-        <Button variant="outline" size="sm" className="gap-1">
+      <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/invoices/create?copyFrom=${id}`}>
           <Copy className="h-4 w-4" />
           نسخ
-        </Button>
-      </Link>
+        </Link></Button>
       {invoice && remaining > 0 && (
         <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
           <Banknote className="h-4 w-4 me-1" />

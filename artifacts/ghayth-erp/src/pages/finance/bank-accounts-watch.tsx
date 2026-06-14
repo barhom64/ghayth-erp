@@ -172,24 +172,18 @@ export default function BankAccountsWatchPage() {
       subtitle="نظرة فورية على رصيد كل حساب نقدي/بنكي + حركة آخر 30 يوم"
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/bank-reconciliation">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/bank-reconciliation">
               <RefreshCw className="h-3.5 w-3.5 ml-1" />
               التسوية البنكية
-            </Button>
-          </Link>
-          <Link href="/finance/cash-position-calculator">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/cash-position-calculator">
               <Banknote className="h-3.5 w-3.5 ml-1" />
               مركز السيولة
-            </Button>
-          </Link>
-          <Link href="/finance/cash-calendar">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/cash-calendar">
               <Calendar className="h-3.5 w-3.5 ml-1" />
               تقويم النقد
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -376,9 +370,7 @@ export default function BankAccountsWatchPage() {
                           {formatCurrency(e.runningBalance)}
                         </td>
                         <td className="py-2 px-2">
-                          <Link href={`/finance/journal/${e.id}`}>
-                            <Button variant="ghost" size="icon" title="التالي" className="h-7 w-7"><ChevronRight className="w-3 h-3" /></Button>
-                          </Link>
+                          <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/journal/${e.id}`}><ChevronRight className="w-3 h-3" /></Link></Button>
                         </td>
                       </tr>
                     ))}

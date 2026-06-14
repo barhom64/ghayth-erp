@@ -233,12 +233,10 @@ export default function ApPaymentCalendarPage() {
             </div>
           </div>
           <div className="flex-1" />
-          <Link href="/finance/payment-run">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/payment-run">
               <Banknote className="w-4 h-4 ml-1" />
               فتح Payment Run
-            </Button>
-          </Link>
+            </Link></Button>
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
             <Download className="w-4 h-4 ml-1" />
             CSV
@@ -423,9 +421,7 @@ export default function ApPaymentCalendarPage() {
                           {totalDue > 0 ? `${((v.amount / totalDue) * 100).toFixed(1)}%` : "—"}
                         </td>
                         <td className="py-2 px-2">
-                          <Link href={`/finance/vendors/${v.supplierId}`}>
-                            <Button variant="ghost" size="icon" title="التالي" className="h-7 w-7"><ChevronRight className="w-4 h-4" /></Button>
-                          </Link>
+                          <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/vendors/${v.supplierId}`}><ChevronRight className="w-4 h-4" /></Link></Button>
                         </td>
                       </tr>
                     ))}

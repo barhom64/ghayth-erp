@@ -37,11 +37,9 @@ export function SmartSuggestionsCard({ suggestions }: SmartSuggestionsCardProps)
                   <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
                 </div>
                 {s.actionLink && (
-                  <Link href={s.actionLink}>
-                    <Button variant="outline" size="sm" className="text-xs shrink-0">
+                  <Button asChild variant="outline" size="sm" className="text-xs shrink-0"><Link href={s.actionLink}>
                       {s.action} <ChevronLeft className="w-3 h-3 ms-1" />
-                    </Button>
-                  </Link>
+                    </Link></Button>
                 )}
               </div>
             );

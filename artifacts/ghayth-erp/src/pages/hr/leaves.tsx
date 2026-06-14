@@ -198,11 +198,9 @@ export default function LeavesPage() {
     actionsColumn(
       (l) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/hr/leaves/create?copyLeaveType=${encodeURIComponent(l.leaveTypeId || l.leaveType || "")}&copyReason=${encodeURIComponent(l.reason || "")}`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" title="نسخ الطلب">
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" title="نسخ الطلب"><Link href={`/hr/leaves/create?copyLeaveType=${encodeURIComponent(l.leaveTypeId || l.leaveType || "")}&copyReason=${encodeURIComponent(l.reason || "")}`}>
               <Copy className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link></Button>
           <button
             onClick={() => setExpandedId(expandedId === l.id ? null : l.id)}
             className="text-muted-foreground hover:text-muted-foreground p-1"

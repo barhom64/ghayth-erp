@@ -65,12 +65,10 @@ export function SummaryCards({ attendance, monthlyStats, currentShift, lastPaysl
             <div className="text-center py-4">
               <XCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" />
               <p className="text-sm text-muted-foreground">لم يتم تسجيل الحضور بعد</p>
-              <Link href="/hr/attendance">
-                <Button size="sm" variant="outline" className="mt-2 gap-1">
+              <Button asChild size="sm" variant="outline" className="mt-2 gap-1"><Link href="/hr/attendance">
                   <LogIn className="w-3 h-3" />
                   تسجيل حضور
-                </Button>
-              </Link>
+                </Link></Button>
             </div>
           )}
           {monthlyStats && (

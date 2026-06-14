@@ -176,11 +176,9 @@ export default function WpsRunsPage() {
       header: "إجراءات",
       render: (r) => (
         <div className="flex gap-1">
-          <Link href={`/hr/wps/${r.id}`}>
-            <Button variant="ghost" size="sm" title="تفاصيل">
+          <Button asChild variant="ghost" size="sm" title="تفاصيل"><Link href={`/hr/wps/${r.id}`}>
               <Eye className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link></Button>
           {r.recordCount > 0 && (
             <a href={apiUrl(`/hr/wps/runs/${r.id}/file`)} download>
               <Button variant="ghost" size="sm" title="تنزيل الملف">

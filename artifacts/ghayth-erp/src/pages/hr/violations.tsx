@@ -142,11 +142,9 @@ export default function ViolationsPage() {
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "المخالفات والجزاءات" }]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/hr/violations/auto-detection">
-            <Button variant="outline" size="sm" className="gap-1.5">
+          <Button asChild variant="outline" size="sm" className="gap-1.5"><Link href="/hr/violations/auto-detection">
               <Radar className="h-4 w-4" /> تشغيل الرصد
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/hr/violations/create">
             <GuardedButton perm="hr:create" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" /> تسجيل مخالفة
@@ -255,11 +253,9 @@ function OverviewTab({ memos, stats }: { memos: any[]; stats: any }) {
               <AlertTriangle className="h-4 w-4 text-status-warning" />
               محاضر تحتاج إجراءً عاجلًا
             </CardTitle>
-            <Link href="/hr/violations?tab=memos">
-              <Button variant="ghost" size="sm" className="gap-1 text-xs">
+            <Button asChild variant="ghost" size="sm" className="gap-1 text-xs"><Link href="/hr/violations?tab=memos">
                 عرض الكل <ArrowLeft className="h-3 w-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardHeader>
           <CardContent>
             {pendingMemos.length === 0 ? (
@@ -535,12 +531,10 @@ function AutoDetectionLink() {
         <p className="text-sm text-muted-foreground mb-4">
           تشغيل/إيقاف الرصد، ضبط حدود التأخر، عرض سجل عمليات الرصد
         </p>
-        <Link href="/hr/violations/auto-detection">
-          <Button>
+        <Button asChild><Link href="/hr/violations/auto-detection">
             <Radar className="h-4 w-4 me-1.5" />
             فتح صفحة الرصد التلقائي
-          </Button>
-        </Link>
+          </Link></Button>
       </CardContent>
     </Card>
   );
@@ -555,12 +549,10 @@ function RegulationLink() {
         <p className="text-sm text-muted-foreground mb-4">
           ٤٩ مادة موزعة على ثلاثة أبواب: مواعيد العمل، تنظيم العمل، السلوك العام
         </p>
-        <Link href="/hr/discipline/regulation">
-          <Button>
+        <Button asChild><Link href="/hr/discipline/regulation">
             <BookOpen className="h-4 w-4 me-1.5" />
             فتح لائحة الانضباط
-          </Button>
-        </Link>
+          </Link></Button>
       </CardContent>
     </Card>
   );

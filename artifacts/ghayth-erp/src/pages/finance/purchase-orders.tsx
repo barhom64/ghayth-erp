@@ -156,22 +156,18 @@ export default function PurchaseOrdersPage() {
       header: "إجراءات",
       render: (po) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/finance/purchase-orders/${po.id}`}>
-            <Button variant="ghost" size="sm">
+          <Button asChild variant="ghost" size="sm"><Link href={`/finance/purchase-orders/${po.id}`}>
               <Eye className="h-4 w-4 me-1" />
               عرض
-            </Button>
-          </Link>
-          <Link href={`/finance/purchase-orders/create?copyFrom=${po.id}`}>
-            <Button
+            </Link></Button>
+          <Button asChild
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-muted-foreground"
               title="نسخ طلب الشراء"
-            >
+            ><Link href={`/finance/purchase-orders/create?copyFrom=${po.id}`}>
               <Copy className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link></Button>
           <button
             onClick={() => setExpandedId(expandedId === po.id ? null : po.id)}
             className="text-muted-foreground hover:text-foreground p-1"

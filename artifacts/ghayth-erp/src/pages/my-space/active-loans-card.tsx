@@ -38,11 +38,9 @@ export function ActiveLoansCard({ activeLoans }: ActiveLoansCardProps) {
             </span>
           )}
         </CardTitle>
-        <Link href="/my-loans">
-          <Button variant="ghost" size="sm" className="text-xs gap-1">
+        <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/my-loans">
             عرض الكل <ChevronLeft className="w-3 h-3" />
-          </Button>
-        </Link>
+          </Link></Button>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">

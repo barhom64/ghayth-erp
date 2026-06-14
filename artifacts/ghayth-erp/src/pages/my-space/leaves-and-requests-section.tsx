@@ -21,11 +21,9 @@ export function LeavesAndRequestsSection({ leaveBalances, openRequests }: Leaves
             <Calendar className="w-5 h-5 text-emerald-500" />
             رصيد الإجازات
           </CardTitle>
-          <Link href="/hr/leaves">
-            <Button variant="ghost" size="sm" className="text-xs gap-1">
+          <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/hr/leaves">
               طلب إجازة <ChevronLeft className="w-3 h-3" />
-            </Button>
-          </Link>
+            </Link></Button>
         </CardHeader>
         <CardContent>
           {leaveBalances.length === 0 ? (

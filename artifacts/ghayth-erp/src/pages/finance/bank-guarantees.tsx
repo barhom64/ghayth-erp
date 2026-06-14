@@ -467,16 +467,12 @@ export default function BankGuaranteesPage() {
         loading={isLoading}
         actions={
           <>
-            <Link href="/finance/bank-accounts-watch">
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href="/finance/bank-accounts-watch">
                 <Landmark className="h-4 w-4 me-2" />مراقبة البنوك
-              </Button>
-            </Link>
-            <Link href="/finance/custodies">
-              <Button variant="outline" size="sm">
+              </Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href="/finance/custodies">
                 <KeyRound className="h-4 w-4 me-2" />العهد
-              </Button>
-            </Link>
+              </Link></Button>
             <GuardedButton perm="finance:create" size="sm" onClick={openNew}>
               <Plus className="h-4 w-4 me-1" />
               ضمان جديد

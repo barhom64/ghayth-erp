@@ -44,28 +44,24 @@ export function EntityPnlButton({
   const href = `/finance/entity-pnl/${entityType}/${entityId}`;
   if (variant === "card") {
     return (
-      <Link href={href}>
-        <Button
+      <Button asChild
           variant="outline"
           className="w-full justify-start"
           data-testid={`entity-pnl-button-${entityType}-${entityId}`}
-        >
+        ><Link href={href}>
           <TrendingUp className="h-4 w-4 ms-1" />
           أرباح وخسائر
-        </Button>
-      </Link>
+        </Link></Button>
     );
   }
   return (
-    <Link href={href}>
-      <Button
+    <Button asChild
         size="sm"
         variant="ghost"
         data-testid={`entity-pnl-button-${entityType}-${entityId}`}
-      >
+      ><Link href={href}>
         <TrendingUp className="h-4 w-4 ms-1" />
         أرباح وخسائر
-      </Button>
-    </Link>
+      </Link></Button>
   );
 }

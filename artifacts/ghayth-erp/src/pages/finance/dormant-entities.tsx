@@ -157,12 +157,10 @@ export default function DormantEntitiesPage() {
               CSV
             </Button>
           )}
-          <Link href="/finance/dimensional-routing">
-            <Button variant="ghost" data-testid="dormant-back-link">
+          <Button asChild variant="ghost" data-testid="dormant-back-link"><Link href="/finance/dimensional-routing">
               <Network className="h-4 w-4 ms-1" />
               رجوع للتأصيل
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -326,16 +324,14 @@ function CcRow({ cc, onChanged }: { cc: DormantCc; onChanged: () => void }) {
           منذ {ageDays.toLocaleString("ar-SA")} يوماً · 0 قيد في الفترة
         </div>
       </div>
-      <Link href={`/finance/cost-centers/${cc.id}/pnl`}>
-        <Button
+      <Button asChild
           size="sm"
           variant="ghost"
           data-testid={`dormant-cc-view-${cc.id}`}
           title="فتح P&L للمركز"
-        >
+        ><Link href={`/finance/cost-centers/${cc.id}/pnl`}>
           <ExternalLink className="h-3.5 w-3.5" />
-        </Button>
-      </Link>
+        </Link></Button>
       <GuardedButton
         perm="finance.cost_centers:delete"
         size="sm"

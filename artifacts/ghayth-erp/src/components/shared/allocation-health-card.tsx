@@ -123,40 +123,30 @@ export function AllocationHealthCard() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Link href="/finance/allocation-coverage">
-            <Button variant="outline" size="sm" className="h-7 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/allocation-coverage">
               <Target className="h-3.5 w-3.5 ml-1" />
               تشخيص التغطية
               <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-            </Button>
-          </Link>
-          <Link href="/finance/allocation-rules">
-            <Button variant="outline" size="sm" className="h-7 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/allocation-rules">
               <Workflow className="h-3.5 w-3.5 ml-1" />
               قواعد التوجيه
-            </Button>
-          </Link>
+            </Link></Button>
           {bypassCount > 0 && (
-            <Link href="/finance/allocation-override-log">
-              <Button variant="outline" size="sm" className="h-7 text-xs text-status-warning-foreground">
+            <Button asChild variant="outline" size="sm" className="h-7 text-xs text-status-warning-foreground"><Link href="/finance/allocation-override-log">
                 <ShieldAlert className="h-3.5 w-3.5 ml-1" />
                 سجل التجاوزات ({bypassCount})
-              </Button>
-            </Link>
+              </Link></Button>
           )}
           {unmapped > 0 && (
-            <Link href="/finance/allocation-results?status=unmapped">
-              <Button variant="outline" size="sm" className="h-7 text-xs text-status-warning-foreground">
+            <Button asChild variant="outline" size="sm" className="h-7 text-xs text-status-warning-foreground"><Link href="/finance/allocation-results?status=unmapped">
                 <AlertCircle className="h-3.5 w-3.5 ml-1" />
                 البنود غير الموجَّهة ({unmapped})
-              </Button>
-            </Link>
+              </Link></Button>
           )}
-          <Link href="/finance/settings">
-            <Button variant="ghost" size="sm" className="h-7 text-xs">
+          <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href="/finance/settings">
               مركز الإعدادات
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       </CardContent>
     </Card>

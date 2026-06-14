@@ -401,12 +401,10 @@ export default function DailyCloseChecklistPage() {
                         </div>
                       </div>
                       {c.severity !== "ok" && (
-                        <Link href={c.fixHref}>
-                          <Button variant="outline" size="sm">
+                        <Button asChild variant="outline" size="sm"><Link href={c.fixHref}>
                             {c.fixLabel}
                             <ChevronRight className="w-3 h-3 mr-1" />
-                          </Button>
-                        </Link>
+                          </Link></Button>
                       )}
                     </div>
                   </div>

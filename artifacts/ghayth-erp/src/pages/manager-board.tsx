@@ -199,11 +199,9 @@ export default function ManagerBoard() {
       ]}
       subtitle="إشراف على الفريق والطلبات المعلقة واتخاذ قرارات سريعة"
       actions={
-        <Link href="/action-center">
-          <Button variant="outline" size="sm" className="gap-1">
+        <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/action-center">
             مركز القرارات الكامل <ArrowUpRight className="w-3 h-3" />
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -272,11 +270,9 @@ export default function ManagerBoard() {
               <UserCheck className="w-5 h-5 text-teal-500" />
               حضور الفريق اليوم
             </CardTitle>
-            <Link href="/hr/attendance">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/hr/attendance">
                 التفاصيل <ChevronLeft className="w-3 h-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardHeader>
           <CardContent>
             {teamLoading ? (
@@ -329,11 +325,9 @@ export default function ManagerBoard() {
               <ListChecks className="w-5 h-5 text-status-info" />
               مهام الفريق
             </CardTitle>
-            <Link href="/tasks">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/tasks">
                 الكل <ChevronLeft className="w-3 h-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-2 mb-4">

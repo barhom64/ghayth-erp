@@ -138,11 +138,9 @@ function ContractsTab() {
             onDelete={() => startDelete(c.id)}
             deletePerm="legal:delete"
           />
-          <Link href={`/legal/create?copyFrom=${c.id}`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2" title="نسخ العقد">
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="نسخ العقد"><Link href={`/legal/create?copyFrom=${c.id}`}>
               <Copy className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       ),
     },
