@@ -11,7 +11,7 @@
 - المصدر الأولي: `docs/platform/PLATFORM_BACKEND_UNUSED_ENDPOINTS.csv` (96 سطر + header)
 - التحقق: تم قراءة ملفات `artifacts/api-server/src/routes/` للحصول على `authorize()` الفعلي
 - التحقق من المستهلكين: بحث في `artifacts/ghayth-erp/src/` عن استدعاءات كل path
-- **2 endpoints ظهرت false-positive** (لها مستهلك فعلي): تفاصيل في §22
+- **8 endpoints ظهرت false-positive** (لها مستهلك فعلي): تفاصيل في §22
 
 ---
 
@@ -129,7 +129,7 @@
 | POST | `/api/fleet/trips` | `fleet:create` | لا | `wire` | إنشاء رحلة — Backend جاهز | متوسط | بناء نموذج إنشاء رحلة |
 | PATCH | `/api/fleet/tires/:id` | `fleet:update` | لا | `wire` | تعديل بيانات إطار — Backend جاهز | متوسط | بناء نموذج تعديل الإطار |
 | DELETE | `/api/fleet/tires/:id` | `fleet:update` | لا | `wire` | حذف إطار — Backend جاهز | متوسط | إضافة زر حذف في صفحة الإطارات |
-| GET | `/api/fleet/rental-contracts` | `fleet:list` | لا | `wire` | قائمة عقود الإيجار — Backend جاهز | منخفض | بناء صفحة عقود الإيجار |
+| GET | `/api/fleet/rental-contracts` | `fleet:list` | **نعم** | `false-positive` | مستهلك في `fleet/rental-contracts.tsx:121` | — | — |
 | POST | `/api/fleet/rental-contracts/:id/payments` | `fleet:update` | لا | `wire` | تسجيل دفعة على عقد إيجار | متوسط | بناء نموذج الدفعة |
 | GET | `/api/fleet/rental-contracts/:id/payments` | `fleet:list` | لا | `report-only` | سجل دفعات عقد الإيجار | منخفض | إدراجه في تفاصيل العقد |
 | POST | `/api/fleet/rental-payments/:id/pay` | `fleet:update` | لا | `wire` | تسوية دفعة إيجار | متوسط | بناء dialog التسوية |
@@ -166,14 +166,14 @@
 
 | Method | Path | Auth Guard | FE Consumer | التصنيف | السبب | المخاطر | الإجراء التالي |
 |---|---|---|---|---|---|---|---|
-| GET | `/api/org/legal-entities` | `admin:list` | لا | `wire` | قائمة الكيانات القانونية — Backend جاهز | منخفض | بناء شجرة الهيكل التنظيمي |
-| PATCH | `/api/org/legal-entities/:id` | `admin:update` | لا | `wire` | تعديل كيان قانوني | منخفض | بناء نموذج التعديل |
-| GET | `/api/org/positions` | `admin:list` | لا | `wire` | قائمة المناصب | منخفض | بناء صفحة إدارة المناصب |
-| PATCH | `/api/org/positions/:id` | `admin:update` | لا | `wire` | تعديل منصب | منخفض | بناء نموذج التعديل |
-| PATCH | `/api/org/teams/:id` | `admin:update` | لا | `wire` | تعديل فريق | منخفض | بناء نموذج التعديل |
-| PATCH | `/api/org/committees/:id` | `admin:update` | لا | `wire` | تعديل لجنة | منخفض | بناء نموذج التعديل |
-| GET | `/api/org/supervision-lines` | `admin:list` | لا | `report-only` | خطوط الإشراف — بيانات مرجعية | منخفض | إدراجه في خريطة التنظيم |
-| GET | `/api/org/approval-authorities` | `admin:list` | لا | `report-only` | صلاحيات الاعتماد — بيانات مرجعية | منخفض | إدراجه في سير الاعتمادات |
+| GET | `/api/org/legal-entities` | `admin:list` | **نعم** | `false-positive` | مستهلك في `admin/org-model.tsx:82` | — | — |
+| PATCH | `/api/org/legal-entities/:id` | `admin:update` | لا | `wire` | تعديل كيان قانوني — FE يستخدم POST/DELETE فقط | منخفض | بناء نموذج تعديل |
+| GET | `/api/org/positions` | `admin:list` | **نعم** | `false-positive` | مستهلك في `entity-selects.tsx:599` | — | — |
+| PATCH | `/api/org/positions/:id` | `admin:update` | لا | `wire` | تعديل منصب — FE يستخدم GET فقط | منخفض | بناء نموذج تعديل |
+| PATCH | `/api/org/teams/:id` | `admin:update` | لا | `wire` | تعديل فريق — FE يستخدم GET/POST/DELETE فقط | منخفض | بناء نموذج تعديل |
+| PATCH | `/api/org/committees/:id` | `admin:update` | لا | `wire` | تعديل لجنة — FE يستخدم GET/POST/DELETE فقط | منخفض | بناء نموذج تعديل |
+| GET | `/api/org/supervision-lines` | `admin:list` | **نعم** | `false-positive` | مستهلك في `admin/org-model.tsx:418` | — | — |
+| GET | `/api/org/approval-authorities` | `admin:list` | **نعم** | `false-positive` | مستهلك في `admin/org-model.tsx:511` | — | — |
 
 ---
 
@@ -208,7 +208,7 @@
 |---|---|---|---|---|---|---|---|
 | PUT | `/api/settings/departments/:id` | `settings:update` | لا | `wire` | تعديل قسم — Backend جاهز | منخفض | بناء نموذج تعديل |
 | DELETE | `/api/settings/departments/:id` | `settings:update` | لا | `wire` | حذف قسم | منخفض | إضافة زر حذف + تأكيد |
-| GET | `/api/settings/administrations` | `settings:list` | لا | `report-only` | قائمة الإدارات — بيانات مرجعية | منخفض | التحقق من استخدامه في dropdown |
+| GET | `/api/settings/administrations` | `settings:list` | **نعم** | `false-positive` | مستهلك في `hr/org-tree.tsx:78` عبر apiFetch | — | — |
 | PATCH | `/api/settings/administrations/:id` | `settings:update` | لا | `wire` | تعديل إدارة | منخفض | بناء نموذج تعديل |
 | DELETE | `/api/settings/administrations/:id` | `settings:update` | لا | `wire` | حذف إدارة | منخفض | إضافة زر حذف + تأكيد |
 
@@ -268,30 +268,36 @@
 
 | التصنيف | العدد | النسبة |
 |---|---|---|
-| `wire` | 51 | 53% |
-| `report-only` | 24 | 25% |
-| `internal-service` | 11 | 12% |
-| `false-positive` | 2 | 2% |
-| `remove-candidate` | 7 | 7% |
+| `wire` | 45 | 47% |
+| `report-only` | 21 | 22% |
+| `internal-service` | 11 | 11% |
+| `false-positive` | 8 | 8% |
+| `remove-candidate` | 10 | 10% |
 | `integration-only` | 1 | 1% |
 | **المجموع** | **96** | **100%** |
 
-*ملاحظة: الـ2 false-positive أُزيلا من CSV (94 remaining). الـ94 الباقية = 51+24+11+7+1.*
+*ملاحظة: الـ8 false-positive أُزيلت من CSV (88 remaining). الـ88 الباقية = 45+21+11+10+1.*
 
 ---
 
 ## §22 — False Positives (لها مستهلك فعلي)
 
-هذه الـ2 endpoints كانت مدرجة خطأً في الجرد — لها مستهلك FE فعلي:
+هذه الـ8 endpoints كانت مدرجة خطأً في الجرد — لها مستهلك FE فعلي:
 
 | Path | المستهلك | الملف |
 |---|---|---|
-| `GET /api/hr/attendance/field-track` | `FieldBreadcrumbSection` | `artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx:152` |
-| `DELETE /api/inbox/threads/:channel/:address/snooze` | unsnooze action | `artifacts/ghayth-erp/src/pages/inbox.tsx:996` |
+| `GET /api/hr/attendance/field-track` | `FieldBreadcrumbSection` | `hr/field-tracking.tsx:152` |
+| `DELETE /api/inbox/threads/:channel/:address/snooze` | unsnooze action | `inbox.tsx:996` |
+| `GET /api/org/legal-entities` | `api<LegalEntity>()` | `admin/org-model.tsx:82` |
+| `GET /api/org/positions` | `endpoint: "/org/positions"` | `shared/entity-selects.tsx:599` |
+| `GET /api/org/supervision-lines` | `api<SupervisionLine>()` | `admin/org-model.tsx:418` |
+| `GET /api/org/approval-authorities` | `api<ApprovalAuthority>()` | `admin/org-model.tsx:511` |
+| `GET /api/settings/administrations` | `apiFetch("/settings/administrations")` | `hr/org-tree.tsx:78` |
+| `GET /api/fleet/rental-contracts` | `useApiQuery("/fleet/rental-contracts?...")` | `fleet/rental-contracts.tsx:121` |
 
-ملاحظة: `POST /api/inbox/messages/:id/read` مختلف عن `/inbox/threads/:channel/:address/read` الذي يستهلكه FE — الأول يبقى في قائمة `wire`.
+ملاحظة: `POST /api/inbox/messages/:id/read` مختلف عن `/inbox/threads/:channel/:address/read` الذي يستهلكه FE — الأول يبقى `wire`.
 
-**الإجراء**: إزالة هذه الـ2 من `PLATFORM_BACKEND_UNUSED_ENDPOINTS.csv` في PR-5 — CSV الآن يحتوي 94 endpoint (كان 96).
+**الإجراء**: إزالة هذه الـ8 من `PLATFORM_BACKEND_UNUSED_ENDPOINTS.csv` — CSV يحتوي 88 endpoint (كان 96).
 
 ---
 

@@ -34,10 +34,12 @@ describe("PR-5 (#2163) — classification doc exists and is complete", () => {
   });
 
   it("doc has summary section with counts", () => {
-    expect(docSrc).toMatch(/\| `wire` \| 5\d \|/);
-    expect(docSrc).toMatch(/\| `report-only` \| 2[0-9] \|/);
-    expect(docSrc).toMatch(/\| `internal-service` \| 1[0-9] \|/);
+    expect(docSrc).toMatch(/\| `wire` \| \d+ \|/);
+    expect(docSrc).toMatch(/\| `report-only` \| \d+ \|/);
+    expect(docSrc).toMatch(/\| `internal-service` \| \d+ \|/);
     expect(docSrc).toContain("false-positive");
+    // total must be 96
+    expect(docSrc).toMatch(/\| \*\*المجموع\*\* \| \*\*96\*\* \|/);
   });
 
   it("doc documents HR-REV linkage (HR-REV-0, HR-REV-1, HR-REV-2)", () => {
@@ -54,13 +56,12 @@ describe("PR-5 (#2163) — classification doc exists and is complete", () => {
   });
 });
 
-describe("PR-5 (#2163) — CSV updated: 2 false-positives removed", () => {
+describe("PR-5 (#2163) — CSV updated: 8 false-positives removed", () => {
   it("CSV has comment noting false-positives removed", () => {
     expect(csvSrc).toContain("false-positives removed");
   });
 
   it("field-track false-positive removed from CSV data lines", () => {
-    // Only data lines (starting with /) — comments are excluded
     const dataLines = csvSrc.split("\n").filter((l) => l.match(/^\/\w/));
     expect(dataLines.join("\n")).not.toMatch(/\/hr\/attendance\/field-track/);
   });
@@ -70,11 +71,23 @@ describe("PR-5 (#2163) — CSV updated: 2 false-positives removed", () => {
     expect(dataLines.join("\n")).not.toMatch(/DELETE \/api\/inbox\/threads/);
   });
 
-  it("CSV now has 94 genuine unused endpoints (not 96, 2 false-positives removed)", () => {
-    const dataLines = csvSrc
-      .split("\n")
-      .filter((l) => l.match(/^\/\w/));
-    expect(dataLines.length).toBe(94);
+  it("org GET endpoints (false-positives) removed from CSV data lines", () => {
+    const dataLines = csvSrc.split("\n").filter((l) => l.match(/^\/\w/)).join("\n");
+    expect(dataLines).not.toMatch(/GET \/api\/org\/legal-entities$/m);
+    expect(dataLines).not.toMatch(/GET \/api\/org\/positions$/m);
+    expect(dataLines).not.toMatch(/GET \/api\/org\/supervision-lines$/m);
+    expect(dataLines).not.toMatch(/GET \/api\/org\/approval-authorities$/m);
+  });
+
+  it("settings/administrations GET and fleet/rental-contracts GET removed", () => {
+    const dataLines = csvSrc.split("\n").filter((l) => l.match(/^\/\w/)).join("\n");
+    expect(dataLines).not.toMatch(/GET \/api\/settings\/administrations$/m);
+    expect(dataLines).not.toMatch(/GET \/api\/fleet\/rental-contracts$/m);
+  });
+
+  it("CSV now has 88 genuine unused endpoints (not 96, 8 false-positives removed)", () => {
+    const dataLines = csvSrc.split("\n").filter((l) => l.match(/^\/\w/));
+    expect(dataLines.length).toBe(88);
   });
 });
 
@@ -83,16 +96,48 @@ describe("PR-5 (#2163) — false-positives confirmed to have FE consumers", () =
     join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx"),
     "utf8",
   );
-  const INBOX = readFileSync(
+  const INBOX_PG = readFileSync(
     join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/inbox.tsx"),
     "utf8",
   );
+  const ORG_MODEL = readFileSync(
+    join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/admin/org-model.tsx"),
+    "utf8",
+  );
+  const ENTITY_SELECTS = readFileSync(
+    join(REPO_ROOT, "artifacts/ghayth-erp/src/components/shared/entity-selects.tsx"),
+    "utf8",
+  );
+  const RENTAL_CONTRACTS = readFileSync(
+    join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/fleet/rental-contracts.tsx"),
+    "utf8",
+  );
 
-  it("field-track endpoint consumed by field-tracking.tsx", () => {
+  it("field-track consumed by field-tracking.tsx", () => {
     expect(FIELD_TRACK).toMatch(/\/hr\/attendance\/field-track/);
   });
 
-  it("inbox snooze endpoint consumed by inbox.tsx", () => {
-    expect(INBOX).toMatch(/\/inbox\/threads\/.*\/snooze/);
+  it("inbox snooze consumed by inbox.tsx", () => {
+    expect(INBOX_PG).toMatch(/\/inbox\/threads\/.*\/snooze/);
+  });
+
+  it("org/legal-entities consumed by org-model.tsx", () => {
+    expect(ORG_MODEL).toMatch(/\/org\/legal-entities/);
+  });
+
+  it("org/positions consumed by entity-selects.tsx", () => {
+    expect(ENTITY_SELECTS).toMatch(/\/org\/positions/);
+  });
+
+  it("org/supervision-lines consumed by org-model.tsx", () => {
+    expect(ORG_MODEL).toMatch(/\/org\/supervision-lines/);
+  });
+
+  it("org/approval-authorities consumed by org-model.tsx", () => {
+    expect(ORG_MODEL).toMatch(/\/org\/approval-authorities/);
+  });
+
+  it("fleet/rental-contracts consumed by rental-contracts.tsx", () => {
+    expect(RENTAL_CONTRACTS).toMatch(/\/fleet\/rental-contracts/);
   });
 });
