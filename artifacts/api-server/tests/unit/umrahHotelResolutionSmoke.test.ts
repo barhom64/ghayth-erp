@@ -43,11 +43,16 @@ describe("U-15-P2 §A — resolution chain runs in the documented order", () => 
     const allocIdx = HELPER.indexOf('source: "allocation"');
     const hotelNameIdx = HELPER.indexOf('source: "hotelName"');
     const packageIdx = HELPER.indexOf('source: "package"');
-    const unknownIdx = HELPER.indexOf('source: "unknown"');
+    // `unknown` appears twice: once as a defensive early-return when
+    // the pilgrim row is missing (between the allocation and hotelName
+    // branches), and once as the final fallback. The smoke pins the
+    // FINAL fallback's position via lastIndexOf — that's the one the
+    // resolution-chain order is about.
+    const unknownFinalIdx = HELPER.lastIndexOf('source: "unknown"');
     expect(allocIdx).toBeGreaterThan(-1);
     expect(hotelNameIdx).toBeGreaterThan(allocIdx);
     expect(packageIdx).toBeGreaterThan(hotelNameIdx);
-    expect(unknownIdx).toBeGreaterThan(packageIdx);
+    expect(unknownFinalIdx).toBeGreaterThan(packageIdx);
   });
 
   it("returns { source: \"allocation\" } from the room-allocations branch", () => {
