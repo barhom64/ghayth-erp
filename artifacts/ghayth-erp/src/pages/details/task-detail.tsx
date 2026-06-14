@@ -80,6 +80,12 @@ export default function TaskDetail() {
     `/tasks/${id}`,
     !!id,
   );
+  const { data: assigneesResp, refetch: refetchAssignees } = useApiQuery<any>(
+    ["task-assignees", String(id)],
+    `/tasks/${id}/assignees`,
+    !!id,
+  );
+  const assigneesList: any[] = assigneesResp?.data || assigneesResp || [];
 
   const addAssignee = async () => {
     if (!newAssigneeId || !id) return;
@@ -90,7 +96,7 @@ export default function TaskDetail() {
       });
       toast({ title: "تم إضافة المُعيَّن" });
       setNewAssigneeId(""); setShowAddAssignee(false);
-      refetch();
+      refetch(); refetchAssignees();
     } catch (err) {
       toast({ variant: "destructive", title: "فشل الإضافة", description: getErrorMessage(err) });
     }
