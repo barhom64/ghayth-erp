@@ -65,18 +65,14 @@ export function LineAllocationStatusBanner({ lines, documentType: _documentType 
               أنشئ قاعدة في «قواعد التوجيه» أو حدّد الحساب يدوياً على البند.
             </p>
             <div className="flex flex-wrap gap-2 mt-2">
-              <Link href="/finance/allocation-rules">
-                <Button variant="outline" size="sm" className="h-7 text-xs">
+              <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/allocation-rules">
                   <Workflow className="h-3.5 w-3.5 ml-1" />
                   افتح قواعد التوجيه
-                </Button>
-              </Link>
-              <Link href="/finance/allocation-coverage">
-                <Button variant="outline" size="sm" className="h-7 text-xs">
+                </Link></Button>
+              <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/allocation-coverage">
                   <Target className="h-3.5 w-3.5 ml-1" />
                   تشخيص التغطية الكلي
-                </Button>
-              </Link>
+                </Link></Button>
             </div>
           </div>
           <Badge variant="outline" className="shrink-0 text-[10px] text-status-danger-foreground border-status-danger-surface">
@@ -100,12 +96,10 @@ export function LineAllocationStatusBanner({ lines, documentType: _documentType 
               في هذه البنود تم تعديل الحساب أو مركز التكلفة يدوياً عن مقترح المحرك — للحوكمة راجع سجل التعديلات.
             </p>
             <div className="flex flex-wrap gap-2 mt-2">
-              <Link href="/finance/overrides-report">
-                <Button variant="outline" size="sm" className="h-7 text-xs">
+              <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/overrides-report">
                   <Pencil className="h-3.5 w-3.5 ml-1" />
                   سجل التعديلات اليدوية
-                </Button>
-              </Link>
+                </Link></Button>
             </div>
           </div>
           <Badge variant="outline" className="shrink-0 text-[10px] text-status-warning-foreground border-status-warning-surface">
