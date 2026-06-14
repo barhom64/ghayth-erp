@@ -60,7 +60,19 @@ transportPlanningRouter.use(authMiddleware);
 
 // ─── Planning settings ───────────────────────────────────────────────
 
-const MAP_PROVIDERS = ["manual_only", "google_maps", "mapbox", "here_maps"] as const;
+// #2079 FIX-11 (DEAD-02) — the `mapbox` and `here_maps` providers
+// remain declared in the TS type union and the DB CHECK constraint
+// (migration 271:130) because old rows may still carry them, but
+// the mapsService falls back to `manual_only` for both of them
+// (mapsService.ts:305-309). Exposing them as a settable value
+// through the PATCH endpoint is misleading — the operator picks
+// "mapbox", clicks save, then notices every estimate is still a
+// straight-line manual approximation. Restrict the input enum to
+// the two providers that ACTUALLY work (`manual_only` +
+// `google_maps`). DB rows already on `mapbox`/`here_maps` keep
+// loading correctly — the type union stays — but no new write
+// can set those values via the public PATCH.
+const MAP_PROVIDERS_WRITABLE = ["manual_only", "google_maps"] as const;
 
 transportPlanningRouter.get(
   "/transport/planning-settings",
@@ -77,7 +89,11 @@ transportPlanningRouter.get(
 );
 
 const updateSettingsSchema = z.object({
-  mapProvider: z.enum(MAP_PROVIDERS).optional(),
+  mapProvider: z.enum(MAP_PROVIDERS_WRITABLE, {
+    errorMap: () => ({
+      message: "مزوّد الخرائط المختار غير مفعَّل في النظام — المسموح: manual_only أو google_maps",
+    }),
+  }).optional(),
   mapProviderApiKey: z.string().max(255).nullable().optional(),
   defaultRestHoursRequired: z.coerce.number().min(0).max(24).optional(),
   defaultLoadingMinutes: z.coerce.number().int().min(0).max(480).optional(),
