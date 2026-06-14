@@ -224,8 +224,11 @@ export const allNavSections: NavSection[] = [
       { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
         perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
         children: [
+        // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
+        // هي المدخل الوحيد. أُزيل تكرار «إدارة المخالفات» (/hr/violations/management
+        // = صفحة stats أصغر)؛ المسار يبقى مسجَّلًا deep-link — لا حذف ولا 404.
+        // متابعة: دمج عرض الإحصاء/التصعيد كتبويب داخل violations.tsx ثم retire.
         { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
         { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },

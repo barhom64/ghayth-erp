@@ -35,7 +35,7 @@
 |--------|--------|
 | `discipline/regulation` | **keep** (السياسة/اللائحة) |
 | `violations` (نظرة عامة) | **keep** كـtab «الوقائع» في المركز |
-| `violations/management` | 🚩 **merge** |
+| `violations/management` | 🟡 **merge منفّذ جزئيًا** (2026-06-14): أُزيل من القائمة → /hr/violations المبوّبة؛ المسار deep-link. متابعة: دمج عرض stats كتبويب ثم retire. |
 | `penalty-escalation` | **→ tab** «التصعيد» |
 | `auto-detection` | **→ tab** «الرصد التلقائي» |
 | `discipline/memos/:id` | deep-link |

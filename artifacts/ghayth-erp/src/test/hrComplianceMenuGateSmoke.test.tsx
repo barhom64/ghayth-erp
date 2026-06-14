@@ -48,7 +48,10 @@ describe("PR-10 (#2077) — «الامتثال والجزاءات» gate", () =>
   });
 
   it("every violations-flavoured child carries the violations perm gate", () => {
-    for (const label of ["نظرة عامة على المخالفات", "إدارة المخالفات", "الرصد التلقائي"]) {
+    // HR-REV-7 (#2226): «إدارة المخالفات» (/hr/violations/management) أُزيل من
+    // القائمة (دمج إلى /hr/violations المبوّبة؛ المسار يبقى deep-link). البقية
+    // ما زالت تحمل بوابة المخالفات.
+    for (const label of ["نظرة عامة على المخالفات", "الرصد التلقائي"]) {
       const re = new RegExp(`label: "${label}"[^}]*perm: \\["hr\\.violations:view","hr\\.violations:list"\\][^}]*permMode: "any"`);
       expect(block, `${label} missing violations perm`).toMatch(re);
     }
