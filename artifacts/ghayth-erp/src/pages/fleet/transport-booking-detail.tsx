@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
 import { BookingSourceContextPanel } from "@/components/shared/booking-source-context-panel";
+import { AddBookingLineDialog } from "@/components/shared/add-booking-line-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -16,7 +17,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import {
-  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock, Wand2,
+  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock, Wand2, Plus,
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
@@ -199,6 +200,8 @@ export default function TransportBookingDetail() {
   const [, navigate] = useLocation();
   const id = params?.id;
   const [suggestOpen, setSuggestOpen] = useState(false);
+  // #TA-T18-UX-AUDIT-01 P1-3 — إضافة سطر للحجز من شاشة التفاصيل.
+  const [addLineOpen, setAddLineOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: BookingDetail }>(
     ["transport-booking", id || ""],
@@ -504,7 +507,12 @@ export default function TransportBookingDetail() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center justify-between">
             <span>سطور الحجز ({b.lines.length})</span>
-            <GuardedButton perm="fleet.bookings:update" variant="outline" size="sm" onClick={() => refetch()}>تحديث</GuardedButton>
+            <div className="flex items-center gap-2">
+              <GuardedButton perm="fleet.bookings:update" variant="outline" size="sm" onClick={() => setAddLineOpen(true)}>
+                <Plus className="h-4 w-4 me-1" />إضافة سطر
+              </GuardedButton>
+              <GuardedButton perm="fleet.bookings:update" variant="outline" size="sm" onClick={() => refetch()}>تحديث</GuardedButton>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -557,6 +565,14 @@ export default function TransportBookingDetail() {
             if (dispatchOrderId) refetch();
             else navigate("/fleet/transport/dispatch");
           }}
+        />
+      )}
+      {id && (
+        <AddBookingLineDialog
+          bookingId={id}
+          open={addLineOpen}
+          onOpenChange={setAddLineOpen}
+          onAdded={() => refetch()}
         />
       )}
     </PageShell>
