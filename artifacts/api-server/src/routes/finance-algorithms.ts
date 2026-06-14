@@ -1618,7 +1618,11 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/transfer", authorize({ feature: 
 
     const bookValue = Number(asset.currentBookValue ?? 0);
     const { financialEngine } = await import("../lib/engines/index.js");
-    const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
+    // R1: use intent-resolved account; stored code overrides if not the known-bad default "1500"
+    const storedCode = asset.assetAccountCode as string | null;
+    const assetCode = (storedCode && storedCode !== "1500")
+      ? storedCode
+      : await financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "debit", "1200");
 
     let journalId: number | null = null;
     await withTransaction(async (client) => {
@@ -1715,9 +1719,16 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
     const gainLoss = roundTo2(proceeds - bookValue);
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
-    const accDepCode = (asset.accDepreciationAccountCode as string | null) ?? "1590";
-    const [cashCode, lossCode, gainCode] = await Promise.all([
+    // R1: resolve via intent when stored code is the legacy default
+    const storedAssetCode = asset.assetAccountCode as string | null;
+    const storedAccDepCode = asset.accDepreciationAccountCode as string | null;
+    const [assetCode, accDepCode, cashCode, lossCode, gainCode] = await Promise.all([
+      (storedAssetCode && storedAssetCode !== "1500")
+        ? Promise.resolve(storedAssetCode)
+        : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "credit", "1200"),
+      (storedAccDepCode && storedAccDepCode !== "1590")
+        ? Promise.resolve(storedAccDepCode)
+        : financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_depreciation", "debit", "1290"),
       // fallback 1111 (نقدية صندوق — postable leaf) — main أصلح هذا في #2192
       financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_cash", "debit", "1111"),
       // fallback 5810 (خسائر بيع أصول ثابتة) وليس 5999 — 5999 غير موجود في القالب
@@ -1915,23 +1926,46 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
-    const [surplusCode, lossCode] = await Promise.all([
+    // R1: resolve via intent when stored code is the legacy default
+    const storedAssetCode = asset.assetAccountCode as string | null;
+    const [assetCode, surplusCode, lossCode] = await Promise.all([
+      (storedAssetCode && storedAssetCode !== "1500")
+        ? Promise.resolve(storedAssetCode)
+        : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "debit", "1200"),
       // fallback 3600 (فائض إعادة التقييم) وليس 3300 (الأرباح المحتجزة) — #2140-5a
       financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_surplus", "credit", "3600"),
       // fallback 5860 (خسارة إعادة تقييم) وليس 5996/5810 — #2140-5a
       financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_loss", "debit", "5860"),
     ]);
 
-    const lines = delta > 0
-      ? [
-          { accountCode: assetCode, debit: delta, credit: 0, assetId: id, description: `إعادة تقييم — زيادة` },
-          { accountCode: surplusCode, debit: 0, credit: delta, assetId: id, description: `فائض إعادة تقييم` },
-        ]
-      : [
-          { accountCode: lossCode, debit: Math.abs(delta), credit: 0, assetId: id, description: `خسارة إعادة تقييم` },
-          { accountCode: assetCode, debit: 0, credit: Math.abs(delta), assetId: id, description: `إعادة تقييم — نقص` },
-        ];
+    // R3: IAS 16 — downward revaluation should first offset existing surplus (3600)
+    // before charging P&L (5860). Track per-asset surplus in revaluationSurplus column.
+    const existingSurplus = roundTo2(Number(asset.revaluationSurplus ?? 0));
+    let lines: any[];
+    let newSurplus: number;
+    if (delta > 0) {
+      // Upward: DR asset, CR surplus; accumulate surplus
+      lines = [
+        { accountCode: assetCode, debit: delta, credit: 0, assetId: id, description: `إعادة تقييم — زيادة` },
+        { accountCode: surplusCode, debit: 0, credit: delta, assetId: id, description: `فائض إعادة تقييم` },
+      ];
+      newSurplus = roundTo2(existingSurplus + delta);
+    } else {
+      // Downward: first offset existing surplus, remainder to P&L
+      const absDelta = Math.abs(delta);
+      const surplusOffset = Math.min(absDelta, existingSurplus);
+      const lossAmount = roundTo2(absDelta - surplusOffset);
+      newSurplus = roundTo2(existingSurplus - surplusOffset);
+      lines = [
+        { accountCode: assetCode, debit: 0, credit: absDelta, assetId: id, description: `إعادة تقييم — نقص` },
+      ];
+      if (surplusOffset > 0) {
+        lines.push({ accountCode: surplusCode, debit: surplusOffset, credit: 0, assetId: id, description: `مقاصة فائض إعادة تقييم` });
+      }
+      if (lossAmount > 0) {
+        lines.push({ accountCode: lossCode, debit: lossAmount, credit: 0, assetId: id, description: `خسارة إعادة تقييم` });
+      }
+    }
 
     const newBookValue = roundTo2(bookValue + delta);
     const newPurchaseCost = roundTo2(Number(asset.purchaseCost) + delta);
@@ -1952,8 +1986,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "
       });
       journalId = posted.journalId;
       await client.query(
-        `UPDATE fixed_assets SET "purchaseCost"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
-        [newPurchaseCost, newBookValue, id, scope.companyId]
+        `UPDATE fixed_assets SET "purchaseCost"=$1, "currentBookValue"=$2, "revaluationSurplus"=$3, "updatedAt"=NOW() WHERE id=$4 AND "companyId"=$5`,
+        [newPurchaseCost, newBookValue, newSurplus, id, scope.companyId]
       );
     });
 
