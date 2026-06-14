@@ -97,12 +97,10 @@ export default function Workspace() {
       ]}
       subtitle={`صباحك خير ${user?.name || ""} — هذا برنامج يومك`}
       actions={
-        <Link href="/manager-board">
-          <Button variant="outline" size="sm" className="gap-2">
+        <Button asChild variant="outline" size="sm" className="gap-2"><Link href="/manager-board">
             <ArrowUpRight className="w-3 h-3" />
             لوحة المدير
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       {/* IGOC-006 — proactive insights surface (shapes itself by active role) */}

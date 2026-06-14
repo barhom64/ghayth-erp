@@ -4995,12 +4995,27 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
       rawQuery<{
         total: string; calculatedAmount: string; paidAmount: string;
         pendingAmount: string; employeesCount: string;
+        conditionMetCount: string; conditionUnmetCount: string;
+        conditionMetAmount: string; conditionUnmetAmount: string;
+        hasViolationsCount: string;
       }>(
+        // U-04-P2 — KPIs extended with condition-met / -unmet splits and
+        // a hasViolations rollup. Both columns already exist on the calc
+        // row (cc."conditionMet" boolean, cc."hasViolations" boolean —
+        // surfaced on the recent table today but never aggregated). All
+        // counts and sums share the same WHERE filter set + parameter
+        // list as the existing KPI block, so the new fields don't
+        // change the result set semantics — they're additive sums.
         `SELECT COUNT(*)::text AS total,
                 COALESCE(SUM(cc."finalAmount"), 0)::text AS "calculatedAmount",
                 COALESCE(SUM(CASE WHEN cc.status = 'paid' THEN cc."finalAmount" ELSE 0 END), 0)::text AS "paidAmount",
                 COALESCE(SUM(CASE WHEN cc.status NOT IN ('paid') THEN cc."finalAmount" ELSE 0 END), 0)::text AS "pendingAmount",
-                COUNT(DISTINCT cc."employeeId")::text AS "employeesCount"
+                COUNT(DISTINCT cc."employeeId")::text AS "employeesCount",
+                COUNT(*) FILTER (WHERE cc."conditionMet" = true)::text AS "conditionMetCount",
+                COUNT(*) FILTER (WHERE cc."conditionMet" = false)::text AS "conditionUnmetCount",
+                COALESCE(SUM(CASE WHEN cc."conditionMet" = true THEN cc."finalAmount" ELSE 0 END), 0)::text AS "conditionMetAmount",
+                COALESCE(SUM(CASE WHEN cc."conditionMet" = false THEN cc."finalAmount" ELSE 0 END), 0)::text AS "conditionUnmetAmount",
+                COUNT(*) FILTER (WHERE cc."hasViolations" = true)::text AS "hasViolationsCount"
            FROM employee_commission_calculations cc
           WHERE ${where}`,
         params,
@@ -5068,7 +5083,15 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
       ),
     ]);
 
-    const k = kpiRow[0] ?? { total: "0", calculatedAmount: "0", paidAmount: "0", pendingAmount: "0", employeesCount: "0" };
+    // U-04-P2 — the kpiRow now carries 5 extra fields. Defaulting them
+    // to "0" string keeps the response shape stable on empty result.
+    const k = kpiRow[0] ?? {
+      total: "0", calculatedAmount: "0", paidAmount: "0",
+      pendingAmount: "0", employeesCount: "0",
+      conditionMetCount: "0", conditionUnmetCount: "0",
+      conditionMetAmount: "0", conditionUnmetAmount: "0",
+      hasViolationsCount: "0",
+    };
     res.json(maskFields(req, {
       kpis: {
         total: Number(k.total),
@@ -5076,6 +5099,12 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
         paidAmount: Number(k.paidAmount),
         pendingAmount: Number(k.pendingAmount),
         employeesCount: Number(k.employeesCount),
+        // U-04-P2 additions — condition-met + violations split.
+        conditionMetCount: Number(k.conditionMetCount),
+        conditionUnmetCount: Number(k.conditionUnmetCount),
+        conditionMetAmount: Number(k.conditionMetAmount),
+        conditionUnmetAmount: Number(k.conditionUnmetAmount),
+        hasViolationsCount: Number(k.hasViolationsCount),
       },
       byStatus:   byStatus.map((r) => ({ status: r.status, count: Number(r.c), total: Number(r.total) })),
       byMonth:    byMonth.map((r) => ({ year: r.year, month: r.month, count: Number(r.c), total: Number(r.total) })),
@@ -5926,5 +5955,190 @@ router.put("/settings/policies/:categoryId", authorize({ feature: "umrah", actio
     res.json({ ok: true, categoryId, updated: Object.keys(b.values).length });
   } catch (err) { handleRouteError(err, res, "Save policy"); }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U-19-P1 — journey-status helper (read-only)
+//
+// Surfaces the 4-stage journey for a sub-agent:
+//   1. imported   — pilgrims attributed to this sub-agent
+//   2. linked     — whether the sub-agent has a clientId
+//   3. invoiced   — sales invoices issued + total invoiced amount
+//   4. collected  — payments received against those invoices + total
+//
+// Outstanding counts (unlinkedPilgrims / uninvoicedGroups /
+// unpaidInvoices) help the operator triage stuck items without
+// flipping to 4 separate pages.
+//
+// READ-ONLY. No writes. Tenant-scoped via the standard sub-agent
+// existence guard. The audit (#2314 §3.1) proposed adding three
+// helper endpoints (sub-agents/:id/journey, import-batches/:id/journey,
+// groups/:id/journey); this slice ships the sub-agent variant. The
+// other two are P3 follow-ups in the FE rendering phase.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/sub-agents/:id/journey",
+  authorize({ feature: "umrah", action: "view" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      // Sub-agent existence + tenant scope. Same guard shape as
+      // /sub-agents/:id (line 303) — leaking journey data through a
+      // stale FK is the failure mode this gates.
+      const [subAgent] = await rawQuery<{ id: number; clientId: number | null; name: string; agentId: number | null }>(
+        `SELECT id, "clientId", name, "agentId"
+           FROM umrah_sub_agents
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
+
+      // All four stages computed in parallel — 0 sequential awaits.
+      // The queries are independent: import side reads
+      // umrah_pilgrims; invoice side reads umrah_sales_invoices;
+      // payment side reads umrah_payments; outstanding rolls up
+      // partials from the same tables.
+      const [
+        importRow,
+        invoiceRow,
+        paymentRow,
+        unlinkedPilgrimsRow,
+        uninvoicedGroupsRow,
+        unpaidInvoicesRow,
+      ] = await Promise.all([
+        rawQuery<{ count: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM(total), 0)::text AS total,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM("sarAmount"), 0)::text AS total,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_payments
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Pilgrims with subAgentId set but no further attribution
+          // (groupId IS NULL) — recoverable via the import unlink
+          // surface. Mirrors U-08's recovery wiring.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "groupId" IS NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Groups belonging to this sub-agent (via pilgrims) with
+          // no sales invoice covering them yet. Hand-rolled NOT IN
+          // because Postgres array semantics here are simpler than
+          // an EXISTS subquery for the JSON text "groupRefs" column.
+          `SELECT COUNT(DISTINCT g.id)::text AS count
+             FROM umrah_groups g
+             JOIN umrah_pilgrims p
+               ON p."groupId" = g.id
+              AND p."companyId" = g."companyId"
+              AND p."deletedAt" IS NULL
+            WHERE g."companyId" = $1
+              AND g."deletedAt" IS NULL
+              AND p."subAgentId" = $2
+              AND NOT EXISTS (
+                SELECT 1 FROM umrah_sales_invoices si
+                 WHERE si."companyId" = g."companyId"
+                   AND si."subAgentId" = $2
+                   AND si."deletedAt" IS NULL
+                   AND si."groupRefs" LIKE '%' || g.id || '%'
+              )`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Invoices where paidAmount < total (or paidAmount NULL).
+          // Includes drafts because the operator's mental model is
+          // "anything I haven't fully collected" — drafts surface as
+          // a separate ratio on the FE, not here.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL
+              AND COALESCE("paidAmount", 0) < COALESCE(total, 0)`,
+          [scope.companyId, id],
+        ),
+      ]);
+
+      const importedCount = Number(importRow[0]?.count ?? 0);
+      const invoicedCount = Number(invoiceRow[0]?.count ?? 0);
+      const invoicedTotal = Number(invoiceRow[0]?.total ?? 0);
+      const collectedCount = Number(paymentRow[0]?.count ?? 0);
+      const collectedTotal = Number(paymentRow[0]?.total ?? 0);
+
+      res.json(
+        maskFields(req, {
+          subAgent: {
+            id: subAgent.id,
+            name: subAgent.name,
+            clientId: subAgent.clientId,
+            agentId: subAgent.agentId,
+          },
+          stages: [
+            {
+              stage: "imported",
+              count: importedCount,
+              ts: importRow[0]?.latestAt ?? null,
+            },
+            {
+              // Linked stage flips on as soon as `clientId IS NOT NULL`.
+              // The audit-log timestamp would be richer but the journey
+              // helper doesn't need to drill that far — the FE shows
+              // a single boolean indicator.
+              stage: "linked",
+              count: subAgent.clientId ? 1 : 0,
+              ts: null,
+            },
+            {
+              stage: "invoiced",
+              count: invoicedCount,
+              total: invoicedTotal,
+              ts: invoiceRow[0]?.latestAt ?? null,
+            },
+            {
+              stage: "collected",
+              count: collectedCount,
+              total: collectedTotal,
+              ts: paymentRow[0]?.latestAt ?? null,
+            },
+          ],
+          outstanding: {
+            unlinkedPilgrims: Number(unlinkedPilgrimsRow[0]?.count ?? 0),
+            uninvoicedGroups: Number(uninvoicedGroupsRow[0]?.count ?? 0),
+            unpaidInvoices: Number(unpaidInvoicesRow[0]?.count ?? 0),
+          },
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Sub-agent journey");
+    }
+  },
+);
 
 export default router;

@@ -207,16 +207,12 @@ export default function RecurringJournalsPage() {
         loading={isLoading}
         actions={
           <>
-            <Link href="/finance/journal">
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href="/finance/journal">
                 <ScrollText className="h-4 w-4 me-2" />القيود اليومية
-              </Button>
-            </Link>
-            <Link href="/finance/recurring-calendar">
-              <Button variant="outline" size="sm">
+              </Link></Button>
+            <Button asChild variant="outline" size="sm"><Link href="/finance/recurring-calendar">
                 <Calendar className="h-4 w-4 me-2" />التقويم
-              </Button>
-            </Link>
+              </Link></Button>
             <GuardedButton perm="finance:create" size="sm" asChild>
               <Link href="/finance/recurring-journals/create">
                 <Plus className="h-4 w-4 me-1" />

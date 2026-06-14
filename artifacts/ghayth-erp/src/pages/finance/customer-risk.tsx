@@ -327,11 +327,9 @@ export default function CustomerRiskPage() {
       header: "الإجراء",
       render: (c) => (
         <div className="flex items-center gap-1">
-          <Link href="/finance/collection">
-            <Button variant="ghost" size="sm" className="h-7 text-xs">
+          <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href="/finance/collection">
               <Megaphone className="h-3 w-3 me-1" /> تحصيل
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       ),
     },
@@ -348,24 +346,18 @@ export default function CustomerRiskPage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/ar-collection-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ar-collection-workbench">
               <Phone className="h-3.5 w-3.5 ml-1" />
               منضدة التحصيل
-            </Button>
-          </Link>
-          <Link href="/finance/ar-aging">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ar-aging">
               <Clock className="h-3.5 w-3.5 ml-1" />
               تقادم الذمم
-            </Button>
-          </Link>
-          <Link href="/finance/bad-debt-provision">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/bad-debt-provision">
               <FileWarning className="h-3.5 w-3.5 ml-1" />
               الديون المشكوك بها
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_customer_risk"
             entityId="list"

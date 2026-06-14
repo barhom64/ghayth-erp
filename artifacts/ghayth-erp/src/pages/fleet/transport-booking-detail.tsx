@@ -316,14 +316,10 @@ export default function TransportBookingDetail() {
           >
             <Wand2 className="h-4 w-4 me-1" />اقترح إسناداً
           </Button>
-          <Link href="/fleet/transport/dispatch">
-            <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />لوحة التوزيع</Button>
-          </Link>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/dispatch"><Calendar className="h-4 w-4 me-1" />لوحة التوزيع</Link></Button>
           {/* #1812 — booking confirmation (gap #10). Opens a print-friendly
               Arabic confirmation page with QR for customer pickup. */}
-          <Link href={`/fleet/transport/bookings/${id}/confirmation`}>
-            <Button variant="outline" size="sm">تأكيد الحجز (طباعة / PDF)</Button>
-          </Link>
+          <Button asChild variant="outline" size="sm"><Link href={`/fleet/transport/bookings/${id}/confirmation`}>تأكيد الحجز (طباعة / PDF)</Link></Button>
           {/* #1812 — auto-cascade dropdown from #1900 (merged). */}
           {(() => {
             const opts = operatorOptionsFor(b.status);
@@ -589,9 +585,7 @@ export default function TransportBookingDetail() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center justify-between">
             <span>أوامر التوزيع ({b.dispatchOrders.length})</span>
-            <Link href="/fleet/transport/dispatch">
-              <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />فتح لوحة التوزيع</Button>
-            </Link>
+            <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/dispatch"><Calendar className="h-4 w-4 me-1" />فتح لوحة التوزيع</Link></Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

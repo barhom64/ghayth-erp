@@ -206,11 +206,9 @@ export default function Employees() {
           >
             <Eye className="h-4 w-4 text-muted-foreground" />
           </Button>
-          <Link href={`/employees/${employee.id}`}>
-            <Button variant="ghost" size="icon" title="عرض التفاصيل">
+          <Button asChild variant="ghost" size="icon" title="عرض التفاصيل"><Link href={`/employees/${employee.id}`}>
               <ExternalLink className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          </Link>
+            </Link></Button>
           <RowActions
             canEdit={canManage}
             onEdit={() =>

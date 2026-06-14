@@ -114,12 +114,10 @@ export default function OperationsCenter() {
       breadcrumbs={[{ label: "العمليات" }]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/daily-close">
-            <Button variant="outline" className="gap-2">
+          <Button asChild variant="outline" className="gap-2"><Link href="/daily-close">
               <Shield className="w-4 h-4" />
               الإقفال اليومي
-            </Button>
-          </Link>
+            </Link></Button>
           <Button variant="outline" size="icon" title="تحديث" onClick={() => { setRefreshKey(k => k + 1); refetch(); }}>
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -171,12 +169,10 @@ export default function OperationsCenter() {
                       </div>
                       <p className="text-sm font-medium text-status-neutral-foreground mb-1">{card.label}</p>
                       {card.extra && <p className="text-xs text-muted-foreground mb-2">{card.extra}</p>}
-                      <Link href={card.actionLink || "#"}>
-                        <Button size="sm" variant="outline" className="w-full gap-1 text-xs mt-1">
+                      <Button asChild size="sm" variant="outline" className="w-full gap-1 text-xs mt-1"><Link href={card.actionLink || "#"}>
                           {card.actionLabel}
                           <ArrowUpRight className="w-3 h-3" />
-                        </Button>
-                      </Link>
+                        </Link></Button>
                     </div>
                   );
                 })}
@@ -242,11 +238,9 @@ export default function OperationsCenter() {
               التغذية الحية
               <Badge className="text-xs bg-status-info-surface text-status-info-foreground">{liveFeed.length}</Badge>
             </CardTitle>
-            <Link href="/activity-log">
-              <Button variant="ghost" size="sm" className="text-xs gap-1">
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/activity-log">
                 عرض الكل <ChevronLeft className="w-3 h-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-1.5 max-h-96 overflow-y-auto">

@@ -161,11 +161,9 @@ export default function MeDriverNavigation() {
         title="الملاحة"
         breadcrumbs={[{ href: "/me/driver", label: "السائق" }, { label: "الملاحة" }]}
         actions={
-          <Link href="/me/driver">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/me/driver">
               <ArrowLeft className="h-4 w-4 me-1" />العودة
-            </Button>
-          </Link>
+            </Link></Button>
         }
       >
         <Card>
@@ -232,11 +230,9 @@ export default function MeDriverNavigation() {
       subtitle={`حجز #${session.bookingNumber}`}
       breadcrumbs={[{ href: "/me/driver", label: "السائق" }, { label: "الملاحة" }]}
       actions={
-        <Link href="/me/driver">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/me/driver">
             <ArrowLeft className="h-4 w-4 me-1" />العودة
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       {/* Hero status card */}

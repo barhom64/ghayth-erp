@@ -32,7 +32,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import {
   Building, Building2, Users, Users2, Network, Plus, ChevronDown, ChevronLeft,
-  AlertTriangle, Layers, ArrowUpRight,
+  AlertTriangle, Layers, ArrowUpRight, Pencil, Trash2,
 } from "lucide-react";
 
 interface Team { id: number; name: string; departmentId: number | null; leaderAssignmentId: number | null; employeeCount: number; }
@@ -54,11 +54,13 @@ export default function OrgTreePage() {
     ["settings-org-tree"], "/settings/org-tree",
   );
 
-  // ── State for inline create dialogs ───────────────────────────────
+  // ── State for inline create/edit dialogs ─────────────────────────
   const [showAdmDialog, setShowAdmDialog] = useState<{ branchId: number | null } | null>(null);
   const [showDeptDialog, setShowDeptDialog] = useState<{ administrationId: number; branchId: number | null } | null>(null);
   const [admName, setAdmName] = useState("");
   const [deptName, setDeptName] = useState("");
+  const [editingAdm, setEditingAdm] = useState<Adm | null>(null);
+  const [editAdmName, setEditAdmName] = useState("");
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
@@ -87,6 +89,28 @@ export default function OrgTreePage() {
       setAdmName("");
       refetch();
     } catch (e: any) { toast({ title: e?.message || "فشل الإنشاء", variant: "destructive" }); }
+  };
+
+  const saveAdmEdit = async () => {
+    if (!editingAdm || !editAdmName.trim()) return;
+    try {
+      await apiFetch(`/settings/administrations/${editingAdm.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: editAdmName.trim() }),
+      });
+      toast({ title: "تم تحديث الإدارة" });
+      setEditingAdm(null);
+      refetch();
+    } catch (e: any) { toast({ title: e?.message || "فشل التحديث", variant: "destructive" }); }
+  };
+
+  const deleteAdm = async (id: number) => {
+    if (!confirm("حذف هذه الإدارة؟")) return;
+    try {
+      await apiFetch(`/settings/administrations/${id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      refetch();
+    } catch (e: any) { toast({ title: e?.message || "فشل الحذف", variant: "destructive" }); }
   };
 
   const createDept = async () => {
@@ -146,6 +170,8 @@ export default function OrgTreePage() {
                   branch={b}
                   onAddAdm={() => setShowAdmDialog({ branchId: b.id })}
                   onAddDept={(admId) => setShowDeptDialog({ administrationId: admId, branchId: b.id })}
+                  onEditAdm={(a) => { setEditingAdm(a); setEditAdmName(a.name); }}
+                  onDeleteAdm={deleteAdm}
                 />
               ))}
               {data.crossBranchAdministrations.length > 0 && (
@@ -155,7 +181,8 @@ export default function OrgTreePage() {
                     إدارات لم تُربط بفرع ({data.crossBranchAdministrations.length})
                   </p>
                   {data.crossBranchAdministrations.map((a) => (
-                    <AdmNode key={a.id} adm={a} onAddDept={(admId) => setShowDeptDialog({ administrationId: admId, branchId: null })} />
+                    <AdmNode key={a.id} adm={a} onAddDept={(admId) => setShowDeptDialog({ administrationId: admId, branchId: null })}
+                      onEdit={(x) => { setEditingAdm(x); setEditAdmName(x.name); }} onDelete={deleteAdm} />
                   ))}
                 </div>
               )}
@@ -204,9 +231,23 @@ export default function OrgTreePage() {
         </CardContent>
       </Card>
 
-      {/* Inline create dialogs — kept minimal. The admin can rename
-          /edit later from /settings/departments or this page's PATCH
-          flow (future-PR). */}
+      {/* Edit administration dialog */}
+      {editingAdm && (
+        <Card className="fixed inset-x-4 bottom-4 md:inset-x-auto md:right-8 md:w-80 shadow-xl z-50" data-testid="adm-edit-dialog">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">تعديل الإدارة</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Input value={editAdmName} onChange={(e) => setEditAdmName(e.target.value)} />
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setEditingAdm(null)}>إلغاء</Button>
+              <Button size="sm" onClick={saveAdmEdit} disabled={!editAdmName.trim()}>حفظ</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Inline create dialogs */}
       {showAdmDialog && (
         <Card className="fixed inset-x-4 bottom-4 md:inset-x-auto md:right-8 md:w-80 shadow-xl z-50" data-testid="adm-dialog">
           <CardHeader className="pb-2">
@@ -261,8 +302,9 @@ function SummaryTile({ icon: Icon, label, n, tone }: {
   );
 }
 
-function BranchNode({ branch, onAddAdm, onAddDept }: {
+function BranchNode({ branch, onAddAdm, onAddDept, onEditAdm, onDeleteAdm }: {
   branch: Branch; onAddAdm: () => void; onAddDept: (admId: number) => void;
+  onEditAdm: (a: Adm) => void; onDeleteAdm: (id: number) => void;
 }) {
   const [open, setOpen] = useState(true);
   return (
@@ -279,7 +321,7 @@ function BranchNode({ branch, onAddAdm, onAddDept }: {
             <p className="text-xs text-muted-foreground italic ps-6">لا توجد إدارات لهذا الفرع.</p>
           ) : (
             branch.administrations.map((a) => (
-              <AdmNode key={a.id} adm={a} onAddDept={onAddDept} />
+              <AdmNode key={a.id} adm={a} onAddDept={onAddDept} onEdit={onEditAdm} onDelete={onDeleteAdm} />
             ))
           )}
           <div className="ps-6 pt-1">
@@ -293,18 +335,29 @@ function BranchNode({ branch, onAddAdm, onAddDept }: {
   );
 }
 
-function AdmNode({ adm, onAddDept }: { adm: Adm; onAddDept: (admId: number) => void }) {
+function AdmNode({ adm, onAddDept, onEdit, onDelete }: {
+  adm: Adm; onAddDept: (admId: number) => void;
+  onEdit: (a: Adm) => void; onDelete: (id: number) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`border rounded ${adm.isActive ? "" : "opacity-60"}`} data-testid={`adm-${adm.id}`}>
-      <button onClick={() => setOpen(!open)} className="w-full p-2 flex items-center gap-2 hover:bg-surface-subtle text-right">
-        {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
-        <Layers className="h-3.5 w-3.5 text-amber-700" />
-        <span className="font-medium text-sm">{adm.name}</span>
-        {!adm.isActive && <Badge variant="outline" className="text-[10px]">مؤرشفة</Badge>}
-        <Badge variant="secondary" className="text-[10px] ms-auto">{adm.departments.length} قسم</Badge>
-        <Badge variant="outline" className="text-[10px]">{adm.employeeCount} موظف</Badge>
-      </button>
+      <div className="w-full p-2 flex items-center gap-2 hover:bg-surface-subtle">
+        <button onClick={() => setOpen(!open)} className="flex items-center gap-2 flex-1 text-right">
+          {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+          <Layers className="h-3.5 w-3.5 text-amber-700" />
+          <span className="font-medium text-sm">{adm.name}</span>
+          {!adm.isActive && <Badge variant="outline" className="text-[10px]">مؤرشفة</Badge>}
+          <Badge variant="secondary" className="text-[10px] ms-auto">{adm.departments.length} قسم</Badge>
+          <Badge variant="outline" className="text-[10px]">{adm.employeeCount} موظف</Badge>
+        </button>
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={(e) => { e.stopPropagation(); onEdit(adm); }}>
+          <Pencil className="h-3 w-3" />
+        </GuardedButton>
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); onDelete(adm.id); }}>
+          <Trash2 className="h-3 w-3" />
+        </GuardedButton>
+      </div>
       {open && (
         <div className="p-2 pt-0 pe-6 space-y-1">
           {adm.departments.length === 0 ? (

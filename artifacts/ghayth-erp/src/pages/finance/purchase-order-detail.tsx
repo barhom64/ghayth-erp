@@ -42,7 +42,7 @@ export default function PurchaseOrderDetailPage() {
     <div className="text-center py-12">
       <ShoppingCart className="h-12 w-12 mx-auto mb-3 text-gray-300" />
       <p className="text-muted-foreground">أمر الشراء غير موجود</p>
-      <Link href="/finance/purchase-orders"><Button variant="outline" className="mt-4">العودة لطلبات الشراء</Button></Link>
+      <Button asChild variant="outline" className="mt-4"><Link href="/finance/purchase-orders">العودة لطلبات الشراء</Link></Button>
     </div>
   );
 
@@ -176,11 +176,9 @@ export default function PurchaseOrderDetailPage() {
 
   const actions = po ? (
     <div className="flex items-center gap-2 flex-wrap">
-      <Link href={`/finance/purchase-orders/create?copyFrom=${id}`}>
-        <Button variant="outline" size="sm" className="gap-1">
+      <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/purchase-orders/create?copyFrom=${id}`}>
           <Copy className="h-4 w-4" />نسخ
-        </Button>
-      </Link>
+        </Link></Button>
       <PrintButton
         entityType="purchase_order"
         entityId={po.id ?? id}

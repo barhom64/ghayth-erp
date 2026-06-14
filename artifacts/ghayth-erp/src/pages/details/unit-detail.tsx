@@ -212,11 +212,9 @@ export default function UnitDetail() {
       >
         <Pencil className="h-3.5 w-3.5" /> تعديل البيانات
       </GuardedButton>
-      <Link href={`/properties/${id}/status`}>
-        <Button variant="outline" size="sm" className="gap-1">
+      <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/properties/${id}/status`}>
           تغيير الحالة
-        </Button>
-      </Link>
+        </Link></Button>
     </div>
   ) : undefined;
 
@@ -592,9 +590,7 @@ export default function UnitDetail() {
                   { key: "totalPaid", header: "المحصل", render: (c) => <span className="text-emerald-600">{formatCurrency(Number(c.totalPaid || 0))}</span> },
                   { key: "status", header: "الحالة", render: (c) => <PageStatusBadge status={c.status} /> },
                   { key: "id", header: "", render: (c) => (
-                    <Link href={`/properties/contracts/${c.id}`}>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><ExternalLink className="h-3.5 w-3.5" /></Button>
-                    </Link>
+                    <Button asChild variant="ghost" size="sm" className="h-7 w-7 p-0"><Link href={`/properties/contracts/${c.id}`}><ExternalLink className="h-3.5 w-3.5" /></Link></Button>
                   )},
                 ]}
                 data={contracts}

@@ -127,11 +127,9 @@ export function ActiveContextGate({
             <Button variant="default" size="sm" onClick={() => setLocation("/")}>
               العودة إلى الرئيسية
             </Button>
-            <Link href="/profile/personal">
-              <Button variant="ghost" size="sm">
+            <Button asChild variant="ghost" size="sm"><Link href="/profile/personal">
                 ضبط التفضيلات
-              </Button>
-            </Link>
+              </Link></Button>
           </div>
         </CardContent>
       </Card>

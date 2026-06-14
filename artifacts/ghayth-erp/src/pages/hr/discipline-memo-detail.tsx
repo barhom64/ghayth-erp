@@ -394,11 +394,9 @@ export default function DisciplineMemoDetailPage() {
             <GuardedButton perm="hr:approve" variant="outline" onClick={() => act("/close", { note: "إقفال عادي" }, "تم إقفال المحضر")} disabled={busy}>
               <Lock className="w-4 h-4 me-2" /> إقفال المحضر
             </GuardedButton>
-            <Link href={`/correspondence/create?relatedType=discipline_memo&relatedId=${memo.id}&subject=${encodeURIComponent(`إخطار تأديبي — ${memo.memoNumber}`)}`}>
-              <Button variant="outline">
+            <Button asChild variant="outline"><Link href={`/correspondence/create?relatedType=discipline_memo&relatedId=${memo.id}&subject=${encodeURIComponent(`إخطار تأديبي — ${memo.memoNumber}`)}`}>
                 <Mail className="w-4 h-4 me-2" /> إصدار خطاب تأديبي
-              </Button>
-            </Link>
+              </Link></Button>
           </CardContent>
         </Card>
       )}
@@ -443,12 +441,10 @@ export default function DisciplineMemoDetailPage() {
   ) : null;
 
   const headerActions = (
-    <Link href={`/correspondence/create?relatedType=discipline_memo&relatedId=${id}&subject=${encodeURIComponent("إخطار تأديبي")}`}>
-      <Button variant="outline" size="sm">
+    <Button asChild variant="outline" size="sm"><Link href={`/correspondence/create?relatedType=discipline_memo&relatedId=${id}&subject=${encodeURIComponent("إخطار تأديبي")}`}>
         <Mail className="w-4 h-4 me-1" />
         خطاب تأديبي
-      </Button>
-    </Link>
+      </Link></Button>
   );
 
   return (

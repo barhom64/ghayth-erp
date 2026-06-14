@@ -395,11 +395,9 @@ export default function Cash13WeekPage() {
                       {formatCurrency(w.endingBalance)}
                     </td>
                     <td className="p-2">
-                      <Link href={`/finance/cash-calendar`}>
-                        <Button variant="ghost" size="sm" className="h-7 px-2" title="التالي">
+                      <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="التالي"><Link href={`/finance/cash-calendar`}>
                           <ChevronRight className="h-3 w-3" />
-                        </Button>
-                      </Link>
+                        </Link></Button>
                     </td>
                   </tr>
                 );

@@ -151,18 +151,16 @@ export default function Evaluation360Page() {
       header: "السجل",
       render: (v) =>
         v.employeeId ? (
-          <Link href={`/hr/evaluation-360/history/${v.employeeId}`}>
-            <Button
+          <Button asChild
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-xs"
               onClick={(e) => e.stopPropagation()}
               title="عرض تاريخ تقييمات الموظف"
-            >
+            ><Link href={`/hr/evaluation-360/history/${v.employeeId}`}>
               <TrendingUp className="h-3.5 w-3.5 me-1" />
               التاريخ
-            </Button>
-          </Link>
+            </Link></Button>
         ) : null,
     },
   ];

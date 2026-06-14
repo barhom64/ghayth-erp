@@ -169,11 +169,9 @@ export default function RentalContractsPage() {
         { label: "تأجير المركبات" },
       ]}
       actions={
-        <Link href="/fleet/rental-contracts/create">
-          <Button size="sm">
+        <Button asChild size="sm"><Link href="/fleet/rental-contracts/create">
             <Plus className="h-4 w-4 me-1" />عقد جديد
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <FleetTabsNav />

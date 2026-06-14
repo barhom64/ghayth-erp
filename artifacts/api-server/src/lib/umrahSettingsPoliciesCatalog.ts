@@ -198,6 +198,33 @@ export const UMRAH_POLICY_CATEGORIES: PolicyCategory[] = [
       { key: "notifyDepartureTomorrow", label: "تنبيه مغادرة الغد", type: "boolean", defaultValue: true },
       { key: "notifyOverstay", label: "تنبيه التخلف", type: "boolean", defaultValue: true },
       { key: "notifyImportUnlinked", label: "تنبيه ظهور صفوف غير مربوطة بعد الاستيراد", type: "boolean", defaultValue: true },
+      // U-17-P1 — per-channel split for the three outbound triggers.
+      // Default SMS = false → behaviour unchanged (the SMS module is
+      // dead today, see U-17 audit §1.3). Tenants opt in by flipping
+      // the toggle; the engine re-wire that reads these keys is
+      // U-17-P2 (borderline, owner-ratification gated).
+      { key: "visaExpiringSms", label: "إرسال SMS عند قرب انتهاء التأشيرة", type: "boolean", defaultValue: false, hint: "يتطلب اعتماد U-17-P2" },
+      { key: "visaExpiringInApp", label: "تنبيه داخل التطبيق عند قرب انتهاء التأشيرة", type: "boolean", defaultValue: true },
+      { key: "departureSms", label: "إرسال SMS عند تذكير المغادرة", type: "boolean", defaultValue: false, hint: "يتطلب اعتماد U-17-P2" },
+      { key: "departureInApp", label: "تنبيه داخل التطبيق عند تذكير المغادرة", type: "boolean", defaultValue: true },
+      { key: "overstaySms", label: "إرسال SMS عند تجاوز الإقامة", type: "boolean", defaultValue: false, hint: "يتطلب اعتماد U-17-P2" },
+      { key: "overstayInApp", label: "تنبيه داخل التطبيق عند تجاوز الإقامة", type: "boolean", defaultValue: true },
+      // U-17-P1 — digest mode controls whether the daily cron pushes
+      // one notification per event ("per_event", default) or one
+      // aggregated notification per recipient per day ("daily_digest").
+      // P4 wires the engine to honour this; the catalog field alone
+      // changes nothing.
+      {
+        key: "digestMode",
+        label: "نمط تجميع التنبيهات",
+        type: "select",
+        defaultValue: "per_event",
+        options: [
+          { value: "per_event", label: "تنبيه لكل حدث (افتراضي)" },
+          { value: "daily_digest", label: "تنبيه واحد يومي مُجمَّع" },
+        ],
+        hint: "يطبَّق في U-17-P4",
+      },
     ],
   },
 ];

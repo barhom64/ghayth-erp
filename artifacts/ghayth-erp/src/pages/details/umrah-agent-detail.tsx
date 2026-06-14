@@ -379,11 +379,9 @@ export default function UmrahAgentDetail() {
           deletePerm="umrah:delete"
           extra={
             <>
-              <Link href={`/finance/profitability/umrah-agent/${id}`}>
-                <Button variant="outline" size="sm" className="gap-1">
+              <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/profitability/umrah-agent/${id}`}>
                   <TrendingUp className="h-4 w-4" /> الربحية
-                </Button>
-              </Link>
+                </Link></Button>
               <EntityPrintButton
                 entityType="umrah_agent"
                 entityId={id ?? 0}

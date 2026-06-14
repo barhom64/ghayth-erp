@@ -758,11 +758,9 @@ export default function ClientDetail() {
           {client?.isBlacklisted && (
             <Badge variant="destructive" className="text-sm px-3 py-1">قائمة سوداء</Badge>
           )}
-          <Link href={`/clients/${params?.id}/statement`}>
-            <Button size="sm" variant="outline" className="gap-1">
+          <Button asChild size="sm" variant="outline" className="gap-1"><Link href={`/clients/${params?.id}/statement`}>
               <FileSpreadsheet className="h-4 w-4" /> كشف حساب
-            </Button>
-          </Link>
+            </Link></Button>
           {client && (
             <EntityPrintButton
               entityType="client"

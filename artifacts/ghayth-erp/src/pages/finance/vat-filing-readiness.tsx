@@ -157,24 +157,18 @@ export default function VatFilingReadinessPage() {
       subtitle={`${periodLabel} — تجميع ضرائب القيمة المضافة الفصلية للإقرار`}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/tax-filing-calendar">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/tax-filing-calendar">
               <Calendar className="h-3.5 w-3.5 ml-1" />
               تقويم الإقرارات
-            </Button>
-          </Link>
-          <Link href="/finance/reports/zatca">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/zatca">
               <Building2 className="h-3.5 w-3.5 ml-1" />
               تقارير ZATCA
-            </Button>
-          </Link>
-          <Link href="/finance/wht-filing-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/wht-filing-workbench">
               <Receipt className="h-3.5 w-3.5 ml-1" />
               منضدة WHT
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -211,12 +205,10 @@ export default function VatFilingReadinessPage() {
             </div>
           </div>
           <div className="flex-1" />
-          <Link href="/finance/reports/zatca">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/reports/zatca">
               <FileCheck2 className="w-4 h-4 ml-1" />
               مركز تقارير ZATCA
-            </Button>
-          </Link>
+            </Link></Button>
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={isLoading}>
             <Download className="w-4 h-4 ml-1" />
             CSV

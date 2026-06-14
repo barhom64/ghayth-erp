@@ -184,24 +184,18 @@ export default function IncomeStatementVsBudgetPage() {
       subtitle={`تحليل الانحراف لـ ${period} — هل أنت قبل الميزانية أم بعدها؟`}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/reports/is-trend">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/is-trend">
               <TrendingUp className="h-3.5 w-3.5 ml-1" />
               اتجاه الدخل
-            </Button>
-          </Link>
-          <Link href="/finance/budget-heatmap">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/budget-heatmap">
               <Grid3x3 className="h-3.5 w-3.5 ml-1" />
               خريطة الميزانية
-            </Button>
-          </Link>
-          <Link href="/finance/budget-variance">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/budget-variance">
               <Target className="h-3.5 w-3.5 ml-1" />
               انحرافات الميزانية
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >

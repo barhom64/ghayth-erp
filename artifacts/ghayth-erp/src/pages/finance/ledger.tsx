@@ -79,22 +79,16 @@ export default function LedgerPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/accounts">
-            <Button variant="ghost" size="icon" title="الانتقال"><ArrowRight className="h-5 w-5" /></Button>
-          </Link>
+          <Button asChild variant="ghost" size="icon" title="الانتقال"><Link href="/finance/accounts"><ArrowRight className="h-5 w-5" /></Link></Button>
           {account && <Badge variant="outline">{typeMap[account.type] || account.type}</Badge>}
           <DatePicker value={startDate} onChange={setStartDate} className="w-40" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-40" placeholder="إلى" />
-          <Link href={`/finance/trial-balance-drilldown?accountCode=${code}`}>
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href={`/finance/trial-balance-drilldown?accountCode=${code}`}>
               <Scale className="h-3.5 w-3.5 me-1" />ميزان المراجعة
-            </Button>
-          </Link>
-          <Link href={`/finance/account-recon-workpaper?accountCode=${code}`}>
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href={`/finance/account-recon-workpaper?accountCode=${code}`}>
               <FileCheck2 className="h-3.5 w-3.5 me-1" />ورقة تسوية
-            </Button>
-          </Link>
+            </Link></Button>
           <EntityPrintButton
             entityType="report_general_ledger"
             entityId={`${code}:${startDate ?? ""}..${endDate ?? ""}`}

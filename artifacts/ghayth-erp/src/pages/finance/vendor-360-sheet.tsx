@@ -235,12 +235,10 @@ export default function Vendor360SheetPage() {
             />
           )}
           {vendorId && (
-            <Link href={`/finance/vendor-statement-print?vendorId=${vendorId}`}>
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href={`/finance/vendor-statement-print?vendorId=${vendorId}`}>
                 <Printer className="w-4 h-4 ml-1" />
                 كشف حساب مفصّل
-              </Button>
-            </Link>
+              </Link></Button>
           )}
         </CardContent>
       </Card>
@@ -445,9 +443,7 @@ export default function Vendor360SheetPage() {
                             {formatCurrency(Number(c.totalValue ?? 0))}
                           </td>
                           <td className="py-1.5 px-2">
-                            <Link href="/finance/contracts">
-                              <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
-                            </Link>
+                            <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href="/finance/contracts"><ExternalLink className="w-3 h-3" /></Link></Button>
                           </td>
                         </tr>
                       );
@@ -488,9 +484,7 @@ export default function Vendor360SheetPage() {
                           {formatCurrency(Number(p.totalAmount))}
                         </td>
                         <td className="py-1.5 px-2">
-                          <Link href={`/finance/purchase-orders/${p.id}`}>
-                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
-                          </Link>
+                          <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/purchase-orders/${p.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                         </td>
                       </tr>
                     ))}
@@ -547,55 +541,41 @@ export default function Vendor360SheetPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Link href={`/finance/vendor-statement-print?vendorId=${vendorId}`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/vendor-statement-print?vendorId=${vendorId}`}>
                     <Printer className="w-4 h-4 ml-1" />
                     كشف الحساب
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/payment-run?supplierId=${vendorId}`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/payment-run?supplierId=${vendorId}`}>
                     <Banknote className="w-4 h-4 ml-1" />
                     دفع للمورد
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/vendor-settlement-workbench`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/vendor-settlement-workbench`}>
                     <AlertTriangle className="w-4 h-4 ml-1" />
                     منضدة التسوية
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/vendor-spend`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/vendor-spend`}>
                     <BarChart3 className="w-4 h-4 ml-1" />
                     إنفاق الموردين
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/vendor-contracts-tracker`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/vendor-contracts-tracker`}>
                     <FileSignature className="w-4 h-4 ml-1" />
                     متابعة العقود
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/entity-360?type=supplier&id=${vendorId}`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/entity-360?type=supplier&id=${vendorId}`}>
                     <Users className="w-4 h-4 ml-1" />
                     Entity 360
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/vendors/${vendorId}`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/vendors/${vendorId}`}>
                     <Building2 className="w-4 h-4 ml-1" />
                     صفحة المورد
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
+                  </Link></Button>
               </div>
             </CardContent>
           </Card>

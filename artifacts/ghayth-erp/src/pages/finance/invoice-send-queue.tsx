@@ -299,12 +299,10 @@ export default function InvoiceSendQueuePage() {
                               {age} يوم
                             </td>
                             <td className="py-2 px-2">
-                              <Link href={`/finance/invoices/${i.id}`}>
-                                <Button variant="outline" size="sm" className="w-full">
+                              <Button asChild variant="outline" size="sm" className="w-full"><Link href={`/finance/invoices/${i.id}`}>
                                   <ExternalLink className="w-3 h-3 ml-1" />
                                   فتح
-                                </Button>
-                              </Link>
+                                </Link></Button>
                             </td>
                           </tr>
                         );

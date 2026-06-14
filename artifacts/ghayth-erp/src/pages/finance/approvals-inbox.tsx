@@ -167,16 +167,12 @@ export default function ApprovalsInboxPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/finance/expense-bulk-approvals">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/expense-bulk-approvals">
               اعتماد المصاريف بالجملة
-            </Button>
-          </Link>
-          <Link href="/finance/daily-close-checklist">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/daily-close-checklist">
               فحص اليوم
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_approvals_inbox"
             entityId="list"
@@ -299,11 +295,9 @@ export default function ApprovalsInboxPage() {
                   ))}
                 </div>
                 <div className="pt-2 text-end">
-                  <Link href="/action-center">
-                    <Button variant="outline" size="sm" className="h-7 text-[11px]">
+                  <Button asChild variant="outline" size="sm" className="h-7 text-[11px]"><Link href="/action-center">
                       اتخاذ قرار <ChevronRight className="h-3 w-3 ms-1" />
-                    </Button>
-                  </Link>
+                    </Link></Button>
                 </div>
               </CardContent>
             )}
@@ -350,12 +344,10 @@ export default function ApprovalsInboxPage() {
                         <p className="text-[11px] text-muted-foreground mt-0.5">{q.description}</p>
                       </div>
                     </div>
-                    <Link href={q.href}>
-                      <Button variant={isEmpty ? "ghost" : "outline"} size="sm" className="h-8 whitespace-nowrap shrink-0">
+                    <Button asChild variant={isEmpty ? "ghost" : "outline"} size="sm" className="h-8 whitespace-nowrap shrink-0"><Link href={q.href}>
                         {isEmpty ? "فتح" : "اتخاذ قرار"}
                         <ChevronRight className="h-3 w-3 ms-1" />
-                      </Button>
-                    </Link>
+                      </Link></Button>
                   </div>
                 </CardHeader>
 
