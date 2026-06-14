@@ -110,6 +110,9 @@ const AttendanceEdit = lazy(() => import("@/pages/create/hr/attendance-edit"));
 const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
 const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
 const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
+// Phase 2 wiring — orphan pages with existing backends.
+const AccrualsMonthly = lazy(() => import("@/pages/hr/accruals-monthly"));
+const WpsSettings = lazy(() => import("@/pages/hr/saudi-compliance/wps/settings"));
 
 export const hrRoutes = [
   { path: "/hr", component: HR },
@@ -202,6 +205,7 @@ export const hrRoutes = [
   { path: "/hr/org-tree", component: OrgTree, subKey: "employees" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
+  { path: "/hr/accruals/monthly", component: AccrualsMonthly, subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
   { path: "/hr/transfers/:id/edit", component: TransfersEdit, subKey: "employees" },
   { path: "/hr/transfers/:id", component: TransferDetail, subKey: "employees" },
@@ -222,4 +226,5 @@ export const hrRoutes = [
   { path: "/hr/wps/:id", component: WpsRunDetail, subKey: "payroll" },
   { path: "/hr/saudization", component: Saudization, subKey: "employees" },
   { path: "/hr/saudi-compliance", component: SaudiCompliance, subKey: "payroll" },
+  { path: "/hr/saudi-compliance/wps/settings", component: WpsSettings, subKey: "payroll" },
 ];
