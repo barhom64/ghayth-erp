@@ -202,7 +202,7 @@ export default function ContractDetailPage() {
           priority: legalForm.priority,
           description: legalForm.description || `إحالة من عقد إيجار رقم ${contract.ejarNumber || contract.id}`,
           notes: `عقد: ${contract.ejarNumber || contract.id} | وحدة: ${contract.unitNumber || ""} | متأخرات: ${overdueAmt.toLocaleString("ar-SA")} ريال | هاتف: ${contract.tenantPhone || "—"}`,
-          filingDate: new Date().toISOString().slice(0, 10),
+          filingDate: todayLocal(),
         }),
       });
       toast({ title: "تم إنشاء القضية في النظام القانوني" });
@@ -558,7 +558,7 @@ export default function ContractDetailPage() {
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => setPayDialog(null)}>إلغاء</Button>
-          <Button size="sm" onClick={handlePay} disabled={paying || !payAmount || Number(payAmount) <= 0} className="gap-1">
+          <Button size="sm" onClick={handlePay} disabled={paying || !payAmount || Number(payAmount) <= 0} className="gap-1" rateLimitAware>
             {paying ? "جاري الحفظ..." : "تسجيل التحصيل"}
           </Button>
         </DialogFooter>

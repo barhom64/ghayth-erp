@@ -1,4 +1,5 @@
 -- @rollback: -- no rollback needed; ALTER TYPE is additive
+-- @policy:breaking DROP CONSTRAINT required to widen the CHECK set; old app version accepts all existing values so no rows will fail validation during rolling deploy.
 
 -- Expand contractSource on rental_contracts to cover additional import origins.
 -- Existing values 'ejar' and 'manual' are preserved; new values added:

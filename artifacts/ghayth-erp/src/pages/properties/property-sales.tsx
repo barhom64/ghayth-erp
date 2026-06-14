@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { formatCurrency, formatDateAr } from "@/lib/formatters";
+import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Plus, TrendingUp, Building2, Banknote } from "lucide-react";
 
@@ -24,7 +24,7 @@ const EMPTY_FORM = {
   salePrice: "",
   bookValue: "",
   vatAmount: "",
-  saleDate: new Date().toISOString().slice(0, 10),
+  saleDate: todayLocal(),
   transferDate: "",
   notes: "",
 };
@@ -103,7 +103,6 @@ export default function PropertySalesPage() {
   return (
     <PageShell
       title="بيع العقارات"
-      description="تسجيل عمليات بيع المباني والعقارات مع قيود المحاسبة"
     >
       <PropertyTabsNav />
       <div className="space-y-4">
@@ -231,7 +230,7 @@ export default function PropertySalesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>إلغاء</Button>
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1">
+            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1" rateLimitAware>
               {saving ? "جاري الحفظ..." : "تسجيل البيع"}
             </Button>
           </DialogFooter>
