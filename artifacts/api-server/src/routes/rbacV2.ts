@@ -31,6 +31,13 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { bumpCacheVersion, checkAccess } from "../lib/rbac/authzEngine.js";
+// roleGuard keeps its OWN module/level cache (built from the static role
+// map) separate from the engine's grant cache. bumpCacheVersion only
+// clears the latter, so without this the requireModule/requireMinLevel
+// mount gates kept serving stale access for up to 30s after a role edit.
+// Clear both whenever an RBAC mutation lands. (RBAC audit — "edits don't
+// take effect")
+import { invalidateRoleCache } from "../middlewares/roleGuard.js";
 import { invalidateSodCache } from "../lib/rbac/sodEnforcement.js";
 import { createAuditLog, createNotification, emitEvent } from "../lib/businessHelpers.js";
 import { FEATURE_CATALOG, FEATURE_INDEX } from "../lib/rbac/featureCatalog.js";
@@ -172,6 +179,7 @@ router.post("/roles", authorize({ feature: "admin.roles", action: "create" }), a
       action: "rbac.role.created", entity: "rbac_roles", entityId: result.insertId,
     }).catch(() => undefined);
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.status(201).json({ id: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "create role");
@@ -220,6 +228,7 @@ router.patch("/roles/:id", authorize({ feature: "admin.roles", action: "update" 
       action: "rbac.role.updated", entity: "rbac_roles", entityId: id,
     }).catch(() => undefined);
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ updated: 1 });
   } catch (err) {
     handleRouteError(err, res, "update role");
@@ -249,6 +258,7 @@ router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete"
       action: "rbac.role.deleted", entity: "rbac_roles", entityId: id,
     }).catch(() => undefined);
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ deleted: 1 });
   } catch (err) {
     handleRouteError(err, res, "delete role");
@@ -337,6 +347,7 @@ router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "upd
     });
 
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ updated: parsed.data.grants.length });
   } catch (err) {
     handleRouteError(err, res, "replace grants");
@@ -398,6 +409,7 @@ router.put("/roles/:id/grants/simple", authorize({ feature: "admin.roles", actio
     });
 
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ updated: expanded.length });
   } catch (err) {
     handleRouteError(err, res, "replace grants (simple)");
@@ -458,6 +470,7 @@ router.put("/roles/:id/field-policies", authorize({ feature: "admin.roles", acti
     });
 
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ updated: parsed.data.policies.length });
   } catch (err) {
     handleRouteError(err, res, "replace field policies");
@@ -520,6 +533,7 @@ router.put("/roles/:id/approval-limits", authorize({ feature: "admin.roles", act
     });
 
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ updated: parsed.data.limits.length });
   } catch (err) {
     handleRouteError(err, res, "replace approval limits");
@@ -696,6 +710,7 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
     });
 
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
   } catch (err) {
     handleRouteError(err, res, "clone role");
   }
@@ -778,6 +793,7 @@ router.post("/templates/:id/apply", authorize({ feature: "admin.roles", action: 
       return id;
     });
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.status(201).json({ id: newId });
   } catch (err) {
     handleRouteError(err, res, "apply template");
@@ -1013,6 +1029,7 @@ router.post("/users/:userId/roles", authorize({ feature: "admin.roles", action: 
       [userId, scope.companyId, roleId, branchId ?? null, departmentId ?? null, !!isPrimary, expiresAt ?? null, scope.userId]
     );
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.status(201).json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "assign role");
@@ -1027,6 +1044,7 @@ router.delete("/users/:userId/roles/:roleId", authorize({ feature: "admin.roles"
       [parseId(req.params.userId, "userId"), parseId(req.params.roleId, "roleId"), scope.companyId]
     );
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "unassign role");
@@ -1075,6 +1093,7 @@ router.post("/admin/sync-all-roles", authorize({ feature: "admin.roles", action:
     );
 
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
     res.json({ added: inserted.affectedRows ?? 0, totalRoles: Number(count) });
   } catch (err) {
     handleRouteError(err, res, "sync all roles");
@@ -1236,6 +1255,7 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
       );
     });
     await bumpCacheVersion(scope.companyId);
+    invalidateRoleCache();
 
     // Notify the requester so they don't have to refresh the JIT page
     // to find out. We look up their active assignment ID to feed
