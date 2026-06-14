@@ -1233,7 +1233,11 @@ function calcDepreciationAmount(asset: any, _period: string, opts?: { unitsThisP
   const purchaseCost = Number(asset.purchaseCost);
   const salvageValue = Number(asset.salvageValue);
   const usefulLife = Number(asset.usefulLifeYears);
-  const currentBookValue = Number(asset.currentBookValue ?? purchaseCost);
+  const accumulatedDepreciation = Number(asset.accumulatedDepreciation ?? 0);
+  const accumulatedImpairment = Number(asset.accumulatedImpairment ?? 0);
+  // currentBookValue (if stored) already reflects both depreciation and impairment.
+  // Fallback recomputes it from components to handle assets created before migration 338.
+  const currentBookValue = Number(asset.currentBookValue ?? (purchaseCost - accumulatedDepreciation - accumulatedImpairment));
   const remainingDepreciable = Math.max(0, currentBookValue - salvageValue);
 
   if (remainingDepreciable <= 0) return 0;
@@ -1373,7 +1377,10 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
     }
 
     const newAccumulated = Number(asset.accumulatedDepreciation) + depAmount;
-    const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
+    const newBookValue = Math.max(
+      Number(asset.purchaseCost) - newAccumulated - Number(asset.accumulatedImpairment ?? 0),
+      Number(asset.salvageValue),
+    );
 
     let entryId: number | undefined;
     let journalId: number | undefined;
@@ -1482,7 +1489,10 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
       if (depAmount <= 0) { skipped++; continue; }
 
       const newAccumulated = Number(asset.accumulatedDepreciation) + depAmount;
-      const newBookValue = Math.max(Number(asset.purchaseCost) - newAccumulated, Number(asset.salvageValue));
+      const newBookValue = Math.max(
+        Number(asset.purchaseCost) - newAccumulated - Number(asset.accumulatedImpairment ?? 0),
+        Number(asset.salvageValue),
+      );
 
       const { financialEngine } = await import("../lib/engines/index.js");
       // Per-asset atomicity: same shape as the single-asset depreciation
