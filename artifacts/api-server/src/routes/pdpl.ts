@@ -8,7 +8,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { userHasPermission } from "../middlewares/permissionMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent, toDateISO } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, toDateISO, auditFromRequest } from "../lib/businessHelpers.js";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
 import { createPerUserLimiter } from "../lib/perUserRateLimit.js";
@@ -174,6 +174,11 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
       attendanceSummary,
       leaveRequests,
       notice: "هذه البيانات صادرة استجابةً لطلب حق الاطلاع وفق نظام حماية البيانات الشخصية (PDPL)"
+    });
+    // GAP_MATRIX P1 — PDPL DSAR export must leave a forensic trail in audit_logs
+    // in addition to the PDPL-domain processing_activities_log entry above.
+    auditFromRequest(req, "pdpl.dsar.export", "employees", employeeId, {
+      after: { exportedBy: scope.userId, isOwnData },
     });
   } catch (err) {
     handleRouteError(err, res, "Employee data export error:");
