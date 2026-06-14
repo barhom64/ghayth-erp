@@ -116,8 +116,6 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
     children,
   } = props;
 
-  // Publish the entity's real title so the topbar + breadcrumb show the
-  // actual page (e.g. the employee/customer name), not the parent module.
 
   const initialTab = defaultTab || tabs[0]?.key || "";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
