@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Wand2, AlertCircle, CheckCircle2, MapPin, User, Truck } from "lucide-react";
+import { Wand2, AlertCircle, CheckCircle2, MapPin, User, Truck, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
@@ -125,6 +125,12 @@ export function AssignmentSuggestDialog({
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // #TA-T18-UX-AUDIT-01 UX-02 — جدولة يدوية من نافذة الاقتراح: عند غياب نافذة
+  // زمنية (أكثر أسباب «صفر ترشيح» شيوعًا) يحدّد المشغّل موعد الرحلة فيُحفظ على
+  // الحجز عبر PATCH ثم يُعاد الحساب — دون مغادرة الحوار.
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+  const [savingWindow, setSavingWindow] = useState(false);
 
   const effectiveSource: SuggestSource = source ??
     (legacyBookingId != null
@@ -167,6 +173,30 @@ export function AssignmentSuggestDialog({
       setError(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // #TA-T18-UX-AUDIT-01 UX-02 — يحفظ نافذة الرحلة على الحجز (pickupWindowStart/
+  // End) ثم يعيد الحساب. لمصدر الحجز فقط (المقطع له مسار جدولة مستقل).
+  const saveWindowAndRerun = async () => {
+    if (effectiveSource.kind !== "booking") return;
+    if (!manualStart || !manualEnd) {
+      toast({ variant: "destructive", title: "حدّد بداية الرحلة ونهايتها أولاً" });
+      return;
+    }
+    setSavingWindow(true);
+    try {
+      await apiFetch(`/transport/bookings/${effectiveSource.bookingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ pickupWindowStart: manualStart, pickupWindowEnd: manualEnd }),
+      });
+      toast({ title: "تم تحديد موعد الرحلة — يُعاد الحساب" });
+      await run();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر حفظ الموعد", description: message });
+    } finally {
+      setSavingWindow(false);
     }
   };
 
@@ -261,6 +291,42 @@ export function AssignmentSuggestDialog({
     }
   };
 
+  // #TA-T18-UX-AUDIT-01 UX-02 — لوحة تحديد موعد الرحلة، تُعرض في حالة «صفر
+  // ترشيح». مصدر الحجز فقط (المقطع له مسار جدولة مستقل).
+  const schedulePanel = effectiveSource.kind === "booking" ? (
+    <div className="bg-white p-3 rounded border space-y-2 text-start">
+      <div className="text-xs font-semibold flex items-center gap-1">
+        <Clock className="h-3.5 w-3.5" /> تحديد موعد الرحلة
+      </div>
+      <div className="text-[11px] text-muted-foreground">
+        إن كان سبب غياب الترشيحات عدم وجود نافذة زمنية، حدّد بداية الرحلة ونهايتها ثم احفظ.
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label className="text-[11px] text-muted-foreground block space-y-1">
+          <span>من</span>
+          <input
+            type="datetime-local"
+            value={manualStart}
+            onChange={(e) => setManualStart(e.target.value)}
+            className="w-full h-8 px-2 rounded border bg-background text-xs"
+          />
+        </label>
+        <label className="text-[11px] text-muted-foreground block space-y-1">
+          <span>إلى</span>
+          <input
+            type="datetime-local"
+            value={manualEnd}
+            onChange={(e) => setManualEnd(e.target.value)}
+            className="w-full h-8 px-2 rounded border bg-background text-xs"
+          />
+        </label>
+      </div>
+      <Button size="sm" onClick={saveWindowAndRerun} disabled={savingWindow || loading} rateLimitAware>
+        {savingWindow ? "جارٍ الحفظ…" : "حفظ الموعد وإعادة الحساب"}
+      </Button>
+    </div>
+  ) : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
@@ -344,6 +410,7 @@ export function AssignmentSuggestDialog({
                         إعادة الحساب
                       </Button>
                     </div>
+                    {schedulePanel}
                   </CardContent>
                 </Card>
               ) : (
@@ -364,6 +431,7 @@ export function AssignmentSuggestDialog({
                       إعادة الحساب
                     </Button>
                   </div>
+                  {schedulePanel}
                 </div>
               )}
             </>

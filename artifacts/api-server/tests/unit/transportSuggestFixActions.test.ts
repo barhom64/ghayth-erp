@@ -67,3 +67,26 @@ describe("UX-01 — أنماط التشخيص المثبّتة سابقًا با
     expect(DIALOG).toMatch(/const \[diagnostics, setDiagnostics\] = useState</);
   });
 });
+
+describe("UX-02 — جدولة يدوية من نافذة الاقتراح (P0-2/P0-3)", () => {
+  it("يحفظ نافذة الرحلة على الحجز عبر PATCH (pickupWindowStart/End) ثم يعيد الحساب", () => {
+    expect(DIALOG).toMatch(/const saveWindowAndRerun = async/);
+    expect(DIALOG).toMatch(/method: "PATCH"/);
+    expect(DIALOG).toMatch(/\/transport\/bookings\/\$\{effectiveSource\.bookingId\}/);
+    expect(DIALOG).toMatch(/pickupWindowStart: manualStart/);
+    expect(DIALOG).toMatch(/pickupWindowEnd: manualEnd/);
+    expect(DIALOG).toMatch(/await run\(\)/);
+  });
+
+  it("لوحة الموعد لمصدر الحجز فقط وتحمل حقلَي وقت وزر حفظ بعربية", () => {
+    expect(DIALOG).toMatch(/const schedulePanel = effectiveSource\.kind === "booking"/);
+    expect(DIALOG).toContain("تحديد موعد الرحلة");
+    expect(DIALOG).toContain("حفظ الموعد وإعادة الحساب");
+    expect((DIALOG.match(/type="datetime-local"/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("عناوين اللوحة عربية (من/إلى) لا مفاتيح تقنية", () => {
+    expect(DIALOG).toContain("<span>من</span>");
+    expect(DIALOG).toContain("<span>إلى</span>");
+  });
+});
