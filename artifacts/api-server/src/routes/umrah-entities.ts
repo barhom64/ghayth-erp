@@ -5163,9 +5163,10 @@ router.get(
         )`;
       }
 
-      // Same shape as the summary's `recent` block, but no LIMIT 100
-      // cap — operators exporting for monthly close need the full
-      // window. We cap at 5000 to protect Excel / memory.
+      // Same shape as the summary's `recent` block, but the
+      // on-screen cap is lifted — operators exporting for monthly
+      // close need the full window. We cap at 5000 to protect
+      // Excel / memory.
       const rows = await rawQuery<{
         id: number; planId: number; planName: string | null;
         employeeId: number; employeeName: string | null;
