@@ -172,7 +172,8 @@ export const hrRoutes = [
   { path: "/hr/exit/:id", component: ExitDetail, subKey: "employees" },
   { path: "/hr/violations", component: Violations, subKey: "violations" },
   { path: "/hr/violations/create", component: ViolationsCreate, subKey: "violations" },
-  { path: "/hr/violations/management", component: ViolationsManagement, subKey: "violations" },
+  // GAP_MATRIX P1 — redirect /management until merged as tab inside base page.
+  { path: "/hr/violations/management", component: redirectTo("/hr/violations"), subKey: "violations" },
   { path: "/hr/violations/penalty-escalation", component: PenaltyEscalation, subKey: "violations" },
   { path: "/hr/violations/auto-detection", component: AutoDetection, subKey: "violations" },
   { path: "/hr/violations/:id", component: ViolationDetail, subKey: "violations" },
