@@ -705,10 +705,15 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
   // the operator's banner, never used to mutate import behaviour.
   // Same `umrah.auto_link.clientLinkagePolicy` key as the invoicing
   // engine reads — single source of truth, no rival key.
-  const policyRaw = await resolveSettings(
-    "umrah.auto_link.clientLinkagePolicy",
-    scope.companyId,
-  );
+  let policyRaw: unknown;
+  try {
+    policyRaw = await resolveSettings(
+      "umrah.auto_link.clientLinkagePolicy",
+      scope.companyId,
+    );
+  } catch {
+    policyRaw = undefined;
+  }
   const activePolicy =
     typeof policyRaw === "string" && policyRaw.length > 0
       ? policyRaw
