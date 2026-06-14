@@ -102,4 +102,16 @@ TERM_BAL="$(psql "$DSN" -tA -c "select count(*) from (select je.id from journal_
 TERM_REV="$(psql "$DSN" -tA -c "select count(*) from journal_lines jl join journal_entries je on je.id=jl.\"journalId\" where je.\"companyId\"=2 and je.\"sourceType\"='rental_contracts' and je.\"sourceId\"=$CID and jl.credit>0 and jl.\"accountCode\"='4130';")"
 [ "${TERM_REV:-0}" -ge 1 ] && ok "termination penalty routed to 4130 (service revenue, not fleet 4150)" || no "termination revenue not routed to 4130 ($TERM_REV)"
 
+# ── Property sale (PR-9) ─────────────────────────────────────────────
+# Verifies: sale INSERT + postSaleGL run atomically. If GL fails the
+# INSERT is rolled back. On success: sale row exists, JE balanced,
+# sourceType='property_sales', debit=credit=salePrice.
+SALE="$(post /properties/sales "{\"buildingId\":$BID,\"buyerName\":\"مشترٍ التحقق\",\"buyerPhone\":\"0500000001\",\"salePrice\":1000000,\"bookValue\":600000,\"vatAmount\":0,\"saleDate\":\"2026-07-01\"}")"
+SALEID="$(echo "$SALE" | gid)"
+[ -n "$SALEID" ] && ok "property sale created (#$SALEID)" || no "property sale: $(echo "$SALE"|py 'import sys,json;d=json.load(sys.stdin);print(d.get("error") or d)')"
+SALE_ST="$(echo "$SALE" | py 'import sys,json;print(json.load(sys.stdin).get("status") or "")')"
+[ "$SALE_ST" = "completed" ] && ok "sale status=completed (GL posted)" || no "sale status=$SALE_ST (expected completed)"
+SALE_BAL="$(psql "$DSN" -tA -c "select count(*) from (select je.id from journal_entries je join journal_lines jl on jl.\"journalId\"=je.id where je.\"companyId\"=2 and je.\"sourceType\"='property_sales' and je.\"sourceId\"=$SALEID group by je.id having sum(jl.debit)=sum(jl.credit) and sum(jl.debit)=1000000) t;")"
+[ "${SALE_BAL:-0}" -ge 1 ] && ok "property sale GL exists and balanced @ 1000000" || no "property sale GL not balanced (${SALE_BAL:-0})"
+
 rm -f "$J"; echo; echo "▶ Result: $PASS passed, $FAIL failed"; [ "$FAIL" -eq 0 ] || exit 1

@@ -1714,7 +1714,10 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
 
     const cost = Number(asset.purchaseCost ?? 0);
     const accDep = Number(asset.accumulatedDepreciation ?? 0);
-    const bookValue = roundTo2(cost - accDep);
+    const accImpairment = roundTo2(Number(asset.accumulatedImpairment ?? 0));
+    // R4: use currentBookValue (reflects both depreciation AND impairment);
+    // fallback recomputes from components for assets without stored currentBookValue.
+    const bookValue = roundTo2(Number(asset.currentBookValue ?? (cost - accDep - accImpairment)));
     const proceeds = roundTo2(b.disposalProceeds);
     const gainLoss = roundTo2(proceeds - bookValue);
 
@@ -1737,12 +1740,21 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
       financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_gain", "credit", "4920"),
     ]);
 
+    // R4: also resolve accumulated-impairment account so we can reverse it on disposal
+    const accImpairmentCode = await financialEngine.resolveAccountCode(
+      scope.companyId, "asset_accumulated_impairment", "debit", "1291"
+    );
+
     const lines: any[] = [];
     if (proceeds > 0) {
       lines.push({ accountCode: cashCode, debit: proceeds, credit: 0, assetId: id, description: `حصيلة بيع الأصل ${asset.name}` });
     }
     if (accDep > 0) {
       lines.push({ accountCode: accDepCode, debit: accDep, credit: 0, assetId: id, description: `تخلص — إلغاء مجمع الإهلاك` });
+    }
+    // R4: reverse accumulated impairment on disposal (closes the IAS 36 contra-asset)
+    if (accImpairment > 0) {
+      lines.push({ accountCode: accImpairmentCode, debit: accImpairment, credit: 0, assetId: id, description: `تخلص — إلغاء مجمع هبوط القيمة` });
     }
     lines.push({ accountCode: assetCode, debit: 0, credit: cost, assetId: id, description: `تخلص — إلغاء أصل ثابت` });
     if (gainLoss < 0) {
