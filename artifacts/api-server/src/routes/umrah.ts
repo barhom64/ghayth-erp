@@ -1220,6 +1220,13 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
       entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"],
       details: { count: rows.length, filters: { seasonId, status, agentId, groupId, flight, arrivalDate, departureDate, search: search || null } },
     });
+    // GAP_MATRIX P1 — pilgrims CSV export was in audit_logs (via logSensitiveAccess)
+    // but missing from print_jobs. Both lanes required for PDPL compliance.
+    rawExecute(
+      `INSERT INTO print_jobs ("companyId","branchId","requestedBy","entityType","entityId","format","status","printedAt")
+       VALUES ($1,$2,$3,'report_umrah_pilgrims',NULL,'csv','completed',NOW())`,
+      [scope.companyId, scope.branchId ?? null, scope.userId]
+    ).catch(() => {});
 
     // RFC 4180 escape — quote when the cell contains the delimiter,
     // a quote, or any newline; double internal quotes.
