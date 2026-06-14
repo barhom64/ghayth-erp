@@ -172,6 +172,12 @@ run_step "check:postable-fallbacks" node scripts/src/check-postable-fallbacks.mj
 # and fixed in owning tracks); fails only on a NEW unscoped statement, freezing
 # the leak surface from growing while buildScopedWhere adoption catches up.
 run_step "check:tenant-isolation" node scripts/src/check-tenant-isolation.mjs
+# GL-failure handling (#2301): a catch around a GL posting must rethrow, else the
+# request 200s while the journal silently never posts (non-atomic; recoverable
+# only via the financial_posting_failures retry queue). Whole-file baseline in
+# scripts/gl-swallow-allowlist.txt (existing surface, triaged per #2301); fails
+# on a NEW file that swallows a GL error without rethrowing.
+run_step "check:gl-swallow" node scripts/src/check-gl-swallow.mjs
 # Stop-Ship compliance scan (#1139 §8): every write endpoint must have an
 # RBAC guard. File-level audit/event gaps are reported as warnings (the
 # global auditMiddleware provides baseline coverage) and don't fail the
