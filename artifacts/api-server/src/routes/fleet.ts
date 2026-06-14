@@ -180,6 +180,8 @@ const createMaintenanceSchema = z.object({
   nextServiceDate: z.string().optional(),
   nextServiceKm: z.coerce.number().optional(),
   performedBy: z.string().optional(),
+  supplierId: z.coerce.number().optional(),
+  unregisteredSupplierName: z.string().optional(),
   status: z.string().optional(),
 });
 
@@ -2434,8 +2436,8 @@ router.post("/maintenance", authorize({ feature: "fleet.maintenance", action: "c
 
     const insertId = await withTransaction(async (client) => {
       const maintResult = await client.query(
-        `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
-        [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || todayISO(), assignedMechanic, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
+        `INSERT INTO fleet_maintenance ("companyId","vehicleId",type,description,cost,"mileageAtService","serviceDate","performedBy","supplierId","unregisteredSupplierName",status,"nextServiceDate","nextServiceKm") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+        [scope.companyId, b.vehicleId, b.type, b.description, b.cost || 0, b.mileageAtService, b.serviceDate || todayISO(), assignedMechanic, b.supplierId ?? null, b.unregisteredSupplierName ?? null, b.status || 'in_progress', effectiveNextServiceDate, b.nextServiceKm ?? null]
       );
       const maintId = maintResult.rows[0]?.id;
 

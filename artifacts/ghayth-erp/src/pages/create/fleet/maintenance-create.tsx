@@ -12,13 +12,15 @@ import { useFieldErrors } from "@/hooks/use-field-errors";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
-import { VehicleSelect } from "@/components/shared/entity-selects";
+import { VehicleSelect, SupplierSelect } from "@/components/shared/entity-selects";
 
 const DRAFT_KEY = "fleet_maintenance_create";
 const INITIAL = {
   vehicleId: "", type: "", description: "", cost: "",
   mileageAtService: "", serviceDate: todayLocal(),
-  nextServiceDate: "", nextServiceKm: "", performedBy: "", status: "pending",
+  nextServiceDate: "", nextServiceKm: "",
+  supplierId: "", unregisteredSupplierName: "", unregisteredSupplier: false,
+  status: "pending",
 };
 
 export default function MaintenanceCreate() {
@@ -50,7 +52,8 @@ export default function MaintenanceCreate() {
         serviceDate: form.serviceDate || undefined,
         nextServiceDate: form.nextServiceDate || undefined,
         nextServiceKm: form.nextServiceKm ? Number(form.nextServiceKm) : undefined,
-        performedBy: form.performedBy || undefined,
+        supplierId: form.supplierId ? Number(form.supplierId) : undefined,
+        unregisteredSupplierName: form.unregisteredSupplier ? (form.unregisteredSupplierName || undefined) : undefined,
         status: form.status,
         ...(attachments.length > 0 ? { attachments } : {}),
       });
@@ -113,7 +116,20 @@ export default function MaintenanceCreate() {
           <DatePicker value={form.nextServiceDate} onChange={(v) => setForm((f) => ({ ...f, nextServiceDate: v }))} />
         </FormFieldWrapper>
         <NumberField label="الكيلومترات القادمة" value={form.nextServiceKm} onChange={(v) => setForm((f) => ({ ...f, nextServiceKm: v }))} placeholder="مثال: 50000" min={0} />
-        <TextField label="الورشة / الفني" value={form.performedBy} onChange={(v) => setForm((f) => ({ ...f, performedBy: v }))} />
+        {form.unregisteredSupplier ? (
+          <div>
+            <TextField label="اسم الورشة / الفني (غير مسجّل)" value={form.unregisteredSupplierName} onChange={(v) => setForm((f) => ({ ...f, unregisteredSupplierName: v }))} />
+            <p className="text-xs text-status-warning-foreground mt-1">استثناء: مورد غير مسجّل — يُسمح للمسودات فقط (سياسة allowUnregisteredMaintenanceSupplier)</p>
+          </div>
+        ) : (
+          <SupplierSelect value={form.supplierId} onChange={(v) => setForm((f) => ({ ...f, supplierId: v }))} label="الورشة / المورد" />
+        )}
+        <FormFieldWrapper label="">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer mt-1">
+            <input type="checkbox" checked={form.unregisteredSupplier} onChange={(e) => setForm((f) => ({ ...f, unregisteredSupplier: e.target.checked, supplierId: "", unregisteredSupplierName: "" }))} />
+            مورد غير مسجّل
+          </label>
+        </FormFieldWrapper>
         <TextAreaField label="الوصف" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} error={fieldErrors.description} className="md:col-span-3" />
       </div>
       <FileDropZone files={attachments} onFilesChange={setAttachments} label="مرفقات الصيانة" />
