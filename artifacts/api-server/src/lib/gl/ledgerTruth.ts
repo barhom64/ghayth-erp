@@ -48,7 +48,8 @@ export const EXPECTED_DIMENSION_LABELS_AR: Record<ExpectedDimension, string> = {
  */
 export function expectedDimensionForAccount(code: string | null | undefined): ExpectedDimension | null {
   if (!code) return null;
-  const c = String(code).trim();
+  // الكود الأساس قبل لاحقة الحساب الفرعي (5510-0001 → 5510) حتى تُصنَّف الأوراق الفرعية مثل أصلها.
+  const c = String(code).trim().split("-")[0];
   // مركبة: مصروفات الأسطول 5500–5599 + إهلاك المركبة 5710
   if (/^55\d{2}$/.test(c) || c === "5710") return "vehicle";
   // عقار: مصروفات العقار 5600–5699
@@ -60,4 +61,40 @@ export function expectedDimensionForAccount(code: string | null | undefined): Ex
   // عميل: العملاء/المستأجرون/عملاء المشاريع
   if (/^113[1-3]$/.test(c)) return "client";
   return null;
+}
+
+// ── عقد البُعد: قواعد الإنفاذ التدريجي (#2233) ────────────────────────────────
+//
+// مفصولة عن heuristic القياس: القياس عريض (كل الأصناف)، أما **الإنفاذ** فيبدأ
+// ضيّقًا وآمنًا ويتوسّع صنفًا صنفًا (ratchet) فور التحقق/إصلاح مسار الإدخال.
+//   • enforce → يُرفَض الترحيل إن غاب البُعد.
+//   • warn    → يُسجَّل تحذير فقط (بلا رفض) — لا تعطيل إنتاج.
+// **أول إنفاذ: وقود المركبة (5510 + أوراقه الفرعية)** — المسار الآلي (fleetEngine)
+// والمصروف المربوط بمركبة يضعان vehicleId؛ فلا يُرفَض إلا «وقود بلا مركبة».
+// التحويل إلى enforce لصنف آخر = تغيير mode سطرٍ واحد هنا (بعد إصلاح إدخاله).
+export type DimensionEnforcementMode = "enforce" | "warn";
+
+export interface DimensionEnforcementRule {
+  /** يُطبَّق على الكود الأساس (قبل لاحقة الحساب الفرعي). */
+  test: (baseCode: string) => boolean;
+  dimension: ExpectedDimension;
+  label: string;
+  mode: DimensionEnforcementMode;
+}
+
+// تُفحص بالترتيب؛ أول قاعدة مطابقة تفوز (فالأخصّ قبل الأعمّ).
+export const DIMENSION_ENFORCEMENT_RULES: DimensionEnforcementRule[] = [
+  { test: (c) => c === "5510", dimension: "vehicle", label: "مركبة", mode: "enforce" },
+  { test: (c) => /^55\d{2}$/.test(c) || c === "5710", dimension: "vehicle", label: "مركبة", mode: "warn" },
+  { test: (c) => /^56\d{2}$/.test(c), dimension: "property", label: "عقار", mode: "warn" },
+  { test: (c) => c === "5130" || c === "4140", dimension: "project", label: "مشروع", mode: "warn" },
+  { test: (c) => /^211[1-3]$/.test(c), dimension: "vendor", label: "مورد", mode: "warn" },
+  { test: (c) => /^113[1-3]$/.test(c), dimension: "client", label: "عميل", mode: "warn" },
+];
+
+/** يعيد قاعدة الإنفاذ المطابقة لكود الحساب (على الأساس)، أو null. دالة نقية. */
+export function classifyEnforcement(code: string | null | undefined): DimensionEnforcementRule | null {
+  if (!code) return null;
+  const base = String(code).trim().split("-")[0];
+  return DIMENSION_ENFORCEMENT_RULES.find((r) => r.test(base)) ?? null;
 }

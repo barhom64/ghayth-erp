@@ -17,6 +17,7 @@ describe("#2246 expectedDimensionForAccount — provisional measurement heuristi
     expect(expectedDimensionForAccount("5520")).toBe("vehicle"); // صيانة
     expect(expectedDimensionForAccount("5560")).toBe("vehicle"); // مخالفات
     expect(expectedDimensionForAccount("5710")).toBe("vehicle"); // إهلاك مركبة
+    expect(expectedDimensionForAccount("5510-0001")).toBe("vehicle"); // ورقة فرعية لمركبة
   });
 
   it("classifies property expense accounts (56xx) as 'property'", () => {
