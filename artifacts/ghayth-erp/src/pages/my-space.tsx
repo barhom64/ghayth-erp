@@ -73,13 +73,11 @@ export default function MySpace() {
       subtitle={`مرحباً ${user?.name || "موظف"} — ${selectedRoleLabel}`}
       actions={
         role !== "employee" && (
-          <Link href="/action-center">
-            <Button variant="outline" className="gap-2">
+          <Button asChild variant="outline" className="gap-2"><Link href="/action-center">
               <Briefcase className="w-4 h-4" />
               مركز القرارات
               <ArrowUpRight className="w-3 h-3" />
-            </Button>
-          </Link>
+            </Link></Button>
         )
       }
     >
