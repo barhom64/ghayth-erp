@@ -285,16 +285,12 @@ export default function VendorContractsPage() {
       ]}
       actions={
         <>
-          <Link href="/finance/vendor-contracts-tracker">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/vendor-contracts-tracker">
               <FileText className="h-4 w-4 me-2" />متابعة العقود
-            </Button>
-          </Link>
-          <Link href="/finance/vendors">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/vendors">
               <Users className="h-4 w-4 me-2" />الموردون
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_vendor_contracts"
             entityId="list"
