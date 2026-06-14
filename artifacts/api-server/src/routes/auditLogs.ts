@@ -3,6 +3,7 @@ import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
+import { auditFromRequest } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -173,6 +174,10 @@ router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (re
     );
 
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage }));
+    // Self-audit: reading audit logs is itself an auditable event (PDPL / forensics).
+    auditFromRequest(req, "audit_logs.read", "audit_logs", 0, {
+      after: { filters: { entityType, entityId, action, userId, dateFrom, dateTo }, page: pageNum, total: Number(countRow?.total ?? 0) },
+    });
   } catch (err) {
     handleRouteError(err, res, "Get audit logs error:");
   }

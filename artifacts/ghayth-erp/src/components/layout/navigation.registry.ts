@@ -819,7 +819,7 @@ export const allNavSections: NavSection[] = [
           { label: "استيراد البيانات", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
-          { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
+          { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
           { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         ]},
       ]},
