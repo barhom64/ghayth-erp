@@ -31,16 +31,12 @@ const nonPostable = new Set();
 const reChart = /code:\s*"(\d{3,4})"[^}\n]*?allowPosting:\s*false/g;
 for (let m; (m = reChart.exec(boot)); ) nonPostable.add(m[1]);
 
-// 2) Baselined known offenders (in other tracks' files — fixed there, then
-//    delete the line here). Key = `<basename>:<purpose>:<fallbackCode>`.
-const ALLOWLIST = new Set([
-  "propertiesEngine.ts:property_owner_receivable:1140",
-  "propertiesEngine.ts:vat_output:2200",
-  "umrahEngine.ts:umrah_commission:5200",
-  "umrahEngine.ts:umrah_transport_expense:5300",
-  "umrahEngine.ts:umrah_transport_payable:2100",
-  "finance-algorithms.ts:asset_cost:1200",
-]);
+// 2) Baselined known offenders. Key = `<basename>:<purpose>:<fallbackCode>`.
+//    Empty — the original 6 (vat_output→2200, property_owner_receivable→1140,
+//    umrah_commission→5200, umrah_transport_expense→5300, umrah_transport_payable
+//    →2100, asset_cost→1200) were repointed to postable leaves in this PR, so
+//    the guard now enforces a clean baseline (any reappearance fails CI).
+const ALLOWLIST = new Set([]);
 
 // 3) Walk .ts sources and collect resolveAccountCode fallbacks.
 function walk(dir) {

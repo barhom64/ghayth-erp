@@ -194,9 +194,9 @@ class PropertiesEngineImpl implements DomainEngine {
     const hasVat = vatAmount > 0;
 
     const [receivableCode, payableCode, vatCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_receivable", "debit", "1140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_receivable", "debit", "1131"),
       financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2160"),
-      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
     ]);
 
     const unitId = maintenance.unitId ?? undefined;
