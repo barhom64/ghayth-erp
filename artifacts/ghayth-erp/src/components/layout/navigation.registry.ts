@@ -637,9 +637,14 @@ export const allNavSections: NavSection[] = [
       // except owner/GM (who get every module).
       { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "operations", children: [
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
-        { label: "المعتمرين", path: "/umrah/pilgrims", icon: Users },
-        { label: "الوكلاء الرئيسيين", path: "/umrah/agents", icon: Building2 },
-        { label: "الوكلاء الفرعيين", path: "/umrah/sub-agents", icon: Users },
+        // U-18-P2 — sidebar plural unification. Standalone labels use
+        // the nominative plural ("المعتمرون", "الوكلاء الرئيسيون",
+        // "الوكلاء الفرعيون") per the UMRAH_CANONICAL_GLOSSARY.md
+        // rule. Object-position phrases ("حركات المعتمرين",
+        // "كشف المعتمرين", etc.) keep the accusative form.
+        { label: "المعتمرون", path: "/umrah/pilgrims", icon: Users },
+        { label: "الوكلاء الرئيسيون", path: "/umrah/agents", icon: Building2 },
+        { label: "الوكلاء الفرعيون", path: "/umrah/sub-agents", icon: Users },
         { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
         { label: "الباقات", path: "/umrah/packages", icon: Package },
         { label: "المجموعات", path: "/umrah/groups", icon: Users2 },
