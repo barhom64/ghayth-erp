@@ -206,11 +206,9 @@ export default function CollectionStagesPage() {
       ]}
       actions={
         <>
-          <Link href="/finance/dunning">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/dunning">
               <Mail className="h-4 w-4 me-1" /> Dunning (إيميلات جماعية)
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_collection_stages"
             entityId="list"
