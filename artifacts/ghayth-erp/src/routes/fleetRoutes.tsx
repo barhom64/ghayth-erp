@@ -59,6 +59,9 @@ const TransportIntegration = lazy(() => import("@/pages/fleet/transport-integrat
 // #1812 itineraries — chained-trip programs.
 const TransportItineraries = lazy(() => import("@/pages/fleet/transport-itineraries"));
 const TransportItineraryDetail = lazy(() => import("@/pages/fleet/transport-itinerary-detail"));
+// #2079 TA-T18-04 — Route patterns SPA (cargo recurring schedules).
+// Pure UI over existing /transport/route-patterns* endpoints.
+const TransportRoutePatterns = lazy(() => import("@/pages/fleet/transport-route-patterns"));
 // Unified driver self-service surface (#1354). Replaces /driver-portal/*
 // — drivers log in to the regular ERP, get the `driver` role, and land
 // here as their dashboard (see dashboard.tsx role-based redirect).
@@ -133,6 +136,7 @@ export const fleetRoutes = [
   { path: "/fleet/transport/integration", component: TransportIntegration },
   { path: "/fleet/transport/itineraries", component: TransportItineraries },
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },
+  { path: "/fleet/transport/route-patterns", component: TransportRoutePatterns },
   { path: "/me/driver/navigation", component: MeDriverNavigation },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },
