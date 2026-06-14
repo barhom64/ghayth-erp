@@ -163,7 +163,7 @@ async function main() {
 
 const isDirectRun =
   import.meta.url === `file://${process.argv[1]}` ||
-  import.meta.url.endsWith(process.argv[1]?.replace(/^.*\//, "") ?? "");
+  import.meta.url.endsWith(process.argv[1]?.replace(/^.*\//, "") ?? "\0");
 if (isDirectRun) {
   main().catch((err) => {
     console.error("[check:tenant-isolation] crashed:", err);

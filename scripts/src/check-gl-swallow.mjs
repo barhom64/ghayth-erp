@@ -15,9 +15,11 @@
 // scripts/gl-swallow-allowlist.txt for triage in their owning tracks — keying
 // by file (not line) keeps the baseline stable across edits.
 //
-// Conservative: a catch body that contains a `throw` passes. A body that only
-// compensates (e.g. soft-deletes the source row) is treated as a swallow and
-// must be baselined explicitly — surfacing it for review is the point.
+// Source is run through stripJs() first so a `}` or `throw` inside a JS comment
+// or string/template literal can't truncate a catch body (false-FAIL on valid
+// rethrowing code) or fake a rethrow (false-PASS). Known residual limitations
+// (rare, under-report only — never a false-fail): a `throw` inside a nested
+// closure in the catch body, and `}`/`throw` inside a regex literal.
 //
 import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -28,25 +30,49 @@ const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SRC = join(REPO_ROOT, "artifacts/api-server/src");
 const ALLOWLIST_FILE = join(REPO_ROOT, "scripts/gl-swallow-allowlist.txt");
 
-// Catch variables that, by convention here, wrap a GL/journal posting.
 const CATCH_RE =
   /catch\s*\(\s*(glErr|glError|journalErr|journalError|postErr|postError)\b[^)]*\)\s*\{/g;
 
-// From the `{` at openBrace, return the index of the matching `}` (string- and
-// template-literal aware). -1 if unbalanced.
-function findBlockEnd(src, openBrace) {
-  let depth = 0;
-  let inStr = null;
-  for (let i = openBrace; i < src.length; i++) {
+// Replace JS line/block comments and string/template literals with spaces,
+// preserving every offset and newline so byte indices and line numbers stay
+// exact. After this, braces and the word `throw` survive only in real code.
+function stripJs(src) {
+  let out = "";
+  let st = null; // "line" | "block" | "sq" | "dq" | "tpl"
+  for (let i = 0; i < src.length; i++) {
     const ch = src[i];
-    if (inStr) {
-      if (ch === "\\") { i++; continue; }
-      if (ch === inStr) inStr = null;
+    const nx = src[i + 1];
+    if (st === null) {
+      if (ch === "/" && nx === "/") { st = "line"; out += "  "; i++; continue; }
+      if (ch === "/" && nx === "*") { st = "block"; out += "  "; i++; continue; }
+      if (ch === "'") { st = "sq"; out += " "; continue; }
+      if (ch === '"') { st = "dq"; out += " "; continue; }
+      if (ch === "`") { st = "tpl"; out += " "; continue; }
+      out += ch; continue;
+    }
+    if (st === "line") { if (ch === "\n") { st = null; out += "\n"; } else out += " "; continue; }
+    if (st === "block") {
+      if (ch === "*" && nx === "/") { st = null; out += "  "; i++; }
+      else out += ch === "\n" ? "\n" : " ";
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === "`") { inStr = ch; continue; }
-    if (ch === "{") depth++;
-    else if (ch === "}") { depth--; if (depth === 0) return i; }
+    // inside a string/template literal
+    if (ch === "\\") { out += "  "; i++; continue; }
+    if ((st === "sq" && ch === "'") || (st === "dq" && ch === '"') || (st === "tpl" && ch === "`")) {
+      st = null; out += " "; continue;
+    }
+    out += ch === "\n" ? "\n" : " ";
+  }
+  return out;
+}
+
+// From the `{` at openBrace, return the index of the matching `}`. Operates on
+// stripJs()'d source, so no string/comment awareness is needed here.
+function findBlockEnd(src, openBrace) {
+  let depth = 0;
+  for (let i = openBrace; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}") { depth--; if (depth === 0) return i; }
   }
   return -1;
 }
@@ -78,8 +104,9 @@ async function main() {
   let total = 0;
 
   for (const file of files) {
-    const src = await readFile(file, "utf8");
-    if (!/catch\s*\(\s*(glErr|glError|journalErr|journalError|postErr|postError)\b/.test(src)) continue;
+    const raw = await readFile(file, "utf8");
+    if (!/catch\s*\(\s*(glErr|glError|journalErr|journalError|postErr|postError)\b/.test(raw)) continue;
+    const src = stripJs(raw); // comment/string-safe; offsets + newlines preserved
     const rel = relative(join(REPO_ROOT, "artifacts/api-server/src"), file);
     CATCH_RE.lastIndex = 0;
     let m;
@@ -125,7 +152,7 @@ async function main() {
 
 const isDirectRun =
   import.meta.url === `file://${process.argv[1]}` ||
-  import.meta.url.endsWith(process.argv[1]?.replace(/^.*\//, "") ?? "");
+  import.meta.url.endsWith(process.argv[1]?.replace(/^.*\//, "") ?? "\0");
 if (isDirectRun) {
   main().catch((err) => {
     console.error("[check:gl-swallow] crashed:", err);
