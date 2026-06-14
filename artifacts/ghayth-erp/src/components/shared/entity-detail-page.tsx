@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRight, AlertCircle, RotateCcw } from "lucide-react";
+import { usePublishPageTitle } from "@/contexts/page-title-context";
 import { cn } from "@/lib/utils";
 
 export type EntityTab = {
@@ -116,18 +117,20 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
     children,
   } = props;
 
+  // Publish the entity's real title so the topbar + breadcrumb show the
+  // actual page (e.g. the employee/customer name), not the parent module.
+  usePublishPageTitle(title);
+
   const initialTab = defaultTab || tabs[0]?.key || "";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   if (isError) {
     return (
       <div className="space-y-4" dir="rtl">
-        <Link href={backHref}>
-          <Button variant="ghost" size="sm" className="gap-1">
+        <Button asChild variant="ghost" size="sm" className="gap-1"><Link href={backHref}>
             <ArrowRight className="h-4 w-4" />
             {backLabel}
-          </Button>
-        </Link>
+          </Link></Button>
         <Card className="border-status-error-surface">
           <CardContent className="p-10 flex flex-col items-center text-center gap-3">
             <AlertCircle className="h-10 w-10 text-red-500" />
@@ -152,12 +155,10 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <Link href={backHref}>
-        <Button variant="ghost" size="sm" className="gap-1">
+      <Button asChild variant="ghost" size="sm" className="gap-1"><Link href={backHref}>
           <ArrowRight className="h-4 w-4" />
           {backLabel}
-        </Button>
-      </Link>
+        </Link></Button>
 
       {isLoading ? (
         <HeaderSkeleton />
