@@ -574,8 +574,10 @@ router.use("/entity-meta", entityMetaRouter);
 // ultimately handles it. Mounting it on each router would cause double-counting
 // when Express falls through from the first router to the second.
 router.use("/umrah", umrahUserLimiter);
-router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
-router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
+// GAP_MATRIX P1 — frontend checks module="umrah"; backend was "operations" only.
+// Accept either so umrah-granted users (who may not carry operations) can reach the API.
+router.use("/umrah", requireModule("operations", "umrah"), requireGuards("financial"), umrahRouter);
+router.use("/umrah", requireModule("operations", "umrah"), requireGuards("financial"), umrahEntitiesRouter);
 router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
 // Wiring stubs — fills the 42 frontend↔backend orphans surfaced by
 // scripts/src/check-frontend-backend-wiring.mjs. Mounted at /api root because
