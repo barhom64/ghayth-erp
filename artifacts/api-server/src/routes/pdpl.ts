@@ -175,8 +175,13 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
       leaveRequests,
       notice: "هذه البيانات صادرة استجابةً لطلب حق الاطلاع وفق نظام حماية البيانات الشخصية (PDPL)"
     });
-    // GAP_MATRIX P1 — PDPL DSAR export must leave a forensic trail in audit_logs
-    // in addition to the PDPL-domain processing_activities_log entry above.
+    // GAP_MATRIX P0 — PDPL DSAR export must be tracked in print_jobs for PDPL
+    // compliance and in audit_logs for the forensic trail.
+    rawExecute(
+      `INSERT INTO print_jobs ("companyId","branchId","requestedBy","entityType","entityId","format","status","printedAt")
+       VALUES ($1,$2,$3,'report_pdpl_dsar',$4,'json','completed',NOW())`,
+      [scope.companyId, scope.branchId ?? null, scope.userId, employeeId]
+    ).catch((e) => logger.error(e, "pdpl: print_jobs insert failed"));
     auditFromRequest(req, "pdpl.dsar.export", "employees", employeeId, {
       after: { exportedBy: scope.userId, isOwnData },
     });
