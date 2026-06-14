@@ -82,6 +82,7 @@ import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 
 const PROJECT_TABS = [
   { key: "overview", label: "نظرة عامة", icon: FolderKanban },
+  { key: "units", label: "الوحدات", icon: BarChart2 },
   { key: "tasks", label: "المهام", icon: ListTodo },
   { key: "team", label: "الفريق", icon: Users2 },
   { key: "costs", label: "التكاليف", icon: DollarSign },
@@ -124,6 +125,15 @@ export default function ProjectDetail() {
   const { data: resourcesResp } = useApiQuery<any>(["project-resources", id || ""], `/projects/${id}/resources`, !!id);
   const { data: costsResp, refetch: refetchCosts } = useApiQuery<any>(["project-costs", id || ""], `/projects/${id}/costs`, !!id);
   const { data: lettersResp } = useApiQuery<any>(["project-letters", id || ""], `/projects/${id}/letters`, !!id);
+  const unitsEnabled = !!id && activeTab === "units";
+  const { data: unitsResp, refetch: refetchUnits } = useApiQuery<any>(["project-units", id || ""], `/projects/${id}/units`, unitsEnabled);
+  const projectUnits: any[] = unitsResp?.units || [];
+  const [showUnitForm, setShowUnitForm] = useState(false);
+  const [newUnit, setNewUnit] = useState<{ name?: string; code?: string; area?: string; salePrice?: string; notes?: string }>({});
+  const [sellUnitId, setSellUnitId] = useState<number | null>(null);
+  const [sellBuyerId, setSellBuyerId] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
+  const [sellLoading, setSellLoading] = useState(false);
   const risks: any[] = risksResp?.data || risksResp || [];
   const milestones: any[] = milestonesResp?.data || milestonesResp || [];
   const openRisks = risks.filter((r: any) => r.status === "open" || r.status === "realized");
@@ -309,6 +319,50 @@ export default function ProjectDetail() {
       qc.invalidateQueries({ queryKey: ["projects"] });
     } catch (err) {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const saveUnit = async () => {
+    try {
+      await apiFetch(`/projects/${id}/units`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newUnit.name,
+          code: newUnit.code || undefined,
+          area: newUnit.area ? Number(newUnit.area) : 0,
+          salePrice: newUnit.salePrice ? Number(newUnit.salePrice) : undefined,
+          notes: newUnit.notes || undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء الوحدة" });
+      setShowUnitForm(false);
+      setNewUnit({});
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const sellUnit = async () => {
+    if (!sellUnitId) return;
+    setSellLoading(true);
+    try {
+      await apiFetch(`/projects/units/${sellUnitId}/sell`, {
+        method: "POST",
+        body: JSON.stringify({
+          buyerClientId: Number(sellBuyerId),
+          salePrice: sellPrice ? Number(sellPrice) : undefined,
+        }),
+      });
+      toast({ title: "تم تسجيل البيع", description: "تم ترحيل قيد التكلفة" });
+      setSellUnitId(null);
+      setSellBuyerId("");
+      setSellPrice("");
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ في البيع", description: getErrorMessage(err) });
+    } finally {
+      setSellLoading(false);
     }
   };
 
@@ -807,6 +861,95 @@ export default function ProjectDetail() {
         </Card>
       )}
 
+      {activeTab === "units" && id && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2"><BarChart2 className="w-5 h-5" /> وحدات المشروع ({projectUnits.length})</CardTitle>
+              <GuardedButton perm="projects.list:create" size="sm" className="gap-1" onClick={() => setShowUnitForm(v => !v)}>
+                <Plus className="w-4 h-4" /> وحدة جديدة
+              </GuardedButton>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {showUnitForm && (
+                <div className="border rounded-lg p-4 bg-surface-subtle space-y-3">
+                  <p className="text-sm font-medium">إضافة وحدة جديدة</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs text-muted-foreground">اسم الوحدة</label>
+                      <input className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.name || ""} onChange={e => setNewUnit(p => ({ ...p, name: e.target.value }))} placeholder="مثال: شقة A-101" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">الرمز (اختياري)</label>
+                      <input className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.code || ""} onChange={e => setNewUnit(p => ({ ...p, code: e.target.value }))} placeholder="A-101" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">المساحة (م²)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.area || ""} onChange={e => setNewUnit(p => ({ ...p, area: e.target.value }))} placeholder="120" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">سعر البيع (اختياري)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.salePrice || ""} onChange={e => setNewUnit(p => ({ ...p, salePrice: e.target.value }))} placeholder="500000" />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs text-muted-foreground">ملاحظات (اختياري)</label>
+                      <input className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.notes || ""} onChange={e => setNewUnit(p => ({ ...p, notes: e.target.value }))} placeholder="" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setShowUnitForm(false)}>إلغاء</Button>
+                    <Button size="sm" onClick={saveUnit} disabled={!newUnit.name}>إضافة</Button>
+                  </div>
+                </div>
+              )}
+              {sellUnitId !== null && (
+                <div className="border rounded-lg p-4 bg-status-warning-surface space-y-3">
+                  <p className="text-sm font-medium">تسجيل بيع الوحدة</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">رقم العميل المشتري (ID)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={sellBuyerId} onChange={e => setSellBuyerId(e.target.value)} placeholder="مثال: 5" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">سعر البيع (اتركه فارغاً لاستخدام السعر المسجل)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={sellPrice} onChange={e => setSellPrice(e.target.value)} placeholder="اختياري" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setSellUnitId(null)}>إلغاء</Button>
+                    <Button size="sm" variant="destructive" onClick={sellUnit} disabled={!sellBuyerId || sellLoading}>
+                      {sellLoading ? "جارٍ البيع..." : "تأكيد البيع"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {projectUnits.length === 0 && !showUnitForm ? (
+                <p className="text-muted-foreground text-center py-8">لا توجد وحدات مشروع</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "name", header: "الوحدة", render: (u: any) => <div><p className="font-medium">{u.name}</p>{u.code && <p className="text-xs text-muted-foreground font-mono">{u.code}</p>}</div> },
+                    { key: "area", header: "المساحة", ltr: true, render: (u: any) => <span className="font-mono">{Number(u.area || 0).toFixed(1)} م²</span> },
+                    { key: "salePrice", header: "سعر البيع", render: (u: any) => u.salePrice != null ? formatCurrency(Number(u.salePrice)) : <span className="text-muted-foreground">—</span> },
+                    { key: "allocatedCost", header: "التكلفة المخصصة", render: (u: any) => u.allocatedCost > 0 ? formatCurrency(Number(u.allocatedCost)) : <span className="text-muted-foreground">—</span> },
+                    { key: "projectedProfit", header: "الربح المتوقع", render: (u: any) => u.projectedProfit != null ? <span className={Number(u.projectedProfit) >= 0 ? "text-status-success-foreground font-medium" : "text-status-error-foreground font-medium"}>{formatCurrency(Number(u.projectedProfit))}</span> : <span className="text-muted-foreground">—</span> },
+                    { key: "status", header: "الحالة", render: (u: any) => <PageStatusBadge status={u.status || "available"} /> },
+                    { key: "actions", header: "", render: (u: any) => u.status !== "sold" && u.status !== "cancelled" ? (
+                      <GuardedButton perm="projects.list:update" size="sm" variant="outline" onClick={() => { setSellUnitId(u.id); setSellPrice(u.salePrice ? String(u.salePrice) : ""); setSellBuyerId(""); }}>
+                        بيع
+                      </GuardedButton>
+                    ) : null },
+                  ]}
+                  data={projectUnits}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
       {activeTab === "documents" && id && (
         <EntityObligations entityType="project" entityId={id!} hideWhenEmpty />
       )}
