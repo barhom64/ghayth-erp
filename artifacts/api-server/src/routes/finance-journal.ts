@@ -3364,7 +3364,8 @@ async function createOpeningBalanceEntry(params: {
   return { id: journalId, ref, description };
 }
 
-journalRouter.post("/opening-balances", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — opening balances alter the GL baseline; floor at 70 (controller).
+journalRouter.post("/opening-balances", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -3380,7 +3381,8 @@ journalRouter.post("/opening-balances", authorize({ feature: "finance.accounts",
   }
 });
 
-journalRouter.post("/opening-balances/import-csv", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — CSV import of opening balances; same level as POST.
+journalRouter.post("/opening-balances/import-csv", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
