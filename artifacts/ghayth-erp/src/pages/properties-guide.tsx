@@ -1,3 +1,8 @@
+/**
+ * GAP_MATRIX P2 — Static property-management guide page. Content is
+ * embedded (no API calls) to provide onboarding instructions for the
+ * Properties module. Intentional static content page.
+ */
 import { useState } from "react";
 import { Link } from "wouter";
 import { formatDateAr, formatCurrency } from "@/lib/formatters";
