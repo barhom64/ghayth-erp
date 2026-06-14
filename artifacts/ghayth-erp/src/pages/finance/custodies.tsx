@@ -193,11 +193,9 @@ export default function CustodiesPage() {
       header: "إجراءات",
       render: (c) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/finance/custodies/${c.id}`}>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="عرض">
+          <Button asChild variant="ghost" size="sm" className="h-7 w-7 p-0" title="عرض"><Link href={`/finance/custodies/${c.id}`}>
               <Eye className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link></Button>
           {c.status !== "settled" && c.status !== "pending" && c.status !== "rejected" && (
             <Button variant="outline" size="sm" onClick={() => setSettleTarget(c)}>
               تسوية
