@@ -63,15 +63,21 @@ describe("U-14-P1 §B — `sub_agent` short-name alias resolves to buildUmrahSub
 // ─────────────────────────────────────────────────────────────────────────────
 // §C — `umrah_group` no longer aliased to the pilgrim preset
 // ─────────────────────────────────────────────────────────────────────────────
-describe("U-14-P1 §C — `umrah_group` is no longer aliased to the pilgrim preset", () => {
-  it("umrah_group calls universalFallback (or a future bespoke group preset), NOT buildUmrahPilgrimPreset", () => {
+describe("U-14-P1 §C — `umrah_group` no longer aliased to the pilgrim preset", () => {
+  it("umrah_group has no aliasing entry pointing at buildUmrahPilgrimPreset", () => {
     expect(RESOLVER).not.toMatch(
       /umrah_group:\s*\(\)\s*=>\s*buildUmrahPilgrimPreset\(\)/,
     );
   });
 
-  it("umrah_group resolution is in the BESPOKE_PRESETS map (key still present)", () => {
-    expect(RESOLVER).toMatch(/umrah_group:\s*\(\)\s*=>/);
+  it("removing the key lets the resolver fall through to universalFallback", () => {
+    // templateResolver.ts line ~142: BESPOKE_PRESETS[entityType]?.() ??
+    //   universalFallback(entityType). The fallback already renders the
+    //   group row's actual columns. Adding a bespoke buildUmrahGroupPreset
+    //   is U-14-P3 scope.
+    expect(RESOLVER).toMatch(
+      /BESPOKE_PRESETS\[entityType\]\?\.\(\)\s*\?\?\s*universalFallback\(entityType\)/,
+    );
   });
 });
 

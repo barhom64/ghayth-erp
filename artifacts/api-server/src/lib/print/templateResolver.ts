@@ -421,12 +421,12 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   // printed doc carries the same layout the rest of the domain uses.
   fleet_driver: () => buildDriverCardPreset(),
   legal_correspondence: () => buildCorrespondenceCardPreset(),
-  // U-14-P1 — umrah_group was aliased to the pilgrim preset, but a
-  // group is a COLLECTION of pilgrims with its own meta (mutamerCount,
-  // agent linkage, season). The universal fallback renders the group
-  // row's actual fields (id, name, status, season, agent, sub-agent,
-  // mutamerCount, ...). A bespoke buildUmrahGroupPreset is U-14-P3.
-  umrah_group: () => universalFallback("umrah_group"),
+  // U-14-P1 — umrah_group was aliased to the pilgrim preset (wrong:
+  // a group is a COLLECTION of pilgrims with its own meta). Removing
+  // the key here lets the resolver fall through to universalFallback
+  // (templateResolver line 142: `BESPOKE_PRESETS[entityType]?.() ??
+  // universalFallback(entityType)`), which renders the group row's
+  // actual columns. A bespoke buildUmrahGroupPreset is U-14-P3.
   umrah_agent_invoice: () => buildUmrahInvoicePreset(),
   // Cargo bill of lading — new bespoke preset wired with loadCargoManifest.
   cargo_manifest: () => buildCargoManifestPreset(),
