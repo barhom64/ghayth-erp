@@ -199,17 +199,22 @@
 
 ---
 
-## §8 — خرائط القرار قبل أي كود
+## §8 — خرائط القرار قبل أي كود (محسومة 2026-06-14)
 
-| الرمز | السؤال | الافتراضي المقترَح | الأثر إذا قُلب |
+| الرمز | السؤال | الافتراضي المقترَح | الحسم النهائي |
 |---|---|---|---|
-| CHECK-PE-01 | `umrah_groups.programStartsAt/EndsAt` موجودان؟ | فحص schema قبل تنفيذ UMR | يلغى حارس «داخل برنامج الفوج» |
-| CHECK-PE-02 | حقول حجم الحمولة على `transport_bookings`؟ | لا يوجد — تأجَّل PROF-03 | تأجيل توسيع الـmatching الفيزيائي |
-| CHECK-PE-03 | حقول تفضيل العميل (AC, safety)؟ | لا يوجد — تأجَّل PROF-04 | تأجيل توسيع agreement |
-| CHECK-PE-04 | `driver_leave_requests` موجود؟ | تأكيد + فحص | يلغى REST-02 |
-| CHECK-PE-05 | سقوف القيادة اليومية/الأسبوعية؟ | 13h/60h من `transport_planning_settings` | تعديل أرقام |
-| CHECK-PE-06 | `same_class_only` تعني حرفي أم مكافئ؟ | حرفي صارم | تعديل سطر 535 |
-| CHECK-PE-07 | الفروع تتشارك الأسطول؟ | نعم — branch tie-breaker فقط | إضافة فلتر `branchId` ولا blocker |
+| CHECK-PE-01 | `umrah_groups.programStartsAt/EndsAt` موجودان؟ | فحص schema قبل تنفيذ UMR | **❌ غير موجودَين.** `umrah_groups` يحمل `programDuration` فقط (integer أيام). البديل المتاح: `umrah_pilgrims.arrivalDate/departureDate` (موجودان) — يمكن اشتقاق نافذة الفوج كـ`MIN(arrivalDate)..MAX(departureDate)`. UMR-03 إن نُفِّذ يستخدم هذا الاشتقاق بدلًا من حقول مباشرة. |
+| CHECK-PE-02 | حقول حجم الحمولة على `transport_bookings`؟ | لا يوجد — تأجَّل PROF-03 | **❌ غير موجودة كحقول مخصَّصة.** `transport_bookings` يحمل `cargoWeight + cargoQuantity + cargoUnit + cargoDescription` (نص حرّ) + `cargoOperationalMetadata jsonb` (مهرب). PROF-03 (مطابقة أبعاد الحمولة بالـbox الفعلي) مؤجَّل بشكل رسمي — يحتاج إضافة `cargoLengthCm/WidthCm/HeightCm` أو الاتفاق على schema `cargoOperationalMetadata`. |
+| CHECK-PE-03 | حقول تفضيل العميل (AC, safety)؟ | لا يوجد — تأجَّل PROF-04 | **❌ غير موجودة.** `transport_bookings` يحمل `requestedVehicleClass` (نص) و `vehicleSubstitutionPolicy` فقط. لا حقل عميلي لـ«مكيّف» أو «ميزات سلامة». PROF-04 (مطابقة `hasAc / safetyFeatures` للمتطلَب) مؤجَّل — جانب الطلب لا يحمل المتطلَب أصلًا. |
+| CHECK-PE-04 | `driver_leave_requests` موجود؟ | تأكيد + فحص | **✅ موجود ومستخدَم.** الجدول الفعلي اسمه `hr_leave_requests` (employeeId/startDate/endDate/status مع `chk_status` enum). **المحرّك يقرأه فعلًا** عبر `assignmentSuggestionEngine.ts:652-664 + 876` (`leaveByEmployeeId Map + checkDriverLeave`). REST-02 مغلق. |
+| CHECK-PE-05 | سقوف القيادة اليومية/الأسبوعية؟ | 13h/60h من `transport_planning_settings` | **✅ موجودان كأعمدة + المحرّك يقرؤهما.** `transport_planning_settings.defaultMaxDailyDrivingMinutes` (default 780 = 13h) و `defaultMaxWeeklyDrivingMinutes` (default 3600 = 60h) + CHECK constraint سَنوي. المحرّك يستهلكهما عبر `drivingCaps + checkDriverDrivingCaps` (الأسطر 778, 878-881). REST-01 مغلق. |
+| CHECK-PE-06 | `same_class_only` تعني حرفي أم مكافئ؟ | حرفي صارم | **⏳ يحتاج قرار مالك.** التطبيق الحالي (سطر ~535) يدمج المكافئ — قرار «حرفي صارم» يتطلَّب تعديل سطر واحد + اختبار. (سيُغلَق في PR منفصل عند القرار.) |
+| CHECK-PE-07 | الفروع تتشارك الأسطول؟ | نعم — branch tie-breaker فقط | **✅ محسوم (قرار مالك 2026-06-14):** نعم تتشارك. لا فلتر `branchId` في الـSELECT، الفرع tie-breaker فقط عند التساوي. السلوك الحالي للمحرّك مطابق — لا تعديل مطلوب. CONF-03 مغلق. |
+
+**خلاصة الحسم 2026-06-14:**
+- ✅ **5/7 محسومة فعليًّا:** CHECK-PE-01..05 + CHECK-PE-07. الثلاثة (01/02/03) المتعلِّقة بحقول schema مفقودة تؤجِّل توسعات «UMR-03 / PROF-03 / PROF-04» إلى ما بعد قرار مالك بإضافة الحقول. الاثنان (04/05) محسومتان إيجابًا — المحرّك ينفّذهما فعلًا.
+- ⏳ **1/7 ينتظر قرار مالك:** CHECK-PE-06 (دلالة `same_class_only`).
+- ✅ **1/7 محسومة بقرار مالك سابق:** CHECK-PE-07 (الأسطول مشترك).
 
 ---
 
