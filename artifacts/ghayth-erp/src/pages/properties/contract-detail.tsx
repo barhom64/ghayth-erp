@@ -28,6 +28,7 @@ import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
 import {
   FileText,
   User,
@@ -342,6 +343,19 @@ export default function ContractDetailPage() {
         inspections.length === 0
           ? emptyMsg("لا توجد تفتيشات")
           : <DataTable columns={inspColumns} data={inspections} pageSize={10} emptyMessage="لا توجد تفتيشات" noToolbar />,
+    },
+    {
+      key: "attachments",
+      label: "المرفقات",
+      icon: FolderOpen,
+      content: () => (
+        <EntityAttachmentPanel
+          entityType="rental_contract"
+          entityId={Number(id)}
+          label="مرفقات العقد"
+          defaultCategory="contract_pdf"
+        />
+      ),
     },
     {
       key: "financial",

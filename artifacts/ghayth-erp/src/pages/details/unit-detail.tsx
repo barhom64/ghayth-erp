@@ -36,12 +36,14 @@ import {
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
+import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
   { key: "contracts", label: "العقود", icon: FileText },
   { key: "payments", label: "المدفوعات والمتأخرات", icon: Banknote },
   { key: "maintenance", label: "الصيانة", icon: Wrench },
+  { key: "attachments", label: "المرفقات", icon: ImageIcon },
   { key: "finance", label: "الملف المالي", icon: BookOpen },
   { key: "tasks", label: "المهام", icon: CheckSquare },
 ] as const;
@@ -248,24 +250,14 @@ export default function UnitDetail() {
               </div>
             ) : null;
           })()}
-          {(() => {
-            const attachments = unit.attachments
-              ? (typeof unit.attachments === "string" ? JSON.parse(unit.attachments) : unit.attachments)
-              : [];
-            const images = attachments.filter((a: any) => a?.mimeType?.startsWith("image/") || a?.url?.match(/\.(jpg|jpeg|png|webp|gif)/i));
-            return images.length > 0 ? (
-              <div className="mt-4">
-                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> صور الوحدة</p>
-                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                  {images.slice(0, 10).map((img: any, i: number) => (
-                    <a key={i} href={img.url || img.fileUrl} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded overflow-hidden border hover:opacity-90 transition-opacity">
-                      <img src={img.url || img.fileUrl} alt={img.name || `صورة ${i+1}`} className="w-full h-full object-cover" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ) : null;
-          })()}
+          <EntityAttachmentPanel
+            entityType="property_unit"
+            entityId={unit.id}
+            label="مرفقات الوحدة"
+            defaultCategory="unit_photo_before"
+            filterCategories={["property_photo","unit_photo_before","unit_photo_after","unit_handover","maintenance_photo"]}
+            className="mt-4"
+          />
         </CardContent>
       </Card>
 
@@ -648,6 +640,19 @@ export default function UnitDetail() {
                 searchPlaceholder={null}
               />
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "attachments" && id && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-5">
+            <EntityAttachmentPanel
+              entityType="property_unit"
+              entityId={Number(id)}
+              label="مرفقات الوحدة"
+              defaultCategory="unit_photo_before"
+            />
           </CardContent>
         </Card>
       )}
