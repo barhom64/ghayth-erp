@@ -329,15 +329,11 @@ export default function VendorSpendPage() {
       header: "الإجراءات",
       render: (v) => (
         <div className="flex items-center gap-1">
-          <Link href={`/finance/vendors/${v.supplierId}/statement`}>
-            <Button variant="ghost" size="sm" className="h-7 text-xs">
+          <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href={`/finance/vendors/${v.supplierId}/statement`}>
               كشف <ChevronRight className="h-3 w-3 ms-1" />
-            </Button>
-          </Link>
+            </Link></Button>
           {v.openInvoiceCount > 0 && (
-            <Link href={`/finance/payment-run?supplierId=${v.supplierId}`}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs">دفع</Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href={`/finance/payment-run?supplierId=${v.supplierId}`}>دفع</Link></Button>
           )}
         </div>
       ),
