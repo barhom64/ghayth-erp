@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useLocation } from "wouter";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { formatNumber, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
@@ -23,16 +23,55 @@ import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 
 type ViewMode = "list" | "schedule";
 
+const EMPTY_TRIP = { vehicleId: "", driverId: "", origin: "", destination: "", distance: "", tripDate: "", notes: "" };
+
 export default function TripsPage() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["trips"], "/fleet/trips");
+  const { data: vehiclesResp } = useApiQuery<any>(["fleet-vehicles-trips"], "/fleet/vehicles?limit=500");
+  const { data: driversResp } = useApiQuery<any>(["fleet-drivers-trips"], "/fleet/drivers?limit=500");
+  const vehicles: any[] = vehiclesResp?.data || vehiclesResp || [];
+  const drivers: any[] = driversResp?.data || driversResp || [];
   const items: any[] = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [showCreate, setShowCreate] = useState(false);
+  const [tripForm, setTripForm] = useState(EMPTY_TRIP);
+  const [saving, setSaving] = useState(false);
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
+
+  const createTrip = async () => {
+    setSaving(true);
+    try {
+      await apiFetch("/fleet/trips", {
+        method: "POST",
+        body: JSON.stringify({
+          vehicleId: tripForm.vehicleId ? Number(tripForm.vehicleId) : undefined,
+          driverId: tripForm.driverId ? Number(tripForm.driverId) : undefined,
+          origin: tripForm.origin || undefined,
+          destination: tripForm.destination || undefined,
+          distance: tripForm.distance ? Number(tripForm.distance) : undefined,
+          tripDate: tripForm.tripDate || undefined,
+          notes: tripForm.notes || undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء الرحلة" });
+      setShowCreate(false);
+      setTripForm(EMPTY_TRIP);
+      await refetch();
+    } catch (err: any) {
+      toast({ title: "فشل الإنشاء", description: err?.message ?? "خطأ", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Group trips by tripDate (or startTime fallback) for the schedule
   // view. ISO date as key keeps the sort stable; the bucket order is
@@ -107,9 +146,9 @@ export default function TripsPage() {
               <CalendarDays className="h-3.5 w-3.5 me-1" />جدول يومي
             </Button>
           </div>
-          <Link href="/fleet/trips/create">
-            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />رحلة جديدة</GuardedButton>
-          </Link>
+          <GuardedButton perm="fleet:create" size="sm" onClick={() => setShowCreate((v) => !v)}>
+            <Plus className="h-4 w-4 me-1" />{showCreate ? "إلغاء" : "رحلة جديدة"}
+          </GuardedButton>
           <PrintButton
             entityType="report_fleet_trips"
             entityId="list"
@@ -135,6 +174,55 @@ export default function TripsPage() {
       }
     >
       <FleetTabsNav />
+
+      {showCreate && (
+        <div className="rounded-lg border bg-white p-4 mb-4 space-y-3" data-testid="form-create-trip">
+          <h3 className="text-base font-semibold">إنشاء رحلة جديدة</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>المركبة</Label>
+              <select className="w-full h-10 border rounded-md px-2" value={tripForm.vehicleId}
+                onChange={(e) => setTripForm((v) => ({ ...v, vehicleId: e.target.value }))}>
+                <option value="">— اختر مركبة —</option>
+                {vehicles.map((v: any) => <option key={v.id} value={v.id}>{v.plateNumber} {v.brand ? `(${v.brand})` : ""}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>السائق</Label>
+              <select className="w-full h-10 border rounded-md px-2" value={tripForm.driverId}
+                onChange={(e) => setTripForm((v) => ({ ...v, driverId: e.target.value }))}>
+                <option value="">— اختر سائق —</option>
+                {drivers.map((d: any) => <option key={d.id} value={d.id}>{d.name || d.driverName}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>من (الموقع)</Label>
+              <Input value={tripForm.origin} onChange={(e) => setTripForm((v) => ({ ...v, origin: e.target.value }))} />
+            </div>
+            <div>
+              <Label>إلى (الوجهة)</Label>
+              <Input value={tripForm.destination} onChange={(e) => setTripForm((v) => ({ ...v, destination: e.target.value }))} />
+            </div>
+            <div>
+              <Label>المسافة (كم)</Label>
+              <Input type="number" value={tripForm.distance} onChange={(e) => setTripForm((v) => ({ ...v, distance: e.target.value }))} />
+            </div>
+            <div>
+              <Label>تاريخ الرحلة</Label>
+              <Input type="date" value={tripForm.tripDate} onChange={(e) => setTripForm((v) => ({ ...v, tripDate: e.target.value }))} />
+            </div>
+            <div className="col-span-2">
+              <Label>ملاحظات</Label>
+              <Input value={tripForm.notes} onChange={(e) => setTripForm((v) => ({ ...v, notes: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button disabled={saving} onClick={createTrip}>{saving ? "جاري الحفظ..." : "إنشاء الرحلة"}</Button>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
+          </div>
+        </div>
+      )}
+
       <KpiGrid items={[
         { label: "إجمالي الرحلات", value: items.length, icon: Route, color: "text-status-info-foreground bg-status-info-surface" },
         { label: "جارية", value: items.filter((t: any) => t.status === "in_progress").length, icon: Navigation, color: "text-status-warning-foreground bg-status-warning-surface" },
