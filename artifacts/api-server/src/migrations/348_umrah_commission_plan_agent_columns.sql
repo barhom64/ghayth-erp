@@ -1,4 +1,4 @@
--- 347_umrah_commission_plan_agent_columns.sql
+-- 348_umrah_commission_plan_agent_columns.sql
 --
 -- WHAT:    add nullable `agentId` + `subAgentId` columns to
 --          employee_commission_plans so a marketing plan can be

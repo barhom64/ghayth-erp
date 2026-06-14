@@ -34,7 +34,7 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const MIGRATION = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/migrations/347_umrah_commission_plan_agent_columns.sql"),
+  join(REPO_ROOT, "artifacts/api-server/src/migrations/348_umrah_commission_plan_agent_columns.sql"),
   "utf8",
 );
 const COMMISSION_ENGINE = readFileSync(
