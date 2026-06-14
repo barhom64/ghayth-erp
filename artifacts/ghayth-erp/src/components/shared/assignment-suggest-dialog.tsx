@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Wand2, AlertCircle, CheckCircle2, MapPin, User, Truck } from "lucide-react";
+import { Wand2, AlertCircle, CheckCircle2, MapPin, User, Truck, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 // #1812 — Suggest-Assignment dialog. Wraps POST
 // /transport/bookings/:id/suggest-assignment and displays the ranked
@@ -91,12 +92,28 @@ const SCORE_LABEL: Record<keyof SuggestionCandidate["scores"], string> = {
   agreement:    "اتفاق العميل",
 };
 
+// #TA-T18-UX-AUDIT-01 UX-01 — تعريب ناتج التخطيط الجماعي بدل عرض enum خام
+// (`outcome`) للمستخدم. أي قيمة غير معروفة تسقط لرسالة عربية لا للمفتاح التقني.
+const OUTCOME_LABEL: Record<string, string> = {
+  planned:       "تم التخطيط",
+  skipped:       "تم التخطّي",
+  conflict:      "تعارض زمني",
+  no_window:     "لا توجد نافذة زمنية",
+  no_candidates: "لا يوجد مرشّحون",
+  blocked:       "عوائق صارمة",
+  error:         "خطأ",
+};
+
 export function AssignmentSuggestDialog({
   source, bookingId: legacyBookingId,
   open, onOpenChange, scheduledStartAt, scheduledEndAt,
   onSelect, autoCreate,
 }: Props) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
+  // #TA-T18-UX-AUDIT-01 UX-01 — أزرار إصلاح مباشرة: تنقل المشغّل إلى مكان
+  // معالجة سبب غياب الترشيحات (المركبات/السائقون) وتغلق الحوار.
+  const goFix = (path: string) => { onOpenChange(false); navigate(path); };
   const [candidates, setCandidates] = useState<SuggestionCandidate[] | null>(null);
   // #1812 gap #5 — structured diagnostics from the server when
   // candidates is empty (no vehicles / no drivers / no window / all busy).
@@ -106,8 +123,18 @@ export function AssignmentSuggestDialog({
     counts: { totalVehicles: number; dispatchableVehicles: number; totalDrivers: number; activeDrivers: number };
     hints: string[];
   } | null>(null);
+  // #TA-T18-UX-AUDIT-01 P0-4 — مركبات/سائقون استبعدهم المحرك قبل التقييم + السبب.
+  const [excluded, setExcluded] = useState<
+    Array<{ kind: string; id: number; label: string; reason: string }> | null
+  >(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // #TA-T18-UX-AUDIT-01 UX-02 — جدولة يدوية من نافذة الاقتراح: عند غياب نافذة
+  // زمنية (أكثر أسباب «صفر ترشيح» شيوعًا) يحدّد المشغّل موعد الرحلة فيُحفظ على
+  // الحجز عبر PATCH ثم يُعاد الحساب — دون مغادرة الحوار.
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+  const [savingWindow, setSavingWindow] = useState(false);
 
   const effectiveSource: SuggestSource = source ??
     (legacyBookingId != null
@@ -127,6 +154,7 @@ export function AssignmentSuggestDialog({
     setError(null);
     setCandidates(null);
     setDiagnostics(null);
+    setExcluded(null);
     try {
       const body: Record<string, unknown> = {};
       if (scheduledStartAt) body.scheduledStartAt = scheduledStartAt;
@@ -139,17 +167,43 @@ export function AssignmentSuggestDialog({
           counts: { totalVehicles: number; dispatchableVehicles: number; totalDrivers: number; activeDrivers: number };
           hints: string[];
         } | null;
+        excluded?: Array<{ kind: string; id: number; label: string; reason: string }>;
       }>(
         suggestUrl,
         { method: "POST", body: JSON.stringify(body) },
       );
       setCandidates(res?.data ?? []);
       setDiagnostics(res?.diagnostics ?? null);
+      setExcluded(res?.excluded ?? null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // #TA-T18-UX-AUDIT-01 UX-02 — يحفظ نافذة الرحلة على الحجز (pickupWindowStart/
+  // End) ثم يعيد الحساب. لمصدر الحجز فقط (المقطع له مسار جدولة مستقل).
+  const saveWindowAndRerun = async () => {
+    if (effectiveSource.kind !== "booking") return;
+    if (!manualStart || !manualEnd) {
+      toast({ variant: "destructive", title: "حدّد بداية الرحلة ونهايتها أولاً" });
+      return;
+    }
+    setSavingWindow(true);
+    try {
+      await apiFetch(`/transport/bookings/${effectiveSource.bookingId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ pickupWindowStart: manualStart, pickupWindowEnd: manualEnd }),
+      });
+      toast({ title: "تم تحديد موعد الرحلة — يُعاد الحساب" });
+      await run();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast({ variant: "destructive", title: "تعذّر حفظ الموعد", description: message });
+    } finally {
+      setSavingWindow(false);
     }
   };
 
@@ -161,6 +215,7 @@ export function AssignmentSuggestDialog({
     // Reset between opens so re-clicking re-fetches.
     setCandidates(null);
     setDiagnostics(null);
+    setExcluded(null);
     setError(null);
   }
 
@@ -200,7 +255,7 @@ export function AssignmentSuggestDialog({
             }),
           },
         );
-        toast({ title: `تم إسناد المرحلة (المركبة #${c.vehicleId}, السائق #${c.driverId})` });
+        toast({ title: `تم إسناد المرحلة — ${c.vehiclePlate ?? "المركبة"} / ${c.driverName ?? "السائق"}` });
         onSelect?.(c);
         onOpenChange(false);
       } catch (err: unknown) {
@@ -231,7 +286,7 @@ export function AssignmentSuggestDialog({
         toast({
           variant: "destructive",
           title: "تعذّر الإنشاء التلقائي",
-          description: r?.reason ?? `الناتج: ${r?.outcome ?? "غير معروف"}`,
+          description: r?.reason ?? OUTCOME_LABEL[r?.outcome ?? ""] ?? "تعذّر إكمال الطلب",
         });
         onSelect?.(c);
       }
@@ -243,6 +298,42 @@ export function AssignmentSuggestDialog({
       setCreating(false);
     }
   };
+
+  // #TA-T18-UX-AUDIT-01 UX-02 — لوحة تحديد موعد الرحلة، تُعرض في حالة «صفر
+  // ترشيح». مصدر الحجز فقط (المقطع له مسار جدولة مستقل).
+  const schedulePanel = effectiveSource.kind === "booking" ? (
+    <div className="bg-white p-3 rounded border space-y-2 text-start">
+      <div className="text-xs font-semibold flex items-center gap-1">
+        <Clock className="h-3.5 w-3.5" /> تحديد موعد الرحلة
+      </div>
+      <div className="text-[11px] text-muted-foreground">
+        إن كان سبب غياب الترشيحات عدم وجود نافذة زمنية، حدّد بداية الرحلة ونهايتها ثم احفظ.
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <label className="text-[11px] text-muted-foreground block space-y-1">
+          <span>من</span>
+          <input
+            type="datetime-local"
+            value={manualStart}
+            onChange={(e) => setManualStart(e.target.value)}
+            className="w-full h-8 px-2 rounded border bg-background text-xs"
+          />
+        </label>
+        <label className="text-[11px] text-muted-foreground block space-y-1">
+          <span>إلى</span>
+          <input
+            type="datetime-local"
+            value={manualEnd}
+            onChange={(e) => setManualEnd(e.target.value)}
+            className="w-full h-8 px-2 rounded border bg-background text-xs"
+          />
+        </label>
+      </div>
+      <Button size="sm" onClick={saveWindowAndRerun} disabled={savingWindow || loading} rateLimitAware>
+        {savingWindow ? "جارٍ الحفظ…" : "حفظ الموعد وإعادة الحساب"}
+      </Button>
+    </div>
+  ) : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -263,7 +354,35 @@ export function AssignmentSuggestDialog({
           {error && (
             <Card className="border-rose-300 bg-rose-50">
               <CardContent className="p-3 text-sm text-rose-700 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />{error}
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span className="flex-1">{error}</span>
+                {/* UX-01 — زر إصلاح مجاور للخطأ بدل رسالة بلا إجراء. */}
+                <Button size="sm" variant="outline" onClick={run} disabled={loading} rateLimitAware>
+                  إعادة المحاولة
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          {excluded && excluded.length > 0 && !loading && !error && (
+            <Card className="border-muted bg-surface-subtle/30">
+              <CardContent className="p-3 text-xs space-y-2">
+                <div className="font-semibold text-muted-foreground flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  مركبات/سائقون مُستبعَدون قبل الترشيح ({excluded.length}) — والسبب
+                </div>
+                <ul className="space-y-1">
+                  {excluded.map((e, i) => (
+                    <li key={i} className="flex items-start gap-1.5 flex-wrap">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded bg-white border font-medium">
+                        {e.kind === "vehicle" ? "مركبة" : "سائق"} {e.label}
+                      </span>
+                      <span className="text-foreground">{e.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-muted-foreground">
+                  عالِج السبب (الملف الفني / جاهزية الوثائق / الإجازة / حدود القيادة) ثم أعد الاقتراح.
+                </div>
               </CardContent>
             </Card>
           )}
@@ -310,12 +429,40 @@ export function AssignmentSuggestDialog({
                         </ul>
                       </div>
                     )}
+                    {/* UX-01 — حوّل التشخيص النصّي إلى إجراءات قابلة للنقر. */}
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => goFix("/fleet")}>
+                        <Truck className="h-3.5 w-3.5 me-1" />قائمة المركبات
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => goFix("/fleet/drivers")}>
+                        <User className="h-3.5 w-3.5 me-1" />قائمة السائقين
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={run} disabled={loading} rateLimitAware>
+                        إعادة الحساب
+                      </Button>
+                    </div>
+                    {schedulePanel}
                   </CardContent>
                 </Card>
               ) : (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  لا توجد مركبات أو سائقون في الشركة، أو الحجز ليس له نافذة زمنية محددة.
-                  تأكد من إعدادات الأسطول والسائقين أولاً.
+                <div className="text-center py-8 text-sm text-muted-foreground space-y-3">
+                  <div>
+                    لا توجد مركبات أو سائقون في الشركة، أو الحجز ليس له نافذة زمنية محددة.
+                    تأكد من إعدادات الأسطول والسائقين أولاً.
+                  </div>
+                  {/* UX-01 — أزرار إصلاح بدل رسالة نصّية بلا إجراء. */}
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <Button size="sm" variant="outline" onClick={() => goFix("/fleet")}>
+                      <Truck className="h-3.5 w-3.5 me-1" />قائمة المركبات
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => goFix("/fleet/drivers")}>
+                      <User className="h-3.5 w-3.5 me-1" />قائمة السائقين
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={run} disabled={loading} rateLimitAware>
+                      إعادة الحساب
+                    </Button>
+                  </div>
+                  {schedulePanel}
                 </div>
               )}
             </>
@@ -366,12 +513,12 @@ export function AssignmentSuggestDialog({
                   <div>
                     <div className="flex items-center gap-2 font-medium">
                       <Truck className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-mono">{c.vehiclePlate ?? `#${c.vehicleId}`}</span>
+                      <span className="font-mono">{c.vehiclePlate ?? "بدون لوحة"}</span>
                       {c.vehicleType && <span className="text-xs text-muted-foreground">({c.vehicleType})</span>}
                     </div>
                     <div className="flex items-center gap-2 text-sm mt-1">
                       <User className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{c.driverName ?? `سائق #${c.driverId}`}</span>
+                      <span>{c.driverName ?? "سائق بلا اسم"}</span>
                       {c.estimatedDistanceKm != null && (
                         <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
                           <MapPin className="h-3 w-3" />

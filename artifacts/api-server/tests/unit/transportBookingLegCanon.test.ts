@@ -49,7 +49,9 @@ describe("#2079 Gate-PE-2 — POST /transport/bookings auto-derives a single leg
       "b.toLocationId",
       "b.fromLocationText",
       "b.toLocationText",
-      "b.pickupWindowStart",
+      // P2-1 (TA-T18-UX-AUDIT-01): النافذة المشتقّة الموحّدة (pickupWindowStart
+      // الصريح أو المشتقّ من التوقيت المرئي) بدل b.pickupWindowStart الخام.
+      "effPickupStart",
       "b.fixedAppointmentTime",
       "b.passengerCount",
     ]) {

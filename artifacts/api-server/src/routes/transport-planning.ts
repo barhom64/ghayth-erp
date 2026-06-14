@@ -51,6 +51,7 @@ import {
   suggestAssignments,
   suggestForLeg,
   suggestForItinerary,
+  type ExcludedCandidate,
 } from "../lib/fleet/assignmentSuggestionEngine.js";
 import { diagnoseEmptySuggest } from "../lib/fleet/suggestDiagnostics.js";
 
@@ -157,6 +158,11 @@ transportPlanningRouter.post(
       const scope = req.scope!;
       const bookingId = parseId(req.params.id, "id");
       const b = zodParse(suggestSchema.safeParse(req.body ?? {}));
+      // #TA-T18-UX-AUDIT-01 P0-4 — collect pre-scoring ejections so the
+      // SPA can explain WHY an expected vehicle/driver isn't suggested
+      // (مصفوفة القدرات / الجاهزية / الصيانة / الإجازة / حدود القيادة)
+      // بدل إخفائها بصمت.
+      const sink: ExcludedCandidate[] = [];
       const candidates = await suggestAssignments({
         companyId: scope.companyId,
         branchId: scope.branchId ?? null,
@@ -165,6 +171,7 @@ transportPlanningRouter.post(
         scheduledStartAt: b.scheduledStartAt,
         scheduledEndAt: b.scheduledEndAt,
         limit: b.limit,
+        sink,
       });
       // #1812 gap #5 — when the engine returns 0, surface a structured
       // diagnostic so the SPA can explain WHY (no vehicles vs no
@@ -178,7 +185,8 @@ transportPlanningRouter.post(
           scheduledEndAt: b.scheduledEndAt,
         });
       }
-      res.json({ data: candidates, diagnostics });
+      // Cap the excluded list so a large fleet can't bloat the payload.
+      res.json({ data: candidates, diagnostics, excluded: sink.slice(0, 40) });
     } catch (err) {
       handleRouteError(err, res, "Suggest assignment error:");
     }

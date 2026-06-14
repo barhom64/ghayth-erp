@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/select";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
 import { Plus, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ROUTE_TYPES } from "@/lib/transport-constants";
 
 // #1812 operational review — closes the user's gap #2:
 //   "تكامل العمرة ناقص. من الصورة لا يوجد سؤال:
@@ -44,15 +45,7 @@ interface Props {
   setBookingSource: (v: string) => void;
 }
 
-const ROUTE_TYPES = [
-  { value: "airport_to_makkah",  label: "المطار → مكة" },
-  { value: "makkah_to_madinah",  label: "مكة → المدينة" },
-  { value: "madinah_to_airport", label: "المدينة → المطار" },
-  { value: "makkah_local",       label: "تنقل محلي بمكة" },
-  { value: "madinah_local",      label: "تنقل محلي بالمدينة" },
-  { value: "ziyarah",            label: "زيارة" },
-  { value: "custom",             label: "مخصص" },
-];
+// ROUTE_TYPES مُوحَّد في "@/lib/transport-constants" (UX-05 — كان مكرّرًا حرفيًا).
 
 export function UmrahContextQuestionnaire(props: Props) {
   if (!props.active) return null;

@@ -78,7 +78,8 @@ describe("#1812 — suggest-assignment route wires the diagnostic", () => {
   });
 
   it("response includes diagnostics field (null when candidates non-empty)", () => {
-    expect(PLANNING).toMatch(/res\.json\(\{\s*data:\s*candidates,\s*diagnostics\s*\}\)/);
+    // P0-4 (TA-T18-UX-AUDIT-01) — الاستجابة وسّعت بحقل excluded الاختياري.
+    expect(PLANNING).toMatch(/res\.json\(\{\s*data:\s*candidates,\s*diagnostics(,\s*excluded:[^}]*)?\s*\}\)/);
     expect(PLANNING).toMatch(/let diagnostics = null/);
   });
 });
