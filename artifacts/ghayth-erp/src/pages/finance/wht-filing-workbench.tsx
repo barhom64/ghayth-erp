@@ -221,24 +221,18 @@ export default function WhtFilingWorkbenchPage() {
       subtitle={`شهر ${periodLabel} — تجميع كامل بالمورد وبفئة الاستقطاع`}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/reports/wht-summary">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/wht-summary">
               <FileCheck2 className="h-3.5 w-3.5 ml-1" />
               ملخص WHT
-            </Button>
-          </Link>
-          <Link href="/finance/tax-filing-calendar">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/tax-filing-calendar">
               <Calendar className="h-3.5 w-3.5 ml-1" />
               تقويم الإقرارات
-            </Button>
-          </Link>
-          <Link href="/finance/vat-filing-readiness">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/vat-filing-readiness">
               <Receipt className="h-3.5 w-3.5 ml-1" />
               جاهزية VAT
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -272,12 +266,10 @@ export default function WhtFilingWorkbenchPage() {
             </select>
           </div>
           <div className="flex-1" />
-          <Link href="/finance/reports/wht-summary">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/reports/wht-summary">
               <FileCheck2 className="w-4 h-4 ml-1" />
               تقرير WHT
-            </Button>
-          </Link>
+            </Link></Button>
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={rows.length === 0}>
             <Download className="w-4 h-4 ml-1" />
             CSV
@@ -529,9 +521,7 @@ export default function WhtFilingWorkbenchPage() {
                                         {formatCurrency(Number(r.whtAmount))}
                                       </td>
                                       <td className="py-1 px-2">
-                                        <Link href={`/finance/journal/${r.journalEntryId}`}>
-                                          <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
-                                        </Link>
+                                        <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/journal/${r.journalEntryId}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                                       </td>
                                     </tr>
                                   ))}
