@@ -4685,4 +4685,98 @@ router.get("/tenants/:id/letters", authorize({ feature: "properties.tenants", ac
   } catch (err) { handleRouteError(err, res, "Tenant letters error:"); }
 });
 
+/* ─── Property Sales ──────────────────────────────────────────────────── */
+
+const createSaleSchema = z.object({
+  buildingId:      z.coerce.number().int().positive().optional(),
+  buyerName:       z.string().min(1),
+  buyerPhone:      z.string().optional(),
+  buyerNationalId: z.string().optional(),
+  salePrice:       z.coerce.number().positive(),
+  bookValue:       z.coerce.number().nonnegative().default(0),
+  vatAmount:       z.coerce.number().nonnegative().default(0),
+  saleDate:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  transferDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes:           z.string().optional(),
+});
+
+// GET /properties/sales
+router.get("/sales", authorize({ feature: "properties.buildings", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT ps.id, ps."buildingId", ps."buyerName", ps."buyerPhone", ps."buyerNationalId",
+              ps."salePrice", ps."bookValue", ps."vatAmount", ps."saleDate", ps."transferDate",
+              ps.status, ps.notes, ps."journalEntryId", ps."createdAt",
+              pb.name AS "buildingName"
+       FROM property_sales ps
+       LEFT JOIN property_buildings pb ON pb.id = ps."buildingId"
+       WHERE ps."companyId" = $1 AND ps."deletedAt" IS NULL
+       ORDER BY ps."saleDate" DESC`,
+      [scope.companyId]
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Property sales list error:"); }
+});
+
+// POST /properties/sales
+router.post("/sales", authorize({ feature: "properties.buildings", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createSaleSchema.safeParse(req.body)) as any;
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO property_sales ("companyId","buildingId","buyerName","buyerPhone","buyerNationalId","salePrice","bookValue","vatAmount","saleDate","transferDate",status,notes,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12)`,
+      [scope.companyId, b.buildingId || null, b.buyerName, b.buyerPhone || null, b.buyerNationalId || null,
+       b.salePrice, b.bookValue, b.vatAmount, b.saleDate, b.transferDate || null, b.notes || null, scope.userId]
+    );
+    assertInsert(insertId, "property_sales");
+
+    // Post GL if book value is provided (non-zero means asset is on books)
+    if (b.bookValue > 0) {
+      try {
+        await propertiesEngine.postSaleGL(
+          { companyId: scope.companyId, branchId: scope.branchId ?? null, createdBy: scope.userId },
+          { id: insertId, propertyId: b.buildingId || 0, buyerId: null,
+            salePrice: b.salePrice, bookValue: b.bookValue, vatAmount: b.vatAmount, saleDate: b.saleDate }
+        );
+        await rawExecute(
+          `UPDATE property_sales SET status='completed', "updatedAt"=NOW() WHERE id=$1`,
+          [insertId]
+        );
+      } catch (glErr) {
+        logger.error(glErr, "Property sale GL error (sale recorded, GL failed):");
+      }
+    }
+
+    await createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "property_sales", entityId: insertId, after: b });
+    await emitEvent({ companyId: scope.companyId, userId: scope.userId,
+      action: "property.sale.created", entity: "property_sales", entityId: insertId,
+      details: `بيع عقار لـ ${b.buyerName} بمبلغ ${b.salePrice}` });
+
+    const [sale] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM property_sales WHERE id=$1`, [insertId]
+    );
+    res.status(201).json(sale);
+  } catch (err) { handleRouteError(err, res, "Property sale create error:"); }
+});
+
+// GET /properties/sales/:id
+router.get("/sales/:id", authorize({ feature: "properties.buildings", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [sale] = await rawQuery<Record<string, unknown>>(
+      `SELECT ps.*, pb.name AS "buildingName" FROM property_sales ps
+       LEFT JOIN property_buildings pb ON pb.id = ps."buildingId"
+       WHERE ps.id=$1 AND ps."companyId"=$2 AND ps."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!sale) throw new NotFoundError("عملية البيع غير موجودة");
+    res.json(maskFields(req, sale));
+  } catch (err) { handleRouteError(err, res, "Property sale get error:"); }
+});
+
 export default router;
