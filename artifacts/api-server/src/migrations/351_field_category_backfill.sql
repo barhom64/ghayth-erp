@@ -1,6 +1,15 @@
 -- 351_field_category_backfill — assign a tracking-enabled category to
 -- field staff whose employee_assignments.categoryKey is still NULL.
 --
+-- @rollback: data-only backfill of employee_assignments.categoryKey; no
+-- schema change. To undo, clear the categories this migration set:
+--   UPDATE employee_assignments SET "categoryKey" = NULL
+--    WHERE "categoryKey" IN ('field_employee','worker');
+-- (Note: this also clears any field_employee/worker categories an HR
+-- operator set by hand afterwards — re-run the backfill or reassign as
+-- needed. Safe because categoryKey only drives attendance-policy
+-- resolution, which falls back to the company default when NULL.)
+--
 -- Root cause (field-tracking audit): migration 270's best-effort backfill
 -- only ever set 'driver', 'executive' or 'manager' and left every other
 -- role — including real field reps, technicians and labor workers — at
