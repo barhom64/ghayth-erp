@@ -528,9 +528,11 @@ export const allNavSections: NavSection[] = [
         { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
         { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
         { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
-        // تأجير المركبات — كانت الصفحة مركّبة بلا مدخل في القائمة (orphan).
-        // بوابة الـ backend: fleet.vehicles:list (fleet.ts /rental-contracts).
-        { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.vehicles:list" },
+        // تأجير المركبات — صفحة العقود.
+        // #2079 TA-T18-09 — هاجرت إلى fleet.rentals كميزة مستقلة (كانت
+        // تحت fleet.vehicles؛ الـPERM-02 طلب فصلها كي يُمنح موظف تأجير
+        // الصلاحية دون فتح CRUD كامل للمركبات).
+        { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.rentals:list" },
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
         { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock, perm: "fleet.maintenance:list" },
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle, perm: "fleet.vehicles:list" },

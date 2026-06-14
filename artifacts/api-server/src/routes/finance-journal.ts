@@ -41,6 +41,12 @@ import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
 import { logAllocationOverride } from "../lib/accountingAllocation.js";
 import { resolveTransactionBranch } from "../lib/branchResolution.js";
 import { costCenterSplitSchema, resolveCostCenterSplits } from "../lib/costCenterSplit.js";
+import {
+  buildExpenseEntityLink,
+  buildExpenseLines,
+  evaluateExpensePlan,
+  type PlannedExpenseLine,
+} from "../lib/expenseJournalPlan.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -49,18 +55,6 @@ journalRouter.use(authMiddleware);
 // ─────────────────────────────────────────────────────────────────────────────
 // ZOD SCHEMAS — request body validation
 // ─────────────────────────────────────────────────────────────────────────────
-
-const expenseImpactPreviewSchema = z.object({
-  amount: z.any().optional(),
-  expenseType: z.string().optional(),
-  paymentMethod: z.string().optional(),
-  costCenter: z.string().optional(),
-  supplierId: z.any().optional(),
-  branchId: z.any().optional(),
-  // #1715 (comment 9) — the allocation target drives a specialized-account hint.
-  targetType: z.string().optional(),
-  itemType: z.string().optional(),
-});
 
 // Shared line-allocation payload (the LineAllocationPanel /
 // AllocationTargetSelect output). Accepted by expense + voucher create so
@@ -85,6 +79,34 @@ const lineAllocationSchema = z.object({
   employeeId: z.coerce.number().optional(),
   manualOverrideReason: z.string().optional(),
 }).optional();
+
+const expenseImpactPreviewSchema = z.object({
+  amount: z.any().optional(),
+  expenseType: z.string().optional(),
+  paymentMethod: z.string().optional(),
+  costCenter: z.string().optional(),
+  supplierId: z.any().optional(),
+  branchId: z.any().optional(),
+  // #1715 (comment 9) — the allocation target drives a specialized-account hint.
+  targetType: z.string().optional(),
+  itemType: z.string().optional(),
+  // #2238 (FIN-P8-JOURNAL-PREVIEW) — full expense inputs so the preview can
+  // build the REAL journal plan (debit/credit lines + dimensions) through the
+  // same shared resolver the save path uses. All optional: when the operator
+  // hasn't filled the minimum (account/amount/source), the preview returns an
+  // "incomplete" journal block instead of fabricated numbers.
+  accountCode: z.string().optional(),
+  subAccountCode: z.string().optional(),
+  sourceAccountCode: z.string().optional(),
+  relatedEntityType: z.string().optional(),
+  relatedEntityId: z.any().optional(),
+  projectId: z.coerce.number().optional(),
+  vatRate: z.any().optional(),
+  vatAmount: z.any().optional(),
+  operationType: z.string().optional(),
+  lineAllocation: lineAllocationSchema,
+  costCenterDistribution: z.array(costCenterSplitSchema).optional(),
+});
 
 // #1715 — operational-effect inputs shared by BOTH the expense and voucher
 // create schemas (an expense and a سند صرف can each trigger the same
@@ -114,6 +136,11 @@ const operationalEffectsShape = {
     costPerLiter: z.coerce.number().optional(),
     odometer: z.coerce.number().optional(),
     stationName: z.string().optional(),
+    // #2234 — the SAVED fuel supplier (vendorId references suppliers.id) is the
+    // commercial party; unregisteredSupplierName is the temporary draft-only
+    // exception. stationName degrades to a derived display label.
+    supplierId: z.coerce.number().int().positive().optional(),
+    unregisteredSupplierName: z.string().optional(),
   }).optional(),
 };
 
@@ -441,11 +468,259 @@ journalRouter.get("/maintenance-ticket-options", authorize({ feature: "finance.j
   }
 });
 
+// #2238 (FIN-P8-JOURNAL-PREVIEW) — the shape returned to the
+// FinancialJournalPreviewPanel: a real debit/credit table + integrity verdict.
+interface JournalPreviewLineView {
+  lineNo: number;
+  accountCode: string;
+  accountName: string | null;
+  debit: number;
+  credit: number;
+  role: string;
+  dimensions: Record<string, unknown>;
+  derivationReason: string;
+  accountSource: "manual" | "mapping" | "purpose" | "fallback" | "selected";
+  status: "ok" | "account_not_found" | "dimension_missing";
+}
+interface JournalPreviewView {
+  ready: boolean;
+  incompleteReason?: string;
+  lines: JournalPreviewLineView[];
+  totals: { debit: number; credit: number };
+  balanced: boolean;
+  blockers: { code: string; field?: string; message: string }[];
+  warnings: string[];
+  sourceContext: { paymentMethod: string | null; sourceAccountCode: string | null; sourceAccountName: string | null };
+  suggestedDocumentStatus: "draft";
+  suggestedPaymentStatus: "paid" | "unpaid";
+  suggestedPostingStatus: "unposted" | "blocked";
+}
+
+/**
+ * Build a read-only journal preview for an expense, using the SAME resolver
+ * primitives the save path uses (buildExpenseEntityLink → resolveLineAllocation
+ * → buildExpenseLines → evaluateExpensePlan). NEVER writes to the DB.
+ * Returns `ready:false` with a reason when the minimum inputs aren't filled —
+ * the panel then shows «أكمل البيانات المطلوبة لعرض القيد» instead of fake numbers.
+ */
+async function buildExpenseJournalPreview(
+  scope: { companyId: number; branchId?: number | null },
+  p: z.infer<typeof expenseImpactPreviewSchema>,
+): Promise<JournalPreviewView> {
+  const paymentMethod = p.paymentMethod ?? null;
+  const sourceAccountCode = p.sourceAccountCode || "1100";
+  const baseAmount = roundTo2(Number(p.amount) || 0);
+
+  const empty = (incompleteReason: string): JournalPreviewView => ({
+    ready: false,
+    incompleteReason,
+    lines: [],
+    totals: { debit: 0, credit: 0 },
+    balanced: false,
+    blockers: [],
+    warnings: [],
+    sourceContext: { paymentMethod, sourceAccountCode, sourceAccountName: null },
+    suggestedDocumentStatus: "draft",
+    suggestedPaymentStatus: paymentMethod === "cash" || paymentMethod === "bank" ? "paid" : "unpaid",
+    suggestedPostingStatus: "blocked",
+  });
+
+  if (!baseAmount || baseAmount <= 0) return empty("أدخل مبلغ المصروف لعرض القيد");
+
+  // 1) dimensions + account override — identical mapping to the save path.
+  const { entityLink, accountCodeOverride } = buildExpenseEntityLink({
+    accountCode: p.accountCode ?? null,
+    relatedEntityType: p.relatedEntityType ?? null,
+    relatedEntityId: p.relatedEntityId ?? null,
+    projectId: p.projectId ?? null,
+    costCenter: p.costCenter ?? null,
+    lineAllocation: p.lineAllocation ?? null,
+  });
+
+  // 2) resolve the expense account + cost-centre through the shared resolver.
+  let expenseAccountCode = accountCodeOverride;
+  let accountSource: JournalPreviewLineView["accountSource"] = accountCodeOverride ? "manual" : "fallback";
+  let derivationReason = accountCodeOverride ? "اختيار يدوي للحساب" : "";
+  if (p.operationType || p.relatedEntityType) {
+    const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+    const resolved = await resolveLineAllocation({
+      companyId: scope.companyId,
+      documentType: "expense",
+      lineType: p.operationType || p.expenseType || undefined,
+      entityType: p.relatedEntityType || undefined,
+      accountCode: expenseAccountCode || undefined,
+      costCenterId: entityLink.costCenterId != null ? Number(entityLink.costCenterId) : null,
+      dimensions: {
+        vehicleId: (entityLink.vehicleId as number) ?? null,
+        propertyId: (entityLink.propertyId as number) ?? null,
+        unitId: (entityLink.unitId as number) ?? null,
+        assetId: (entityLink.assetId as number) ?? null,
+        projectId: (entityLink.projectId as number) ?? null,
+        employeeId: (entityLink.employeeId as number) ?? null,
+        driverId: (entityLink.driverId as number) ?? null,
+        contractId: (entityLink.contractId as number) ?? null,
+        umrahSeasonId: (entityLink.umrahSeasonId as number) ?? null,
+        umrahAgentId: (entityLink.umrahAgentId as number) ?? null,
+        productId: (entityLink.productId as number) ?? null,
+        clientId: (entityLink.clientId as number) ?? null,
+        vendorId: (entityLink.vendorId as number) ?? null,
+      },
+      sourceTable: "journal_lines",
+      sourceLineId: 0,
+    });
+    if (resolved.status === "manual_override") {
+      accountSource = "manual";
+      derivationReason = "اختيار يدوي للحساب (تجاوز قاعدة التوجيه)";
+    } else if (resolved.status === "resolved" && resolved.resolvedAccountCode) {
+      if (!expenseAccountCode) expenseAccountCode = resolved.resolvedAccountCode;
+      accountSource = "mapping";
+      derivationReason = resolved.ruleId ? `قاعدة توجيه محاسبي (#${resolved.ruleId})` : "قاعدة توجيه محاسبي";
+    }
+    if (entityLink.costCenterId == null && resolved.costCenterId != null) {
+      entityLink.costCenterId = resolved.costCenterId;
+    }
+  }
+  // subAccount override mirrors the save path (applied on the expense leg).
+  if (p.subAccountCode && p.subAccountCode !== p.accountCode) {
+    expenseAccountCode = p.subAccountCode;
+    accountSource = "manual";
+    derivationReason = "حساب فرعي محدّد يدويًا";
+  }
+  if (!expenseAccountCode) {
+    expenseAccountCode = "5000";
+    accountSource = "fallback";
+    derivationReason = "حساب مصروف عام افتراضي — لا قاعدة توجيه مطابقة";
+  }
+
+  // 3) VAT input account (purpose-resolved) + amounts.
+  const vatRateVal = p.vatRate != null ? Number(p.vatRate) || 0 : 0;
+  const vatAmount = roundTo2(p.vatAmount != null ? Number(p.vatAmount) || 0 : computeVat(baseAmount, vatRateVal));
+  const totalWithVat = roundTo2(baseAmount + vatAmount);
+  let vatInputAccountCode: string | null = null;
+  if (vatAmount > 0) {
+    const { financialEngine } = await import("../lib/engines/index.js");
+    vatInputAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+  }
+
+  // 4) cost-centre distribution splits (same helper the save path uses).
+  const costCenterSplits =
+    p.costCenterDistribution && p.costCenterDistribution.length > 0
+      ? resolveCostCenterSplits(p.costCenterDistribution, baseAmount).map((leg) => ({ costCenterId: leg.costCenterId, amount: leg.amount }))
+      : null;
+
+  // 5) assemble the lines through the shared builder.
+  const lines = buildExpenseLines({
+    expenseAccountCode,
+    baseAmount,
+    vatAmount,
+    vatInputAccountCode,
+    sourceAccountCode,
+    totalWithVat,
+    entityLink,
+    costCenterSplits,
+  });
+
+  // 6) account existence/postability + names (read-only).
+  const codes = Array.from(new Set(lines.map((l) => l.accountCode).filter(Boolean)));
+  const accountRows = await rawQuery<{ code: string; name: string }>(
+    `SELECT code, name FROM chart_of_accounts
+       WHERE "companyId" = $1 AND code = ANY($2::text[])
+         AND "deletedAt" IS NULL AND "isActive" = true AND "allowPosting" = true`,
+    [scope.companyId, codes],
+  );
+  const knownAccountCodes = new Set(accountRows.map((r) => r.code));
+  const nameByCode = new Map(accountRows.map((r) => [r.code, r.name]));
+
+  // 7) integrity verdict (balance + account existence + dimension contract #2233).
+  const evald = evaluateExpensePlan({ lines, knownAccountCodes });
+  const blockers = [...evald.blockers];
+
+  // 8) money-source ↔ payment-method policy, reached ONLY through the unified
+  // FinanceOperationContext wrapper (#1715 guardrail #6) — the same path the
+  // save route uses, so the check can never drift. Surfaced as a blocker.
+  try {
+    const { assertOperationValid, fromLegacyExpenseForm } = await import("../lib/financeOperationContext.js");
+    const opCtx = fromLegacyExpenseForm({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      sourceAccountCode,
+      paymentMethod,
+      relatedEntityType: p.relatedEntityType ?? null,
+      relatedEntityId: p.relatedEntityId != null ? Number(p.relatedEntityId) : null,
+      lineAllocation: p.lineAllocation ?? undefined,
+    });
+    await assertOperationValid(opCtx);
+  } catch (e) {
+    if (e instanceof ValidationError) {
+      blockers.push({ code: "payment_source", field: "sourceAccountCode", message: e.message });
+    } else {
+      throw e;
+    }
+  }
+
+  // 9) per-line view.
+  const lineViews: JournalPreviewLineView[] = (lines as PlannedExpenseLine[]).map((l, i) => {
+    const dims: Record<string, unknown> = {};
+    for (const k of ["vehicleId", "propertyId", "projectId", "vendorId", "clientId", "unitId", "assetId", "contractId", "employeeId", "costCenterId", "costCenter"]) {
+      if (l[k] != null) dims[k] = l[k];
+    }
+    let role = l.role;
+    let lineSource: JournalPreviewLineView["accountSource"];
+    let reason: string;
+    if (role === "expense") {
+      lineSource = accountSource;
+      reason = derivationReason;
+    } else if (role === "vat_input") {
+      lineSource = "purpose";
+      reason = "ضريبة مدخلات — غرض الحساب vat_input";
+    } else {
+      lineSource = "selected";
+      reason = `مصدر الصرف المختار${paymentMethod ? ` (${paymentMethod})` : ""}`;
+    }
+    const exists = knownAccountCodes.has(l.accountCode);
+    let status: JournalPreviewLineView["status"] = "ok";
+    if (!exists) status = "account_not_found";
+    return {
+      lineNo: i + 1,
+      accountCode: l.accountCode,
+      accountName: nameByCode.get(l.accountCode) ?? null,
+      debit: l.debit,
+      credit: l.credit,
+      role,
+      dimensions: dims,
+      derivationReason: reason,
+      accountSource: lineSource,
+      status,
+    };
+  });
+  // mark dimension-missing rows (matched a dimension blocker field) for the UI.
+  if (blockers.some((b) => b.code === "dimension_contract")) {
+    for (const lv of lineViews) {
+      if (lv.role === "expense" && Object.keys(lv.dimensions).length === 0) lv.status = "dimension_missing";
+    }
+  }
+
+  const sourceAccountName = nameByCode.get(sourceAccountCode) ?? null;
+  return {
+    ready: true,
+    lines: lineViews,
+    totals: { debit: evald.totalDebit, credit: evald.totalCredit },
+    balanced: evald.balanced,
+    blockers,
+    warnings: evald.warnings,
+    sourceContext: { paymentMethod, sourceAccountCode, sourceAccountName },
+    suggestedDocumentStatus: "draft",
+    suggestedPaymentStatus: paymentMethod === "cash" || paymentMethod === "bank" ? "paid" : "unpaid",
+    suggestedPostingStatus: blockers.length > 0 ? "blocked" : "unposted",
+  };
+}
+
 // Impact preview — shows what will happen when the expense is created
 journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId, targetType, itemType } = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
+    const parsedPreview = zodParse(expenseImpactPreviewSchema.safeParse(req.body ?? {}));
+    const { amount, expenseType, paymentMethod, costCenter, supplierId, branchId, targetType, itemType } = parsedPreview;
     const amt = Number(amount || 0);
 
     const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
@@ -568,7 +843,12 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
       severity: "info",
     });
 
-    const hasDanger = items.some((i) => i.severity === "danger");
+    // #2238 (FIN-P8-JOURNAL-PREVIEW) — the REAL journal plan (debit/credit
+    // lines + dimensions + integrity verdict), built through the SAME shared
+    // resolver the save path uses. Read-only: never writes to the DB.
+    const journalPreview = await buildExpenseJournalPreview(scope, parsedPreview);
+
+    const hasDanger = items.some((i) => i.severity === "danger") || (journalPreview?.blockers.length ?? 0) > 0;
     const hasWarning = items.some((i) => i.severity === "warning");
     res.json({
       actionType: "create_expense",
@@ -577,8 +857,11 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
       items,
       suggestedAccountCode,
       suggestedCapitalize,
+      journalPreview,
       summary: hasDanger
-        ? "مصروف يتجاوز الميزانية — مطلوب اعتماد إضافي"
+        ? journalPreview && journalPreview.blockers.length > 0
+          ? `لا يمكن الحفظ: ${journalPreview.blockers[0].message}`
+          : "مصروف يتجاوز الميزانية — مطلوب اعتماد إضافي"
         : hasWarning
         ? `مصروف ${amt.toLocaleString("ar-SA")} ر.س — راجع الاعتمادات`
         : `مصروف ${amt.toLocaleString("ar-SA")} ر.س جاهز للتسجيل`,
@@ -729,51 +1012,63 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
 
     const idempotencyToken = requestIdempotencyToken(req);
     const ref = `EXP-${idempotencyToken}`;
-    const entityLink: Record<string, any> = {};
-    if (relatedEntityType === "employee" && relatedEntityId) entityLink.employeeId = Number(relatedEntityId);
-    if (relatedEntityType === "vehicle" && relatedEntityId) entityLink.vehicleId = Number(relatedEntityId);
-    if (relatedEntityType === "property" && relatedEntityId) entityLink.propertyId = Number(relatedEntityId);
-    if (relatedEntityType === "contract" && relatedEntityId) entityLink.contractId = Number(relatedEntityId);
-    // Supplier / vendor / customer / client coverage — the expense form
-    // (expenses-create.tsx) ships "supplier"; older callers may use the
-    // dimension-name variants. Pre-fix the expense JE never carried
-    // vendorId/clientId on the expense line even though the operator
-    // explicitly tagged the supplier — per-supplier expense reports
-    // were silently incomplete.
-    if ((relatedEntityType === "supplier" || relatedEntityType === "vendor") && relatedEntityId) entityLink.vendorId = Number(relatedEntityId);
-    if ((relatedEntityType === "customer" || relatedEntityType === "client") && relatedEntityId) entityLink.clientId = Number(relatedEntityId);
-    if (projectId) entityLink.projectId = Number(projectId);
-    if (costCenter) entityLink.costCenter = costCenter;
+    // #2238 — dimensions + account override built through the SHARED resolver
+    // (buildExpenseEntityLink), the single source the journal-preview also uses
+    // so preview and save can never drift. Same field-by-field mapping as before:
+    // relatedEntityType→dim, projectId/costCenter, then LineAllocationPanel
+    // overrides (incl. the 6 dims the upstream schema once dropped silently).
+    // The override is logged via logAllocationOverride() INSIDE the
+    // withTransaction block below so the audit row rolls back with the JE.
+    const { entityLink, accountCodeOverride } = buildExpenseEntityLink({
+      accountCode,
+      relatedEntityType,
+      relatedEntityId,
+      projectId,
+      costCenter,
+      lineAllocation,
+    });
+    let overrideAccountCode = accountCodeOverride ?? accountCode;
 
-    // Audit item #2 — apply operator-supplied allocation overrides on top
-    // of the auto-derived entityLink. Each field that the operator pinned
-    // through the LineAllocationPanel wins over the rule-resolved value.
-    // The override gets logged via logAllocationOverride() INSIDE the
-    // withTransaction block below (after the JE id is known) so the
-    // allocation_override_log row rolls back with the JE on failure.
-    let overrideAccountCode = accountCode;
-    if (lineAllocation) {
-      if (lineAllocation.accountCode) overrideAccountCode = lineAllocation.accountCode;
-      if (lineAllocation.costCenterId != null) entityLink.costCenterId = lineAllocation.costCenterId;
-      if (lineAllocation.activityType) entityLink.activityType = lineAllocation.activityType;
-      if (lineAllocation.projectId != null) entityLink.projectId = lineAllocation.projectId;
-      if (lineAllocation.vehicleId != null) entityLink.vehicleId = lineAllocation.vehicleId;
-      if (lineAllocation.propertyId != null) entityLink.propertyId = lineAllocation.propertyId;
-      if (lineAllocation.unitId != null) entityLink.unitId = lineAllocation.unitId;
-      if (lineAllocation.assetId != null) entityLink.assetId = lineAllocation.assetId;
-      if (lineAllocation.contractId != null) entityLink.contractId = lineAllocation.contractId;
-      if (lineAllocation.umrahAgentId != null) entityLink.umrahAgentId = lineAllocation.umrahAgentId;
-      // Propagate the 6 fields that the upstream schema previously dropped
-      // silently. Without these, an expense line could carry a clientId in
-      // the form payload that vanished by the time the JE was posted.
-      if (lineAllocation.clientId != null) entityLink.clientId = lineAllocation.clientId;
-      if (lineAllocation.vendorId != null) entityLink.vendorId = lineAllocation.vendorId;
-      if (lineAllocation.driverId != null) entityLink.driverId = lineAllocation.driverId;
-      if (lineAllocation.productId != null) entityLink.productId = lineAllocation.productId;
-      if (lineAllocation.umrahSeasonId != null) entityLink.umrahSeasonId = lineAllocation.umrahSeasonId;
-      if (lineAllocation.departmentId != null) entityLink.departmentId = lineAllocation.departmentId;
-      if (lineAllocation.employeeId != null) entityLink.employeeId = lineAllocation.employeeId;
-      if (lineAllocation.manualOverrideReason) entityLink.manualOverrideReason = lineAllocation.manualOverrideReason;
+    // #2234 (FIN-P4-SUPPLIER-FUEL-CONTRACT) — a vehicle-fuel expense must carry
+    // a SAVED supplier (the commercial party that issues the invoice), not a
+    // free-text station. The supplier rides as vendorId on the JE line (the
+    // canonical `suppliers.id` reference — no separate vendor entity). The only
+    // sanctioned exception is a temporary unregistered name, and ONLY when the
+    // company policy `allowUnregisteredFuelSupplier` is on (draft-only intent).
+    // forward-only: applies at save; legacy fuel logs are untouched.
+    if (fuelLog?.create && entityLink.vehicleId != null) {
+      const fuelSupplierId = (entityLink.vendorId as number | undefined) ?? fuelLog.supplierId ?? null;
+      if (fuelSupplierId) {
+        const [supplierRow] = await rawQuery<{ id: number }>(
+          `SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+          [Number(fuelSupplierId), effectiveCompanyId],
+        );
+        if (!supplierRow) {
+          throw new ValidationError("المورد المحدّد لتعبئة الوقود غير موجود أو لا يتبع الشركة", {
+            field: "fuelLog.supplierId",
+            fix: "اختر موردًا محفوظًا صحيحًا من قائمة الموردين",
+          });
+        }
+        // mirror onto the line dimension so the JE carries vendorId even when
+        // the supplier came via fuelLog.supplierId rather than lineAllocation.
+        if (entityLink.vendorId == null) entityLink.vendorId = Number(fuelSupplierId);
+      } else if (fuelLog.unregisteredSupplierName) {
+        const [allowRow] = await rawQuery<{ value: string }>(
+          `SELECT value FROM system_settings WHERE "companyId" = $1 AND key = 'allowUnregisteredFuelSupplier' LIMIT 1`,
+          [effectiveCompanyId],
+        ).catch(() => [] as { value: string }[]);
+        if (allowRow?.value !== "true") {
+          throw new ValidationError("لا يُسمح بترحيل وقود مركبة على مورد غير مسجّل — احفظ المحطة كمورد أولاً", {
+            field: "fuelLog.supplierId",
+            fix: "اختر موردًا محفوظًا، أو فعّل سياسة «السماح بمورد وقود غير مسجّل» للمسودات",
+          });
+        }
+      } else {
+        throw new ValidationError("المورد مطلوب لتسجيل تعبئة وقود المركبة", {
+          field: "fuelLog.supplierId",
+          fix: "اختر المورد (محطة الوقود المحفوظة) في سيناريو وقود المركبة",
+        });
+      }
     }
 
     // Activate the centralised resolver (migration 256 seeds the
@@ -823,33 +1118,35 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    // Carry the full entityLink on EVERY leg of the expense JE — expense DR,
-    // VAT input DR, and cash CR. Without this the VAT obligation + cash
-    // movement are dim-less even though the expense line is fully tagged.
-    // Per-vendor cash outflow + per-property VAT input reports were
-    // silently broken (the expense DR ties to the property/vehicle but
-    // the cash CR didn't tie to anything, so cashflow-by-dim summed
-    // only half the picture).
-    const journalLines: any[] = [{ accountCode: overrideAccountCode ?? "5000", debit: baseAmount, credit: 0, ...entityLink }];
+    // #2238 — assemble through the SHARED builder (buildExpenseLines), the same
+    // source the journal-preview uses. Carries the full entityLink on EVERY leg
+    // (expense DR, VAT input DR, cash CR) so per-vendor cash outflow and
+    // per-property VAT input reports stay complete. The subAccount override is
+    // applied to the expense leg before building; multi-cost-center distribution
+    // (#1715) replaces the single expense DR with one prorated leg per center
+    // that sums exactly to baseAmount (VAT DR + cash CR untouched). The shared
+    // builder tags each line with a `role`; strip it so the posted shape stays
+    // byte-identical to the pre-refactor lines.
+    const expenseLegAccount = (subAccountCode && subAccountCode !== accountCode)
+      ? subAccountCode
+      : (overrideAccountCode ?? "5000");
+    let inputVatCode: string | null = null;
     if (computedVat > 0) {
-      const inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1180");
-      journalLines.push({ accountCode: inputVatCode, debit: computedVat, credit: 0, ...entityLink });
+      inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1180");
     }
-    journalLines.push({ accountCode: sourceAcct, debit: 0, credit: totalWithVat, ...entityLink });
-    if (subAccountCode && subAccountCode !== accountCode) { journalLines[0].accountCode = subAccountCode; }
-
-    // #1715 multi cost-center distribution: when supplied, replace the single
-    // expense DR (journalLines[0]) with one balanced leg per cost center —
-    // same account + full entityLink, its own costCenterId and prorated
-    // amount. The legs sum exactly to baseAmount (remainder absorbed by the
-    // last) so the entry stays balanced; the VAT DR and cash CR are untouched.
-    if (costCenterDistribution && costCenterDistribution.length > 0) {
-      const debitAccount = journalLines[0].accountCode;
-      const splitLines = resolveCostCenterSplits(costCenterDistribution, baseAmount).map((leg) => ({
-        accountCode: debitAccount, debit: leg.amount, credit: 0, ...entityLink, costCenterId: leg.costCenterId,
-      }));
-      journalLines.splice(0, 1, ...splitLines);
-    }
+    const costCenterSplits = (costCenterDistribution && costCenterDistribution.length > 0)
+      ? resolveCostCenterSplits(costCenterDistribution, baseAmount).map((leg) => ({ costCenterId: leg.costCenterId, amount: leg.amount }))
+      : null;
+    const journalLines: any[] = buildExpenseLines({
+      expenseAccountCode: expenseLegAccount,
+      baseAmount,
+      vatAmount: computedVat,
+      vatInputAccountCode: inputVatCode,
+      sourceAccountCode: sourceAcct,
+      totalWithVat,
+      entityLink,
+      costCenterSplits,
+    }).map(({ role, ...line }) => line);
 
     // C3 — the journal entry, its header metadata and the approval chain are
     // created in ONE transaction. A failure anywhere (or a crash) rolls the
@@ -1017,6 +1314,10 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
           costPerLiter: fuelLog.costPerLiter ?? null,
           mileageAtFuel: fuelLog.odometer ?? null,
           stationName: fuelLog.stationName ?? null,
+          // #2234 — the saved supplier (vendorId on the JE line) is the truth;
+          // its name becomes the derived stationName label.
+          supplierId: (entityLink.vendorId as number | undefined) ?? fuelLog.supplierId ?? null,
+          unregisteredSupplierName: fuelLog.unregisteredSupplierName ?? null,
           fuelDate: expenseDate ?? null,
         });
         logger.info({ journalId: posted.journalId, fuelLogId: fl.fuelLogId }, "[finance] fuel log created from expense");

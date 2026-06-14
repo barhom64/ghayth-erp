@@ -22,9 +22,12 @@ describe("finance-journal create flows route through FinanceOperationContext", (
   });
 
   it("validates each create flow via assertOperationValid", () => {
-    // Two call sites: /expenses and /vouchers.
+    // Three call sites: /expenses (save), /vouchers (save), and the #2238
+    // expense journal-preview — the preview reaches the money-source ↔ method
+    // policy ONLY through the same context wrapper, so the check can never drift
+    // between what the preview shows and what the save enforces.
     const calls = SRC.match(/await assertOperationValid\(/g) ?? [];
-    expect(calls.length).toBe(2);
+    expect(calls.length).toBe(3);
   });
 
   it("no longer calls assertPaymentSourceAllowed inline in the create flows", () => {

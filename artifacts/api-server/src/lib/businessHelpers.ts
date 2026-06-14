@@ -5,6 +5,7 @@ import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
+import { assertDimensionContract } from "./financePostingPolicy.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
 import { config } from "./config.js";
 import {
@@ -680,6 +681,17 @@ export async function createJournalEntry(params: {
     // built assuming parent posting would silently shift. The dim-
     // routing page surfaces the toggle so the operator can opt in.
     await substituteSubsidiaryAccountCodes(client, params.lines, params.companyId);
+
+    // FIN-INTEGRITY-CONTRACT (#2233) — عقد البُعد بعد اكتمال إثراء الأبعاد،
+    // قبل إدراج السطور (داخل المعاملة: الرفض يُرجِع كل شيء). تدريجي: enforce
+    // لوقود المركبة (5510)، warn لبقية الأصناف (يُسجَّل فقط).
+    const dimContract = assertDimensionContract({ lines: params.lines });
+    if (dimContract.warnings.length > 0) {
+      logger.warn(
+        { companyId: params.companyId, ref: params.ref, warnings: dimContract.warnings },
+        "[dimension-contract] سطور بلا بُعد مطلوب (warn)",
+      );
+    }
 
     for (const line of params.lines) {
       let accountId = line.accountId ?? null;

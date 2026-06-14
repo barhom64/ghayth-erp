@@ -253,6 +253,16 @@ const updateDriverSchema = z.object({
 });
 
 const createTripSchema = z.object({
+  // #2079 TA-T18-14 (RM-02 a+b) — every new fleet_trips row must be
+  // anchored to a parent transport_dispatch_orders entry. This
+  // closes the back-door the audit flagged: previously the POST
+  // accepted free-form trip data with no source, which made
+  // trips that bypassed VCM / Vehicle Readiness / Driver Readiness
+  // entirely. Required + positive — the handler then verifies the
+  // order actually exists for the caller's company.
+  dispatchOrderId: z.coerce.number({
+    required_error: "رقم أمر التوزيع مطلوب — الرحلات تُنشأ فقط من خط الإسناد",
+  }).int().positive(),
   vehicleId: z.coerce.number().optional(),
   driverId: z.coerce.number().optional(),
   clientId: z.coerce.number().optional(),
@@ -1728,6 +1738,20 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     const scope = req.scope!;
     const b = zodParse(createTripSchema.safeParse(req.body));
 
+    // #2079 TA-T18-14 — verify the parent dispatch order belongs to
+    // the caller's company. The zod schema already enforces a
+    // positive integer; this lookup turns "free-form trip data
+    // bypassing the guards" into a hard 404 when the upstream
+    // dispatch row doesn't exist.
+    const [parentDispatch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM transport_dispatch_orders
+        WHERE id = $1 AND "companyId" = $2`,
+      [b.dispatchOrderId, scope.companyId],
+    );
+    if (!parentDispatch) {
+      throw new NotFoundError("أمر التوزيع المرجعي غير موجود");
+    }
+
     if (b.vehicleId) {
       const [vehicle] = await rawQuery<Record<string, unknown>>(
         `SELECT v.id, v."assignedDriverId", v.status,
@@ -1948,8 +1972,15 @@ router.post("/trips", authorize({ feature: "fleet.trips", action: "create" }), a
     // INSERTs succeeded, and the operator ended up with two trips. The
     // partial-unique index on (companyId, sourceKey) — migration 196 —
     // collapses retried POSTs onto the same row at the DB level.
+    // #2079 TA-T18-14 — encode the parent dispatch order in the
+    // canonical sourceKey shape so the existing (companyId, sourceKey)
+    // partial-unique index doubles as the "one trip per dispatch
+    // order" guarantee. The idempotency token suffix lets a retried
+    // POST land on the same row, but two DIFFERENT dispatch orders
+    // can never share the prefix — they're distinct keys by
+    // construction.
     const idempotencyToken = requestIdempotencyToken(req);
-    const sourceKey = `fleet:trip:${idempotencyToken}`;
+    const sourceKey = `dispatch:${b.dispatchOrderId}:${idempotencyToken}`;
     const [preExisting] = await rawQuery<{ id: number }>(
       `SELECT id FROM fleet_trips WHERE "companyId" = $1 AND "sourceKey" = $2 LIMIT 1`,
       [scope.companyId, sourceKey]
@@ -4409,7 +4440,7 @@ const rentalReturnSchema = z.object({
   overageAmount: z.coerce.number().nonnegative().optional(),
 });
 
-router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+router.get("/rental-contracts", authorize({ feature: "fleet.rentals", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const vehicleId = req.query.vehicleId ? Number(req.query.vehicleId) : null;
@@ -4431,7 +4462,7 @@ router.get("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "
   } catch (err) { handleRouteError(err, res, "rental contracts list error"); }
 });
 
-router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: "create" }), async (req, res) => {
+router.post("/rental-contracts", authorize({ feature: "fleet.rentals", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(createRentalContractSchema.safeParse(req.body));
@@ -4495,7 +4526,7 @@ router.post("/rental-contracts", authorize({ feature: "fleet.vehicles", action: 
 // (rental-detail.tsx) needs the full row + joined vehicle/client/
 // driver labels so the handover + return forms can render without
 // re-fetching three lookup endpoints.
-router.get("/rental-contracts/:id", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+router.get("/rental-contracts/:id", authorize({ feature: "fleet.rentals", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4515,7 +4546,7 @@ router.get("/rental-contracts/:id", authorize({ feature: "fleet.vehicles", actio
   } catch (err) { handleRouteError(err, res, "rental contract detail error"); }
 });
 
-router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.rentals", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4537,7 +4568,7 @@ router.post("/rental-contracts/:id/activate", authorize({ feature: "fleet.vehicl
 // vehicle state (odometer + fuel level + any pre-existing damage
 // notes) at the moment the customer takes the keys. Allowed only when
 // the contract is `active` (not draft / completed / cancelled).
-router.post("/rental-contracts/:id/handover", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.post("/rental-contracts/:id/handover", authorize({ feature: "fleet.rentals", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4575,7 +4606,7 @@ router.post("/rental-contracts/:id/handover", authorize({ feature: "fleet.vehicl
 // supplies here is what will surface as a separate line in the
 // downstream Accounting Candidate — no JE is posted in this screen
 // (per the user's "السائق/الشاشة لا ترى المال — Candidate فقط" rule).
-router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.rentals", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
