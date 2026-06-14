@@ -228,6 +228,7 @@ export const allNavSections: NavSection[] = [
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
         { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees", perm: ["hr.saudization:view","hr.saudization:list"], permMode: "any" },
         { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
+        { label: "إعدادات WPS", path: "/hr/saudi-compliance/wps/settings", icon: Settings, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
       ]},
 
       // 6. الأداء والتطوير — gathers performance + 360 + IDP + training
@@ -248,6 +249,7 @@ export const allNavSections: NavSection[] = [
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
         { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
+        { label: "ترحيل الاستحقاقات الشهرية", path: "/hr/accruals/monthly", icon: ListChecks, subKey: "payroll" },
         { label: "نظام حماية الأجور (WPS)", path: "/hr/wps", icon: Send, subKey: "payroll" },
       ]},
 
@@ -393,6 +395,8 @@ export const allNavSections: NavSection[] = [
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
         { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
         { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
+        { label: "فواتير B2C موجهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
+        { label: "عملاء بلا رقم ضريبي", path: "/finance/zatca/missing-tax", icon: AlertTriangle },
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
         { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
         { label: "إعداد إقرار WHT", path: "/finance/wht-filing-workbench", icon: FileCheck },
@@ -570,6 +574,13 @@ export const allNavSections: NavSection[] = [
         { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
         { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
         { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
+        { label: "الدفعات", path: "/warehouse/lots", icon: Package },
+        { label: "الأرقام التسلسلية", path: "/warehouse/serials", icon: ListChecks },
+        { label: "الجرد الدوري", path: "/warehouse/cycle-counts", icon: ClipboardCheck },
+        { label: "تصنيف ABC", path: "/warehouse/abc", icon: BarChart3 },
+        { label: "تقرير دقة الجرد", path: "/warehouse/reports/accuracy", icon: BarChart3 },
+        { label: "تقرير الأصناف المنتهية", path: "/warehouse/reports/expiring", icon: AlertTriangle },
+        { label: "تقادم الدفعات", path: "/warehouse/reports/lot-aging", icon: FileBarChart },
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         // Agent-5: explicit module="bi" matches backend gate.
@@ -704,6 +715,7 @@ export const allNavSections: NavSection[] = [
         { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
         { label: "صندوق OCR", path: "/documents/ocr-inbox", icon: FileText },
+        { label: "مراجعة OCR", path: "/documents/ocr/review", icon: FileCheck },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
         { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
       ]},
