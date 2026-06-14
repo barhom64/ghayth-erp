@@ -1439,6 +1439,79 @@ router.get("/suppliers/:id", authorize({ feature: "warehouse.inventory", action:
   } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
+// ── Supplier item memory (FIN-P5-SUPPLIER-ITEMS-MEMORY #2235) ────────────────
+// The supplier's usual items + relationship defaults (unit / tax / last price /
+// account PURPOSE / allowed scenarios) so the expense flow stops re-typing them.
+// Built on the canonical `suppliers.id` (no separate vendor entity, per #2234).
+// The item returns `accountPurpose` — NEVER a final accountCode; financialEngine
+// resolves the purpose to a real account and preflight verifies it.
+router.get("/suppliers/:id/items", authorize({ feature: "warehouse.inventory", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Supplier must belong to the caller's company (cross-company → not found).
+    const [supplier] = await rawQuery<{ id: number }>(
+      `SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!supplier) throw new NotFoundError("المورد غير موجود");
+    const scenario = typeof req.query.scenario === "string" && req.query.scenario ? req.query.scenario : null;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "supplierId", name, "itemType", "defaultUnit", "defaultTaxCodeId",
+              "accountPurpose", "allowedScenarios", "lastPrice", "lastPriceDate", "priceCurrency"
+         FROM supplier_items
+        WHERE "companyId"=$1 AND "supplierId"=$2 AND "isActive"=true AND "deletedAt" IS NULL
+          AND ($3::text IS NULL OR "allowedScenarios" IS NULL OR "allowedScenarios" @> to_jsonb($3::text))
+        ORDER BY name ASC`,
+      [scope.companyId, id, scenario],
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "Supplier items error:"); }
+});
+
+const createSupplierItemSchema = z.object({
+  name: z.string().min(1, "اسم البند مطلوب"),
+  itemType: z.string().optional(),
+  defaultUnit: z.string().optional(),
+  defaultTaxCodeId: z.coerce.number().int().positive().optional(),
+  accountPurpose: z.string().optional(),
+  allowedScenarios: z.array(z.string()).optional(),
+  lastPrice: z.coerce.number().optional(),
+  priceCurrency: z.string().optional(),
+});
+
+router.post("/suppliers/:id/items", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [supplier] = await rawQuery<{ id: number }>(
+      `SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!supplier) throw new NotFoundError("المورد غير موجود");
+    const b = zodParse(createSupplierItemSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO supplier_items
+         ("companyId","supplierId",name,"itemType","defaultUnit","defaultTaxCodeId",
+          "accountPurpose","allowedScenarios","lastPrice","lastPriceDate","priceCurrency")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)`,
+      [
+        scope.companyId, id, b.name.trim(), b.itemType ?? null, b.defaultUnit ?? null,
+        b.defaultTaxCodeId ?? null, b.accountPurpose ?? null,
+        b.allowedScenarios ? JSON.stringify(b.allowedScenarios) : null,
+        b.lastPrice ?? null, b.lastPrice != null ? todayISO() : null,
+        b.priceCurrency ?? "SAR",
+      ],
+    );
+    assertInsert(insertId, "supplier_items");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM supplier_items WHERE id=$1 AND "companyId"=$2`,
+      [insertId, scope.companyId],
+    );
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create supplier item error:"); }
+});
+
 router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
