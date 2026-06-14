@@ -7,7 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PageStatusBadge } from "@/components/page-status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowRight, AlertCircle, RotateCcw } from "lucide-react";
-import { usePublishPageTitle } from "@/contexts/page-title-context";
 import { cn } from "@/lib/utils";
 
 export type EntityTab = {
@@ -119,7 +118,6 @@ export function EntityDetailPage(props: EntityDetailPageProps) {
 
   // Publish the entity's real title so the topbar + breadcrumb show the
   // actual page (e.g. the employee/customer name), not the parent module.
-  usePublishPageTitle(title);
 
   const initialTab = defaultTab || tabs[0]?.key || "";
   const [activeTab, setActiveTab] = useState<string>(initialTab);
