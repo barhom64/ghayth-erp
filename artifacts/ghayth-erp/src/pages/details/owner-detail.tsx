@@ -7,7 +7,8 @@ import { EntityPrintButton } from "@/components/shared/entity-print";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText } from "lucide-react";
+import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText, TrendingUp } from "lucide-react";
+import { Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
@@ -264,10 +265,18 @@ export default function OwnerDetail() {
             deletePerm="properties:delete"
             extra={
               owner ? (
-                <EntityPrintButton
-                  entityType="owner"
-                  entityId={id ?? 0}
-                 />
+                <>
+                  <Link href={`/properties/owners/statement?ownerId=${id}`}>
+                    <GuardedButton perm="properties:view" size="sm" variant="outline" className="gap-1">
+                      <TrendingUp className="h-4 w-4" />
+                      كشف الحساب
+                    </GuardedButton>
+                  </Link>
+                  <EntityPrintButton
+                    entityType="owner"
+                    entityId={id ?? 0}
+                  />
+                </>
               ) : null
             }
           />

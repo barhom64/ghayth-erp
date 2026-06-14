@@ -8,6 +8,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   PageStatusBadge,
   DataTable,
   FormGrid,
@@ -18,8 +27,9 @@ import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import {
   Building, FileText, Banknote, Wrench, Users, DollarSign,
-  AlertTriangle, XCircle, Info, Pencil,
-  Compass, Paintbrush, Star, Image as ImageIcon, MapPin, BedDouble, Bath, Maximize2
+  AlertTriangle, XCircle, Info, Pencil, Plus, ExternalLink,
+  Compass, Paintbrush, Star, Image as ImageIcon, MapPin, BedDouble, Bath, Maximize2,
+  Clock,
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -36,12 +46,15 @@ import {
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
+import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
+import { PropertyAlertsPanel, buildUnitAlerts } from "@/components/shared/property-alerts-panel";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
   { key: "contracts", label: "العقود", icon: FileText },
   { key: "payments", label: "المدفوعات والمتأخرات", icon: Banknote },
   { key: "maintenance", label: "الصيانة", icon: Wrench },
+  { key: "attachments", label: "المرفقات", icon: ImageIcon },
   { key: "finance", label: "الملف المالي", icon: BookOpen },
   { key: "tasks", label: "المهام", icon: CheckSquare },
 ] as const;
@@ -131,6 +144,9 @@ export default function UnitDetail() {
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [editOpen, setEditOpen] = useState(false);
+  const [maintOpen, setMaintOpen] = useState(false);
+  const [maintForm, setMaintForm] = useState({ description: "", priority: "medium", estimatedCost: "" });
+  const [maintSaving, setMaintSaving] = useState(false);
   const { hideTabs: registryHideTabs } = useRegistryTabs("property_unit", id ?? 0);
 
   const { data: unit, isLoading, isError, error } = useApiQuery<any>(
@@ -147,11 +163,46 @@ export default function UnitDetail() {
   const totalCollected = payments.filter((p: any) => p.status === "paid").reduce((s: number, p: any) => s + Number(p.paidAmount || 0), 0);
 
 
+  async function submitMaintenance() {
+    if (!maintForm.description.trim()) return;
+    setMaintSaving(true);
+    try {
+      await apiFetch("/properties/maintenance-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          unitId: Number(id),
+          contractId: activeContract?.id || null,
+          description: maintForm.description,
+          priority: maintForm.priority,
+          estimatedCost: maintForm.estimatedCost ? Number(maintForm.estimatedCost) : undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء طلب الصيانة" });
+      qc.invalidateQueries({ queryKey: ["unit-detail", id || ""] });
+      setMaintOpen(false);
+      setMaintForm({ description: "", priority: "medium", estimatedCost: "" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الإنشاء", description: err.message });
+    } finally {
+      setMaintSaving(false);
+    }
+  }
+
   const actions = unit ? (
     <div className="flex items-center gap-2">
       <Badge className={cn("border", STATUS_COLORS[unit.status] || "bg-surface-subtle text-status-neutral-foreground")}>
         {STATUS_LABELS[unit.status] || unit.status}
       </Badge>
+      <GuardedButton
+        perm="properties:create"
+        variant="outline"
+        size="sm"
+        className="gap-1"
+        onClick={() => setMaintOpen(true)}
+      >
+        <Plus className="h-3.5 w-3.5" /> طلب صيانة
+      </GuardedButton>
       <GuardedButton
         perm="properties:update"
         variant="outline"
@@ -169,8 +220,11 @@ export default function UnitDetail() {
     </div>
   ) : undefined;
 
+  const unitAlerts = unit ? buildUnitAlerts({ unit, contracts, payments, maintenance }) : [];
+
   const overview = unit ? (
     <div className="space-y-6">
+      <PropertyAlertsPanel alerts={unitAlerts} />
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -248,24 +302,16 @@ export default function UnitDetail() {
               </div>
             ) : null;
           })()}
-          {(() => {
-            const attachments = unit.attachments
-              ? (typeof unit.attachments === "string" ? JSON.parse(unit.attachments) : unit.attachments)
-              : [];
-            const images = attachments.filter((a: any) => a?.mimeType?.startsWith("image/") || a?.url?.match(/\.(jpg|jpeg|png|webp|gif)/i));
-            return images.length > 0 ? (
-              <div className="mt-4">
-                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> صور الوحدة</p>
-                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
-                  {images.slice(0, 10).map((img: any, i: number) => (
-                    <a key={i} href={img.url || img.fileUrl} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded overflow-hidden border hover:opacity-90 transition-opacity">
-                      <img src={img.url || img.fileUrl} alt={img.name || `صورة ${i+1}`} className="w-full h-full object-cover" />
-                    </a>
-                  ))}
-                </div>
-              </div>
-            ) : null;
-          })()}
+          {/* Read-only thumbnail strip — canonical upload/management is in the المرفقات tab */}
+          <div className="mt-3">
+            <button
+              className="text-xs text-status-info-foreground hover:underline flex items-center gap-1"
+              onClick={() => setActiveTab("attachments")}
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+              عرض كل المرفقات وإدارتها
+            </button>
+          </div>
         </CardContent>
       </Card>
 
@@ -545,6 +591,11 @@ export default function UnitDetail() {
                   { key: "monthlyRent", header: "الإيجار", render: (c) => <span className="font-bold">{formatCurrency(Number(c.monthlyRent || 0))}</span> },
                   { key: "totalPaid", header: "المحصل", render: (c) => <span className="text-emerald-600">{formatCurrency(Number(c.totalPaid || 0))}</span> },
                   { key: "status", header: "الحالة", render: (c) => <PageStatusBadge status={c.status} /> },
+                  { key: "id", header: "", render: (c) => (
+                    <Link href={`/properties/contracts/${c.id}`}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                    </Link>
+                  )},
                 ]}
                 data={contracts}
                 rowClassName={(c) => cn(c.status === "active" && "bg-status-info-surface")}
@@ -596,13 +647,29 @@ export default function UnitDetail() {
                 <DataTable
                   columns={[
                     { key: "tenantName", header: "المستأجر" },
-                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => <span className="text-muted-foreground">{formatDateAr(p.dueDate)}</span> },
+                    { key: "dueDate", header: "تاريخ الاستحقاق", render: (p) => {
+                      const overdue = p.status !== "paid" && new Date(p.dueDate) < new Date();
+                      const upcoming = p.status !== "paid" && !overdue && new Date(p.dueDate) <= new Date(Date.now() + 7 * 86400000);
+                      return (
+                        <span className={cn("flex items-center gap-1 text-xs font-medium",
+                          overdue ? "text-status-error-foreground" : upcoming ? "text-amber-600" : "text-muted-foreground"
+                        )}>
+                          {overdue && <AlertTriangle className="h-3 w-3" />}
+                          {upcoming && <Clock className="h-3 w-3" />}
+                          {formatDateAr(p.dueDate)}
+                        </span>
+                      );
+                    }},
                     { key: "amount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.amount || 0))}</span> },
                     { key: "paidAmount", header: "المدفوع", render: (p) => <span className="text-emerald-600">{formatCurrency(Number(p.paidAmount || 0))}</span> },
                     { key: "status", header: "الحالة", render: (p) => <PageStatusBadge status={p.status} /> },
                   ]}
                   data={payments}
-                  rowClassName={(p) => cn(p.status !== "paid" && new Date(p.dueDate) < new Date() && "bg-status-error-surface")}
+                  rowClassName={(p) => {
+                    const overdue = p.status !== "paid" && new Date(p.dueDate) < new Date();
+                    const upcoming = p.status !== "paid" && !overdue && new Date(p.dueDate) <= new Date(Date.now() + 7 * 86400000);
+                    return cn(overdue && "bg-status-error-surface", upcoming && "bg-amber-50", p.status === "paid" && "bg-status-success-surface/30");
+                  }}
                   noToolbar
                   pageSize={0}
                   searchPlaceholder={null}
@@ -648,6 +715,19 @@ export default function UnitDetail() {
                 searchPlaceholder={null}
               />
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "attachments" && id && (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-5">
+            <EntityAttachmentPanel
+              entityType="property_unit"
+              entityId={Number(id)}
+              label="مرفقات الوحدة"
+              defaultCategory="unit_photo_before"
+            />
           </CardContent>
         </Card>
       )}
@@ -759,6 +839,56 @@ export default function UnitDetail() {
         </FormGrid>
       </EntityEditDialog>
     )}
+    <Dialog open={maintOpen} onOpenChange={setMaintOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>طلب صيانة جديد — وحدة {unit?.unitNumber}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label className="text-xs">وصف المشكلة (مطلوب)</Label>
+            <Textarea
+              rows={3}
+              value={maintForm.description}
+              onChange={e => setMaintForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="صف المشكلة التي تحتاج إصلاحاً..."
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">الأولوية</Label>
+              <Select value={maintForm.priority} onValueChange={v => setMaintForm(f => ({ ...f, priority: v }))}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">منخفضة</SelectItem>
+                  <SelectItem value="medium">متوسطة</SelectItem>
+                  <SelectItem value="high">عالية</SelectItem>
+                  <SelectItem value="urgent">عاجلة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">التكلفة التقديرية (ريال)</Label>
+              <Input
+                type="number"
+                className="h-8 text-sm"
+                value={maintForm.estimatedCost}
+                onChange={e => setMaintForm(f => ({ ...f, estimatedCost: e.target.value }))}
+                placeholder="0"
+              />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setMaintOpen(false)}>إلغاء</Button>
+          <Button size="sm" onClick={submitMaintenance} disabled={maintSaving || !maintForm.description.trim()}>
+            {maintSaving ? "جاري الحفظ..." : "إنشاء الطلب"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

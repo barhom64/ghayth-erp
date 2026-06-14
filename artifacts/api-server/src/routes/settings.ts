@@ -18,6 +18,19 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
+import {
+  TASK_SLA_REMINDER_SETTING_KEY,
+  DEFAULT_TASK_SLA_REMINDER_CONFIG,
+  resolveTaskSlaReminderConfig,
+  validateTaskSlaReminderConfig,
+  TASK_ROLE_CHAIN_SETTING_KEY,
+  ROLES_BY_TASK_TYPE,
+  DEFAULT_TASK_ROLE_CHAIN,
+  INBOX_TASK_TYPES,
+  CATCHALL_ROLE,
+  resolveTaskRoleChains,
+  validateRoleChainMap,
+} from "../lib/inboxClassifier.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
@@ -288,6 +301,148 @@ router.delete("/", authorize({ feature: "settings", action: "update" }), async (
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete setting error:");
+  }
+});
+
+/* ── Inbox task SLA reminder tuning (key: inbox.task_sla_reminder) ────
+ * Thin read/write surface over the 3-level settings engine consumed by the
+ * inbox_task_sla_reminder_scan cron. No new table — the value is a JSON blob
+ * validated by validateTaskSlaReminderConfig. */
+
+router.get("/task-sla-reminder", authorize({ feature: "settings", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const stored = await resolveSettings(TASK_SLA_REMINDER_SETTING_KEY, scope.companyId, scope.branchId);
+    res.json({
+      data: {
+        config: resolveTaskSlaReminderConfig(stored),
+        defaults: DEFAULT_TASK_SLA_REMINDER_CONFIG,
+        isOverridden: stored !== undefined && stored !== null,
+      },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Get task SLA reminder settings error:");
+  }
+});
+
+router.put("/task-sla-reminder", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { config, errors } = validateTaskSlaReminderConfig(req.body);
+    if (errors.length > 0) throw new ValidationError(errors.join("، "));
+    await upsertSetting("company", scope.companyId, TASK_SLA_REMINDER_SETTING_KEY, config);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
+      entity: "settings", entityId: scope.companyId,
+      after: { key: TASK_SLA_REMINDER_SETTING_KEY, value: config },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_SLA_REMINDER_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ data: { config, defaults: DEFAULT_TASK_SLA_REMINDER_CONFIG, isOverridden: true } });
+  } catch (err) {
+    handleRouteError(err, res, "Update task SLA reminder settings error:");
+  }
+});
+
+router.delete("/task-sla-reminder", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await deleteSetting("company", scope.companyId, TASK_SLA_REMINDER_SETTING_KEY);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
+      entity: "settings", entityId: scope.companyId,
+      before: { key: TASK_SLA_REMINDER_SETTING_KEY },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_SLA_REMINDER_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ data: { config: DEFAULT_TASK_SLA_REMINDER_CONFIG, defaults: DEFAULT_TASK_SLA_REMINDER_CONFIG, isOverridden: false } });
+  } catch (err) {
+    handleRouteError(err, res, "Reset task SLA reminder settings error:");
+  }
+});
+
+/* ── Inbox auto-routing role chains (key: inbox.task_role_chains) ─────
+ * Per-company override of the classifier's role escalation chains, consumed by
+ * eventListeners auto-routing via resolveTaskRoleChains. No new table. */
+
+const INBOX_ROLE_LABEL_FALLBACK: Record<string, string> = {
+  owner: "مالك النظام",
+  general_manager: "مدير عام",
+  branch_manager: "مدير فرع",
+  support_manager: "مدير الدعم الفني",
+  finance_manager: "مدير المالية",
+  accountant: "محاسب",
+};
+
+router.get("/inbox-routing", authorize({ feature: "settings", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const stored = await resolveSettings(TASK_ROLE_CHAIN_SETTING_KEY, scope.companyId, scope.branchId);
+    const resolved = resolveTaskRoleChains(stored);
+
+    const taskTypes = INBOX_TASK_TYPES.map((type) => {
+      const def = [...(ROLES_BY_TASK_TYPE[type] ?? DEFAULT_TASK_ROLE_CHAIN)];
+      const chain = [...resolved[type]];
+      const isOverridden = chain.length !== def.length || chain.some((v, i) => v !== def[i]);
+      return { type, defaultChain: def, chain, isOverridden };
+    });
+
+    // Canonical Arabic labels come from the company's own rbac_roles; the inbox
+    // fallback map covers any chain role not yet seeded as an rbac_roles row.
+    const dbRoles = await rawQuery<{ key: string; label: string }>(
+      `SELECT role_key AS "key", label_ar AS "label" FROM rbac_roles WHERE "companyId" = $1 ORDER BY level DESC`,
+      [scope.companyId],
+    ).catch(() => [] as Array<{ key: string; label: string }>);
+    const labelMap = new Map<string, string>();
+    for (const r of dbRoles) labelMap.set(r.key, r.label);
+
+    const roleKeys = new Set<string>(dbRoles.map((r) => r.key));
+    for (const type of INBOX_TASK_TYPES) {
+      for (const role of ROLES_BY_TASK_TYPE[type] ?? []) roleKeys.add(role);
+      for (const role of resolved[type]) roleKeys.add(role);
+    }
+    roleKeys.add(CATCHALL_ROLE);
+    const availableRoles = [...roleKeys].map((key) => ({
+      key,
+      label: labelMap.get(key) ?? INBOX_ROLE_LABEL_FALLBACK[key] ?? key,
+    }));
+
+    res.json({ data: { taskTypes, availableRoles, catchAllRole: CATCHALL_ROLE } });
+  } catch (err) {
+    handleRouteError(err, res, "Get inbox routing settings error:");
+  }
+});
+
+router.put("/inbox-routing", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const raw = (req.body ?? {}) as { chains?: unknown };
+    const { chains, errors } = validateRoleChainMap(raw.chains);
+    if (errors.length > 0) throw new ValidationError(errors.map((e) => `${e.taskType}: ${e.message}`).join("، "));
+    await upsertSetting("company", scope.companyId, TASK_ROLE_CHAIN_SETTING_KEY, chains);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
+      entity: "settings", entityId: scope.companyId,
+      after: { key: TASK_ROLE_CHAIN_SETTING_KEY, value: chains },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_ROLE_CHAIN_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ success: true });
+  } catch (err) {
+    handleRouteError(err, res, "Update inbox routing settings error:");
+  }
+});
+
+router.delete("/inbox-routing", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await deleteSetting("company", scope.companyId, TASK_ROLE_CHAIN_SETTING_KEY);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
+      entity: "settings", entityId: scope.companyId,
+      before: { key: TASK_ROLE_CHAIN_SETTING_KEY },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_ROLE_CHAIN_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ success: true });
+  } catch (err) {
+    handleRouteError(err, res, "Reset inbox routing settings error:");
   }
 });
 
