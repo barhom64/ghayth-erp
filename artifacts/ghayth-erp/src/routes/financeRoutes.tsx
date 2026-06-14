@@ -37,6 +37,7 @@ const TaxCodesEdit = lazy(() => import("@/pages/create/finance/tax-codes-edit"))
 const WhtCategoriesEdit = lazy(() => import("@/pages/create/finance/wht-categories-edit"));
 const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
 const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
+const LedgerTruth = lazy(() => import("@/pages/finance/ledger-truth"));
 const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
 const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
 const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
@@ -256,6 +257,8 @@ export const financeRoutes = [
   { path: "/finance/reports/inventory-turnover", component: InventoryTurnover },
   // COGS / margin summary — consumes /reports/cogs-summary (#1034).
   { path: "/finance/reports/cogs-summary", component: CogsSummary },
+  // Ledger-truth measurement — consumes /reports/ledger-truth (#2246, read-only).
+  { path: "/finance/reports/ledger-truth", component: LedgerTruth },
   // VAT reconciliation report — pre-filing sanity check (#1037 backend).
   { path: "/finance/reports/vat-reconciliation", component: VatReconciliation },
   { path: "/finance/vouchers", component: Vouchers },
