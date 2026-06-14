@@ -155,12 +155,14 @@ describe("#2079 PE-02 — engine wires the readiness gate", () => {
 
   it("builds a maintenanceByVehicleId Map and ejects matches before scoring", () => {
     expect(ENGINE).toMatch(/const maintenanceByVehicleId = new Map<number, MaintenanceBlock>\(\);/);
-    expect(ENGINE).toMatch(/if \(maintenanceByVehicleId\.has\(v\.id\)\) continue;/);
+    // P0-4 (TA-T18-UX-AUDIT-01): الإقصاء يسجّل السبب في c.sink قبل continue.
+    expect(ENGINE).toMatch(/if \(maintenanceByVehicleId\.has\(v\.id\)\) \{[\s\S]{0,260}continue;\s*\}/);
   });
 
   it("calls checkVehicleDocumentReadiness in the eligibility pre-loop", () => {
     expect(ENGINE).toMatch(/const readiness = checkVehicleDocumentReadiness\(v, end\);/);
-    expect(ENGINE).toMatch(/if \(readiness\.blocked\) continue;/);
+    // P0-4 (TA-T18-UX-AUDIT-01): الإقصاء يسجّل السبب في c.sink قبل continue.
+    expect(ENGINE).toMatch(/if \(readiness\.blocked\) \{[\s\S]{0,260}continue;\s*\}/);
   });
 
   it("readiness checks happen inside the loop that populates eligibleVehicles (not after)", () => {
