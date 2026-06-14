@@ -33,7 +33,7 @@ class UmrahEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_agent_receivable", "debit", "1210"),
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_revenue", "credit", "4200"),
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "umrah_commission", "debit", "5200"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_commission", "debit", "5240"),
     ]);
 
     // Carry umrahAgentId on every line so per-agent revenue/AR/penalty/
@@ -88,8 +88,8 @@ class UmrahEngineImpl implements DomainEngine {
     }
   ) {
     const [expenseCode, payableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_expense", "debit", "5300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_expense", "debit", "5140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_transport_payable", "credit", "2150"),
     ]);
 
     const umrahSeasonId = transport.umrahSeasonId ?? undefined;

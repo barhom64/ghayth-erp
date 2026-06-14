@@ -1,0 +1,15 @@
+# gl-swallow-allowlist.txt — #2301 triage baseline (whole-file).
+# Each file currently catches a GL-posting error without rethrowing
+# (returns success while the journal silently fails → financial_posting_failures
+# retry queue). Fix in the owning track (rethrow / compensate-then-surface),
+# then delete its line. The guard fails on a NEW file that does the same.
+
+lib/engines/warehouseEngine.ts
+lib/eventListeners.ts
+routes/legal.ts
+routes/projects.ts
+routes/store.ts
+routes/support.ts
+routes/umrah.ts
+routes/warehouse-cycle-counts.ts
+routes/warehouse.ts
