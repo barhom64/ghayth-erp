@@ -288,15 +288,278 @@ outside the finance engine. ❌ No bulk silent anything.
 
 ---
 
-## 10. Owner decision matrix
+## 10. Owner decision matrix (PRE-CONTRACT — superseded by §11)
+
+> The owner ratified §1–§9 in principle on 2026-06-14 00:30 UTC
+> **BUT** added a binding architectural rule: Umrah must NOT
+> build invoices / JE / tax / accounts itself. It must SEND
+> operational data to the Financial Engine and the engine must
+> RETURN the invoice ref, posting status, JE id, AR/revenue/VAT
+> accounts, and financial period. §11 below answers the eight
+> contract questions raised at that ratification.
+>
+> **Hard freeze (re-affirmed):** no P4a, no P4b, no P4c, no
+> engine touch, no migration, no FE detail page, no default
+> flip — until §11 is ratified by the owner.
+
+| Original decision | Now superseded by §12 |
+| --- | --- |
+| Ratify §3 + §4 + §5 + §7 sequence | Re-cast in §12 conditional on §11 contract ratification. |
+| Amend §4.3 to Option B | Same — re-cast in §12. |
+| Hold close on the entire plan | Still available. |
+| Drop P4 entirely | Still available. |
+
+**Until §11 ratification, `generateSalesInvoice` is not
+touched.** The 9 owner requirements remain the operational
+acceptance criteria; §11 adds the architectural acceptance
+criteria.
+
+---
+
+## 11. Financial Engine Contract (response to the owner's
+binding architectural rule)
+
+### 11.0 Where Umrah crosses the line today
+
+The read-only audit of `lib/businessHelpers.ts`,
+`numberingService.ts`, `taxCodes.ts`,
+`revenueAccountResolver.ts`, and
+`financialEngine.postJournalEntry` shows the Financial Engine
+already exposes four layers:
+
+| Layer | Engine surface | Today umrah delegates? |
+| --- | --- | --- |
+| **Numbering** | `issueNumber(IssueParams) → IssueResult { number, sequenceValue, schemeId, assignmentId, … }` | ✅ Yes — `umrahInvoicingEngine.ts:541` calls `issueNumber("umrah_sales_invoice")`. |
+| **Tax** | `computeTaxFromTaxCode({ companyId, amount, taxInclusive, taxCode }) → { net, tax, gross, taxCode, rate }`; `getCompanyVatRate(companyId)` | ❌ **No.** Umrah computes VAT inline via `marginBase × rate / (100+rate)` (lines 504–524). This is one of the four cross-the-line points. |
+| **Account routing** | `resolveRevenueAccount(companyId, hint, accountType?)` + `getAccountCodeFromMapping(companyId, operation, side, fallback)` | ⚠️ Partial — Umrah does delegate revenue routing, but it picks AR / VAT / penalty accounts via `getAccountCodeFromMapping` calls it makes itself, and constructs the GL line array manually. |
+| **GL posting** | `financialEngine.postJournalEntry(GLPostingRequest) → journalId` (period guard + idempotency baked in) | ⚠️ Mixed — Umrah calls `createGuardedJournalEntry` directly (the lower-level helper) rather than `financialEngine.postJournalEntry`. CRM finance-invoices uses the higher-level one. |
+
+**Conclusion:** Umrah owns 4 things it shouldn't:
+1. Inline VAT math.
+2. Manual selection of AR + VAT account codes.
+3. Manual GL-line array construction.
+4. Direct call to `createGuardedJournalEntry` instead of the
+   posted `financialEngine.postJournalEntry`.
+
+### 11.1 Proposed contract surface — `FinancialEngine.postSalesInvoice(...)`
+
+The contract needs **one new façade method** on the financial
+engine so Umrah (and any future module) sends an operational
+request and receives a finance-side response. **The method does
+NOT exist today** — it is the new surface this contract
+defines.
+
+```ts
+// New (proposed) — lives in artifacts/api-server/src/lib/financialEngine.ts
+interface SalesInvoiceRequest {
+  // Tenancy
+  scope: { companyId: number; branchId?: number | null; userId: number };
+
+  // Operational classification — informs the engine which scheme +
+  // mappings + tax policy + period to apply.
+  operation: "umrah_sales" | "crm_sales" | "property_rent" | /* …extensible */ string;
+
+  // Document context (operator-supplied; engine does not invent)
+  invoiceDate: string;                  // YYYY-MM-DD; engine validates against the period
+  dueDate?: string | null;
+  notes?: string | null;
+
+  // Counterparty (the LEGAL party for AR/statement). Under
+  // main_agent_client mode the umrah module resolves this to the
+  // main agent's client; under sub_agent_client_required mode it
+  // resolves to the sub-agent's client. The engine does NOT decide
+  // which side of the policy is in force — that's umrah-domain.
+  customer: { clientId: number };
+
+  // Operational dimensions — engine stamps these on EVERY GL line.
+  // Engine does NOT interpret them; modules tell it which to carry.
+  dimensions: {
+    umrahAgentId?: number | null;       // main agent
+    umrahSubAgentId?: number | null;
+    umrahSeasonId?: number | null;
+    umrahGroupId?: number | null;       // when the WHOLE invoice belongs to one group; otherwise per-line
+    propertyUnitId?: number | null;     // for the rent path; harmless null for umrah
+    /* …extensible per module */
+  };
+
+  // Line items — per-line tax flag, per-line cost reference, per-line
+  // group, per-line product. The engine treats these as
+  // OPERATIONAL FACTS and decides the accounting consequences.
+  lines: Array<{
+    // Operational identity
+    itemType: "service" | "penalty" | "adjustment";
+    description: string;
+    quantity: number;
+
+    // Pricing (operator-confirmed)
+    unitPriceExclTax: number;
+
+    // Per-line dimensions
+    groupId?: number | null;
+    sourceNuskInvoiceId?: number | null;  // purchase reference (Option A: dimension only)
+    productId?: number | null;            // gives engine a defaultTaxCode + defaultRevenueAccountId
+
+    // Tax intent (explicit; no "all taxable" or "all exempt" assumption)
+    isTaxable?: boolean | null;           // NULL = use product/policy default; TRUE / FALSE = explicit override
+    taxCodeHint?: "standard" | "zero" | "exempt" | null;
+
+    // Per-line cost basis (optional; engine may use for margin scheme)
+    costBasisHint?: number | null;
+  }>;
+
+  // Idempotency
+  sourceKey: string;                     // e.g., `umrah-sales-${operatorOpKey}`; engine dedupes
+}
+
+interface SalesInvoiceResponse {
+  // Finance-side facts that umrah PERSISTS but does NOT pick
+  invoiceRef: string;                    // from numberingService
+  invoiceId: number;                     // engine wrote the header to its own table OR returned a foreign id (see §11.2)
+  journalEntryId: number;                // from createGuardedJournalEntry
+  postedAt: string;                      // ISO; the date the engine accepted the post
+  periodId: number;                      // financial period the JE landed in
+  periodName: string;                    // human-readable
+  status: "draft" | "posted" | "deferred"; // engine decides based on issueTiming + period
+
+  // Account routing — engine returns the codes it chose, so umrah
+  // can SHOW them on the invoice without re-deriving.
+  accounts: {
+    arAccountCode: string;
+    revenueAccountCodes: string[];       // one per revenue bucket (vatRate, groupId, productId)
+    vatAccountCode: string;
+    penaltyAccountCode?: string;
+    // No COGS in Option A; would appear here under Option B.
+  };
+
+  // Tax breakdown — engine returns the per-line computed values so
+  // umrah can persist + render them without recomputing.
+  tax: {
+    inclusiveMode: boolean;
+    lines: Array<{
+      lineIndex: number;
+      isTaxable: boolean;                // engine resolves the read chain
+      vatRate: number;
+      vatAmount: number;
+      lineTotalExclTax: number;
+      lineTotalInclTax: number;
+    }>;
+    totals: { subtotalExclTax: number; vatAmount: number; total: number };
+  };
+}
+```
+
+**Engine responsibilities (after contract lands):**
+- Owns invoice numbering (already does via numberingService).
+- Owns VAT math via `computeTaxFromTaxCode` (NEW — Umrah stops doing it).
+- Owns AR + VAT + revenue account code selection from
+  `accounting_mappings` + `resolveRevenueAccount` (NEW —
+  Umrah stops doing the AR/VAT selection itself).
+- Owns period validation (already does inside
+  `createJournalEntry`).
+- Owns GL line construction + posting (NEW — Umrah stops
+  building the array; engine constructs from `lines`+
+  `accounts`+`tax`).
+- Returns the envelope above.
+
+**Umrah responsibilities (after contract lands):**
+- Resolve the customer per the linkage policy (main vs
+  sub-agent).
+- Decide which groups + NUSK refs + sub-agent + season belong
+  on the invoice.
+- Decide per-line `isTaxable` overrides when the operator
+  explicitly says "this line is exempt".
+- Persist the response envelope on
+  `umrah_sales_invoices`/`umrah_sales_invoice_items`.
+- NOT compute VAT. NOT pick accounts. NOT construct JE lines.
+  NOT call `createGuardedJournalEntry` directly.
+
+### 11.2 Eight contract questions — answered
+
+| # | Owner question | Answer |
+| --- | --- | --- |
+| 1 | **What does Umrah send?** | Operational `SalesInvoiceRequest`: scope, operation key, dates, customer FK, dimensions, lines (with productId / groupId / sourceNuskInvoiceId / isTaxable / unitPriceExclTax), sourceKey. **No invoice number, no JE id, no period, no account codes, no VAT.** |
+| 2 | **What does the engine return?** | `SalesInvoiceResponse`: invoiceRef + invoiceId + journalEntryId + postedAt + periodId + periodName + status + accounts + tax breakdown per line + totals. **Umrah persists this verbatim; never overwrites it.** |
+| 3 | **Who owns the invoice number?** | The Financial Engine via numberingService. The scheme + counter + reset policy + scope (company/branch/season) live in `numbering_schemes`. Umrah cannot mint or alter the ref. |
+| 4 | **Who calculates the tax?** | The Financial Engine via `computeTaxFromTaxCode` per line. Umrah supplies `isTaxable` (or NULL = inherit) and the price; the engine returns `vatRate`, `vatAmount`, `lineTotalExclTax`, `lineTotalInclTax`. Margin-scheme logic, if any, is decided by the engine from the `operation` key — **not by umrah's `umrah_vat_mode` flag**. |
+| 5 | **Who picks the accounts?** | The Financial Engine. AR + VAT + penalty from `accounting_mappings(operation = "umrah_sales")`; revenue per bucket from `resolveRevenueAccount(companyId, hint, "revenue")` extended to walk umrah_group / umrah_season / property. Umrah supplies the hint (group/sub-agent/agent/season) and lets the engine resolve. |
+| 6 | **Where does the group number appear?** | On the line (`lines[i].groupId`) and on EVERY revenue/VAT GL line via the new `umrahGroupId` dimension. The engine stamps it because Umrah passed it on the line. |
+| 7 | **Where does the purchase-invoice number appear?** | On the line (`lines[i].sourceNuskInvoiceId`) and on the engine's GL line via a new `sourceNuskInvoiceId` dimension. The response envelope echoes it back so the printed invoice + report can render it per row. |
+| 8 | **Is the purchase-invoice number just a reference or does it affect cost?** | **In P4: reference + dimension only (§4.3 Option A).** The engine uses it to stamp GL lines and to optionally compute margin-scheme VAT base (engine reads `costBasisHint` if supplied). It does NOT post a COGS pair — the NUSK AP entry posted at purchase time remains the only cost posting. A COGS pair (Option B) is a SEPARATE engine track (suggested id: `FIN-COGS-UMRAH`), not bundled into P4. |
+
+### 11.3 Migration consequences for the engine side
+
+Adding the contract is **not** Umrah's migration. The engine
+side may need:
+
+- A new method `financialEngine.postSalesInvoice(...)`
+  (the only file change required to expose the contract).
+- A row in `accounting_mappings` for
+  `operation = "umrah_sales"` (which probably already exists —
+  needs verification).
+- Optional: an enum extension on `taxCodes` for any umrah-
+  specific code (e.g., `umrah_visa_zero`); current `zero` /
+  `exempt` may suffice.
+
+**None of those land in P4-plan.** They live in a separate
+finance-side PR after this contract is ratified.
+
+### 11.4 What changes inside Umrah after the contract lands
+
+- `umrahInvoicingEngine.ts` shrinks from ~785 lines to ~250
+  lines: it builds the request, calls
+  `financialEngine.postSalesInvoice`, persists the response.
+- Inline VAT math (lines 461–524) **deleted**.
+- Manual AR/VAT/penalty `getAccountCodeFromMapping` calls
+  **deleted**.
+- Manual JE line construction (lines 580–731) **deleted**.
+- Direct `createGuardedJournalEntry` call **deleted**.
+- New: 3 columns on `umrah_sales_invoices` to persist the
+  engine's response (`periodId`, `periodName` is rendered
+  from the period table, `acceptedAt = postedAt`).
+
+This is **the architectural payoff** of P4: Umrah stops
+maintaining a parallel finance code path.
+
+---
+
+## 12. Revised slice sequence (post §11)
+
+| Slice | Scope | Owner |
+| --- | --- | --- |
+| **P4-plan-v2** | This document, with §11. **No code.** | 🟢 autonomous (this PR; iteration 2 of the plan). |
+| **CONTRACT-RATIFY** | Owner reads §11 + answers §11.2 questions, ratifies the request/response envelope shape and the responsibility split. | Owner only. |
+| **FIN-P4-CONTRACT** | Finance-side engine PR — adds `financialEngine.postSalesInvoice(...)` + the accounting_mappings row + smokes that pin the contract. **Not Umrah's PR.** | Finance-track owner; class TBD. |
+| **P4a (umrah-side)** | Additive nullable migration on `umrah_sales_invoice_items` (the 5 columns in §3.1) + a smoke that pins the column shape. Still no engine touch. | 🟢 autonomous after CONTRACT-RATIFY + FIN-P4-CONTRACT. |
+| **P4b (umrah-side)** | `umrahInvoicingEngine.ts` switches to calling `financialEngine.postSalesInvoice(...)`. Old inline math + manual JE deleted. Smoke pins the shrink. | 🔴 **hard-pause** (production behaviour change). |
+| **P4c (umrah-side)** | New FE detail page rendering §6's per-line view from the engine's response envelope. | 🟢 autonomous. |
+| **P5** | Catalog default flip `main_agent_client` for new tenants. | 🔴 hard-pause. |
+
+**Order of dependencies:** plan ratification → finance-side
+contract PR → umrah migration → umrah engine swap → umrah FE
+detail → policy default flip. **P4b cannot land before the
+finance-side contract PR.**
+
+---
+
+## 13. What this PR (iteration 2) ships
+
+1. This planning document, with §11 added.
+2. No source code change anywhere.
+3. The 14 existing umrah smokes (`227/227` last green run on
+   main) continue to protect the surface unchanged.
+
+---
+
+## 14. Owner decision matrix (post §11)
 
 | Decision | I do next |
 | --- | --- |
-| **Ratify §3 + §4 + §5 + §7 sequence** | Open P4a (migration + catalog field + smoke). |
-| **Amend §4.3 to Option B** | I redraw §4.2's JE with explicit COGS pairs and re-circulate before any code. |
-| **Hold close on the entire plan** | No further action. P4 stays as a documented direction. |
-| **Drop P4 entirely** | We close the BILL-MAIN track at P3 + P6 (linker + detection). |
+| **Ratify §11 contract envelope + §12 sequence** | Pause for the finance-track owner to draft FIN-P4-CONTRACT. After it lands, I open P4a (the umrah migration). |
+| **Amend §11.1 request/response shape** | I redraft §11 per the amendment and re-circulate. |
+| **Amend §11.2 answers (one or more)** | I update the answer + propagate consequences through §11.1 / §12. |
+| **Hold close on the entire plan** | No further action; Umrah keeps owning the finance path for now. |
+| **Drop P4 entirely** | We close the BILL-MAIN track at P3 + P6. |
 
-**Until ratification, `generateSalesInvoice` is not touched.**
-The 9 owner requirements are the canonical acceptance criteria
-for P4 code; any code PR will cite them line-by-line.
+**Until ratification of §11, `generateSalesInvoice` is not
+touched, no P4a/b/c migration or code lands, no FE detail page,
+no default flip.**
