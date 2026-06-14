@@ -57,6 +57,7 @@ CR  2220  eos_accrual_liability    = monthlyEosAccrual   [employeeId, department
 - ربط **purpose صريح** لـ`eos_accrual_liability → 2220` و`eos_accrual_expense → 5260` في الـseed (لا الاعتماد على fallback).
 - **تصحيح مقترن (الفجوة #3):** التزام الإجازات في `postMonthlyAccrualsGL` يسقط حاليًّا على 2220؛ يجب فصله إلى **2150** عبر profile «استحقاق الإجازات» منفصل (خارج نطاق #2252 لكنه يشارك نفس الدالة المعطوبة `hrEngine.ts:521-559` — يلزم تنسيق عند التنفيذ حتى لا يبقى الخلط).
 - كل سطر يحمل الأبعاد (الـbreakdown يُحسب أصلًا في `hr.ts:7556` ثم يُهمَل — هنا يُمرَّر).
+- **تحديث (#2233 هبط، `6016330`):** عقد البُعد المُنفَّذ يغطّي vehicle/property/project/vendor/client **فقط، لا employee/department/branch**. فأبعاد EOSB **خارج العقد الحالي** — يلزم توسيع فئة أبعاد العمالة في العقد (`financePostingPolicy.assertDimensionContract` + `ledgerTruth.DIMENSION_COLUMN`) قبل أن تُفرَض هنا. التصميم يفرض هذا المتطلّب على العقد، لا يكتفي باستهلاكه.
 
 ### 3.3 الـidempotency + جدول التتبّع (مقترح)
 نظير `depreciation_entries`:
