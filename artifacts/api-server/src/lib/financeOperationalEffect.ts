@@ -221,12 +221,32 @@ export interface FuelLogInput {
   mileageAtFuel?: number | null;
   stationName?: string | null;
   fuelDate?: string | null;
+  // #2234 (FIN-P4-SUPPLIER-FUEL-CONTRACT) — the SAVED supplier is the
+  // commercial party (carried as vendorId on the JE line). `fleet_fuel_logs`
+  // has no supplierId column, so the supplier's name becomes the DERIVED
+  // stationName label (display, not source of truth). `unregisteredSupplierName`
+  // is the temporary free-text exception (draft-only, policy-gated upstream).
+  supplierId?: number | null;
+  unregisteredSupplierName?: string | null;
 }
 
 export async function applyFuelLogEffect(
   client: TxnClient,
   input: FuelLogInput,
 ): Promise<{ fuelLogId: number }> {
+  // Derive the display station name: prefer the saved supplier's name (the
+  // real commercial identity lives on the JE as vendorId), then the temporary
+  // unregistered name, then any legacy free-text stationName.
+  let stationLabel: string | null = input.stationName ?? null;
+  if (input.supplierId) {
+    const s = await client.query(
+      `SELECT name FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+      [input.supplierId, input.companyId],
+    );
+    if (s.rows.length > 0) stationLabel = s.rows[0].name as string;
+  } else if (input.unregisteredSupplierName) {
+    stationLabel = input.unregisteredSupplierName;
+  }
   const r = await client.query(
     `INSERT INTO fleet_fuel_logs
        ("companyId", "vehicleId", "fuelDate", liters, "costPerLiter", "totalCost",
@@ -241,7 +261,7 @@ export async function applyFuelLogEffect(
       input.costPerLiter ?? null,
       input.totalCost,
       input.mileageAtFuel ?? null,
-      input.stationName ?? null,
+      stationLabel,
       input.journalId,
     ],
   );
