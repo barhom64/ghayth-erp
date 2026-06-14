@@ -5115,6 +5115,132 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// U-04-P3 — Commissions Summary CSV export.
+//
+// Same query + same WHERE filter set as
+// GET /umrah/reports/commissions-summary, but:
+//   - returns a UTF-8 BOM-prefixed CSV (Excel-friendly Arabic)
+//   - bumps LIMIT to 5000 (vs the on-screen 100) for operator
+//     monthly close exports
+//   - one line per calc row, header row carries Arabic labels
+//
+// Read-only. Tenant-scoped via cc."companyId" + cc."deletedAt" IS
+// NULL on every row + the optional seasonId join still chains
+// through cp."companyId" = cc."companyId".
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/reports/commissions-summary/export",
+  authorize({ feature: "umrah", action: "list" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
+      const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+      const yearParam   = req.query.year        ? Number(req.query.year)        : null;
+      const statusParam = req.query.status      ? String(req.query.status)      : null;
+
+      const params: unknown[] = [scope.companyId];
+      let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
+      if (yearParam) {
+        params.push(yearParam);
+        where += ` AND cc.year = $${params.length}`;
+      }
+      if (employeeId) {
+        params.push(employeeId);
+        where += ` AND cc."employeeId" = $${params.length}`;
+      }
+      if (statusParam) {
+        params.push(statusParam);
+        where += ` AND cc.status = $${params.length}`;
+      }
+      if (seasonId) {
+        params.push(seasonId);
+        where += ` AND EXISTS (
+          SELECT 1 FROM employee_commission_plans cp
+           WHERE cp.id = cc."planId"
+             AND cp."companyId" = cc."companyId"
+             AND cp."seasonId" = $${params.length}
+        )`;
+      }
+
+      // Same shape as the summary's `recent` block, but the
+      // on-screen cap is lifted — operators exporting for monthly
+      // close need the full window. We cap at 5000 to protect
+      // Excel / memory.
+      const rows = await rawQuery<{
+        id: number; planId: number; planName: string | null;
+        employeeId: number; employeeName: string | null;
+        month: number; year: number; status: string;
+        finalAmount: string; commissionAmount: string;
+        totalMutamers: number; conditionMet: boolean;
+        hasViolations: boolean; createdAt: string;
+      }>(
+        `SELECT cc.id, cc."planId", cp."planName",
+                cc."employeeId", e.name AS "employeeName",
+                cc.month, cc.year, cc.status,
+                cc."finalAmount"::text AS "finalAmount",
+                cc."commissionAmount"::text AS "commissionAmount",
+                cc."totalMutamers", cc."conditionMet", cc."hasViolations",
+                cc."createdAt"::text AS "createdAt"
+           FROM employee_commission_calculations cc
+           LEFT JOIN employee_commission_plans cp
+                  ON cp.id = cc."planId" AND cp."companyId" = cc."companyId" AND cp."deletedAt" IS NULL
+           LEFT JOIN employees e
+                  ON e.id = cc."employeeId" AND e."companyId" = cc."companyId" AND e."deletedAt" IS NULL
+          WHERE ${where}
+          ORDER BY cc.year DESC, cc.month DESC, cc."finalAmount" DESC
+          LIMIT 5000`,
+        params,
+      );
+
+      // RFC 4180 escape — quote when the cell contains the delimiter,
+      // a quote, or any newline; double internal quotes. Same shape
+      // as the pilgrims export (routes/umrah.ts:1233).
+      const csvEscape = (v: unknown): string => {
+        if (v === null || v === undefined) return "";
+        const s = String(v);
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+
+      const headers: Array<[keyof typeof rows[number], string]> = [
+        ["id",               "رقم"],
+        ["year",             "السنة"],
+        ["month",            "الشهر"],
+        ["employeeName",     "الموظف"],
+        ["planName",         "الخطة"],
+        ["status",           "الحالة"],
+        ["commissionAmount", "العمولة المحتسبة"],
+        ["finalAmount",      "المبلغ النهائي"],
+        ["totalMutamers",    "عدد المعتمرين"],
+        ["conditionMet",     "تحقّق الشرط"],
+        ["hasViolations",    "وجود مخالفات"],
+        ["createdAt",        "تاريخ الإنشاء"],
+      ];
+
+      const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
+      const dataRows = rows.map((r) =>
+        headers
+          .map(([key]) => csvEscape(r[key]))
+          .join(","),
+      );
+      // BOM so Excel detects UTF-8 Arabic — without it the file opens
+      // as mojibake (same lesson as the pilgrims export).
+      const BOM = "﻿";
+      const csv = BOM + [headerRow, ...dataRows].join("\n");
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="umrah-commissions-${todayISO()}.csv"`,
+      );
+      res.send(csv);
+    } catch (err) {
+      handleRouteError(err, res, "Commissions summary CSV export");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // §6 Finance Hygiene — Untraced Finance (Charter #1870)
 //
 // Operator's 5-minute daily check: which finance-impacting rows are
