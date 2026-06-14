@@ -79,11 +79,9 @@ const METHOD_LABEL: Record<string, string> = {
 
 const journalLink = (id: number | null) =>
   id ? (
-    <Link href={`/finance/journal/${id}`}>
-      <Button variant="ghost" size="sm" className="h-7 gap-1">
+    <Button asChild variant="ghost" size="sm" className="h-7 gap-1"><Link href={`/finance/journal/${id}`}>
         <ExternalLink className="h-3 w-3" />القيد
-      </Button>
-    </Link>
+      </Link></Button>
   ) : null;
 
 export default function VendorDocumentsPage() {
