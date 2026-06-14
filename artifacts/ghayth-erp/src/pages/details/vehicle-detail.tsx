@@ -21,7 +21,8 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, Video } from "lucide-react";
-import { GuardedButton } from "@/components/shared/permission-gate";
+import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
+import { VehicleCapabilityMatrixForm } from "@/components/shared/vehicle-capability-matrix-form";
 import {
   DetailPageLayout,
   EntityComments,
@@ -34,6 +35,7 @@ import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
   { key: "info", label: "المعلومات", icon: Car },
+  { key: "vcm", label: "الملف الفني", icon: Wrench },
   { key: "trips", label: "الرحلات", icon: MapPin },
   { key: "maintenance", label: "الصيانة", icon: Wrench },
   { key: "fuel", label: "الوقود", icon: Fuel },
@@ -71,6 +73,9 @@ export default function VehicleDetail() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
+  // #2079 TA-T18-05 — gate the VCM form's save controls on the
+  // existing fleet.vehicles:update action; no new RBAC introduced.
+  const canEditVehicle = usePermission("fleet.vehicles:update");
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
@@ -593,6 +598,42 @@ export default function VehicleDetail() {
             </CardContent>
           </Card>
         </div>
+      )}
+      {activeTab === "vcm" && vehicle && (
+        <VehicleCapabilityMatrixForm
+          vehicleId={vehicle.id}
+          initial={{
+            vehicleType: vehicle.vehicleType ?? null,
+            payloadKg: vehicle.payloadKg ?? null,
+            boxLengthCm: vehicle.boxLengthCm ?? null,
+            boxWidthCm: vehicle.boxWidthCm ?? null,
+            boxHeightCm: vehicle.boxHeightCm ?? null,
+            axleCount: vehicle.axleCount ?? null,
+            tireCount: vehicle.tireCount ?? null,
+            tireSize: vehicle.tireSize ?? null,
+            engineDisplacementCc: vehicle.engineDisplacementCc ?? null,
+            transmissionType: vehicle.transmissionType ?? null,
+            fuelType: vehicle.fuelType ?? null,
+            seatCount: vehicle.seatCount ?? null,
+            hasAc: vehicle.hasAc ?? null,
+            screenCount: vehicle.screenCount ?? null,
+            doorCount: vehicle.doorCount ?? null,
+            upholsteryType: vehicle.upholsteryType ?? null,
+            safetyFeatures: Array.isArray(vehicle.safetyFeatures)
+              ? (vehicle.safetyFeatures as string[]) : null,
+            operatingHours: vehicle.operatingHours ?? null,
+            equipmentAttachments: Array.isArray(vehicle.equipmentAttachments)
+              ? (vehicle.equipmentAttachments as string[]) : null,
+            operationalPayloadKg: vehicle.operationalPayloadKg ?? null,
+            validForPassengers: vehicle.validForPassengers ?? null,
+            validForCargo: vehicle.validForCargo ?? null,
+            operationalPassengerCapacity: vehicle.operationalPassengerCapacity ?? null,
+            vehicleServiceTypes: Array.isArray(vehicle.vehicleServiceTypes)
+              ? (vehicle.vehicleServiceTypes as string[]) : null,
+          }}
+          canEdit={canEditVehicle}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["vehicle-detail", String(id)] })}
+        />
       )}
       {activeTab === "trips" && (
         <Card>
