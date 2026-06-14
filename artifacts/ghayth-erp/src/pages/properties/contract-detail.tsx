@@ -68,7 +68,9 @@ export default function ContractDetailPage() {
   const [paying, setPaying] = useState(false);
 
   const [legalOpen, setLegalOpen] = useState(false);
-  const [legalForm, setLegalForm] = useState({ caseType: "civil", description: "", priority: "medium" });
+  // caseType is a free string on the backend (z.string().optional()); values
+  // below mirror the common Arabic court taxonomy — no server-side enum constraint.
+  const [legalForm, setLegalForm] = useState({ caseType: "rental_dispute", description: "", priority: "medium" });
   const [legalSaving, setLegalSaving] = useState(false);
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
@@ -576,9 +578,9 @@ export default function ContractDetailPage() {
             <Select value={legalForm.caseType} onValueChange={v => setLegalForm(f => ({ ...f, caseType: v }))}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="civil">مدنية — إخلاء / مطالبة مالية</SelectItem>
+                <SelectItem value="rental_dispute">نزاع إيجاري — إخلاء / مطالبة</SelectItem>
+                <SelectItem value="civil">مدنية — مطالبة مالية عامة</SelectItem>
                 <SelectItem value="commercial">تجارية</SelectItem>
-                <SelectItem value="rental_dispute">نزاع إيجاري</SelectItem>
               </SelectContent>
             </Select>
           </div>

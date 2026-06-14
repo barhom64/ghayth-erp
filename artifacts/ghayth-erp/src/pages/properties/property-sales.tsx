@@ -90,8 +90,11 @@ export default function PropertySalesPage() {
     { key: "bookValue", header: "القيمة الدفترية", render: r => formatCurrency(Number(r.bookValue || 0)) },
     { key: "vatAmount", header: "ضريبة القيمة المضافة", render: r => r.vatAmount ? formatCurrency(Number(r.vatAmount)) : "—" },
     { key: "status", header: "الحالة", render: r => (
-      <Badge variant="outline" className={r.status === "completed" ? "border-emerald-200 text-emerald-600 bg-emerald-50" : ""}>
-        {r.status === "completed" ? "مكتمل" : r.status === "pending" ? "معلق" : r.status}
+      <Badge variant="outline" className={
+        r.status === "completed" ? "border-emerald-200 text-emerald-600 bg-emerald-50" :
+        r.status === "draft" ? "border-amber-200 text-amber-700 bg-amber-50" : ""
+      }>
+        {r.status === "completed" ? "مكتمل — مرحّل" : r.status === "draft" ? "مسودة — بدون قيد" : r.status === "pending" ? "قيد التنفيذ" : r.status}
       </Badge>
     )},
     { key: "buyerPhone", header: "هاتف المشتري", render: r => r.buyerPhone || "—" },

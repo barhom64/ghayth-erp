@@ -4725,30 +4725,38 @@ router.post("/sales", authorize({ feature: "properties.buildings", action: "crea
     const scope = req.scope!;
     const b = zodParse(createSaleSchema.safeParse(req.body)) as any;
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO property_sales ("companyId","buildingId","buyerName","buyerPhone","buyerNationalId","salePrice","bookValue","vatAmount","saleDate","transferDate",status,notes,"createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,$12)`,
-      [scope.companyId, b.buildingId || null, b.buyerName, b.buyerPhone || null, b.buyerNationalId || null,
-       b.salePrice, b.bookValue, b.vatAmount, b.saleDate, b.transferDate || null, b.notes || null, scope.userId]
-    );
-    assertInsert(insertId, "property_sales");
+    // INSERT + GL must succeed together. withTransaction binds a single
+    // connection via AsyncLocalStorage so rawQuery/rawExecute inside the
+    // callback run on the same transaction. If postSaleGL throws, the
+    // transaction rolls back, the INSERT is undone, and the error propagates
+    // to the outer catch → handleRouteError → 4xx/5xx to the client.
+    // We never return 201 without a balanced journal entry.
+    const insertId = await withTransaction(async () => {
+      const { insertId: id } = await rawExecute(
+        `INSERT INTO property_sales ("companyId","buildingId","buyerName","buyerPhone","buyerNationalId","salePrice","bookValue","vatAmount","saleDate","transferDate",status,notes,"createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [scope.companyId, b.buildingId || null, b.buyerName, b.buyerPhone || null, b.buyerNationalId || null,
+         b.salePrice, b.bookValue, b.vatAmount, b.saleDate, b.transferDate || null,
+         b.bookValue > 0 ? 'pending' : 'draft',
+         b.notes || null, scope.userId]
+      );
+      assertInsert(id, "property_sales");
 
-    // Post GL if book value is provided (non-zero means asset is on books)
-    if (b.bookValue > 0) {
-      try {
+      if (b.bookValue > 0) {
+        // postSaleGL throws on failure → transaction rolls back → INSERT undone.
         await propertiesEngine.postSaleGL(
           { companyId: scope.companyId, branchId: scope.branchId ?? null, createdBy: scope.userId },
-          { id: insertId, propertyId: b.buildingId || 0, buyerId: null,
+          { id, propertyId: b.buildingId || 0, buyerId: null,
             salePrice: b.salePrice, bookValue: b.bookValue, vatAmount: b.vatAmount, saleDate: b.saleDate }
         );
         await rawExecute(
           `UPDATE property_sales SET status='completed', "updatedAt"=NOW() WHERE id=$1`,
-          [insertId]
+          [id]
         );
-      } catch (glErr) {
-        logger.error(glErr, "Property sale GL error (sale recorded, GL failed):");
       }
-    }
+
+      return id;
+    });
 
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId,
       action: "create", entity: "property_sales", entityId: insertId, after: b });

@@ -29,7 +29,7 @@ import {
   Building, FileText, Banknote, Wrench, Users, DollarSign,
   AlertTriangle, XCircle, Info, Pencil, Plus, ExternalLink,
   Compass, Paintbrush, Star, Image as ImageIcon, MapPin, BedDouble, Bath, Maximize2,
-  CheckCircle, Clock,
+  Clock,
 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -302,14 +302,16 @@ export default function UnitDetail() {
               </div>
             ) : null;
           })()}
-          <EntityAttachmentPanel
-            entityType="property_unit"
-            entityId={unit.id}
-            label="مرفقات الوحدة"
-            defaultCategory="unit_photo_before"
-            filterCategories={["property_photo","unit_photo_before","unit_photo_after","unit_handover","maintenance_photo"]}
-            className="mt-4"
-          />
+          {/* Read-only thumbnail strip — canonical upload/management is in the المرفقات tab */}
+          <div className="mt-3">
+            <button
+              className="text-xs text-status-info-foreground hover:underline flex items-center gap-1"
+              onClick={() => setActiveTab("attachments")}
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+              عرض كل المرفقات وإدارتها
+            </button>
+          </div>
         </CardContent>
       </Card>
 
@@ -654,7 +656,6 @@ export default function UnitDetail() {
                         )}>
                           {overdue && <AlertTriangle className="h-3 w-3" />}
                           {upcoming && <Clock className="h-3 w-3" />}
-                          {overdue && <CheckCircle className="h-3 w-3 hidden" />}
                           {formatDateAr(p.dueDate)}
                         </span>
                       );
