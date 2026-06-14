@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
-import { usePublishPageTitle } from "@/contexts/page-title-context";
 import { PageStateWrapper } from "./page-state";
 import { EntityDocuments } from "./entity-documents";
 import { EntityTimeline } from "./entity-timeline";
@@ -192,7 +191,6 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
 
   // Publish the entity's real title (e.g. "فاتورة #INV-2024-001") so the
   // topbar + breadcrumb show the actual page, not the parent module label.
-  usePublishPageTitle(title);
 
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
