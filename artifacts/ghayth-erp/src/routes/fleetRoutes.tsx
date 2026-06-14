@@ -46,6 +46,7 @@ const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-bookin
 const TransportBookingConfirmation = lazy(() => import("@/pages/fleet/transport-booking-confirmation"));
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
+const TransportServiceLines = lazy(() => import("@/pages/fleet/transport-service-lines"));
 const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
 // #1812 Wave 1 Step C — equipment rental (the third leg).
 const RentalContractsList = lazy(() => import("@/pages/fleet/rental-contracts"));
@@ -124,6 +125,7 @@ export const fleetRoutes = [
   { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/transport/price-rules", component: TransportPriceRules },
+  { path: "/fleet/transport/service-lines", component: TransportServiceLines },
   { path: "/fleet/transport/rules", component: TransportRulesAdmin },
   // #1812 Wave 1 Step C — equipment rental (3rd transport leg).
   // /create + /:id come after the parent list path; /:id is a numeric
