@@ -1,3 +1,7 @@
+/**
+ * GAP_MATRIX P2 — Pure-frontend tax-filing calendar. Static content with
+ * Saudi fiscal year deadlines; makes no API calls. Intentional.
+ */
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
