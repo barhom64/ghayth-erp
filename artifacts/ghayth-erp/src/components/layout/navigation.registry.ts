@@ -83,7 +83,7 @@ export const allNavSections: NavSection[] = [
       // tasks) with a single canonical page.
       { label: "صندوق الأعمال", path: "/work-inbox", icon: Inbox },
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
-      { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
+      { label: "التقويم الموحد", path: "/calendar", icon: Calendar },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
         { label: "ما ينتظر إجراءاتي", path: "/work-inbox", icon: ListChecks },
         // PR-9 (#2077) — رفيق الميدان. The page itself checks the
@@ -94,17 +94,17 @@ export const allNavSections: NavSection[] = [
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
       ]},
-      { label: "لوحات الإدارة", path: "/manager-board", icon: Users, minRoleLevel: 40, children: [
+      { label: "لوحات الإدارة", path: "/manager-board", icon: Users, minRoleLevel: 50, children: [
         { label: "لوحة المدير", path: "/manager-board", icon: Users },
         { label: "مساحة المدير", path: "/manager-workspace", icon: Users },
         { label: "لوحات مؤشرات المسارات", path: "/module-dashboards", icon: LayoutDashboard },
         { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 70 },
         { label: "اسأل غيث", path: "/assistant", icon: Sparkles, minRoleLevel: 70 },
       ]},
-      { label: "مراكز التحكم", path: "/action-center", icon: Briefcase, minRoleLevel: 20, children: [
+      { label: "مراكز التحكم", path: "/action-center", icon: Briefcase, minRoleLevel: 50, children: [
         { label: "مركز القرارات", path: "/action-center", icon: Briefcase },
-        { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
-        { label: "مركز الالتزامات", path: "/obligations", icon: Clock, minRoleLevel: 30 },
+        { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 50 },
+        { label: "مركز الالتزامات", path: "/obligations", icon: Clock },
       ]},
     ],
   },
@@ -734,10 +734,10 @@ export const allNavSections: NavSection[] = [
         // Phase 5: communications dashboard is admin-only — non-managers
         // get redirected to /inbox automatically. Sidebar hides it for
         // them via minRoleLevel.
-        { label: "مراقبة الاتصالات", path: "/communications", icon: MessageSquare, minRoleLevel: 40 },
-        { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap, minRoleLevel: 40 },
+        { label: "مراقبة الاتصالات", path: "/communications", icon: MessageSquare, minRoleLevel: 50 },
+        { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap, minRoleLevel: 50 },
       ]},
-      { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
+      { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 50, children: [
         { label: "نظرة عامة", path: "/legal", icon: LayoutDashboard },
         { label: "القضايا", path: "/legal/cases", icon: Briefcase },
         { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
@@ -754,7 +754,7 @@ export const allNavSections: NavSection[] = [
         { label: "الامتثال", path: "/governance/compliance", icon: CheckCircle },
         { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
       ]},
-      { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 40 },
+      { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 50 },
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
@@ -763,7 +763,7 @@ export const allNavSections: NavSection[] = [
   {
     title: "النظام",
     items: [
-      { label: "ذكاء الأعمال", path: "/bi", icon: LineChart, module: "bi", minRoleLevel: 40, children: [
+      { label: "ذكاء الأعمال", path: "/bi", icon: LineChart, module: "bi", minRoleLevel: 50, children: [
         { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
         { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
         { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
@@ -840,9 +840,9 @@ export const allNavSections: NavSection[] = [
       // settings — consolidated here into one "الطباعة والمطبوعات" group. Each
       // child keeps its original module/perm/minRoleLevel so visibility filtering
       // is unchanged; only the grouping moved (no page removed → no orphans).
-      { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 40, children: [
-        { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 40, perm: "print_jobs:read" },
-        { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 40, perm: "print:reprint:approve" },
+      { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 50, children: [
+        { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 50, perm: "print_jobs:read" },
+        { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 50, perm: "print:reprint:approve" },
         { label: "قوالب الطباعة", path: "/settings/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
         { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },

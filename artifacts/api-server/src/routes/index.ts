@@ -436,27 +436,24 @@ router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"),
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseAdvancedRouter);
 router.use("/properties", propertiesUserLimiter);
 router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
-// Agent 7 (visibility consistency sweep) — sidebar gates /legal/cases at
-// level 40 but the mount used to be module-only, so a level-10 employee
-// inside a tenant with the legal module could hit /api/legal/* directly.
-// Floor at 40 mirrors the sidebar promise; per-route authorize() still
-// runs inside legalRouter.
-router.use("/legal", requireModule("legal"), requireMinLevel(40), legalRouter);
+// GAP_MATRIX P1 — role ladder: 40 is not a real role level; nearest real
+// level above employee (10) is department_manager (50). Floor raised to 50.
+router.use("/legal", requireModule("legal"), requireMinLevel(50), legalRouter);
 router.use("/projects", requireModule("operations"), projectsRouter);
 router.use("/support", requireModule("support"), supportRouter);
 router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
 // Agent 7 — sidebar shows الأتمتة only at level 60 + admin:update; the
 // mount used to be module-only. Floor at 60 so direct-URL traffic
-// matches what the menu promises (per-route authorize uses admin:list /
-// admin:update on every call).
-router.use("/automation", requireModule("automation"), requireMinLevel(60), automationRouter);
-// Agent 7 — sidebar gates the comms management surface (مراقبة الاتصالات،
-// محرك الإشعارات) at level 40. /inbox + /mailboxes below stay module-only
-// because their endpoints are still expected to work for every
-// comms-enabled employee; only the broad call/message log needs the
-// manager floor.
-router.use("/communications", requireModule("comms"), requireMinLevel(40), communicationsRouter);
+// GAP_MATRIX P1 — "automation" is not in CANONICAL_MODULES so no role gets it
+// by default; frontend nav gates the entry under module="admin". Align the
+// backend mount to module="admin" so admin-granted users can actually reach
+// the API. Per-route authorize() inside automationRouter uses admin:list /
+// admin:update on every call.
+router.use("/automation", requireModule("admin"), requireMinLevel(60), automationRouter);
+// GAP_MATRIX P1 — role ladder: 40 not a real role level; raised to 50
+// (department_manager+). Per-route authorize() still applies inside.
+router.use("/communications", requireModule("comms"), requireMinLevel(50), communicationsRouter);
 // User-facing inbox: compose/send + thread view + call log. Lives next
 // to /communications (read-only logs) so the SPA can navigate between
 // them without crossing module boundaries.
@@ -471,7 +468,8 @@ router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
 // at level 40; mounts used to be module-only. Floor both at the sidebar
 // level so direct-URL access matches what the menu shows.
 router.use("/governance", requireModule("governance"), requireMinLevel(60), governanceRouter);
-router.use("/bi", requireModule("bi"), requireMinLevel(40), biRouter);
+// GAP_MATRIX P1 — role ladder: 40 not a real role level; raised to 50.
+router.use("/bi", requireModule("bi"), requireMinLevel(50), biRouter);
 router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
 router.use("/documents", requireModule("documents"), documentsRouter);
 router.use("/requests", requireModule("requests"), requestsRouter);
@@ -563,10 +561,9 @@ router.use("/my/field", myFieldTrackingRouter);
 // underlying queries are already scope-protected (companyId / assignmentId /
 // employeeId), so no extra requireMinLevel floor is needed.
 router.use("/me", meInsightsRouter);
-// Agent 7 — sidebar gates مراكز التحكم → مركز القرارات (/action-center)
-// at level 20. Floor the mount to match so a level-10 pre-onboarding
-// account can't reach the action queue via direct URL.
-router.use("/action-center", requireMinLevel(20), actionCenterRouter);
+// GAP_MATRIX P1 — role ladder: 20 not a real role level; raised to 50
+// (department_manager+) to block employee-level (10) direct-URL access.
+router.use("/action-center", requireMinLevel(50), actionCenterRouter);
 router.use("/workspace", workspaceRouter);
 router.use("/entity-meta", entityMetaRouter);
 // Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
@@ -578,26 +575,24 @@ router.use("/umrah", umrahUserLimiter);
 // Accept either so umrah-granted users (who may not carry operations) can reach the API.
 router.use("/umrah", requireModule("operations", "umrah"), requireGuards("financial"), umrahRouter);
 router.use("/umrah", requireModule("operations", "umrah"), requireGuards("financial"), umrahEntitiesRouter);
-router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
+// GAP_MATRIX P1 — role ladder: 40 not a real role level; raised to 50.
+router.use("/operations-center", requireModule("operations"), requireMinLevel(50), operationsCenterRouter);
 // Wiring stubs — fills the 42 frontend↔backend orphans surfaced by
 // scripts/src/check-frontend-backend-wiring.mjs. Mounted at /api root because
 // the routes carry their full domain prefix internally.
 // GAP_MATRIX item #17 — wiring stubs return canned envelopes for routes
 // the frontend is wired to but the backend hasn't fully implemented yet.
-// The stubs router had module gates but no min-level floor, so any
-// authenticated user with the module bit set could enumerate them.
-// Floor at level 20 (employee+) — same as exportRouter, deliberately
-// low because stubs are read-only stand-ins. As each stub is replaced
-// by a real implementation it should pick up the destination route's
-// own gates (authorize/requireMinLevel) and this floor becomes
-// belt-and-braces.
-router.use("/warehouse", requireModule("warehouse"), requireMinLevel(20), warehouseStubsRouter);
-router.use("/documents", requireModule("documents"), requireMinLevel(20), documentsStubsRouter);
-router.use("/hr", requireModule("hr"), requireMinLevel(20), hrStubsRouter);
-router.use("/finance", requireModule("finance"), requireMinLevel(20), financeStubsRouter);
+// Floor at level 10 (any authenticated employee) — stubs are read-only
+// stand-ins; real implementations carry their own authorize/requireMinLevel.
+// GAP_MATRIX P1 — role ladder: 20 not a real role level; corrected to 10.
+router.use("/warehouse", requireModule("warehouse"), requireMinLevel(10), warehouseStubsRouter);
+router.use("/documents", requireModule("documents"), requireMinLevel(10), documentsStubsRouter);
+router.use("/hr", requireModule("hr"), requireMinLevel(10), hrStubsRouter);
+router.use("/finance", requireModule("finance"), requireMinLevel(10), financeStubsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
 router.use(wiringScopeErrorHandler);
-router.use("/export", requireMinLevel(30), exportRouter);
+// GAP_MATRIX P1 — role ladder: 30 not a real role level; raised to 50.
+router.use("/export", requireMinLevel(50), exportRouter);
 router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
@@ -617,12 +612,12 @@ router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
 // Smart assistant — curated Arabic owner questions → vetted parameterized
 // queries (no NL→SQL). Exec-only (cross-domain data). See routes/assistant.ts.
 router.use("/assistant", requireMinLevel(70), assistantRouter);
-// Agent 7 — sidebar gates مركز الالتزامات (/obligations) at level 30
-// and التقويم الموحد (/calendar) at level 20. Mounts used to have no
-// floor; align them with the sidebar so direct-URL access matches the
-// menu (per-route authorize() inside each router still applies).
-router.use("/obligations", requireMinLevel(30), obligationsRouter);
-router.use("/calendar", requireMinLevel(20), calendarRouter);
+// GAP_MATRIX P1 — role ladder: 30 and 20 are not real role levels.
+// Obligations and calendar are employee-accessible pages; floor at 10
+// (any authenticated user). The module-gated sidebar already filters by
+// permissions; the API relies on per-route authorize() inside each router.
+router.use("/obligations", requireMinLevel(10), obligationsRouter);
+router.use("/calendar", requireMinLevel(10), calendarRouter);
 router.use("/hr/contracts", requireModule("hr"), contractsRouter);
 router.use("/correspondence", requireModule("comms"), correspondenceRouter);
 router.use("/print", printRouter);

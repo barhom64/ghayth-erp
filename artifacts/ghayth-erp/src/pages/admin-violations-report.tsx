@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,7 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg: string
 
 export default function ViolationsReportPage() {
   const [filters, setFilters] = useState({ type: "", priority: "", status: "open", department: "" });
+  const [bulkResolveOpen, setBulkResolveOpen] = useState(false);
   const queryParams = new URLSearchParams();
   if (filters.type) queryParams.set("type", filters.type);
   if (filters.priority) queryParams.set("priority", filters.priority);
@@ -108,13 +110,14 @@ export default function ViolationsReportPage() {
   };
 
   const openCount = Number(summary.open || 0);
-  const handleBulkResolve = () => {
-    const scopeLabel = [
-      filters.type && (TYPE_LABELS[filters.type] || filters.type),
-      filters.department && (DEPARTMENT_LABELS[filters.department] || filters.department),
-      filters.priority && (PRIORITY_CONFIG[filters.priority]?.label || filters.priority),
-    ].filter(Boolean).join(" / ") || "كل الأنواع والأقسام";
-    if (!window.confirm(`سيتم إغلاق كل المخالفات المفتوحة المطابقة (${scopeLabel}). متابعة؟`)) return;
+  const scopeLabel = [
+    filters.type && (TYPE_LABELS[filters.type] || filters.type),
+    filters.department && (DEPARTMENT_LABELS[filters.department] || filters.department),
+    filters.priority && (PRIORITY_CONFIG[filters.priority]?.label || filters.priority),
+  ].filter(Boolean).join(" / ") || "كل الأنواع والأقسام";
+  const handleBulkResolve = () => setBulkResolveOpen(true);
+  const confirmBulkResolve = () => {
+    setBulkResolveOpen(false);
     bulkMut.mutate({
       type: filters.type || undefined,
       priority: filters.priority || undefined,
@@ -409,6 +412,20 @@ export default function ViolationsReportPage() {
           />
         </CardContent>
       </Card>
+      <AlertDialog open={bulkResolveOpen} onOpenChange={setBulkResolveOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle>إغلاق المخالفات المفتوحة</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم إغلاق كل المخالفات المفتوحة المطابقة ({scopeLabel}). لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmBulkResolve} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">تأكيد الإغلاق</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

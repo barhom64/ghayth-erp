@@ -94,10 +94,10 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-documents", component: MyDocuments },
   { path: "/my-loans", component: MyLoans },
   { path: "/my-overtime", component: MyOvertime },
-  // GAP_MATRIX P2 — backend requires requireMinLevel(20); add matching frontend gate.
-  { path: "/action-center", component: ActionCenter, minRoleLevel: 20 },
+  // GAP_MATRIX P1 — role ladder: 20/30/40 don't exist; nearest real level above employee is 50.
+  { path: "/action-center", component: ActionCenter, minRoleLevel: 50 },
   { path: "/workspace", component: Workspace },
-  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
+  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 50 },
   { path: "/my/work-queue", component: WorkQueue },
   // PR-5 (#2077) — صندوق الأعمال الموحّد (canonical).
   { path: "/work-inbox", component: WorkInbox },
@@ -107,10 +107,10 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   // Agent-5 (route↔backend consistency): /api/exec-dashboard mounts with
   // requireMinLevel(70). Route gate raised from 60 → 70 to match.
   { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 70 },
-  { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
-  { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 40 },
-  { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },
-  { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 40 },
+  { path: "/manager-board", component: ManagerBoard, minRoleLevel: 50 },
+  { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 50 },
+  { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 50 },
+  { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 50 },
   { path: "/clients", component: Clients, module: "crm" },
   { path: "/clients/create", component: ClientsCreate, module: "crm" },
   { path: "/clients/:id/statement", component: CustomerStatement, module: "crm" },
