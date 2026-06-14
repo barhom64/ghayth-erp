@@ -357,7 +357,7 @@ export default function CargoCreate() {
       </Card>
 
       <div className="mt-4 flex justify-end gap-2">
-        <Link href="/fleet/cargo"><Button variant="outline">إلغاء</Button></Link>
+        <Button asChild variant="outline"><Link href="/fleet/cargo">إلغاء</Link></Button>
         <Button rateLimitAware onClick={submit} disabled={submitting || !form.manifestNumber.trim() || !form.customerId}>
           <Save className="h-4 w-4 me-1" />
           {submitting ? "جاري الحفظ…" : "حفظ البوليصة"}
