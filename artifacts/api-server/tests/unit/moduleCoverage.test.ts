@@ -553,7 +553,8 @@ describe("Module coverage: Operations", () => {
 
   it("is gated by requireModule('operations') in index", () => {
     expect(indexTs).toContain('requireModule("operations")');
-    expect(indexTs).toContain('requireModule("operations"), requireMinLevel(40), operationsCenterRouter');
+    // GAP_MATRIX P1 — role ladder: 40 → 50 (nearest real role level above employee).
+    expect(indexTs).toContain('requireModule("operations"), requireMinLevel(50), operationsCenterRouter');
   });
 
   // Audit

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Shield, Search, Users, Copy, Info, Eye } from "lucide-react";
@@ -78,6 +79,7 @@ export default function RbacSimpleEditor() {
   const [cloning, setCloning] = useState(false);
   const [cloneKey, setCloneKey] = useState("");
   const [cloneLabel, setCloneLabel] = useState("");
+  const [pendingRoleSwitch, setPendingRoleSwitch] = useState<number | null | false>(false);
 
   const features = featuresData?.features ?? [];
   const levels = catalog?.levels ?? [];
@@ -114,11 +116,15 @@ export default function RbacSimpleEditor() {
   }, [picks, initialPicks]);
   const isDirty = dirtyKeys.length > 0;
 
-  // Switching role with unsaved edits would silently drop them — confirm first.
+  // Switching role with unsaved edits would silently drop them — show dialog first.
   const selectRole = (id: number | null) => {
-    if (isDirty && !window.confirm("لديك تغييرات غير محفوظة على هذا الدور. هل تريد تجاهلها والانتقال؟")) return;
+    if (isDirty) { setPendingRoleSwitch(id ?? null); return; }
     setRoleId(id);
     setSearch("");
+  };
+  const confirmRoleSwitch = () => {
+    if (pendingRoleSwitch !== false) { setRoleId(pendingRoleSwitch); setSearch(""); }
+    setPendingRoleSwitch(false);
   };
 
   const modules = useMemo(() => {
@@ -382,6 +388,19 @@ export default function RbacSimpleEditor() {
           )}
         </div>
       </PageStateWrapper>
+
+      <AlertDialog open={pendingRoleSwitch !== false} onOpenChange={(o) => { if (!o) setPendingRoleSwitch(false); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle>تغييرات غير محفوظة</AlertDialogTitle>
+            <AlertDialogDescription>لديك تغييرات غير محفوظة على هذا الدور. هل تريد تجاهلها والانتقال؟</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row-reverse gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRoleSwitch} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">تجاهل والانتقال</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageShell>
   );
 }

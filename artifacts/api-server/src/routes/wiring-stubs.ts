@@ -10,6 +10,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
+import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { logger } from "../lib/logger.js";
 
@@ -56,7 +57,7 @@ function notImplemented(res: Response, feature: string): void {
 /* ============================================================
  * Documents — OCR (4). Mounted under /documents.
  * ============================================================ */
-documentsStubsRouter.get("/ocr/extractions", requireMinLevel(20), async (req, res) => {
+documentsStubsRouter.get("/ocr/extractions", requireMinLevel(10), authorize({ feature: "documents.my", action: "list" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const status = (req.query.status as string) || null;
@@ -68,13 +69,13 @@ documentsStubsRouter.get("/ocr/extractions", requireMinLevel(20), async (req, re
     res.json({ data, total: data.length });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-documentsStubsRouter.post("/ocr/extractions/:id/confirm", requireMinLevel(20), async (_req, res) => {
+documentsStubsRouter.post("/ocr/extractions/:id/confirm", requireMinLevel(10), authorize({ feature: "documents.my", action: "update" }), async (_req, res) => {
   notImplemented(res, "documents.ocr.confirm");
 });
-documentsStubsRouter.post("/ocr/extractions/:id/reject", requireMinLevel(20), async (_req, res) => {
+documentsStubsRouter.post("/ocr/extractions/:id/reject", requireMinLevel(10), authorize({ feature: "documents.my", action: "update" }), async (_req, res) => {
   notImplemented(res, "documents.ocr.reject");
 });
-documentsStubsRouter.post("/:id/ocr/rerun", requireMinLevel(20), async (_req, res) => {
+documentsStubsRouter.post("/:id/ocr/rerun", requireMinLevel(10), authorize({ feature: "documents.my", action: "update" }), async (_req, res) => {
   notImplemented(res, "documents.ocr.rerun");
 });
 
@@ -82,7 +83,7 @@ documentsStubsRouter.post("/:id/ocr/rerun", requireMinLevel(20), async (_req, re
  * HR Saudi compliance — banks / WPS / Mudad / credentials (7).
  * Mounted under /hr.
  * ============================================================ */
-hrStubsRouter.get("/saudi/banks", requireMinLevel(20), async (_req, res) => {
+hrStubsRouter.get("/saudi/banks", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "list" }), async (_req, res) => {
   res.json({
     data: [
       { code: "RJHI", name: "مصرف الراجحي", swift: "RJHISARI" },
@@ -96,7 +97,7 @@ hrStubsRouter.get("/saudi/banks", requireMinLevel(20), async (_req, res) => {
     ],
   });
 });
-hrStubsRouter.get("/saudi/wps/runs", requireMinLevel(20), async (req, res) => {
+hrStubsRouter.get("/saudi/wps/runs", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "list" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const period = (req.query.period as string) || null;
@@ -109,7 +110,7 @@ hrStubsRouter.get("/saudi/wps/runs", requireMinLevel(20), async (req, res) => {
     res.json({ data, total: data.length });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-hrStubsRouter.get("/saudi/wps/runs/:id", requireMinLevel(20), async (req, res) => {
+hrStubsRouter.get("/saudi/wps/runs/:id", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "view" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
@@ -128,11 +129,11 @@ hrStubsRouter.get("/saudi/wps/runs/:id", requireMinLevel(20), async (req, res) =
     res.json({ ...rows[0], lines });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-hrStubsRouter.get("/saudi/mudad/settlements", requireMinLevel(20), async (req, res) => {
+hrStubsRouter.get("/saudi/mudad/settlements", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "list" }), async (req, res) => {
   const period = (req.query.period as string) || null;
   res.json({ data: [], period, note: "Mudad integration not configured" });
 });
-hrStubsRouter.get("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (req, res) => {
+hrStubsRouter.get("/saudi/wps/credentials/:bankCode", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "view" }), async (req, res) => {
   res.json({
     bankCode: req.params.bankCode,
     configured: false,
@@ -140,39 +141,39 @@ hrStubsRouter.get("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async
     message: "لم يتم تكوين بيانات WPS لهذا البنك بعد",
   });
 });
-hrStubsRouter.put("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (_req, res) => {
+hrStubsRouter.put("/saudi/wps/credentials/:bankCode", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "update" }), async (_req, res) => {
   notImplemented(res, "hr.wps.credentials.save");
 });
-hrStubsRouter.delete("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (_req, res) => {
+hrStubsRouter.delete("/saudi/wps/credentials/:bankCode", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "update" }), async (_req, res) => {
   notImplemented(res, "hr.wps.credentials.clear");
 });
 
 /* ============================================================
  * Finance — pricing rules (6) + ZATCA (4). Mounted under /finance.
  * ============================================================ */
-financeStubsRouter.get("/pricing/rules", requireMinLevel(20), async (_req, res) => {
+financeStubsRouter.get("/pricing/rules", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "list" }), async (_req, res) => {
   res.json({ data: [], total: 0 });
 });
-financeStubsRouter.post("/pricing/rules", requireMinLevel(20), async (_req, res) => {
+financeStubsRouter.post("/pricing/rules", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "create" }), async (_req, res) => {
   notImplemented(res, "finance.pricingRules.create");
 });
-financeStubsRouter.get("/pricing/rules/:id", requireMinLevel(20), async (req, res) => {
+financeStubsRouter.get("/pricing/rules/:id", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "view" }), async (req, res) => {
   // Read-only stub — returning an empty rule lets a detail page render
   // without crashing, but the user sees "active: false" so they know it
   // isn't doing anything.
   res.json({ id: Number(req.params.id), name: "", active: false, conditions: [] });
 });
-financeStubsRouter.put("/pricing/rules/:id", requireMinLevel(20), async (_req, res) => {
+financeStubsRouter.put("/pricing/rules/:id", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "update" }), async (_req, res) => {
   notImplemented(res, "finance.pricingRules.update");
 });
-financeStubsRouter.delete("/pricing/rules/:id", requireMinLevel(20), async (_req, res) => {
+financeStubsRouter.delete("/pricing/rules/:id", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "delete" }), async (_req, res) => {
   notImplemented(res, "finance.pricingRules.delete");
 });
-financeStubsRouter.post("/pricing/resolve", requireMinLevel(20), async (_req, res) => {
+financeStubsRouter.post("/pricing/resolve", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "view" }), async (_req, res) => {
   notImplemented(res, "finance.pricingRules.resolve");
 });
 
-financeStubsRouter.get("/zatca/missing-tax-numbers", requireMinLevel(20), async (req, res) => {
+financeStubsRouter.get("/zatca/missing-tax-numbers", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const data = await rawQuery(
@@ -188,7 +189,7 @@ financeStubsRouter.get("/zatca/missing-tax-numbers", requireMinLevel(20), async 
     res.json({ data, total: data.length });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-financeStubsRouter.patch("/zatca/missing-tax-numbers/:id", requireMinLevel(20), async (req, res) => {
+financeStubsRouter.patch("/zatca/missing-tax-numbers/:id", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "update" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
@@ -204,10 +205,10 @@ financeStubsRouter.patch("/zatca/missing-tax-numbers/:id", requireMinLevel(20), 
     res.json({ id, taxNumber, ok: true });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-financeStubsRouter.get("/zatca/pause-history", requireMinLevel(20), async (_req, res) => {
+financeStubsRouter.get("/zatca/pause-history", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "list" }), async (_req, res) => {
   res.json({ data: [], total: 0 });
 });
-financeStubsRouter.get("/zatca/misrouted-b2c-invoices", requireMinLevel(20), async (req, res) => {
+financeStubsRouter.get("/zatca/misrouted-b2c-invoices", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const data = await rawQuery(
