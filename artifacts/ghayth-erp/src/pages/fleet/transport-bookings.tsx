@@ -159,36 +159,24 @@ export default function TransportBookingsList() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "حجوزات النقل" }]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/fleet/transport/ops-dashboard">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/ops-dashboard">
               <Calendar className="h-4 w-4 me-1" />لوحة تشغيل اليوم
-            </Button>
-          </Link>
-          <Link href="/fleet/transport/integration">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/integration">
               <Users className="h-4 w-4 me-1" />التكامل
-            </Button>
-          </Link>
-          <Link href="/fleet/transport/itineraries">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/itineraries">
               <Calendar className="h-4 w-4 me-1" />البرامج
-            </Button>
-          </Link>
-          <Link href="/fleet/transport/dispatch">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/dispatch">
               <Calendar className="h-4 w-4 me-1" />لوحة التوزيع
-            </Button>
-          </Link>
-          <Link href="/fleet/transport/price-rules">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/price-rules">
               <Clipboard className="h-4 w-4 me-1" />قواعد التسعير
-            </Button>
-          </Link>
-          <Link href="/fleet/transport/rules">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/rules">
               <Clipboard className="h-4 w-4 me-1" />قواعد العمليات
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/fleet/transport/bookings/create">
             <GuardedButton perm="fleet.bookings:create" size="sm">
               <Plus className="h-4 w-4 me-1" />حجز جديد
@@ -235,7 +223,7 @@ export default function TransportBookingsList() {
             </Select>
             <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
           </div>
-          <DataTable<BookingRow>
+          <DataTable
             columns={columns}
             data={rows}
             onRowClick={(r) => navigate(`/fleet/transport/bookings/${r.id}`)}
