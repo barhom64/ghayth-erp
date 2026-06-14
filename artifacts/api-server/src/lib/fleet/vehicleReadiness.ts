@@ -27,9 +27,12 @@
 
 export interface VehicleReadinessRow {
   id: number;
-  registrationExpiry: string | null;
-  insuranceExpiry: string | null;
-  nextInspectionDate: string | null;
+  // node-postgres default-parses DATE columns to JS Date objects;
+  // accept either shape so the readiness helper works whether the
+  // caller has cast to text or left the raw row through.
+  registrationExpiry: string | Date | null;
+  insuranceExpiry: string | Date | null;
+  nextInspectionDate: string | Date | null;
 }
 
 export interface ReadinessVerdict {
@@ -44,11 +47,14 @@ export interface ReadinessVerdict {
  * — block it. (A trip that finishes on the same day the document
  * expires is still legal; the check uses strict `<`.)
  */
-function ymd(value: string | null): string | null {
+function ymd(value: string | Date | null): string | null {
   if (!value) return null;
-  // Postgres returns DATE as YYYY-MM-DD already. TIMESTAMPTZ may
-  // come as full ISO; the first 10 chars are still the date in UTC,
-  // which matches how the expiry columns are stored (no time).
+  // node-postgres default-parses DATE columns to JS Date objects in
+  // local time; for our YYYY-MM-DD comparison we want UTC so the
+  // string still slices cleanly. TIMESTAMPTZ inputs already come as
+  // full ISO strings — the first 10 chars are still the calendar
+  // date the column was stored under (no clock component).
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
   return value.slice(0, 10);
 }
 
