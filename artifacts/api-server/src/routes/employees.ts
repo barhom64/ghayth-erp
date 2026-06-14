@@ -388,6 +388,190 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
   }
 });
 
+// ── HR-REV-3 (#2222) — fast minimal employee creation ──
+// A lightweight alternative to the 46-field full-create above. It lands
+// the employee in a PENDING (inactive) state with an active assignment +
+// a distributed onboarding task plan, so HR can register a hire in
+// seconds and complete the heavy profile later. The later PATCH /:id
+// activation flow (whose before-query filters ea.status IN
+// ('active','suspended','terminated')) finds the active assignment and
+// flips the employee to active. This path deliberately does NOT create
+// PBX/vehicle/custody/contract/leave-balance/salary-component rows — those
+// belong to the heavy create.
+const quickActivateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  nationality: z.string().optional().nullable(),
+  departmentId: z.coerce.number().optional().nullable(),
+  jobTitle: z.string().optional().nullable(),
+  hireDate: z.string().optional().nullable(),
+});
+
+router.post("/quick-activate", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
+  try {
+    const body = zodParse(quickActivateSchema.safeParse(req.body));
+    const scope = req.scope!;
+    const { name, phone, nationalId, nationality, departmentId, jobTitle } = body;
+
+    if (!name) {
+      throw new ValidationError("لا يمكن إنشاء موظف بدون اسم", {
+        field: "name",
+        fix: "أدخل الاسم الكامل للموظف",
+      });
+    }
+
+    const effectiveCompanyId = scope.companyId;
+    const targetBranchId = scope.branchId;
+    const resolvedDepartmentId = departmentId ?? null;
+    const effectiveHireDate = body.hireDate || todayISO();
+    const effectiveJobTitle = jobTitle || "موظف";
+
+    // Numbering center (Issue #1141) — employee code via central authority
+    // (`hr.employee_code`). Issued OUTSIDE the transaction (exact same call
+    // as POST /) so the audit:numbering-coverage check stays satisfied: the
+    // INSERT into employees gets its number from the numbering service.
+    const preIssued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "employee_code",
+      entityTable: "employees",
+      actorId: scope.userId,
+      expectedTiming: "on_draft",
+    });
+    const finalEmpNumber = preIssued.number;
+
+    const result = await withTransaction(async (client) => {
+      // ── Create the employee in PENDING (inactive) state ──
+      // 'inactive' is the only CHECK-allowed pending-ish status (migration
+      // 084); it gates the employee until the activation flow flips it.
+      const empRes = await client.query(
+        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status)
+         VALUES ($1, $2, $3, $4, $5, 'inactive')
+         RETURNING id`,
+        [name, phone || null, finalEmpNumber, nationalId || null, nationality || null]
+      );
+      const empId = empRes.rows[0].id;
+
+      // Link the numbering assignment to the employee row.
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [empId, preIssued.assignmentId]
+      );
+
+      // ── Resolve jobTitleId from the jobTitle text (company-scoped) ──
+      let resolvedJobTitleId: number | null = null;
+      if (effectiveJobTitle && effectiveJobTitle !== "موظف") {
+        const jtRes = await client.query(
+          `SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+          [effectiveJobTitle, effectiveCompanyId]
+        );
+        if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
+      }
+
+      // ── Create the first assignment in ACTIVE state ──
+      // The assignment is 'active' so the PATCH /:id activation flow (which
+      // filters ea.status IN ('active','suspended','terminated')) can later
+      // find it and flip the employee to active.
+      const assignRes = await client.query(
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status)
+         VALUES ($1,$2,$3,$4,$5,$6,'employee',0,$7,true,'active')
+         RETURNING id`,
+        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, effectiveJobTitle, resolvedJobTitleId, effectiveHireDate]
+      );
+      const assignmentId = assignRes.rows[0].id;
+
+      // ── Create the 4 onboarding tasks (same plan as the full create) ──
+      const onboardingTasks = [
+        "تسليم أجهزة IT وإعداد الحسابات",
+        "توقيع عقد العمل والتأمينات",
+        "تعريف المدير المباشر والفريق",
+        "دورة التعريف بالشركة وسياساتها",
+      ];
+      const dueDateOnboarding = new Date();
+      dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
+      for (const taskTitle of onboardingTasks) {
+        await client.query(
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
+           VALUES ($1,$2,$3,$4,$5,'pending')`,
+          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
+        );
+      }
+
+      // ── Record the lifecycle event (state → onboarding) ──
+      // offer_accepted is the event that maps to the onboarding state
+      // (EVENT_TO_STATE_AFTER). The new hire has no prior state, so
+      // stateBefore is null.
+      await client.query(
+        `INSERT INTO employee_lifecycle_events
+          ("companyId", "branchId", "employeeId", "assignmentId",
+           "eventType", "stateBefore", "stateAfter",
+           reason, "effectiveDate",
+           "actorUserId", "activeRoleKey", "activeDepartmentId", "resolvedScope", "impersonationSourceUser",
+           metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [
+          scope.companyId, targetBranchId ?? null, empId, assignmentId,
+          "offer_accepted", null, "onboarding",
+          "إنشاء سريع للموظف (تفعيل معلّق)", effectiveHireDate,
+          scope.userId,
+          scope.selectedRoleKey ?? null,
+          scope.activeDepartmentId ?? null,
+          scope.resolvedScope ?? null,
+          scope.impersonationSourceUser ?? null,
+          JSON.stringify({ quickActivate: true }),
+        ]
+      );
+
+      return { empId, assignmentId };
+    });
+
+    const { empId, assignmentId } = result;
+
+    // ── Event log ──
+    await emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+      action: "employee.quick_activated", entity: "employees", entityId: empId,
+      details: JSON.stringify({
+        empNumber: finalEmpNumber, assignmentId, jobTitle: effectiveJobTitle,
+        status: "inactive", onboardingTasks: 4,
+        context: {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          userId: scope.userId,
+          activeRoleKey: scope.selectedRoleKey ?? null,
+          resolvedScope: scope.resolvedScope ?? null,
+        },
+      }),
+    });
+
+    // ── Audit log ──
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.quick_activated", entity: "employees", entityId: empId,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      activeDepartmentId: scope.activeDepartmentId ?? null,
+      resolvedScope: scope.resolvedScope ?? null,
+      impersonationSourceUser: scope.impersonationSourceUser ?? null,
+      after: {
+        name, empNumber: finalEmpNumber, jobTitle: effectiveJobTitle,
+        status: "inactive", assignmentId, onboardingTasksCreated: 4,
+      },
+    });
+
+    res.status(201).json({
+      id: empId,
+      empNumber: finalEmpNumber,
+      assignmentId,
+      status: "inactive",
+      onboardingTasksCreated: 4,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Quick-activate employee error:");
+  }
+});
+
 router.post("/", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createEmployeeSchema.safeParse(req.body));
