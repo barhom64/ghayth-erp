@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Badge } from "@/components/ui/badge";
@@ -117,7 +117,7 @@ export default function EmployeeActivationPage() {
   const lifecyclePending = patchMutation.isPending || terminateMutation.isPending;
 
   // HR-REV-3 (#2222) — تفعيل سريع: ينشئ موظفًا بحالة "غير مفعّل" مع خطة المهام.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   const emptyQuickForm = {
     name: "",
     phone: "",
