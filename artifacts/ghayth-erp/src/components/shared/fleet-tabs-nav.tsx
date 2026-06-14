@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import {
   Car, Users, Navigation, Wrench, Fuel, Shield, Bell,
   BarChart3, Calendar, AlertTriangle, Satellite, Package, Disc,
-  Clipboard,
+  Clipboard, FileSignature,
 } from "lucide-react";
 
 const TABS = [
@@ -14,6 +14,12 @@ const TABS = [
   { href: "/fleet/transport/bookings", label: "حجوزات النقل", icon: Clipboard, match: ["/fleet/transport"] },
   { href: "/fleet/trips", label: "الرحلات", icon: Navigation, match: ["/fleet/trips"] },
   { href: "/fleet/cargo", label: "نقل البضائع", icon: Package, match: ["/fleet/cargo"] },
+  // #2079 TA-T18-13 (FIX-12) — rental was orphaned from the in-page
+  // fleet tabs even after TA-T18-09 split it onto its own
+  // `fleet.rentals` feature. Surfacing it next to cargo so the
+  // operator reaches the third transport leg (equipment rental)
+  // without leaving the fleet sub-app.
+  { href: "/fleet/rental-contracts", label: "التأجير", icon: FileSignature, match: ["/fleet/rental-contracts"] },
   { href: "/fleet/maintenance", label: "الصيانة", icon: Wrench, match: ["/fleet/maintenance"] },
   { href: "/fleet/fuel", label: "الوقود", icon: Fuel, match: ["/fleet/fuel"] },
   { href: "/fleet/insurance", label: "التأمين", icon: Shield, match: ["/fleet/insurance"] },
