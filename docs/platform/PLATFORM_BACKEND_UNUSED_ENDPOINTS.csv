@@ -1,3 +1,14 @@
+# PR-5 (#2163): 8 false-positives removed (have FE consumers):
+#   /hr,GET /api/hr/attendance/field-track  → field-tracking.tsx:152
+#   /inbox,DELETE /api/inbox/threads/:channel/:address/snooze → inbox.tsx:996
+#   /org,GET /api/org/legal-entities → admin/org-model.tsx:82
+#   /org,GET /api/org/positions → shared/entity-selects.tsx:599
+#   /org,GET /api/org/supervision-lines → admin/org-model.tsx:418
+#   /org,GET /api/org/approval-authorities → admin/org-model.tsx:511
+#   /settings,GET /api/settings/administrations → hr/org-tree.tsx:78
+#   /fleet,GET /api/fleet/rental-contracts → fleet/rental-contracts.tsx:121
+# Note: /inbox/messages/:id/read is DIFFERENT from /inbox/threads/.../read (FE uses the latter)
+# Remaining: 88 genuine unused endpoints
 module,endpoint
 /activity-log,GET /api/activity-log/feed
 /admin,GET /api/admin/communication-control/outbound-queue
@@ -33,13 +44,11 @@ module,endpoint
 /fleet,POST /api/fleet/trips
 /fleet,PATCH /api/fleet/tires/:id
 /fleet,DELETE /api/fleet/tires/:id
-/fleet,GET /api/fleet/rental-contracts
 /fleet,POST /api/fleet/rental-contracts/:id/payments
 /fleet,GET /api/fleet/rental-contracts/:id/payments
 /fleet,POST /api/fleet/rental-payments/:id/pay
 /hr,GET /api/hr/attendance/field-ping/eligibility
 /hr,POST /api/hr/attendance/field-ping
-/hr,GET /api/hr/attendance/field-track
 /hr,POST /api/hr/leave-types
 /hr,PATCH /api/hr/leave-types/:id
 /hr,GET /api/hr/company-document-categories
@@ -47,16 +56,11 @@ module,endpoint
 /hr,PATCH /api/hr/company-documents/:id
 /inbox,POST /api/inbox/messages/:id/read
 /inbox,GET /api/inbox/unread-count
-/inbox,DELETE /api/inbox/threads/:channel/:address/snooze
 /inbox,GET /api/inbox/snoozed
-/org,GET /api/org/legal-entities
 /org,PATCH /api/org/legal-entities/:id
-/org,GET /api/org/positions
 /org,PATCH /api/org/positions/:id
 /org,PATCH /api/org/teams/:id
 /org,PATCH /api/org/committees/:id
-/org,GET /api/org/supervision-lines
-/org,GET /api/org/approval-authorities
 /parties,GET /api/parties/:id/360
 /parties,GET /api/parties/resolve
 /parties,POST /api/parties/backfill
@@ -70,7 +74,6 @@ module,endpoint
 /projects,PATCH /api/projects/units/:uid
 /settings,PUT /api/settings/departments/:id
 /settings,DELETE /api/settings/departments/:id
-/settings,GET /api/settings/administrations
 /settings,PATCH /api/settings/administrations/:id
 /settings,DELETE /api/settings/administrations/:id
 /tasks,GET /api/tasks/:id/assignees
