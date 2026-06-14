@@ -177,7 +177,7 @@ async function matchSenderToEntity(phone: string, companyId: number): Promise<{ 
   const employees = await rawQuery<{ id: number; name: string }>(
     `SELECT e.id, e.name FROM employees e
      JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea."companyId"=$1 AND ea.status='active'
-     WHERE REPLACE(REPLACE(e.phone,'+',''),'-','') LIKE $2
+     WHERE e."deletedAt" IS NULL AND REPLACE(REPLACE(e.phone,'+',''),'-','') LIKE $2
      LIMIT 5`,
     [companyId, `%${normalizedPhone}`]
   );
