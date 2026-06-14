@@ -35,6 +35,7 @@
     "check:button-nesting": "node scripts/src/check-button-nesting.mjs",
     "check:dup-filenames": "node scripts/src/check-dup-filenames.mjs",
     "check:lazy-table-swallow": "node scripts/src/check-lazy-table-swallow.mjs",
+    "check:postable-fallbacks": "node scripts/src/check-postable-fallbacks.mjs",
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
