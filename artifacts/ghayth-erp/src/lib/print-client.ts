@@ -248,6 +248,20 @@ export function decodeRenderResponseBytes(resp: PrintRenderResponse): Uint8Array
   return base64ToUint8Array(resp.base64);
 }
 
+/**
+ * logClientPrint — records a client-side browser-print event in print_jobs so
+ * BI analytics pages (bi-admin-reports, bi-operations) have an audit trail.
+ * Call this before triggering the native browser print dialog.
+ * Fire-and-forget: errors are swallowed so the print is never blocked.
+ * GAP_MATRIX P0 — Ctrl+P prints on BI dashboards were previously untracked.
+ */
+export async function logClientPrint(entityType: string, entityId?: number | null): Promise<void> {
+  apiFetch(`/api/print/log-client-print`, {
+    method: "POST",
+    body: JSON.stringify({ entityType, entityId: entityId ?? null, format: "window_print" }),
+  }).catch(() => {});
+}
+
 // ─── internals ────────────────────────────────────────────────────────────
 
 function base64ToUint8Array(b64: string): Uint8Array {
