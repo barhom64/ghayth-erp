@@ -1,4 +1,4 @@
--- 346_backfill_jobtitle_id_company_scoped.sql
+-- 347_backfill_jobtitle_id_company_scoped.sql
 -- @rollback: لا حاجة — backfill بيانات idempotent يملأ jobTitleId الفارغ فقط (لا DDL)؛ التراجع غير موصى به ويفقد الربط.
 -- ADR-HR-01 (#2223) — تطبيع المسمى الوظيفي: إكمال backfill لـ jobTitleId.
 --

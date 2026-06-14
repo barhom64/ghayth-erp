@@ -23,7 +23,7 @@
 
 🏛 **ADR-HR-01 — ✅ حُسِم ونُفِّذ (2026-06-14):** يُبقى التمييز `job_titles`(مهني) × `positions`(إداري). **تصحيح:** التمثيل النصّي **واحد** (`employee_assignments.jobTitle`) لا اثنان — `employees.jobTitle` غير موجود. والـFK `employee_assignments.jobTitleId` **موجود أصلًا** (migration 012) ومسارا create/update يحلّانه مع نطاق الشركة والقراءات تُفضّله (`COALESCE(jt.name, ea."jobTitle")`).
 
-**ما نُفِّذ في هذه الموجة:** (1) نمذجة `jobTitleId` في Drizzle (كانت ناقصة)، (2) migration `346` backfill دفاعي company-scoped للصفوف القديمة، (3) توثيق إهمال العمود النصّي. القالب يُبنى على المثلّث: **(job_title.category + position.level + categoryKey)**.
+**ما نُفِّذ في هذه الموجة:** (1) نمذجة `jobTitleId` في Drizzle (كانت ناقصة)، (2) migration `347` backfill دفاعي company-scoped للصفوف القديمة، (3) توثيق إهمال العمود النصّي. القالب يُبنى على المثلّث: **(job_title.category + position.level + categoryKey)**.
 
 ---
 
