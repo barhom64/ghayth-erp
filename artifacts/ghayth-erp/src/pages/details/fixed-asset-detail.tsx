@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
-import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField, FormShell, FormDateField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
   DetailPageLayout,
@@ -13,8 +13,9 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntityPrintButton } from "@/components/shared/entity-print";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { Edit, Box, TrendingDown } from "lucide-react";
+import { Edit, Box, TrendingDown, ArrowLeftRight, CheckCircle2 } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -58,6 +59,7 @@ export default function FixedAssetDetail() {
   const [, params] = useRoute("/finance/fixed-assets/:id");
   const id = params?.id ? Number(params.id) : null;
   const [editOpen, setEditOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("fixed-asset", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -264,6 +266,17 @@ export default function FixedAssetDetail() {
             entityType="fixed_asset"
             entityId={id ?? 0}
            />
+          {item?.status === "active" && (
+            <GuardedButton
+              perm="finance:create"
+              variant="outline"
+              size="sm"
+              onClick={() => setTransferOpen(true)}
+            >
+              <ArrowLeftRight className="h-4 w-4 ms-1" />
+              نقل
+            </GuardedButton>
+          )}
           <GuardedButton
             perm="finance:update"
             variant="outline"
@@ -277,6 +290,15 @@ export default function FixedAssetDetail() {
         </>
       }
     />
+    {item && id && transferOpen && (
+      <TransferAssetDialog
+        assetId={id}
+        assetName={item.name}
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        onSuccess={() => { setTransferOpen(false); refetch(); }}
+      />
+    )}
     {item && id && (
       <EntityEditDialog<FixedAssetEditForm>
         open={editOpen}
@@ -416,5 +438,134 @@ function DepreciationScheduleCard({ assetId }: { assetId: number }) {
         />
       </CardContent>
     </Card>
+  );
+}
+
+// ── Transfer Asset Dialog ────────────────────────────────────────────────────
+
+const transferFormSchema = z.object({
+  toBranchId: z.string().optional().default(""),
+  toDepartmentId: z.string().optional().default(""),
+  toCostCenterId: z.string().optional().default(""),
+  transferDate: z.string().optional().default(""),
+  reason: z.string().min(3, "سبب النقل مطلوب (3 أحرف على الأقل)"),
+});
+type TransferForm = z.infer<typeof transferFormSchema>;
+
+function TransferAssetDialog({
+  assetId,
+  assetName,
+  open,
+  onClose,
+  onSuccess,
+}: {
+  assetId: number;
+  assetName: string;
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [result, setResult] = useState<{ journalEntryId: number | null; transferDate: string } | null>(null);
+
+  const { data: branchesData } = useApiQuery<any>(["branches-list"], "/settings/branches", open);
+  const { data: deptsData } = useApiQuery<any>(["departments-list"], "/settings/departments", open);
+  const { data: ccData } = useApiQuery<any>(["cost-centers-list"], "/finance/cost-centers", open);
+
+  const branches = (branchesData?.data ?? branchesData ?? []) as any[];
+  const departments = (deptsData?.data ?? deptsData ?? []) as any[];
+  const costCenters = (ccData?.data ?? ccData ?? []) as any[];
+
+  const transferMutation = useApiMutation<any, Record<string, unknown>>(
+    `/finance/fixed-assets/${assetId}/transfer`,
+    "POST",
+    [[`fixed-asset`, String(assetId)], ["fixed-assets"]],
+    { successMessage: "تم نقل الأصل بنجاح" },
+  );
+
+  if (!open) return null;
+
+  async function handleSubmit(values: TransferForm) {
+    const payload: Record<string, unknown> = { reason: values.reason };
+    if (values.toBranchId) payload.toBranchId = Number(values.toBranchId);
+    if (values.toDepartmentId) payload.toDepartmentId = Number(values.toDepartmentId);
+    if (values.toCostCenterId) payload.toCostCenterId = Number(values.toCostCenterId);
+    if (values.transferDate) payload.transferDate = values.transferDate;
+    const res = await transferMutation.mutateAsync(payload);
+    setResult({ journalEntryId: res?.journalEntryId ?? null, transferDate: res?.transferDate ?? "" });
+    onSuccess();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ArrowLeftRight className="h-4 w-4" />
+            نقل الأصل: {assetName}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {result ? (
+            <div className="space-y-4">
+              <div className="bg-status-success-surface border border-status-success-surface rounded p-3 text-sm space-y-1">
+                <p className="font-semibold text-status-success-foreground flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> تم نقل الأصل بنجاح
+                </p>
+                {result.journalEntryId && (
+                  <p className="text-xs text-muted-foreground">رقم القيد: {result.journalEntryId}</p>
+                )}
+                {result.transferDate && (
+                  <p className="text-xs text-muted-foreground">تاريخ النقل: {formatDateAr(result.transferDate)}</p>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={onClose}>إغلاق</Button>
+              </div>
+            </div>
+          ) : (
+            <FormShell
+              schema={transferFormSchema}
+              defaultValues={{ toBranchId: "", toDepartmentId: "", toCostCenterId: "", transferDate: "", reason: "" }}
+              submitLabel={transferMutation.isPending ? "جاري النقل..." : "تأكيد النقل"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={onClose} disabled={transferMutation.isPending}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={handleSubmit}
+            >
+              <FormGrid cols={1}>
+                <FormSelectField
+                  name="toBranchId"
+                  label="الفرع المستقبِل"
+                  options={[
+                    { value: "", label: "— لا تغيير —" },
+                    ...branches.map((b: any) => ({ value: String(b.id), label: b.name })),
+                  ]}
+                />
+                <FormSelectField
+                  name="toDepartmentId"
+                  label="القسم (اختياري)"
+                  options={[
+                    { value: "", label: "— لا تغيير —" },
+                    ...departments.map((d: any) => ({ value: String(d.id), label: d.name })),
+                  ]}
+                />
+                <FormSelectField
+                  name="toCostCenterId"
+                  label="مركز التكلفة (اختياري)"
+                  options={[
+                    { value: "", label: "— لا تغيير —" },
+                    ...costCenters.map((c: any) => ({ value: String(c.id), label: c.name })),
+                  ]}
+                />
+                <FormDateField name="transferDate" label="تاريخ النقل (اختياري)" />
+                <FormTextareaField name="reason" label="سبب النقل" required rows={2} />
+              </FormGrid>
+            </FormShell>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
