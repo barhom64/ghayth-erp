@@ -13,6 +13,7 @@ import {
   ACCOUNT_USAGE_LABELS_AR,
   type AccountUsage,
 } from "./financeAccountClassifier.js";
+import { classifyEnforcement, DIMENSION_COLUMN } from "./gl/ledgerTruth.js";
 
 interface AccountUsageRow {
   code: string;
@@ -65,4 +66,49 @@ export async function assertPaymentSourceAllowed(args: {
       },
     );
   }
+}
+
+/**
+ * عقد البُعد (FIN-INTEGRITY-CONTRACT #2233) — يُفرَض عند بابَي الترحيل
+ * (businessHelpers.createJournalEntry + gl/posting.postJournalEntry).
+ *
+ * لكل سطر على حساب من فئة مُبعّدة (وفق DIMENSION_ENFORCEMENT_RULES): إن غاب
+ * البُعد المطلوب → **يُرفَض** (mode=enforce) أو **يُسجَّل تحذير** (mode=warn).
+ * تدريجي وآمن (ratchet): أول enforce هو وقود المركبة (5510) فقط؛ البقية warn.
+ * forward-only — يقع عند الترحيل لا على القيود التاريخية. **دالة نقية** (بلا I/O):
+ * يُحلَّل البُعد من كود الحساب، فلا حاجة لقاعدة بيانات — قابلة للاختبار وحدةً.
+ */
+export interface DimensionContractLine {
+  accountCode?: string | null;
+  vehicleId?: number | string | null;
+  propertyId?: number | string | null;
+  projectId?: number | string | null;
+  vendorId?: number | string | null;
+  clientId?: number | string | null;
+}
+
+export function assertDimensionContract(args: { lines: DimensionContractLine[] }): { warnings: string[] } {
+  const warnings: string[] = [];
+  for (const line of args.lines) {
+    const code = line.accountCode ? String(line.accountCode).trim() : "";
+    if (!code) continue;
+    const rule = classifyEnforcement(code);
+    if (!rule) continue;
+    const col = DIMENSION_COLUMN[rule.dimension] as keyof DimensionContractLine;
+    const val = line[col];
+    const present = val !== null && val !== undefined && val !== "";
+    if (present) continue;
+    if (rule.mode === "enforce") {
+      throw new ValidationError(
+        `إعداد التوجيه المحاسبي غير مكتمل: الحساب «${code}» يتطلب ربطه بـ«${rule.label}» قبل الترحيل`,
+        {
+          field: String(col),
+          fix: `اربط السطر بـ«${rule.label}» الصحيح (عبر المسار التشغيلي/السيناريو)، أو استخدم تجاوزًا يدويًا مُصرّحًا`,
+          meta: { accountCode: code, requiredDimension: rule.dimension },
+        },
+      );
+    }
+    warnings.push(`الحساب «${code}» بلا بُعد «${rule.label}» (تحذير — غير مُنفَّذ بعد لهذا الصنف)`);
+  }
+  return { warnings };
 }
