@@ -14,6 +14,9 @@
  *   • vehicle   ← VEHICLE_STATUS_OPTIONS canonical set
  *   • rental    ← fleet_rental_contracts states + the two derived
  *                 sub-stages classified on the client (#2001 / #2002)
+ *   • navigation ← driver_navigation_sessions lifecycle (ملاحة السائق)
+ *   • trip       ← driver trips (شاشة me-driver)
+ *   • driver     ← fleet_drivers availability / duty status
  *
  * Owner's rule (RM-03): «صفر fallback إنجليزي خام». Every status
  * returned by the API must surface in Arabic on the operator screen.
@@ -25,7 +28,10 @@ export type TransportEntity =
   | "cargo"
   | "leg"
   | "vehicle"
-  | "rental";
+  | "rental"
+  | "navigation"
+  | "trip"
+  | "driver";
 
 export interface StatusLabel {
   /** Arabic, direct user-facing. */
@@ -122,13 +128,45 @@ const RENTAL: Record<string, StatusLabel> = {
   cancelled:         { label: "ملغى",              tone: ROSE },
 };
 
+/* ── navigation (driver_navigation_sessions) ─────────────────── */
+// #TA-T18-UX-AUDIT-01 — ملاحة السائق داخل التطبيق (شاشة me-driver-navigation).
+const NAVIGATION: Record<string, StatusLabel> = {
+  active:          { label: "في الطريق",          tone: INFO },
+  arrived_pickup:  { label: "وصلت موقع التحميل",  tone: PURPLE },
+  loaded:          { label: "تم التحميل",         tone: WARNING },
+  arrived_dropoff: { label: "وصلت موقع التسليم",  tone: PURPLE },
+  delivered:       { label: "تم التسليم",         tone: POSITIVE },
+  ended:           { label: "انتهت",              tone: NEUTRAL },
+  cancelled:       { label: "ملغاة",              tone: ROSE },
+};
+
+/* ── trip (driver trips — شاشة me-driver) ────────────────────── */
+const TRIP: Record<string, StatusLabel> = {
+  scheduled:   { label: "مجدولة", tone: INFO },
+  planned:     { label: "مخططة",  tone: INFO },
+  in_progress: { label: "جارية",  tone: WARNING },
+  completed:   { label: "مكتملة", tone: POSITIVE },
+  cancelled:   { label: "ملغاة",  tone: ROSE },
+};
+
+/* ── driver (fleet_drivers availability / duty) ──────────────── */
+const DRIVER: Record<string, StatusLabel> = {
+  available: { label: "متاح",        tone: POSITIVE },
+  on_trip:   { label: "في رحلة",     tone: INFO },
+  off_duty:  { label: "خارج الدوام", tone: WARNING },
+  suspended: { label: "موقوف",       tone: ROSE },
+};
+
 const ALL: Record<TransportEntity, Record<string, StatusLabel>> = {
-  booking:  BOOKING,
-  dispatch: DISPATCH,
-  cargo:    CARGO,
-  leg:      LEG,
-  vehicle:  VEHICLE,
-  rental:   RENTAL,
+  booking:    BOOKING,
+  dispatch:   DISPATCH,
+  cargo:      CARGO,
+  leg:        LEG,
+  vehicle:    VEHICLE,
+  rental:     RENTAL,
+  navigation: NAVIGATION,
+  trip:       TRIP,
+  driver:     DRIVER,
 };
 
 /**
