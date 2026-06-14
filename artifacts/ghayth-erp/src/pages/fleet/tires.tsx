@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { Disc, Plus } from "lucide-react";
+import { Disc, Plus, Pencil, Trash2 } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -58,6 +58,8 @@ export default function TiresPage() {
   const vehicles = asList(vehiclesResp);
   const [filters, setFilters] = useFilters();
   const [showCreate, setShowCreate] = useState(false);
+  const [editingTire, setEditingTire] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<{ status: string; notes: string }>({ status: "", notes: "" });
   const [form, setForm] = useState({
     vehicleId: "",
     position: "front_left",
@@ -69,6 +71,32 @@ export default function TiresPage() {
   });
 
   const createMut = useApiMutation("/fleet/tires", "POST");
+
+  const saveTireEdit = async () => {
+    if (!editingTire) return;
+    try {
+      await (await import("@/lib/api")).apiFetch(`/fleet/tires/${editingTire.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: editForm.status, notes: editForm.notes || undefined }),
+      });
+      toast({ title: "تم تحديث الإطار" });
+      setEditingTire(null);
+      await refetch();
+    } catch (err: any) {
+      toast({ title: "فشل التحديث", description: err?.message ?? "خطأ", variant: "destructive" });
+    }
+  };
+
+  const deleteTire = async (id: number) => {
+    if (!confirm("حذف هذا الإطار؟")) return;
+    try {
+      await (await import("@/lib/api")).apiFetch(`/fleet/tires/${id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      await refetch();
+    } catch (err: any) {
+      toast({ title: "فشل الحذف", description: err?.message ?? "خطأ", variant: "destructive" });
+    }
+  };
 
   const filtered = applyFilters(tires, filters, { searchFields: ["plateNumber", "brand", "size"] });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
@@ -102,6 +130,32 @@ export default function TiresPage() {
       header: "الحالة",
       sortable: true,
       render: (t) => STATUS_LABEL[t.status] || t.status,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (t) => (
+        <div className="flex gap-1">
+          <GuardedButton
+            perm="fleet.maintenance:create"
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            onClick={() => { setEditingTire(t); setEditForm({ status: t.status, notes: t.notes || "" }); }}
+          >
+            <Pencil className="h-3 w-3" />
+          </GuardedButton>
+          <GuardedButton
+            perm="fleet.maintenance:create"
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+            onClick={() => deleteTire(t.id)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </GuardedButton>
+        </div>
+      ),
     },
   ];
 
@@ -266,6 +320,27 @@ export default function TiresPage() {
         emptyMessage="لا توجد إطارات مسجلة. ابدأ بتسجيل أول إطار من زر 'إضافة إطار'."
         emptyIcon={<Disc className="h-6 w-6 text-slate-400" />}
       />
+      {editingTire && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditingTire(null)}>
+          <div className="bg-white rounded-lg shadow-xl p-5 w-80 space-y-3" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-base">تعديل الإطار #{editingTire.id}</h3>
+            <div>
+              <Label>الحالة</Label>
+              <select className="w-full h-10 border rounded-md px-2 mt-1" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
+                {Object.entries(STATUS_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>ملاحظات</Label>
+              <Input className="mt-1" value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" size="sm" onClick={() => setEditingTire(null)}>إلغاء</Button>
+              <Button size="sm" onClick={saveTireEdit}>حفظ</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }
