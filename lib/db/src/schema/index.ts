@@ -60,7 +60,12 @@ export const employeeAssignments = pgTable("employee_assignments", {
   companyId: integer("companyId").notNull().references(() => companies.id),
   branchId: integer("branchId").references(() => branches.id),
   role: text("role").default("employee"),
+  // ADR-HR-01 (#2223) — المسمى المهني canonical عبر jobTitleId (FK→job_titles،
+  // migration 012). العمود النصّي jobTitle مُهمَل تدريجيًا ويبقى fallback
+  // للقراءة عبر COALESCE(jt.name, ea."jobTitle"). مسارا create/update يحلّان
+  // jobTitleId مع نطاق الشركة. (positionId = المنصب الإداري، كيان منفصل — 274.)
   jobTitle: text("jobTitle"),
+  jobTitleId: integer("jobTitleId"),
   departmentId: integer("departmentId"),
   salary: numeric("salary", { precision: 14, scale: 2 }).default("0"),
   status: text("status").default("active"),

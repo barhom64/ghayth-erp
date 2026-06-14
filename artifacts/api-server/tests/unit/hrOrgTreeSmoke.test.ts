@@ -186,8 +186,12 @@ describe("PR-7 (#2077) — the admin tree page exists + is in the HR nav", () =>
     expect(HR_ROUTES).toMatch(/const OrgTree = lazy\(\(\) => import\("@\/pages\/hr\/org-tree"\)\)/);
     expect(HR_ROUTES).toMatch(/\{ path: "\/hr\/org-tree", component: OrgTree/);
   });
-  it("navigation surfaces «الشجرة التنظيمية» pointing at /hr/org-tree", () => {
-    expect(NAV).toMatch(/label: "الشجرة التنظيمية", path: "\/hr\/org-tree"/);
+  it("navigation surfaces the org tree pointing at /hr/org-tree", () => {
+    // ADR-HR-02 (#2221): org nav consolidated to a single canonical entry →
+    // /hr/org-tree (relabeled «الهيكل التنظيمي»، أُزيل تكرار «الهيكل المصوّر»
+    // وعنصر «الشجرة التنظيمية» المنفصل). org-tree يبقى مرئيًا في nav — نثبّت
+    // بالمسار + التسمية الجديدة.
+    expect(NAV).toMatch(/label: "الهيكل التنظيمي", path: "\/hr\/org-tree"/);
   });
 });
 
