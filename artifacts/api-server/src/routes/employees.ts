@@ -2080,11 +2080,18 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
           `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
           [employee.assignmentId, scope.companyId, before.status]
         );
+        // HR-REV-1/8 (#2220 #2227) — إعادة تفعيل: استعادة تسجيل الدخول عند
+        // إرجاع الموظف من الإيقاف (يقابل تعطيل الحساب في فرع suspended أدناه).
+        await client.query(`UPDATE users SET "isActive" = true WHERE "employeeId" = $1`, [id]);
       } else if (status === "suspended" && before.status !== "suspended") {
         await client.query(
           `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
           [employee.assignmentId, scope.companyId, before.status]
         );
+        // HR-REV-1/8 (#2220 #2227) — سدّ ثغرة: الإيقاف كان يضبط حالة التعيين
+        // فقط ويُبقي حساب المستخدم حيًّا، فيستطيع الموقوف الدخول والتصرّف
+        // بصلاحياته. نعطّل الحساب كما يفعل terminate؛ تُستعاد عند العودة active.
+        await client.query(`UPDATE users SET "isActive" = false WHERE "employeeId" = $1`, [id]);
       }
 
       // If any expiry field was changed, refresh obligations. Old obligations with
