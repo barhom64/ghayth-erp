@@ -9,7 +9,8 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
-import { TextAreaField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import { TextAreaField, NumberField, FormFieldWrapper, TextField } from "@/components/shared/form-field-wrapper";
+import { SupplierSelect } from "@/components/shared/entity-selects";
 
 export default function PropertyMaintenanceCreate() {
   const [, setLocation] = useLocation();
@@ -31,6 +32,7 @@ export default function PropertyMaintenanceCreate() {
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("property_maintenance_create", {
     unitId: "", category: "", description: "", priority: "medium", cost: "",
+    supplierId: "", unregisteredSupplierName: "", unregisteredSupplier: false,
   });
 
   if (isLoading) return <LoadingSpinner />;
@@ -54,6 +56,8 @@ export default function PropertyMaintenanceCreate() {
         description: form.description,
         priority: form.priority,
         estimatedCost: form.cost ? Number(form.cost) : undefined,
+        supplierId: form.supplierId ? Number(form.supplierId) : undefined,
+        unregisteredSupplierName: form.unregisteredSupplier ? (form.unregisteredSupplierName || undefined) : undefined,
       });
       clearDraft();
       toast({ title: "تم إنشاء طلب الصيانة بنجاح" });
@@ -116,6 +120,18 @@ export default function PropertyMaintenanceCreate() {
         </FormFieldWrapper>
         <TextAreaField label="الوصف" required value={form.description} onChange={(v) => setForm((f) => ({ ...f, description: v }))} rows={3} error={fieldErrors.description} className="md:col-span-2" />
         <NumberField label="التكلفة" value={form.cost} onChange={(v) => setForm((f) => ({ ...f, cost: v }))} placeholder="0" step={0.01} min={0} error={fieldErrors.cost} />
+        {form.unregisteredSupplier ? (
+          <div>
+            <TextField label="اسم المقاول / المورد (غير مسجّل)" value={form.unregisteredSupplierName} onChange={(v) => setForm((f) => ({ ...f, unregisteredSupplierName: v }))} />
+            <p className="text-xs text-status-warning-foreground mt-1">استثناء: مورد غير مسجّل (سياسة allowUnregisteredMaintenanceSupplier)</p>
+          </div>
+        ) : (
+          <SupplierSelect value={form.supplierId} onChange={(v) => setForm((f) => ({ ...f, supplierId: v }))} label="المقاول / المورد" />
+        )}
+        <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer self-end pb-2">
+          <input type="checkbox" checked={form.unregisteredSupplier} onChange={(e) => setForm((f) => ({ ...f, unregisteredSupplier: e.target.checked, supplierId: "", unregisteredSupplierName: "" }))} />
+          مورد غير مسجّل
+        </label>
       </div>
       <div className="flex items-center justify-between gap-3 pt-6">
         <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">

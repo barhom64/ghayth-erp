@@ -94,7 +94,8 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-documents", component: MyDocuments },
   { path: "/my-loans", component: MyLoans },
   { path: "/my-overtime", component: MyOvertime },
-  { path: "/action-center", component: ActionCenter },
+  // GAP_MATRIX P2 — backend requires requireMinLevel(20); add matching frontend gate.
+  { path: "/action-center", component: ActionCenter, minRoleLevel: 20 },
   { path: "/workspace", component: Workspace },
   { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
   { path: "/my/work-queue", component: WorkQueue },
@@ -159,5 +160,5 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/automation", component: Automation, module: "admin" },
   { path: "/activity-log", component: ActivityLog },
   { path: "/module-dashboards", component: ModuleDashboards, module: "bi" },
-  { path: "/reports/scheduled", component: ScheduledReports, module: "bi" },
+  { path: "/reports/scheduled", component: ScheduledReports, module: "bi", minRoleLevel: 50 },
 ];

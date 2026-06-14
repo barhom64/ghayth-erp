@@ -1,8 +1,10 @@
 import { handleRouteError } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery } from "../lib/rawdb.js";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere } from "../lib/scopedQuery.js";
+import { auditFromRequest } from "../lib/businessHelpers.js";
+import { requireMinLevel } from "../middlewares/roleGuard.js";
 
 const router = Router();
 
@@ -173,8 +175,91 @@ router.get("/", authorize({ feature: "admin.audit", action: "view" }), async (re
     );
 
     res.json(maskFields(req, { data: rows, total: Number(countRow?.total ?? 0), page: pageNum, pageSize: perPage }));
+    // Self-audit: reading audit logs is itself an auditable event (PDPL / forensics).
+    auditFromRequest(req, "audit_logs.read", "audit_logs", 0, {
+      after: { filters: { entityType, entityId, action, userId, dateFrom, dateTo }, page: pageNum, total: Number(countRow?.total ?? 0) },
+    });
   } catch (err) {
     handleRouteError(err, res, "Get audit logs error:");
+  }
+});
+
+// GAP_MATRIX P0 — admin/logs CSV export must create a print_jobs record so
+// downloads of audit data leave a central traceable trail (PDPL compliance).
+// The frontend should call this endpoint instead of building CSV client-side.
+router.get("/export", requireMinLevel(70), authorize({ feature: "admin.audit", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { entityType, entityId, action, userId, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+
+    const { where: scopeWhere, params, nextParamIndex } = buildScopedWhere(
+      scope,
+      {},
+      { companyColumn: 'al."companyId"', disableBranchScope: true }
+    );
+    const conditions = [scopeWhere];
+    let paramIdx = nextParamIndex;
+
+    if (entityType) { params.push(String(entityType)); conditions.push(`al.entity = $${paramIdx++}`); }
+    if (entityId) { params.push(String(entityId)); conditions.push(`al."entityId" = $${paramIdx++}`); }
+    if (action) { params.push(String(action)); conditions.push(`al.action = $${paramIdx++}`); }
+    if (userId) { params.push(Number(userId) || 0); conditions.push(`al."userId" = $${paramIdx++}`); }
+    if (dateFrom) { params.push(String(dateFrom)); conditions.push(`al."createdAt" >= $${paramIdx++}::timestamptz`); }
+    if (dateTo) { params.push(String(dateTo) + "T23:59:59Z"); conditions.push(`al."createdAt" <= $${paramIdx++}::timestamptz`); }
+
+    const where = conditions.join(" AND ");
+    params.push(5000); // cap export at 5000 rows
+    const limitIdx = paramIdx++;
+
+    const rows = await rawQuery<AuditLogRow>(
+      `SELECT al.id, al."companyId", al."branchId", al."userId", al.action, al.entity, al."entityId",
+              al.reason, al."ipAddress", al."createdAt",
+              e.name AS "userName"
+       FROM audit_logs al
+       LEFT JOIN users u ON u.id = al."userId"
+       LEFT JOIN employees e ON e.id = u."employeeId"
+       WHERE ${where}
+       ORDER BY al."createdAt" DESC, al.id DESC
+       LIMIT $${limitIdx}`,
+      params
+    );
+
+    // Record the export in print_jobs so there is a central audit trail.
+    await rawExecute(
+      `INSERT INTO print_jobs ("companyId","branchId","userId","entityType","entityId","format","status","ipAddress","userAgent")
+       VALUES ($1,$2,$3,'report_audit_logs','0','csv','completed',$4,$5)`,
+      [
+        scope.companyId,
+        scope.branchId ?? null,
+        scope.userId ?? null,
+        (req.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ?? req.socket?.remoteAddress ?? null,
+        (req.headers["user-agent"] as string | undefined) ?? null,
+      ]
+    );
+
+    auditFromRequest(req, "audit_logs.export", "audit_logs", 0, {
+      after: { filters: { entityType, entityId, action, userId, dateFrom, dateTo }, rowCount: rows.length },
+    });
+
+    // Build CSV inline — no external dependency.
+    const header = "id,companyId,branchId,userId,userName,action,entity,entityId,reason,ipAddress,createdAt";
+    const esc = (v: unknown) => {
+      if (v === null || v === undefined) return "";
+      const s = String(v).replace(/"/g, '""');
+      return /[,"\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const lines = rows.map((r) =>
+      [r.id, r.companyId, r.branchId, r.userId, r.userName, r.action, r.entity, r.entityId, r.reason, r.ipAddress, r.createdAt]
+        .map(esc)
+        .join(",")
+    );
+    const csv = [header, ...lines].join("\r\n");
+    const filename = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`; // utc-ok: storage path / filename partition uses UTC
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (err) {
+    handleRouteError(err, res, "Export audit logs error:");
   }
 });
 

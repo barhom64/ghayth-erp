@@ -2437,7 +2437,9 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
   } catch (err) { handleRouteError(err, res, "List journal entries error:"); }
 });
 
-journalRouter.post("/journal", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+// GAP_MATRIX P0 — manual journal create: floor at 50 (accountant/department_manager).
+// Any finance-module holder (including employee=10) would otherwise reach this endpoint.
+journalRouter.post("/journal", requireMinLevel(50), authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { description, lines, date, branchId: bodyBranchId, branchSplits } = zodParse(createJournalSchema.safeParse(req.body ?? {}));
@@ -2645,7 +2647,8 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
 
 // FIN-013 — approve a draft manual journal. Pure status transition; no GL
 // movement yet. The companion `/post` endpoint runs the balance push.
-journalRouter.post("/journal/:id/approve", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+// GAP_MATRIX P0 — approve floor at 60 (branch_manager+): separation of duties.
+journalRouter.post("/journal/:id/approve", requireMinLevel(60), authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2680,7 +2683,8 @@ journalRouter.post("/journal/:id/approve", authorize({ feature: "finance.journal
 // inside one transaction so the status change and ledger movement commit
 // together; if balancesApply fails (e.g. period reclosed in the interim)
 // the status reverts.
-journalRouter.post("/journal/:id/post", authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
+// GAP_MATRIX P0 — posting to GL is irreversible; floor at 70 (finance_manager).
+journalRouter.post("/journal/:id/post", requireMinLevel(70), authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -2717,7 +2721,8 @@ journalRouter.post("/journal/:id/post", authorize({ feature: "finance.journal", 
   }
 });
 
-journalRouter.post("/journal/:id/reverse", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+// GAP_MATRIX P0 — reversal creates an offsetting GL entry; floor at 70 (finance_manager).
+journalRouter.post("/journal/:id/reverse", requireMinLevel(70), authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -3364,7 +3369,8 @@ async function createOpeningBalanceEntry(params: {
   return { id: journalId, ref, description };
 }
 
-journalRouter.post("/opening-balances", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — opening balances alter the GL baseline; floor at 70 (controller).
+journalRouter.post("/opening-balances", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -3380,7 +3386,8 @@ journalRouter.post("/opening-balances", authorize({ feature: "finance.accounts",
   }
 });
 
-journalRouter.post("/opening-balances/import-csv", authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — CSV import of opening balances; same level as POST.
+journalRouter.post("/opening-balances/import-csv", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

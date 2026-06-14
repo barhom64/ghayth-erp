@@ -90,6 +90,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // department filtering, which this surface intentionally doesn't do
   // because the role gate (ifRole) already narrows visibility.
   "meInsights.ts",
+  // myFieldTracking.ts: PR-9 (#2077) self-service field-tracking mount.
+  // scope.companyId appears only in emitEvent() calls for audit metadata,
+  // not in SQL WHERE clauses. Both endpoints serve the caller's own data
+  // via scope.userId; buildScopedWhere's branch-cascade doesn't apply.
+  "myFieldTracking.ts",
   "moduleDashboards.ts",
   "mySpace.ts",
   "notification-engine.ts",
@@ -251,7 +256,7 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // apply. Counted under manualOnly to preserve the invariant.
       total: 119,
       helperUsers: 39,
-      manualOnly: 76,
+      manualOnly: 77,
     });
   });
 });

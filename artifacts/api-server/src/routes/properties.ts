@@ -265,6 +265,8 @@ const createMaintenanceRequestSchema = z.object({
   estimatedCost: z.coerce.number().optional().nullable(),
   unitLat: z.coerce.number().optional().nullable(),
   unitLon: z.coerce.number().optional().nullable(),
+  supplierId: z.coerce.number().optional().nullable(),
+  unregisteredSupplierName: z.string().optional().nullable(),
 });
 
 const approveMaintenanceSchema = z.object({
@@ -339,6 +341,8 @@ const createMaintenanceSimpleSchema = z.object({
   category: z.string().optional().nullable(),
   description: z.string().min(1, "وصف الصيانة مطلوب"),
   priority: z.string().optional().nullable(),
+  supplierId: z.coerce.number().optional().nullable(),
+  unregisteredSupplierName: z.string().optional().nullable(),
 });
 
 const updateMaintenanceRequestSchema = z.object({
@@ -2439,8 +2443,8 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"assignedTo","estimatedCost") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, b.unitId, b.contractId || null, b.tenantName || null, b.category || null, b.description, autoPriority, assignedTechnicianId ? 'assigned' : 'pending', assignedTechnicianId, b.estimatedCost || 0]
+      `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"assignedTo","estimatedCost","supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [scope.companyId, b.unitId, b.contractId || null, b.tenantName || null, b.category || null, b.description, autoPriority, assignedTechnicianId ? 'assigned' : 'pending', assignedTechnicianId, b.estimatedCost || 0, b.supplierId ?? null, b.unregisteredSupplierName ?? null]
     );
     assertInsert(insertId, "maintenance_requests");
 
@@ -3232,8 +3236,8 @@ router.post("/maintenance", authorize({ feature: "properties.maintenance", actio
       throw new ValidationError("الوحدة غير موجودة", { field: "unitId", fix: "اختر وحدة مسجلة" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status) VALUES ($1,$2,$3,$4,$5,$6,'open')`,
-      [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium']
+      `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status,"supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8)`,
+      [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium', b.supplierId ?? null, b.unregisteredSupplierName ?? null]
     );
     assertInsert(insertId, "maintenance_requests");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
