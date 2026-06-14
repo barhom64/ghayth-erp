@@ -151,6 +151,9 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
               <FormFieldWrapper label="المسبّب / السبب">
                 <Input value={value.reason ?? ""} onChange={(e) => set({ reason: e.target.value })} placeholder="سبب الصيانة" />
               </FormFieldWrapper>
+              {/* #2234 (عقد المورد التشغيلي) — الورشة/الفني طرف تجاري = مورد محفوظ
+                  يصل القيد كـvendorId (تقارير الصيانة حسب المورد). مُوصى لا إلزامي. */}
+              <SupplierSelect value={value.allocation.vendorId ?? ""} onChange={(v) => setAlloc({ vendorId: v })} label="الورشة / المورد" allowCreate={false} />
             </>
           )}
           {value.target === "vehicle" && (
@@ -252,6 +255,9 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
                   <SelectContent>{MAINTENANCE_TYPES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                 </Select>
               </FormFieldWrapper>
+              {/* #2234 (عقد المورد التشغيلي) — المقاول/الفني طرف تجاري = مورد محفوظ
+                  يصل القيد كـvendorId (تقارير الصيانة حسب المورد). مُوصى لا إلزامي. */}
+              <SupplierSelect value={value.allocation.vendorId ?? ""} onChange={(v) => setAlloc({ vendorId: v })} label="المقاول / المورد" allowCreate={false} />
               <FormFieldWrapper label="من يتحمل التكلفة">
                 <Select value={value.costBearer ?? ""} onValueChange={(v) => set({ costBearer: v })}>
                   <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
