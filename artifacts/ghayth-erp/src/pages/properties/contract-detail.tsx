@@ -51,6 +51,7 @@ import {
   DollarSign,
   CheckCircle2,
   Clock,
+  Scale,
 } from "lucide-react";
 
 export default function ContractDetailPage() {
@@ -65,6 +66,10 @@ export default function ContractDetailPage() {
   const [payMethod, setPayMethod] = useState("bank_transfer");
   const [payNotes, setPayNotes] = useState("");
   const [paying, setPaying] = useState(false);
+
+  const [legalOpen, setLegalOpen] = useState(false);
+  const [legalForm, setLegalForm] = useState({ caseType: "civil", description: "", priority: "medium" });
+  const [legalSaving, setLegalSaving] = useState(false);
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
     ["properties-contract", id],
@@ -177,6 +182,35 @@ export default function ContractDetailPage() {
       <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
+
+  async function handleReferToLegal() {
+    if (!contract) return;
+    setLegalSaving(true);
+    try {
+      const overdueAmt = schedule
+        .filter((p: any) => p.status !== "paid" && new Date(p.dueDate) < new Date())
+        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+      await apiFetch("/legal/cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `إخلاء مستأجر — ${contract.tenantName} — وحدة ${contract.unitNumber || ""}`,
+          caseType: legalForm.caseType,
+          opposingParty: contract.tenantName,
+          priority: legalForm.priority,
+          description: legalForm.description || `إحالة من عقد إيجار رقم ${contract.ejarNumber || contract.id}`,
+          notes: `عقد: ${contract.ejarNumber || contract.id} | وحدة: ${contract.unitNumber || ""} | متأخرات: ${overdueAmt.toLocaleString("ar-SA")} ريال | هاتف: ${contract.tenantPhone || "—"}`,
+          filingDate: new Date().toISOString().slice(0, 10),
+        }),
+      });
+      toast({ title: "تم إنشاء القضية في النظام القانوني" });
+      setLegalOpen(false);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل إنشاء القضية", description: err.message });
+    } finally {
+      setLegalSaving(false);
+    }
+  }
 
   async function handlePay() {
     if (!payDialog) return;
@@ -362,6 +396,10 @@ export default function ContractDetailPage() {
         <XCircle className="h-4 w-4" />
         إنهاء
       </GuardedButton>
+      <GuardedButton perm="legal.cases:create" size="sm" variant="outline" className="gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setLegalOpen(true)}>
+        <Scale className="h-4 w-4" />
+        إحالة قانونية
+      </GuardedButton>
       <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} />
       {!isContractLocked && (
         <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
@@ -512,6 +550,56 @@ export default function ContractDetailPage() {
           <Button variant="outline" size="sm" onClick={() => setPayDialog(null)}>إلغاء</Button>
           <Button size="sm" onClick={handlePay} disabled={paying || !payAmount || Number(payAmount) <= 0} className="gap-1">
             {paying ? "جاري الحفظ..." : "تسجيل التحصيل"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={legalOpen} onOpenChange={setLegalOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إحالة قانونية — {contract?.tenantName}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2 text-sm">
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-amber-800 text-xs">
+            سيُنشئ هذا الإجراء قضية في وحدة القانونية مرتبطة بهذا العقد وبيانات المستأجر.
+          </div>
+          <div>
+            <Label className="text-xs">نوع القضية</Label>
+            <Select value={legalForm.caseType} onValueChange={v => setLegalForm(f => ({ ...f, caseType: v }))}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="civil">مدنية — إخلاء / مطالبة مالية</SelectItem>
+                <SelectItem value="commercial">تجارية</SelectItem>
+                <SelectItem value="rental_dispute">نزاع إيجاري</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">الأولوية</Label>
+            <Select value={legalForm.priority} onValueChange={v => setLegalForm(f => ({ ...f, priority: v }))}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="medium">متوسطة</SelectItem>
+                <SelectItem value="high">عالية</SelectItem>
+                <SelectItem value="critical">حرجة</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">وصف الإحالة (اختياري)</Label>
+            <Textarea
+              rows={3}
+              value={legalForm.description}
+              onChange={e => setLegalForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="سبب الإحالة، تفاصيل المشكلة..."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setLegalOpen(false)}>إلغاء</Button>
+          <Button size="sm" variant="destructive" onClick={handleReferToLegal} disabled={legalSaving} className="gap-1">
+            <Scale className="h-4 w-4" />
+            {legalSaving ? "جاري الإنشاء..." : "إنشاء القضية"}
           </Button>
         </DialogFooter>
       </DialogContent>
