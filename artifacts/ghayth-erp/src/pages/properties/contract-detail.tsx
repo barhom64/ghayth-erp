@@ -29,6 +29,7 @@ import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
+import { PropertyAlertsPanel, buildContractAlerts } from "@/components/shared/property-alerts-panel";
 import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -273,8 +274,11 @@ export default function ContractDetailPage() {
     }
   };
 
+  const contractAlerts = contract ? buildContractAlerts({ contract, schedule, maintRequests }) : [];
+
   const overview = (
     <div className="space-y-4">
+      <PropertyAlertsPanel alerts={contractAlerts} />
       <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">

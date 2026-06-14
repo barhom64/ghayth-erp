@@ -47,6 +47,7 @@ import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PrintButton } from "@/components/shared/print-button";
 import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
+import { PropertyAlertsPanel, buildUnitAlerts } from "@/components/shared/property-alerts-panel";
 
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Building },
@@ -219,8 +220,11 @@ export default function UnitDetail() {
     </div>
   ) : undefined;
 
+  const unitAlerts = unit ? buildUnitAlerts({ unit, contracts, payments, maintenance }) : [];
+
   const overview = unit ? (
     <div className="space-y-6">
+      <PropertyAlertsPanel alerts={unitAlerts} />
       <Card className="border-0 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
