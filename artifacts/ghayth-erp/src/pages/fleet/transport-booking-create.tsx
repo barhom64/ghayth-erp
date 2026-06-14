@@ -61,7 +61,11 @@ export default function TransportBookingCreate() {
   const [submitting, setSubmitting] = useState(false);
 
   // Shared fields.
-  const [bookingNumber, setBookingNumber] = useState("");
+  // #TA-T18-UX-AUDIT-01 UX-04 — رقم الحجز يُولَّد تلقائيًا (قابل للتعديل) بدل
+  // إلزام المستخدم بإدخال مفتاح تقني في أول حقل.
+  const [bookingNumber, setBookingNumber] = useState(
+    () => `B-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  );
   const [bookingSource, setBookingSource] = useState<string>("manual_entry");
   const [transportServiceType, setTransportServiceType] = useState<string>("cargo_load");
   const [customerName, setCustomerName] = useState("");
@@ -83,6 +87,9 @@ export default function TransportBookingCreate() {
   const [toLat, setToLat] = useState("");
   const [toLng, setToLng] = useState("");
   const [showGeoFields, setShowGeoFields] = useState(false);
+  // #TA-T18-UX-AUDIT-01 UX-04 — الحد الأدنى أولًا: تُطوى كتلة «اتفاق العميل +
+  // النوافذ الزمنية» المتقدمة افتراضيًا، وتظهر عند الطلب فقط.
+  const [showAgreement, setShowAgreement] = useState(false);
   // #1812 multi-leg booking — user's #1 explicit gap.
   const [legs, setLegs] = useState<BookingLeg[]>([]);
   const [requestedPickupDate, setRequestedPickupDate] = useState("");
@@ -572,10 +579,19 @@ export default function TransportBookingCreate() {
         )}
 
         {/* #1812 — اتفاق العميل + النوافذ الزمنية (Comment 3) */}
+        {/* #TA-T18-UX-AUDIT-01 UX-04 — كتلة متقدمة مطويّة افتراضيًا (الحد الأدنى أولًا). */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">اتفاق العميل + النوافذ الزمنية</CardTitle>
+            <button
+              type="button"
+              onClick={() => setShowAgreement((s) => !s)}
+              className="flex items-center justify-between w-full text-start"
+            >
+              <CardTitle className="text-sm">تفاصيل إضافية (اتفاق العميل + النوافذ الزمنية)</CardTitle>
+              <span className="text-xs text-muted-foreground">{showAgreement ? "إخفاء ▲" : "إظهار ▼"}</span>
+            </button>
           </CardHeader>
+          {showAgreement && (
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Label>فئة المركبة المطلوبة</Label>
@@ -671,6 +687,7 @@ export default function TransportBookingCreate() {
               />
             </div>
           </CardContent>
+          )}
         </Card>
 
         <Card>
