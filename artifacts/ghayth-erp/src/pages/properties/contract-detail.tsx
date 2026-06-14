@@ -28,6 +28,12 @@ import { EntityObligations } from "@/components/shared/entity-obligations";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
+import { PropertyAlertsPanel, buildContractAlerts } from "@/components/shared/property-alerts-panel";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   FileText,
   User,
@@ -45,6 +51,7 @@ import {
   DollarSign,
   CheckCircle2,
   Clock,
+  Scale,
 } from "lucide-react";
 
 export default function ContractDetailPage() {
@@ -53,6 +60,18 @@ export default function ContractDetailPage() {
   const id = params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("rental_contract", id ?? "");
   const queryClient = useQueryClient();
+
+  const [payDialog, setPayDialog] = useState<{ paymentId: number; amount: number } | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("bank_transfer");
+  const [payNotes, setPayNotes] = useState("");
+  const [paying, setPaying] = useState(false);
+
+  const [legalOpen, setLegalOpen] = useState(false);
+  // caseType is a free string on the backend (z.string().optional()); values
+  // below mirror the common Arabic court taxonomy — no server-side enum constraint.
+  const [legalForm, setLegalForm] = useState({ caseType: "rental_dispute", description: "", priority: "medium" });
+  const [legalSaving, setLegalSaving] = useState(false);
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
     ["properties-contract", id],
@@ -119,10 +138,31 @@ export default function ContractDetailPage() {
 
   const paymentsColumns: DataTableColumn<any>[] = [
     { key: "installmentNumber", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.installmentNumber}</span> },
-    { key: "dueDate", header: "الاستحقاق", sortable: true, render: (r) => formatDateAr(r.dueDate) },
+    { key: "dueDate", header: "الاستحقاق", sortable: true, render: (r) => {
+      const overdue = r.status !== "paid" && new Date(r.dueDate) < new Date();
+      const upcoming = r.status !== "paid" && !overdue && new Date(r.dueDate) <= new Date(Date.now() + 7 * 86400000);
+      return (
+        <span className={overdue ? "text-red-600 font-semibold" : upcoming ? "text-amber-600 font-medium" : r.status === "paid" ? "text-emerald-600" : ""}>
+          {formatDateAr(r.dueDate)}
+        </span>
+      );
+    }},
     { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.amount) || 0)}</span> },
     { key: "paidAmount", header: "المدفوع", sortable: true, render: (r) => formatCurrency(Number(r.paidAmount) || 0) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => {
+      const overdue = r.status !== "paid" && new Date(r.dueDate) < new Date();
+      return <Badge variant="outline" className={overdue ? "border-red-200 text-red-600 bg-red-50" : r.status === "paid" ? "border-emerald-200 text-emerald-600 bg-emerald-50" : ""}>{r.status || "-"}</Badge>;
+    }},
+    { key: "_pay", header: "", render: (r) => r.status !== "paid" ? (
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+        onClick={() => { setPayDialog({ paymentId: r.id, amount: Number(r.amount) || 0 }); setPayAmount(String(Number(r.amount) || 0)); }}
+      >
+        تحصيل
+      </Button>
+    ) : null },
   ];
 
   const maintColumns: DataTableColumn<any>[] = [
@@ -144,6 +184,61 @@ export default function ContractDetailPage() {
       <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
+
+  async function handleReferToLegal() {
+    if (!contract) return;
+    setLegalSaving(true);
+    try {
+      const overdueAmt = schedule
+        .filter((p: any) => p.status !== "paid" && new Date(p.dueDate) < new Date())
+        .reduce((s: number, p: any) => s + Number(p.amount || 0), 0);
+      await apiFetch("/legal/cases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `إخلاء مستأجر — ${contract.tenantName} — وحدة ${contract.unitNumber || ""}`,
+          caseType: legalForm.caseType,
+          opposingParty: contract.tenantName,
+          priority: legalForm.priority,
+          description: legalForm.description || `إحالة من عقد إيجار رقم ${contract.ejarNumber || contract.id}`,
+          notes: `عقد: ${contract.ejarNumber || contract.id} | وحدة: ${contract.unitNumber || ""} | متأخرات: ${overdueAmt.toLocaleString("ar-SA")} ريال | هاتف: ${contract.tenantPhone || "—"}`,
+          filingDate: todayLocal(),
+        }),
+      });
+      toast({ title: "تم إنشاء القضية في النظام القانوني" });
+      setLegalOpen(false);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل إنشاء القضية", description: err.message });
+    } finally {
+      setLegalSaving(false);
+    }
+  }
+
+  async function handlePay() {
+    if (!payDialog) return;
+    setPaying(true);
+    try {
+      await apiFetch(`/properties/payments/${payDialog.paymentId}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paidAmount: Number(payAmount) || payDialog.amount,
+          method: payMethod,
+          notes: payNotes || undefined,
+        }),
+      });
+      toast({ title: "تم تسجيل الدفعة بنجاح" });
+      queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
+      queryClient.invalidateQueries({ queryKey: ["contract-detail-schedule", id] });
+      setPayDialog(null);
+      setPayAmount("");
+      setPayNotes("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل تسجيل الدفعة", description: err.message });
+    } finally {
+      setPaying(false);
+    }
+  }
 
   const handleRenew = async () => {
     // Use the dedicated /renew endpoint — it runs the audited
@@ -215,8 +310,11 @@ export default function ContractDetailPage() {
     }
   };
 
+  const contractAlerts = contract ? buildContractAlerts({ contract, schedule, maintRequests }) : [];
+
   const overview = (
     <div className="space-y-4">
+      <PropertyAlertsPanel alerts={contractAlerts} />
       <InlineEditCard hook={editDelete} />
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm">
@@ -269,6 +367,14 @@ export default function ContractDetailPage() {
         <CardContent className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InfoRow label="رقم إيجار" value={contract?.ejarNumber} />
+            <InfoRow label="مصدر العقد" value={
+              contract?.contractSource === "ejar" ? "منصة إيجار" :
+              contract?.contractSource === "manual" ? "إدخال يدوي" :
+              contract?.contractSource === "file_import" ? "استيراد ملف" :
+              contract?.contractSource === "ejar_later" ? "إيجار لاحقاً" :
+              contract?.contractSource === "migrated" ? "مرحّل من نظام قديم" :
+              contract?.contractSource || "—"
+            } />
             <InfoRow label="المستأجر" value={contract?.tenantName} />
             <InfoRow label="الوحدة" value={contract?.unitNumber} />
             <InfoRow label="المبنى" value={contract?.buildingName} />
@@ -299,6 +405,10 @@ export default function ContractDetailPage() {
       <GuardedButton perm="properties:create" size="sm" variant="outline" onClick={handleTerminate} className="gap-1" rateLimitAware>
         <XCircle className="h-4 w-4" />
         إنهاء
+      </GuardedButton>
+      <GuardedButton perm="legal.cases:create" size="sm" variant="outline" className="gap-1 text-red-600 border-red-200 hover:bg-red-50" onClick={() => setLegalOpen(true)}>
+        <Scale className="h-4 w-4" />
+        إحالة قانونية
       </GuardedButton>
       <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} />
       {!isContractLocked && (
@@ -342,6 +452,19 @@ export default function ContractDetailPage() {
         inspections.length === 0
           ? emptyMsg("لا توجد تفتيشات")
           : <DataTable columns={inspColumns} data={inspections} pageSize={10} emptyMessage="لا توجد تفتيشات" noToolbar />,
+    },
+    {
+      key: "attachments",
+      label: "المرفقات",
+      icon: FolderOpen,
+      content: () => (
+        <EntityAttachmentPanel
+          entityType="rental_contract"
+          entityId={Number(id)}
+          label="مرفقات العقد"
+          defaultCategory="contract_pdf"
+        />
+      ),
     },
     {
       key: "financial",
@@ -393,6 +516,101 @@ export default function ContractDetailPage() {
         <DialogFooter>
           <Button variant="outline" onClick={() => setTerminateOpen(false)}>إلغاء</Button>
           <Button variant="destructive" onClick={confirmTerminate} rateLimitAware>تأكيد الإنهاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={!!payDialog} onOpenChange={() => setPayDialog(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تسجيل تحصيل دفعة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label className="text-xs">المبلغ المحصل (ريال)</Label>
+            <Input
+              type="number"
+              className="h-9"
+              value={payAmount}
+              onChange={e => setPayAmount(e.target.value)}
+            />
+            {payDialog && Number(payAmount) < payDialog.amount && Number(payAmount) > 0 && (
+              <p className="text-xs text-amber-600 mt-1">دفعة جزئية — الباقي {formatCurrency(payDialog.amount - Number(payAmount))}</p>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs">طريقة الدفع</Label>
+            <Select value={payMethod} onValueChange={setPayMethod}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
+                <SelectItem value="cash">نقدي</SelectItem>
+                <SelectItem value="check">شيك</SelectItem>
+                <SelectItem value="online">دفع إلكتروني</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">ملاحظات (اختياري)</Label>
+            <Input className="h-9" value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="رقم التحويل، رقم الشيك..." />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setPayDialog(null)}>إلغاء</Button>
+          <Button size="sm" onClick={handlePay} disabled={paying || !payAmount || Number(payAmount) <= 0} className="gap-1" rateLimitAware>
+            {paying ? "جاري الحفظ..." : "تسجيل التحصيل"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={legalOpen} onOpenChange={setLegalOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>إحالة قانونية — {contract?.tenantName}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2 text-sm">
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-amber-800 text-xs">
+            سيُنشئ هذا الإجراء قضية في وحدة القانونية مرتبطة بهذا العقد وبيانات المستأجر.
+          </div>
+          <div>
+            <Label className="text-xs">نوع القضية</Label>
+            <Select value={legalForm.caseType} onValueChange={v => setLegalForm(f => ({ ...f, caseType: v }))}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="rental_dispute">نزاع إيجاري — إخلاء / مطالبة</SelectItem>
+                <SelectItem value="civil">مدنية — مطالبة مالية عامة</SelectItem>
+                <SelectItem value="commercial">تجارية</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">الأولوية</Label>
+            <Select value={legalForm.priority} onValueChange={v => setLegalForm(f => ({ ...f, priority: v }))}>
+              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="medium">متوسطة</SelectItem>
+                <SelectItem value="high">عالية</SelectItem>
+                <SelectItem value="critical">حرجة</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">وصف الإحالة (اختياري)</Label>
+            <Textarea
+              rows={3}
+              value={legalForm.description}
+              onChange={e => setLegalForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="سبب الإحالة، تفاصيل المشكلة..."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setLegalOpen(false)}>إلغاء</Button>
+          <Button size="sm" variant="destructive" onClick={handleReferToLegal} disabled={legalSaving} className="gap-1">
+            <Scale className="h-4 w-4" />
+            {legalSaving ? "جاري الإنشاء..." : "إنشاء القضية"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

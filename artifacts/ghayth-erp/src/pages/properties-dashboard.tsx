@@ -461,6 +461,8 @@ export default function PropertiesDashboard() {
           { href: "/properties/contracts", icon: FileText, label: "عقود الإيجار", color: "text-status-warning-foreground bg-status-warning-surface" },
           { href: "/properties/payments", icon: Banknote, label: "المدفوعات", color: "text-indigo-600 bg-indigo-50" },
           { href: "/properties/maintenance", icon: Wrench, label: "طلبات الصيانة", color: "text-orange-600 bg-orange-50" },
+          { href: "/properties/sales", icon: TrendingUp, label: "بيع العقارات", color: "text-emerald-600 bg-emerald-50" },
+          { href: "/properties/owners/statement", icon: TrendingDown, label: "مستحقات الملاك", color: "text-purple-600 bg-purple-50" },
         ].map(item => (
           <Link key={item.href} href={item.href}>
             <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer group">

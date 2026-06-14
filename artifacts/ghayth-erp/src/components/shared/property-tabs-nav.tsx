@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, Home, Building2, Users2, FileText, Banknote, Wrench, BarChart3,
+  LayoutDashboard, Home, Building2, Users2, FileText, Banknote, Wrench, BarChart3, TrendingUp,
 } from "lucide-react";
 
 const TABS = [
@@ -12,6 +12,7 @@ const TABS = [
   { href: "/properties/contracts", label: "العقود", icon: FileText, match: ["/properties/contracts"] },
   { href: "/properties/payments", label: "المدفوعات", icon: Banknote, match: ["/properties/payments"] },
   { href: "/properties/maintenance", label: "الصيانة", icon: Wrench, match: ["/properties/maintenance"] },
+  { href: "/properties/sales", label: "بيع العقارات", icon: TrendingUp, match: ["/properties/sales"] },
   { href: "/properties/occupancy-report", label: "التقارير", icon: BarChart3, match: ["/properties/occupancy-report", "/properties/deposits", "/properties/inspections"] },
 ];
 
