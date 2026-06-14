@@ -542,6 +542,17 @@ transportBookingsRouter.post(
       const b = zodParse(createBookingSchema.safeParse(req.body));
       // #1812 multi-leg — wrap booking header + lines in one transaction
       // so a leg-validation failure rolls back the orphan header.
+      // #TA-T18-UX-AUDIT-01 P2-1 — نموذج توقيت موحّد: التوقيت المرئي (أوقات
+      // التحميل/التسليم) يشتقّ نافذة المحرك (pickupWindowStart/End) حين لا
+      // يحدّد المشغّل النافذة المتقدمة صراحةً، فلا يبقى الحجز بلا نافذة (يُنهي
+      // مأزق «صفر ترشيح» من الجذر). إزاحة الرياض ثابتة (+03:00 — لا توقيت صيفي).
+      const toRiyadhTs = (d?: string | null, t?: string | null): string | null =>
+        d ? `${d}T${t && t.length >= 4 ? t : "00:00"}:00+03:00` : null;
+      const effPickupStart = b.pickupWindowStart ?? toRiyadhTs(b.requestedPickupDate, b.requestedPickupTime);
+      const effPickupEnd = b.pickupWindowEnd
+        ?? toRiyadhTs(b.requestedDeliveryDate, b.requestedDeliveryTime)
+        ?? effPickupStart;
+
       const { insertId, legsInserted } = await withTransaction(async () => {
         const headerInsert = await rawExecute(
         `INSERT INTO transport_bookings
@@ -589,7 +600,7 @@ transportBookingsRouter.post(
           b.vehicleSubstitutionPolicy ?? "equivalent_allowed",
           b.allowUpgrade ?? false,
           b.requiredExactVehicleId ?? null, b.requiredExactDriverId ?? null,
-          b.pickupWindowStart ?? null, b.pickupWindowEnd ?? null,
+          effPickupStart, effPickupEnd,
           b.dropoffWindowStart ?? null, b.dropoffWindowEnd ?? null,
           b.fixedAppointmentTime ?? null, b.isFlexibleTime ?? false,
           b.priority ?? 0,
@@ -628,7 +639,7 @@ transportBookingsRouter.post(
               toPlaceId:        b.toPlaceId,
               legRouteType:     b.routeType,
               scheduledPickupAt:
-                b.pickupWindowStart ?? b.fixedAppointmentTime ?? undefined,
+                effPickupStart ?? b.fixedAppointmentTime ?? undefined,
               scheduledDeliveryAt:
                 b.dropoffWindowStart ?? undefined,
               lineDescription:  b.cargoDescription ?? undefined,

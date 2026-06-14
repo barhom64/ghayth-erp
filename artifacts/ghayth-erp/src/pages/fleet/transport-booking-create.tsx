@@ -441,6 +441,13 @@ export default function TransportBookingCreate() {
               <Label htmlFor="deliveryTime">وقت التسليم</Label>
               <Input id="deliveryTime" type="time" value={requestedDeliveryTime} onChange={(e) => setRequestedDeliveryTime(e.target.value)} />
             </div>
+            {/* #TA-T18-UX-AUDIT-01 P2-1 — نموذج توقيت موحّد: هذه الأوقات هي مرجع
+                الجدولة؛ تُشتقّ منها نافذة المحرك تلقائيًا. النوافذ المتقدمة اختيارية. */}
+            <div className="sm:col-span-2">
+              <p className="text-[11px] text-muted-foreground">
+                تُستخدم أوقات التحميل/التسليم أعلاه للجدولة والتوزيع تلقائيًا — لا حاجة لتعبئة النوافذ الزمنية في «تفاصيل إضافية» إلا عند الحاجة.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
