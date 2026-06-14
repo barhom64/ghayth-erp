@@ -964,10 +964,20 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           }
         } else {
           // Reward when capacity is well-utilised but not over-spec.
-          const fillRatio = cargoKg / effective;
+          // #2079 follow-up — guard the cargo branch against divide-by-
+          // zero (effective=0 + cargoKg=0 used to produce NaN and a
+          // false "100" score via NaN-comparisons-always-false). The
+          // passenger branch below already had this defense at line
+          // 951; bringing the cargo branch into parity.
+          const fillRatio = effective > 0 ? cargoKg / effective : 0;
           capacityScore = fillRatio < 0.2 ? 70 :
                           fillRatio > 0.95 ? 80 : 100;
-          if (fillRatio >= 0.8 && fillRatio <= 0.95) {
+          // #2079 follow-up — the "well-utilised" reason previously
+          // fired only for fillRatio in [0.8, 0.95]; widen to the
+          // full sweet-spot the ternary actually rewards with 100
+          // ([0.2, 0.95]) so the operator sees the same reason
+          // whenever the engine gave the maximum capacity score.
+          if (fillRatio >= 0.2 && fillRatio <= 0.95) {
             reasons.push("سعة المركبة مناسبة جداً للحمولة");
           }
         }
@@ -1017,7 +1027,23 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       } else if (d.lastDutyEndedAt) {
         const hoursSinceLastDuty =
           (new Date(start).getTime() - new Date(d.lastDutyEndedAt).getTime()) / 3_600_000;
-        if (hoursSinceLastDuty < d.restHoursRequired) {
+        // #2079 follow-up — defensive NaN guard. A malformed
+        // `lastDutyEndedAt` value (or invalid `start`) makes
+        // `new Date(...).getTime()` return NaN. The downstream
+        // comparisons `NaN < X` and `NaN < X + 2` both evaluate
+        // to `false`, so without this guard the driver would
+        // SILENTLY pass the rest check on a corrupt timestamp —
+        // a safety bug (audit trail says "rest OK" when the
+        // engine had no idea). Treat any non-finite result as
+        // "rest history unknown → block defensively" so the
+        // dispatcher gets an actionable reason instead of an
+        // invisible eligibility pass.
+        if (!Number.isFinite(hoursSinceLastDuty)) {
+          restScore = 0;
+          blockers.push(
+            "تاريخ آخر إنهاء قيادة للسائق غير صالح — راجع ملف السائق قبل الإسناد",
+          );
+        } else if (hoursSinceLastDuty < d.restHoursRequired) {
           restScore = 0;
           blockers.push(
             `لم يستوفِ السائق ساعات الراحة المطلوبة (${d.restHoursRequired} ساعة) — أمضى ${hoursSinceLastDuty.toFixed(1)} فقط`,

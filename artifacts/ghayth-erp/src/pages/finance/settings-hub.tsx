@@ -263,15 +263,9 @@ function EnforceLineAllocationToggle() {
             )}
           </p>
           <div className="flex gap-2 mt-2">
-            <Link href="/finance/allocation-rules">
-              <Button variant="outline" size="sm" className="h-7 text-xs">قواعد التوجيه</Button>
-            </Link>
-            <Link href="/finance/allocation-override-log">
-              <Button variant="outline" size="sm" className="h-7 text-xs">سجل التجاوزات</Button>
-            </Link>
-            <Link href="/finance/allocation-coverage">
-              <Button variant="outline" size="sm" className="h-7 text-xs">تغطية التخصيص</Button>
-            </Link>
+            <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/allocation-rules">قواعد التوجيه</Link></Button>
+            <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/allocation-override-log">سجل التجاوزات</Link></Button>
+            <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href="/finance/allocation-coverage">تغطية التخصيص</Link></Button>
           </div>
         </div>
       </CardContent>

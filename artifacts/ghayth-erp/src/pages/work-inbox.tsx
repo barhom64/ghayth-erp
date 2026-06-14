@@ -526,11 +526,9 @@ function ItemCard({ icon: Icon, badgeText, badgeClass, title, meta, createdAt, h
           <p className="text-sm font-medium truncate">{title}</p>
           {meta && <p className="text-xs text-muted-foreground truncate">{meta}</p>}
         </div>
-        <Link href={href}>
-          <Button variant="ghost" size="sm" className="shrink-0">
+        <Button asChild variant="ghost" size="sm" className="shrink-0"><Link href={href}>
             <ArrowUpRight className="h-4 w-4" />
-          </Button>
-        </Link>
+          </Link></Button>
       </CardContent>
     </Card>
   );

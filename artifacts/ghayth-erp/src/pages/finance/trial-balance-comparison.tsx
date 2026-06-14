@@ -250,11 +250,9 @@ export default function TbComparisonPage() {
       key: "_drilldown",
       header: "تفاصيل",
       render: (r) => (
-        <Link href={`/finance/ledger/${r.code}`}>
-          <Button variant="ghost" size="sm" className="h-6 text-xs">
+        <Button asChild variant="ghost" size="sm" className="h-6 text-xs"><Link href={`/finance/ledger/${r.code}`}>
             ledger <ChevronRight className="h-3 w-3 ms-1" />
-          </Button>
-        </Link>
+          </Link></Button>
       ),
     },
   ];

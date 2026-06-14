@@ -27,11 +27,9 @@ export function PendingApprovalsCard({ pendingApprovals, role }: PendingApproval
           موافقاتي المعلقة
           <Badge variant="destructive" className="text-xs">{pendingApprovals.length}</Badge>
         </CardTitle>
-        <Link href="/action-center">
-          <Button variant="ghost" size="sm" className="text-xs gap-1">
+        <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/action-center">
             مركز القرارات <ChevronLeft className="w-3 h-3" />
-          </Button>
-        </Link>
+          </Link></Button>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">

@@ -393,9 +393,7 @@ export default function CustodyWorkbenchPage() {
                                     </Badge>
                                   </td>
                                   <td className="py-1.5 px-2">
-                                    <Link href={`/finance/custodies/${c.id}`}>
-                                      <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
-                                    </Link>
+                                    <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/custodies/${c.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                                   </td>
                                 </tr>
                               );

@@ -73,12 +73,10 @@ export default function ImportUnlinked() {
         { label: `الدفعة #${id}` },
       ]}
       actions={
-        <Link href="/umrah/import">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/umrah/import">
             <ArrowRight className="h-4 w-4 me-1" />
             عودة للاستيراد
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <UmrahTabsNav />
@@ -129,6 +127,8 @@ function UnlinkedTab({ batchId, dimension }: { batchId: number; dimension: Dimen
   const [targetId, setTargetId] = useState<string>("");
   const [newName, setNewName] = useState<string>("");
   const [parentAgentId, setParentAgentId] = useState<string>("");
+  // Per-row mode: pilgrimId → chosen existing-target id (string from Select)
+  const [rowTargets, setRowTargets] = useState<Record<number, string>>({});
 
   const rowsQ = useApiQuery<{ data: UnlinkedRow[] }>(
     ["umrah-import-unlinked", String(batchId), dimension],
@@ -170,6 +170,7 @@ function UnlinkedTab({ batchId, dimension }: { batchId: number; dimension: Dimen
         setTargetId("");
         setNewName("");
         setParentAgentId("");
+        setRowTargets({});
       },
       onError: (err: any) => {
         toast({ variant: "destructive", title: err?.error || err?.message || "تعذّر الربط" });
@@ -206,6 +207,28 @@ function UnlinkedTab({ batchId, dimension }: { batchId: number; dimension: Dimen
     linkMutation.mutate(body);
   };
 
+  const setRowTarget = (pilgrimId: number, value: string) => {
+    setRowTargets((prev) => {
+      const next = { ...prev };
+      if (value) next[pilgrimId] = value;
+      else delete next[pilgrimId];
+      return next;
+    });
+  };
+
+  const assignedEntries = Object.entries(rowTargets).filter(([, t]) => t);
+
+  const onLinkPerRow = () => {
+    if (assignedEntries.length === 0) {
+      toast({ variant: "destructive", title: `عيّن ${DIMENSION_LABEL[dimension]}ًا لصف واحد على الأقل` });
+      return;
+    }
+    linkMutation.mutate({
+      dimension,
+      assignments: assignedEntries.map(([pid, t]) => ({ pilgrimId: Number(pid), targetId: Number(t) })),
+    });
+  };
+
   return (
     <>
       <Card className="mb-4">
@@ -236,6 +259,9 @@ function UnlinkedTab({ batchId, dimension }: { batchId: number; dimension: Dimen
                     <th className="p-2 text-start">الاسم</th>
                     <th className="p-2 text-start">الجنسية</th>
                     <th className="p-2 text-start">الحالة</th>
+                    <th className="p-2 text-start min-w-[12rem]">
+                      {DIMENSION_LABEL[dimension]} (تعيين فردي)
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -253,10 +279,42 @@ function UnlinkedTab({ batchId, dimension }: { batchId: number; dimension: Dimen
                       <td className="p-2">{r.fullName}</td>
                       <td className="p-2">{r.nationality ?? "—"}</td>
                       <td className="p-2">{r.status ?? "—"}</td>
+                      <td className="p-2">
+                        <Select
+                          value={rowTargets[r.id] ?? ""}
+                          onValueChange={(v) => setRowTarget(r.id, v)}
+                        >
+                          <SelectTrigger className="h-8" data-testid={`row-target-${r.id}`}>
+                            <SelectValue placeholder={`اختر ${DIMENSION_LABEL[dimension]}`} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {options.map((o: any) => (
+                              <SelectItem key={o.id} value={String(o.id)}>
+                                {o.name || o.title || `#${o.id}`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {rows.length > 0 && (
+            <div className="flex items-center justify-between gap-3 pt-4 mt-2 border-t flex-wrap">
+              <p className="text-xs text-muted-foreground">
+                عيّن لكل صف وجهته الخاصة من القائمة، ثم اربط الجميع دفعة واحدة. مفيد عندما تعود الصفوف لوكلاء أو مجموعات مختلفة.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={onLinkPerRow}
+                disabled={linkMutation.isPending || assignedEntries.length === 0}
+                data-testid="btn-link-per-row"
+              >
+                {linkMutation.isPending ? "جاري الربط..." : `ربط المعيَّنين فرديًا (${assignedEntries.length})`}
+              </Button>
             </div>
           )}
         </CardContent>

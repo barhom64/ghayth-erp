@@ -276,11 +276,9 @@ export default function CostCenterPnlPage() {
       key: "_actions",
       header: "تفاصيل",
       render: (r) => (
-        <Link href={`/finance/journal?costCenter=${encodeURIComponent(r.costCenter)}&startDate=${startDate}&endDate=${endDate}`}>
-          <Button variant="ghost" size="sm" className="h-7 text-xs">
+        <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href={`/finance/journal?costCenter=${encodeURIComponent(r.costCenter)}&startDate=${startDate}&endDate=${endDate}`}>
             القيود <ChevronRight className="h-3 w-3 ms-1" />
-          </Button>
-        </Link>
+          </Link></Button>
       ),
     },
   ];

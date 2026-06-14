@@ -80,12 +80,10 @@ export function AssistantHints({
                   <div className="text-sm font-medium">{s.title}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">{s.body}</div>
                   <div className="flex items-center gap-2 mt-2">
-                    <Link href={s.actionUrl}>
-                      <Button size="sm" variant="outline" data-testid={`assistant-action-${s.type}`}>
+                    <Button asChild size="sm" variant="outline" data-testid={`assistant-action-${s.type}`}><Link href={s.actionUrl}>
                         <ArrowLeft className="h-3 w-3 me-1" />
                         {s.actionLabel}
-                      </Button>
-                    </Link>
+                      </Link></Button>
                     <Button
                       size="sm"
                       variant="ghost"

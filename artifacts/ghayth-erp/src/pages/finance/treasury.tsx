@@ -79,11 +79,9 @@ export default function TreasuryPage() {
       key: "actions",
       header: "",
       render: (a) => (
-        <Link href={`/finance/ledger/${a.code}`}>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="دفتر الأستاذ">
+        <Button asChild variant="ghost" size="sm" className="h-7 w-7 p-0" title="دفتر الأستاذ"><Link href={`/finance/ledger/${a.code}`}>
             <Eye className="h-4 w-4" />
-          </Button>
-        </Link>
+          </Link></Button>
       ),
     },
   ];

@@ -152,12 +152,10 @@ export default function EntityRankingPage() {
               CSV
             </Button>
           )}
-          <Link href="/finance/dimensional-routing">
-            <Button variant="ghost" data-testid="entity-ranking-back">
+          <Button asChild variant="ghost" data-testid="entity-ranking-back"><Link href="/finance/dimensional-routing">
               <BarChart3 className="h-4 w-4 ms-1" />
               التأصيل المالي
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >

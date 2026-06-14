@@ -409,13 +409,11 @@ export default function ActionCenter() {
       ]}
       subtitle="المعاملات والقرارات التي تنتظر اعتمادك"
       actions={
-        <Link href="/my-space">
-          <Button variant="outline" className="gap-2">
+        <Button asChild variant="outline" className="gap-2"><Link href="/my-space">
             <User className="w-4 h-4" />
             مساحتي
             <ArrowUpRight className="w-3 h-3" />
-          </Button>
-        </Link>
+          </Link></Button>
       }
       contentClassName="space-y-6"
     >
@@ -589,11 +587,9 @@ export default function ActionCenter() {
 
           {currentData.length > 0 && (
             <div className="mt-3 text-center">
-              <Link href={tabLinks[activeTab]}>
-                <Button variant="ghost" size="sm" className="text-xs gap-1">
+              <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href={tabLinks[activeTab]}>
                   عرض الكل في الصفحة المخصصة <ChevronLeft className="w-3 h-3" />
-                </Button>
-              </Link>
+                </Link></Button>
             </div>
           )}
         </CardContent>
@@ -664,11 +660,9 @@ export default function ActionCenter() {
               مهام اليوم
               {todayTasks.length > 0 && <Badge className="text-xs">{todayTasks.length}</Badge>}
             </CardTitle>
-            <Link href="/tasks">
-              <Button variant="ghost" size="sm" className="text-xs gap-1">
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/tasks">
                 عرض الكل <ChevronLeft className="w-3 h-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardHeader>
           <CardContent>
             {todayTasks.length === 0 ? (
@@ -712,11 +706,9 @@ export default function ActionCenter() {
                 تنبيهات حرجة
                 <Badge variant="destructive" className="text-xs">{criticalAlerts.length}</Badge>
               </CardTitle>
-              <Link href="/notifications">
-                <Button variant="ghost" size="sm" className="text-xs gap-1">
+              <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/notifications">
                   عرض الكل <ChevronLeft className="w-3 h-3" />
-                </Button>
-              </Link>
+                </Link></Button>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">

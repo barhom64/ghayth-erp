@@ -63,18 +63,14 @@ export default function ManagerWorkspace() {
       subtitle={`نبض الفريق اليوم — ${selectedRoleLabel}`}
       actions={
         <div className="flex gap-2">
-          <Link href="/manager-board">
-            <Button variant="outline" size="sm" className="gap-2">
+          <Button asChild variant="outline" size="sm" className="gap-2"><Link href="/manager-board">
               <ListChecks className="w-3 h-3" />
               الاعتمادات
-            </Button>
-          </Link>
-          <Link href="/workspace">
-            <Button variant="outline" size="sm" className="gap-2">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="gap-2"><Link href="/workspace">
               <ArrowUpRight className="w-3 h-3" />
               مساحتي
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >

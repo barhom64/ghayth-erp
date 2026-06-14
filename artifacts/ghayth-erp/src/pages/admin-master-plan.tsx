@@ -192,11 +192,9 @@ export default function AdminMasterPlan() {
                                   </p>
                                 )}
                                 {i.linkPath && (
-                                  <Link href={i.linkPath}>
-                                    <Button variant="link" size="sm" className="h-auto p-0 mt-1 text-[11px]">
+                                  <Button asChild variant="link" size="sm" className="h-auto p-0 mt-1 text-[11px]"><Link href={i.linkPath}>
                                       افتح <ExternalLink className="w-3 h-3 ms-1" />
-                                    </Button>
-                                  </Link>
+                                    </Link></Button>
                                 )}
                               </div>
                             </div>

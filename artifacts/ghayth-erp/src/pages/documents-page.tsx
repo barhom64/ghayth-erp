@@ -323,11 +323,9 @@ function DocumentsList() {
                           </Button>
                         </>
                       )}
-                      <Link href={`/documents/${d.id}/versions`}>
-                        <Button variant="ghost" size="sm" className="gap-1 text-xs">
+                      <Button asChild variant="ghost" size="sm" className="gap-1 text-xs"><Link href={`/documents/${d.id}/versions`}>
                           <History className="h-3.5 w-3.5" /> الإصدارات
-                        </Button>
-                      </Link>
+                        </Link></Button>
                       <GuardedButton perm="documents:update" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => startEdit(d)}>
                         <Edit className="h-3.5 w-3.5" /> تعديل
                       </GuardedButton>

@@ -134,24 +134,18 @@ export default function ExpenseBulkApprovalsPage() {
       subtitle="اختر عدة مصاريف واعتمدها أو ارفضها مرة واحدة — توفير وقت المعتمد"
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/expenses">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/expenses">
               <Receipt className="h-3.5 w-3.5 ml-1" />
               قائمة المصاريف
-            </Button>
-          </Link>
-          <Link href="/finance/expense-burn-rate">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/expense-burn-rate">
               <BarChart3 className="h-3.5 w-3.5 ml-1" />
               معدل الحرق
-            </Button>
-          </Link>
-          <Link href="/finance/approvals-inbox">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/approvals-inbox">
               <ListChecks className="h-3.5 w-3.5 ml-1" />
               صندوق الاعتمادات
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_expense_bulk_approvals"
             entityId="list"
@@ -406,11 +400,9 @@ export default function ExpenseBulkApprovalsPage() {
                               {formatCurrency(amount)}
                             </td>
                             <td className="py-2 px-2">
-                              <Link href={`/finance/expenses/${e.id}`}>
-                                <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7" onClick={(ev) => ev.stopPropagation()}>
+                              <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7" onClick={(ev) => ev.stopPropagation()}><Link href={`/finance/expenses/${e.id}`}>
                                   <ExternalLink className="w-3 h-3" />
-                                </Button>
-                              </Link>
+                                </Link></Button>
                             </td>
                           </tr>
                         );

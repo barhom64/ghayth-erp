@@ -61,11 +61,9 @@ export function RecentActionsAndPerformanceSection({ recentActions, performanceR
             <Target className="w-5 h-5 text-status-warning" />
             تقييمات الأداء
           </CardTitle>
-          <Link href="/hr/performance">
-            <Button variant="ghost" size="sm" className="text-xs gap-1">
+          <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/hr/performance">
               عرض الكل <ChevronLeft className="w-3 h-3" />
-            </Button>
-          </Link>
+            </Link></Button>
         </CardHeader>
         <CardContent>
           {performanceReviews.length === 0 ? (

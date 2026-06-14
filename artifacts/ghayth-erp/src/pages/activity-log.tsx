@@ -496,11 +496,9 @@ export default function ActivityLogPage() {
                           </Button>
                         )}
                         {link && (
-                          <Link href={link}>
-                            <Button variant="ghost" size="sm" className="shrink-0 text-xs h-7 px-2">
+                          <Button asChild variant="ghost" size="sm" className="shrink-0 text-xs h-7 px-2"><Link href={link}>
                               عرض <ChevronLeft className="w-3 h-3 ms-1" />
-                            </Button>
-                          </Link>
+                            </Link></Button>
                         )}
                       </div>
                     </div>

@@ -218,24 +218,18 @@ export default function DunningPage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/ar-collection-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ar-collection-workbench">
               <Send className="h-3.5 w-3.5 ml-1" />
               منضدة التحصيل
-            </Button>
-          </Link>
-          <Link href="/finance/ar-aging">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ar-aging">
               <Clock className="h-3.5 w-3.5 ml-1" />
               تقادم الذمم
-            </Button>
-          </Link>
-          <Link href="/finance/collection">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/collection">
               <Gavel className="h-3.5 w-3.5 ml-1" />
               مراحل التصعيد
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_dunning"
             entityId="list"

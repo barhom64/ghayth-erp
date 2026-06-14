@@ -311,11 +311,9 @@ export default function TransportBookingCreate() {
         { label: "حجز جديد" },
       ]}
       actions={
-        <Link href="/fleet/transport/bookings">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
             <ArrowLeft className="h-4 w-4 me-1" />العودة للقائمة
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <FleetTabsNav />
@@ -807,9 +805,7 @@ export default function TransportBookingCreate() {
         </Card>
 
         <div className="flex items-center gap-2 justify-end">
-          <Link href="/fleet/transport/bookings">
-            <Button type="button" variant="outline">إلغاء</Button>
-          </Link>
+          <Button asChild type="button" variant="outline"><Link href="/fleet/transport/bookings">إلغاء</Link></Button>
           <Button type="submit" disabled={submitting || !hasLinkedSource || tripFamily == null} rateLimitAware>
             <Plus className="h-4 w-4 me-1" />
             {submitting ? "جاري الإنشاء…" : "إنشاء الحجز"}

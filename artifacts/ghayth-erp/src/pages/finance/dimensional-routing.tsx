@@ -147,30 +147,22 @@ export default function DimensionalRoutingPage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/subsidiary-accounts">
-            <Button variant="ghost" data-testid="dim-routing-subsidiary-link">
+          <Button asChild variant="ghost" data-testid="dim-routing-subsidiary-link"><Link href="/finance/subsidiary-accounts">
               <Wallet2 className="h-4 w-4 ms-1" />
               الحسابات الفرعية
-            </Button>
-          </Link>
-          <Link href="/finance/cost-centers/tree">
-            <Button variant="ghost" data-testid="dim-routing-tree-link">
+            </Link></Button>
+          <Button asChild variant="ghost" data-testid="dim-routing-tree-link"><Link href="/finance/cost-centers/tree">
               <Network className="h-4 w-4 ms-1" />
               شجرة مراكز التكلفة
-            </Button>
-          </Link>
-          <Link href="/finance/dormant-entities">
-            <Button variant="ghost" data-testid="dim-routing-dormant-link">
+            </Link></Button>
+          <Button asChild variant="ghost" data-testid="dim-routing-dormant-link"><Link href="/finance/dormant-entities">
               <AlertTriangle className="h-4 w-4 ms-1" />
               الخاملة
-            </Button>
-          </Link>
-          <Link href="/finance/entity-ranking">
-            <Button variant="ghost" data-testid="dim-routing-ranking-link">
+            </Link></Button>
+          <Button asChild variant="ghost" data-testid="dim-routing-ranking-link"><Link href="/finance/entity-ranking">
               <ArrowUpDown className="h-4 w-4 ms-1" />
               التصنيف
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -415,11 +407,9 @@ function EntityHealthRow({ row, onChanged }: { row: HealthRow; onChanged: () => 
           />
         )}
         {detailLink && (
-          <Link href={detailLink}>
-            <Button variant="ghost" size="sm" data-testid={`dim-routing-open-${row.entityType}`}>
+          <Button asChild variant="ghost" size="sm" data-testid={`dim-routing-open-${row.entityType}`}><Link href={detailLink}>
               <ExternalLink className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link></Button>
         )}
         {!coversAccounts && !coversCc && (
           <Badge variant="secondary" className="text-xs">

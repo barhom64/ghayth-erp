@@ -16,12 +16,10 @@ export default function NotFound() {
           عذراً، الصفحة التي تبحث عنها غير موجودة أو تم نقلها إلى مكان آخر.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Link href="/dashboard">
-            <Button className="gap-2">
+          <Button asChild className="gap-2"><Link href="/dashboard">
               <Home className="h-4 w-4" />
               الصفحة الرئيسية
-            </Button>
-          </Link>
+            </Link></Button>
           <Button variant="outline" className="gap-2" onClick={() => window.history.back()}>
             <ArrowRight className="h-4 w-4" />
             العودة للخلف

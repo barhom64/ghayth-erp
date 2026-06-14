@@ -199,12 +199,10 @@ export default function CustomerStatementPrintPage() {
           </div>
           <div className="flex gap-2 mt-3 justify-end">
             {clientId && (
-              <Link href={`/finance/customer-360-sheet?clientId=${clientId}`}>
-                <Button variant="outline" size="sm">
+              <Button asChild variant="outline" size="sm"><Link href={`/finance/customer-360-sheet?clientId=${clientId}`}>
                   <FileText className="w-4 h-4 ml-1" />
                   ملف العميل 360°
-                </Button>
-              </Link>
+                </Link></Button>
             )}
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
@@ -340,9 +338,7 @@ export default function CustomerStatementPrintPage() {
                       </td>
                       <td className="py-1.5 px-2 print:hidden">
                         {m.movementType === "invoice" && (
-                          <Link href={`/finance/invoices/${m.id}`}>
-                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
-                          </Link>
+                          <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/invoices/${m.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                         )}
                       </td>
                     </tr>

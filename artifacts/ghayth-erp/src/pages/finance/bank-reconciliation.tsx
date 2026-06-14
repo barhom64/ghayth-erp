@@ -130,24 +130,18 @@ export default function BankReconciliationPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "التسوية البنكية" }]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/reconciliation-hub">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reconciliation-hub">
               <GitMerge className="h-3.5 w-3.5 ml-1" />
               مركز التسويات
-            </Button>
-          </Link>
-          <Link href="/finance/bank-accounts-watch">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/bank-accounts-watch">
               <Activity className="h-3.5 w-3.5 ml-1" />
               مراقبة البنوك
-            </Button>
-          </Link>
-          <Link href="/finance/account-recon-workpaper">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/account-recon-workpaper">
               <FileCheck2 className="h-3.5 w-3.5 ml-1" />
               ورقة تسوية
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_bank_reconciliation"
             entityId="list"
@@ -286,11 +280,9 @@ export default function BankReconciliationPage() {
                     ) },
                     { key: "amount", header: "المبلغ", render: (r: any) => <span className="font-semibold">{formatCurrency(Number(r.amount))}</span> },
                     { key: "actions", header: "مطابقة يدوية", render: (r: any) => (
-                      <Link href={`/finance/bank-reconciliation/manual-match/${activeBatch}/${r.id}`}>
-                        <Button variant="ghost" size="sm" title="ربط">
+                      <Button asChild variant="ghost" size="sm" title="ربط"><Link href={`/finance/bank-reconciliation/manual-match/${activeBatch}/${r.id}`}>
                           <Link2 className="h-4 w-4 text-status-info" />
-                        </Button>
-                      </Link>
+                        </Link></Button>
                     ) },
                   ] as DataTableColumn<any>[]}
                   data={unmatchedRows}

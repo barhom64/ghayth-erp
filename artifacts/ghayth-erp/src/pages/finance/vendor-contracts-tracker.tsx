@@ -346,16 +346,12 @@ export default function VendorContractsTrackerPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            <Link href="/finance/contracts">
-                              <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-8 w-8"><ExternalLink className="w-4 h-4" /></Button>
-                            </Link>
+                            <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-8 w-8"><Link href="/finance/contracts"><ExternalLink className="w-4 h-4" /></Link></Button>
                             {c.vendorId && (
-                              <Link href={`/finance/vendor-360-sheet?vendorId=${c.vendorId}`}>
-                                <Button variant="outline" size="sm">
+                              <Button asChild variant="outline" size="sm"><Link href={`/finance/vendor-360-sheet?vendorId=${c.vendorId}`}>
                                   المورد 360°
                                   <ChevronRight className="w-3 h-3 mr-1" />
-                                </Button>
-                              </Link>
+                                </Link></Button>
                             )}
                           </div>
                         </div>

@@ -293,21 +293,15 @@ export default function AccountsPage() {
         loading={isLoading}
         actions={
           <>
-            <Link href="/finance/trial-balance-drilldown">
-              <Button size="sm" variant="outline">
+            <Button asChild size="sm" variant="outline"><Link href="/finance/trial-balance-drilldown">
                 <Scale className="h-4 w-4 me-1" />ميزان المراجعة
-              </Button>
-            </Link>
-            <Link href="/finance/subsidiary-accounts">
-              <Button size="sm" variant="outline">
+              </Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href="/finance/subsidiary-accounts">
                 <BookOpen className="h-4 w-4 me-1" />الحسابات الفرعية
-              </Button>
-            </Link>
-            <Link href="/finance/tax-codes">
-              <Button size="sm" variant="outline">
+              </Link></Button>
+            <Button asChild size="sm" variant="outline"><Link href="/finance/tax-codes">
                 <Percent className="h-4 w-4 me-1" />رموز الضريبة
-              </Button>
-            </Link>
+              </Link></Button>
             <EntityPrintButton entityType="report_chart_of_accounts" entityId="all" />
             <Button
               size="sm"

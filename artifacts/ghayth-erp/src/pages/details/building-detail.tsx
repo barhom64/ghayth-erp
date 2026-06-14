@@ -100,11 +100,9 @@ export default function BuildingDetail() {
           <Home className="h-5 w-5 text-status-info" /> وحدات المبنى
         </h2>
         {canManage && (
-          <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}>
-            <Button size="sm" className="gap-1">
+          <Button asChild size="sm" className="gap-1"><Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}>
               <Plus className="h-4 w-4" /> إضافة وحدة
-            </Button>
-          </Link>
+            </Link></Button>
         )}
       </div>
 
@@ -113,9 +111,7 @@ export default function BuildingDetail() {
           <Home className="h-10 w-10 mx-auto mb-3 text-gray-300" />
           <p className="text-muted-foreground">لا توجد وحدات في هذا المبنى</p>
           {canManage && (
-            <Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}>
-              <Button className="mt-4 gap-2" size="sm"><Plus className="h-4 w-4" /> إضافة وحدة</Button>
-            </Link>
+            <Button asChild className="mt-4 gap-2" size="sm"><Link href={`/properties/create?buildingId=${id}&buildingName=${encodeURIComponent(building?.name || "")}`}><Plus className="h-4 w-4" /> إضافة وحدة</Link></Button>
           )}
         </div>
       ) : (
@@ -206,11 +202,9 @@ export default function BuildingDetail() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <Link href={`/finance/profitability/property/${id}`}>
-            <Button variant="outline" size="sm" className="gap-1">
+          <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/profitability/property/${id}`}>
               <TrendingUp className="h-4 w-4" /> الربحية
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton entityType="building" entityId={(id as any) ?? 0} label="طباعة" />
         </div>
       }

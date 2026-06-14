@@ -197,12 +197,10 @@ export default function EntityPnlPage() {
               CSV
             </Button>
           )}
-          <Link href={backHref}>
-            <Button variant="ghost" data-testid="entity-pnl-back">
+          <Button asChild variant="ghost" data-testid="entity-pnl-back"><Link href={backHref}>
               <User className="h-4 w-4 ms-1" />
               رجوع
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -268,16 +266,14 @@ export default function EntityPnlPage() {
                   <ScrollText className="h-4 w-4 text-muted-foreground" />
                   آخر القيود ({data.recentEntries.length})
                 </CardTitle>
-                <Link href={`/finance/journal?${entityType}Id=${entityId}${qs ? "&" + qs : ""}`}>
-                  <Button
+                <Button asChild
                     variant="ghost"
                     size="sm"
                     data-testid="entity-pnl-all-entries"
-                  >
+                  ><Link href={`/finance/journal?${entityType}Id=${entityId}${qs ? "&" + qs : ""}`}>
                     عرض الكل
                     <ArrowLeftRight className="h-3.5 w-3.5 me-1" />
-                  </Button>
-                </Link>
+                  </Link></Button>
               </CardHeader>
               <CardContent className="p-0">
                 {data.recentEntries.length === 0 ? (

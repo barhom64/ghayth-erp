@@ -182,18 +182,14 @@ export default function FixedAssetRegisterPage() {
       subtitle="نظرة محفظية على الأصول — توزيع، أعمار، تقدم الإهلاك"
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/fixed-assets">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/fixed-assets">
               <Package className="h-3.5 w-3.5 ml-1" />
               إدارة الأصول
-            </Button>
-          </Link>
-          <Link href="/finance/fixed-assets/batch-depreciate">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/fixed-assets/batch-depreciate">
               <TrendingDown className="h-3.5 w-3.5 ml-1" />
               إهلاك دفعي
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -478,9 +474,7 @@ export default function FixedAssetRegisterPage() {
                               </Badge>
                             </td>
                             <td className="py-2 px-2">
-                              <Link href={`/finance/fixed-assets/${a.id}`}>
-                                <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
-                              </Link>
+                              <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/fixed-assets/${a.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                             </td>
                           </tr>
                         );

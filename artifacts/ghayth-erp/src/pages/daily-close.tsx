@@ -71,11 +71,9 @@ export default function DailyClose() {
       subtitle={`تحقق من اكتمال جميع العمليات قبل إغلاق اليوم — ${closeDate}`}
       loading={isLoading}
       actions={
-        <Link href="/operations-center">
-          <Button variant="ghost" size="sm" className="gap-1 text-xs">
+        <Button asChild variant="ghost" size="sm" className="gap-1 text-xs"><Link href="/operations-center">
             مركز العمليات <ChevronLeft className="w-3 h-3" />
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       {closedToday && (
