@@ -108,11 +108,9 @@ export default function PropertiesOwners() {
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           {canManage && (
             <>
-              <Link href={`/properties/owners/${o.id}/edit`}>
-                <Button variant="ghost" size="sm" className="gap-1 text-xs h-7">
+              <Button asChild variant="ghost" size="sm" className="gap-1 text-xs h-7"><Link href={`/properties/owners/${o.id}/edit`}>
                   <Pencil className="h-3 w-3" /> تعديل
-                </Button>
-              </Link>
+                </Link></Button>
               <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 text-status-error hover:text-status-error-foreground" onClick={() => setDeletingOwner({ id: o.id, name: o.name || "—" })}>
                 <Trash2 className="h-3 w-3" />
               </Button>
