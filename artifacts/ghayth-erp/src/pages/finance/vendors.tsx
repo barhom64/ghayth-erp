@@ -128,16 +128,12 @@ export default function VendorsPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/vendor-spend">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/vendor-spend">
               <Building2 className="h-4 w-4 me-2" />تحليل الإنفاق
-            </Button>
-          </Link>
-          <Link href="/finance/vendor-contracts-tracker">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/vendor-contracts-tracker">
               <Calendar className="h-4 w-4 me-2" />متابعة العقود
-            </Button>
-          </Link>
+            </Link></Button>
           <GuardedButton perm="finance:create" size="sm" asChild>
             <Link href={createPath}>
               <Plus className="h-4 w-4 me-1" />
