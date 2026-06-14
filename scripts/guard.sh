@@ -47,7 +47,7 @@ run_step() {
   fi
 }
 
-run_step "typecheck"          pnpm run typecheck
+run_step "typecheck"          pnpm -s run typecheck
 # Pure-logic fixtures for the lint-pattern regexes + ratchet invariants
 # — no DB needed. Runs before lint:patterns so a broken regex fails the
 # test (with a precise diff) rather than producing a silent green run.
