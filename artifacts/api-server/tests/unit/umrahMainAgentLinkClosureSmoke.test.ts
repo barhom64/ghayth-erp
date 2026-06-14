@@ -117,11 +117,15 @@ describe("BILL-MAIN P7 §C — link-client route writes umrah_agents.clientId, n
     expect(handler![0]).not.toMatch(/INSERT\s+INTO\s+clients\b/i);
   });
 
-  it("handler does NOT touch subsidiary_accounts (no silent AR opening)", () => {
+  it("handler does NOT INSERT INTO or UPDATE subsidiary_accounts (no silent AR opening)", () => {
     const handler = UMRAH_ROUTE.match(
       /router\.put\(["']\/agents\/:id\/link-client["'][\s\S]{0,4000}?^\}\);/m,
     );
-    expect(handler![0]).not.toMatch(/subsidiary_accounts\b/i);
+    // We must allow the documentation comment that explains WHY the
+    // route doesn't open AR ("No subsidiary_accounts row is created
+    // here..."), so the assertion targets SQL writes only.
+    expect(handler![0]).not.toMatch(/INSERT\s+INTO\s+subsidiary_accounts\b/i);
+    expect(handler![0]).not.toMatch(/UPDATE\s+subsidiary_accounts\b/i);
   });
 
   it("handler emits the `umrah.agent.linked_to_client` event so the link is observable", () => {
