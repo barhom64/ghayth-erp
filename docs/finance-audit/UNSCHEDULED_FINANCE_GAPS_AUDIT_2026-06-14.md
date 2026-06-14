@@ -112,6 +112,8 @@
 - ✅ تصفية GRNI: لها مسار فعلي (three-way match + obligation، `finance-purchase.ts:1629`) — لكن على 2150 المخلوط (مغطّى بـ#2277).
 - ✅ التسوية البنكية: لها بنية (تعديلات FIN-18 `businessHelpers.ts:1438`، دفعات `BANK`، حدث `finance.reconciliation.completed`).
 - ✅ عكس القيود: `reverseAccountBalances` عام موجود (`businessHelpers.ts:867`)؛ سحب مخصص EOSB مغطّى بـ#2252.
+- ✅ **CRM/القانوني/المشاريع/الدعم (جولة وحدات):** `handleDealWon` idempotent (يفحص العميل بالاسم/الهاتف المُطبَّع/الإيميل `FOR UPDATE` قبل الإدراج، `crm.ts:729`)؛ المشاريع `project_wip→1270` يتراكم ثم يُحرَّر لـCOGS عند البيع (`projectsEngine`)؛ القانوني له تكاليف/تسويات/أحكام/أتعاب. لا فجوات جديدة (الخلوط فيها مغطّاة بـ#2277/#2325).
+- ⚠️ **نمط فشل GL نظاميّ وغير متّسق (تعميم #2301):** ~20 موقع `catch(glErr)` بثلاثة أنماط — rethrow (`fleet.ts:4771`) / تعويض (`properties.ts:4096`) / ابتلاع→retry (umrah/legal/projects/support/warehouse/eventListeners). موثّق كتعليق على #2301 (لا issues لكل وحدة).
 - ✅ **اكتمال الترحيل (approved-but-unposted):** طبقة رصد ناضجة موجودة — `GET /reports/gl-integrity-gaps` (`finance-reports.ts:3171`: فواتير/credit/debit memos/payment_runs منفَّذة بلا journalId + spa_orphans) + `/reports/unmapped-lines` + `/reports/operation-gaps`. **ملاحظة خفيفة:** تقارير سلبية (لا cron/تنبيه يستهلكها) — يُفترض أن تستهلكها بوّابة الإقفال #2250 (محجوزة). مرصود ومغطّى.
 
 ---
