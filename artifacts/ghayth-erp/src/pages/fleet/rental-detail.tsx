@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PrintButton } from "@/components/shared/print-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -180,11 +181,20 @@ export default function RentalDetailPage() {
         { label: c.ref ?? `#${c.id}` },
       ]}
       actions={
-        <Link href="/fleet/rental-contracts">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="h-4 w-4 me-1" />العودة للقائمة
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* #2079 TA-T18-11 (TPL-02) — print the rental delivery/return
+              docket. The single preset (rental_handover_return_classic)
+              renders the handover block when handed-over and the return
+              block when returned, so this button surfaces the live
+              state of the contract regardless of where it is in the
+              lifecycle. */}
+          <PrintButton entityType="fleet_rental_contract" entityId={c.id} />
+          <Link href="/fleet/rental-contracts">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="h-4 w-4 me-1" />العودة للقائمة
+            </Button>
+          </Link>
+        </div>
       }
     >
       <FleetTabsNav />
