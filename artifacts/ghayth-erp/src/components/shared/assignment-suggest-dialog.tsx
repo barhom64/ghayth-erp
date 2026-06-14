@@ -123,6 +123,10 @@ export function AssignmentSuggestDialog({
     counts: { totalVehicles: number; dispatchableVehicles: number; totalDrivers: number; activeDrivers: number };
     hints: string[];
   } | null>(null);
+  // #TA-T18-UX-AUDIT-01 P0-4 — مركبات/سائقون استبعدهم المحرك قبل التقييم + السبب.
+  const [excluded, setExcluded] = useState<
+    Array<{ kind: string; id: number; label: string; reason: string }> | null
+  >(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // #TA-T18-UX-AUDIT-01 UX-02 — جدولة يدوية من نافذة الاقتراح: عند غياب نافذة
@@ -150,6 +154,7 @@ export function AssignmentSuggestDialog({
     setError(null);
     setCandidates(null);
     setDiagnostics(null);
+    setExcluded(null);
     try {
       const body: Record<string, unknown> = {};
       if (scheduledStartAt) body.scheduledStartAt = scheduledStartAt;
@@ -162,12 +167,14 @@ export function AssignmentSuggestDialog({
           counts: { totalVehicles: number; dispatchableVehicles: number; totalDrivers: number; activeDrivers: number };
           hints: string[];
         } | null;
+        excluded?: Array<{ kind: string; id: number; label: string; reason: string }>;
       }>(
         suggestUrl,
         { method: "POST", body: JSON.stringify(body) },
       );
       setCandidates(res?.data ?? []);
       setDiagnostics(res?.diagnostics ?? null);
+      setExcluded(res?.excluded ?? null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -208,6 +215,7 @@ export function AssignmentSuggestDialog({
     // Reset between opens so re-clicking re-fetches.
     setCandidates(null);
     setDiagnostics(null);
+    setExcluded(null);
     setError(null);
   }
 
@@ -352,6 +360,29 @@ export function AssignmentSuggestDialog({
                 <Button size="sm" variant="outline" onClick={run} disabled={loading} rateLimitAware>
                   إعادة المحاولة
                 </Button>
+              </CardContent>
+            </Card>
+          )}
+          {excluded && excluded.length > 0 && !loading && !error && (
+            <Card className="border-muted bg-surface-subtle/30">
+              <CardContent className="p-3 text-xs space-y-2">
+                <div className="font-semibold text-muted-foreground flex items-center gap-1">
+                  <AlertCircle className="h-4 w-4" />
+                  مركبات/سائقون مُستبعَدون قبل الترشيح ({excluded.length}) — والسبب
+                </div>
+                <ul className="space-y-1">
+                  {excluded.map((e, i) => (
+                    <li key={i} className="flex items-start gap-1.5 flex-wrap">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded bg-white border font-medium">
+                        {e.kind === "vehicle" ? "مركبة" : "سائق"} {e.label}
+                      </span>
+                      <span className="text-foreground">{e.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="text-muted-foreground">
+                  عالِج السبب (الملف الفني / جاهزية الوثائق / الإجازة / حدود القيادة) ثم أعد الاقتراح.
+                </div>
               </CardContent>
             </Card>
           )}
