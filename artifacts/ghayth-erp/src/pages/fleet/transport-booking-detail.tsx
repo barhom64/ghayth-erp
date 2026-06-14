@@ -19,7 +19,7 @@ import {
   ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock, Wand2,
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { GuardedButton } from "@/components/shared/permission-gate";
+import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
 
 // #1733 Comment 9 — booking detail page. Single-screen view of the
 // booking + its lines + the dispatch orders that came out of it.
@@ -165,6 +165,13 @@ const ALL_STATUS_LABELS: Record<string, string> = {
 // from driver actions on the dispatch order.
 const AUTO_CASCADED_STATES = new Set(["dispatched", "in_progress", "completed"]);
 
+// #2079 TA-T18-08 — approval decisions (approved / rejected) are
+// SoD-gated by the separate `fleet.bookings:approve` permission and
+// flow through the dedicated Approve / Reject buttons next to the
+// dropdown. They are intentionally removed from the generic status
+// dropdown so a holder of `update` alone cannot pick them.
+const APPROVAL_DECISION_STATES = new Set(["approved", "rejected"]);
+
 const BOOKING_TRANSITIONS: Record<string, string[]> = {
   draft:            ["submitted", "cancelled"],
   submitted:        ["pending_approval", "cancelled"],
@@ -182,6 +189,8 @@ function operatorOptionsFor(current: string): { value: string; label: string }[]
   const targets = BOOKING_TRANSITIONS[current] ?? [];
   return targets
     .filter((t) => !AUTO_CASCADED_STATES.has(t))
+    // #2079 TA-T18-08 — approve/reject use the dedicated buttons.
+    .filter((t) => !APPROVAL_DECISION_STATES.has(t))
     .map((t) => ({ value: t, label: ALL_STATUS_LABELS[t] ?? t }));
 }
 
@@ -203,6 +212,21 @@ export default function TransportBookingDetail() {
     "PATCH",
     [["transport-booking", id || ""], ["transport-bookings"]],
     { successMessage: "تم تحديث حالة الحجز" },
+  );
+
+  // #2079 TA-T18-08 — dedicated approval mutations.
+  const canApprove = usePermission("fleet.bookings:approve");
+  const approveMut = useApiMutation<unknown, { note?: string }>(
+    () => `/transport/bookings/${id}/approve`,
+    "POST",
+    [["transport-booking", id || ""], ["transport-bookings"]],
+    { successMessage: "تم اعتماد الحجز" },
+  );
+  const rejectMut = useApiMutation<unknown, { reason: string }>(
+    () => `/transport/bookings/${id}/reject`,
+    "POST",
+    [["transport-booking", id || ""], ["transport-bookings"]],
+    { successMessage: "تم رفض الحجز" },
   );
 
   if (isLoading) return <LoadingSpinner />;
@@ -322,6 +346,40 @@ export default function TransportBookingDetail() {
                       ))}
                     </SelectContent>
                   </Select>
+                )}
+                {/* #2079 TA-T18-08 — dedicated approval controls,
+                    gated on the new fleet.bookings:approve permission
+                    so a holder of update alone cannot drive the
+                    approval decision. */}
+                {b.status === "pending_approval" && canApprove && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => approveMut.mutate({})}
+                      disabled={approveMut.isPending}
+                    >
+                      اعتماد
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        const reason = prompt("سبب الرفض (مطلوب)");
+                        if (reason && reason.trim()) {
+                          rejectMut.mutate({ reason: reason.trim() });
+                        }
+                      }}
+                      disabled={rejectMut.isPending}
+                    >
+                      رفض
+                    </Button>
+                  </>
+                )}
+                {b.status === "pending_approval" && !canApprove && (
+                  <span className="text-[10px] text-muted-foreground italic">
+                    (يلزم صلاحية fleet.bookings:approve للاعتماد/الرفض)
+                  </span>
                 )}
               </div>
             );
