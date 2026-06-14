@@ -120,10 +120,21 @@ export default function ContractDetailPage() {
 
   const paymentsColumns: DataTableColumn<any>[] = [
     { key: "installmentNumber", header: "#", sortable: true, render: (r) => <span className="font-mono text-xs">{r.installmentNumber}</span> },
-    { key: "dueDate", header: "الاستحقاق", sortable: true, render: (r) => formatDateAr(r.dueDate) },
+    { key: "dueDate", header: "الاستحقاق", sortable: true, render: (r) => {
+      const overdue = r.status !== "paid" && new Date(r.dueDate) < new Date();
+      const upcoming = r.status !== "paid" && !overdue && new Date(r.dueDate) <= new Date(Date.now() + 7 * 86400000);
+      return (
+        <span className={overdue ? "text-red-600 font-semibold" : upcoming ? "text-amber-600 font-medium" : r.status === "paid" ? "text-emerald-600" : ""}>
+          {formatDateAr(r.dueDate)}
+        </span>
+      );
+    }},
     { key: "amount", header: "المبلغ", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.amount) || 0)}</span> },
     { key: "paidAmount", header: "المدفوع", sortable: true, render: (r) => formatCurrency(Number(r.paidAmount) || 0) },
-    { key: "status", header: "الحالة", sortable: true, render: (r) => <Badge variant="outline">{r.status || "-"}</Badge> },
+    { key: "status", header: "الحالة", sortable: true, render: (r) => {
+      const overdue = r.status !== "paid" && new Date(r.dueDate) < new Date();
+      return <Badge variant="outline" className={overdue ? "border-red-200 text-red-600 bg-red-50" : r.status === "paid" ? "border-emerald-200 text-emerald-600 bg-emerald-50" : ""}>{r.status || "-"}</Badge>;
+    }},
   ];
 
   const maintColumns: DataTableColumn<any>[] = [
