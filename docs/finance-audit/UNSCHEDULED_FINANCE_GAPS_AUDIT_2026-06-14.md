@@ -72,6 +72,7 @@
 - ✅ تصفية GRNI: لها مسار فعلي (three-way match + obligation، `finance-purchase.ts:1629`) — لكن على 2150 المخلوط (مغطّى بـ#2277).
 - ✅ التسوية البنكية: لها بنية (تعديلات FIN-18 `businessHelpers.ts:1438`، دفعات `BANK`، حدث `finance.reconciliation.completed`).
 - ✅ عكس القيود: `reverseAccountBalances` عام موجود (`businessHelpers.ts:867`)؛ سحب مخصص EOSB مغطّى بـ#2252.
+- ✅ **اكتمال الترحيل (approved-but-unposted):** طبقة رصد ناضجة موجودة — `GET /reports/gl-integrity-gaps` (`finance-reports.ts:3171`: فواتير/credit/debit memos/payment_runs منفَّذة بلا journalId + spa_orphans) + `/reports/unmapped-lines` + `/reports/operation-gaps`. **ملاحظة خفيفة:** تقارير سلبية (لا cron/تنبيه يستهلكها) — يُفترض أن تستهلكها بوّابة الإقفال #2250 (محجوزة). مرصود ومغطّى.
 
 ---
 
