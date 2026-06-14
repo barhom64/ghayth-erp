@@ -311,19 +311,36 @@ const materialiseRangeSchema = z.object({
 // either `toDate` (inclusive) or after `count` matches — whichever
 // comes first. Always bounded by MATERIALISE_RANGE_DAY_CAP calendar
 // days regardless of caller intent.
+// node-postgres default-parses DATE columns to JS Date objects, so
+// the activeFrom/activeUntil readings from `transport_route_patterns`
+// arrive here as Dates — not the ISO strings the original signature
+// implied. Defensive coercion: accept either shape, normalise to a
+// `YYYY-MM-DD` string before the date-string template that the rest
+// of the generator depends on. Without this the activeFrom/Until
+// gates degraded to no-ops (NaN compares as `false` against both
+// `<` and `>`), letting the generator emit dates outside the
+// pattern's active window.
+function toIsoDate(v: string | Date | null | undefined): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return v.slice(0, 10);
+}
+
 function* matchingDatesInRange(
   fromDate: string,
   toDate: string | undefined,
   count: number | undefined,
   daysOfWeekMask: number,
-  activeFrom: string | null,
-  activeUntil: string | null,
+  activeFrom: string | Date | null,
+  activeUntil: string | Date | null,
 ): Generator<string> {
   const start = new Date(`${fromDate}T00:00:00Z`);
   if (Number.isNaN(start.getTime())) return;
   const endLimit = toDate ? new Date(`${toDate}T00:00:00Z`).getTime() : Infinity;
-  const activeFromMs = activeFrom ? new Date(`${activeFrom}T00:00:00Z`).getTime() : -Infinity;
-  const activeUntilMs = activeUntil ? new Date(`${activeUntil}T00:00:00Z`).getTime() : Infinity;
+  const activeFromIso = toIsoDate(activeFrom);
+  const activeUntilIso = toIsoDate(activeUntil);
+  const activeFromMs = activeFromIso ? new Date(`${activeFromIso}T00:00:00Z`).getTime() : -Infinity;
+  const activeUntilMs = activeUntilIso ? new Date(`${activeUntilIso}T00:00:00Z`).getTime() : Infinity;
   let emitted = 0;
   for (let i = 0; i < MATERIALISE_RANGE_DAY_CAP; i++) {
     const t = start.getTime() + i * 86400000;
@@ -352,7 +369,7 @@ transportRoutePatternsRouter.post(
       const [pattern] = await rawQuery<{
         id: number; patternCode: string;
         daysOfWeekMask: number;
-        activeFrom: string | null; activeUntil: string | null;
+        activeFrom: string | Date | null; activeUntil: string | Date | null;
         defaultCustomerId: number | null; defaultContractId: number | null;
         fromLocationId: number | null; toLocationId: number | null;
         fromLocationText: string | null; toLocationText: string | null;
