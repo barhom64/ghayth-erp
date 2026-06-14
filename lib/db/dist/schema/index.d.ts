@@ -856,6 +856,23 @@ export declare const employeeAssignments: import("drizzle-orm/pg-core").PgTableW
             identity: undefined;
             generated: undefined;
         }, {}, {}>;
+        jobTitleId: import("drizzle-orm/pg-core").PgColumn<{
+            name: "jobTitleId";
+            tableName: "employee_assignments";
+            dataType: "number";
+            columnType: "PgInteger";
+            data: number;
+            driverParam: string | number;
+            notNull: false;
+            hasDefault: false;
+            isPrimaryKey: false;
+            isAutoincrement: false;
+            hasRuntimeDefault: false;
+            enumValues: undefined;
+            baseColumn: never;
+            identity: undefined;
+            generated: undefined;
+        }, {}, {}>;
         departmentId: import("drizzle-orm/pg-core").PgColumn<{
             name: "departmentId";
             tableName: "employee_assignments";
