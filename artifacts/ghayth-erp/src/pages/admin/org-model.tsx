@@ -28,7 +28,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/formatters";
-import { Plus, X, Trash2, Building2, Briefcase, Users, Gavel, Network, Banknote } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Building2, Briefcase, Users, Gavel, Network, Banknote } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface LegalEntity {
@@ -83,6 +83,8 @@ function LegalEntitiesTab() {
   const rows = asList<LegalEntity>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ nameAr: "", nameEn: "", crNumber: "", vatNumber: "", taxNumber: "" });
+  const [editingRow, setEditingRow] = useState<LegalEntity | null>(null);
+  const [editForm, setEditForm] = useState({ nameAr: "", nameEn: "", crNumber: "", vatNumber: "", taxNumber: "" });
 
   const save = async () => {
     if (!form.nameAr.trim()) { toast({ title: "الاسم العربي مطلوب", variant: "destructive" }); return; }
@@ -96,6 +98,16 @@ function LegalEntitiesTab() {
       setForm({ nameAr: "", nameEn: "", crNumber: "", vatNumber: "", taxNumber: "" });
       refetch();
     } catch (err: any) { toast({ title: err?.message || "فشل الحفظ", variant: "destructive" }); }
+  };
+  const update = async (id: number) => {
+    if (!editForm.nameAr.trim()) { toast({ title: "الاسم العربي مطلوب", variant: "destructive" }); return; }
+    try {
+      await apiFetch(`/org/legal-entities/${id}`, { method: "PATCH", body: JSON.stringify({
+        nameAr: editForm.nameAr.trim(), nameEn: editForm.nameEn || null,
+        crNumber: editForm.crNumber || null, vatNumber: editForm.vatNumber || null, taxNumber: editForm.taxNumber || null,
+      })});
+      toast({ title: "تم التحديث" }); setEditingRow(null); refetch();
+    } catch (err: any) { toast({ title: err?.message || "فشل التحديث", variant: "destructive" }); }
   };
   const remove = async (id: number) => {
     if (!confirm("تعطيل هذا الكيان؟ (حذف ناعم — لن يظهر في القوائم)")) return;
@@ -113,10 +125,15 @@ function LegalEntitiesTab() {
     { key: "vatNumber", header: "الرقم الضريبي", render: (r) => r.vatNumber || "—" },
     { key: "isActive", header: "الحالة", render: (r) => <PageStatusBadge status={r.isActive ? "active" : "inactive"} /> },
     { key: "actions", header: "", render: (r) => (
-      <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-2 text-status-error"
-        onClick={() => remove(r.id)}>
-        <Trash2 className="h-3.5 w-3.5" />
-      </GuardedButton>
+      <div className="flex gap-1">
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1"
+          onClick={() => { setEditingRow(r); setEditForm({ nameAr: r.nameAr, nameEn: r.nameEn || "", crNumber: r.crNumber || "", vatNumber: r.vatNumber || "", taxNumber: r.taxNumber || "" }); }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </GuardedButton>
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1 text-status-error" onClick={() => remove(r.id)}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </GuardedButton>
+      </div>
     )},
   ];
 
@@ -124,6 +141,24 @@ function LegalEntitiesTab() {
   if (isError) return <ErrorState />;
   return (
     <div>
+      {editingRow && (
+        <Card className="mb-4 border-primary/30">
+          <CardHeader className="pb-2"><CardTitle className="text-base">تعديل: {editingRow.nameAr}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><Label>الاسم العربي *</Label><Input value={editForm.nameAr} onChange={(e) => setEditForm((f) => ({ ...f, nameAr: e.target.value }))} className="mt-1" /></div>
+              <div><Label>Name (EN)</Label><Input value={editForm.nameEn} onChange={(e) => setEditForm((f) => ({ ...f, nameEn: e.target.value }))} className="mt-1" /></div>
+              <div><Label>السجل التجاري</Label><Input value={editForm.crNumber} onChange={(e) => setEditForm((f) => ({ ...f, crNumber: e.target.value }))} className="mt-1" /></div>
+              <div><Label>الرقم الضريبي (VAT)</Label><Input value={editForm.vatNumber} onChange={(e) => setEditForm((f) => ({ ...f, vatNumber: e.target.value }))} className="mt-1" /></div>
+              <div><Label>رقم الإقرار الضريبي</Label><Input value={editForm.taxNumber} onChange={(e) => setEditForm((f) => ({ ...f, taxNumber: e.target.value }))} className="mt-1" /></div>
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button variant="outline" onClick={() => setEditingRow(null)}>إلغاء</Button>
+              <GuardedButton perm={PERM_WRITE} onClick={() => update(editingRow.id)}>حفظ التعديلات</GuardedButton>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex justify-end mb-3">
         {!showForm ? (
           <GuardedButton perm={PERM_WRITE} onClick={() => setShowForm(true)}>
@@ -162,6 +197,8 @@ function PositionsTab() {
   const rows = asList<Position>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ positionKey: "", labelAr: "", labelEn: "", description: "", level: 30 });
+  const [editingRow, setEditingRow] = useState<Position | null>(null);
+  const [editForm, setEditForm] = useState({ labelAr: "", labelEn: "", description: "", level: 30 });
 
   const save = async () => {
     if (!form.positionKey.match(/^[a-z][a-z0-9_]*$/)) { toast({ title: "مفتاح المنصب: إنجليزي صغير فقط", variant: "destructive" }); return; }
@@ -177,6 +214,16 @@ function PositionsTab() {
       setForm({ positionKey: "", labelAr: "", labelEn: "", description: "", level: 30 });
       refetch();
     } catch (err: any) { toast({ title: err?.message || "فشل الحفظ", variant: "destructive" }); }
+  };
+  const updatePos = async (id: number) => {
+    if (!editForm.labelAr.trim()) { toast({ title: "الاسم العربي مطلوب", variant: "destructive" }); return; }
+    try {
+      await apiFetch(`/org/positions/${id}`, { method: "PATCH", body: JSON.stringify({
+        labelAr: editForm.labelAr.trim(), labelEn: editForm.labelEn || null,
+        description: editForm.description || null, level: editForm.level,
+      })});
+      toast({ title: "تم التحديث" }); setEditingRow(null); refetch();
+    } catch (err: any) { toast({ title: err?.message || "فشل التحديث", variant: "destructive" }); }
   };
   const remove = async (id: number) => {
     if (!confirm("تعطيل هذا المنصب؟")) return;
@@ -198,9 +245,15 @@ function PositionsTab() {
     },
     { key: "isActive", header: "الحالة", render: (r) => <PageStatusBadge status={r.isActive ? "active" : "inactive"} /> },
     { key: "actions", header: "", render: (r) => r.isSystem ? <span className="text-xs text-muted-foreground">—</span> : (
-      <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-2 text-status-error" onClick={() => remove(r.id)}>
-        <Trash2 className="h-3.5 w-3.5" />
-      </GuardedButton>
+      <div className="flex gap-1">
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1"
+          onClick={() => { setEditingRow(r); setEditForm({ labelAr: r.labelAr, labelEn: r.labelEn || "", description: r.description || "", level: r.level }); }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </GuardedButton>
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1 text-status-error" onClick={() => remove(r.id)}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </GuardedButton>
+      </div>
     )},
   ];
 
@@ -208,6 +261,23 @@ function PositionsTab() {
   if (isError) return <ErrorState />;
   return (
     <div>
+      {editingRow && (
+        <Card className="mb-4 border-primary/30">
+          <CardHeader className="pb-2"><CardTitle className="text-base">تعديل: {editingRow.labelAr}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><Label>الاسم العربي *</Label><Input value={editForm.labelAr} onChange={(e) => setEditForm((f) => ({ ...f, labelAr: e.target.value }))} className="mt-1" /></div>
+              <div><Label>Label (EN)</Label><Input value={editForm.labelEn} onChange={(e) => setEditForm((f) => ({ ...f, labelEn: e.target.value }))} className="mt-1" /></div>
+              <div><Label>المستوى (0..100)</Label><Input type="number" min={0} max={100} value={editForm.level} onChange={(e) => setEditForm((f) => ({ ...f, level: Number(e.target.value) }))} className="mt-1" /></div>
+              <div><Label>الوصف</Label><Input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button variant="outline" onClick={() => setEditingRow(null)}>إلغاء</Button>
+              <GuardedButton perm={PERM_WRITE} onClick={() => updatePos(editingRow.id)}>حفظ التعديلات</GuardedButton>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex justify-end mb-3">
         {!showForm ? (
           <GuardedButton perm={PERM_WRITE} onClick={() => setShowForm(true)}><Plus className="h-4 w-4 me-1" /> منصب جديد</GuardedButton>
@@ -244,6 +314,8 @@ function TeamsTab() {
   const rows = asList<Team>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", scopeType: "department" });
+  const [editingRow, setEditingRow] = useState<Team | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", description: "", scopeType: "department" });
 
   const save = async () => {
     if (!form.name.trim()) { toast({ title: "اسم الفريق مطلوب", variant: "destructive" }); return; }
@@ -255,6 +327,15 @@ function TeamsTab() {
       setShowForm(false);
       setForm({ name: "", description: "", scopeType: "department" });
       refetch();
+    } catch (err: any) { toast({ title: err?.message || "فشل", variant: "destructive" }); }
+  };
+  const updateTeam = async (id: number) => {
+    if (!editForm.name.trim()) { toast({ title: "الاسم مطلوب", variant: "destructive" }); return; }
+    try {
+      await apiFetch(`/org/teams/${id}`, { method: "PATCH", body: JSON.stringify({
+        name: editForm.name.trim(), description: editForm.description || null, scopeType: editForm.scopeType,
+      })});
+      toast({ title: "تم التحديث" }); setEditingRow(null); refetch();
     } catch (err: any) { toast({ title: err?.message || "فشل", variant: "destructive" }); }
   };
   const remove = async (id: number) => {
@@ -270,9 +351,15 @@ function TeamsTab() {
     { key: "scopeType", header: "النطاق", render: (r) => <Badge variant="outline">{r.scopeType || "—"}</Badge> },
     { key: "isActive", header: "الحالة", render: (r) => <PageStatusBadge status={r.isActive ? "active" : "inactive"} /> },
     { key: "actions", header: "", render: (r) => (
-      <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-2 text-status-error" onClick={() => remove(r.id)}>
-        <Trash2 className="h-3.5 w-3.5" />
-      </GuardedButton>
+      <div className="flex gap-1">
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1"
+          onClick={() => { setEditingRow(r); setEditForm({ name: r.name, description: r.description || "", scopeType: r.scopeType || "department" }); }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </GuardedButton>
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1 text-status-error" onClick={() => remove(r.id)}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </GuardedButton>
+      </div>
     )},
   ];
 
@@ -280,6 +367,32 @@ function TeamsTab() {
   if (isError) return <ErrorState />;
   return (
     <div>
+      {editingRow && (
+        <Card className="mb-4 border-primary/30">
+          <CardHeader className="pb-2"><CardTitle className="text-base">تعديل الفريق: {editingRow.name}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><Label>الاسم *</Label><Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+              <div>
+                <Label>نطاق التأثير</Label>
+                <Select value={editForm.scopeType} onValueChange={(v) => setEditForm((f) => ({ ...f, scopeType: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="department">إدارة واحدة</SelectItem>
+                    <SelectItem value="branch">فرع كامل</SelectItem>
+                    <SelectItem value="cross_company">عبر الشركات</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="sm:col-span-2"><Label>وصف</Label><Input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button variant="outline" onClick={() => setEditingRow(null)}>إلغاء</Button>
+              <GuardedButton perm={PERM_WRITE} onClick={() => updateTeam(editingRow.id)}>حفظ التعديلات</GuardedButton>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex justify-end mb-3">
         {!showForm ? (
           <GuardedButton perm={PERM_WRITE} onClick={() => setShowForm(true)}><Plus className="h-4 w-4 me-1" /> فريق جديد</GuardedButton>
@@ -331,6 +444,8 @@ function CommitteesTab() {
   const rows = asList<Committee>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "audit", description: "", startDate: "", endDate: "" });
+  const [editingRow, setEditingRow] = useState<Committee | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", type: "audit", description: "", startDate: "", endDate: "" });
 
   const save = async () => {
     if (!form.name.trim()) { toast({ title: "اسم اللجنة مطلوب", variant: "destructive" }); return; }
@@ -350,6 +465,16 @@ function CommitteesTab() {
     try { await apiFetch(`/org/committees/${id}`, { method: "DELETE" }); toast({ title: "تم التعطيل" }); refetch(); }
     catch (err: any) { toast({ title: err?.message || "فشل", variant: "destructive" }); }
   };
+  const updateCommittee = async (id: number) => {
+    if (!editForm.name.trim()) { toast({ title: "الاسم مطلوب", variant: "destructive" }); return; }
+    try {
+      await apiFetch(`/org/committees/${id}`, { method: "PATCH", body: JSON.stringify({
+        name: editForm.name.trim(), type: editForm.type, description: editForm.description || null,
+        startDate: editForm.startDate || null, endDate: editForm.endDate || null,
+      })});
+      toast({ title: "تم التحديث" }); setEditingRow(null); refetch();
+    } catch (err: any) { toast({ title: err?.message || "فشل", variant: "destructive" }); }
+  };
 
   const columns: DataTableColumn<Committee>[] = [
     { key: "name", header: "اسم اللجنة", render: (r) => <span className="font-medium">{r.name}</span> },
@@ -359,9 +484,15 @@ function CommitteesTab() {
     { key: "endDate", header: "إلى", render: (r) => r.endDate || "—" },
     { key: "isActive", header: "الحالة", render: (r) => <PageStatusBadge status={r.isActive ? "active" : "inactive"} /> },
     { key: "actions", header: "", render: (r) => (
-      <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-2 text-status-error" onClick={() => remove(r.id)}>
-        <Trash2 className="h-3.5 w-3.5" />
-      </GuardedButton>
+      <div className="flex gap-1">
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1"
+          onClick={() => { setEditingRow(r); setEditForm({ name: r.name, type: r.type, description: r.description || "", startDate: r.startDate || "", endDate: r.endDate || "" }); }}>
+          <Pencil className="h-3.5 w-3.5" />
+        </GuardedButton>
+        <GuardedButton perm={PERM_WRITE} variant="ghost" size="sm" className="h-7 px-1 text-status-error" onClick={() => remove(r.id)}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </GuardedButton>
+      </div>
     )},
   ];
 
@@ -369,6 +500,30 @@ function CommitteesTab() {
   if (isError) return <ErrorState />;
   return (
     <div>
+      {editingRow && (
+        <Card className="mb-4 border-primary/30">
+          <CardHeader className="pb-2"><CardTitle className="text-base">تعديل اللجنة: {editingRow.name}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div><Label>الاسم *</Label><Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className="mt-1" /></div>
+              <div>
+                <Label>النوع</Label>
+                <Select value={editForm.type} onValueChange={(v) => setEditForm((f) => ({ ...f, type: v }))}>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>{COMMITTEE_TYPES.map((t) => <SelectItem key={t.v} value={t.v}>{t.l}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>تاريخ البدء</Label><Input type="date" value={editForm.startDate} onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))} className="mt-1" /></div>
+              <div><Label>تاريخ الانتهاء</Label><Input type="date" value={editForm.endDate} onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))} className="mt-1" /></div>
+              <div className="sm:col-span-2"><Label>الوصف</Label><Input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button variant="outline" onClick={() => setEditingRow(null)}>إلغاء</Button>
+              <GuardedButton perm={PERM_WRITE} onClick={() => updateCommittee(editingRow.id)}>حفظ التعديلات</GuardedButton>
+            </div>
+          </CardContent>
+        </Card>
+      )}
       <div className="flex justify-end mb-3">
         {!showForm ? (
           <GuardedButton perm={PERM_WRITE} onClick={() => setShowForm(true)}><Plus className="h-4 w-4 me-1" /> لجنة جديدة</GuardedButton>
