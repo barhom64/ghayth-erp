@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
+import { usePublishPageTitle } from "@/contexts/page-title-context";
 import { PageStateWrapper } from "./page-state";
 import { EntityDocuments } from "./entity-documents";
 import { EntityTimeline } from "./entity-timeline";
@@ -189,17 +190,19 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
     headerExtra,
   } = props;
 
+  // Publish the entity's real title (e.g. "فاتورة #INV-2024-001") so the
+  // topbar + breadcrumb show the actual page, not the parent module label.
+  usePublishPageTitle(title);
+
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
   // --- Header strip (always visible, even during loading) -----------------
   const header = (
     <div className="flex items-start justify-between gap-4 flex-wrap">
-      <Link href={backPath}>
-        <Button variant="ghost" size="sm" className="gap-1">
+      <Button asChild variant="ghost" size="sm" className="gap-1"><Link href={backPath}>
           <ArrowRight className="h-4 w-4" />
           {backLabel}
-        </Button>
-      </Link>
+        </Link></Button>
       <div className="flex items-center gap-2 flex-wrap">
         {printable && onPrint && (
           <Button onClick={onPrint} size="sm" variant="outline" className="gap-1">
