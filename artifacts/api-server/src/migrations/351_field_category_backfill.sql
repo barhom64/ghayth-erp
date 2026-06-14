@@ -1,4 +1,4 @@
--- 349_field_category_backfill — assign a tracking-enabled category to
+-- 351_field_category_backfill — assign a tracking-enabled category to
 -- field staff whose employee_assignments.categoryKey is still NULL.
 --
 -- Root cause (field-tracking audit): migration 270's best-effort backfill
