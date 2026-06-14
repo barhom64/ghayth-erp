@@ -51,6 +51,7 @@ import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
+import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
 import { fleetEngine } from "../lib/engines/index.js";
 
 export const transportBookingsRouter = Router();
@@ -1001,6 +1002,42 @@ transportBookingsRouter.post(
         [b.bookingLineId, scope.companyId],
       );
       if (!line) throw new NotFoundError("سطر الحجز غير موجود");
+
+      // #TA-T18-UX-AUDIT-01 §11-ب — الاختيار اليدوي لا يتجاوز الحراس الصلبة.
+      // نمرّر الزوج (مركبة/سائق) عبر المحرك نفسه (مصدر الحراس الوحيد) للنافذة
+      // المطلوبة: إن غاب الزوج عن نتائج المحرك فهو غير مؤهّل (مصفوفة القدرات /
+      // جاهزية المركبة / صيانة / إجازة السائق / حدود القيادة)؛ وإن حمل عوائق
+      // صلبة (تعارض / راحة / سعة / اتفاق العميل) رُفض ما لم يُوثَّق استثناء.
+      // معزول عن المسار التلقائي (plan-bookings يُدرج مباشرةً في transport-integration).
+      const ranked = await suggestAssignments({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        bookingId: line.bookingId,
+        bookingLineId: b.bookingLineId,
+        scheduledStartAt: b.scheduledStartAt,
+        scheduledEndAt: b.scheduledEndAt,
+        limit: 100000,
+      });
+      const guardPair = ranked.find(
+        (c) => c.vehicleId === b.vehicleId && c.driverId === b.driverId,
+      );
+      if (!guardPair) {
+        // الزوج خارج نتائج المحرك = غير مؤهّل (مصفوفة قدرات غير مكتملة / جاهزية /
+        // صيانة / إجازة / حدود قيادة). يُحجب افتراضيًا ويُسمح فقط باستثناء موثَّق
+        // (overrideReason) — اتساقًا مع فلسفة الحراس القائمة (الأهلية/الراحة/
+        // التعارض كلها override-able)، فلا يكسر إسناد مركبة لم يكتمل ملفها بعد.
+        if (!b.overrideReason) {
+          throw new ValidationError(
+            "هذه المركبة أو هذا السائق غير مؤهّل لهذا الحجز (مصفوفة القدرات، جاهزية المركبة، إجازة السائق، أو حدود القيادة). أرسل overrideReason للموافقة الموثَّقة على الاستثناء.",
+            { field: "vehicleId", fix: "اختر تركيبة مؤهّلة من الاقتراح، أو عالج سبب عدم الأهلية في الملف الفني/جاهزية السائق، أو وثّق سبب الاستثناء." },
+          );
+        }
+      } else if (guardPair.blockers.length > 0 && !b.overrideReason) {
+        throw new ConflictError(
+          `الإسناد يكسر حارسًا صلبًا: ${guardPair.blockers.join("؛ ")}. أرسل overrideReason للموافقة الموثَّقة.`,
+          { field: "blockers", fix: "اختر تركيبة بلا عوائق أو وضّح سبب الاستثناء." },
+        );
+      }
 
       // 1) Driver eligibility — reuses the #1761 guard.
       await assertDriverEligibility({

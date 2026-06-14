@@ -19,6 +19,7 @@ import { BookingSourceSelector, type BookingSourcePrefill } from "@/components/s
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
 import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
 import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
+import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -599,20 +600,25 @@ export default function TransportBookingCreate() {
               </Select>
             </div>
             <div>
-              <Label>المركبة المحددة (id — اختياري)</Label>
-              <Input type="number" min={0}
+              {/* #TA-T18-UX-AUDIT-01 UX-03 — منتقي مركبة حقيقي بدل إدخال رقم
+                  قاعدة البيانات الخام. المحرك يفرض requiredExactVehicleId كحارس
+                  صلب عند الاقتراح والإسناد. */}
+              <VehicleSelect
+                label="المركبة المطلوبة (اختياري)"
                 value={requiredExactVehicleId}
-                onChange={(e) => setRequiredExactVehicleId(e.target.value)}
-                placeholder="إذا اشترط العميل مركبة بعينها"
+                onChange={(v) => setRequiredExactVehicleId(String(v ?? ""))}
+                allowCreate={false}
               />
+              <p className="text-[11px] text-muted-foreground mt-1">إذا اشترط العميل مركبة بعينها</p>
             </div>
             <div>
-              <Label>السائق المحدد (id — اختياري)</Label>
-              <Input type="number" min={0}
+              <DriverSelect
+                label="السائق المطلوب (اختياري)"
                 value={requiredExactDriverId}
-                onChange={(e) => setRequiredExactDriverId(e.target.value)}
-                placeholder="إذا اشترط العميل سائقاً بعينه"
+                onChange={(v) => setRequiredExactDriverId(String(v ?? ""))}
+                allowCreate={false}
               />
+              <p className="text-[11px] text-muted-foreground mt-1">إذا اشترط العميل سائقاً بعينه</p>
             </div>
             <div className="flex items-center gap-2">
               <input
