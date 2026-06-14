@@ -127,16 +127,12 @@ export default function BadDebtProvisionPage() {
       subtitle={`ورقة عمل الإقفال الشهري — نسب قابلة للتعديل لكل سطل عمر`}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/finance/ar-collection-workbench">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/ar-collection-workbench">
               منضدة التحصيل
-            </Button>
-          </Link>
-          <Link href="/finance/customer-risk">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/customer-risk">
               مخاطر العملاء
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_bad_debt_provision"
             entityId={period}
