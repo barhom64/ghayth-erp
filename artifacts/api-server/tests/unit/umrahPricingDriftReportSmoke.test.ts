@@ -62,15 +62,15 @@ describe("U-15-P5 §A — GET /reports/packages-vs-allocations-pricing-drift is 
 // §B — Latest-block selection uses DISTINCT ON deterministically
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-15-P5 §B — latest_block CTE picks the latest block per hotel deterministically", () => {
-  it("uses DISTINCT ON (\"hotelId\") + ORDER BY \"hotelId\", id DESC", () => {
+  it("uses DISTINCT ON (rb.\"hotelId\") + ORDER BY rb.\"hotelId\", rb.id DESC", () => {
     expect(HANDLER).toMatch(
-      /DISTINCT\s+ON\s*\(\s*"hotelId"\s*\)[\s\S]{0,800}?ORDER\s+BY\s+"hotelId",\s*id\s+DESC/,
+      /DISTINCT\s+ON\s*\(\s*rb\."hotelId"\s*\)[\s\S]{0,800}?ORDER\s+BY\s+rb\."hotelId",\s*rb\.id\s+DESC/,
     );
   });
 
   it("filters out blocks without ratePerNight (CTE prereq)", () => {
     expect(HANDLER).toMatch(
-      /"ratePerNight"\s+IS\s+NOT\s+NULL/,
+      /rb\."ratePerNight"\s+IS\s+NOT\s+NULL/,
     );
   });
 });
@@ -90,9 +90,9 @@ describe("U-15-P5 §C — driftFraction is NULL when package costPrice is 0", ()
 // §D — Tenant scope preserved
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-15-P5 §D — every aggregate query is companyId + deletedAt scoped", () => {
-  it("latest_block CTE filters by companyId = $1 + deletedAt IS NULL", () => {
+  it("latest_block CTE filters by rb.companyId = $1 + rb.deletedAt IS NULL", () => {
     expect(HANDLER).toMatch(
-      /umrah_room_blocks[\s\S]{0,200}?"companyId"\s*=\s*\$1[\s\S]{0,200}?"deletedAt"\s+IS\s+NULL/,
+      /umrah_room_blocks\s+rb[\s\S]{0,200}?rb\."companyId"\s*=\s*\$1[\s\S]{0,200}?rb\."deletedAt"\s+IS\s+NULL/,
     );
   });
 

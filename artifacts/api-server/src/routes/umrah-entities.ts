@@ -6315,14 +6315,14 @@ router.get(
         driftFraction: string | null;
       }>(
         `WITH latest_block AS (
-           SELECT DISTINCT ON ("hotelId")
-                  "hotelId",
-                  "ratePerNight"
-             FROM umrah_room_blocks
-            WHERE "companyId" = $1
-              AND "deletedAt" IS NULL
-              AND "ratePerNight" IS NOT NULL
-            ORDER BY "hotelId", id DESC
+           SELECT DISTINCT ON (rb."hotelId")
+                  rb."hotelId",
+                  rb."ratePerNight"
+             FROM umrah_room_blocks rb
+            WHERE rb."companyId" = $1
+              AND rb."deletedAt" IS NULL
+              AND rb."ratePerNight" IS NOT NULL
+            ORDER BY rb."hotelId", rb.id DESC
          )
          SELECT
            p.id   AS "packageId",
