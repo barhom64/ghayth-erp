@@ -767,7 +767,10 @@ router.post("/memos", authorize({ feature: "hr.discipline", action: "create" }),
 });
 
 // Step 1: Employee justification
-router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
+// authz: تقديم التبرير عملية كتابة (انتقال حالة pending_employee → pending_manager)؛
+// تُحكم بـ"update" لا "list". دور الموظف يملك hr.discipline:update@self عبر توسعة
+// hr:self (autoMigrate.actionMap)، فالموظف لا يُحجب، والتحقّق الحقيقي owner/HR أدناه.
+router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -1091,13 +1094,23 @@ router.post("/memos/:id/cancel", authorize({ feature: "hr.discipline", action: "
 // ─────────────────────────────────────────────────────────────────────────────
 // APPEAL — استئناف الموظف على قرار الجزاء
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
+// authz: الاستئناف عملية كتابة (انتقال approved → appeal_pending)؛ تُحكم بـ"update"
+// لا "list". أُضيف تحقّق الملكية (owner/HR) المفقود سابقًا — كان أي حامل لرؤية
+// الانضباط يستطيع الاستئناف على أي محضر.
+router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { reason } = zodParse(appealSchema.safeParse(req.body));
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
+
+    // authorisation: صاحب المحضر نفسه أو HR/GM/Owner (مطابقة لمسار التبرير justify).
+    const isOwnerOfMemo = scope.activeAssignmentId === memo.assignmentId;
+    const isHR = HR_ROLES.includes(scope.role);
+    if (!isOwnerOfMemo && !isHR) {
+      throw new ForbiddenError("لا تملك صلاحية تقديم استئناف على هذا المحضر");
+    }
 
     await applyTransition({
       entity: "hr_inquiry_memos",

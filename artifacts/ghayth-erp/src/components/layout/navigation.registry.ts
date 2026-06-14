@@ -176,8 +176,12 @@ export const allNavSections: NavSection[] = [
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
-        { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
-        { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+        // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
+        // PR-7 «الموحّد»). أُزيل تكرار «الهيكل المصوّر» وعنصر org-tree المنفصل في
+        // إعدادات HR. مسارا /hr/organization (عرض المناصب) و .../structure (العلاقات)
+        // يبقيان مسجَّلين deep-link — لا حذف ولا 404. متابعة: نقل عرضَي «المناصب»
+        // و«العلاقات» إلى org-tree كتبويبات ثم retire الصفحتين.
+        { label: "الهيكل التنظيمي", path: "/hr/org-tree", icon: Network, subKey: "organization" },
         { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
         { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
         { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
@@ -220,8 +224,11 @@ export const allNavSections: NavSection[] = [
       { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
         perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
         children: [
+        // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
+        // هي المدخل الوحيد. أُزيل تكرار «إدارة المخالفات» (/hr/violations/management
+        // = صفحة stats أصغر)؛ المسار يبقى مسجَّلًا deep-link — لا حذف ولا 404.
+        // متابعة: دمج عرض الإحصاء/التصعيد كتبويب داخل violations.tsx ثم retire.
         { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
         { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
@@ -266,7 +273,6 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
-        { label: "الشجرة التنظيمية", path: "/hr/org-tree", icon: Network, subKey: "employees" },
         { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
         { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },

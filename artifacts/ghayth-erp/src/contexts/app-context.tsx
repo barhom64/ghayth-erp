@@ -67,6 +67,14 @@ const roleKeySubPages: Record<string, Record<string, string[]>> = {
   general_manager: { hr: [...ALL_HR_SUBS] },
   hr_manager: { hr: [...ALL_HR_SUBS] },
   branch_manager: { hr: ["employees", "attendance", "leaves"] },
+  // HR-REV-1 (#2220) — علاج visible+403: بدون هذه الإدخالات يسقط
+  // canAccessSubPage إلى «الوحدة مسموحة ⇒ كل subKeys تظهر»، فيرى الدوران
+  // كامل قائمة HR بينما grants محدودة فتُرفض الصفحات بـ403. القصر هنا
+  // يُخفي فقط (الـbackend authorize يبقى الحارس الحقيقي).
+  // department_manager: hr.employees/attendance/leaves/performance (scope=department).
+  department_manager: { hr: ["employees", "attendance", "leaves", "performance"] },
+  // payroll_officer: hr.payroll.* + hr.attendance (لا انضباط/توظيف/هيكل).
+  payroll_officer: { hr: ["payroll", "attendance"] },
 };
 
 export type PermissionKey =
