@@ -445,9 +445,12 @@ router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
 // Agent 7 — sidebar shows الأتمتة only at level 60 + admin:update; the
 // mount used to be module-only. Floor at 60 so direct-URL traffic
-// matches what the menu promises (per-route authorize uses admin:list /
-// admin:update on every call).
-router.use("/automation", requireModule("automation"), requireMinLevel(60), automationRouter);
+// GAP_MATRIX P1 — "automation" is not in CANONICAL_MODULES so no role gets it
+// by default; frontend nav gates the entry under module="admin". Align the
+// backend mount to module="admin" so admin-granted users can actually reach
+// the API. Per-route authorize() inside automationRouter uses admin:list /
+// admin:update on every call.
+router.use("/automation", requireModule("admin"), requireMinLevel(60), automationRouter);
 // GAP_MATRIX P1 — role ladder: 40 not a real role level; raised to 50
 // (department_manager+). Per-route authorize() still applies inside.
 router.use("/communications", requireModule("comms"), requireMinLevel(50), communicationsRouter);
