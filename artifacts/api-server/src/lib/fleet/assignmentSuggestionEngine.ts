@@ -1120,7 +1120,16 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
           agreementScore = 100;
           reasons.push("المركبة تطابق الفئة المطلوبة من العميل");
         } else if (classesAreEquivalent(booking.requestedVehicleClass, v.vehicleType)) {
-          agreementScore = ["equivalent_allowed", "upgrade_allowed", "same_class_only"].includes(
+          // #2079 CHECK-PE-06 (owner decision 2026-06-14) — `same_class_only`
+          // is now LITERAL-STRICT. An equivalent-class vehicle (e.g.
+          // compact ↔ sedan) is no longer acceptable under that policy;
+          // only the exact `vehicleType === requestedVehicleClass`
+          // match at line 1119 scores 100. The customer explicitly
+          // asked for «نفس الفئة فقط» — honoring the literal contract.
+          // `equivalent_allowed` and `upgrade_allowed` still accept
+          // the equivalent class (score 85); their contracts permit
+          // substitution.
+          agreementScore = ["equivalent_allowed", "upgrade_allowed"].includes(
             booking.vehicleSubstitutionPolicy,
           ) ? 85 : 30;
           if (agreementScore < 50) {
