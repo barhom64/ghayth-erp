@@ -11,6 +11,12 @@ const FORM = readFileSync(
   join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/create/finance/expenses-create.tsx"),
   "utf8"
 );
+// #2238 — the entityLink + JE-line assembly was extracted into this shared
+// module so the save path and the journal-preview build the SAME lines.
+const PLAN = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/lib/expenseJournalPlan.ts"),
+  "utf8"
+);
 
 // ─── Audit item #2 — LineAllocationPanel on single-expense form ────────────
 // Locks both halves of the contract: the backend schema accepts a
@@ -52,26 +58,36 @@ describe("expense schema accepts lineAllocation", () => {
   });
 });
 
-describe("expense handler applies the overrides", () => {
+describe("expense handler applies the overrides (via shared resolver #2238)", () => {
   it("destructures lineAllocation from body", () => {
     // lineAllocation is destructured from `b`; later fields (maintenanceTicket,
     // assetCreation, fuelLog, date) may follow before the closing `} = b;`.
     expect(ROUTE).toMatch(/lineAllocation,[\s\S]*?\n\s*} = b;/);
   });
 
-  it("operator accountCode wins over the default", () => {
-    expect(ROUTE).toContain("let overrideAccountCode = accountCode;");
-    expect(ROUTE).toContain("if (lineAllocation.accountCode) overrideAccountCode = lineAllocation.accountCode;");
-    // The JE line uses the overridden accountCode, not the original.
-    expect(ROUTE).toContain("accountCode: overrideAccountCode ?? ");
+  it("builds entityLink + account override through the shared buildExpenseEntityLink", () => {
+    // #2238 — the inline entityLink/override block was extracted into the shared
+    // expenseJournalPlan so the save path and the journal-preview build the SAME
+    // lines from ONE source. The route now calls the shared builder.
+    expect(ROUTE).toContain("const { entityLink, accountCodeOverride } = buildExpenseEntityLink({");
+    expect(ROUTE).toContain("let overrideAccountCode = accountCodeOverride ?? accountCode;");
   });
 
-  it("every dimension field flows into entityLink when supplied", () => {
-    const idx = ROUTE.indexOf("if (lineAllocation) {");
+  it("operator accountCode wins over the default (in the shared resolver)", () => {
+    expect(PLAN).toContain("if (la.accountCode) accountCodeOverride = la.accountCode;");
+  });
+
+  it("the assembled JE lines come from the shared buildExpenseLines", () => {
+    expect(ROUTE).toContain("buildExpenseLines({");
+    // `role` is stripped so the posted line shape stays identical to the
+    // pre-refactor lines (byte-identical INSERT payload).
+    expect(ROUTE).toContain(".map(({ role, ...line }) => line)");
+  });
+
+  it("every dimension field flows into entityLink when supplied (shared resolver)", () => {
+    const idx = PLAN.indexOf("const la = input.lineAllocation;");
     expect(idx).toBeGreaterThan(-1);
-    // Widened from 1400 → 3000 after wiring the 7 newly accepted fields
-    // (client/vendor/driver/product/umrahSeason/department/employee).
-    const block = ROUTE.slice(idx, idx + 3000);
+    const block = PLAN.slice(idx, idx + 3000);
     for (const [key, sink] of [
       ["costCenterId", "entityLink.costCenterId"],
       ["activityType", "entityLink.activityType"],
@@ -83,7 +99,7 @@ describe("expense handler applies the overrides", () => {
       ["umrahAgentId", "entityLink.umrahAgentId"],
       ["manualOverrideReason", "entityLink.manualOverrideReason"],
     ] as const) {
-      expect(block).toContain(`if (lineAllocation.${key}`);
+      expect(block).toContain(`if (la.${key}`);
       expect(block).toContain(sink);
     }
   });
