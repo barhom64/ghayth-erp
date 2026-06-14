@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { statusLabel, statusDict } from "@/lib/transport-status-labels";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,25 +39,8 @@ const LEG_TYPES = [
   { value: "custom", label: "مخصص" },
 ] as const;
 
-const LEG_STATUSES = [
-  { value: "pending", label: "بانتظار" },
-  { value: "scheduled", label: "مجدول" },
-  { value: "assigned", label: "مسند" },
-  { value: "in_progress", label: "جاري التنفيذ" },
-  { value: "completed", label: "اكتمل" },
-  { value: "cancelled", label: "ملغى" },
-  { value: "skipped", label: "تم تجاوزه" },
-] as const;
-
-const LEG_STATUS_TONE: Record<string, string> = {
-  pending:    "bg-surface-subtle text-muted-foreground",
-  scheduled:  "bg-status-info-surface text-status-info-foreground",
-  assigned:   "bg-purple-50 text-purple-700",
-  in_progress:"bg-status-warning-surface text-status-warning-foreground",
-  completed:  "bg-status-success-surface text-status-success-foreground",
-  cancelled:  "bg-rose-100 text-rose-700",
-  skipped:    "bg-surface-subtle text-muted-foreground",
-};
+// #TA-T18-UX-AUDIT-01 UX-05 — حالات المقطع تُعرض من القاموس الموحّد
+// (lib/transport-status-labels، كيان "leg") بدل خريطتين محليتين متوازيتين.
 
 interface Leg {
   id: number;
@@ -135,7 +119,7 @@ function legTypeLabel(v: string): string {
 }
 
 function legStatusLabel(v: string): string {
-  return LEG_STATUSES.find((s) => s.value === v)?.label ?? v;
+  return statusLabel("leg", v).label;
 }
 
 export default function TransportItineraryDetail() {
@@ -320,7 +304,7 @@ export default function TransportItineraryDetail() {
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="font-mono">#{leg.legNumber}</Badge>
                     <span className="text-sm font-medium">{legTypeLabel(leg.legType)}</span>
-                    <Badge className={LEG_STATUS_TONE[leg.status]}>
+                    <Badge className={statusLabel("leg", leg.status).tone}>
                       {legStatusLabel(leg.status)}
                     </Badge>
                   </div>
@@ -458,8 +442,8 @@ export default function TransportItineraryDetail() {
                   <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {LEG_STATUSES.map((s) => (
-                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      {Object.entries(statusDict("leg")).map(([value, info]) => (
+                        <SelectItem key={value} value={value}>{info.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
