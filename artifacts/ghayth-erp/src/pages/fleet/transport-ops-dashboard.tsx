@@ -192,16 +192,12 @@ export default function TransportOpsDashboard() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/fleet/transport/dispatch">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/dispatch">
               <Calendar className="h-4 w-4 me-1" />لوحة التوزيع
-            </Button>
-          </Link>
-          <Link href="/fleet/transport/bookings">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
               <ArrowLeft className="h-4 w-4 me-1" />العودة للحجوزات
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
