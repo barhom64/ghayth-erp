@@ -32,6 +32,8 @@
     "check:write-path-contracts": "node scripts/src/check-write-path-contracts.mjs",
     "check:sql-ambiguity": "node scripts/src/check-sql-ambiguity.mjs",
     "check:duplicate-migrations": "node scripts/src/check-duplicate-migrations.mjs",
+    "check:button-nesting": "node scripts/src/check-button-nesting.mjs",
+    "check:lazy-table-swallow": "node scripts/src/check-lazy-table-swallow.mjs",
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",

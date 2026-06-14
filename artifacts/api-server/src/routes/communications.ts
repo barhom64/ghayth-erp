@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError, IntegrationError,
+import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
@@ -1065,10 +1065,10 @@ router.get("/queue-stats", authorize({ feature: "communications", action: "list"
 router.get("/push/vapid-key", async (_req, res): Promise<void> => {
   try {
     const key = getVapidPublicKey();
-    if (!key) {
-      throw new IntegrationError("VAPID keys not configured");
-    }
-    res.json({ publicKey: key });
+    // VAPID keys are optional infra config. When unset, browser push is simply
+    // disabled — that is NOT a 502 integration failure, so return a 200 the
+    // client can branch on (publicKey:null) instead of a noisy server error.
+    res.json({ publicKey: key, configured: key !== null });
   } catch (err) { handleRouteError(err, res, "VAPID key error:"); }
 });
 
