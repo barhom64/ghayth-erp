@@ -8,6 +8,7 @@ import { join } from "node:path";
 
 const spaSrc = join(import.meta.dirname!, "../../../../artifacts/ghayth-erp/src");
 const DISPATCH = readFileSync(join(spaSrc, "pages/fleet/transport-dispatch.tsx"), "utf8");
+const REQUESTS = readFileSync(join(spaSrc, "pages/umrah/transport-requests.tsx"), "utf8");
 
 describe("UX-05 — لوحة التوزيع تستخدم القاموس الموحّد للحالة", () => {
   it("تستورد statusLabel من القاموس الموحّد", () => {
@@ -22,5 +23,18 @@ describe("UX-05 — لوحة التوزيع تستخدم القاموس المو
   it("لم تعد هناك خريطة حالة محلية بـ fallback إنجليزي خام", () => {
     expect(DISPATCH).not.toMatch(/const STATUS_LABEL: Record/);
     expect(DISPATCH).not.toMatch(/const STATUS_TONE: Record/);
+  });
+});
+
+describe("UX-05 — صفحة طلبات النقل (umrah) تستهلك القاموس الموحّد", () => {
+  it("تستورد statusLabel وتعرض الحالة عبر statusLabel('booking', …)", () => {
+    expect(REQUESTS).toMatch(/import \{ statusLabel \} from "@\/lib\/transport-status-labels"/);
+    expect(REQUESTS).toMatch(/statusLabel\("booking", r\.status\)\.label/);
+    expect(REQUESTS).toMatch(/statusLabel\("booking", r\.status\)\.tone/);
+  });
+
+  it("لم تعد هناك خرائط حالة محلية (STATUS_LABEL_AR/STATUS_TONE)", () => {
+    expect(REQUESTS).not.toMatch(/const STATUS_LABEL_AR: Record/);
+    expect(REQUESTS).not.toMatch(/const STATUS_TONE: Record/);
   });
 });
