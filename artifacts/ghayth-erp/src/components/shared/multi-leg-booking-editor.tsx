@@ -6,6 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, ArrowDown, ArrowUp } from "lucide-react";
+import { ROUTE_TYPES } from "@/lib/transport-constants";
 
 // #1812 operational review — closes the user's #1 explicit gap:
 //   "لا يوجد Multi-leg Booking. الواقع التشغيلي: مطار جدة ↓ فندق مكة
@@ -55,15 +56,7 @@ const LOCATION_KINDS: { value: string; label: string }[] = [
   { value: "other",         label: "أخرى" },
 ];
 
-const ROUTE_TYPES: { value: string; label: string }[] = [
-  { value: "airport_to_makkah",   label: "المطار → مكة" },
-  { value: "makkah_to_madinah",   label: "مكة → المدينة" },
-  { value: "madinah_to_airport",  label: "المدينة → المطار" },
-  { value: "makkah_local",        label: "تنقل محلي بمكة" },
-  { value: "madinah_local",       label: "تنقل محلي بالمدينة" },
-  { value: "ziyarah",             label: "زيارة" },
-  { value: "custom",              label: "مخصص" },
-];
+// ROUTE_TYPES مُوحَّد في "@/lib/transport-constants" (UX-05 — كان مكرّرًا حرفيًا).
 
 // Common umrah template — clicking it appends 6 standard legs.
 const UMRAH_TEMPLATE: BookingLeg[] = [

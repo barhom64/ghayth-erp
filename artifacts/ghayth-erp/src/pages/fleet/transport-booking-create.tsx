@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { apiFetch } from "@/lib/api";
+import { ROUTE_TYPES } from "@/lib/transport-constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -45,15 +46,7 @@ const BOOKING_SOURCES = [
   { value: "recurring_schedule", label: "جدول متكرر" },
 ] as const;
 
-const ROUTE_TYPES = [
-  { value: "airport_to_makkah", label: "المطار → مكة" },
-  { value: "makkah_to_madinah", label: "مكة → المدينة" },
-  { value: "madinah_to_airport", label: "المدينة → المطار" },
-  { value: "makkah_local", label: "تنقل محلي بمكة" },
-  { value: "madinah_local", label: "تنقل محلي بالمدينة" },
-  { value: "ziyarah", label: "زيارة" },
-  { value: "custom", label: "مخصص" },
-] as const;
+// ROUTE_TYPES مُوحَّد في "@/lib/transport-constants" (UX-05 — كان مكرّرًا حرفيًا).
 
 export default function TransportBookingCreate() {
   const [, navigate] = useLocation();
