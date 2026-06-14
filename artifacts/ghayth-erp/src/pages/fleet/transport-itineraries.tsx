@@ -174,11 +174,9 @@ export default function TransportItineraries() {
           <Button size="sm" onClick={openCreate} rateLimitAware>
             <Plus className="h-4 w-4 me-1" />برنامج جديد
           </Button>
-          <Link href="/fleet/transport/bookings">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
               <ArrowLeft className="h-4 w-4 me-1" />العودة
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
