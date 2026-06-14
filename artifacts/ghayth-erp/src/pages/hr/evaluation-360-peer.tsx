@@ -90,9 +90,7 @@ export default function Evaluation360PeerPage() {
       subtitle={cycle ? `الموظف: ${cycle.employeeName} · ${cycle.period}` : undefined}
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "تقييم الزملاء" }]}
       actions={
-        <Link href={`/hr/evaluation-360/${cycleId}`}>
-          <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
-        </Link>
+        <Button asChild variant="ghost" size="sm"><Link href={`/hr/evaluation-360/${cycleId}`}><ArrowRight className="w-4 h-4 me-1" />عودة</Link></Button>
       }
     >
       <HrTabsNav />
@@ -185,9 +183,7 @@ export default function Evaluation360PeerPage() {
       </Card>
 
       <div className="flex gap-3 justify-end">
-        <Link href={`/hr/evaluation-360/${cycleId}`}>
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+        <Button asChild variant="outline"><Link href={`/hr/evaluation-360/${cycleId}`}>إلغاء</Link></Button>
         <GuardedButton perm="hr:create" onClick={handleSubmit} disabled={submitMutation.isPending} rateLimitAware>
           {submitMutation.isPending ? "جاري الإرسال..." : "إرسال التقييم"}
         </GuardedButton>
