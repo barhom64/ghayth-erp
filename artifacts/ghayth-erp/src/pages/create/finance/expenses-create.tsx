@@ -300,6 +300,12 @@ export default function ExpensesCreate() {
   // description / account / allocation, preserving shared header fields
   // (date, branch, payment method, source treasury). Operators get the
   // multi-line workflow without a second form.
+  // #2238 — the journal-preview verdict gates save: a critical blocker (account
+  // not found / unbalanced / required dimension missing / illegal money source)
+  // disables the save button so the operator fixes the routing before posting,
+  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
+  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
+
   const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
       accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
@@ -470,10 +476,27 @@ export default function ExpensesCreate() {
               endpoint="/finance/expenses/impact-preview"
               enabled={Boolean(form.amount && Number(form.amount) > 0)}
               payload={{
-                amount: Number(form.amount),
+                // #2238 — ship the FULL expense inputs so the backend builds the
+                // REAL journal plan (debit/credit + dimensions) through the same
+                // shared resolver the save path uses. `amount` is the NET (the
+                // backend adds VAT on top), matching the save payload exactly.
+                amount: Number(taxSplit.net),
                 expenseType: form.expenseType,
                 paymentMethod: form.paymentMethod,
                 costCenter: form.costCenter,
+                accountCode: form.accountCode || undefined,
+                sourceAccountCode: form.sourceAccountCode || undefined,
+                relatedEntityType: derivedRelated.type || undefined,
+                relatedEntityId: derivedRelated.id ? Number(derivedRelated.id) : undefined,
+                projectId: form.projectId ? Number(form.projectId) : undefined,
+                vatRate: form.vatRate ? Number(form.vatRate) : undefined,
+                operationType: form.operationType,
+                lineAllocation: Object.values(allocation).some((v) => v != null && v !== "")
+                  ? buildAllocationPayload(allocation)
+                  : undefined,
+                costCenterDistribution: ccRows.length > 0
+                  ? ccRows.map((r) => ({ costCenterId: Number(r.costCenterId), percentage: Number(r.percentage) }))
+                  : undefined,
                 supplierId: derivedRelated.type === "supplier" && derivedRelated.id ? Number(derivedRelated.id) : undefined,
                 targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
                 itemType: form.expenseType || undefined,
@@ -481,10 +504,12 @@ export default function ExpensesCreate() {
               // #1945 (owner review #3) — the scenario's suggested account becomes
               // the real DEFAULT at save: pre-fill the (editable) charge account
               // when the operator hasn't chosen one. Override stays one edit away.
+              // #2238 — capture the journal-preview blockers to gate the save button.
               onResult={(r) => {
                 if (r.suggestedAccountCode && !form.accountCode) {
                   setForm((f) => (f.accountCode ? f : { ...f, accountCode: r.suggestedAccountCode! }));
                 }
+                setJournalBlockers(r.journalPreview?.ready ? (r.journalPreview.blockers ?? []) : []);
               }}
             />
           </div>
@@ -934,12 +959,22 @@ export default function ExpensesCreate() {
           )}
         </div>
 
+        {/* #2238 — surface why save is blocked (critical journal-preview blocker). */}
+        {journalBlockers.length > 0 && (
+          <div className="mt-4 rounded-lg border border-status-error-surface bg-status-error-surface p-3 text-xs text-status-error-foreground">
+            <p className="font-semibold mb-1">لا يمكن الحفظ — أصلِح القيد أولًا:</p>
+            <ul className="list-disc pr-4 space-y-0.5">
+              {journalBlockers.map((b, i) => <li key={i}>{b.message}</li>)}
+            </ul>
+          </div>
+        )}
+
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
-          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending || !activeCtx.ready} rateLimitAware>
+          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending || !activeCtx.ready || journalBlockers.length > 0} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ وإضافة آخر"}
           </Button>
-          <Button onClick={() => handleSubmit()} disabled={createMut.isPending || !activeCtx.ready} rateLimitAware>
+          <Button onClick={() => handleSubmit()} disabled={createMut.isPending || !activeCtx.ready || journalBlockers.length > 0} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
         </div>
