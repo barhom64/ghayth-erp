@@ -66,15 +66,13 @@ export default function PropertiesPayments() {
       hidden: !canManage,
       render: (p) => (
         p.status !== "paid" ? (
-          <Link href={`/properties/payments/${p.id}/pay`}>
-            <Button
+          <Button asChild
               variant="ghost"
               size="sm"
               className="gap-1 text-xs h-7 text-emerald-600"
-            >
+            ><Link href={`/properties/payments/${p.id}/pay`}>
               <CheckCircle className="h-3 w-3" /> تسجيل
-            </Button>
-          </Link>
+            </Link></Button>
         ) : null
       ),
     },
