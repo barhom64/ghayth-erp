@@ -721,7 +721,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 
     if (costCenterId) {
       const ccRows = await rawQuery<{ id: number }>(
-        `SELECT id FROM cost_centers WHERE id = $1 AND "companyId" = $2 LIMIT 1`,
+        `SELECT id FROM cost_centers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
         [Number(costCenterId), effectiveCompanyId]
       );
       if (ccRows.length === 0) {
@@ -1819,6 +1819,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
            FROM employee_contracts c
           WHERE c."employeeId" = $1 AND c."companyId" = $2
             AND (c.status = 'active' OR c.status IS NULL)
+            AND c."deletedAt" IS NULL
           ORDER BY c."startDate" DESC NULLS LAST, c.id DESC LIMIT 1`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "employees contract query failed"); return []; }),

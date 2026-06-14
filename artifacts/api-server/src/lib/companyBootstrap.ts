@@ -271,6 +271,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1260", name: "الأصول غير الملموسة (برامج وتراخيص)", nameEn: "Intangible Assets", type: "asset", level: 3, parentCode: "1200" },
   { code: "1270", name: "أعمال تحت التنفيذ", nameEn: "Capital Work In Progress", type: "asset", level: 3, parentCode: "1200" },
 
+  // 1291 مجمع انخفاض قيمة الأصول الثابتة — IAS 36 contra-asset مستقل عن مجمعات
+  // الإهلاك (1211/1221/…) لضمان فصل مخصص الهبوط عن مخصص الإهلاك في الميزانية.
+  // الترحيل: DR 5850 خسارة هبوط / CR 1291 مجمع هبوط. #2140-5a.
+  { code: "1291", name: "مجمع انخفاض قيمة الأصول الثابتة", nameEn: "Accum. Impairment – Fixed Assets", type: "asset", level: 3, parentCode: "1200" },
+
   // ============ 2xxx الالتزامات (Liabilities) ============
   { code: "2000", name: "الالتزامات", nameEn: "Liabilities", type: "liability", level: 1, allowPosting: false },
 
@@ -305,6 +310,10 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "3300", name: "الأرباح المحتجزة", nameEn: "Retained Earnings", type: "equity", level: 2, parentCode: "3000" },
   { code: "3400", name: "أرباح/خسائر العام الحالي", nameEn: "Current Year P/L", type: "equity", level: 2, parentCode: "3000" },
   { code: "3500", name: "السحوبات والتوزيعات", nameEn: "Drawings & Distributions", type: "equity", level: 2, parentCode: "3000" },
+  // 3600 فائض إعادة التقييم — IAS 16 Revaluation Model. حساب مستقل عن الأرباح
+  // المحتجزة (3300) لأن فائض إعادة التقييم لا يُوزَّع إلا عند التصرف في الأصل.
+  // الترحيل: DR أصل ثابت / CR 3600 (زيادة)؛ DR 5860 / CR أصل ثابت (نقص). #2140-5a.
+  { code: "3600", name: "فائض إعادة التقييم", nameEn: "Revaluation Surplus", type: "equity", level: 2, parentCode: "3000" },
 
   // ============ 4xxx الإيرادات ============
   { code: "4000", name: "الإيرادات", nameEn: "Revenue", type: "revenue", level: 1, allowPosting: false },
@@ -397,6 +406,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   // 58xx مصروفات أخرى ومخصصات
   { code: "5800", name: "مصروفات أخرى ومخصصات", nameEn: "Other Expenses & Provisions", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
   { code: "5810", name: "خسائر بيع أصول ثابتة", nameEn: "Loss on Sale of Assets", type: "expense", level: 3, parentCode: "5800" },
+  // 5850 / 5860: مصروفات IAS 36 (هبوط القيمة) و IAS 16 (إعادة التقييم النازلة).
+  // مستقلة عن 5810 (خسائر البيع) لأن طبيعتها وتوقيت الاعتراف بها مختلفان.
+  // #2140-5a مرتكزات الأصول الثابتة.
+  { code: "5850", name: "خسارة انخفاض قيمة الأصول الثابتة", nameEn: "Impairment Loss – Fixed Assets", type: "expense", level: 3, parentCode: "5800" },
+  { code: "5860", name: "خسارة إعادة تقييم الأصول الثابتة", nameEn: "Revaluation Loss – Fixed Assets", type: "expense", level: 3, parentCode: "5800" },
   { code: "5820", name: "ديون معدومة", nameEn: "Bad Debts", type: "expense", level: 3, parentCode: "5800" },
   { code: "5830", name: "مخصصات (ضمانات/التزامات)", nameEn: "Provisions", type: "expense", level: 3, parentCode: "5800" },
   { code: "5840", name: "زكاة وضرائب الدخل", nameEn: "Zakat & Income Tax", type: "expense", level: 3, parentCode: "5800" },

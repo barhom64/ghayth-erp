@@ -1632,17 +1632,36 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/transfer", authorize({ feature: 
         ],
       });
       journalId = posted.journalId;
+      // يحفظ الفرع والقسم ومركز التكلفة في سجل الأصل — لا يكتفى بأبعاد GL.
+      // b.toDepartmentId / b.toCostCenterId قد تكون undefined (لم يتغيرا) فتبقى
+      // القيمة الحالية؛ لذلك نستخدم COALESCE لتجنب مسحها بـ NULL.
       await client.query(
-        `UPDATE fixed_assets SET "branchId"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
-        [newBranchId, id, scope.companyId]
+        `UPDATE fixed_assets
+            SET "branchId"    = $1,
+                "departmentId" = COALESCE($2, "departmentId"),
+                "costCenterId" = COALESCE($3, "costCenterId"),
+                "updatedAt"   = NOW()
+          WHERE id = $4 AND "companyId" = $5`,
+        [newBranchId, b.toDepartmentId ?? null, b.toCostCenterId ?? null, id, scope.companyId]
       );
     });
 
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fixed_assets.transfer", entity: "fixed_assets", entityId: id,
-      before: { branchId: oldBranchId },
-      after: { branchId: newBranchId, departmentId: b.toDepartmentId ?? null, costCenterId: b.toCostCenterId ?? null, transferDate, reason: b.reason, journalEntryId: journalId },
+      before: {
+        branchId: oldBranchId,
+        departmentId: (asset.departmentId as number | null) ?? null,
+        costCenterId: (asset.costCenterId as number | null) ?? null,
+      },
+      after: {
+        branchId: newBranchId,
+        departmentId: b.toDepartmentId ?? (asset.departmentId as number | null) ?? null,
+        costCenterId: b.toCostCenterId ?? (asset.costCenterId as number | null) ?? null,
+        transferDate,
+        reason: b.reason,
+        journalEntryId: journalId,
+      },
     }).catch((e) => logger.error(e, "fixed_assets transfer audit failed"));
 
     res.json({ message: "تم نقل الأصل بنجاح", journalEntryId: journalId, transferDate });
@@ -1689,8 +1708,11 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
     const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
     const accDepCode = (asset.accDepreciationAccountCode as string | null) ?? "1590";
     const [cashCode, lossCode, gainCode] = await Promise.all([
+      // fallback 1111 (نقدية صندوق — postable leaf) — main أصلح هذا في #2192
       financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_cash", "debit", "1111"),
+      // fallback 5810 (خسائر بيع أصول ثابتة) وليس 5999 — 5999 غير موجود في القالب
       financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_loss", "debit", "5810"),
+      // fallback 4920 (أرباح بيع أصول ثابتة) وليس 4999 — 4999 غير موجود في القالب
       financialEngine.resolveAccountCode(scope.companyId, "asset_disposal_gain", "credit", "4920"),
     ]);
 
@@ -1780,11 +1802,13 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/impair", authorize({ feature: "f
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [lossCode, accImpairmentCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "asset_impairment_loss", "debit", "5810"),
-      financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_impairment", "credit", "1211"),
+      // fallback 5850 (خسارة انخفاض قيمة الأصول الثابتة) وليس 5995/5810 — #2140-5a
+      financialEngine.resolveAccountCode(scope.companyId, "asset_impairment_loss", "debit", "5850"),
+      // fallback 1291 (مجمع انخفاض قيمة) — مستقل عن مجمع الإهلاك IAS 36 ≠ IAS 16 — #2140-5a
+      financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_impairment", "credit", "1291"),
     ]);
 
-    const newAccumulated = roundTo2(Number(asset.accumulatedDepreciation) + b.impairmentAmount);
+    const newImpairmentAccumulated = roundTo2(Number(asset.accumulatedImpairment ?? 0) + b.impairmentAmount);
     const newBookValue = roundTo2(bookValue - b.impairmentAmount);
 
     let journalId: number | null = null;
@@ -1805,23 +1829,37 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/impair", authorize({ feature: "f
         ],
       });
       journalId = posted.journalId;
-      // Treat impairment as a permanent add to accumulated depreciation
-      // so future dep calculations work off the impaired book value
-      // without needing a separate "impairedValue" column.
+      // accumulatedImpairment (IAS 36) مستقل عن accumulatedDepreciation (IAS 16).
+      // currentBookValue يتأثر بالاثنين. لا نمس accumulatedDepreciation هنا.
       await client.query(
-        `UPDATE fixed_assets SET "accumulatedDepreciation"=$1, "currentBookValue"=$2, "updatedAt"=NOW() WHERE id=$3 AND "companyId"=$4`,
-        [newAccumulated, newBookValue, id, scope.companyId]
+        `UPDATE fixed_assets
+            SET "accumulatedImpairment" = $1,
+                "currentBookValue"      = $2,
+                "updatedAt"             = NOW()
+          WHERE id = $3 AND "companyId" = $4`,
+        [newImpairmentAccumulated, newBookValue, id, scope.companyId]
       );
     });
 
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fixed_assets.impair", entity: "fixed_assets", entityId: id,
-      before: { bookValue, accumulatedDepreciation: Number(asset.accumulatedDepreciation) },
-      after: { bookValue: newBookValue, accumulatedDepreciation: newAccumulated, impairmentAmount: b.impairmentAmount, impairmentDate: b.impairmentDate, reason: b.reason, journalEntryId: journalId },
+      before: {
+        bookValue,
+        accumulatedDepreciation: Number(asset.accumulatedDepreciation),
+        accumulatedImpairment: Number(asset.accumulatedImpairment ?? 0),
+      },
+      after: {
+        bookValue: newBookValue,
+        accumulatedImpairment: newImpairmentAccumulated,
+        impairmentAmount: b.impairmentAmount,
+        impairmentDate: b.impairmentDate,
+        reason: b.reason,
+        journalEntryId: journalId,
+      },
     }).catch((e) => logger.error(e, "fixed_assets impair audit failed"));
 
-    res.json({ message: "تم تسجيل انخفاض قيمة الأصل", journalEntryId: journalId, newBookValue, impairmentAmount: b.impairmentAmount });
+    res.json({ message: "تم تسجيل انخفاض قيمة الأصل", journalEntryId: journalId, newBookValue, impairmentAmount: b.impairmentAmount, accumulatedImpairment: newImpairmentAccumulated });
   } catch (err) {
     handleRouteError(err, res, "Impair asset error:");
   }
@@ -1869,8 +1907,10 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "
     const { financialEngine } = await import("../lib/engines/index.js");
     const assetCode = (asset.assetAccountCode as string | null) ?? "1500";
     const [surplusCode, lossCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_surplus", "credit", "3300"),
-      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_loss", "debit", "5810"),
+      // fallback 3600 (فائض إعادة التقييم) وليس 3300 (الأرباح المحتجزة) — #2140-5a
+      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_surplus", "credit", "3600"),
+      // fallback 5860 (خسارة إعادة تقييم) وليس 5996/5810 — #2140-5a
+      financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_loss", "debit", "5860"),
     ]);
 
     const lines = delta > 0

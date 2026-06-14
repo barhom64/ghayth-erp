@@ -102,14 +102,14 @@ describe("createJournalEntry INSERT writes new dimensional columns", () => {
     expect(BIZ).toContain("line.dimensionJson ? JSON.stringify(line.dimensionJson) : null");
   });
 
-  it("placeholder count covers 28 columns", () => {
+  it("placeholder count covers 29 columns", () => {
     const insertIdx = BIZ.indexOf("INSERT INTO journal_lines");
     const section = BIZ.slice(insertIdx, insertIdx + 1500);
-    // The VALUES clause now lists $1..$28 — column 28 is branchId, added
-    // in migration 236 so per-line branch can carry a different value
-    // than the entry header (multi-branch split flow).
+    // The VALUES clause now lists $1..$29 — column 28 is branchId, column 29
+    // is analyticAccountId (added in migration 341, Issue #2197).
     expect(section).toContain("$28");
-    // and not $29+ (would mean we added too many)
-    expect(section).not.toMatch(/\$\b(29|30|31)\b/);
+    expect(section).toContain("$29");
+    // and not $30+ (would mean we added too many)
+    expect(section).not.toMatch(/\$\b(30|31|32)\b/);
   });
 });

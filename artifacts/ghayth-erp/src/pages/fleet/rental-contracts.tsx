@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
+import { statusLabel } from "@/lib/transport-status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -97,16 +98,16 @@ const SUB_STAGE_TONE: Record<SubStage, string> = {
   cancelled:         "bg-rose-50 text-rose-700",
 };
 
+// #2079 TA-T18-06 — filter labels sourced from the shared dictionary
+// so any new rental contract status surfaces here in Arabic by default.
+// The two derived sub-stages (awaiting_handover/awaiting_return) are
+// classified client-side (#2001 / #2002) and live in the dictionary
+// alongside the canonical server enum.
 const STATUS_FILTERS: Array<{ value: string; label: string }> = [
-  { value: "all",               label: "الكل" },
-  { value: "draft",             label: "مسودّة" },
-  // The two derived sub-stages — both fetch backend status=active and
-  // narrow client-side via classify().
-  { value: "awaiting_handover", label: "في انتظار التسليم" },
-  { value: "awaiting_return",   label: "في انتظار الإرجاع" },
-  { value: "active",            label: "فعّال (كلاهما)" },
-  { value: "completed",         label: "مُغلق" },
-  { value: "cancelled",         label: "ملغى" },
+  { value: "all", label: "الكل" },
+  ...(["draft", "awaiting_handover", "awaiting_return", "active", "completed", "cancelled"] as const).map(
+    (v) => ({ value: v, label: statusLabel("rental", v).label + (v === "active" ? " (كلاهما)" : "") }),
+  ),
 ];
 
 const DERIVED_SUB_STAGES = new Set<string>(["awaiting_handover", "awaiting_return"]);

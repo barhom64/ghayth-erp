@@ -838,7 +838,7 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
               (psd.amount - COALESCE(psd."refundAmount", 0)) AS "heldAmount"
          FROM property_security_deposits psd
          JOIN rental_contracts rc ON rc.id = psd."contractId" AND rc."deletedAt" IS NULL
-         JOIN tenants t ON t.id = rc."tenantId"
+         JOIN tenants t ON t.id = rc."tenantId" AND t."deletedAt" IS NULL
         WHERE t."clientId" = $1
           AND psd."companyId" = $2
           AND psd."receivedDate" <= $3

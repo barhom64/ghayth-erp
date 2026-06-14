@@ -2,6 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
+import { statusLabel } from "@/lib/transport-status-labels";
 import {
   Truck, Fuel, Wrench, Shield, MapPin, AlertTriangle, Info, Calendar,
 } from "lucide-react";
@@ -72,12 +73,9 @@ interface VehicleDetail {
   }>;
 }
 
-const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  active: { label: "نشطة", className: "bg-status-success-surface text-status-success-foreground border-status-success-surface" },
-  maintenance: { label: "تحت الصيانة", className: "bg-orange-50 text-orange-700 border-orange-200" },
-  retired: { label: "متوقفة", className: "bg-surface-subtle text-gray-700 border-border" },
-  sold: { label: "مباعة", className: "bg-status-error-surface text-status-error-foreground border-status-error-surface" },
-};
+// #2079 TA-T18-06 — labels sourced from the shared transport status
+// dictionary so the SPA never drifts from the server enum (any new
+// fleet_vehicles status surfaces in Arabic automatically).
 
 /**
  * Rich vehicle context for fleet forms.
@@ -112,7 +110,7 @@ export function VehicleContextCard({
 
   if (!data) return null;
 
-  const statusInfo = STATUS_LABELS[data.status || ""] || { label: data.status || "—", className: "" };
+  const statusInfo = statusLabel("vehicle", data.status);
   const notAvailable = data.status === "maintenance" || data.status === "retired" || data.status === "sold";
 
   const openMaintenance = (data.maintenance || []).filter(
@@ -149,7 +147,7 @@ export function VehicleContextCard({
               {[data.make, data.model, data.year].filter(Boolean).join(" ")}
             </Badge>
           </div>
-          <Badge variant="outline" className={cn("text-xs", statusInfo.className)}>
+          <Badge variant="outline" className={cn("text-xs", statusInfo.tone)}>
             {statusInfo.label}
           </Badge>
         </div>
