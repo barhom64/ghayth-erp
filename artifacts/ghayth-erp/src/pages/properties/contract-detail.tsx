@@ -365,6 +365,14 @@ export default function ContractDetailPage() {
         <CardContent className="p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InfoRow label="رقم إيجار" value={contract?.ejarNumber} />
+            <InfoRow label="مصدر العقد" value={
+              contract?.contractSource === "ejar" ? "منصة إيجار" :
+              contract?.contractSource === "manual" ? "إدخال يدوي" :
+              contract?.contractSource === "file_import" ? "استيراد ملف" :
+              contract?.contractSource === "ejar_later" ? "إيجار لاحقاً" :
+              contract?.contractSource === "migrated" ? "مرحّل من نظام قديم" :
+              contract?.contractSource || "—"
+            } />
             <InfoRow label="المستأجر" value={contract?.tenantName} />
             <InfoRow label="الوحدة" value={contract?.unitNumber} />
             <InfoRow label="المبنى" value={contract?.buildingName} />
