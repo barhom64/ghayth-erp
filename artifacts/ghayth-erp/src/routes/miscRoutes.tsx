@@ -159,5 +159,5 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/automation", component: Automation, module: "admin" },
   { path: "/activity-log", component: ActivityLog },
   { path: "/module-dashboards", component: ModuleDashboards, module: "bi" },
-  { path: "/reports/scheduled", component: ScheduledReports, module: "bi" },
+  { path: "/reports/scheduled", component: ScheduledReports, module: "bi", minRoleLevel: 50 },
 ];
