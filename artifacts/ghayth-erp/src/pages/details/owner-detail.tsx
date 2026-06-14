@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { useDetailEditDelete, DetailActionButtons, InlineEditCard } from "@/components/shared/detail-edit-delete-actions";
+import { OwnerPayoutsPanel } from "./owner-payouts-panel";
 
 /**
  * OwnerDetail — unified detail page for a single property owner.
@@ -40,7 +41,17 @@ export default function OwnerDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/owners/:id");
   const id = params?.id ? Number(params.id) : null;
-  const { extraTabs, hideTabs } = useRegistryTabs("owner", id ?? 0);
+  const { extraTabs: registryTabs, hideTabs } = useRegistryTabs("owner", id ?? 0);
+
+  const extraTabs = useMemo(() => [
+    ...registryTabs,
+    {
+      key: "payouts",
+      label: "المدفوعات للمالك",
+      icon: Banknote,
+      content: () => id ? <OwnerPayoutsPanel ownerId={id} /> : null,
+    },
+  ], [registryTabs, id]);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
