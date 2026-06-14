@@ -216,24 +216,18 @@ export default function GlHealthScorePage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/gl-anomaly-detector">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/gl-anomaly-detector">
               <AlertTriangle className="h-3.5 w-3.5 ml-1" />
               كاشف الشذوذ
-            </Button>
-          </Link>
-          <Link href="/finance/reports/gl-integrity-gaps">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/gl-integrity-gaps">
               <Shield className="h-3.5 w-3.5 ml-1" />
               فجوات السلامة
-            </Button>
-          </Link>
-          <Link href="/finance/gl-posting-queue">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/gl-posting-queue">
               <Activity className="h-3.5 w-3.5 ml-1" />
               قائمة الترحيل
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_gl_health"
             entityId="list"
@@ -355,12 +349,10 @@ export default function GlHealthScorePage() {
                       }`} style={{ width: `${d.rawScore}%` }} />
                     </div>
                   </div>
-                  <Link href={d.fixHref}>
-                    <Button variant="outline" size="sm" className="h-8 text-xs whitespace-nowrap shrink-0">
+                  <Button asChild variant="outline" size="sm" className="h-8 text-xs whitespace-nowrap shrink-0"><Link href={d.fixHref}>
                       {d.fixLabel}
                       <ChevronRight className="h-3 w-3 ms-1" />
-                    </Button>
-                  </Link>
+                    </Link></Button>
                 </div>
               </CardContent>
             </Card>
