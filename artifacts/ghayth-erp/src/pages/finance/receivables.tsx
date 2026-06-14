@@ -88,9 +88,7 @@ export default function ReceivablesPage() {
       key: "actions",
       header: "إجراءات",
       render: (r) => (
-        <Link href={`/finance/invoices/${r.id}`}>
-          <Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button>
-        </Link>
+        <Button asChild variant="ghost" size="sm" title="عرض"><Link href={`/finance/invoices/${r.id}`}><Eye className="h-4 w-4" /></Link></Button>
       ),
     },
   ];
@@ -102,24 +100,18 @@ export default function ReceivablesPage() {
       loading={isLoading}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/ar-aging">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ar-aging">
               <Clock className="h-3.5 w-3.5 ml-1" />
               تقادم الذمم
-            </Button>
-          </Link>
-          <Link href="/finance/ar-collection-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ar-collection-workbench">
               <ArrowDownCircle className="h-3.5 w-3.5 ml-1" />
               منضدة التحصيل
-            </Button>
-          </Link>
-          <Link href="/finance/dunning">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/dunning">
               <AlertTriangle className="h-3.5 w-3.5 ml-1" />
               متابعة Dunning
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_receivables"
             entityId="list"
