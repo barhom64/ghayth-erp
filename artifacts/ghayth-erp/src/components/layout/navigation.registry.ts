@@ -176,8 +176,12 @@ export const allNavSections: NavSection[] = [
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
-        { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
-        { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+        // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
+        // PR-7 «الموحّد»). أُزيل تكرار «الهيكل المصوّر» وعنصر org-tree المنفصل في
+        // إعدادات HR. مسارا /hr/organization (عرض المناصب) و .../structure (العلاقات)
+        // يبقيان مسجَّلين deep-link — لا حذف ولا 404. متابعة: نقل عرضَي «المناصب»
+        // و«العلاقات» إلى org-tree كتبويبات ثم retire الصفحتين.
+        { label: "الهيكل التنظيمي", path: "/hr/org-tree", icon: Network, subKey: "organization" },
         { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
         { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
         { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
@@ -266,7 +270,6 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
-        { label: "الشجرة التنظيمية", path: "/hr/org-tree", icon: Network, subKey: "employees" },
         { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
         { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
