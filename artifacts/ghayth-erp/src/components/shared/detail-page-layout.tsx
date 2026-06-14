@@ -189,8 +189,6 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
     headerExtra,
   } = props;
 
-  // Publish the entity's real title (e.g. "فاتورة #INV-2024-001") so the
-  // topbar + breadcrumb show the actual page, not the parent module label.
 
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
