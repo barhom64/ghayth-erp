@@ -372,8 +372,13 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   mutamer: () => buildUmrahPilgrimPreset(),
   trip: () => buildFleetTripPreset(),
   customer: () => buildClientCardPreset(),
-  agent: () => buildUmrahPilgrimPreset(),
-  sub_agent: () => buildUmrahPilgrimPreset(),
+  // U-14-P1 — short-name aliases were wired to the pilgrim preset,
+  // which is wrong (the agent / sub-agent card preset already exists
+  // and renders the correct fields). The umrah_agent / umrah_sub_agent
+  // long-name keys above are unchanged; this just fixes the SPA
+  // detail-page paths that pass the short form.
+  agent: () => buildUmrahAgentCardPreset(),
+  sub_agent: () => buildUmrahSubAgentCardPreset(),
   overtime: () => buildOvertimeRequestPreset(),
   leave: () => buildLeaveRequestPreset(),
   excuse: () => buildExcuseRequestPreset(),
@@ -416,7 +421,12 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   // printed doc carries the same layout the rest of the domain uses.
   fleet_driver: () => buildDriverCardPreset(),
   legal_correspondence: () => buildCorrespondenceCardPreset(),
-  umrah_group: () => buildUmrahPilgrimPreset(),
+  // U-14-P1 — umrah_group was aliased to the pilgrim preset, but a
+  // group is a COLLECTION of pilgrims with its own meta (mutamerCount,
+  // agent linkage, season). The universal fallback renders the group
+  // row's actual fields (id, name, status, season, agent, sub-agent,
+  // mutamerCount, ...). A bespoke buildUmrahGroupPreset is U-14-P3.
+  umrah_group: () => universalFallback("umrah_group"),
   umrah_agent_invoice: () => buildUmrahInvoicePreset(),
   // Cargo bill of lading — new bespoke preset wired with loadCargoManifest.
   cargo_manifest: () => buildCargoManifestPreset(),
