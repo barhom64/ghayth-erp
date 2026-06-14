@@ -45,6 +45,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
@@ -702,6 +703,25 @@ transportBookingsRouter.patch(
       );
       if (!existing) throw new NotFoundError("الحجز غير موجود");
       if (b.status && b.status !== existing.status) {
+        // #2079 TA-T18-08 — SoD: moving a booking to `approved` or
+        // `rejected` is an APPROVAL decision and requires the
+        // `fleet.bookings:approve` action on top of `update`. The
+        // generic update grant on its own does NOT unlock this
+        // transition. This rule is the second line of defence — the
+        // primary path is the dedicated POST /approve + /reject
+        // endpoints, but a permitted client can still drive the
+        // status via PATCH as long as it holds approve.
+        if (b.status === "approved" || b.status === "rejected") {
+          const approval = await checkAccess(scope, {
+            feature: "fleet.bookings",
+            action: "approve",
+          });
+          if (!approval.allowed) {
+            throw new ValidationError(
+              "اعتماد/رفض الحجز يتطلب صلاحية fleet.bookings:approve منفصلة عن صلاحية التعديل العامة",
+            );
+          }
+        }
         const allowed = BOOKING_TRANSITIONS[existing.status] ?? [];
         if (!allowed.includes(b.status)) {
           throw new ConflictError(`الانتقال من ${existing.status} إلى ${b.status} غير مسموح`);
@@ -784,6 +804,114 @@ transportBookingsRouter.patch(
       res.json({ data: { id, billingCandidateId: passengerCandidateId } });
     } catch (err) {
       handleRouteError(err, res, "Update transport booking error:");
+    }
+  },
+);
+
+// ─── #2079 TA-T18-08 — Approval endpoints (SoD) ──────────────────────
+//
+// These two routes are the canonical paths for moving a booking out of
+// `pending_approval`. They are authorized on the NEW `approve` action
+// (declared `approvableActions: ["approve"]` in the feature catalog),
+// distinct from `update`. A role can now hold `fleet.bookings:update`
+// (read+edit) without `fleet.bookings:approve`, which is the
+// segregation-of-duties guarantee the audit required:
+//
+//   • creator role  →  update only       (cannot self-approve)
+//   • approver role →  approve (+ view)  (cannot edit booking fields)
+//   • admin role    →  both              (legacy behaviour preserved
+//                                         via wildcard fleet.bookings:*
+//                                         or fleet.*)
+//
+// The generic PATCH still accepts status=approved|rejected from
+// callers who hold BOTH update + approve (e.g. the legacy admin
+// dropdown). The dedicated endpoints are the path the SPA's new
+// Approve / Reject buttons use.
+const approveBookingSchema = z.object({
+  note: z.string().max(2000).optional(),
+});
+const rejectBookingSchema = z.object({
+  reason: z.string().min(1, "سبب الرفض مطلوب").max(2000),
+});
+
+transportBookingsRouter.post(
+  "/transport/bookings/:id/approve",
+  authorize({ feature: "fleet.bookings", action: "approve" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(approveBookingSchema.safeParse(req.body));
+      const [existing] = await rawQuery<{ status: typeof BOOKING_STATUSES[number] }>(
+        `SELECT status FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!existing) throw new NotFoundError("الحجز غير موجود");
+      const allowed = BOOKING_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes("approved")) {
+        throw new ConflictError(`لا يمكن اعتماد حجز في حالة "${existing.status}"`);
+      }
+      await rawExecute(
+        `UPDATE transport_bookings
+            SET status = 'approved', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "approve", entity: "transport_bookings", entityId: id,
+        before: { status: existing.status },
+        after: { status: "approved", note: b.note ?? null },
+      }).catch((e) => logger.error(e, "booking approve audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+        action: "fleet.booking.approved", entity: "transport_bookings", entityId: id,
+        details: JSON.stringify({ previousStatus: existing.status }),
+      }).catch((e) => logger.error(e, "booking approve event failed"));
+      res.json({ data: { id, status: "approved" } });
+    } catch (err) {
+      handleRouteError(err, res, "Approve transport booking error:");
+    }
+  },
+);
+
+transportBookingsRouter.post(
+  "/transport/bookings/:id/reject",
+  authorize({ feature: "fleet.bookings", action: "approve" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(rejectBookingSchema.safeParse(req.body));
+      const [existing] = await rawQuery<{ status: typeof BOOKING_STATUSES[number] }>(
+        `SELECT status FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!existing) throw new NotFoundError("الحجز غير موجود");
+      const allowed = BOOKING_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes("rejected")) {
+        throw new ConflictError(`لا يمكن رفض حجز في حالة "${existing.status}"`);
+      }
+      await rawExecute(
+        `UPDATE transport_bookings
+            SET status = 'rejected', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "reject", entity: "transport_bookings", entityId: id,
+        before: { status: existing.status },
+        after: { status: "rejected", reason: b.reason },
+      }).catch((e) => logger.error(e, "booking reject audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+        action: "fleet.booking.rejected", entity: "transport_bookings", entityId: id,
+        details: JSON.stringify({ previousStatus: existing.status, reason: b.reason }),
+      }).catch((e) => logger.error(e, "booking reject event failed"));
+      res.json({ data: { id, status: "rejected" } });
+    } catch (err) {
+      handleRouteError(err, res, "Reject transport booking error:");
     }
   },
 );
