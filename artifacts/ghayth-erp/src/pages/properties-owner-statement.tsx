@@ -128,7 +128,11 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 export default function PropertiesOwnerStatement() {
-  const [ownerId, setOwnerId] = useState<string>("");
+  // Auto-select owner when navigated from owner detail page (?ownerId=X)
+  const initialOwnerId = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("ownerId") ?? ""
+    : "";
+  const [ownerId, setOwnerId] = useState<string>(initialOwnerId);
   const [from, setFrom] = useState<string>(firstOfMonth());
   const [to, setTo] = useState<string>(todayLocal());
   const [commissionOverride, setCommissionOverride] = useState<string>("");
