@@ -138,12 +138,10 @@ export default function CostCenterRankingPage() {
               CSV
             </Button>
           )}
-          <Link href="/finance/cost-centers/tree">
-            <Button variant="ghost" data-testid="cc-ranking-tree">
+          <Button asChild variant="ghost" data-testid="cc-ranking-tree"><Link href="/finance/cost-centers/tree">
               <Network className="h-4 w-4 ms-1" />
               الشجرة
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
