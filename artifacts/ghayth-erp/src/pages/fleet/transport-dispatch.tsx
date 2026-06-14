@@ -13,6 +13,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
+import { statusLabel, statusDict } from "@/lib/transport-status-labels";
 
 // #1733 Comment 9 — dispatch board surface. Shows scheduled dispatch
 // orders grouped per-driver in a daily timeline column so the
@@ -43,27 +44,8 @@ interface DispatchOrderRow {
   completedAt: string | null;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: "بانتظار",
-  notified: "تم الإبلاغ",
-  accepted: "قَبِل",
-  declined: "رفض",
-  executing: "جاري التنفيذ",
-  completed: "اكتمل",
-  closed: "مغلق",
-  cancelled: "ملغى",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  pending:   "bg-status-info-surface text-status-info-foreground",
-  notified:  "bg-status-info-surface text-status-info-foreground",
-  accepted:  "bg-purple-50 text-purple-700",
-  declined:  "bg-rose-100 text-rose-700",
-  executing: "bg-status-warning-surface text-status-warning-foreground",
-  completed: "bg-status-success-surface text-status-success-foreground",
-  closed:    "bg-surface-subtle text-muted-foreground",
-  cancelled: "bg-surface-subtle text-muted-foreground",
-};
+// #TA-T18-UX-AUDIT-01 UX-05 — حالة التوزيع تُعرض من القاموس الموحّد
+// (lib/transport-status-labels) بدل خريطة محلية كانت تسقط لقيمة إنجليزية خام.
 
 function toDateInputValue(d: Date): string {
   // YYYY-MM-DD in local time so the operator's "today" matches their wall clock.
@@ -414,8 +396,8 @@ export default function TransportDispatchBoard() {
                                 )}
                                 حجز #{o.bookingNumber}
                               </span>
-                              <Badge variant="outline" className={STATUS_TONE[o.status] ?? ""}>
-                                {STATUS_LABEL[o.status] ?? o.status}
+                              <Badge variant="outline" className={statusLabel("dispatch", o.status).tone}>
+                                {statusLabel("dispatch", o.status).label}
                               </Badge>
                             </div>
                             <div className="flex items-center gap-3 text-muted-foreground">
@@ -471,7 +453,7 @@ export default function TransportDispatchBoard() {
               <Label>الحالة</Label>
               <select className="w-full h-10 border rounded-md px-2 mt-1" value={editStatus}
                 onChange={(e) => setEditStatus(e.target.value)}>
-                {Object.entries(STATUS_LABEL).map(([k, lbl]) => <option key={k} value={k}>{lbl}</option>)}
+                {Object.entries(statusDict("dispatch")).map(([k, info]) => <option key={k} value={k}>{info.label}</option>)}
               </select>
             </div>
             <div className="flex gap-2 justify-end pt-1">

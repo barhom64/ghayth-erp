@@ -66,6 +66,20 @@ import {
 } from "./umrahFamiliarity.js";
 import { evaluateLadder } from "./vehicleClassLadder.js";
 
+/** #TA-T18-UX-AUDIT-01 P0-4 — pre-scoring ejection record. When the
+ *  caller passes a `sink`, the engine reports WHY each vehicle/driver
+ *  was dropped BEFORE scoring (مصفوفة القدرات / الجاهزية / الصيانة /
+ *  الإجازة / حدود القيادة) so the dispatcher screen can explain a
+ *  missing candidate instead of silently hiding it. Opt-in: omitting
+ *  the sink keeps the hot path allocation-free. */
+export interface ExcludedCandidate {
+  kind: "vehicle" | "driver";
+  id: number;
+  label: string;
+  reason: string;
+}
+export type ExclusionSink = ExcludedCandidate[];
+
 export interface SuggestionRequest {
   companyId: number;
   branchId: number | null;
@@ -77,6 +91,8 @@ export interface SuggestionRequest {
   scheduledEndAt?: string;
   /** Max candidates to return (default 10). */
   limit?: number;
+  /** #P0-4 — optional collector for pre-scoring ejections. */
+  sink?: ExclusionSink;
 }
 
 export interface SuggestionResult {
@@ -159,6 +175,8 @@ export interface SuggestionCriteria {
   fromLat: number | null;
   fromLng: number | null;
   limit?: number;
+  /** #TA-T18-UX-AUDIT-01 P0-4 — pre-scoring ejection collector. */
+  sink?: ExclusionSink;
   /** #2079 PE-05 — continuity bonus.
    *  When the engine is invoked as part of an itinerary walk, the
    *  caller threads through the (vehicle, driver) pair that won the
@@ -317,6 +335,7 @@ export async function suggestAssignments(
     fromLat: booking.fromLat,
     fromLng: booking.fromLng,
     limit: req.limit,
+    sink: req.sink,
     // #2079 PE-06 — thread the umrah context through. The criteria
     // wrapper does NOT touch these unless the scorer activates.
     umrahGroupId: booking.umrahGroupId,
@@ -854,15 +873,27 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
     vcmByVehicleId.set(v.id, vcm);
     if (tripFamily) {
       const verdict = isEligibleForTripFamily(vcm, tripFamily, booking.transportServiceType);
-      if (!verdict.eligible) continue;
+      if (!verdict.eligible) {
+        c.sink?.push({ kind: "vehicle", id: v.id, label: v.plateNumber ?? `#${v.id}`,
+          reason: verdict.reason ?? "المركبة غير مؤهّلة لعائلة هذه الرحلة" });
+        continue;
+      }
     }
     // #2079 PE-02 — vehicle readiness gate. Document-expiry and
     // active-maintenance ejections fire BEFORE scoring so the
     // dispatcher never sees a candidate they would have to reject
     // for paperwork or workshop reasons.
     const readiness = checkVehicleDocumentReadiness(v, end);
-    if (readiness.blocked) continue;
-    if (maintenanceByVehicleId.has(v.id)) continue;
+    if (readiness.blocked) {
+      c.sink?.push({ kind: "vehicle", id: v.id, label: v.plateNumber ?? `#${v.id}`,
+        reason: readiness.reason ?? "وثائق المركبة منتهية أو تنتهي قبل نهاية الرحلة" });
+      continue;
+    }
+    if (maintenanceByVehicleId.has(v.id)) {
+      c.sink?.push({ kind: "vehicle", id: v.id, label: v.plateNumber ?? `#${v.id}`,
+        reason: "المركبة في صيانة نشطة" });
+      continue;
+    }
     eligibleVehicles.push(v);
   }
 
@@ -874,13 +905,21 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
   const eligibleDrivers: DriverRow[] = [];
   for (const d of drivers) {
     const leaveVerdict = checkDriverLeave(d.employeeId, leaveByEmployeeId);
-    if (leaveVerdict.blocked) continue;
+    if (leaveVerdict.blocked) {
+      c.sink?.push({ kind: "driver", id: d.id, label: d.name ?? `#${d.id}`,
+        reason: leaveVerdict.reason ?? "السائق في إجازة معتمدة خلال النافذة" });
+      continue;
+    }
     const capVerdict = checkDriverDrivingCaps(
       drivingMinutesByDriverId.get(d.id) ?? null,
       tripDurationMinutes,
       drivingCaps,
     );
-    if (capVerdict.blocked) continue;
+    if (capVerdict.blocked) {
+      c.sink?.push({ kind: "driver", id: d.id, label: d.name ?? `#${d.id}`,
+        reason: capVerdict.reason ?? "تجاوز حدود القيادة المسموحة" });
+      continue;
+    }
     eligibleDrivers.push(d);
   }
 

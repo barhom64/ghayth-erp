@@ -29,6 +29,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { statusLabel } from "@/lib/transport-status-labels";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,31 +58,9 @@ interface TransportRequestRow {
   actualCost: number | null;
 }
 
-const STATUS_LABEL_AR: Record<string, string> = {
-  draft: "مسودة",
-  submitted: "مُقدَّم",
-  pending_approval: "بانتظار الاعتماد",
-  approved: "معتمد",
-  scheduled: "مجدول",
-  dispatched: "مُكلَّف",
-  in_progress: "قيد التنفيذ",
-  completed: "مكتمل",
-  cancelled: "ملغي",
-  rejected: "مرفوض",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  draft:            "bg-slate-100 text-slate-700 border-slate-300",
-  submitted:        "bg-sky-100 text-sky-700 border-sky-300",
-  pending_approval: "bg-amber-100 text-amber-700 border-amber-300",
-  approved:         "bg-emerald-100 text-emerald-700 border-emerald-300",
-  scheduled:        "bg-sky-100 text-sky-700 border-sky-300",
-  dispatched:       "bg-indigo-100 text-indigo-700 border-indigo-300",
-  in_progress:      "bg-blue-100 text-blue-700 border-blue-300",
-  completed:        "bg-emerald-100 text-emerald-700 border-emerald-300",
-  cancelled:        "bg-rose-100 text-rose-700 border-rose-300",
-  rejected:         "bg-rose-100 text-rose-700 border-rose-300",
-};
+// #TA-T18-UX-AUDIT-01 UX-05 — حالات طلب النقل العشر مطابقة لحالات الحجز
+// القانونية، فتُعرض من القاموس الموحّد (lib/transport-status-labels) بدل
+// خريطتين محليتين كانتا تسقطان لقيمة إنجليزية خام.
 
 const ROUTE_TYPE_LABEL_AR: Record<string, string> = {
   airport_to_makkah: "مطار → مكة",
@@ -354,7 +333,7 @@ export default function UmrahTransportRequestsPage() {
                 </thead>
                 <tbody>
                   {rows.map((r) => {
-                    const tone = STATUS_TONE[r.status] ?? STATUS_TONE.draft;
+                    const tone = statusLabel("booking", r.status).tone;
                     return (
                       <tr
                         key={r.transportRequestId}
@@ -376,7 +355,7 @@ export default function UmrahTransportRequestsPage() {
                           <span
                             className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}
                           >
-                            {STATUS_LABEL_AR[r.status] ?? r.status}
+                            {statusLabel("booking", r.status).label}
                           </span>
                         </td>
                       </tr>
