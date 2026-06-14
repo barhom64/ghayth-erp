@@ -240,11 +240,9 @@ export default function RentalDetailPage() {
               state of the contract regardless of where it is in the
               lifecycle. */}
           <PrintButton entityType="fleet_rental_contract" entityId={c.id} />
-          <Link href="/fleet/rental-contracts">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/rental-contracts">
               <ArrowLeft className="h-4 w-4 me-1" />العودة للقائمة
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
