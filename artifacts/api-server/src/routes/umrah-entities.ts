@@ -4995,12 +4995,27 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
       rawQuery<{
         total: string; calculatedAmount: string; paidAmount: string;
         pendingAmount: string; employeesCount: string;
+        conditionMetCount: string; conditionUnmetCount: string;
+        conditionMetAmount: string; conditionUnmetAmount: string;
+        hasViolationsCount: string;
       }>(
+        // U-04-P2 — KPIs extended with condition-met / -unmet splits and
+        // a hasViolations rollup. Both columns already exist on the calc
+        // row (cc."conditionMet" boolean, cc."hasViolations" boolean —
+        // surfaced on the recent table today but never aggregated). All
+        // counts and sums share the same WHERE filter set + parameter
+        // list as the existing KPI block, so the new fields don't
+        // change the result set semantics — they're additive sums.
         `SELECT COUNT(*)::text AS total,
                 COALESCE(SUM(cc."finalAmount"), 0)::text AS "calculatedAmount",
                 COALESCE(SUM(CASE WHEN cc.status = 'paid' THEN cc."finalAmount" ELSE 0 END), 0)::text AS "paidAmount",
                 COALESCE(SUM(CASE WHEN cc.status NOT IN ('paid') THEN cc."finalAmount" ELSE 0 END), 0)::text AS "pendingAmount",
-                COUNT(DISTINCT cc."employeeId")::text AS "employeesCount"
+                COUNT(DISTINCT cc."employeeId")::text AS "employeesCount",
+                COUNT(*) FILTER (WHERE cc."conditionMet" = true)::text AS "conditionMetCount",
+                COUNT(*) FILTER (WHERE cc."conditionMet" = false)::text AS "conditionUnmetCount",
+                COALESCE(SUM(CASE WHEN cc."conditionMet" = true THEN cc."finalAmount" ELSE 0 END), 0)::text AS "conditionMetAmount",
+                COALESCE(SUM(CASE WHEN cc."conditionMet" = false THEN cc."finalAmount" ELSE 0 END), 0)::text AS "conditionUnmetAmount",
+                COUNT(*) FILTER (WHERE cc."hasViolations" = true)::text AS "hasViolationsCount"
            FROM employee_commission_calculations cc
           WHERE ${where}`,
         params,
@@ -5068,7 +5083,15 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
       ),
     ]);
 
-    const k = kpiRow[0] ?? { total: "0", calculatedAmount: "0", paidAmount: "0", pendingAmount: "0", employeesCount: "0" };
+    // U-04-P2 — the kpiRow now carries 5 extra fields. Defaulting them
+    // to "0" string keeps the response shape stable on empty result.
+    const k = kpiRow[0] ?? {
+      total: "0", calculatedAmount: "0", paidAmount: "0",
+      pendingAmount: "0", employeesCount: "0",
+      conditionMetCount: "0", conditionUnmetCount: "0",
+      conditionMetAmount: "0", conditionUnmetAmount: "0",
+      hasViolationsCount: "0",
+    };
     res.json(maskFields(req, {
       kpis: {
         total: Number(k.total),
@@ -5076,6 +5099,12 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
         paidAmount: Number(k.paidAmount),
         pendingAmount: Number(k.pendingAmount),
         employeesCount: Number(k.employeesCount),
+        // U-04-P2 additions — condition-met + violations split.
+        conditionMetCount: Number(k.conditionMetCount),
+        conditionUnmetCount: Number(k.conditionUnmetCount),
+        conditionMetAmount: Number(k.conditionMetAmount),
+        conditionUnmetAmount: Number(k.conditionUnmetAmount),
+        hasViolationsCount: Number(k.hasViolationsCount),
       },
       byStatus:   byStatus.map((r) => ({ status: r.status, count: Number(r.c), total: Number(r.total) })),
       byMonth:    byMonth.map((r) => ({ year: r.year, month: r.month, count: Number(r.c), total: Number(r.total) })),
