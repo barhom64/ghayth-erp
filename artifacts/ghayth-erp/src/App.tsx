@@ -26,6 +26,7 @@ import { requestsRoutes } from "@/routes/requestsRoutes";
 import { commsRoutes } from "@/routes/commsRoutes";
 import { miscRoutes } from "@/routes/miscRoutes";
 import { umrahRoutes } from "@/routes/umrahRoutes";
+import { warehouseRoutes } from "@/routes/warehouseRoutes";
 
 import Login from "@/pages/login";
 import Setup from "@/pages/setup";
@@ -69,6 +70,7 @@ const allModuleRoutes: RouteConfig[] = [
   // "umrah", so umrah-granted users carry "umrah" in allowedModules; owners/GM
   // keep ALL_MODULES. See docs/frontend/PAGE_VISIBILITY_INVENTORY.md.
   ...tagRoutes(umrahRoutes, "umrah"),
+  ...tagRoutes(warehouseRoutes, "warehouse"),
   ...miscRoutes,
 ];
 

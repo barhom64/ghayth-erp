@@ -11,6 +11,7 @@ import { storeRoutes } from "@/routes/storeRoutes";
 import { documentsRoutes } from "@/routes/documentsRoutes";
 import { requestsRoutes } from "@/routes/requestsRoutes";
 import { commsRoutes } from "@/routes/commsRoutes";
+import { warehouseRoutes } from "@/routes/warehouseRoutes";
 import { miscRoutes } from "@/routes/miscRoutes";
 import { umrahRoutes } from "@/routes/umrahRoutes";
 
@@ -31,6 +32,7 @@ const REGISTERED_PATTERNS: string[] = [
   ...documentsRoutes.map((r) => r.path),
   ...requestsRoutes.map((r) => r.path),
   ...commsRoutes.map((r) => r.path),
+  ...warehouseRoutes.map((r) => r.path),
   ...miscRoutes.map((r) => r.path),
   ...umrahRoutes.map((r) => r.path),
 ];
