@@ -63,7 +63,7 @@ import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
   BookOpen, FileText, Clock, Plus, Flag,
-  BarChart2, ShieldAlert, Users2, Mail, Lock, TrendingUp,
+  BarChart2, ShieldAlert, Users2, Mail, Lock, TrendingUp, ClipboardList,
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -88,6 +88,7 @@ const PROJECT_TABS = [
   { key: "costs", label: "التكاليف", icon: DollarSign },
   { key: "finance", label: "المالية", icon: BookOpen },
   { key: "letters", label: "المراسلات", icon: Mail },
+  { key: "boq", label: "جدول الكميات", icon: ClipboardList },
   { key: "documents", label: "المستندات", icon: FileText },
   { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
@@ -128,6 +129,14 @@ export default function ProjectDetail() {
   const unitsEnabled = !!id && activeTab === "units";
   const { data: unitsResp, refetch: refetchUnits } = useApiQuery<any>(["project-units", id || ""], `/projects/${id}/units`, unitsEnabled);
   const projectUnits: any[] = unitsResp?.units || [];
+  const boqEnabled = !!id && activeTab === "boq";
+  const { data: boqResp, refetch: refetchBoq } = useApiQuery<any>(["project-boq", id || ""], `/projects/${id}/boq`, boqEnabled);
+  const boqItems: any[] = boqResp?.data || boqResp || [];
+  const [showBoqForm, setShowBoqForm] = useState(false);
+  const [newBoq, setNewBoq] = useState<{ description?: string; unit?: string; quantity?: string; unitPrice?: string; notes?: string }>({});
+  const [editBoqId, setEditBoqId] = useState<number | null>(null);
+  const [editBoq, setEditBoq] = useState<{ description?: string; unit?: string; quantity?: string; unitPrice?: string; notes?: string }>({});
+  const [boqBilling, setBoqBilling] = useState(false);
   const [showUnitForm, setShowUnitForm] = useState(false);
   const [newUnit, setNewUnit] = useState<{ name?: string; code?: string; area?: string; salePrice?: string; notes?: string }>({});
   const [sellUnitId, setSellUnitId] = useState<number | null>(null);
@@ -363,6 +372,73 @@ export default function ProjectDetail() {
       toast({ variant: "destructive", title: "حدث خطأ في البيع", description: getErrorMessage(err) });
     } finally {
       setSellLoading(false);
+    }
+  };
+
+  const saveBoqItem = async () => {
+    if (!newBoq.description) return;
+    try {
+      await apiFetch(`/projects/${id}/boq`, {
+        method: "POST",
+        body: JSON.stringify({
+          description: newBoq.description,
+          unit: newBoq.unit,
+          quantity: newBoq.quantity ? Number(newBoq.quantity) : undefined,
+          unitPrice: newBoq.unitPrice ? Number(newBoq.unitPrice) : undefined,
+          notes: newBoq.notes,
+        }),
+      });
+      toast({ title: "تمت الإضافة" });
+      setShowBoqForm(false);
+      setNewBoq({});
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الإضافة", description: getErrorMessage(err) });
+    }
+  };
+
+  const updateBoqItem = async (boqId: number) => {
+    try {
+      await apiFetch(`/projects/boq/${boqId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          description: editBoq.description,
+          unit: editBoq.unit,
+          quantity: editBoq.quantity ? Number(editBoq.quantity) : undefined,
+          unitPrice: editBoq.unitPrice ? Number(editBoq.unitPrice) : undefined,
+          notes: editBoq.notes,
+        }),
+      });
+      toast({ title: "تم التحديث" });
+      setEditBoqId(null);
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل التحديث", description: getErrorMessage(err) });
+    }
+  };
+
+  const deleteBoqItem = async (boqId: number) => {
+    if (!confirm("حذف هذا البند؟")) return;
+    try {
+      await apiFetch(`/projects/boq/${boqId}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الحذف", description: getErrorMessage(err) });
+    }
+  };
+
+  const billBoqItems = async () => {
+    if (!confirm("إرسال جدول الكميات للفوترة؟")) return;
+    setBoqBilling(true);
+    try {
+      await apiFetch(`/projects/${id}/boq/bill`, { method: "POST" });
+      toast({ title: "تم الإرسال للفوترة" });
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الإرسال", description: getErrorMessage(err) });
+    } finally {
+      setBoqBilling(false);
     }
   };
 
@@ -950,6 +1026,103 @@ export default function ProjectDetail() {
           </Card>
         </div>
       )}
+      {activeTab === "boq" && id && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ClipboardList className="w-5 h-5" /> جدول الكميات ({boqItems.length})
+              </CardTitle>
+              <div className="flex gap-2">
+                <GuardedButton perm="projects.list:create" size="sm" variant="outline" className="gap-1"
+                  onClick={billBoqItems} disabled={boqBilling || boqItems.length === 0}>
+                  {boqBilling ? "جارٍ الإرسال..." : "إرسال للفوترة"}
+                </GuardedButton>
+                <GuardedButton perm="projects.list:create" size="sm" className="gap-1" onClick={() => setShowBoqForm(v => !v)}>
+                  <Plus className="w-4 h-4" /> بند جديد
+                </GuardedButton>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {showBoqForm && (
+                <div className="border rounded-lg p-4 bg-surface-subtle space-y-3">
+                  <p className="text-sm font-medium">إضافة بند BOQ</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs text-muted-foreground">الوصف *</label>
+                      <input className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.description || ""} onChange={e => setNewBoq(p => ({ ...p, description: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">الوحدة</label>
+                      <input className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.unit || ""} onChange={e => setNewBoq(p => ({ ...p, unit: e.target.value }))} placeholder="م²، طن، م.ط..." />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">الكمية</label>
+                      <input type="number" className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.quantity || ""} onChange={e => setNewBoq(p => ({ ...p, quantity: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">سعر الوحدة</label>
+                      <input type="number" className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.unitPrice || ""} onChange={e => setNewBoq(p => ({ ...p, unitPrice: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">ملاحظات</label>
+                      <input className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.notes || ""} onChange={e => setNewBoq(p => ({ ...p, notes: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setShowBoqForm(false)}>إلغاء</Button>
+                    <Button size="sm" onClick={saveBoqItem} disabled={!newBoq.description}>إضافة</Button>
+                  </div>
+                </div>
+              )}
+              {boqItems.length === 0 && !showBoqForm ? (
+                <p className="text-muted-foreground text-center py-8">لا توجد بنود في جدول الكميات</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "description", header: "الوصف", render: (b: any) => editBoqId === b.id ? (
+                      <input className="w-full h-8 px-2 text-sm border rounded" value={editBoq.description || ""} onChange={e => setEditBoq(p => ({ ...p, description: e.target.value }))} />
+                    ) : <span className="font-medium">{b.description}</span> },
+                    { key: "unit", header: "الوحدة", render: (b: any) => editBoqId === b.id ? (
+                      <input className="w-20 h-8 px-2 text-sm border rounded" value={editBoq.unit || ""} onChange={e => setEditBoq(p => ({ ...p, unit: e.target.value }))} />
+                    ) : <span className="text-muted-foreground">{b.unit || "—"}</span> },
+                    { key: "quantity", header: "الكمية", ltr: true, render: (b: any) => editBoqId === b.id ? (
+                      <input type="number" className="w-20 h-8 px-2 text-sm border rounded" value={editBoq.quantity || ""} onChange={e => setEditBoq(p => ({ ...p, quantity: e.target.value }))} />
+                    ) : <span className="font-mono">{b.quantity != null ? Number(b.quantity).toFixed(2) : "—"}</span> },
+                    { key: "unitPrice", header: "سعر الوحدة", render: (b: any) => editBoqId === b.id ? (
+                      <input type="number" className="w-24 h-8 px-2 text-sm border rounded" value={editBoq.unitPrice || ""} onChange={e => setEditBoq(p => ({ ...p, unitPrice: e.target.value }))} />
+                    ) : b.unitPrice != null ? formatCurrency(Number(b.unitPrice)) : <span className="text-muted-foreground">—</span> },
+                    { key: "totalPrice", header: "الإجمالي", render: (b: any) => b.totalPrice != null ? <span className="font-bold">{formatCurrency(Number(b.totalPrice))}</span> : <span className="text-muted-foreground">—</span> },
+                    { key: "billingStatus", header: "الفوترة", render: (b: any) => b.billingStatus ? <Badge variant="outline">{b.billingStatus}</Badge> : <span className="text-muted-foreground">—</span> },
+                    { key: "actions", header: "", render: (b: any) => editBoqId === b.id ? (
+                      <div className="flex gap-1">
+                        <Button size="sm" className="h-7 px-2 text-xs" onClick={() => updateBoqItem(b.id)}>حفظ</Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditBoqId(null)}><X className="w-3 h-3" /></Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1">
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                          onClick={() => { setEditBoqId(b.id); setEditBoq({ description: b.description, unit: b.unit || "", quantity: b.quantity != null ? String(b.quantity) : "", unitPrice: b.unitPrice != null ? String(b.unitPrice) : "", notes: b.notes || "" }); }}>
+                          <Pencil className="w-3 h-3" />
+                        </GuardedButton>
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive"
+                          onClick={() => deleteBoqItem(b.id)}>
+                          <Trash2 className="w-3 h-3" />
+                        </GuardedButton>
+                      </div>
+                    ) },
+                  ]}
+                  data={boqItems}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {activeTab === "documents" && id && (
         <EntityObligations entityType="project" entityId={id!} hideWhenEmpty />
       )}
