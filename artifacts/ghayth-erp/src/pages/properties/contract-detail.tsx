@@ -29,6 +29,10 @@ import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { EntityAttachmentPanel } from "@/components/shared/entity-attachment-panel";
+import { Input } from "@/components/ui/input";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   FileText,
   User,
@@ -54,6 +58,12 @@ export default function ContractDetailPage() {
   const id = params?.id || "";
   const { hideTabs: registryHideTabs } = useRegistryTabs("rental_contract", id ?? "");
   const queryClient = useQueryClient();
+
+  const [payDialog, setPayDialog] = useState<{ paymentId: number; amount: number } | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("bank_transfer");
+  const [payNotes, setPayNotes] = useState("");
+  const [paying, setPaying] = useState(false);
 
   const { data: contract, isLoading, isError, refetch } = useApiQuery<any>(
     ["properties-contract", id],
@@ -135,6 +145,16 @@ export default function ContractDetailPage() {
       const overdue = r.status !== "paid" && new Date(r.dueDate) < new Date();
       return <Badge variant="outline" className={overdue ? "border-red-200 text-red-600 bg-red-50" : r.status === "paid" ? "border-emerald-200 text-emerald-600 bg-emerald-50" : ""}>{r.status || "-"}</Badge>;
     }},
+    { key: "_pay", header: "", render: (r) => r.status !== "paid" ? (
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+        onClick={() => { setPayDialog({ paymentId: r.id, amount: Number(r.amount) || 0 }); setPayAmount(String(Number(r.amount) || 0)); }}
+      >
+        تحصيل
+      </Button>
+    ) : null },
   ];
 
   const maintColumns: DataTableColumn<any>[] = [
@@ -156,6 +176,32 @@ export default function ContractDetailPage() {
       <CardContent className="p-10 text-center text-sm text-muted-foreground">{msg}</CardContent>
     </Card>
   );
+
+  async function handlePay() {
+    if (!payDialog) return;
+    setPaying(true);
+    try {
+      await apiFetch(`/properties/payments/${payDialog.paymentId}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paidAmount: Number(payAmount) || payDialog.amount,
+          method: payMethod,
+          notes: payNotes || undefined,
+        }),
+      });
+      toast({ title: "تم تسجيل الدفعة بنجاح" });
+      queryClient.invalidateQueries({ queryKey: ["properties-contract", id] });
+      queryClient.invalidateQueries({ queryKey: ["contract-detail-schedule", id] });
+      setPayDialog(null);
+      setPayAmount("");
+      setPayNotes("");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل تسجيل الدفعة", description: err.message });
+    } finally {
+      setPaying(false);
+    }
+  }
 
   const handleRenew = async () => {
     // Use the dedicated /renew endpoint — it runs the audited
@@ -418,6 +464,51 @@ export default function ContractDetailPage() {
         <DialogFooter>
           <Button variant="outline" onClick={() => setTerminateOpen(false)}>إلغاء</Button>
           <Button variant="destructive" onClick={confirmTerminate} rateLimitAware>تأكيد الإنهاء</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={!!payDialog} onOpenChange={() => setPayDialog(null)}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>تسجيل تحصيل دفعة</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div>
+            <Label className="text-xs">المبلغ المحصل (ريال)</Label>
+            <Input
+              type="number"
+              className="h-9"
+              value={payAmount}
+              onChange={e => setPayAmount(e.target.value)}
+            />
+            {payDialog && Number(payAmount) < payDialog.amount && Number(payAmount) > 0 && (
+              <p className="text-xs text-amber-600 mt-1">دفعة جزئية — الباقي {formatCurrency(payDialog.amount - Number(payAmount))}</p>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs">طريقة الدفع</Label>
+            <Select value={payMethod} onValueChange={setPayMethod}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bank_transfer">تحويل بنكي</SelectItem>
+                <SelectItem value="cash">نقدي</SelectItem>
+                <SelectItem value="check">شيك</SelectItem>
+                <SelectItem value="online">دفع إلكتروني</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs">ملاحظات (اختياري)</Label>
+            <Input className="h-9" value={payNotes} onChange={e => setPayNotes(e.target.value)} placeholder="رقم التحويل، رقم الشيك..." />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setPayDialog(null)}>إلغاء</Button>
+          <Button size="sm" onClick={handlePay} disabled={paying || !payAmount || Number(payAmount) <= 0} className="gap-1">
+            {paying ? "جاري الحفظ..." : "تسجيل التحصيل"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
