@@ -51,8 +51,10 @@ describe("admin/rbac-v2-sod-tab — Dialog → inline Card + dependent dropdowns
     expect(SRC).not.toMatch(/<Dialog\b/);
     expect(SRC).not.toContain('from "@/components/ui/dialog"');
     expect(stripComments(SRC)).not.toMatch(/function AddSodRuleDialog\(/);
-    // Replaced by:
-    expect(SRC).toContain("function AddSodRuleForm(");
+    // Replaced by a single form shared between create and edit
+    // (renamed AddSodRuleForm → SodRuleForm when inline editing landed).
+    expect(SRC).toContain("function SodRuleForm(");
+    expect(SRC).toContain("initial?: SodRule");
     expect(SRC).toContain('Card className="border-2 border-primary/20"');
   });
 
@@ -83,8 +85,18 @@ describe("admin/rbac-v2-sod-tab — Dialog → inline Card + dependent dropdowns
   });
 
   it("inline Card is toggled by showAdd state from the parent — no orphan dialog", () => {
-    expect(SRC).toMatch(/onClick=\{\(\) => setShowAdd\(!showAdd\)\}/);
+    // The add toggle still flips showAdd; opening it now also clears any
+    // in-progress edit (setEditingRule(null)) so the two inline cards stay
+    // mutually exclusive.
+    expect(SRC).toMatch(/setShowAdd\(!showAdd\)/);
     expect(SRC).toMatch(/\{showAdd && \(\s*<Card/);
+  });
+
+  it("supports inline EDIT of an existing rule via PATCH — separate from create", () => {
+    expect(SRC).toContain("editingRule");
+    expect(SRC).toMatch(/\{editingRule && \(\s*<Card/);
+    expect(SRC).toContain("`/rbac/v2/sod/${initial!.id}`");
+    expect(SRC).toMatch(/method:\s*"PATCH"/);
   });
 
   it("ConfirmDeleteDialog is preserved — destructive confirm, not create/edit", () => {
