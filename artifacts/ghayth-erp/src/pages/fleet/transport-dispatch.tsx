@@ -228,11 +228,9 @@ export default function TransportDispatchBoard() {
           <GuardedButton perm="transport:create" size="sm" onClick={() => setShowCreate((v) => !v)}>
             <Plus className="h-4 w-4 me-1" />{showCreate ? "إلغاء" : "أمر توزيع جديد"}
           </GuardedButton>
-          <Link href="/fleet/transport/bookings">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
               <ArrowLeft className="h-4 w-4 me-1" />العودة للحجوزات
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
