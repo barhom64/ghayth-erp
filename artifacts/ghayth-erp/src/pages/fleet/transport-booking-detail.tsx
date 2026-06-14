@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
 import { BookingSourceContextPanel } from "@/components/shared/booking-source-context-panel";
 import {
@@ -16,7 +18,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import {
-  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock, Wand2,
+  ArrowLeft, Calendar, MapPin, Users, Package, User, Truck, Clock, Wand2, Plus,
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
@@ -198,7 +200,10 @@ export default function TransportBookingDetail() {
   const [, params] = useRoute("/fleet/transport/bookings/:id");
   const [, navigate] = useLocation();
   const id = params?.id;
+  const { toast } = useToast();
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [showLineForm, setShowLineForm] = useState(false);
+  const [lineForm, setLineForm] = useState({ requiredVehicleType: "", lineDescription: "", quantity: "", unitOfMeasure: "", scheduledPickupAt: "", scheduledDeliveryAt: "" });
 
   const { data, isLoading, isError, refetch } = useApiQuery<{ data: BookingDetail }>(
     ["transport-booking", id || ""],
@@ -504,9 +509,67 @@ export default function TransportBookingDetail() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center justify-between">
             <span>سطور الحجز ({b.lines.length})</span>
-            <GuardedButton perm="fleet.bookings:update" variant="outline" size="sm" onClick={() => refetch()}>تحديث</GuardedButton>
+            <div className="flex gap-2">
+              <GuardedButton perm="fleet.bookings:update" variant="outline" size="sm"
+                onClick={() => setShowLineForm(v => !v)}>
+                <Plus className="h-4 w-4 me-1" />{showLineForm ? "إلغاء" : "سطر جديد"}
+              </GuardedButton>
+            </div>
           </CardTitle>
         </CardHeader>
+        {showLineForm && (
+          <CardContent className="border-t pt-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><label className="text-xs text-muted-foreground">نوع المركبة المطلوبة</label>
+                <Input className="h-8 mt-1 text-sm" value={lineForm.requiredVehicleType}
+                  onChange={e => setLineForm(f => ({ ...f, requiredVehicleType: e.target.value }))} placeholder="مثال: bus, truck" />
+              </div>
+              <div><label className="text-xs text-muted-foreground">الوصف</label>
+                <Input className="h-8 mt-1 text-sm" value={lineForm.lineDescription}
+                  onChange={e => setLineForm(f => ({ ...f, lineDescription: e.target.value }))} />
+              </div>
+              <div><label className="text-xs text-muted-foreground">الكمية</label>
+                <Input type="number" className="h-8 mt-1 text-sm" value={lineForm.quantity}
+                  onChange={e => setLineForm(f => ({ ...f, quantity: e.target.value }))} />
+              </div>
+              <div><label className="text-xs text-muted-foreground">وحدة القياس</label>
+                <Input className="h-8 mt-1 text-sm" value={lineForm.unitOfMeasure}
+                  onChange={e => setLineForm(f => ({ ...f, unitOfMeasure: e.target.value }))} placeholder="trip, kg, pax..." />
+              </div>
+              <div><label className="text-xs text-muted-foreground">موعد الاستلام</label>
+                <Input type="datetime-local" className="h-8 mt-1 text-sm" value={lineForm.scheduledPickupAt}
+                  onChange={e => setLineForm(f => ({ ...f, scheduledPickupAt: e.target.value }))} />
+              </div>
+              <div><label className="text-xs text-muted-foreground">موعد التسليم</label>
+                <Input type="datetime-local" className="h-8 mt-1 text-sm" value={lineForm.scheduledDeliveryAt}
+                  onChange={e => setLineForm(f => ({ ...f, scheduledDeliveryAt: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end mt-3">
+              <Button size="sm" onClick={async () => {
+                try {
+                  await apiFetch(`/transport/bookings/${id}/lines`, {
+                    method: "POST",
+                    body: JSON.stringify({
+                      requiredVehicleType: lineForm.requiredVehicleType || undefined,
+                      lineDescription: lineForm.lineDescription || undefined,
+                      quantity: lineForm.quantity ? Number(lineForm.quantity) : undefined,
+                      unitOfMeasure: lineForm.unitOfMeasure || undefined,
+                      scheduledPickupAt: lineForm.scheduledPickupAt || undefined,
+                      scheduledDeliveryAt: lineForm.scheduledDeliveryAt || undefined,
+                    }),
+                  });
+                  toast({ title: "تم إضافة السطر" });
+                  setShowLineForm(false);
+                  setLineForm({ requiredVehicleType: "", lineDescription: "", quantity: "", unitOfMeasure: "", scheduledPickupAt: "", scheduledDeliveryAt: "" });
+                  refetch();
+                } catch (err) {
+                  toast({ variant: "destructive", title: "فشل الإضافة", description: getErrorMessage(err) });
+                }
+              }}>إضافة السطر</Button>
+            </div>
+          </CardContent>
+        )}
         <CardContent className="p-0">
           {b.lines.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground text-sm">
