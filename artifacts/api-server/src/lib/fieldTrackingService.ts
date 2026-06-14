@@ -54,10 +54,22 @@ export async function getFieldEligibility(scope: FieldScope): Promise<{
   if (!scope.activeAssignmentId) {
     return { eligible: false, reason: "no_active_assignment", trackingFrequencySeconds: 0, categoryKey: null };
   }
-  const policy = await resolveAttendancePolicy({
-    companyId: scope.companyId,
-    assignmentId: scope.activeAssignmentId,
-  }).catch(() => null);
+  // A thrown policy resolution (DB fault, bad assignment) must NOT be
+  // collapsed into "category_not_tracked": that made a real backend error
+  // indistinguishable from "this employee's category isn't tracked" and
+  // sent every field worker the misleading "غير مؤهل" banner. Surface a
+  // distinct `policy_error` reason instead so the client/ops can tell the
+  // two apart. (field-tracking audit — symptom: false "not eligible")
+  let policy;
+  try {
+    policy = await resolveAttendancePolicy({
+      companyId: scope.companyId,
+      assignmentId: scope.activeAssignmentId,
+    });
+  } catch (e) {
+    logger.error(e, "field-eligibility policy resolution failed");
+    return { eligible: false, reason: "policy_error", trackingFrequencySeconds: 0, categoryKey: null };
+  }
   const freq = policy?.trackingFrequencySeconds ?? 0;
   return {
     eligible: freq > 0,

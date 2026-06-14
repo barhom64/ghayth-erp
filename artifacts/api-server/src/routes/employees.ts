@@ -10,6 +10,8 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { bumpCacheVersion } from "../lib/rbac/authzEngine.js";
+import { invalidateRoleCache } from "../middlewares/roleGuard.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
   createNotification,
@@ -1220,7 +1222,13 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // rbac_roles row and bind it in rbac_user_roles — exactly what
       // /admin/onboard does. Soft-skip (warn) when the key has no rbac role
       // so employee creation never fails just because a role is unmapped.
-      if (createdNewUser && userId) {
+      // Bind the RBAC role for EVERY employee that has a login user — not
+      // only freshly-created ones. The old `createdNewUser && userId` gate
+      // meant linking an employee to a pre-existing user account skipped
+      // the role bind entirely, leaving that employee with zero grants
+      // (only the self-service floor) — "موظف جديد بلا صلاحيات". RBAC is
+      // user-scoped, so when there is no userId there is nothing to bind.
+      if (userId) {
         const effectiveRoleKey =
           (defaultRoleKeyFromJob && (!role || role === "employee"))
             ? defaultRoleKeyFromJob
@@ -1238,6 +1246,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
              ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
             [userId, effectiveCompanyId, roleRow[0].id, targetBranchId, resolvedDepartmentId, scope.userId]
           );
+          // Drop stale permission caches so the new grant is effective on
+          // the employee's very first request instead of after the 30s TTL.
+          // Both layers: the engine's grant cache (rbac_cache_version) and
+          // roleGuard's separate module cache. Best-effort, post-commit
+          // semantics don't matter here — a redundant bump is harmless.
+          bumpCacheVersion(effectiveCompanyId).catch((e) =>
+            logger.warn(e, "[employees] bumpCacheVersion after role bind failed"));
+          invalidateRoleCache(userId);
         } else {
           logger.warn(
             { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId },
