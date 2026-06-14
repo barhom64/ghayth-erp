@@ -7,6 +7,7 @@ const DocumentsUpload = lazy(() => import("@/pages/documents/documents-upload"))
 const DocumentsArchive = lazy(() => import("@/pages/documents/archive"));
 const DocumentsTemplates = lazy(() => import("@/pages/documents/templates"));
 const DocumentsOcrInbox = lazy(() => import("@/pages/documents-ocr-inbox"));
+const DocumentsOcrReview = lazy(() => import("@/pages/documents/ocr-review"));
 
 export const documentsRoutes = [
   { path: "/documents", component: DocumentsPage },
@@ -17,4 +18,5 @@ export const documentsRoutes = [
   { path: "/documents/templates", component: DocumentsTemplates },
   { path: "/documents/archive", component: DocumentsArchive },
   { path: "/documents/ocr-inbox", component: DocumentsOcrInbox },
+  { path: "/documents/ocr/review", component: DocumentsOcrReview },
 ];
