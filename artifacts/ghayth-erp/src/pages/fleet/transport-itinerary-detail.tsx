@@ -280,11 +280,9 @@ export default function TransportItineraryDetail() {
           <Button variant="outline" size="sm" onClick={removeItinerary} className="text-rose-600">
             <Trash2 className="h-4 w-4 me-1" />حذف البرنامج
           </Button>
-          <Link href="/fleet/transport/itineraries">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/itineraries">
               <ArrowLeft className="h-4 w-4 me-1" />العودة
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >

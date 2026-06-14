@@ -265,16 +265,12 @@ export default function ExpensesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }]}
       actions={
         <>
-          <Link href="/finance/expense-bulk-approvals">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/expense-bulk-approvals">
               <CheckSquare className="h-4 w-4 me-2" />الاعتماد بالجملة
-            </Button>
-          </Link>
-          <Link href="/finance/expense-burn-rate">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/expense-burn-rate">
               <BarChart3 className="h-4 w-4 me-2" />معدل الحرق
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/finance/expenses/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
           </Link>
@@ -482,12 +478,10 @@ export default function ExpensesPage() {
               <EntityComments entityType="expense" entityId={e.id} />
               <ActionHistory entityType="expense" entityId={e.id} defaultOpen />
               <div className="flex justify-end pt-2 border-t">
-                <Link href={`/finance/expenses/${e.id}`}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
+                <Button asChild variant="outline" size="sm" className="gap-1.5"><Link href={`/finance/expenses/${e.id}`}>
                     <ExternalLink className="h-3.5 w-3.5" />
                     عرض الصفحة الكاملة
-                  </Button>
-                </Link>
+                  </Link></Button>
               </div>
             </div>
           );

@@ -246,12 +246,10 @@ export default function AttendancePage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/hr/excuse-requests">
-            <Button variant="outline" size="sm" className="gap-1.5">
+          <Button asChild variant="outline" size="sm" className="gap-1.5"><Link href="/hr/excuse-requests">
               <Clock className="h-4 w-4" />
               الاستئذانات
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/hr/attendance/create">
             <GuardedButton perm="hr:create" variant="outline" size="sm" className="gap-1.5">
               <Plus className="h-4 w-4" />

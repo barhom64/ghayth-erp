@@ -440,9 +440,7 @@ export default function ArCollectionWorkbenchPage() {
                                     {formatCurrency(inv.outstanding)}
                                   </td>
                                   <td className="py-2 px-2">
-                                    <Link href={`/finance/invoices/${inv.id}`}>
-                                      <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
-                                    </Link>
+                                    <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/invoices/${inv.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                                   </td>
                                 </tr>
                               );
@@ -450,18 +448,14 @@ export default function ArCollectionWorkbenchPage() {
                           </tbody>
                         </table>
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
-                          <Link href={`/finance/customer-360-sheet?clientId=${c.clientId}`}>
-                            <Button size="sm" variant="outline">
+                          <Button asChild size="sm" variant="outline"><Link href={`/finance/customer-360-sheet?clientId=${c.clientId}`}>
                               <Users className="w-4 h-4 ml-1" />
                               ملف العميل 360°
-                            </Button>
-                          </Link>
-                          <Link href={`/finance/customer-statement-print?clientId=${c.clientId}`}>
-                            <Button size="sm" variant="outline">
+                            </Link></Button>
+                          <Button asChild size="sm" variant="outline"><Link href={`/finance/customer-statement-print?clientId=${c.clientId}`}>
                               <FileText className="w-4 h-4 ml-1" />
                               كشف الحساب
-                            </Button>
-                          </Link>
+                            </Link></Button>
                         </div>
                       </CardContent>
                     )}

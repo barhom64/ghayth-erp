@@ -108,12 +108,10 @@ export default function TransportBookingConfirmation() {
   return (
     <div dir="rtl" className="bg-surface-subtle min-h-screen">
       <div className="bg-white border-b p-3 flex items-center justify-between max-w-[800px] mx-auto">
-        <Link href={`/fleet/transport/bookings/${id}`}>
-          <Button variant="ghost" size="sm">
+        <Button asChild variant="ghost" size="sm"><Link href={`/fleet/transport/bookings/${id}`}>
             <ArrowLeft className="h-4 w-4 ml-1" />
             عودة للحجز
-          </Button>
-        </Link>
+          </Link></Button>
         {/* Canonical Ghaith Print Platform — produces PDF with branch
             letterhead, audit log entry, watermark, RBAC checks. The
             entityType key resolves to loadTransportBookingConfirmation

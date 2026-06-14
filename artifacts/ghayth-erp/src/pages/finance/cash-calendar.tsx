@@ -173,21 +173,15 @@ export default function CashCalendarPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/finance/cash-position-calculator">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/cash-position-calculator">
               <Banknote className="h-4 w-4 me-1" />مركز السيولة
-            </Button>
-          </Link>
-          <Link href="/finance/cash-13week">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/cash-13week">
               <CalIcon className="h-4 w-4 me-1" />توقع 13 أسبوع
-            </Button>
-          </Link>
-          <Link href="/finance/cashflow">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/cashflow">
               <Activity className="h-4 w-4 me-1" />لوحة التدفقات
-            </Button>
-          </Link>
+            </Link></Button>
           <Button variant="outline" size="sm" onClick={() => setStartDate(addDaysIso(startDate, -7))}>
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -425,12 +419,8 @@ export default function CashCalendarPage() {
                 )}
 
                 <div className="pt-2 border-t flex gap-2">
-                  <Link href="/finance/receivables" className="flex-1">
-                    <Button variant="outline" size="sm" className="w-full text-xs">AR متأخرة</Button>
-                  </Link>
-                  <Link href="/finance/payment-run" className="flex-1">
-                    <Button variant="outline" size="sm" className="w-full text-xs">دفع موردين</Button>
-                  </Link>
+                  <Button asChild variant="outline" size="sm" className="w-full text-xs"><Link href="/finance/receivables" className="flex-1">AR متأخرة</Link></Button>
+                  <Button asChild variant="outline" size="sm" className="w-full text-xs"><Link href="/finance/payment-run" className="flex-1">دفع موردين</Link></Button>
                 </div>
               </>
             )}

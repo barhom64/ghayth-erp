@@ -247,11 +247,9 @@ export default function VehicleDetail() {
   const statusLabel = VEHICLE_STATUS_OPTIONS.find(o => o.value === vehicle?.status)?.label || vehicle?.status || "";
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
-      <Link href={`/fleet/${id}/status`}>
-        <Button variant="outline" size="sm" className="gap-1">
+      <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/fleet/${id}/status`}>
           <Pencil className="h-4 w-4" />تغيير الحالة
-        </Button>
-      </Link>
+        </Link></Button>
       <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
       {deleting ? (
         <div className="flex gap-2">
@@ -824,9 +822,7 @@ export default function VehicleDetail() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center justify-between">
                   <span className="flex items-center gap-2"><Radio className="w-4 h-4 text-status-info-foreground" /> الجهاز والموقع</span>
-                  <Link href={`/fleet/telematics/live-map?vehicleId=${id}`}>
-                    <Button variant="outline" size="sm" className="gap-1"><MapPin className="w-3 h-3" /> الخريطة المباشرة</Button>
-                  </Link>
+                  <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/fleet/telematics/live-map?vehicleId=${id}`}><MapPin className="w-3 h-3" /> الخريطة المباشرة</Link></Button>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
@@ -883,9 +879,7 @@ export default function VehicleDetail() {
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between">
                 <span className="flex items-center gap-2"><Bot className="w-4 h-4 text-rose-600" /> تنبيهات السلامة الذكية ({(telematicsAlerts?.data || []).length})</span>
-                <Link href="/fleet/telematics/ai-alerts">
-                  <Button variant="outline" size="sm">عرض الكل</Button>
-                </Link>
+                <Button asChild variant="outline" size="sm"><Link href="/fleet/telematics/ai-alerts">عرض الكل</Link></Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1162,11 +1156,9 @@ export default function VehicleDetail() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <Link href={`/finance/profitability/vehicle/${id}`}>
-            <Button variant="outline" size="sm" className="gap-1">
+          <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/profitability/vehicle/${id}`}>
               <TrendingUp className="h-4 w-4" /> الربحية
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} label="طباعة" />
           {id != null && <EntityPnlButton entityType="vehicle" entityId={Number(id)} />}
         </div>

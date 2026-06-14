@@ -158,24 +158,18 @@ export default function ZatcaReportsHubPage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/tax-filing-calendar">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/tax-filing-calendar">
               <Calendar className="h-3.5 w-3.5 ml-1" />
               تقويم الإقرارات
-            </Button>
-          </Link>
-          <Link href="/finance/vat-filing-readiness">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/vat-filing-readiness">
               <FileCheck2 className="h-3.5 w-3.5 ml-1" />
               جاهزية VAT
-            </Button>
-          </Link>
-          <Link href="/finance/wht-filing-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/wht-filing-workbench">
               <Receipt className="h-3.5 w-3.5 ml-1" />
               منضدة WHT
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_zatca_reports_hub"
             entityId="list"

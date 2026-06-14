@@ -30,11 +30,9 @@ export function LinkedTasks({ entityType, entityId }: LinkedTasksProps) {
           <CardTitle className="text-lg flex items-center gap-2">
             <CheckSquare className="w-5 h-5" /> المهام المرتبطة ({tasks.length})
           </CardTitle>
-          <Link href={`/tasks/create?linkedEntityType=${entityType}&linkedEntityId=${entityId}`}>
-            <Button size="sm" variant="outline" className="gap-1">
+          <Button asChild size="sm" variant="outline" className="gap-1"><Link href={`/tasks/create?linkedEntityType=${entityType}&linkedEntityId=${entityId}`}>
               <Plus className="h-3.5 w-3.5" /> مهمة جديدة
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       </CardHeader>
       <CardContent className="p-0">

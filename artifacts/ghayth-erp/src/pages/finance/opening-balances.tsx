@@ -122,16 +122,12 @@ export default function OpeningBalancesPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/trial-balance-drilldown">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/trial-balance-drilldown">
               <Scale className="h-4 w-4 me-2" />ميزان المراجعة
-            </Button>
-          </Link>
-          <Link href="/finance/accounts">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/accounts">
               <BookOpen className="h-4 w-4 me-2" />دليل الحسابات
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/finance/opening-balances/create">
             <GuardedButton perm="finance:create" size="sm">
               <Plus className="h-4 w-4 me-1" />

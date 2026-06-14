@@ -381,11 +381,9 @@ export default function PeriodClosePreflightPage() {
             <p className="text-xs text-muted-foreground mb-4">
               لإقفال فترة جديدة لازم تكون مفتوحة. افتح صفحة الفترات وأنشئ/افتح فترة.
             </p>
-            <Link href="/finance/fiscal-periods-v2">
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href="/finance/fiscal-periods-v2">
                 <Calendar className="h-4 w-4 me-1" /> فتح صفحة الفترات
-              </Button>
-            </Link>
+              </Link></Button>
           </CardContent>
         </Card>
       ) : !period ? null : (
@@ -471,12 +469,10 @@ export default function PeriodClosePreflightPage() {
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{def.description}</p>
                     </div>
-                    <Link href={def.fixHref}>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs">
+                    <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href={def.fixHref}>
                         {def.fixLabel}
                         <ChevronRight className="h-3 w-3 ms-1" />
-                      </Button>
-                    </Link>
+                      </Link></Button>
                   </div>
                 );
               })}

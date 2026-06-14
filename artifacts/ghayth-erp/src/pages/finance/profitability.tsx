@@ -223,11 +223,9 @@ export default function ProfitabilityPage({ entityType }: Props) {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href={config.listPath}>
-            <Button size="sm" variant="outline">
+          <Button asChild size="sm" variant="outline"><Link href={config.listPath}>
               <ArrowLeft className="h-3.5 w-3.5 me-1" /> {config.listLabel}
-            </Button>
-          </Link>
+            </Link></Button>
           <GuardedButton
             perm="finance:export" variant="outline" size="sm"
             onClick={() => exportCSV(config.label, data.accounts, data.summary)}

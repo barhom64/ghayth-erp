@@ -72,24 +72,18 @@ export default function CashFlowForecastPage() {
       loading={isLoading}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/cash-13week">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/cash-13week">
               <Calendar className="h-3.5 w-3.5 ml-1" />
               توقع 13 أسبوع
-            </Button>
-          </Link>
-          <Link href="/finance/cash-position-calculator">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/cash-position-calculator">
               <Banknote className="h-3.5 w-3.5 ml-1" />
               مركز السيولة
-            </Button>
-          </Link>
-          <Link href="/finance/cashflow">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/cashflow">
               <BarChart3 className="h-3.5 w-3.5 ml-1" />
               لوحة التدفقات
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_cash_flow_forecast"
             entityId="list"

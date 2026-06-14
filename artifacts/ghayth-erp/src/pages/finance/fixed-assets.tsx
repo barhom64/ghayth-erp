@@ -114,11 +114,9 @@ export default function FixedAssetsPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/fixed-asset-register">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/fixed-asset-register">
               <Building2 className="h-4 w-4 me-2" />السجل التحليلي
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/finance/fixed-assets/batch-depreciate">
             <GuardedButton perm="finance:approve" variant="outline" size="sm">
               <TrendingDown className="h-4 w-4 me-2" />إهلاك دفعي

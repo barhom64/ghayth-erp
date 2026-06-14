@@ -202,21 +202,15 @@ export default function JournalPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/recurring-journals">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/recurring-journals">
               <Repeat className="h-4 w-4 me-2" />القيود الدورية
-            </Button>
-          </Link>
-          <Link href="/finance/journal-templates">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/journal-templates">
               <FileText className="h-4 w-4 me-2" />القوالب
-            </Button>
-          </Link>
-          <Link href="/finance/journal/activity">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/journal/activity">
               <Activity className="h-4 w-4 me-2" />نشاط الترحيل
-            </Button>
-          </Link>
+            </Link></Button>
           <GuardedButton perm="finance:create" size="sm" asChild>
             <Link href="/finance/journal/create">
               <Plus className="h-4 w-4 me-1" />

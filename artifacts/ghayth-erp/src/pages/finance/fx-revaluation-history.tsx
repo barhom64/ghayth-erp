@@ -138,11 +138,9 @@ export default function FxRevaluationHistoryPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/finance/fx-revaluation">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/fx-revaluation">
               <RefreshCw className="h-4 w-4 me-1" /> تقييم جديد
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_fx_revaluation_history"
             entityId="list"

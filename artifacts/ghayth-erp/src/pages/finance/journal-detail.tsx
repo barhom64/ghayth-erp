@@ -372,9 +372,7 @@ export default function JournalDetailPage() {
       </Card>
 
       <div className="mt-4 flex justify-end">
-        <Link href="/finance/journal">
-          <Button variant="outline" size="sm">العودة لقائمة القيود</Button>
-        </Link>
+        <Button asChild variant="outline" size="sm"><Link href="/finance/journal">العودة لقائمة القيود</Link></Button>
       </div>
     </PageShell>
   );

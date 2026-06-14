@@ -527,11 +527,9 @@ export default function Dashboard() {
               مهام اليوم
               {todayTasks.length > 0 && <Badge className="text-xs">{todayTasks.length}</Badge>}
             </CardTitle>
-            <Link href="/tasks">
-              <Button variant="ghost" size="sm" className="text-xs gap-1">
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/tasks">
                 عرض الكل <ChevronLeft className="w-3 h-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardHeader>
           <CardContent>
             {todayTasks.length === 0 ? (
@@ -584,11 +582,9 @@ export default function Dashboard() {
               الإشعارات
               {notifications.length > 0 && <Badge variant="destructive" className="text-xs">{notifications.length}</Badge>}
             </CardTitle>
-            <Link href="/notifications">
-              <Button variant="ghost" size="sm" className="text-xs gap-1">
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/notifications">
                 عرض الكل <ChevronLeft className="w-3 h-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardHeader>
           <CardContent>
             {notifications.length === 0 ? (
@@ -742,11 +738,9 @@ export default function Dashboard() {
                       <p className="text-xs text-muted-foreground mt-0.5">{s.description}</p>
                     </div>
                     {s.actionLink && (
-                      <Link href={s.actionLink}>
-                        <Button variant="outline" size="sm" className="text-xs shrink-0">
+                      <Button asChild variant="outline" size="sm" className="text-xs shrink-0"><Link href={s.actionLink}>
                           {s.action} <ChevronLeft className="w-3 h-3 ms-1" />
-                        </Button>
-                      </Link>
+                        </Link></Button>
                     )}
                   </div>
                 );

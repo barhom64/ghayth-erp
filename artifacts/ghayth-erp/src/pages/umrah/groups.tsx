@@ -60,6 +60,7 @@ interface Group {
   salesInvoiceTotal?: number | string | null;
   salesInvoiceStatus?: string | null;
   salesOutstanding?: number | string;
+  pilgrimsTotal?: number;
   pilgrimsInside?: number;
   pilgrimsOverstayed?: number;
   visaAtRisk?: number;
@@ -219,7 +220,7 @@ export default function UmrahGroups() {
     { key: "subAgentName" as any, header: "الوكيل الفرعي", render: (g) => g.subAgentName ?? g.agentName ?? "—" },
     { key: "mutamerCount", header: "معتمرون", render: (g) => (
       <div className="flex items-center gap-1 text-xs">
-        <span className="font-medium">{g.mutamerCount}</span>
+        <span className="font-medium">{g.pilgrimsTotal ?? g.mutamerCount}</span>
         {Number(g.pilgrimsInside ?? 0) > 0 && (
           <Badge variant="outline" className="border-status-success-surface text-status-success-foreground text-[10px]">{g.pilgrimsInside} داخل</Badge>
         )}
@@ -258,11 +259,9 @@ export default function UmrahGroups() {
       header: "إجراءات",
       render: (g) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/umrah/groups/${g.id}`} data-testid={`group-detail-link-${g.id}`}>
-            <Button variant="ghost" size="sm" className="gap-1">
+          <Button asChild variant="ghost" size="sm" className="gap-1"><Link href={`/umrah/groups/${g.id}`} data-testid={`group-detail-link-${g.id}`}>
               تفاصيل
-            </Button>
-          </Link>
+            </Link></Button>
           <Button
             variant="ghost"
             size="sm"

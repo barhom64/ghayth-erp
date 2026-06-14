@@ -226,12 +226,10 @@ export default function VendorSettlementWorkbenchPage() {
                 <Button variant={sortMode === "name" ? "default" : "outline"} size="sm" onClick={() => setSortMode("name")}>الاسم</Button>
               </div>
             </div>
-            <Link href="/finance/payment-run">
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href="/finance/payment-run">
                 <Banknote className="w-4 h-4 ml-1" />
                 Payment Run
-              </Button>
-            </Link>
+              </Link></Button>
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
               CSV
@@ -428,9 +426,7 @@ export default function VendorSettlementWorkbenchPage() {
                                 </td>
                                 <td className="py-1.5 px-2">
                                   {o.sourceType === "purchase_order" && (
-                                    <Link href={`/finance/purchase-orders/${o.id}`}>
-                                      <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><ExternalLink className="w-3 h-3" /></Button>
-                                    </Link>
+                                    <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/purchase-orders/${o.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                                   )}
                                 </td>
                               </tr>
@@ -439,28 +435,22 @@ export default function VendorSettlementWorkbenchPage() {
                         </table>
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                           {v.supplierId && (
-                            <Link href={`/finance/payment-run?supplierId=${v.supplierId}`}>
-                              <Button size="sm" variant="outline">
+                            <Button asChild size="sm" variant="outline"><Link href={`/finance/payment-run?supplierId=${v.supplierId}`}>
                                 <Banknote className="w-4 h-4 ml-1" />
                                 دفع لهذا المورد
-                              </Button>
-                            </Link>
+                              </Link></Button>
                           )}
                           {v.supplierId && (
-                            <Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
-                              <Button size="sm" variant="outline">
+                            <Button asChild size="sm" variant="outline"><Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
                                 <Users className="w-4 h-4 ml-1" />
                                 ملف المورد 360°
-                              </Button>
-                            </Link>
+                              </Link></Button>
                           )}
                           {v.supplierId && (
-                            <Link href={`/finance/vendor-statement-print?vendorId=${v.supplierId}`}>
-                              <Button size="sm" variant="outline">
+                            <Button asChild size="sm" variant="outline"><Link href={`/finance/vendor-statement-print?vendorId=${v.supplierId}`}>
                                 <FileText className="w-4 h-4 ml-1" />
                                 كشف الحساب
-                              </Button>
-                            </Link>
+                              </Link></Button>
                           )}
                         </div>
                       </CardContent>

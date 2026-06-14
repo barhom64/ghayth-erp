@@ -154,11 +154,9 @@ export default function AllocationRulesPage() {
     { key: "_actions", header: "إجراءات",
       render: (r) => (
         <div className="flex items-center gap-1">
-          <Link href={`/finance/allocation-rules/${r.id}/edit`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة"><Link href={`/finance/allocation-rules/${r.id}/edit`}>
               <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link></Button>
           <RowActions
             onDelete={() => ruleActions.startDelete(r.id)}
             canEdit={false}

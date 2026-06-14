@@ -236,12 +236,10 @@ export default function Customer360SheetPage() {
             />
           )}
           {clientId && (
-            <Link href={`/finance/customer-statement-print?clientId=${clientId}`}>
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href={`/finance/customer-statement-print?clientId=${clientId}`}>
                 <Printer className="w-4 h-4 ml-1" />
                 كشف حساب مفصّل
-              </Button>
-            </Link>
+              </Link></Button>
           )}
         </CardContent>
       </Card>
@@ -446,48 +444,36 @@ export default function Customer360SheetPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <Link href={`/finance/customer-statement-print?clientId=${clientId}`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/customer-statement-print?clientId=${clientId}`}>
                     <Printer className="w-4 h-4 ml-1" />
                     كشف الحساب
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/receivables?clientId=${clientId}`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/receivables?clientId=${clientId}`}>
                     <DollarSign className="w-4 h-4 ml-1" />
                     تسجيل دفعة
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/customer-advances?view=grouped`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/customer-advances?view=grouped`}>
                     <FileText className="w-4 h-4 ml-1" />
                     دفعات مقدمة
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/ar-collection-workbench`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/ar-collection-workbench`}>
                     <AlertTriangle className="w-4 h-4 ml-1" />
                     منضدة التحصيل
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/entity-360?type=client&id=${clientId}`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/entity-360?type=client&id=${clientId}`}>
                     <Users className="w-4 h-4 ml-1" />
                     Entity 360
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
-                <Link href={`/finance/customer-risk`}>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  </Link></Button>
+                <Button asChild variant="outline" size="sm" className="w-full justify-start"><Link href={`/finance/customer-risk`}>
                     <ShieldAlert className="w-4 h-4 ml-1" />
                     تحليل المخاطر
                     <ExternalLink className="w-3 h-3 mr-auto" />
-                  </Button>
-                </Link>
+                  </Link></Button>
               </div>
             </CardContent>
           </Card>

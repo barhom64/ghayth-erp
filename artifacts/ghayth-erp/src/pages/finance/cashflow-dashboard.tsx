@@ -86,9 +86,7 @@ export default function CashflowDashboard() {
       actions={
         <>
           <Button variant="outline" size="sm" onClick={() => refetchSummary()}><RefreshCw className="h-3.5 w-3.5 me-1" />تحديث</Button>
-          <Link href="/finance">
-            <Button variant="outline" size="sm" className="gap-1">الوحدة المالية <ArrowUpRight className="w-3 h-3" /></Button>
-          </Link>
+          <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/finance">الوحدة المالية <ArrowUpRight className="w-3 h-3" /></Link></Button>
           <PrintButton
             entityType="report_finance_cashflow_dashboard"
             entityId={period}
@@ -343,9 +341,7 @@ export default function CashflowDashboard() {
               <Receipt className="w-5 h-5 text-status-warning" />
               الفواتير المعلقة
             </CardTitle>
-            <Link href="/finance/invoices">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">عرض الكل <ChevronLeft className="w-3 h-3" /></Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/finance/invoices">عرض الكل <ChevronLeft className="w-3 h-3" /></Link></Button>
           </CardHeader>
           <CardContent>
             {pendingInvoices.length === 0 ? (
@@ -379,9 +375,7 @@ export default function CashflowDashboard() {
               <Wallet className="w-5 h-5 text-status-info" />
               أحدث المصروفات
             </CardTitle>
-            <Link href="/finance/expenses">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">عرض الكل <ChevronLeft className="w-3 h-3" /></Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/finance/expenses">عرض الكل <ChevronLeft className="w-3 h-3" /></Link></Button>
           </CardHeader>
           <CardContent>
             {recentExpenses.length === 0 ? (

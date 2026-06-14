@@ -249,11 +249,9 @@ export default function CargoDetail() {
             </SelectContent>
           </Select>
           {m.fleetTripId && (
-            <Link href={`/fleet/trips/${m.fleetTripId}`}>
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href={`/fleet/trips/${m.fleetTripId}`}>
                 <MapPin className="h-4 w-4 me-1" />الرحلة #{m.fleetTripId}
-              </Button>
-            </Link>
+              </Link></Button>
           )}
           <GuardedButton
             perm="fleet.cargo:delete"

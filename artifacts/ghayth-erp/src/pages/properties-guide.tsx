@@ -1274,12 +1274,10 @@ export default function PropertiesGuide() {
               <p className="text-[10px] text-muted-foreground">دليل إرشادي مصور — نظام غيث لتخطيط موارد المؤسسات</p>
             </div>
           </div>
-          <Link href="/properties/dashboard">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+          <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs"><Link href="/properties/dashboard">
               <ChevronRight className="h-3.5 w-3.5" />
               العودة للنظام
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       </div>
 

@@ -114,12 +114,10 @@ export function EmployeeDisciplineSummary({
           {title}
         </CardTitle>
         {!hideCreateButton && (
-          <Link href={`/hr/violations/create?employeeId=${employeeId}`}>
-            <Button size="sm" variant="outline" className="gap-1.5">
+          <Button asChild size="sm" variant="outline" className="gap-1.5"><Link href={`/hr/violations/create?employeeId=${employeeId}`}>
               <Plus className="h-3.5 w-3.5" />
               تسجيل مخالفة جديدة
-            </Button>
-          </Link>
+            </Link></Button>
         )}
       </CardHeader>
       <CardContent className="space-y-3">
@@ -169,11 +167,9 @@ export function EmployeeDisciplineSummary({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-medium text-muted-foreground">آخر المحاضر</p>
-                  <Link href={`/hr/violations?tab=memos&employeeId=${employeeId}`}>
-                    <Button variant="ghost" size="sm" className="text-xs h-6 gap-1">
+                  <Button asChild variant="ghost" size="sm" className="text-xs h-6 gap-1"><Link href={`/hr/violations?tab=memos&employeeId=${employeeId}`}>
                       الكل <ArrowLeft className="h-3 w-3" />
-                    </Button>
-                  </Link>
+                    </Link></Button>
                 </div>
                 <div className="space-y-1">
                   {recent.map((m) => {

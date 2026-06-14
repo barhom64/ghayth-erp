@@ -230,11 +230,9 @@ export default function PurchaseRequestsPage() {
           )}
           {r.status === "approved" && (
             <>
-              <Link href={`/finance/purchase-orders/create?fromRequestId=${r.id}`}>
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-purple-700">
+              <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-purple-700"><Link href={`/finance/purchase-orders/create?fromRequestId=${r.id}`}>
                   <ArrowRight className="h-3 w-3 me-1" /> صفحة التحويل
-                </Button>
-              </Link>
+                </Link></Button>
               <Button
                 variant="ghost"
                 size="sm"

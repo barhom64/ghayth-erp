@@ -488,15 +488,9 @@ export default function ProjectDetail() {
           <ShieldAlert className="h-3 w-3" /> {criticalRisks.length} مخاطر حرجة
         </Badge>
       )}
-      <Link href={`/projects/gantt?projectId=${id}`}>
-        <Button variant="outline" size="sm"><BarChart2 className="h-4 w-4 me-1" />غانت</Button>
-      </Link>
-      <Link href={`/projects/risks?projectId=${id}`}>
-        <Button variant="outline" size="sm"><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Button>
-      </Link>
-      <Link href="/calendar">
-        <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />التقويم</Button>
-      </Link>
+      <Button asChild variant="outline" size="sm"><Link href={`/projects/gantt?projectId=${id}`}><BarChart2 className="h-4 w-4 me-1" />غانت</Link></Button>
+      <Button asChild variant="outline" size="sm"><Link href={`/projects/risks?projectId=${id}`}><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Link></Button>
+      <Button asChild variant="outline" size="sm"><Link href="/calendar"><Calendar className="h-4 w-4 me-1" />التقويم</Link></Button>
       {project.status !== "completed" && !closingProject && (
         <GuardedButton perm="operations:update" variant="outline" size="sm" className="text-emerald-600" onClick={() => setClosingProject(true)}>
           <Lock className="h-4 w-4 me-1" />إقفال المشروع
@@ -674,7 +668,7 @@ export default function ProjectDetail() {
                     <Button variant="ghost" size="sm" className="text-xs" onClick={handleAddMilestone} disabled={addMilestoneMut.isPending} rateLimitAware>
                       + إضافة
                     </Button>
-                    <Link href={`/projects/gantt?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">غانت</Button></Link>
+                    <Button asChild variant="ghost" size="sm" className="text-xs"><Link href={`/projects/gantt?projectId=${id}`}>غانت</Link></Button>
                   </div>
                 </div>
               </CardHeader>
@@ -716,7 +710,7 @@ export default function ProjectDetail() {
                       <Badge className="bg-status-error-surface text-status-error-foreground text-[10px]">{criticalRisks.length} حرج</Badge>
                     )}
                   </CardTitle>
-                  <Link href={`/projects/risks?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">إدارة</Button></Link>
+                  <Button asChild variant="ghost" size="sm" className="text-xs"><Link href={`/projects/risks?projectId=${id}`}>إدارة</Link></Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -945,9 +939,7 @@ export default function ProjectDetail() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2"><Mail className="w-5 h-5 text-muted-foreground" /> المراسلات المرتبطة ({letters.length})</CardTitle>
-              <Link href={`/correspondence/create?relatedType=project&relatedId=${id}`}>
-                <Button size="sm" variant="outline"><Plus className="h-3 w-3 me-1" /> خطاب جديد</Button>
-              </Link>
+              <Button asChild size="sm" variant="outline"><Link href={`/correspondence/create?relatedType=project&relatedId=${id}`}><Plus className="h-3 w-3 me-1" /> خطاب جديد</Link></Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -1225,11 +1217,9 @@ export default function ProjectDetail() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <Link href={`/finance/profitability/project/${id}`}>
-            <Button variant="outline" size="sm" className="gap-1">
+          <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/profitability/project/${id}`}>
               <TrendingUp className="h-4 w-4" /> الربحية
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton entityType="project" entityId={(id as any) ?? 0} label="طباعة" />
           {id != null && <EntityPnlButton entityType="project" entityId={Number(id)} />}
         </div>

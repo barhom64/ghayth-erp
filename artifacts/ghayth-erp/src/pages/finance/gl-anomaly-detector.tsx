@@ -153,24 +153,18 @@ export default function GlAnomalyDetectorPage() {
       subtitle="فحص آلي للقيود حسب 6 أنماط للمراجعة الدورية"
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/gl-health">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/gl-health">
               <Sparkles className="h-3.5 w-3.5 ml-1" />
               صحة النظام
-            </Button>
-          </Link>
-          <Link href="/finance/reports/gl-integrity-gaps">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/gl-integrity-gaps">
               <AlertTriangle className="h-3.5 w-3.5 ml-1" />
               فجوات السلامة
-            </Button>
-          </Link>
-          <Link href="/finance/trial-balance-drilldown">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/trial-balance-drilldown">
               <ScaleIcon className="h-3.5 w-3.5 ml-1" />
               ميزان المراجعة
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_gl_anomaly"
             entityId="list"
@@ -359,12 +353,10 @@ export default function GlAnomalyDetectorPage() {
                           </tfoot>
                         </table>
                         <div className="flex justify-end mt-3">
-                          <Link href={`/finance/journal/${je.id}`}>
-                            <Button variant="outline" size="sm">
+                          <Button asChild variant="outline" size="sm"><Link href={`/finance/journal/${je.id}`}>
                               <ExternalLink className="w-3 h-3 ml-1" />
                               فتح القيد
-                            </Button>
-                          </Link>
+                            </Link></Button>
                         </div>
                       </CardContent>
                     )}

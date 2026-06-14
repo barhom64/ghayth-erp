@@ -348,11 +348,9 @@ export default function ProjectPortfolioDashboardPage() {
                           {p.margin.toFixed(1)}%
                         </td>
                         <td className="py-1.5 px-2">
-                          <Link href={`/finance/project-costing/${p.id}`}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <Button asChild variant="ghost" size="icon" className="h-7 w-7"><Link href={`/finance/project-costing/${p.id}`}>
                               <ExternalLink className="w-3 h-3" />
-                            </Button>
-                          </Link>
+                            </Link></Button>
                         </td>
                       </tr>
                     ))}

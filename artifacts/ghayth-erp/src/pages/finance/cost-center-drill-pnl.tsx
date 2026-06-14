@@ -173,12 +173,10 @@ export default function CostCenterDrillPnlPage() {
               CSV
             </Button>
           )}
-          <Link href="/finance/cost-centers/tree">
-            <Button variant="ghost" data-testid="cost-center-pnl-back">
+          <Button asChild variant="ghost" data-testid="cost-center-pnl-back"><Link href="/finance/cost-centers/tree">
               <Network className="h-4 w-4 ms-1" />
               رجوع للشجرة
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -255,16 +253,14 @@ export default function CostCenterDrillPnlPage() {
                   <ScrollText className="h-4 w-4 text-muted-foreground" />
                   آخر القيود ({data.recentEntries.length})
                 </CardTitle>
-                <Link href={`/finance/journal?costCenterId=${id}&dateFrom=${from}&dateTo=${to}`}>
-                  <Button
+                <Button asChild
                     variant="ghost"
                     size="sm"
                     data-testid="cost-center-pnl-all-entries"
-                  >
+                  ><Link href={`/finance/journal?costCenterId=${id}&dateFrom=${from}&dateTo=${to}`}>
                     عرض الكل
                     <ArrowLeftRight className="h-3.5 w-3.5 me-1" />
-                  </Button>
-                </Link>
+                  </Link></Button>
               </CardHeader>
               <CardContent className="p-0">
                 {data.recentEntries.length === 0 ? (

@@ -170,11 +170,9 @@ export default function MeDriver() {
       title={`مرحباً، ${me.name}`}
       subtitle="لوحة السائق — رحلاتك وبضائعك"
       actions={
-        <Link href="/me/driver/navigation">
-          <Button size="sm" variant="default">
+        <Button asChild size="sm" variant="default"><Link href="/me/driver/navigation">
             <Navigation className="h-4 w-4 me-1" />الملاحة
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <Card className="mb-4">
