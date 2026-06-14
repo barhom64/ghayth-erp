@@ -11,11 +11,25 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
+import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2, auditFromRequest } from "../lib/businessHelpers.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
+// GAP_MATRIX P1 — every finance report GET must leave an audit trail (PDPL / forensics).
+// Runs on res.finish so the audit happens after the response is sent, never blocking the caller.
+reportsRouter.use((req, res, next) => {
+  if (req.method === "GET") {
+    res.on("finish", () => {
+      if (res.statusCode < 400) {
+        auditFromRequest(req, "finance.reports.read", "finance_reports", 0, {
+          after: { path: req.path, query: req.query },
+        });
+      }
+    });
+  }
+  next();
+});
 
 /**
  * Builds a branch restriction SQL condition for queries joining `journal_entries`
