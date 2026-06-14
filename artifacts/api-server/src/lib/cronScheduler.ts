@@ -28,6 +28,11 @@ import {
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
+import {
+  TASK_SLA_REMINDER_SETTING_KEY,
+  resolveTaskSlaReminderConfig,
+  shouldFireSlaReminder,
+} from "./inboxClassifier.js";
 import { processFallbackChains } from "./notificationEngine.js";
 import {
   resolveSystemSmtpConfig,
@@ -4532,7 +4537,108 @@ export async function warehouseCycleCountPlanScan(): Promise<string> {
   return `cycle-count plans: ${opened} count(s) opened from ${plans.length} plan(s)`;
 }
 
+/**
+ * inbox_task_sla_reminder_scan — nudge the assignee of each open inbox task
+ * before its slaDeadline. Per company: load the (per-company-tunable) reminder
+ * config, scan pending, not-yet-breached tasks that carry an slaDeadline, and
+ * fire the first reminder once the remaining window crosses the lead threshold
+ * (stamping slaReminderSentAt for idempotency); optionally fire a second
+ * reminder closer to the deadline (stamping slaFinalReminderSentAt). The
+ * pre-breach + per-task *SentAt stamps make repeated runs idempotent.
+ * Unassigned tasks are skipped. The decision itself lives in the pure
+ * shouldFireSlaReminder so it is unit-tested without a DB.
+ */
+async function inboxTaskSlaReminderScan(): Promise<string> {
+  const { resolveSettings } = await import("./settings.js");
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  const now = new Date();
+  let first = 0;
+  let final = 0;
+  for (const company of companies) {
+    const stored = await resolveSettings(TASK_SLA_REMINDER_SETTING_KEY, company.id).catch(() => undefined);
+    const cfg = resolveTaskSlaReminderConfig(stored);
+
+    const tasks = await rawQuery<{
+      id: number;
+      assignmentId: number | null;
+      title: string;
+      createdAt: string | Date;
+      slaDeadline: string | Date;
+      slaReminderSentAt: string | Date | null;
+      slaFinalReminderSentAt: string | Date | null;
+    }>(
+      `SELECT id,
+              COALESCE("assignmentId", "assignedTo") AS "assignmentId",
+              title, "createdAt", "slaDeadline",
+              "slaReminderSentAt", "slaFinalReminderSentAt"
+         FROM tasks
+        WHERE "companyId" = $1
+          AND status = 'pending'
+          AND "deletedAt" IS NULL
+          AND "slaDeadline" IS NOT NULL
+          AND "slaDeadline" > NOW()
+          AND ("slaReminderSentAt" IS NULL OR "slaFinalReminderSentAt" IS NULL)`,
+      [company.id]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
+    ).catch((e) => { logger.error(e, "[cron] inbox SLA reminder scan query failed"); return [] as any[]; });
+
+    for (const t of tasks) {
+      if (!t.assignmentId) continue;
+      const { firstReminder, finalReminder } = shouldFireSlaReminder({
+        now,
+        createdAt: new Date(t.createdAt),
+        slaDeadline: new Date(t.slaDeadline),
+        config: cfg,
+        reminderSentAt: t.slaReminderSentAt ? new Date(t.slaReminderSentAt) : null,
+        finalReminderSentAt: t.slaFinalReminderSentAt ? new Date(t.slaFinalReminderSentAt) : null,
+      });
+      const deadlineLabel = new Date(t.slaDeadline).toISOString().slice(0, 16).replace("T", " ");
+      // Stamp FIRST as an atomic compare-and-set (WHERE …SentAt IS NULL): the
+      // row that wins the stamp owns the send. This prevents a duplicate
+      // reminder when two runs overlap or a previous run already stamped — at
+      // the cost of dropping a reminder if the notify fails after the stamp
+      // (preferring an occasional miss over spamming the assignee).
+      if (firstReminder) {
+        const won = await rawExecute(
+          `UPDATE tasks SET "slaReminderSentAt" = NOW() WHERE id = $1 AND "slaReminderSentAt" IS NULL`,
+          [t.id],
+        ).then((r) => r.affectedRows === 1).catch((e) => { logger.error(e, "[cron] inbox SLA reminder stamp failed"); return false; });
+        if (won) {
+          await createNotification({
+            companyId: company.id, assignmentId: t.assignmentId,
+            type: "task", title: "تذكير: مهمة تقترب من موعد الاستجابة",
+            body: `المهمة «${t.title}» يقترب موعد استجابتها (${deadlineLabel}).`,
+            priority: "high",
+            refType: "tasks", refId: t.id,
+            actionUrl: "/inbox/tasks",
+          }).catch((e) => logger.error(e, "[cron] inbox SLA reminder notify failed"));
+          first++;
+        }
+      }
+      if (finalReminder) {
+        const won = await rawExecute(
+          `UPDATE tasks SET "slaFinalReminderSentAt" = NOW() WHERE id = $1 AND "slaFinalReminderSentAt" IS NULL`,
+          [t.id],
+        ).then((r) => r.affectedRows === 1).catch((e) => { logger.error(e, "[cron] inbox SLA final reminder stamp failed"); return false; });
+        if (won) {
+          await createNotification({
+            companyId: company.id, assignmentId: t.assignmentId,
+            type: "task", title: "تذكير نهائي: مهمة على وشك تجاوز الموعد",
+            body: `المهمة «${t.title}» على وشك تجاوز موعد الاستجابة (${deadlineLabel}).`,
+            priority: "urgent",
+            refType: "tasks", refId: t.id,
+            actionUrl: "/inbox/tasks",
+          }).catch((e) => logger.error(e, "[cron] inbox SLA final reminder notify failed"));
+          final++;
+        }
+      }
+    }
+  }
+  return `inbox SLA reminders: ${first} first, ${final} final`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
   { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
   { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
   { name: "party_registry_sync", description: "مزامنة سجل الأطراف (Party) — ربط الكيانات الجديدة", schedule: "30 3 * * *", handler: partyRegistrySync },
