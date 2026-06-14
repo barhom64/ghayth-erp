@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { redirectTo } from "@/components/shared/redirect-to";
 
 // R.1.5 — Finance Dashboard is the new landing page for /finance. The
 // chart of accounts stays at /finance/accounts (see the separate route
@@ -373,7 +374,8 @@ export const financeRoutes = [
   { path: "/finance/custody-workbench", component: CustodyWorkbench },
   { path: "/finance/custodies/report", component: CustodyAgingReport },
   { path: "/finance/custodies/:id", component: CustodyDetail },
-  { path: "/finance/fiscal-periods", component: FiscalPeriods },
+  // GAP_MATRIX P1 — v1 is a duplicate of v2; redirect so only one URL is canonical.
+  { path: "/finance/fiscal-periods", component: redirectTo("/finance/fiscal-periods-v2") },
   { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2 },
   { path: "/finance/period-close-preflight", component: PeriodClosePreflight },
   { path: "/finance/salary-advances", component: SalaryAdvances },

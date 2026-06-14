@@ -1,3 +1,8 @@
+/**
+ * GAP_MATRIX P2 — Admin hub page: tab-based display of admin sub-module cards.
+ * Cards are intentionally display-only here; each sub-page has its own route.
+ * Navigation is via the sidebar or direct URLs, not onClick handlers on cards.
+ */
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, KeyRound, ScrollText, UserCog, Lock, FileSearch, ShieldAlert,

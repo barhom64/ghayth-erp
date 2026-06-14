@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { redirectTo } from "@/components/shared/redirect-to";
 
 const HR = lazy(() => import("@/pages/hr"));
 const HrServices = lazy(() => import("@/pages/hr/services"));
@@ -145,11 +146,12 @@ export const hrRoutes = [
   { path: "/hr/payroll/:id", component: PayrollDetail, subKey: "payroll" },
   { path: "/hr/performance", component: Performance, subKey: "performance" },
   { path: "/hr/performance/create", component: PerformanceCreate, subKey: "performance" },
-  { path: "/hr/performance/advanced", component: PerformanceAdvanced, subKey: "performance" },
+  // GAP_MATRIX P1 — redirect /advanced until merged as analytics tab inside base page.
+  { path: "/hr/performance/advanced", component: redirectTo("/hr/performance"), subKey: "performance" },
   { path: "/hr/performance/:id", component: PerformanceDetail, subKey: "performance" },
   { path: "/hr/training", component: Training, subKey: "training" },
   { path: "/hr/training/create", component: TrainingCreate, subKey: "training" },
-  { path: "/hr/training/advanced", component: TrainingAdvanced, subKey: "training" },
+  { path: "/hr/training/advanced", component: redirectTo("/hr/training"), subKey: "training" },
   { path: "/hr/training/:id", component: TrainingDetail, subKey: "training" },
   { path: "/hr/organization", component: Organization, subKey: "organization" },
   { path: "/hr/organization/structure", component: OrganizationStructure, subKey: "organization" },
@@ -157,7 +159,7 @@ export const hrRoutes = [
   { path: "/hr/recruitment/create", component: RecruitmentCreate, subKey: "recruitment" },
   { path: "/hr/recruitment/applicants/create", component: ApplicantsCreate, subKey: "recruitment" },
   { path: "/hr/recruitment/applications", component: ApplicationList, subKey: "recruitment" },
-  { path: "/hr/recruitment/advanced", component: RecruitmentAdvanced, subKey: "recruitment" },
+  { path: "/hr/recruitment/advanced", component: redirectTo("/hr/recruitment"), subKey: "recruitment" },
   { path: "/hr/recruitment/jobs/:id", component: JobDetail, subKey: "recruitment" },
   { path: "/hr/loans", component: Loans, subKey: "payroll" },
   { path: "/hr/loans/create", component: LoansCreate, subKey: "payroll" },
@@ -180,7 +182,7 @@ export const hrRoutes = [
   { path: "/hr/discipline/memos/:id", component: DisciplineMemoDetail, subKey: "violations" },
   { path: "/hr/shifts", component: Shifts, subKey: "shifts" },
   { path: "/hr/shifts/create", component: ShiftsCreate, subKey: "shifts" },
-  { path: "/hr/shifts/management", component: ShiftsManagement, subKey: "shifts" },
+  { path: "/hr/shifts/management", component: redirectTo("/hr/shifts"), subKey: "shifts" },
   { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },

@@ -56,7 +56,7 @@ function notImplemented(res: Response, feature: string): void {
 /* ============================================================
  * Documents — OCR (4). Mounted under /documents.
  * ============================================================ */
-documentsStubsRouter.get("/ocr/extractions", async (req, res) => {
+documentsStubsRouter.get("/ocr/extractions", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const status = (req.query.status as string) || null;
@@ -82,7 +82,7 @@ documentsStubsRouter.post("/:id/ocr/rerun", requireMinLevel(20), async (_req, re
  * HR Saudi compliance — banks / WPS / Mudad / credentials (7).
  * Mounted under /hr.
  * ============================================================ */
-hrStubsRouter.get("/saudi/banks", async (_req, res) => {
+hrStubsRouter.get("/saudi/banks", requireMinLevel(20), async (_req, res) => {
   res.json({
     data: [
       { code: "RJHI", name: "مصرف الراجحي", swift: "RJHISARI" },
@@ -96,7 +96,7 @@ hrStubsRouter.get("/saudi/banks", async (_req, res) => {
     ],
   });
 });
-hrStubsRouter.get("/saudi/wps/runs", async (req, res) => {
+hrStubsRouter.get("/saudi/wps/runs", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const period = (req.query.period as string) || null;
@@ -109,7 +109,7 @@ hrStubsRouter.get("/saudi/wps/runs", async (req, res) => {
     res.json({ data, total: data.length });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-hrStubsRouter.get("/saudi/wps/runs/:id", async (req, res) => {
+hrStubsRouter.get("/saudi/wps/runs/:id", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const id = Number(req.params.id);
@@ -128,11 +128,11 @@ hrStubsRouter.get("/saudi/wps/runs/:id", async (req, res) => {
     res.json({ ...rows[0], lines });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-hrStubsRouter.get("/saudi/mudad/settlements", async (req, res) => {
+hrStubsRouter.get("/saudi/mudad/settlements", requireMinLevel(20), async (req, res) => {
   const period = (req.query.period as string) || null;
   res.json({ data: [], period, note: "Mudad integration not configured" });
 });
-hrStubsRouter.get("/saudi/wps/credentials/:bankCode", async (req, res) => {
+hrStubsRouter.get("/saudi/wps/credentials/:bankCode", requireMinLevel(20), async (req, res) => {
   res.json({
     bankCode: req.params.bankCode,
     configured: false,
@@ -150,13 +150,13 @@ hrStubsRouter.delete("/saudi/wps/credentials/:bankCode", requireMinLevel(20), as
 /* ============================================================
  * Finance — pricing rules (6) + ZATCA (4). Mounted under /finance.
  * ============================================================ */
-financeStubsRouter.get("/pricing/rules", async (_req, res) => {
+financeStubsRouter.get("/pricing/rules", requireMinLevel(20), async (_req, res) => {
   res.json({ data: [], total: 0 });
 });
 financeStubsRouter.post("/pricing/rules", requireMinLevel(20), async (_req, res) => {
   notImplemented(res, "finance.pricingRules.create");
 });
-financeStubsRouter.get("/pricing/rules/:id", async (req, res) => {
+financeStubsRouter.get("/pricing/rules/:id", requireMinLevel(20), async (req, res) => {
   // Read-only stub — returning an empty rule lets a detail page render
   // without crashing, but the user sees "active: false" so they know it
   // isn't doing anything.
@@ -172,7 +172,7 @@ financeStubsRouter.post("/pricing/resolve", requireMinLevel(20), async (_req, re
   notImplemented(res, "finance.pricingRules.resolve");
 });
 
-financeStubsRouter.get("/zatca/missing-tax-numbers", async (req, res) => {
+financeStubsRouter.get("/zatca/missing-tax-numbers", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const data = await rawQuery(
@@ -204,10 +204,10 @@ financeStubsRouter.patch("/zatca/missing-tax-numbers/:id", requireMinLevel(20), 
     res.json({ id, taxNumber, ok: true });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-financeStubsRouter.get("/zatca/pause-history", async (_req, res) => {
+financeStubsRouter.get("/zatca/pause-history", requireMinLevel(20), async (_req, res) => {
   res.json({ data: [], total: 0 });
 });
-financeStubsRouter.get("/zatca/misrouted-b2c-invoices", async (req, res) => {
+financeStubsRouter.get("/zatca/misrouted-b2c-invoices", requireMinLevel(20), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
     const data = await rawQuery(
