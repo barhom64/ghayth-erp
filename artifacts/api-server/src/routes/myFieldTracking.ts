@@ -19,6 +19,7 @@ import { Router } from "express";
 import { authorize } from "../lib/rbac/authorize.js";
 import { handleRouteError, ValidationError, ForbiddenError, zodParse } from "../lib/errorHandler.js";
 import { fieldPingSchema, getFieldEligibility, recordFieldPing } from "../lib/fieldTrackingService.js";
+import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -55,6 +56,10 @@ router.post("/ping", authorize({ feature: "hr.attendance.checkin", action: "crea
         return;
       case "accepted":
         res.status(201).json({ accepted: true, id: r.id, minIntervalSeconds: r.freq });
+        auditFromRequest(req, "field_tracking.ping", "field_tracking_pings", r.id, {
+          after: { lat: b.lat, lng: b.lng, accuracy: b.accuracy },
+        });
+        emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "field_tracking.ping.accepted", entity: "field_tracking_pings", entityId: r.id, details: JSON.stringify({ lat: b.lat, lng: b.lng }) }).catch(() => {});
         return;
     }
   } catch (err) {
