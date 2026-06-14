@@ -20,6 +20,7 @@ import {
   createAuditLog,
   initiateApprovalChain,
   updateBudgetUsed,
+  validateBudget,
   checkFinancialPeriodOpen,
   computeVat,
   getCompanyVatRate,
@@ -3347,6 +3348,22 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
       // on the sales side.
       if (subtotal > 0) {
         const period = String(b.invoiceDate).slice(0, 7);
+        // #2296 — enforce the expense budget on the procurement channel with
+        // the same role-aware 80/100/110% gates the manual-expense path applies
+        // (finance-journal). validateBudget returns canProceed=false when the
+        // caller's role can't authorise the tier, so over-budget vendor bills
+        // are blocked (rejected) or require GM/CFO sign-off — instead of being
+        // silently consumed and only flagged in a report afterwards.
+        const budgetCheck = await validateBudget({
+          companyId: scope.companyId, accountCode: expenseCode, amount: subtotal, period, role: scope.role,
+        });
+        if (!budgetCheck.canProceed) {
+          const meta = { utilization: budgetCheck.utilization, status: budgetCheck.status, accountCode: expenseCode };
+          if (budgetCheck.status === "rejected") {
+            throw new ConflictError(budgetCheck.message, { field: "amount", fix: "أعد تقييم الميزانية أو قلّل المبلغ", meta });
+          }
+          throw new ForbiddenError(budgetCheck.message, { fix: `يلزم موافقة ${budgetCheck.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`, meta });
+        }
         await client.query(
           `UPDATE budgets SET used = COALESCE(used, 0) + $1
            WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,

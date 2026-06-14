@@ -1622,7 +1622,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/transfer", authorize({ feature: 
     const storedCode = asset.assetAccountCode as string | null;
     const assetCode = (storedCode && storedCode !== "1500")
       ? storedCode
-      : await financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "debit", "1200");
+      : await financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "debit", "1270");
 
     let journalId: number | null = null;
     await withTransaction(async (client) => {
@@ -1728,7 +1728,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
     const [assetCode, accDepCode, cashCode, lossCode, gainCode] = await Promise.all([
       (storedAssetCode && storedAssetCode !== "1500")
         ? Promise.resolve(storedAssetCode)
-        : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "credit", "1200"),
+        : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "credit", "1270"),
       (storedAccDepCode && storedAccDepCode !== "1590")
         ? Promise.resolve(storedAccDepCode)
         : financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_depreciation", "debit", "1290"),
@@ -1943,7 +1943,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/revalue", authorize({ feature: "
     const [assetCode, surplusCode, lossCode] = await Promise.all([
       (storedAssetCode && storedAssetCode !== "1500")
         ? Promise.resolve(storedAssetCode)
-        : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "debit", "1200"),
+        : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "debit", "1270"),
       // fallback 3600 (فائض إعادة التقييم) وليس 3300 (الأرباح المحتجزة) — #2140-5a
       financialEngine.resolveAccountCode(scope.companyId, "asset_revaluation_surplus", "credit", "3600"),
       // fallback 5860 (خسارة إعادة تقييم) وليس 5996/5810 — #2140-5a

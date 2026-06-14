@@ -159,6 +159,25 @@ run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent
 # PRs #1019 (frontend batch 1), #1026 (frontend batch 2), and #1028
 # (bi.ts + finance-budget.ts route files).
 run_step "check:finance-period-drift" node scripts/src/check-finance-period-drift.mjs
+# FIN-NONPOSTABLE-FALLBACK (#2325): every resolveAccountCode 4th-arg fallback
+# must be a postable leaf, never a non-postable parent (a parent fallback hard-
+# fails posting once account_mappings is empty). Baseline in the script's
+# ALLOWLIST (offenders in other in-flight tracks); fails only on a NEW offender,
+# which is exactly how #2044 silently re-introduced vat_output→2200 after #2181.
+run_step "check:postable-fallbacks" node scripts/src/check-postable-fallbacks.mjs
+# Tenant-isolation (FND-013): a static read/write of a tenant-scoped table
+# (has a "companyId" column) MUST carry a "companyId" predicate, else one
+# tenant's rows leak into another's session. Baseline in
+# scripts/tenant-isolation-allowlist.txt (the existing surface, to be triaged
+# and fixed in owning tracks); fails only on a NEW unscoped statement, freezing
+# the leak surface from growing while buildScopedWhere adoption catches up.
+run_step "check:tenant-isolation" node scripts/src/check-tenant-isolation.mjs
+# GL-failure handling (#2301): a catch around a GL posting must rethrow, else the
+# request 200s while the journal silently never posts (non-atomic; recoverable
+# only via the financial_posting_failures retry queue). Whole-file baseline in
+# scripts/gl-swallow-allowlist.txt (existing surface, triaged per #2301); fails
+# on a NEW file that swallows a GL error without rethrowing.
+run_step "check:gl-swallow" node scripts/src/check-gl-swallow.mjs
 # Stop-Ship compliance scan (#1139 §8): every write endpoint must have an
 # RBAC guard. File-level audit/event gaps are reported as warnings (the
 # global auditMiddleware provides baseline coverage) and don't fail the
