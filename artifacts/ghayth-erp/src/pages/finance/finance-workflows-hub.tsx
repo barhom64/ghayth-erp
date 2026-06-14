@@ -1,3 +1,8 @@
+/**
+ * GAP_MATRIX P2 — Pure navigation hub for finance workflows.
+ * Makes NO API calls; renders workflow cards that link to action pages.
+ * Intentional: a workflow entry-point landing page for the Finance module.
+ */
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";

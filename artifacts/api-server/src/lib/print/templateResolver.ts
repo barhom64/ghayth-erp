@@ -372,8 +372,13 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   mutamer: () => buildUmrahPilgrimPreset(),
   trip: () => buildFleetTripPreset(),
   customer: () => buildClientCardPreset(),
-  agent: () => buildUmrahPilgrimPreset(),
-  sub_agent: () => buildUmrahPilgrimPreset(),
+  // U-14-P1 — short-name aliases were wired to the pilgrim preset,
+  // which is wrong (the agent / sub-agent card preset already exists
+  // and renders the correct fields). The umrah_agent / umrah_sub_agent
+  // long-name keys above are unchanged; this just fixes the SPA
+  // detail-page paths that pass the short form.
+  agent: () => buildUmrahAgentCardPreset(),
+  sub_agent: () => buildUmrahSubAgentCardPreset(),
   overtime: () => buildOvertimeRequestPreset(),
   leave: () => buildLeaveRequestPreset(),
   excuse: () => buildExcuseRequestPreset(),
@@ -416,11 +421,25 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   // printed doc carries the same layout the rest of the domain uses.
   fleet_driver: () => buildDriverCardPreset(),
   legal_correspondence: () => buildCorrespondenceCardPreset(),
-  umrah_group: () => buildUmrahPilgrimPreset(),
+  // U-14-P1 — umrah_group was aliased to the pilgrim preset (wrong:
+  // a group is a COLLECTION of pilgrims with its own meta). Removing
+  // the key here lets the resolver fall through to universalFallback
+  // (templateResolver line 142: `BESPOKE_PRESETS[entityType]?.() ??
+  // universalFallback(entityType)`), which renders the group row's
+  // actual columns. A bespoke buildUmrahGroupPreset is U-14-P3.
   umrah_agent_invoice: () => buildUmrahInvoicePreset(),
   // Cargo bill of lading — new bespoke preset wired with loadCargoManifest.
   cargo_manifest: () => buildCargoManifestPreset(),
   manifest: () => buildCargoManifestPreset(),
+  // #2079 TA-T18-11 (TPL-02) — fleet rental delivery/return docket.
+  // One preset covers both states; the loader's hasHandover /
+  // hasReturn flags drive the conditional blocks inside the template.
+  // entityType is `fleet_rental_contract` to disambiguate from the
+  // existing `rental_contract` (property rental, the real-estate
+  // tenant contract above).
+  fleet_rental_contract: () => buildRentalHandoverReturnPreset(),
+  fleet_rental_handover: () => buildRentalHandoverReturnPreset(),
+  fleet_rental_return: () => buildRentalHandoverReturnPreset(),
   performance: () => buildEvaluationPreset(),
   performance_review: () => buildEvaluationPreset(),
 };
@@ -1647,6 +1666,99 @@ function buildCargoManifestPreset(): PrintTemplate {
   <div>الشاحن<br/>____________________</div>
   <div>السائق<br/>____________________</div>
   <div>المستلم<br/>____________________</div>
+</div>`,
+  });
+}
+
+// #2079 TA-T18-11 (TPL-02) — rental delivery/return docket.
+//
+// Single preset that renders the handover block when the contract
+// has been handed over (hasHandover) and the return block when
+// returned (hasReturn). All fields come from migration 293 columns
+// the loader already projects: handoverOdometer / handoverFuelLevel
+// / handoverNotes / handoverAt and the return-side counterparts.
+//
+// Why one preset, not two: the operator's mental model is "the
+// rental docket" — they print it once at delivery, then update it
+// at return. Two distinct presets would force the print engine to
+// switch templates mid-lifecycle and double-track an
+// administrative artefact that's conceptually one document.
+function buildRentalHandoverReturnPreset(): PrintTemplate {
+  return makePreset({
+    id: -99, presetKey: "rental_handover_return_classic",
+    entityType: "fleet_rental_contract",
+    name: "محضر تسليم/إرجاع التأجير",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">محضر تسليم/إرجاع تأجير مركبة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">عقد التأجير: <span dir="ltr" style="font-family:monospace">{{entity.ref}}</span></div>
+<div class="meta-grid">
+  <div><strong>الحالة:</strong> {{entity.status}}</div>
+  <div><strong>الفرع:</strong> {{branch.branchName}}</div>
+  <div><strong>تاريخ بدء العقد:</strong> {{entity.startDate}}</div>
+  <div><strong>تاريخ نهاية العقد:</strong> {{entity.endDate}}</div>
+  <div><strong>السائق ضمن العقد:</strong> {{entity.withDriver}}</div>
+  <div><strong>شروط الدفع:</strong> {{entity.paymentTerms}}</div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">بيانات العميل</div>
+  <div><strong>الاسم:</strong> {{entity.clientName}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.clientPhone}}</span></div>
+</div>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">بيانات المركبة المؤجَّرة</div>
+  <div><strong>اللوحة:</strong> <span dir="ltr">{{entity.plateNumber}}</span> — {{entity.vehicleMake}} {{entity.vehicleModel}} ({{entity.vehicleYear}})</div>
+  <div><strong>اللون:</strong> {{entity.vehicleColor}}</div>
+  <div><strong>VIN:</strong> <span dir="ltr">{{entity.vinNumber}}</span></div>
+</div>
+{{#if entity.withDriver}}
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">بيانات السائق المرفق</div>
+  <div><strong>الاسم:</strong> {{entity.driverName}}</div>
+  <div><strong>الهاتف:</strong> <span dir="ltr">{{entity.driverPhone}}</span></div>
+  <div><strong>رخصة:</strong> <span dir="ltr">{{entity.driverLicense}}</span></div>
+</div>
+{{/if}}
+<div class="totals">
+  <div><strong>السعر اليومي:</strong> {{entity.dailyRate}}</div>
+  <div><strong>السعر الأسبوعي:</strong> {{entity.weeklyRate}}</div>
+  <div><strong>السعر الشهري:</strong> {{entity.monthlyRate}}</div>
+  <div class="grand"><strong>الضمان المؤمَّن:</strong> {{entity.securityDeposit}}</div>
+</div>
+{{#if entity.hasHandover}}
+<div style="margin:14px 0;padding:12px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">إيصال التسليم</div>
+  <div><strong>تاريخ التسليم:</strong> {{entity.handoverAt}}</div>
+  <div><strong>قراءة العداد عند التسليم (كم):</strong> {{entity.handoverOdometer}}</div>
+  <div><strong>مستوى الوقود عند التسليم:</strong> {{entity.fuelLevelPct}}%</div>
+  {{#if entity.handoverNotes}}
+  <div><strong>ملاحظات التسليم:</strong></div>
+  <div style="white-space:pre-wrap">{{entity.handoverNotes}}</div>
+  {{/if}}
+</div>
+{{/if}}
+{{#if entity.hasReturn}}
+<div style="margin:14px 0;padding:12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">محضر الإرجاع</div>
+  <div><strong>تاريخ الإرجاع:</strong> {{entity.returnedAt}}</div>
+  <div><strong>تاريخ الانتهاء الفعلي:</strong> {{entity.actualEndDate}}</div>
+  <div><strong>قراءة العداد عند الإرجاع (كم):</strong> {{entity.returnOdometer}}</div>
+  <div><strong>مستوى الوقود عند الإرجاع:</strong> {{entity.returnFuelLevelPct}}%</div>
+  <div><strong>مبلغ التجاوز:</strong> {{entity.overageAmount}}</div>
+  {{#if entity.returnNotes}}
+  <div><strong>ملاحظات الإرجاع:</strong></div>
+  <div style="white-space:pre-wrap">{{entity.returnNotes}}</div>
+  {{/if}}
+</div>
+{{/if}}
+{{#if entity.notes}}
+<div style="margin:14px 0;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">ملاحظات العقد</div>
+  <div style="white-space:pre-wrap">{{entity.notes}}</div>
+</div>
+{{/if}}
+<div class="signatures" style="margin-top:36px">
+  <div>المؤجِّر<br/>____________________</div>
+  <div>المستأجِر<br/>____________________</div>
 </div>`,
   });
 }
@@ -3687,6 +3799,12 @@ export const ARABIC_TITLES: Record<string, string> = {
   fuel: "تعبئة وقود", fixed_asset: "بطاقة أصل ثابت",
   vendor: "بطاقة مورّد", supplier: "بطاقة مورّد",
   rental_contract: "عقد إيجار", property_unit: "بطاقة وحدة عقارية",
+  // #2079 TA-T18-11 — fleet rental docket (distinct from the property
+  // rental_contract above; same Arabic-label family but the schema +
+  // template differ).
+  fleet_rental_contract: "محضر تسليم/إرجاع تأجير",
+  fleet_rental_handover: "محضر تسليم تأجير",
+  fleet_rental_return: "محضر إرجاع تأجير",
   tenant: "بطاقة مستأجر", building: "بطاقة مبنى",
   legal_contract: "عقد قانوني", legal_judgment: "ملف قضية",
   legal_session: "محضر جلسة", legal_correspondence: "مراسلة قانونية",

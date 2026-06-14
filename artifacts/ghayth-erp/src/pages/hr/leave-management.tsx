@@ -1,13 +1,18 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { formatDateAr } from "@/lib/formatters";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, CheckCircle, XCircle, Clock, FileText } from "lucide-react";
+import { Calendar, CheckCircle, XCircle, Clock, FileText, Plus, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
@@ -84,11 +89,14 @@ function LeaveApprovalCard({ request, onDone }: { request: any; onDone: () => vo
   );
 }
 
+const EMPTY_TYPE_FORM = { name: "", maxDays: "", isPaid: "true", description: "" };
+
 export default function LeaveManagementPage() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const { data: requestsData, refetch: refetchPending, isLoading, isError } = useApiQuery<any>(["leaves-pending"], "/hr/leave-requests?status=pending");
   const { data: balanceData } = useApiQuery<any>(["leave-balance"], "/hr/leave-balance");
-  const { data: typesData } = useApiQuery<any>(["leave-types"], "/hr/leave-types");
+  const { data: typesData, refetch: refetchTypes } = useApiQuery<any>(["leave-types"], "/hr/leave-types");
   const { data: statsData } = useApiQuery<any>(["leave-stats"], "/hr/leave-stats");
   const pendingRequests = asList(requestsData);
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(pendingRequests);
@@ -96,6 +104,33 @@ export default function LeaveManagementPage() {
   const types = typesData?.data || [];
   const stats = statsData || {};
   const qc = useQueryClient();
+  const [showTypeForm, setShowTypeForm] = useState(false);
+  const [typeForm, setTypeForm] = useState(EMPTY_TYPE_FORM);
+  const [editingTypeId, setEditingTypeId] = useState<number | null>(null);
+
+  const saveLeaveType = async () => {
+    const payload = {
+      name: typeForm.name,
+      maxDays: typeForm.maxDays ? Number(typeForm.maxDays) : undefined,
+      isPaid: typeForm.isPaid === "true",
+      description: typeForm.description || undefined,
+    };
+    try {
+      if (editingTypeId) {
+        await apiFetch(`/hr/leave-types/${editingTypeId}`, { method: "PATCH", body: JSON.stringify(payload) });
+        toast({ title: "تم تحديث نوع الإجازة" });
+      } else {
+        await apiFetch("/hr/leave-types", { method: "POST", body: JSON.stringify(payload) });
+        toast({ title: "تم إنشاء نوع الإجازة" });
+      }
+      setShowTypeForm(false);
+      setTypeForm(EMPTY_TYPE_FORM);
+      setEditingTypeId(null);
+      refetchTypes();
+    } catch (err: any) {
+      toast({ title: "فشل الحفظ", description: err?.message, variant: "destructive" });
+    }
+  };
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -177,22 +212,65 @@ export default function LeaveManagementPage() {
         </TabsContent>
 
         <TabsContent value="types">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {types.map((t: any) => (
-              <Card key={t.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Calendar className="w-5 h-5 text-status-info" />
-                    <span className="font-semibold">{t.name}</span>
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <GuardedButton perm="hr.leaves:update" size="sm" onClick={() => { setShowTypeForm((v) => !v); if (showTypeForm) { setTypeForm(EMPTY_TYPE_FORM); setEditingTypeId(null); } }}>
+                <Plus className="h-4 w-4 me-1" />{showTypeForm ? "إلغاء" : "إضافة نوع"}
+              </GuardedButton>
+            </div>
+            {showTypeForm && (
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <h4 className="font-semibold text-sm">{editingTypeId ? "تعديل نوع الإجازة" : "إضافة نوع إجازة جديد"}</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>الاسم *</Label>
+                      <Input value={typeForm.name} onChange={(e) => setTypeForm((f) => ({ ...f, name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>عدد الأيام السنوية</Label>
+                      <Input type="number" value={typeForm.maxDays} onChange={(e) => setTypeForm((f) => ({ ...f, maxDays: e.target.value }))} />
+                    </div>
+                    <div>
+                      <Label>مدفوعة؟</Label>
+                      <select className="w-full h-10 border rounded-md px-2" value={typeForm.isPaid} onChange={(e) => setTypeForm((f) => ({ ...f, isPaid: e.target.value }))}>
+                        <option value="true">نعم</option>
+                        <option value="false">لا</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label>وصف</Label>
+                      <Input value={typeForm.description} onChange={(e) => setTypeForm((f) => ({ ...f, description: e.target.value }))} />
+                    </div>
                   </div>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p>الأيام السنوية: <span className="font-medium text-status-neutral-foreground">{t.maxDays || t.annualDays || 0}</span></p>
-                    <p>مدفوعة: <Badge className={t.isPaid ? "bg-status-success-surface text-status-success-foreground" : "bg-surface-subtle text-status-neutral-foreground"}>{t.isPaid ? "نعم" : "لا"}</Badge></p>
+                  <div className="flex gap-2">
+                    <Button disabled={!typeForm.name} onClick={saveLeaveType}>{editingTypeId ? "تحديث" : "إنشاء"}</Button>
+                    <Button variant="outline" onClick={() => { setShowTypeForm(false); setTypeForm(EMPTY_TYPE_FORM); setEditingTypeId(null); }}>إلغاء</Button>
                   </div>
                 </CardContent>
               </Card>
-            ))}
-            {types.length === 0 && <p className="text-center text-muted-foreground col-span-3 py-8">لا توجد أنواع إجازات</p>}
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {types.map((t: any) => (
+                <Card key={t.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="w-5 h-5 text-status-info" />
+                      <span className="font-semibold">{t.name}</span>
+                      <GuardedButton perm="hr.leaves:update" variant="ghost" size="sm" className="ms-auto h-6 w-6 p-0"
+                        onClick={() => { setEditingTypeId(t.id); setTypeForm({ name: t.name, maxDays: String(t.maxDays || t.annualDays || ""), isPaid: t.isPaid ? "true" : "false", description: t.description || "" }); setShowTypeForm(true); }}>
+                        <Pencil className="h-3 w-3" />
+                      </GuardedButton>
+                    </div>
+                    <div className="space-y-1 text-sm text-muted-foreground">
+                      <p>الأيام السنوية: <span className="font-medium text-status-neutral-foreground">{t.maxDays || t.annualDays || 0}</span></p>
+                      <p>مدفوعة: <Badge className={t.isPaid ? "bg-status-success-surface text-status-success-foreground" : "bg-surface-subtle text-status-neutral-foreground"}>{t.isPaid ? "نعم" : "لا"}</Badge></p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              {types.length === 0 && <p className="text-center text-muted-foreground col-span-3 py-8">لا توجد أنواع إجازات</p>}
+            </div>
           </div>
         </TabsContent>
       </Tabs>

@@ -94,9 +94,10 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-documents", component: MyDocuments },
   { path: "/my-loans", component: MyLoans },
   { path: "/my-overtime", component: MyOvertime },
-  { path: "/action-center", component: ActionCenter },
+  // GAP_MATRIX P1 — role ladder: 20/30/40 don't exist; nearest real level above employee is 50.
+  { path: "/action-center", component: ActionCenter, minRoleLevel: 50 },
   { path: "/workspace", component: Workspace },
-  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
+  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 50 },
   { path: "/my/work-queue", component: WorkQueue },
   // PR-5 (#2077) — صندوق الأعمال الموحّد (canonical).
   { path: "/work-inbox", component: WorkInbox },
@@ -106,10 +107,10 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   // Agent-5 (route↔backend consistency): /api/exec-dashboard mounts with
   // requireMinLevel(70). Route gate raised from 60 → 70 to match.
   { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 70 },
-  { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
-  { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 40 },
-  { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },
-  { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 40 },
+  { path: "/manager-board", component: ManagerBoard, minRoleLevel: 50 },
+  { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 50 },
+  { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 50 },
+  { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 50 },
   { path: "/clients", component: Clients, module: "crm" },
   { path: "/clients/create", component: ClientsCreate, module: "crm" },
   { path: "/clients/:id/statement", component: CustomerStatement, module: "crm" },
@@ -159,5 +160,5 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/automation", component: Automation, module: "admin" },
   { path: "/activity-log", component: ActivityLog },
   { path: "/module-dashboards", component: ModuleDashboards, module: "bi" },
-  { path: "/reports/scheduled", component: ScheduledReports, module: "bi" },
+  { path: "/reports/scheduled", component: ScheduledReports, module: "bi", minRoleLevel: 50 },
 ];

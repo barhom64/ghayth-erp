@@ -709,8 +709,18 @@ transportBookingsRouter.patch(
       const scope = req.scope!;
       const id = parseId(req.params.id, "id");
       const b = zodParse(updateBookingSchema.safeParse(req.body));
-      const [existing] = await rawQuery<{ status: typeof BOOKING_STATUSES[number] }>(
-        `SELECT status FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      const [existing] = await rawQuery<{
+        status: typeof BOOKING_STATUSES[number];
+        // #2079 FIX-13 (TA-SEC-02) — pull the linked-source fields
+        // alongside status so the audit log below can compute a true
+        // before/after delta for `linked_source_changed` events.
+        customerId: number | null;
+        umrahGroupId: number | null;
+        contractId: number | null;
+      }>(
+        `SELECT status, "customerId", "umrahGroupId", "contractId"
+           FROM transport_bookings
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [id, scope.companyId],
       );
       if (!existing) throw new NotFoundError("الحجز غير موجود");
@@ -761,6 +771,41 @@ transportBookingsRouter.patch(
         action: "update", entity: "transport_bookings", entityId: id,
         before: { status: existing.status }, after: b,
       }).catch((e) => logger.error(e, "booking audit failed"));
+
+      // #2079 FIX-13 (TA-SEC-02) — when the operator touches a link
+      // field (customerId / umrahGroupId / contractId), surface that
+      // as a SEPARATE audit event on top of the generic update log.
+      // The audit trail needs a distinct row whose `action` makes
+      // the SoD-sensitive nature obvious — silently lumping a
+      // source-link rebind under "update" lets a malicious operator
+      // hide a customer swap inside a noisy notes/cost edit. The
+      // before/after carries ONLY the linked-source fields so the
+      // auditor reads the row cleanly without scrolling through
+      // unrelated field deltas.
+      const linkedSourceFields = ["customerId", "umrahGroupId", "contractId"] as const;
+      const linkedChange: Record<string, { before: number | null; after: number | null }> = {};
+      for (const field of linkedSourceFields) {
+        if (b[field] !== undefined && b[field] !== existing[field]) {
+          linkedChange[field] = {
+            before: existing[field],
+            after: (b[field] as number | null | undefined) ?? null,
+          };
+        }
+      }
+      if (Object.keys(linkedChange).length > 0) {
+        createAuditLog({
+          companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+          action: "linked_source_changed",
+          entity: "transport_bookings",
+          entityId: id,
+          before: Object.fromEntries(
+            Object.entries(linkedChange).map(([k, v]) => [k, v.before]),
+          ),
+          after: Object.fromEntries(
+            Object.entries(linkedChange).map(([k, v]) => [k, v.after]),
+          ),
+        }).catch((e) => logger.error(e, "booking linked-source audit failed"));
+      }
 
       // #2079 TA-T18-01 — passenger booking close → Accounting Candidate.
       // Mirrors the cargo + rental handoffs. Only fires when status

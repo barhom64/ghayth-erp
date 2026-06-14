@@ -1,16 +1,19 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageShell } from "@workspace/ui-core";
-import { Calendar, Clock, Truck, User, AlertCircle, ArrowLeft, GripVertical } from "lucide-react";
+import { Calendar, Clock, Truck, User, AlertCircle, ArrowLeft, GripVertical, Plus, Pencil } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
-import { statusLabel } from "@/lib/transport-status-labels";
+import { statusLabel, statusDict } from "@/lib/transport-status-labels";
 
 // #1733 Comment 9 — dispatch board surface. Shows scheduled dispatch
 // orders grouped per-driver in a daily timeline column so the
@@ -68,6 +71,51 @@ export default function TransportDispatchBoard() {
   const [draggingOrderId, setDraggingOrderId] = useState<number | null>(null);
   const [dropTargetDriverId, setDropTargetDriverId] = useState<number | null>(null);
   const [rescheduling, setRescheduling] = useState<number | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ bookingLineId: "", vehicleId: "", driverId: "", scheduledStartAt: "", scheduledEndAt: "" });
+  const [editingOrder, setEditingOrder] = useState<DispatchOrderRow | null>(null);
+  const [editStatus, setEditStatus] = useState("");
+
+  const { data: vehiclesResp } = useApiQuery<any>(["fleet-vehicles-dispatch"], "/fleet/vehicles?limit=500");
+  const { data: driversResp } = useApiQuery<any>(["fleet-drivers-dispatch"], "/fleet/drivers?limit=500");
+  const vehicles = asList(vehiclesResp);
+  const drivers = asList(driversResp);
+
+  const createOrder = async () => {
+    try {
+      await apiFetch("/transport/dispatch-orders", {
+        method: "POST",
+        body: JSON.stringify({
+          bookingLineId: createForm.bookingLineId ? Number(createForm.bookingLineId) : undefined,
+          vehicleId: createForm.vehicleId ? Number(createForm.vehicleId) : undefined,
+          driverId: createForm.driverId ? Number(createForm.driverId) : undefined,
+          scheduledStartAt: createForm.scheduledStartAt || undefined,
+          scheduledEndAt: createForm.scheduledEndAt || undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء أمر التوزيع" });
+      setShowCreate(false);
+      setCreateForm({ bookingLineId: "", vehicleId: "", driverId: "", scheduledStartAt: "", scheduledEndAt: "" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الإنشاء", description: err?.message });
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editingOrder) return;
+    try {
+      await apiFetch(`/transport/dispatch-orders/${editingOrder.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: editStatus }),
+      });
+      toast({ title: "تم تحديث الأمر" });
+      setEditingOrder(null);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل التحديث", description: err?.message });
+    }
+  };
 
   // 24-hour window for the chosen day.
   const fromDate = dateFilter;
@@ -159,6 +207,9 @@ export default function TransportDispatchBoard() {
       ]}
       actions={
         <div className="flex items-center gap-2">
+          <GuardedButton perm="transport:create" size="sm" onClick={() => setShowCreate((v) => !v)}>
+            <Plus className="h-4 w-4 me-1" />{showCreate ? "إلغاء" : "أمر توزيع جديد"}
+          </GuardedButton>
           <Link href="/fleet/transport/bookings">
             <Button variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 me-1" />العودة للحجوزات
@@ -168,6 +219,49 @@ export default function TransportDispatchBoard() {
       }
     >
       <FleetTabsNav />
+
+      {showCreate && (
+        <div className="rounded-lg border bg-white p-4 mb-4 space-y-3">
+          <h3 className="font-semibold">إنشاء أمر توزيع</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>رقم بند الحجز *</Label>
+              <Input type="number" value={createForm.bookingLineId}
+                onChange={(e) => setCreateForm((f) => ({ ...f, bookingLineId: e.target.value }))} />
+            </div>
+            <div>
+              <Label>المركبة</Label>
+              <select className="w-full h-10 border rounded-md px-2" value={createForm.vehicleId}
+                onChange={(e) => setCreateForm((f) => ({ ...f, vehicleId: e.target.value }))}>
+                <option value="">— اختر —</option>
+                {vehicles.map((v: any) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>السائق</Label>
+              <select className="w-full h-10 border rounded-md px-2" value={createForm.driverId}
+                onChange={(e) => setCreateForm((f) => ({ ...f, driverId: e.target.value }))}>
+                <option value="">— اختر —</option>
+                {drivers.map((d: any) => <option key={d.id} value={d.id}>{d.name || d.driverName}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>بداية مجدولة</Label>
+              <Input type="datetime-local" value={createForm.scheduledStartAt}
+                onChange={(e) => setCreateForm((f) => ({ ...f, scheduledStartAt: e.target.value }))} />
+            </div>
+            <div>
+              <Label>نهاية مجدولة</Label>
+              <Input type="datetime-local" value={createForm.scheduledEndAt}
+                onChange={(e) => setCreateForm((f) => ({ ...f, scheduledEndAt: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button disabled={!createForm.bookingLineId} onClick={createOrder}>إنشاء</Button>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>إلغاء</Button>
+          </div>
+        </div>
+      )}
 
       <Card className="mt-4">
         <CardContent className="p-4">
@@ -330,6 +424,12 @@ export default function TransportDispatchBoard() {
                             {isBusy && (
                               <div className="mt-1 text-[10px] text-status-info-foreground">جاري إعادة الجدولة…</div>
                             )}
+                            <div className="mt-1 flex justify-end">
+                              <GuardedButton perm="transport:update" variant="ghost" size="sm" className="h-5 w-5 p-0"
+                                onClick={(e) => { e.stopPropagation(); setEditingOrder(o); setEditStatus(o.status); }}>
+                                <Pencil className="h-2.5 w-2.5" />
+                              </GuardedButton>
+                            </div>
                           </div>
                         );
                       })}
@@ -347,6 +447,24 @@ export default function TransportDispatchBoard() {
           )}
         </CardContent>
       </Card>
+      {editingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditingOrder(null)}>
+          <div className="bg-white rounded-lg shadow-xl p-5 w-72 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-sm">تعديل أمر التوزيع #{editingOrder.id}</h3>
+            <div>
+              <Label>الحالة</Label>
+              <select className="w-full h-10 border rounded-md px-2 mt-1" value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}>
+                {Object.entries(statusDict("dispatch")).map(([k, info]) => <option key={k} value={k}>{info.label}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" size="sm" onClick={() => setEditingOrder(null)}>إلغاء</Button>
+              <Button size="sm" onClick={saveEdit}>حفظ</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

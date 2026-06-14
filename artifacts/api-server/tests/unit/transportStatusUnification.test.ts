@@ -13,7 +13,7 @@ const ITINERARY = readFileSync(join(spaSrc, "pages/fleet/transport-itinerary-det
 
 describe("UX-05 — لوحة التوزيع تستخدم القاموس الموحّد للحالة", () => {
   it("تستورد statusLabel من القاموس الموحّد", () => {
-    expect(DISPATCH).toMatch(/import \{ statusLabel \} from "@\/lib\/transport-status-labels"/);
+    expect(DISPATCH).toMatch(/import \{[^}]*statusLabel[^}]*\} from "@\/lib\/transport-status-labels"/);
   });
 
   it("تعرض حالة التوزيع عبر statusLabel('dispatch', …) لا خريطة محلية", () => {

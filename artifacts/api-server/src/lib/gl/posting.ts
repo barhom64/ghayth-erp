@@ -21,6 +21,7 @@
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { checkFinancialPeriodOpen, todayISO } from "../businessHelpers.js";
+import { assertDimensionContract } from "../financePostingPolicy.js";
 import type { JournalEntryPayload } from "./journal-poster.js";
 
 export type JournalEntryStatus = "draft" | "posted";
@@ -161,6 +162,25 @@ export async function postJournalEntry(
     // (journal_lines.accountCode is NOT NULL even though
     // journal_lines.accountId is the canonical FK).
     const codeById = new Map(accounts.map((a) => [a.id, a.code]));
+
+    // FIN-INTEGRITY-CONTRACT (#2233) — عقد البُعد عند الباب الـtyped أيضًا.
+    // تدريجي: enforce لوقود المركبة (5510)، warn لبقية الأصناف.
+    const dimContract = assertDimensionContract({
+      lines: payload.lines.map((l) => ({
+        accountCode: codeById.get(l.accountId) ?? null,
+        vehicleId: l.vehicleId ?? null,
+        propertyId: l.propertyId ?? null,
+        projectId: l.projectId ?? null,
+        vendorId: l.vendorId ?? null,
+        clientId: l.clientId ?? null,
+      })),
+    });
+    if (dimContract.warnings.length > 0) {
+      logger.warn(
+        { companyId: ctx.companyId, ref: ctx.ref, warnings: dimContract.warnings },
+        "[dimension-contract] سطور بلا بُعد مطلوب (warn)",
+      );
+    }
 
     // Pre-compute postedBy/postedAt in JS so each $N maps to exactly one
     // column. A previous design reused $5 (createdBy) inside the postedBy

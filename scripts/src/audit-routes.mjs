@@ -52,6 +52,9 @@ const ALLOWLIST = new Set([
   // /finance redirect stub → /finance/accounts. Not in any routes file,
   // so visiting /finance directly 404s today. Keep until router decides.
   "pages/finance.tsx",
+  // GAP_MATRIX P1 — duplicate eliminated: /settings/print-templates now
+  // redirects to /admin/print-templates (canonical). File kept for reference.
+  "pages/settings/print-templates.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];

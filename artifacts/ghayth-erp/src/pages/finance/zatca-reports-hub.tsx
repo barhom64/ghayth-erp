@@ -1,3 +1,8 @@
+/**
+ * GAP_MATRIX P2 — Pure navigation hub for ZATCA-related reports.
+ * Makes NO API calls; links out to individual report pages.
+ * Intentional: a landing page for ZATCA compliance report navigation.
+ */
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

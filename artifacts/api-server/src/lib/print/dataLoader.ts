@@ -232,6 +232,16 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "cargo_manifest":
     case "manifest":
       return await loadCargoManifest(companyId, entityId);
+    // #2079 TA-T18-11 (TPL-02) — fleet rental delivery/return docket.
+    // One loader, one preset; the template renders the handover or
+    // return block conditionally based on whether the row has the
+    // corresponding timestamp filled. entityType is
+    // `fleet_rental_contract` (not `rental_contract`, which is the
+    // pre-existing property rental contract — different schema).
+    case "fleet_rental_contract":
+    case "fleet_rental_handover":
+    case "fleet_rental_return":
+      return await loadRentalContract(companyId, entityId);
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
@@ -582,7 +592,7 @@ async function loadPurchaseOrder(companyId: number, id: string) {
   // around migration 202 (#1418 GAP_MATRIX item #4). The loader was still
   // SELECTing from the old name, so PO prints rendered with an empty items
   // array and the universal template showed "بلا بنود".
-  const items = await rawQuery(`SELECT * FROM purchase_order_items WHERE "purchaseOrderId" = $1`, [id]).catch(() => []);
+  const items = await rawQuery(`SELECT * FROM purchase_order_items WHERE "orderId" = $1`, [id]).catch(() => []);
   // The column on purchase_orders is "supplierId" (it was renamed from
   // "vendorId" before #1084 but the loader never caught up). Reading
   // `po.vendorId` returned undefined so the supplier name never loaded.
@@ -1313,6 +1323,47 @@ async function loadCargoManifest(companyId: number, id: string) {
 // Note: removed my earlier loadFleetMaintenance — main's version above
 // has the print-template-friendly aliases (serviceType, totalCost,
 // workshopName, odometer) that the maintenance templates depend on.
+
+// #2079 TA-T18-11 — rental contract for the handover/return docket.
+// The fields from migration 293 (handoverOdometer / handoverFuelLevel /
+// handoverNotes / handoverAt + the return-side counterparts) are
+// pulled here so the print template stays declarative — no inline
+// conditional SQL inside the preset.
+async function loadRentalContract(companyId: number, id: string) {
+  const [contract] = await rawQuery<Record<string, unknown>>(
+    `SELECT rc.*,
+            v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
+            v.year AS "vehicleYear", v.color AS "vehicleColor",
+            v."vinNumber",
+            c.name AS "clientName", c.phone AS "clientPhone",
+            d.name AS "driverName", d.phone AS "driverPhone",
+            d."licenseNumber" AS "driverLicense"
+       FROM fleet_rental_contracts rc
+       LEFT JOIN fleet_vehicles v ON v.id = rc."vehicleId" AND v."companyId" = $2
+       LEFT JOIN clients c ON c.id = rc."clientId" AND c."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = rc."driverId" AND d."companyId" = $2
+      WHERE rc.id = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!contract) return { entity: { id } };
+  // Pre-render simple flags the template needs for its conditional
+  // blocks (Mustache-style `{{#if}}` over a bool is more reliable
+  // than templating against a SQL timestamp directly).
+  return {
+    entity: {
+      ...contract,
+      hasHandover: !!contract.handoverAt,
+      hasReturn: !!contract.returnedAt,
+      fuelLevelPct: contract.handoverFuelLevel != null
+        ? Math.round(Number(contract.handoverFuelLevel) * 100)
+        : null,
+      returnFuelLevelPct: contract.returnFuelLevel != null
+        ? Math.round(Number(contract.returnFuelLevel) * 100)
+        : null,
+    },
+  };
+}
 
 async function loadFuelLog(companyId: number, id: string) {
   const [f] = await rawQuery<Record<string, unknown>>(

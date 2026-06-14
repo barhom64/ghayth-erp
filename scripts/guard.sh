@@ -128,6 +128,19 @@ run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migration
 # db/schema_pre.sql (fresh installs never re-run pre-cutoff migrations, so a
 # stale dump silently 500s clean environments — the 2026-06 inbox incident).
 run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
+# Invalid interactive-element nesting: <Link><Button> renders <a><button>,
+# which is invalid HTML and breaks keyboard / screen-reader semantics.
+# OFFLINE source scan; baseline in scripts/button-nesting-allowlist.txt,
+# fails only on a NEW offender. Pure-logic fixtures guard the detector.
+run_step "check:button-nesting:tests" node scripts/src/check-button-nesting.test.mjs
+run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
+# Duplicate basenames within a single frontend artifact's src/ (e.g. two
+# policies-tab.tsx) — copy-paste components that drift apart and resolve
+# imports to the wrong copy. OFFLINE filename scan; baseline in
+# scripts/dup-filename-allowlist.txt, fails only on a NEW collision.
+# Pure-logic fixtures guard the detector.
+run_step "check:dup-filenames:tests" node scripts/src/check-dup-filenames.test.mjs
+run_step "check:dup-filenames" node scripts/src/check-dup-filenames.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
 run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs

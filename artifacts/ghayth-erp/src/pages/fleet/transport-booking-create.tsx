@@ -27,14 +27,57 @@ import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects"
 // selected `transportServiceType` so cargo-specific fields don't clutter
 // an umrah-passenger booking and vice versa.
 
-const SERVICE_TYPES = [
-  { value: "cargo_load", label: "نقل حمولة" },
-  { value: "passenger_umrah", label: "نقل معتمرين" },
-  { value: "passenger_general", label: "نقل ركاب" },
-  { value: "equipment_rental", label: "تأجير معدة" },
-  { value: "internal_transfer", label: "نقل داخلي" },
-  { value: "other", label: "أخرى" },
-] as const;
+// #2079 TA-T18-12 (RM-04) — family-first booking creation.
+//
+// Before: the operator landed on a dropdown of 6 service types
+// with no upstream cue, and the form's downstream branches
+// (passengerCount vs cargoWeight, validForPassengers vs
+// validForCargo) only showed up after a service-type pick — a
+// known UX trap because the operator often picked the wrong
+// type then had to back out. The audit's RM-04 fix: a two-step
+// flow — first choose the trip FAMILY (ركاب / حمولة), then
+// narrow the service-type dropdown to the matching subset.
+//
+// The server's deriveTripFamily() stays the canonical source of
+// truth — this is a UI-only narrowing. equipment_rental,
+// internal_transfer, and `other` are presented under BOTH
+// families because their canon depends on payload data, not the
+// service-type alone (the engine's deriveTripFamily uses
+// passengerCount > 0 → passenger, cargoWeight > 0 → cargo, with
+// rental tilting passenger and the rest tilting cargo).
+type TripFamily = "passenger" | "cargo";
+
+const SERVICE_TYPES_BY_FAMILY: Record<TripFamily, ReadonlyArray<{ value: string; label: string }>> = {
+  passenger: [
+    { value: "passenger_umrah", label: "نقل معتمرين" },
+    { value: "passenger_general", label: "نقل ركاب" },
+    { value: "equipment_rental", label: "تأجير معدة (مع ركاب/سائق)" },
+    { value: "internal_transfer", label: "نقل داخلي" },
+    { value: "other", label: "أخرى" },
+  ],
+  cargo: [
+    { value: "cargo_load", label: "نقل حمولة" },
+    { value: "equipment_rental", label: "تأجير معدة" },
+    { value: "internal_transfer", label: "نقل داخلي" },
+    { value: "other", label: "أخرى" },
+  ],
+} as const;
+
+// Server canon: cargo_load → cargo, passenger_* → passenger.
+// Anything else: tilts cargo unless the operator picked the
+// passenger family. We use the family choice as the
+// disambiguator for the ambiguous service-types — the server
+// re-derives from the row data so this only affects the picker.
+function serviceTypesForFamily(family: TripFamily | null): ReadonlyArray<{ value: string; label: string }> {
+  if (!family) return [];
+  return SERVICE_TYPES_BY_FAMILY[family];
+}
+
+// Family-stable default service-type when the family flips.
+const DEFAULT_SERVICE_BY_FAMILY: Record<TripFamily, string> = {
+  passenger: "passenger_umrah",
+  cargo: "cargo_load",
+};
 
 const BOOKING_SOURCES = [
   { value: "manual_entry", label: "إدخال يدوي" },
@@ -60,7 +103,30 @@ export default function TransportBookingCreate() {
     () => `B-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
   );
   const [bookingSource, setBookingSource] = useState<string>("manual_entry");
+  // #2079 TA-T18-12 — family is picked FIRST; service-type defaults
+  // from the family so the operator never sees a mismatched dropdown.
+  const [tripFamily, setTripFamily] = useState<TripFamily | null>(null);
   const [transportServiceType, setTransportServiceType] = useState<string>("cargo_load");
+
+  // Flipping the family resets the service-type to its canonical
+  // default for that family (passenger → passenger_umrah, cargo →
+  // cargo_load). Leftover cargo-specific picks don't bleed into a
+  // passenger booking and vice versa.
+  const onTripFamilyChange = (next: TripFamily): void => {
+    setTripFamily(next);
+    if (
+      next === "passenger" &&
+      !SERVICE_TYPES_BY_FAMILY.passenger.some((s) => s.value === transportServiceType)
+    ) {
+      setTransportServiceType(DEFAULT_SERVICE_BY_FAMILY.passenger);
+    }
+    if (
+      next === "cargo" &&
+      !SERVICE_TYPES_BY_FAMILY.cargo.some((s) => s.value === transportServiceType)
+    ) {
+      setTransportServiceType(DEFAULT_SERVICE_BY_FAMILY.cargo);
+    }
+  };
   const [customerName, setCustomerName] = useState("");
   // #1812 source-driven booking (gap #1) — customer/contract/project IDs
   // come from the source selector; the form proceeds to text-only edit
@@ -279,12 +345,55 @@ export default function TransportBookingCreate() {
                 required
               />
             </div>
+            {/* #2079 TA-T18-12 (RM-04) — step 1: family picker.
+                Two-button choice between ركاب (passenger) and حمولة
+                (cargo). The service-type dropdown below narrows to
+                the family's subset; the operator can't pick a
+                cargo service-type while in passenger mode. */}
+            <div className="md:col-span-2">
+              <Label className="text-xs">نوع الرحلة *</Label>
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onTripFamilyChange("passenger")}
+                  className={
+                    "rounded border px-3 py-2 text-sm font-medium transition-colors " +
+                    (tripFamily === "passenger"
+                      ? "bg-status-info-surface border-status-info-foreground text-status-info-foreground"
+                      : "bg-surface-subtle border-border text-muted-foreground hover:bg-surface")
+                  }
+                >
+                  ركاب
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onTripFamilyChange("cargo")}
+                  className={
+                    "rounded border px-3 py-2 text-sm font-medium transition-colors " +
+                    (tripFamily === "cargo"
+                      ? "bg-amber-50 border-amber-600 text-amber-700"
+                      : "bg-surface-subtle border-border text-muted-foreground hover:bg-surface")
+                  }
+                >
+                  حمولة
+                </button>
+              </div>
+              {tripFamily == null && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  اختر نوع الرحلة لظهور أنواع الخدمة المناسبة.
+                </p>
+              )}
+            </div>
             <div>
               <Label htmlFor="transportServiceType">نوع الخدمة *</Label>
-              <Select value={transportServiceType} onValueChange={setTransportServiceType}>
-                <SelectTrigger id="transportServiceType"><SelectValue /></SelectTrigger>
+              <Select
+                value={transportServiceType}
+                onValueChange={setTransportServiceType}
+                disabled={tripFamily == null}
+              >
+                <SelectTrigger id="transportServiceType"><SelectValue placeholder="اختر نوع الرحلة أولاً" /></SelectTrigger>
                 <SelectContent>
-                  {SERVICE_TYPES.map((s) => (
+                  {serviceTypesForFamily(tripFamily).map((s) => (
                     <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -701,7 +810,7 @@ export default function TransportBookingCreate() {
           <Link href="/fleet/transport/bookings">
             <Button type="button" variant="outline">إلغاء</Button>
           </Link>
-          <Button type="submit" disabled={submitting || !hasLinkedSource} rateLimitAware>
+          <Button type="submit" disabled={submitting || !hasLinkedSource || tripFamily == null} rateLimitAware>
             <Plus className="h-4 w-4 me-1" />
             {submitting ? "جاري الإنشاء…" : "إنشاء الحجز"}
           </Button>

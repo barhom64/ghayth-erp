@@ -174,7 +174,9 @@ financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.h
   }
 });
 
-financeHardeningRouter.post("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — creating a new fiscal period is a controller-level
+// action; floor at 70 to match close/reopen/lock.
+financeHardeningRouter.post("/fiscal-periods-v2", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -445,7 +447,9 @@ async function insertDraftManualJournal(params: {
 // posted with currentBalance never moved and the one-shot guard locking
 // retries out → permanent silent drift.)
 
-financeHardeningRouter.post("/journal-manual", authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
+// GAP_MATRIX item #2 — manual journal creation is a controller-level
+// action; floor at 70 (same as year-end-close and period close).
+financeHardeningRouter.post("/journal-manual", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -721,7 +725,8 @@ financeHardeningRouter.patch("/journal-manual/:id/review", authorize({ feature: 
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
+// GAP_MATRIX item #2 — approving a manual journal posts to GL; CFO-level floor.
+financeHardeningRouter.patch("/journal-manual/:id/approve", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 
@@ -773,7 +778,8 @@ financeHardeningRouter.patch("/journal-manual/:id/approve", authorize({ feature:
   }
 });
 
-financeHardeningRouter.patch("/journal-manual/:id/post", authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
+// GAP_MATRIX item #2 — posting a manual journal is irreversible GL mutation; floor at 70.
+financeHardeningRouter.patch("/journal-manual/:id/post", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
 

@@ -313,6 +313,19 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     icon: "ClipboardList",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
     approvableActions: ["approve"], displayOrder: 332 },
+  // #2079 TA-T18-09 — `fleet.rentals` as a dedicated feature. Before
+  // this, equipment-rental endpoints lived under `fleet.vehicles`,
+  // which meant any holder of `fleet.vehicles:update` could activate,
+  // hand-over or return a rental contract — the same grant unlocked
+  // vehicle CRUD AND the rental lifecycle. The audit (PERM-02)
+  // flagged this as a SoD/least-privilege break: a rental clerk
+  // should be grantable independently of full vehicle CRUD, and the
+  // rental approve actions (handover / return) should require the
+  // dedicated `approve` action just like `fleet.bookings:approve`.
+  { key: "fleet.rentals", parentKey: "fleet", moduleKey: "fleet", labelAr: "تأجير المركبات",
+    icon: "FileSignature",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 333 },
   { key: "fleet.dispatch", parentKey: "fleet", moduleKey: "fleet", labelAr: "توزيع وجدولة الرحلات",
     icon: "Calendar",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],

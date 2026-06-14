@@ -1,11 +1,22 @@
 import { useState } from "react";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { UserCheck, UserX, Users, ToggleLeft, Pause, Play, Ban } from "lucide-react";
+import { UserCheck, UserX, Users, ToggleLeft, Pause, Play, Ban, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   DataTable,
@@ -104,6 +115,53 @@ export default function EmployeeActivationPage() {
   );
 
   const lifecyclePending = patchMutation.isPending || terminateMutation.isPending;
+
+  // HR-REV-3 (#2222) — تفعيل سريع: ينشئ موظفًا بحالة "غير مفعّل" مع خطة المهام.
+  const today = todayLocal();
+  const emptyQuickForm = {
+    name: "",
+    phone: "",
+    nationalId: "",
+    nationality: "",
+    departmentId: "",
+    jobTitle: "",
+    hireDate: today,
+  };
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickForm, setQuickForm] = useState(emptyQuickForm);
+
+  const quickActivateMutation = useApiMutation<any, Record<string, any>>(
+    "/employees/quick-activate",
+    "POST",
+    [["employees"]],
+    {
+      successMessage: false,
+      onSuccess: () => {
+        toast({ title: 'تم إنشاء الموظف بحالة "غير مفعّل" مع خطة المهام — فعّله من القائمة' });
+        setQuickOpen(false);
+        setQuickForm(emptyQuickForm);
+        refetch();
+      },
+    },
+  );
+
+  const setQuickField = (key: keyof typeof emptyQuickForm, value: string) =>
+    setQuickForm((f) => ({ ...f, [key]: value }));
+
+  const submitQuickActivate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickForm.name.trim()) return;
+    const body: Record<string, any> = {
+      name: quickForm.name.trim(),
+      hireDate: quickForm.hireDate || undefined,
+    };
+    if (quickForm.phone.trim()) body.phone = quickForm.phone.trim();
+    if (quickForm.nationalId.trim()) body.nationalId = quickForm.nationalId.trim();
+    if (quickForm.nationality.trim()) body.nationality = quickForm.nationality.trim();
+    if (quickForm.departmentId.trim()) body.departmentId = Number(quickForm.departmentId);
+    if (quickForm.jobTitle.trim()) body.jobTitle = quickForm.jobTitle.trim();
+    quickActivateMutation.mutate(body);
+  };
 
   const employees = data?.data || [];
 
@@ -277,7 +335,14 @@ export default function EmployeeActivationPage() {
       subtitle="إدارة دورة حياة الموظفين: تفعيل، تعليق، وإنهاء الخدمة"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "تفعيل / تعليق الموظفين" }]}
       actions={
-        <PrintButton
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <Button size="sm" className="gap-1" onClick={() => setQuickOpen(true)}>
+              <Zap className="h-4 w-4" />
+              تفعيل سريع
+            </Button>
+          )}
+          <PrintButton
           entityType="report_hr_employee_activation"
           entityId="list"
           size="icon"
@@ -292,7 +357,8 @@ export default function EmployeeActivationPage() {
               "الحالة": e.status || "—",
             })),
           })}
-        />
+          />
+        </div>
       }
     >
       <HrTabsNav />
@@ -371,6 +437,98 @@ export default function EmployeeActivationPage() {
         onSubmit={(reason) => confirmWithReason(reason)}
         onClose={() => setPending(null)}
       />
+
+      {/* HR-REV-3 (#2222) — تفعيل سريع: إنشاء موظف غير مفعّل مع خطة المهام. */}
+      <Dialog open={quickOpen} onOpenChange={(open) => { if (!open) setQuickOpen(false); }}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تفعيل سريع</DialogTitle>
+            <DialogDescription>
+              إنشاء موظف جديد بحالة "غير مفعّل" مع خطة المهام. الاسم فقط مطلوب.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitQuickActivate} className="grid gap-4 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="qa-name">الاسم *</Label>
+              <Input
+                id="qa-name"
+                required
+                value={quickForm.name}
+                onChange={(e) => setQuickField("name", e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label htmlFor="qa-phone">الجوال</Label>
+                <Input
+                  id="qa-phone"
+                  value={quickForm.phone}
+                  onChange={(e) => setQuickField("phone", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="qa-nationalId">رقم الهوية</Label>
+                <Input
+                  id="qa-nationalId"
+                  value={quickForm.nationalId}
+                  onChange={(e) => setQuickField("nationalId", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="qa-nationality">الجنسية</Label>
+                <Input
+                  id="qa-nationality"
+                  value={quickForm.nationality}
+                  onChange={(e) => setQuickField("nationality", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="qa-departmentId">القسم</Label>
+                <Input
+                  id="qa-departmentId"
+                  type="number"
+                  value={quickForm.departmentId}
+                  onChange={(e) => setQuickField("departmentId", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="qa-jobTitle">المسمى الوظيفي</Label>
+                <Input
+                  id="qa-jobTitle"
+                  value={quickForm.jobTitle}
+                  onChange={(e) => setQuickField("jobTitle", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="qa-hireDate">تاريخ المباشرة</Label>
+                <Input
+                  id="qa-hireDate"
+                  type="date"
+                  value={quickForm.hireDate}
+                  onChange={(e) => setQuickField("hireDate", e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setQuickOpen(false)}
+                disabled={quickActivateMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              <Button
+                type="submit"
+                rateLimitAware
+                disabled={quickActivateMutation.isPending || !quickForm.name.trim()}
+              >
+                {quickActivateMutation.isPending ? "جاري الإنشاء..." : "إنشاء وتفعيل"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

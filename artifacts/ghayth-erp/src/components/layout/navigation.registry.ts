@@ -83,7 +83,7 @@ export const allNavSections: NavSection[] = [
       // tasks) with a single canonical page.
       { label: "صندوق الأعمال", path: "/work-inbox", icon: Inbox },
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
-      { label: "التقويم الموحد", path: "/calendar", icon: Calendar, minRoleLevel: 20 },
+      { label: "التقويم الموحد", path: "/calendar", icon: Calendar },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
         { label: "ما ينتظر إجراءاتي", path: "/work-inbox", icon: ListChecks },
         // PR-9 (#2077) — رفيق الميدان. The page itself checks the
@@ -94,17 +94,17 @@ export const allNavSections: NavSection[] = [
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
       ]},
-      { label: "لوحات الإدارة", path: "/manager-board", icon: Users, minRoleLevel: 40, children: [
+      { label: "لوحات الإدارة", path: "/manager-board", icon: Users, minRoleLevel: 50, children: [
         { label: "لوحة المدير", path: "/manager-board", icon: Users },
         { label: "مساحة المدير", path: "/manager-workspace", icon: Users },
         { label: "لوحات مؤشرات المسارات", path: "/module-dashboards", icon: LayoutDashboard },
         { label: "لوحة القيادة التنفيذية", path: "/exec-dashboard", icon: Shield, minRoleLevel: 70 },
         { label: "اسأل غيث", path: "/assistant", icon: Sparkles, minRoleLevel: 70 },
       ]},
-      { label: "مراكز التحكم", path: "/action-center", icon: Briefcase, minRoleLevel: 20, children: [
+      { label: "مراكز التحكم", path: "/action-center", icon: Briefcase, minRoleLevel: 50, children: [
         { label: "مركز القرارات", path: "/action-center", icon: Briefcase },
-        { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 40 },
-        { label: "مركز الالتزامات", path: "/obligations", icon: Clock, minRoleLevel: 30 },
+        { label: "مركز العمليات", path: "/operations-center", icon: Zap, minRoleLevel: 50 },
+        { label: "مركز الالتزامات", path: "/obligations", icon: Clock },
       ]},
     ],
   },
@@ -176,8 +176,12 @@ export const allNavSections: NavSection[] = [
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
-        { label: "الهيكل التنظيمي", path: "/hr/organization", icon: Network, subKey: "organization" },
-        { label: "الهيكل المصوّر", path: "/hr/organization/structure", icon: GitBranch, subKey: "organization" },
+        // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
+        // PR-7 «الموحّد»). أُزيل تكرار «الهيكل المصوّر» وعنصر org-tree المنفصل في
+        // إعدادات HR. مسارا /hr/organization (عرض المناصب) و .../structure (العلاقات)
+        // يبقيان مسجَّلين deep-link — لا حذف ولا 404. متابعة: نقل عرضَي «المناصب»
+        // و«العلاقات» إلى org-tree كتبويبات ثم retire الصفحتين.
+        { label: "الهيكل التنظيمي", path: "/hr/org-tree", icon: Network, subKey: "organization" },
         { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
         { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
         { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
@@ -220,8 +224,11 @@ export const allNavSections: NavSection[] = [
       { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
         perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
         children: [
+        // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
+        // هي المدخل الوحيد. أُزيل تكرار «إدارة المخالفات» (/hr/violations/management
+        // = صفحة stats أصغر)؛ المسار يبقى مسجَّلًا deep-link — لا حذف ولا 404.
+        // متابعة: دمج عرض الإحصاء/التصعيد كتبويب داخل violations.tsx ثم retire.
         { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
-        { label: "إدارة المخالفات", path: "/hr/violations/management", icon: ClipboardList, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
         { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
@@ -266,7 +273,6 @@ export const allNavSections: NavSection[] = [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
         { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
-        { label: "الشجرة التنظيمية", path: "/hr/org-tree", icon: Network, subKey: "employees" },
         { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
         { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
@@ -306,13 +312,13 @@ export const allNavSections: NavSection[] = [
         { label: "كاشف الشذوذ", path: "/finance/gl-anomaly-detector", icon: ShieldAlert },
         { label: "طابور الترحيل", path: "/finance/gl-posting-queue", icon: Clock },
         { label: "مركز التسويات", path: "/finance/reconciliation-hub", icon: RefreshCw },
-        { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature },
+        { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature, minRoleLevel: 70 },
         { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
         { label: "قوالب قيود سريعة", path: "/finance/journal-quick-templates", icon: Zap },
         { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
         { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
         { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
-        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus },
+        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus, minRoleLevel: 70 },
       ]},
       { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [
         { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
@@ -373,9 +379,9 @@ export const allNavSections: NavSection[] = [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
         { label: "خريطة حرارية", path: "/finance/budget-heatmap", icon: BarChart3 },
         { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
-        { label: "إقفال الفترات", path: "/finance/fiscal-periods-v2", icon: Lock },
-        { label: "فحص قبل الإقفال", path: "/finance/period-close-preflight", icon: ShieldAlert },
-        { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive },
+        { label: "إقفال الفترات", path: "/finance/fiscal-periods-v2", icon: Lock, minRoleLevel: 70 },
+        { label: "فحص قبل الإقفال", path: "/finance/period-close-preflight", icon: ShieldAlert, minRoleLevel: 70 },
+        { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive, minRoleLevel: 70 },
         { label: "الالتزامات", path: "/finance/commitments", icon: FileSignature },
         { label: "الضمانات البنكية", path: "/finance/bank-guarantees", icon: Shield },
       ]},
@@ -522,9 +528,11 @@ export const allNavSections: NavSection[] = [
         { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
         { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
         { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
-        // تأجير المركبات — كانت الصفحة مركّبة بلا مدخل في القائمة (orphan).
-        // بوابة الـ backend: fleet.vehicles:list (fleet.ts /rental-contracts).
-        { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.vehicles:list" },
+        // تأجير المركبات — صفحة العقود.
+        // #2079 TA-T18-09 — هاجرت إلى fleet.rentals كميزة مستقلة (كانت
+        // تحت fleet.vehicles؛ الـPERM-02 طلب فصلها كي يُمنح موظف تأجير
+        // الصلاحية دون فتح CRUD كامل للمركبات).
+        { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.rentals:list" },
         { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
         { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock, perm: "fleet.maintenance:list" },
         { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle, perm: "fleet.vehicles:list" },
@@ -726,10 +734,10 @@ export const allNavSections: NavSection[] = [
         // Phase 5: communications dashboard is admin-only — non-managers
         // get redirected to /inbox automatically. Sidebar hides it for
         // them via minRoleLevel.
-        { label: "مراقبة الاتصالات", path: "/communications", icon: MessageSquare, minRoleLevel: 40 },
-        { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap, minRoleLevel: 40 },
+        { label: "مراقبة الاتصالات", path: "/communications", icon: MessageSquare, minRoleLevel: 50 },
+        { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap, minRoleLevel: 50 },
       ]},
-      { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 40, children: [
+      { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 50, children: [
         { label: "نظرة عامة", path: "/legal", icon: LayoutDashboard },
         { label: "القضايا", path: "/legal/cases", icon: Briefcase },
         { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
@@ -746,7 +754,7 @@ export const allNavSections: NavSection[] = [
         { label: "الامتثال", path: "/governance/compliance", icon: CheckCircle },
         { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
       ]},
-      { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 40 },
+      { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 50 },
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
@@ -755,7 +763,7 @@ export const allNavSections: NavSection[] = [
   {
     title: "النظام",
     items: [
-      { label: "ذكاء الأعمال", path: "/bi", icon: LineChart, module: "bi", minRoleLevel: 40, children: [
+      { label: "ذكاء الأعمال", path: "/bi", icon: LineChart, module: "bi", minRoleLevel: 50, children: [
         { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
         { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
         { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
@@ -817,7 +825,7 @@ export const allNavSections: NavSection[] = [
           { label: "استيراد البيانات", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
-          { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any" },
+          { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
           { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         ]},
       ]},
@@ -832,9 +840,9 @@ export const allNavSections: NavSection[] = [
       // settings — consolidated here into one "الطباعة والمطبوعات" group. Each
       // child keeps its original module/perm/minRoleLevel so visibility filtering
       // is unchanged; only the grouping moved (no page removed → no orphans).
-      { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 40, children: [
-        { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 40, perm: "print_jobs:read" },
-        { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 40, perm: "print:reprint:approve" },
+      { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 50, children: [
+        { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 50, perm: "print_jobs:read" },
+        { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 50, perm: "print:reprint:approve" },
         { label: "قوالب الطباعة", path: "/settings/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
         { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
