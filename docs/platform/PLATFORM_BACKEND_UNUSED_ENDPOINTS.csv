@@ -1,3 +1,8 @@
+# PR-5 (#2163): 2 false-positives removed (have FE consumers):
+#   /hr,GET /api/hr/attendance/field-track  → field-tracking.tsx:152
+#   /inbox,DELETE /api/inbox/threads/:channel/:address/snooze → inbox.tsx:996
+# Note: /inbox/messages/:id/read is DIFFERENT from /inbox/threads/.../read (FE uses the latter)
+# Remaining: 94 genuine unused endpoints
 module,endpoint
 /activity-log,GET /api/activity-log/feed
 /admin,GET /api/admin/communication-control/outbound-queue
@@ -39,7 +44,6 @@ module,endpoint
 /fleet,POST /api/fleet/rental-payments/:id/pay
 /hr,GET /api/hr/attendance/field-ping/eligibility
 /hr,POST /api/hr/attendance/field-ping
-/hr,GET /api/hr/attendance/field-track
 /hr,POST /api/hr/leave-types
 /hr,PATCH /api/hr/leave-types/:id
 /hr,GET /api/hr/company-document-categories
@@ -47,7 +51,6 @@ module,endpoint
 /hr,PATCH /api/hr/company-documents/:id
 /inbox,POST /api/inbox/messages/:id/read
 /inbox,GET /api/inbox/unread-count
-/inbox,DELETE /api/inbox/threads/:channel/:address/snooze
 /inbox,GET /api/inbox/snoozed
 /org,GET /api/org/legal-entities
 /org,PATCH /api/org/legal-entities/:id
