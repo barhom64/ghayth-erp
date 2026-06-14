@@ -870,10 +870,211 @@ function IntakeRulesPanel() {
   );
 }
 
+// ────────────────────────────── Planning settings ─────────────────────
+
+const MAP_PROVIDERS_UI = [
+  { value: "manual_only", label: "يدوي فقط" },
+  { value: "google_maps", label: "Google Maps" },
+  { value: "mapbox", label: "Mapbox" },
+  { value: "here_maps", label: "HERE Maps" },
+];
+
+function PlanningSettingsPanel() {
+  const { toast } = useToast();
+  const { data, isLoading, refetch } = useApiQuery<any>(["transport-planning-settings"], "/transport/planning-settings");
+  const s = data?.data || data || {};
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [loaded, setLoaded] = useState(false);
+
+  if (!isLoading && !loaded) {
+    setForm({
+      mapProvider: s.mapProvider || "manual_only",
+      defaultRestHoursRequired: String(s.defaultRestHoursRequired ?? ""),
+      defaultLoadingMinutes: String(s.defaultLoadingMinutes ?? ""),
+      defaultUnloadingMinutes: String(s.defaultUnloadingMinutes ?? ""),
+      defaultBufferMinutes: String(s.defaultBufferMinutes ?? ""),
+      defaultDeadheadKmh: String(s.defaultDeadheadKmh ?? ""),
+      estimateCacheTtlMinutes: String(s.estimateCacheTtlMinutes ?? ""),
+    });
+    setLoaded(true);
+  }
+
+  const save = async () => {
+    try {
+      await apiFetch("/transport/planning-settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          mapProvider: form.mapProvider || undefined,
+          defaultRestHoursRequired: form.defaultRestHoursRequired ? Number(form.defaultRestHoursRequired) : undefined,
+          defaultLoadingMinutes: form.defaultLoadingMinutes ? Number(form.defaultLoadingMinutes) : undefined,
+          defaultUnloadingMinutes: form.defaultUnloadingMinutes ? Number(form.defaultUnloadingMinutes) : undefined,
+          defaultBufferMinutes: form.defaultBufferMinutes ? Number(form.defaultBufferMinutes) : undefined,
+          defaultDeadheadKmh: form.defaultDeadheadKmh ? Number(form.defaultDeadheadKmh) : undefined,
+          estimateCacheTtlMinutes: form.estimateCacheTtlMinutes ? Number(form.estimateCacheTtlMinutes) : undefined,
+        }),
+      });
+      toast({ title: "تم حفظ الإعدادات" });
+      setLoaded(false);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الحفظ", description: err?.message });
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">إعدادات تخطيط النقل</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label>مزوّد الخريطة</Label>
+            <select className="w-full h-10 border rounded-md px-2 mt-1" value={form.mapProvider || "manual_only"}
+              onChange={(e) => setForm((f) => ({ ...f, mapProvider: e.target.value }))}>
+              {MAP_PROVIDERS_UI.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label>ساعات الراحة المطلوبة (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultRestHoursRequired || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultRestHoursRequired: e.target.value }))} />
+          </div>
+          <div>
+            <Label>دقائق الشحن (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultLoadingMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultLoadingMinutes: e.target.value }))} />
+          </div>
+          <div>
+            <Label>دقائق التفريغ (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultUnloadingMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultUnloadingMinutes: e.target.value }))} />
+          </div>
+          <div>
+            <Label>دقائق الاحتياطي (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultBufferMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultBufferMinutes: e.target.value }))} />
+          </div>
+          <div>
+            <Label>سرعة العودة الفارغة (كم/ساعة)</Label>
+            <Input type="number" className="mt-1" value={form.defaultDeadheadKmh || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultDeadheadKmh: e.target.value }))} />
+          </div>
+          <div>
+            <Label>صلاحية كاش التقدير (دقائق)</Label>
+            <Input type="number" className="mt-1" value={form.estimateCacheTtlMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, estimateCacheTtlMinutes: e.target.value }))} />
+          </div>
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={save}>حفظ الإعدادات</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ────────────────────────────── Transport locations ─────────────────────
+
+const EMPTY_LOC = { name: "", code: "", locationType: "", city: "", address: "", notes: "" };
+
+function LocationsPanel() {
+  const { toast } = useToast();
+  const { data, isLoading, refetch } = useApiQuery<any>(["transport-locations-admin"], "/transport/locations");
+  const locations: any[] = data?.data || [];
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY_LOC);
+
+  const create = async () => {
+    try {
+      await apiFetch("/transport/locations", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.name,
+          code: form.code || undefined,
+          locationType: form.locationType || undefined,
+          city: form.city || undefined,
+          address: form.address || undefined,
+          notes: form.notes || undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء الموقع" });
+      setShowForm(false);
+      setForm(EMPTY_LOC);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الإنشاء", description: err?.message });
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">مواقع النقل ({locations.length})</CardTitle>
+        <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "موقع جديد"}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {showForm && (
+          <div className="rounded-lg border bg-surface-subtle p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>الاسم *</Label>
+                <Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <Label>الرمز</Label>
+                <Input className="mt-1" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
+              </div>
+              <div>
+                <Label>النوع</Label>
+                <Input className="mt-1" placeholder="warehouse / port / customer..." value={form.locationType} onChange={(e) => setForm((f) => ({ ...f, locationType: e.target.value }))} />
+              </div>
+              <div>
+                <Label>المدينة</Label>
+                <Input className="mt-1" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>العنوان</Label>
+                <Input className="mt-1" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>ملاحظات</Label>
+                <Input className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>إلغاء</Button>
+              <Button size="sm" disabled={!form.name} onClick={create}>إنشاء</Button>
+            </div>
+          </div>
+        )}
+        {locations.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8 text-sm">لا توجد مواقع مسجلة</p>
+        ) : (
+          <div className="divide-y text-sm">
+            {locations.map((loc: any) => (
+              <div key={loc.id} className="py-2 flex items-center gap-3">
+                <span className="font-medium">{loc.name}</span>
+                {loc.code && <Badge variant="outline" className="text-xs font-mono">{loc.code}</Badge>}
+                {loc.locationType && <Badge variant="secondary" className="text-xs">{loc.locationType}</Badge>}
+                {loc.city && <span className="text-muted-foreground text-xs">{loc.city}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ────────────────────────────── Page shell ───────────────────────────
 
 export default function TransportRulesAdmin() {
-  const [tab, setTab] = useState<"expense" | "intake">("expense");
+  const [tab, setTab] = useState<"expense" | "intake" | "planning" | "locations">("expense");
   return (
     <PageShell
       title="قواعد العمليات والنفقات"
@@ -893,7 +1094,7 @@ export default function TransportRulesAdmin() {
     >
       <FleetTabsNav />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "expense" | "intake")} className="mt-4">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "expense" | "intake" | "planning" | "locations")} className="mt-4">
         <TabsList>
           <TabsTrigger value="expense">
             <Wrench className="h-4 w-4 me-1" />تصنيف النفقات
@@ -901,12 +1102,24 @@ export default function TransportRulesAdmin() {
           <TabsTrigger value="intake">
             <Clipboard className="h-4 w-4 me-1" />استقبال العمليات
           </TabsTrigger>
+          <TabsTrigger value="planning">
+            إعدادات التخطيط
+          </TabsTrigger>
+          <TabsTrigger value="locations">
+            المواقع
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="expense" className="mt-3">
           <ExpenseRulesPanel />
         </TabsContent>
         <TabsContent value="intake" className="mt-3">
           <IntakeRulesPanel />
+        </TabsContent>
+        <TabsContent value="planning" className="mt-3">
+          <PlanningSettingsPanel />
+        </TabsContent>
+        <TabsContent value="locations" className="mt-3">
+          <LocationsPanel />
         </TabsContent>
       </Tabs>
     </PageShell>
