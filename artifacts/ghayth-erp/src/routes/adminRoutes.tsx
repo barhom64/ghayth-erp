@@ -52,11 +52,13 @@ const AdminEffectivePermissions = lazy(() => import("@/pages/admin/effective-per
 // stay reachable for bookmarks but redirect to the HR canonical so
 // nobody can re-establish two equal owners.
 const AdminOrgMemberships = lazy(() => import("@/pages/admin/org-memberships"));
+const AdminSubscription = lazy(() => import("@/pages/admin/subscription"));
 const RedirectToHrAttendanceCategories = redirectTo("/hr/attendance-categories");
 const RedirectToHrScoringWeights      = redirectTo("/hr/scoring-weights");
 
 export const adminRoutes = [
   { path: "/admin/expiring-docs", component: AdminExpiringDocs },
+  { path: "/admin/subscription", component: AdminSubscription },
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
   { path: "/admin/user-onboarding", component: AdminUserOnboarding },

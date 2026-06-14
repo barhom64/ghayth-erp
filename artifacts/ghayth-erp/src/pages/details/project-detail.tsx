@@ -143,6 +143,8 @@ export default function ProjectDetail() {
   const [sellBuyerId, setSellBuyerId] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [sellLoading, setSellLoading] = useState(false);
+  const [editingUnitId, setEditingUnitId] = useState<number | null>(null);
+  const [editUnitDraft, setEditUnitDraft] = useState<{ name?: string; area?: string; salePrice?: string; notes?: string }>({});
   const risks: any[] = risksResp?.data || risksResp || [];
   const milestones: any[] = milestonesResp?.data || milestonesResp || [];
   const openRisks = risks.filter((r: any) => r.status === "open" || r.status === "realized");
@@ -346,6 +348,38 @@ export default function ProjectDetail() {
       toast({ title: "تم إنشاء الوحدة" });
       setShowUnitForm(false);
       setNewUnit({});
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const updateUnit = async () => {
+    if (!editingUnitId) return;
+    try {
+      await apiFetch(`/projects/units/${editingUnitId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editUnitDraft.name || undefined,
+          area: editUnitDraft.area ? Number(editUnitDraft.area) : undefined,
+          salePrice: editUnitDraft.salePrice ? Number(editUnitDraft.salePrice) : undefined,
+          notes: editUnitDraft.notes || undefined,
+        }),
+      });
+      toast({ title: "تم تحديث الوحدة" });
+      setEditingUnitId(null);
+      setEditUnitDraft({});
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const deleteUnit = async (uid: number) => {
+    if (!confirm("حذف هذه الوحدة؟")) return;
+    try {
+      await apiFetch(`/projects/units/${uid}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
       refetchUnits();
     } catch (err) {
       toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
@@ -999,6 +1033,36 @@ export default function ProjectDetail() {
                   </div>
                 </div>
               )}
+              {editingUnitId !== null && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditingUnitId(null)}>
+                  <div className="bg-white rounded-lg shadow-xl p-5 w-96 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <h3 className="font-semibold text-sm">تعديل الوحدة</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className="text-xs text-muted-foreground">الاسم</label>
+                        <input className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.name || ""} onChange={e => setEditUnitDraft(d => ({ ...d, name: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">المساحة (م²)</label>
+                        <input type="number" className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.area || ""} onChange={e => setEditUnitDraft(d => ({ ...d, area: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">سعر البيع</label>
+                        <input type="number" className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.salePrice || ""} onChange={e => setEditUnitDraft(d => ({ ...d, salePrice: e.target.value }))} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-xs text-muted-foreground">ملاحظات</label>
+                        <input className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.notes || ""} onChange={e => setEditUnitDraft(d => ({ ...d, notes: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={() => setEditingUnitId(null)}>إلغاء</Button>
+                      <Button size="sm" onClick={updateUnit}>حفظ</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {projectUnits.length === 0 && !showUnitForm ? (
                 <p className="text-muted-foreground text-center py-8">لا توجد وحدات مشروع</p>
               ) : (
@@ -1010,11 +1074,23 @@ export default function ProjectDetail() {
                     { key: "allocatedCost", header: "التكلفة المخصصة", render: (u: any) => u.allocatedCost > 0 ? formatCurrency(Number(u.allocatedCost)) : <span className="text-muted-foreground">—</span> },
                     { key: "projectedProfit", header: "الربح المتوقع", render: (u: any) => u.projectedProfit != null ? <span className={Number(u.projectedProfit) >= 0 ? "text-status-success-foreground font-medium" : "text-status-error-foreground font-medium"}>{formatCurrency(Number(u.projectedProfit))}</span> : <span className="text-muted-foreground">—</span> },
                     { key: "status", header: "الحالة", render: (u: any) => <PageStatusBadge status={u.status || "available"} /> },
-                    { key: "actions", header: "", render: (u: any) => u.status !== "sold" && u.status !== "cancelled" ? (
-                      <GuardedButton perm="projects.list:update" size="sm" variant="outline" onClick={() => { setSellUnitId(u.id); setSellPrice(u.salePrice ? String(u.salePrice) : ""); setSellBuyerId(""); }}>
-                        بيع
-                      </GuardedButton>
-                    ) : null },
+                    { key: "actions", header: "", render: (u: any) => (
+                      <div className="flex gap-1">
+                        {u.status !== "sold" && u.status !== "cancelled" && (
+                          <GuardedButton perm="projects.list:update" size="sm" variant="outline" onClick={() => { setSellUnitId(u.id); setSellPrice(u.salePrice ? String(u.salePrice) : ""); setSellBuyerId(""); }}>
+                            بيع
+                          </GuardedButton>
+                        )}
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                          onClick={() => { setEditingUnitId(u.id); setEditUnitDraft({ name: u.name, area: u.area ? String(u.area) : "", salePrice: u.salePrice ? String(u.salePrice) : "", notes: u.notes || "" }); }}>
+                          <Pencil className="h-3 w-3" />
+                        </GuardedButton>
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={() => deleteUnit(u.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </GuardedButton>
+                      </div>
+                    ) },
                   ]}
                   data={projectUnits}
                   noToolbar
