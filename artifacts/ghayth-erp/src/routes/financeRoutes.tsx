@@ -204,6 +204,11 @@ const UmrahAgentPortfolio = lazy(() => import("@/pages/finance/umrah-agent-portf
 const ExpenseMixAnalyzer = lazy(() => import("@/pages/finance/expense-mix-analyzer"));
 const RevenueMixAnalyzer = lazy(() => import("@/pages/finance/revenue-mix-analyzer"));
 const DsoTrend = lazy(() => import("@/pages/finance/dso-trend"));
+// Phase 2 wiring — orphan pages with existing backends.
+const CustomerAdvanceQuickCreate = lazy(() => import("@/pages/create/finance/customer-advance-create"));
+const PricingRulesCreate = lazy(() => import("@/pages/create/finance/pricing-rules-create"));
+const ZatcaMisrouted = lazy(() => import("@/pages/finance/zatca-misrouted"));
+const ZatcaMissingTax = lazy(() => import("@/pages/finance/zatca-missing-tax"));
 
 export const financeRoutes = [
   { path: "/finance/project-portfolio", component: ProjectPortfolioDashboard },
@@ -232,6 +237,7 @@ export const financeRoutes = [
   // as accounts.tsx; create pages mirror accounts-create.tsx.
   { path: "/finance/tax-codes", component: TaxCodes },
   { path: "/finance/pricing-rules", component: PricingRules },
+  { path: "/finance/pricing-rules/create", component: PricingRulesCreate },
   { path: "/finance/tax-codes/create", component: TaxCodesCreate },
   { path: "/finance/tax-codes/:id/edit", component: TaxCodesEdit },
   { path: "/finance/wht-categories", component: WhtCategories },
@@ -246,6 +252,8 @@ export const financeRoutes = [
   { path: "/finance/wht-filing-workbench", component: WhtFilingWorkbench },
   // ZATCA & inventory reports hub — landing page (#1059).
   { path: "/finance/reports/zatca", component: ZatcaReportsHub },
+  { path: "/finance/zatca/misrouted", component: ZatcaMisrouted },
+  { path: "/finance/zatca/missing-tax", component: ZatcaMissingTax },
   { path: "/finance/vat-filing-readiness", component: VatFilingReadiness },
   // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
   { path: "/finance/reports/lot-expiry-alerts", component: LotExpiryAlerts },
@@ -313,6 +321,11 @@ export const financeRoutes = [
   { path: "/finance/customer-advances", component: CustomerAdvances },
   { path: "/finance/customer-advances-workbench", component: CustomerAdvancesWorkbench },
   { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
+  // Lightweight single-line advance intake (distinct from the full
+  // create form above which carries allocation + branch context). The
+  // canonical /create path stays bound to CustomerAdvancesCreate; this
+  // quick form gets its own path to avoid a route collision.
+  { path: "/finance/customer-advances/quick-create", component: CustomerAdvanceQuickCreate },
   { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
   { path: "/finance/dunning", component: Dunning },
   { path: "/finance/collection", component: CollectionStages },
