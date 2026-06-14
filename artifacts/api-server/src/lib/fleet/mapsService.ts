@@ -100,7 +100,15 @@ export async function loadPlanningSettings(companyId: number): Promise<PlanningS
   if (rows[0]) return rows[0];
 
   // Lazy-create the defaults row.
-  await rawExecute(
+  // #2079 follow-up — `transport_planning_settings` has NO `id` column
+  // (PK is `companyId`). `rawExecute` auto-appends `RETURNING id` to
+  // any non-RETURNING DML, so this used to crash with 42703
+  // "column id does not exist" on the very first suggest-assignment
+  // call against any freshly-bootstrapped company. Switch to
+  // `rawQuery` (which doesn't auto-append) — the ON CONFLICT DO
+  // NOTHING gives us the same fire-and-forget upsert without needing
+  // an insertId.
+  await rawQuery(
     `INSERT INTO transport_planning_settings ("companyId")
      VALUES ($1) ON CONFLICT ("companyId") DO NOTHING`,
     [companyId],
