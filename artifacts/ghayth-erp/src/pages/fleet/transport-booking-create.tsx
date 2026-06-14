@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { apiFetch } from "@/lib/api";
+import { ROUTE_TYPES } from "@/lib/transport-constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import { BookingSourceSelector, type BookingSourcePrefill } from "@/components/s
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
 import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
 import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
+import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
@@ -87,15 +89,7 @@ const BOOKING_SOURCES = [
   { value: "recurring_schedule", label: "جدول متكرر" },
 ] as const;
 
-const ROUTE_TYPES = [
-  { value: "airport_to_makkah", label: "المطار → مكة" },
-  { value: "makkah_to_madinah", label: "مكة → المدينة" },
-  { value: "madinah_to_airport", label: "المدينة → المطار" },
-  { value: "makkah_local", label: "تنقل محلي بمكة" },
-  { value: "madinah_local", label: "تنقل محلي بالمدينة" },
-  { value: "ziyarah", label: "زيارة" },
-  { value: "custom", label: "مخصص" },
-] as const;
+// ROUTE_TYPES مُوحَّد في "@/lib/transport-constants" (UX-05 — كان مكرّرًا حرفيًا).
 
 export default function TransportBookingCreate() {
   const [, navigate] = useLocation();
@@ -103,7 +97,11 @@ export default function TransportBookingCreate() {
   const [submitting, setSubmitting] = useState(false);
 
   // Shared fields.
-  const [bookingNumber, setBookingNumber] = useState("");
+  // #TA-T18-UX-AUDIT-01 UX-04 — رقم الحجز يُولَّد تلقائيًا (قابل للتعديل) بدل
+  // إلزام المستخدم بإدخال مفتاح تقني في أول حقل.
+  const [bookingNumber, setBookingNumber] = useState(
+    () => `B-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  );
   const [bookingSource, setBookingSource] = useState<string>("manual_entry");
   // #2079 TA-T18-12 — family is picked FIRST; service-type defaults
   // from the family so the operator never sees a mismatched dropdown.
@@ -148,6 +146,9 @@ export default function TransportBookingCreate() {
   const [toLat, setToLat] = useState("");
   const [toLng, setToLng] = useState("");
   const [showGeoFields, setShowGeoFields] = useState(false);
+  // #TA-T18-UX-AUDIT-01 UX-04 — الحد الأدنى أولًا: تُطوى كتلة «اتفاق العميل +
+  // النوافذ الزمنية» المتقدمة افتراضيًا، وتظهر عند الطلب فقط.
+  const [showAgreement, setShowAgreement] = useState(false);
   // #1812 multi-leg booking — user's #1 explicit gap.
   const [legs, setLegs] = useState<BookingLeg[]>([]);
   const [requestedPickupDate, setRequestedPickupDate] = useState("");
@@ -547,6 +548,13 @@ export default function TransportBookingCreate() {
               <Label htmlFor="deliveryTime">وقت التسليم</Label>
               <Input id="deliveryTime" type="time" value={requestedDeliveryTime} onChange={(e) => setRequestedDeliveryTime(e.target.value)} />
             </div>
+            {/* #TA-T18-UX-AUDIT-01 P2-1 — نموذج توقيت موحّد: هذه الأوقات هي مرجع
+                الجدولة؛ تُشتقّ منها نافذة المحرك تلقائيًا. النوافذ المتقدمة اختيارية. */}
+            <div className="sm:col-span-2">
+              <p className="text-[11px] text-muted-foreground">
+                تُستخدم أوقات التحميل/التسليم أعلاه للجدولة والتوزيع تلقائيًا — لا حاجة لتعبئة النوافذ الزمنية في «تفاصيل إضافية» إلا عند الحاجة.
+              </p>
+            </div>
           </CardContent>
         </Card>
 
@@ -678,10 +686,19 @@ export default function TransportBookingCreate() {
         )}
 
         {/* #1812 — اتفاق العميل + النوافذ الزمنية (Comment 3) */}
+        {/* #TA-T18-UX-AUDIT-01 UX-04 — كتلة متقدمة مطويّة افتراضيًا (الحد الأدنى أولًا). */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">اتفاق العميل + النوافذ الزمنية</CardTitle>
+            <button
+              type="button"
+              onClick={() => setShowAgreement((s) => !s)}
+              className="flex items-center justify-between w-full text-start"
+            >
+              <CardTitle className="text-sm">تفاصيل إضافية (اتفاق العميل + النوافذ الزمنية)</CardTitle>
+              <span className="text-xs text-muted-foreground">{showAgreement ? "إخفاء ▲" : "إظهار ▼"}</span>
+            </button>
           </CardHeader>
+          {showAgreement && (
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Label>فئة المركبة المطلوبة</Label>
@@ -706,20 +723,25 @@ export default function TransportBookingCreate() {
               </Select>
             </div>
             <div>
-              <Label>المركبة المحددة (id — اختياري)</Label>
-              <Input type="number" min={0}
+              {/* #TA-T18-UX-AUDIT-01 UX-03 — منتقي مركبة حقيقي بدل إدخال رقم
+                  قاعدة البيانات الخام. المحرك يفرض requiredExactVehicleId كحارس
+                  صلب عند الاقتراح والإسناد. */}
+              <VehicleSelect
+                label="المركبة المطلوبة (اختياري)"
                 value={requiredExactVehicleId}
-                onChange={(e) => setRequiredExactVehicleId(e.target.value)}
-                placeholder="إذا اشترط العميل مركبة بعينها"
+                onChange={(v) => setRequiredExactVehicleId(String(v ?? ""))}
+                allowCreate={false}
               />
+              <p className="text-[11px] text-muted-foreground mt-1">إذا اشترط العميل مركبة بعينها</p>
             </div>
             <div>
-              <Label>السائق المحدد (id — اختياري)</Label>
-              <Input type="number" min={0}
+              <DriverSelect
+                label="السائق المطلوب (اختياري)"
                 value={requiredExactDriverId}
-                onChange={(e) => setRequiredExactDriverId(e.target.value)}
-                placeholder="إذا اشترط العميل سائقاً بعينه"
+                onChange={(v) => setRequiredExactDriverId(String(v ?? ""))}
+                allowCreate={false}
               />
+              <p className="text-[11px] text-muted-foreground mt-1">إذا اشترط العميل سائقاً بعينه</p>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -772,6 +794,7 @@ export default function TransportBookingCreate() {
               />
             </div>
           </CardContent>
+          )}
         </Card>
 
         <Card>

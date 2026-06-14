@@ -200,7 +200,8 @@ describe("#2079 Gate-PE-1 — engine wires VCM before scoring", () => {
   it("hard-ejects ineligible vehicles BEFORE the scoring loop", () => {
     expect(ENGINE).toMatch(/const eligibleVehicles: VehicleRow\[\] = \[\];/);
     expect(ENGINE).toMatch(/isEligibleForTripFamily\(vcm, tripFamily, booking\.transportServiceType\)/);
-    expect(ENGINE).toMatch(/if \(!verdict\.eligible\) continue;/);
+    // P0-4 (TA-T18-UX-AUDIT-01): الإقصاء يسجّل السبب في c.sink قبل continue.
+    expect(ENGINE).toMatch(/if \(!verdict\.eligible\) \{[\s\S]{0,260}continue;\s*\}/);
     expect(ENGINE).toMatch(/for \(const v of eligibleVehicles\)/);
   });
 

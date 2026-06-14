@@ -79,11 +79,17 @@ describe("#1812 — itinerary detail + leg editor", () => {
     ]) {
       expect(ITINERARY_DETAIL, `leg type ${t} missing`).toContain(`value: "${t}"`);
     }
+    // UX-05 (TA-T18-UX-AUDIT-01) — قائمة حالات المقطع تُشتق من القاموس الموحّد
+    // (كيان "leg")؛ فينتقل ضمان القيم السبع إلى المصدر الموحّد.
+    expect(ITINERARY_DETAIL).toMatch(/Object\.entries\(statusDict\("leg"\)\)/);
+    const LEG_DICT = readSpa("lib/transport-status-labels.ts");
+    const legStart = LEG_DICT.indexOf("const LEG:");
+    const legBlock = LEG_DICT.slice(legStart, LEG_DICT.indexOf("const ", legStart + 10));
     for (const s of [
       "pending", "scheduled", "assigned", "in_progress",
       "completed", "cancelled", "skipped",
     ]) {
-      expect(ITINERARY_DETAIL, `leg status ${s} missing`).toContain(`value: "${s}"`);
+      expect(legBlock, `leg status ${s} missing`).toContain(`${s}:`);
     }
   });
 
