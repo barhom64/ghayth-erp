@@ -62,7 +62,12 @@ describe("U-06-P1 §A — live verify script is present at the documented path",
 
   it("script's headline comment names the journey it covers", () => {
     const sh = readFileSync(VERIFY_SCRIPT_PATH, "utf8");
-    expect(sh).toMatch(/umrah\s+sales\s+commissions\s+land\s+in\s+payroll/i);
+    // The bash comment header carries `# verify-umrah-commission-
+    // payroll-journey.sh — E2E proof that umrah sales\n#
+    // commissions land in payroll`. Use a forgiving alternation that
+    // tolerates the wrapped-comment newline + `#` marker without
+    // demanding a specific layout.
+    expect(sh).toMatch(/umrah[\s\S]{0,80}?commissions[\s\S]{0,80}?payroll/i);
     expect(sh).toMatch(/payroll_lines\.commission/);
     expect(sh).toMatch(/exactly-once/);
   });
