@@ -428,6 +428,7 @@ export const allNavSections: NavSection[] = [
         { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
         { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
         { label: "الجهات الخاملة", path: "/finance/dormant-entities", icon: Clock },
+        { label: "صدق دفتر الأستاذ (قياس)", path: "/finance/reports/ledger-truth", icon: AlertTriangle },
         { label: "GL Integrity Gaps", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
         { label: "فجوات العمليات المالية", path: "/finance/reports/operation-gaps", icon: AlertTriangle },
         { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
@@ -544,6 +545,9 @@ export const allNavSections: NavSection[] = [
         { label: "حجوزات النقل", path: "/fleet/transport/bookings", icon: ClipboardList, perm: "fleet.bookings:list" },
         { label: "الإرسال (Dispatch)", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
         { label: "خطط المسارات", path: "/fleet/transport/itineraries", icon: Navigation, perm: "fleet.dispatch:list" },
+        // #2079 TA-T18-04 — قوالب الحجوزات المتكررة (cargo recurring).
+        // SPA-only over endpoints القائمة /transport/route-patterns*.
+        { label: "قوالب المسارات المتكررة", path: "/fleet/transport/route-patterns", icon: CalendarClock, perm: "fleet.bookings:list" },
         { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
         { label: "قواعد تسعير النقل", path: "/fleet/transport/price-rules", icon: Percent, perm: "fleet.bookings:list" },
         { label: "قواعد استقبال النقل", path: "/fleet/transport/rules", icon: ListChecks, perm: "fleet.bookings:list" },
