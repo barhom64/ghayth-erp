@@ -569,7 +569,7 @@ export default function TransportBookingDetail() {
               لا توجد سطور بعد. أضف سطراً لكل مركبة مطلوبة قبل التوزيع.
             </div>
           ) : (
-            <DataTable<BookingLine>
+            <DataTable
               columns={lineColumns}
               data={b.lines}
               emptyMessage="لا توجد سطور"
@@ -591,7 +591,7 @@ export default function TransportBookingDetail() {
               لم يتم توزيع هذا الحجز على سائق بعد.
             </div>
           ) : (
-            <DataTable<DispatchOrder>
+            <DataTable
               columns={dispatchColumns}
               data={b.dispatchOrders}
               emptyMessage="لا توجد أوامر توزيع"
