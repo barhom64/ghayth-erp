@@ -18,6 +18,7 @@ import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
 import { BookingSourceSelector, type BookingSourcePrefill } from "@/components/shared/booking-source-selector";
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
+import { MapLocationPicker } from "@/components/shared/map-location-picker";
 import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
 import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
 import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
@@ -478,16 +479,23 @@ export default function TransportBookingCreate() {
                 placeholder="نوع موقع التحميل"
               />
               {showGeoFields && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number" step="0.0000001" value={fromLat}
-                    onChange={(e) => setFromLat(e.target.value)}
-                    placeholder="خط العرض"
-                  />
-                  <Input
-                    type="number" step="0.0000001" value={fromLng}
-                    onChange={(e) => setFromLng(e.target.value)}
-                    placeholder="خط الطول"
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number" step="0.0000001" value={fromLat}
+                      onChange={(e) => setFromLat(e.target.value)}
+                      placeholder="خط العرض"
+                    />
+                    <Input
+                      type="number" step="0.0000001" value={fromLng}
+                      onChange={(e) => setFromLng(e.target.value)}
+                      placeholder="خط الطول"
+                    />
+                  </div>
+                  <MapLocationPicker
+                    lat={fromLat ? Number(fromLat) : undefined}
+                    lng={fromLng ? Number(fromLng) : undefined}
+                    onPick={(la, ln) => { setFromLat(String(la)); setFromLng(String(ln)); }}
                   />
                 </div>
               )}
@@ -502,16 +510,23 @@ export default function TransportBookingCreate() {
                 placeholder="نوع موقع التسليم"
               />
               {showGeoFields && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number" step="0.0000001" value={toLat}
-                    onChange={(e) => setToLat(e.target.value)}
-                    placeholder="خط العرض"
-                  />
-                  <Input
-                    type="number" step="0.0000001" value={toLng}
-                    onChange={(e) => setToLng(e.target.value)}
-                    placeholder="خط الطول"
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number" step="0.0000001" value={toLat}
+                      onChange={(e) => setToLat(e.target.value)}
+                      placeholder="خط العرض"
+                    />
+                    <Input
+                      type="number" step="0.0000001" value={toLng}
+                      onChange={(e) => setToLng(e.target.value)}
+                      placeholder="خط الطول"
+                    />
+                  </div>
+                  <MapLocationPicker
+                    lat={toLat ? Number(toLat) : undefined}
+                    lng={toLng ? Number(toLng) : undefined}
+                    onPick={(la, ln) => { setToLat(String(la)); setToLng(String(ln)); }}
                   />
                 </div>
               )}
