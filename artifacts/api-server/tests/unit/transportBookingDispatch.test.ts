@@ -220,6 +220,26 @@ describe("#1733 Booking + Dispatch — state machines", () => {
       /cascadeDispatchToBooking\(client, \{[\s\S]{0,120}target: "completed"/,
     );
   });
+
+  it("cancelling a dispatch-linked trip re-dispatches (NOT cancels) the order", () => {
+    // Operator decision: a cancelled trip is not a cancelled booking. The
+    // linked order — only when still 'accepted'/'executing' — goes back to
+    // 'pending' (re-pickable by another driver), its accept/start stamps are
+    // cleared, the nav session is cancelled, and the booking LINE returns to
+    // 'pending'. The booking itself is left untouched (mirrors decline).
+    const cancelBlock =
+      FLEET_ROUTE.match(/trips\/:id\/cancel[\s\S]+?event: "fleet\.trip\.cancelled"/)?.[0] ?? "";
+    expect(cancelBlock).toMatch(/\/\^dispatch:\(\\d\+\):\//);
+    // re-assignable, not terminal: order → pending (never 'completed'/'cancelled').
+    expect(cancelBlock).toMatch(
+      /status IN \('accepted', 'executing'\)[\s\S]{0,400}status = 'pending'/,
+    );
+    expect(cancelBlock).toMatch(/"acceptedAt" = NULL, "startedAt" = NULL/);
+    expect(cancelBlock).toMatch(/driver_navigation_sessions[\s\S]{0,120}status = 'cancelled'/);
+    // the operational need survives: line back to 'pending', not 'cancelled'.
+    expect(cancelBlock).toMatch(/transport_booking_lines[\s\S]{0,120}status = 'pending'/);
+    expect(cancelBlock).not.toMatch(/cascadeDispatchToBooking[\s\S]{0,80}target: "cancelled"/);
+  });
 });
 
 describe("#1733 Booking + Dispatch — RBAC features registered", () => {
