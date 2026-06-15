@@ -1232,8 +1232,8 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     // GAP_MATRIX P1 — pilgrims CSV export was in audit_logs (via logSensitiveAccess)
     // but missing from print_jobs. Both lanes required for PDPL compliance.
     rawExecute(
-      `INSERT INTO print_jobs ("companyId","branchId","requestedBy","entityType","entityId","format","status","printedAt")
-       VALUES ($1,$2,$3,'report_umrah_pilgrims',NULL,'csv','completed',NOW())`,
+      `INSERT INTO print_jobs ("companyId","branchId","userId","entityType","entityId","format","status")
+       VALUES ($1,$2,$3,'report_umrah_pilgrims','0','csv','completed')`,
       [scope.companyId, scope.branchId ?? null, scope.userId]
     ).catch(() => {});
 

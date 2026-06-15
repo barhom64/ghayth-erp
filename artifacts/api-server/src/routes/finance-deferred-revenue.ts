@@ -24,7 +24,8 @@ import {
 } from "../lib/errorHandler.js";
 import { rawQuery, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { assertPostableAccount } from "../lib/businessHelpers.js";
+import { assertPostableAccount, auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 import {
   computeRecognitionSchedule,
   runDueRecognitions,
@@ -126,6 +127,15 @@ financeDeferredRevenueRouter.post(
         ],
       );
       assertInsert(row?.id, "deferred_revenue_schedules");
+      auditFromRequest(req, "finance.deferred_revenue.scheduled", "deferred_revenue_schedules", row.id, {
+        after: { totalAmount: b.totalAmount, months, monthlyAmount, deferredRevenueAccountCode: b.deferredRevenueAccountCode },
+      });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.deferred_revenue.scheduled", entity: "deferred_revenue_schedules", entityId: row.id,
+        totalAmount: b.totalAmount, months,
+        details: JSON.stringify({ totalAmount: b.totalAmount, months, monthlyAmount }),
+      }).catch((e) => logger.error(e, "finance-deferred-revenue background task failed"));
       res.status(201).json({ id: row.id, months, monthlyAmount });
     } catch (err) { handleRouteError(err, res, "Deferred revenue create error:"); }
   },
@@ -148,6 +158,15 @@ financeDeferredRevenueRouter.post(
         createdBy: scope.activeAssignmentId ?? 0,
         scheduleId: b.scheduleId,
       });
+      auditFromRequest(req, "finance.deferred_revenue.recognized", "deferred_revenue_schedules", b.scheduleId ?? 0, {
+        after: result,
+      });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.deferred_revenue.recognized", entity: "deferred_revenue_schedules", entityId: b.scheduleId ?? 0,
+        posted: result.posted, schedulesProcessed: result.schedulesProcessed,
+        details: JSON.stringify(result),
+      }).catch((e) => logger.error(e, "finance-deferred-revenue background task failed"));
       res.json({ data: result });
     } catch (err) { handleRouteError(err, res, "Deferred revenue run error:"); }
   },
