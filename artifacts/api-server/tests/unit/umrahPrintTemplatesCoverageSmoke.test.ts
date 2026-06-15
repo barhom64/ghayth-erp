@@ -82,6 +82,9 @@ describe("U-14-P5 §A — dataLoader umrah_* cases all have a BESPOKE_PRESETS en
     "umrah_pilgrim",
     "umrah_sales_invoice",
     "umrah_agent_invoice",
+    // U-14-P3 (next phase) — the purchase-side Nusk invoice joined the
+    // BESPOKE map alongside the loader case in dataLoader.ts.
+    "umrah_nusk_invoice",
     "umrah_penalty",
     "umrah_violation",
     "umrah_transport",
