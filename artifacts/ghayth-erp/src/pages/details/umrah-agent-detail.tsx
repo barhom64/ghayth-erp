@@ -14,7 +14,7 @@ import {
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { Button } from "@/components/ui/button";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Phone, Mail, MapPin, Users, Wallet, TrendingUp } from "lucide-react";
@@ -382,7 +382,7 @@ export default function UmrahAgentDetail() {
               <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/profitability/umrah-agent/${id}`}>
                   <TrendingUp className="h-4 w-4" /> الربحية
                 </Link></Button>
-              <EntityPrintButton
+              <PrintButton
                 entityType="umrah_agent"
                 entityId={id ?? 0}
                />

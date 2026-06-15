@@ -46,7 +46,7 @@ vi.mock("@workspace/ui-core", () => ({
 
 vi.mock("@/components/shared/finance-tabs-nav", () => ({ FinanceTabsNav: () => null }));
 vi.mock("@/components/shared/permission-gate", () => ({ GuardedButton: ({ children }: any) => <button>{children}</button> }));
-vi.mock("@/components/shared/entity-print", () => ({ EntityPrintButton: () => null }));
+vi.mock("@/components/shared/entity-print", () => ({ PrintButton: () => null }));
 vi.mock("@/components/shared/loading-error-states", () => ({ LoadingSpinner: () => null, ErrorState: () => null }));
 
 import JournalDetailPage from "./journal-detail";

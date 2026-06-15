@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -410,7 +410,7 @@ export default function ContractDetailPage() {
         <Scale className="h-4 w-4" />
         إحالة قانونية
       </GuardedButton>
-      <EntityPrintButton entityType="rental_contract" entityId={id ?? ""} />
+      <PrintButton entityType="rental_contract" entityId={id ?? ""} />
       {!isContractLocked && (
         <DetailActionButtons hook={editDelete} editPerm="properties:update" deletePerm="properties:delete" />
       )}

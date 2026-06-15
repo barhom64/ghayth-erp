@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -329,7 +329,7 @@ export default function MaintenanceDetail() {
       actions={
         <>
           {maintenance && (
-            <EntityPrintButton
+            <PrintButton
               entityType="maintenance_request"
               entityId={maintenance.id ?? id}
              />
