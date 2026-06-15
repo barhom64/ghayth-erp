@@ -47,10 +47,7 @@ import {
 import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
 import { InvoiceAmendDialog } from "@/components/shared/invoice-amend-dialog";
 import { DebitMemoDialog } from "@/components/shared/debit-memo-dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -748,22 +745,17 @@ export default function InvoiceDetailPage() {
           />
         </>
       )}
-      <AlertDialog open={confirmPost} onOpenChange={(o) => !o && setConfirmPost(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد ترحيل الفاتورة</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة الذي يُرحَّل إلى دفتر الأستاذ العام. هذا الإجراء غير قابل للتراجع. متابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setConfirmPost(false); postMut.mutate({}); }}>
-              تأكيد الترحيل
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={confirmPost}
+        onOpenChange={(o) => { if (!o) setConfirmPost(false); }}
+        variant="destructive"
+        title="تأكيد ترحيل الفاتورة"
+        description="سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة الذي يُرحَّل إلى دفتر الأستاذ العام. هذا الإجراء غير قابل للتراجع. متابعة؟"
+        confirmLabel="تأكيد الترحيل"
+        pending={postMut.isPending}
+        onConfirm={() => { setConfirmPost(false); postMut.mutate({}); }}
+      />
     </>
   );
 }
