@@ -12,7 +12,7 @@ import {
 } from "@workspace/ui-core";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
@@ -314,7 +314,7 @@ export default function VoucherDetail() {
         actions={
           <>
             {voucher && (
-              <EntityPrintButton
+              <PrintButton
                 entityType={voucher.voucherType === "receipt" ? "receipt_voucher" : "payment_voucher"}
                 entityId={voucher.id ?? id}
                 formats={["a4", "thermal_80"]}/>

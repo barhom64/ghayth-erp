@@ -26,7 +26,7 @@ import {
 import { MultiExportButton } from "@/components/shared/export-buttons";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { ErrorState } from "@/components/shared/loading-error-states";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 
 // GAP_MATRIX item #7 — routed through unified export helper so the
 // download appears in /reports/print-log with entity=report_reports.
@@ -40,17 +40,6 @@ async function exportCSV(rows: any[], headers: string[], title: string) {
   });
 }
 
-// PrintButton — routes through Print Engine v2 unconditionally. Every report
-// tab must declare an entityType so the rendered job carries the branch
-// letterhead, audit row, verify QR, and reprint detection. The legacy
-// browser-print fallback was removed as part of the print-platform
-// unification (issue #1286):
-// any tab that needs printing must wire a server-side loader and pass
-// entityType. The entityId encodes the date filter as
-// "YYYY-MM-DD..YYYY-MM-DD" so each rendered job is traceable to its filter.
-function PrintButton({ entityType, entityId }: { entityType: string; entityId?: string }) {
-  return <EntityPrintButton entityType={entityType} entityId={entityId ?? "all"} />;
-}
 
 function dateRangeId(startDate?: string, endDate?: string): string {
   if (!startDate && !endDate) return "all";

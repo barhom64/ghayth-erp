@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh, todayLocal } from "@/lib/formatters";
 import { Download, Receipt } from "lucide-react";
 
@@ -190,7 +190,7 @@ export default function WhtSummaryPage() {
           >
             <Download className="h-3.5 w-3.5 me-1" /> تصدير CSV
           </GuardedButton>
-          <EntityPrintButton
+          <PrintButton
             entityType="report_wht_summary"
             entityId={`${startDate ?? ""}..${endDate ?? ""}`}
            

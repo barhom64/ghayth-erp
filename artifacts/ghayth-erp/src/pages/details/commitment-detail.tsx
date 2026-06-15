@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -295,7 +295,7 @@ export default function CommitmentDetail() {
         actions={
           <>
             {commitment && (
-              <EntityPrintButton
+              <PrintButton
                 entityType="commitment"
                 entityId={id ?? 0}
                />
