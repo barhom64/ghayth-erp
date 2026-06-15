@@ -35,8 +35,8 @@ describe("POST /hr/leave-types — admin can create new leave types", () => {
     expect(block).toContain('action: "create"');
   });
 
-  it("requires HR_ROLES inline (separation of duties for compensation)", () => {
-    expect(block).toContain("HR_ROLES.includes(scope.role)");
+  it("requires the hr:update grant inline (separation of duties for compensation)", () => {
+    expect(block).toContain('scopeCan(scope, "hr", "update")');
     expect(block).toContain("تعديل أنواع الإجازات يتطلب دور موارد بشرية");
   });
 
@@ -79,8 +79,8 @@ describe("PATCH /hr/leave-types/:id — closes API-1 (UI was hitting 404)", () =
     expect(block).toContain('idParam: "id"');
   });
 
-  it("requires HR_ROLES inline (same SoD as create)", () => {
-    expect(block).toContain("HR_ROLES.includes(scope.role)");
+  it("requires the hr:update grant inline (same SoD as create)", () => {
+    expect(block).toContain('scopeCan(scope, "hr", "update")');
   });
 
   it("body is partial — uses leaveTypePayloadSchema.partial()", () => {
