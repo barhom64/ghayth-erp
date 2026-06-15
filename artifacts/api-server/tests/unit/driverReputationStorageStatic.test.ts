@@ -193,12 +193,14 @@ describe("TA-T18-DR Phase 1 — boundary intact", () => {
     }
   });
 
-  it("Phase 1 does NOT touch the assignment engine yet (the integration is deferred)", () => {
-    // Sanity pin: this PR must not modify assignmentSuggestionEngine.
-    // The integration ships in a follow-up PR.
+  it("the engine reads only the persisted reputation COLUMN, never imports the service", () => {
+    // Phase 2 (#TA-T18-DR PR) integrates `reputationScore` as a
+    // scoring axis. The engine MUST stay decoupled from the compute
+    // service to avoid circular dependencies. It reads the persisted
+    // `d."reputationScore"` column off `fleet_drivers`, and that's it.
     const enginePath = join(repoRoot, "artifacts/api-server/src/lib/fleet/assignmentSuggestionEngine.ts");
     const ENGINE = readFileSync(enginePath, "utf8");
     expect(ENGINE).not.toMatch(/from\s+["']\.\/driverReputation/);
-    expect(ENGINE).not.toMatch(/computeDriverReputation|loadDriverReputation/);
+    expect(ENGINE).not.toMatch(/computeDriverReputation|loadDriverReputation|recomputeAllDrivers/);
   });
 });

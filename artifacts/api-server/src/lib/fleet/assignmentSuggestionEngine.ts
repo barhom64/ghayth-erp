@@ -245,6 +245,10 @@ interface DriverRow {
   // for hr_leave_requests; without it the leave gate is silently
   // skipped (legacy drivers not linked to an employee row).
   employeeId: number | null;
+  // TA-T18-DR Phase 2 — reputation score (0..100) persisted by
+  // `driverReputation.ts`. NULL for fresh hires; the scoring axis
+  // treats NULL as neutral (the driver isn't penalised on day one).
+  reputationScore: string | null;
 }
 
 interface ConflictRow {
@@ -610,7 +614,8 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
             d."lastDutyEndedAt",
             d."licenseClass",
             COALESCE(d.status, 'active') AS status,
-            d."employeeId"
+            d."employeeId",
+            d."reputationScore"
        FROM fleet_drivers d
       WHERE d."companyId" = $1
         AND d."deletedAt" IS NULL
@@ -1204,20 +1209,49 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
         if (fam.reason) reasons.push(fam.reason);
       }
 
+      // TA-T18-DR Phase 2 — driver reputation axis. The persisted
+      // `reputationScore` (0..100) is read straight off the DriverRow
+      // (already projected by the compute service using the
+      // owner-set formula 0.4·onTime + 0.4·completion + 0.2·startRate).
+      // Fresh hires with NULL reputation get a NEUTRAL 50 so they aren't
+      // penalised on day one — the engine treats them like an average
+      // driver until enough trips populate the metric.
+      const reputationScore = d.reputationScore != null
+        ? Math.max(0, Math.min(100, Number(d.reputationScore)))
+        : 50;
+      if (d.reputationScore == null) {
+        reasons.push("لا توجد بيانات سمعة للسائق بعد — يُعامَل كمتوسط");
+      } else if (Number(d.reputationScore) >= 85) {
+        reasons.push(`سمعة عالية (${Number(d.reputationScore).toFixed(0)}/100)`);
+      } else if (Number(d.reputationScore) < 60) {
+        reasons.push(`سمعة منخفضة (${Number(d.reputationScore).toFixed(0)}/100)`);
+      }
+
       // ─ Aggregate ─────────────────────────────────────────────────
-      // PE-06: weights re-balanced one more time — distance 0.05 →
-      // 0.025, the freed 0.025 funds the new umrahFamiliarity axis.
-      // utilization stays at 0.05. Total still 1.00.
+      // TA-T18-DR Phase 2 (2026-06-15): added reputation axis at 0.05.
+      // The 0.05 budget came from `conflict`: 0.25 → 0.20. Reasoning:
+      // when there IS a conflict the candidate gets a HARD blocker and
+      // its overall score is forced to 0 regardless of weight, so the
+      // 0.05 only matters at the margins (near-overlap windows), which
+      // is rare. Driver reputation is a soft preference among the
+      // qualifying candidates — same tier of importance as `utilization`
+      // (0.05) and `agreement` partials.
+      //
+      // PE-06 (prior): distance 0.05 → 0.025, freed 0.025 funded umrah.
+      //
+      // Total: 0.20 + 0.10 + 0.20 + 0.15 + 0.10 + 0.025 + 0.10 + 0.05
+      //      + 0.025 + 0.05 = 1.000 (verified by static test).
       const finalScore = Math.round(
         capacityScore        * 0.20 +
         availabilityScore    * 0.10 +
-        conflictScore        * 0.25 +
+        conflictScore        * 0.20 +
         restScore            * 0.15 +
         licenseScore         * 0.10 +
         distanceScore        * 0.025 +
         agreementScore       * 0.10 +
         utilScore            * 0.05 +
-        umrahFamiliarityScore * 0.025,
+        umrahFamiliarityScore * 0.025 +
+        reputationScore      * 0.05,
       );
 
       // #2079 PE-05 — continuity bonus. Only applies when the caller
