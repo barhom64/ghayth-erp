@@ -303,28 +303,20 @@ export default function AdminSystemRegistry() {
               {pages.length > 0 && (
                 <Card>
                   <CardContent className="p-0">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-surface-subtle">
-                          <th className="text-start p-2">المسار</th>
-                          <th className="text-start p-2">المكوّن</th>
-                          <th className="text-start p-2">النطاق</th>
-                          <th className="text-start p-2">تحميل كسول</th>
-                          <th className="text-start p-2">حد الصلاحية</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pages.map((p) => (
-                          <tr key={p.path} className="border-t hover:bg-muted/30">
-                            <td className="p-2 font-mono text-xs">{p.path}</td>
-                            <td className="p-2 text-xs">{p.component}</td>
-                            <td className="p-2"><Badge variant="outline" className="text-xs">{p.domain}</Badge></td>
-                            <td className="p-2 text-xs">{p.lazy ? "نعم" : "—"}</td>
-                            <td className="p-2 text-xs">{p.minLevel ? `≥ ${p.minLevel}` : "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <DataTable<any>
+                      data={pages}
+                      rowKey={(p) => p.path}
+                      noToolbar
+                      pageSize={0}
+                      emptyMessage="لا توجد صفحات"
+                      columns={[
+                        { key: "path", header: "المسار", className: "font-mono text-xs" },
+                        { key: "component", header: "المكوّن", className: "text-xs" },
+                        { key: "domain", header: "النطاق", render: (p) => <Badge variant="outline" className="text-xs">{p.domain}</Badge> },
+                        { key: "lazy", header: "تحميل كسول", render: (p) => p.lazy ? "نعم" : "—" },
+                        { key: "minLevel", header: "حد الصلاحية", render: (p) => p.minLevel ? `≥ ${p.minLevel}` : "—" },
+                      ]}
+                    />
                   </CardContent>
                 </Card>
               )}
@@ -498,35 +490,20 @@ export default function AdminSystemRegistry() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/50 sticky top-0">
-                            <tr>
-                              <th className="p-2 text-right">الكيان</th>
-                              <th className="p-2 text-right">النطاق</th>
-                              <th className="p-2 text-right">التصنيف</th>
-                              <th className="p-2 text-right">الوصف</th>
-                              <th className="p-2 text-center">الخطورة</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredGaps.map((g: any, i: number) => (
-                              <tr key={i} className="border-t">
-                                <td className="p-2 font-medium text-xs">{g.entityLabel}</td>
-                                <td className="p-2"><Badge variant="outline" className="text-[10px]">{g.domain}</Badge></td>
-                                <td className="p-2 text-xs text-muted-foreground">{categoryLabel(g.category)}</td>
-                                <td className="p-2 text-xs">{g.description}</td>
-                                <td className="p-2 text-center">
-                                  <Badge className={severityColor(g.severity)}>{severityLabel(g.severity)}</Badge>
-                                </td>
-                              </tr>
-                            ))}
-                            {filteredGaps.length === 0 && (
-                              <tr><td colSpan={5} className="p-4 text-center text-status-success-foreground">لا توجد فجوات — تغطية كاملة</td></tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                      <DataTable<any>
+                        data={filteredGaps}
+                        rowKey={(_g, i) => String(i)}
+                        noToolbar
+                        pageSize={0}
+                        emptyMessage="لا توجد فجوات — تغطية كاملة"
+                        columns={[
+                          { key: "entityLabel", header: "الكيان", className: "font-medium text-xs" },
+                          { key: "domain", header: "النطاق", render: (g) => <Badge variant="outline" className="text-[10px]">{g.domain}</Badge> },
+                          { key: "category", header: "التصنيف", render: (g) => <span className="text-xs text-muted-foreground">{categoryLabel(g.category)}</span> },
+                          { key: "description", header: "الوصف", className: "text-xs" },
+                          { key: "severity", header: "الخطورة", align: "center" as const, render: (g) => <Badge className={severityColor(g.severity)}>{severityLabel(g.severity)}</Badge> },
+                        ]}
+                      />
                     </CardContent>
                   </Card>
                 </>
