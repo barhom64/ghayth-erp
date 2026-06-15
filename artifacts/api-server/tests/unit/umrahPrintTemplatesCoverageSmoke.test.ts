@@ -87,22 +87,17 @@ describe("U-14-P5 §A — dataLoader umrah_* cases all have a BESPOKE_PRESETS en
     "umrah_transport",
     "umrah_package",
     "umrah_season",
+    // U-14-P3 — umrah_group now has its own BESPOKE_PRESETS entry
+    // (buildUmrahGroupPreset). The U-14-P1 universal-fallback gap is
+    // closed; the dedicated builder renders the group meta block + the
+    // pilgrim manifest list.
+    "umrah_group",
   ]) {
     it(`dataLoader case '${entity}' has a matching BESPOKE_PRESETS entry`, () => {
       expect(dataLoaderCases.has(entity)).toBe(true);
       expect(bespokeKeys.has(entity)).toBe(true);
     });
   }
-
-  // umrah_group is special: per U-14-P1 it intentionally falls through
-  // to universalFallback so the row's actual columns render (a group is
-  // a collection of pilgrims, not a single pilgrim). U-14-P3 will add
-  // buildUmrahGroupPreset; until then we pin the absence so a half-
-  // implementation that aliases it back to the wrong preset is caught.
-  it("dataLoader case 'umrah_group' exists, but BESPOKE_PRESETS does NOT alias it (universal fallback by design)", () => {
-    expect(dataLoaderCases.has("umrah_group")).toBe(true);
-    expect(bespokeKeys.has("umrah_group")).toBe(false);
-  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,6 +107,12 @@ describe("U-14-P5 §B — umrah_group alias points at the correct builder", () =
   it("umrah_group is NOT aliased to buildUmrahPilgrimPreset (the U-14-P1 regression)", () => {
     expect(TEMPLATE_RESOLVER).not.toMatch(
       /umrah_group\s*:\s*\(\s*\)\s*=>\s*buildUmrahPilgrimPreset/,
+    );
+  });
+
+  it("umrah_group routes to the dedicated buildUmrahGroupPreset (U-14-P3)", () => {
+    expect(TEMPLATE_RESOLVER).toMatch(
+      /umrah_group\s*:\s*\(\s*\)\s*=>\s*buildUmrahGroupPreset/,
     );
   });
 

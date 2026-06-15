@@ -147,11 +147,15 @@ describe("RACE-2: payroll run takes pg_advisory_xact_lock + re-checks duplicate"
   });
 });
 
-// ─── SEC-3 — salary_components writes restricted to PAYROLL_ROLES ────────
+// ─── SEC-3 — salary_components writes restricted to the hr.payroll authority ──
+// HR-REV-1 #1 migrated the inline PAYROLL_ROLES SoD gate to a grant-derived
+// scopeCan(hr.payroll:<verb>) check (tighter than the route's
+// hr.payroll.runs capability, exactly as before).
 
-describe("SEC-3: salary-components writes require PAYROLL_ROLES", () => {
+describe("SEC-3: salary-components writes require the hr.payroll authority", () => {
+  const ACTION_FOR = { post: "create", patch: "update", delete: "delete" } as const;
   for (const verb of ["post", "patch", "delete"] as const) {
-    it(`${verb.toUpperCase()} /salary-components requires PAYROLL_ROLES inline`, () => {
+    it(`${verb.toUpperCase()} /salary-components requires scopeCan(hr.payroll:${ACTION_FOR[verb]}) inline`, () => {
       // The handler appears as `router.${verb}("/salary-components"...`
       // for POST and `router.${verb}("/salary-components/:id"...` for
       // PATCH/DELETE. Find whichever matches first.
@@ -162,7 +166,7 @@ describe("SEC-3: salary-components writes require PAYROLL_ROLES", () => {
       const start = HR.indexOf(needle);
       expect(start, `${needle} handler exists`).toBeGreaterThan(0);
       const block = HR.slice(start, start + 2500);
-      expect(block).toContain("PAYROLL_ROLES.includes(scope.role)");
+      expect(block).toContain(`scopeCan(scope, "hr.payroll", "${ACTION_FOR[verb]}")`);
       // POST/PATCH say "تعديل"; DELETE says "حذف". Either is fine —
       // what matters is the error mentions "مكوّنات الراتب".
       expect(block).toContain("مكوّنات الراتب");
