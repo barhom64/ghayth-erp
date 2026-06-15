@@ -245,11 +245,47 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requireMinLevel(70),
       periodId,
       status: closed.status,
       event: "fiscal_period.closed",
+      report: closed.report ?? null,
     });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Close fiscal period error:");
+  }
+});
+
+// FIN-PERIOD-CLOSE (#2250) — close PREVIEW. Read-only: aggregate ALL integrity
+// blockers + the close report WITHOUT locking the period. Lets an operator see
+// the full work list (and the counts) before committing the close. Same record
+// scope as the close route; list-level authorize (no mutation).
+financeHardeningRouter.get("/fiscal-periods-v2/:id/close-preview", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const periodId = parseId(req.params.id, "id");
+
+    const [period] = await rawQuery<{ id: number; name: string; startDate: string; endDate: string; status: string }>(
+      `SELECT id, name, "startDate"::text AS "startDate", "endDate"::text AS "endDate", status
+         FROM financial_periods
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [periodId, scope.companyId],
+    );
+    if (!period) throw new NotFoundError("الفترة غير موجودة");
+
+    const { collectPeriodCloseBlockers, buildPeriodCloseReport } = await import("../lib/periodCloseCoordinator.js");
+    const window = { startDate: period.startDate, endDate: period.endDate, name: period.name };
+    const blockers = await collectPeriodCloseBlockers({ companyId: scope.companyId, period: window });
+    const report = await buildPeriodCloseReport({ companyId: scope.companyId, periodId, period: window, blockers });
+
+    res.json(maskFields(req, {
+      periodId,
+      periodName: period.name,
+      status: period.status,
+      canClose: blockers.length === 0,
+      blockers,
+      report,
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "Close preview error:");
   }
 });
 
