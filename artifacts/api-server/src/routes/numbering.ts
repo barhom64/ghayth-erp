@@ -117,9 +117,9 @@ router.get(
                 "nextNumber"::text AS "nextNumber",
                 "lockedAt", "createdAt", "updatedAt"
            FROM numbering_counters
-          WHERE "schemeId" = $1
+          WHERE "schemeId" = $1 AND "companyId" = $2
           ORDER BY "branchId" NULLS FIRST, "fiscalYear" DESC NULLS LAST, period DESC NULLS LAST`,
-        [id],
+        [id, scope.companyId],
       );
       res.json({ data: row, counters });
     } catch (err) {

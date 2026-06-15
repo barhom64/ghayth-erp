@@ -9,8 +9,6 @@ routes/admin-observability.ts:cron_logs
 routes/admin.ts:cron_jobs
 routes/admin.ts:cron_logs
 routes/automation.ts:cron_jobs
-routes/bi.ts:alert_fatigue_settings
-routes/bi.ts:notifications
 # careersPortal.ts:job_postings — public careers portal. The flagged reads
 # are an applicant viewing their OWN applications (JOIN job_postings, scoped by
 # applicantAccountId / application id), not a company session. Adding companyId
@@ -60,7 +58,6 @@ routes/mySpace.ts:notifications
 routes/mySpace.ts:payroll_runs
 routes/mySpace.ts:shifts
 routes/mySpace.ts:tasks
-routes/numbering.ts:numbering_counters
 routes/operationsCenter.ts:system_settings
 routes/projects.ts:employees
 routes/projects.ts:project_resources
