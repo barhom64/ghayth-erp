@@ -99,12 +99,16 @@ describe("#1812 — /rental-contracts/:id/return wires the handoff", () => {
 });
 
 describe("#1812 — deferred-GL boundary stays intact", () => {
-  it("materialize endpoint still gates on cargo_manifest (rental GL deferred by mandate)", () => {
+  it("materialize endpoint gates on the supported source types (rental GL deferred by mandate)", () => {
     const CANDIDATES = readFileSync(
       join(apiSrc, "routes/transport-billing-candidates.ts"),
       "utf8",
     );
-    expect(CANDIDATES).toMatch(/candidate\.sourceType !== "cargo_manifest"/);
+    // The materialiser posts GL only for the explicitly-supported fleet
+    // source types; rental stays deferred (intentionally NOT in the set).
+    expect(CANDIDATES).toMatch(/SUPPORTED_SOURCE_TYPES = \["cargo_manifest", "maintenance", "fuel", "insurance"\]/);
+    expect(CANDIDATES).not.toMatch(/SUPPORTED_SOURCE_TYPES = \[[^\]]*rental/);
+    expect(CANDIDATES).toMatch(/!SUPPORTED_SOURCE_TYPES\.includes\(candidate\.sourceType\)/);
     expect(CANDIDATES).toMatch(/غير مدعوم بعد للترحيل التلقائي/);
   });
 });
