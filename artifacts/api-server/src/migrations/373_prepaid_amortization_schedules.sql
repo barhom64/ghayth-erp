@@ -1,4 +1,4 @@
--- 371_prepaid_amortization_schedules.sql
+-- 373_prepaid_amortization_schedules.sql
 -- FIN-TIME-SPREADING (#2247) — prepaid-amortization engine storage.
 --
 -- Turns a prepaid asset balance (insurance/rent/license/subscription paid up

@@ -22,7 +22,7 @@ import {
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const API_SRC = join(REPO_ROOT, "artifacts/api-server/src");
 const MIGRATION = readFileSync(
-  join(API_SRC, "migrations/371_prepaid_amortization_schedules.sql"),
+  join(API_SRC, "migrations/373_prepaid_amortization_schedules.sql"),
   "utf8",
 );
 const ENGINE = readFileSync(
