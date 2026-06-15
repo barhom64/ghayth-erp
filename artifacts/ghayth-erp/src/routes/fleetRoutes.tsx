@@ -60,6 +60,8 @@ const RentalCreate = lazy(() => import("@/pages/fleet/rental-create"));
 const RentalDetail = lazy(() => import("@/pages/fleet/rental-detail"));
 // #1812 Planning engine — ops dashboard + driver in-app navigation.
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
+// TR-022 — unified transport calendar.
+const TransportCalendar = lazy(() => import("@/pages/fleet/transport-calendar"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
 // #1812 integration bridges — linked sources view.
 const TransportIntegration = lazy(() => import("@/pages/fleet/transport-integration"));
@@ -141,6 +143,7 @@ export const fleetRoutes = [
   { path: "/fleet/rental-contracts/:id", component: RentalDetail },
   // #1812 ops dashboard + driver navigation surfaces.
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
+  { path: "/fleet/transport/calendar", component: TransportCalendar }, // TR-022
   { path: "/fleet/transport/integration", component: TransportIntegration },
   { path: "/fleet/transport/itineraries", component: TransportItineraries },
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },
