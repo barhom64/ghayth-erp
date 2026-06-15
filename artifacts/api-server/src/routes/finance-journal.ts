@@ -47,6 +47,12 @@ import {
   evaluateExpensePlan,
   type PlannedExpenseLine,
 } from "../lib/expenseJournalPlan.js";
+import {
+  buildVendorInvoiceLines,
+  evaluateVendorInvoicePlan,
+  type PlannedVendorInvoiceLine,
+  type VendorInvoiceLineInput,
+} from "../lib/vendorInvoiceJournalPlan.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -190,6 +196,66 @@ const createExpenseSchema = z.object({
   costCenterDistribution: z.array(costCenterSplitSchema).optional(),
   // #1715 — maintenance-ticket / fixed-asset / fuel-log effect inputs.
   ...operationalEffectsShape,
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #2241 (FIN-P11-VENDOR-INVOICE-WORKSPACE) — vendor invoice (supplier bill).
+// A SEPARATE entry path from the fuel/expense path: it posts a MULTI-LINE
+// journal whose single credit leg is the supplier PAYABLE (آجل) OR the money
+// source (paid). Each line carries an `accountPurpose` (TEXT) — the engine
+// resolves the GL account; the UI/memory NEVER carry a GL code. Line dims mirror
+// finance-purchase.ts `purchaseLineDimsSchema`.
+// ─────────────────────────────────────────────────────────────────────────────
+const vendorInvoiceLineSchema = z.object({
+  itemId: z.coerce.number().int().positive().optional(),
+  itemName: z.string().optional(),
+  quantity: z.coerce.number().optional(),
+  unit: z.string().optional(),
+  unitPrice: z.coerce.number().optional(),
+  taxCode: z.string().optional(),
+  // amount = qty × unitPrice (net of VAT) — the line's debit base.
+  amount: z.coerce.number(),
+  vatAmount: z.coerce.number().optional(),
+  // TEXT purpose only — the financial engine resolves it to a GL account.
+  accountPurpose: z.string().min(1, "غرض الحساب مطلوب لكل سطر"),
+  scenario: z.string().optional(),
+  targetType: z.string().optional(),
+  // line dims (mirror purchaseLineDimsSchema).
+  costCenterId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
+  vehicleId: z.coerce.number().optional(),
+  propertyId: z.coerce.number().optional(),
+  unitId: z.coerce.number().optional(),
+  contractId: z.coerce.number().optional(),
+  clientId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+  assetId: z.coerce.number().optional(),
+  umrahSeasonId: z.coerce.number().optional(),
+  umrahAgentId: z.coerce.number().optional(),
+});
+
+const vendorInvoicePreviewSchema = z.object({
+  supplierId: z.coerce.number().int().positive(),
+  paid: z.coerce.boolean().optional().default(false),
+  sourceAccountCode: z.string().optional(),
+  branchId: z.any().optional(),
+  lines: z.array(vendorInvoiceLineSchema).min(1, "أدخل بندًا واحدًا على الأقل"),
+});
+
+const createVendorInvoiceSchema = z.object({
+  supplierId: z.coerce.number().int().positive(),
+  paid: z.coerce.boolean().optional().default(false),
+  sourceAccountCode: z.string().optional(),
+  invoiceNo: z.string().optional(),
+  invoiceDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  description: z.string().optional(),
+  reference: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  attachmentType: z.string().optional(),
+  branchId: z.any().optional(),
+  companyId: z.any().optional(),
+  lines: z.array(vendorInvoiceLineSchema).min(1, "أدخل بندًا واحدًا على الأقل"),
 });
 
 const updateDescriptionSchema = z.object({
@@ -1352,6 +1418,301 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     res.status(201).json({ ...(createdExpense || { id: journalId }), idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create expense error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #2241 (FIN-P11-VENDOR-INVOICE-WORKSPACE) — vendor invoice (supplier bill).
+//
+// SEPARATE from the expense/fuel path (expenses-create.tsx / buildExpenseLines
+// are NOT touched). A vendor invoice posts a MULTI-LINE journal: one DR per item
+// line (account resolved from the line's `accountPurpose` TEXT — never a GL code
+// from the UI), an optional DR for total input VAT, and ONE credit leg = the
+// supplier PAYABLE (purchase_vendor_ap → 2111) when آجل, or the money source
+// when paid. `vendorId` is stamped on every line. Preview + save share the same
+// resolver so they can never drift.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve a vendor invoice into its planned journal lines using the SAME
+ * primitives the save path uses. Pure-ish: it resolves accounts via the engine
+ * (read-only) and returns the planned lines + the resolved AP/VAT/source codes.
+ * NEVER writes to the DB.
+ */
+async function resolveVendorInvoicePlan(
+  scope: { companyId: number; branchId?: number | null },
+  p: { supplierId: number; paid: boolean; sourceAccountCode?: string | null; lines: z.infer<typeof vendorInvoiceLineSchema>[] },
+): Promise<{
+  lines: PlannedVendorInvoiceLine[];
+  apAccountCode: string;
+  vatInputAccountCode: string | null;
+  sourceAccountCode: string | null;
+  totalWithVat: number;
+}> {
+  const { financialEngine } = await import("../lib/engines/index.js");
+
+  // AP (supplier payable) — credit leg for a credit (آجل) invoice.
+  const apAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111");
+
+  // Build each item DR line: resolve its account from accountPurpose (TEXT), and
+  // its dimensions through the SHARED entity-link builder (stamping vendorId).
+  const itemLines: VendorInvoiceLineInput[] = [];
+  let totalVat = 0;
+  let totalNet = 0;
+  for (const line of p.lines) {
+    const { entityLink } = buildExpenseEntityLink({
+      relatedEntityType: "supplier",
+      relatedEntityId: p.supplierId,
+      projectId: line.projectId ?? null,
+      lineAllocation: {
+        costCenterId: line.costCenterId ?? undefined,
+        projectId: line.projectId ?? undefined,
+        vehicleId: line.vehicleId ?? undefined,
+        propertyId: line.propertyId ?? undefined,
+        unitId: line.unitId ?? undefined,
+        contractId: line.contractId ?? undefined,
+        clientId: line.clientId ?? undefined,
+        employeeId: line.employeeId ?? undefined,
+        assetId: line.assetId ?? undefined,
+        umrahSeasonId: line.umrahSeasonId ?? undefined,
+        umrahAgentId: line.umrahAgentId ?? undefined,
+        vendorId: p.supplierId,
+      },
+    });
+    // The engine resolves the line's GL account from its accountPurpose (TEXT).
+    const expenseAccountCode = await financialEngine.resolveAccountCode(
+      scope.companyId,
+      line.accountPurpose,
+      "debit",
+      "5000",
+    );
+    const net = roundTo2(Number(line.amount) || 0);
+    const vat = roundTo2(Number(line.vatAmount) || 0);
+    totalNet = roundTo2(totalNet + net);
+    totalVat = roundTo2(totalVat + vat);
+    itemLines.push({ expenseAccountCode, baseAmount: net, vatAmount: vat, entityLink });
+  }
+
+  const totalWithVat = roundTo2(totalNet + totalVat);
+  let vatInputAccountCode: string | null = null;
+  if (totalVat > 0) {
+    vatInputAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+  }
+
+  const lines = buildVendorInvoiceLines({
+    lines: itemLines,
+    paid: p.paid,
+    sourceAccountCode: p.paid ? (p.sourceAccountCode ?? null) : null,
+    apAccountCode,
+    vatInputAccountCode,
+    totalWithVat,
+    vendorId: p.supplierId,
+  });
+
+  return { lines, apAccountCode, vatInputAccountCode, sourceAccountCode: p.paid ? (p.sourceAccountCode ?? null) : null, totalWithVat };
+}
+
+/** Validate that the supplier exists AND belongs to the caller's company. */
+async function assertVendorBelongsToCompany(companyId: number, supplierId: number): Promise<void> {
+  const [sup] = await rawQuery<{ id: number }>(
+    `SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [supplierId, companyId],
+  );
+  if (!sup) throw new ValidationError("المورد غير موجود أو لا يتبع الشركة", { field: "supplierId", fix: "اختر موردًا من قائمة الموردين." });
+}
+
+journalRouter.post("/vendor-invoices/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(vendorInvoicePreviewSchema.safeParse(req.body ?? {}));
+    await assertVendorBelongsToCompany(scope.companyId, p.supplierId);
+
+    const paymentMethod = p.paid ? "cash" : null;
+    const empty = (incompleteReason: string): JournalPreviewView => ({
+      ready: false,
+      incompleteReason,
+      lines: [],
+      totals: { debit: 0, credit: 0 },
+      balanced: false,
+      blockers: [],
+      warnings: [],
+      sourceContext: { paymentMethod, sourceAccountCode: p.sourceAccountCode || null, sourceAccountName: null },
+      suggestedDocumentStatus: "draft",
+      suggestedPaymentStatus: p.paid ? "paid" : "unpaid",
+      suggestedPostingStatus: "blocked",
+    });
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
+
+    // HARD RULES surfaced as preview blockers (mirror the save-path errors).
+    let journalPreview: JournalPreviewView;
+    if (!p.paid && p.sourceAccountCode) {
+      journalPreview = { ...empty("لا مصدر صرف في الفاتورة الآجلة"), blockers: [{ code: "payment_source", field: "sourceAccountCode", message: "لا مصدر صرف في الفاتورة الآجلة" }] };
+    } else if (p.paid && !p.sourceAccountCode) {
+      journalPreview = { ...empty("اختر مصدر الصرف للفاتورة المدفوعة"), blockers: [{ code: "payment_source", field: "sourceAccountCode", message: "اختر مصدر الصرف للفاتورة المدفوعة" }] };
+    } else {
+      const plan = await resolveVendorInvoicePlan(scope, p);
+
+      // account existence/postability + names (read-only).
+      const codes = Array.from(new Set(plan.lines.map((l) => l.accountCode).filter(Boolean)));
+      const accountRows = await rawQuery<{ code: string; name: string }>(
+        `SELECT code, name FROM chart_of_accounts
+           WHERE "companyId" = $1 AND code = ANY($2::text[])
+             AND "deletedAt" IS NULL AND "isActive" = true AND "allowPosting" = true`,
+        [scope.companyId, codes],
+      );
+      const knownAccountCodes = new Set(accountRows.map((r) => r.code));
+      const nameByCode = new Map(accountRows.map((r) => [r.code, r.name]));
+
+      const evald = evaluateVendorInvoicePlan({ lines: plan.lines, knownAccountCodes });
+
+      const lineViews: JournalPreviewLineView[] = (plan.lines as PlannedVendorInvoiceLine[]).map((l, i) => {
+        const dims: Record<string, unknown> = {};
+        for (const k of ["vehicleId", "propertyId", "projectId", "vendorId", "clientId", "unitId", "assetId", "contractId", "employeeId", "costCenterId", "costCenter"]) {
+          if (l[k] != null) dims[k] = l[k];
+        }
+        let lineSource: JournalPreviewLineView["accountSource"];
+        let reason: string;
+        if (l.role === "expense") { lineSource = "purpose"; reason = "حساب البند — مُحلّ من غرض الحساب (accountPurpose)"; }
+        else if (l.role === "vat_input") { lineSource = "purpose"; reason = "ضريبة مدخلات — غرض الحساب vat_input"; }
+        else { lineSource = p.paid ? "selected" : "purpose"; reason = p.paid ? "مصدر الصرف المختار (مدفوعة)" : "ذمة المورد — غرض الحساب purchase_vendor_ap (آجل)"; }
+        return {
+          lineNo: i + 1,
+          accountCode: l.accountCode,
+          accountName: nameByCode.get(l.accountCode) ?? null,
+          debit: l.debit,
+          credit: l.credit,
+          role: l.role,
+          dimensions: dims,
+          derivationReason: reason,
+          accountSource: lineSource,
+          status: knownAccountCodes.has(l.accountCode) ? "ok" : "account_not_found",
+        };
+      });
+
+      journalPreview = {
+        ready: true,
+        lines: lineViews,
+        totals: { debit: evald.totalDebit, credit: evald.totalCredit },
+        balanced: evald.balanced,
+        blockers: evald.blockers,
+        warnings: evald.warnings,
+        sourceContext: { paymentMethod, sourceAccountCode: plan.sourceAccountCode, sourceAccountName: plan.sourceAccountCode ? (nameByCode.get(plan.sourceAccountCode) ?? null) : null },
+        suggestedDocumentStatus: "draft",
+        suggestedPaymentStatus: p.paid ? "paid" : "unpaid",
+        suggestedPostingStatus: evald.blockers.length > 0 ? "blocked" : "unposted",
+      };
+
+      items.push({ category: "محاسبي", label: p.paid ? "فاتورة مورد مدفوعة" : "فاتورة مورد آجلة", value: p.paid ? `مدين البنود / دائن مصدر الصرف ${plan.totalWithVat.toLocaleString("ar-SA")}` : `مدين البنود / دائن ذمة المورد ${plan.totalWithVat.toLocaleString("ar-SA")}`, severity: "info" });
+    }
+
+    const hasDanger = (journalPreview.blockers.length ?? 0) > 0;
+    res.json({
+      actionType: "create_vendor_invoice",
+      employeeId: 0,
+      employeeName: "",
+      items,
+      journalPreview,
+      summary: hasDanger
+        ? `لا يمكن الحفظ: ${journalPreview.blockers[0].message}`
+        : `فاتورة مورد ${journalPreview.totals.credit.toLocaleString("ar-SA")} ر.س جاهزة للتسجيل`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة أثر فاتورة المورد");
+  }
+});
+
+journalRouter.post("/vendor-invoices", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorInvoiceSchema.safeParse(req.body ?? {}));
+
+    const effectiveCompanyId = b.companyId && scope.allowedCompanies.includes(Number(b.companyId)) ? Number(b.companyId) : scope.companyId;
+    const branchId = b.branchId ? Number(b.branchId) : null;
+    if (!branchId && !scope.branchId) {
+      throw new ValidationError("الفرع مطلوب لتسجيل فاتورة المورد", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+    }
+
+    await assertVendorBelongsToCompany(effectiveCompanyId, b.supplierId);
+
+    // HARD RULES — credit (آجل) invoices must NOT carry a money source; paid
+    // invoices MUST. Enforced server-side regardless of the UI.
+    if (!b.paid && b.sourceAccountCode) {
+      throw new ValidationError("لا مصدر صرف في الفاتورة الآجلة", { field: "sourceAccountCode", fix: "احذف مصدر الصرف، أو فعّل «مدفوعة» إذا دُفِعت الفاتورة فورًا" });
+    }
+    if (b.paid && !b.sourceAccountCode) {
+      throw new ValidationError("اختر مصدر الصرف للفاتورة المدفوعة", { field: "sourceAccountCode", fix: "حدد الخزنة/البنك الذي خرج منه المال" });
+    }
+
+    // Attachment required for vendor invoices (mirror the expense policy).
+    const attachCheck = checkAttachmentRequired({ operationType: "vendor_invoice", hasAttachment: !!b.attachmentUrl });
+    if (attachCheck.required && !b.attachmentUrl) {
+      throw new ValidationError(attachCheck.reason || "المرفق إلزامي لفاتورة المورد", { field: "attachmentUrl", fix: "أرفق صورة فاتورة المورد قبل الحفظ" });
+    }
+
+    const plan = await resolveVendorInvoicePlan({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId ?? null }, b);
+    const journalLines = (plan.lines as PlannedVendorInvoiceLine[]).map(({ role, ...line }) => line);
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `VINV-${idempotencyToken}`;
+    const finalDescription = b.description || `فاتورة مورد${b.invoiceNo ? ` #${b.invoiceNo}` : ""}`;
+
+    const { journalId, alreadyExists } = await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: effectiveCompanyId,
+        branchId: branchId ?? scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: finalDescription,
+        type: "expense",
+        sourceType: "vendor_invoice",
+        sourceId: 0,
+        sourceKey: `finance:vendor_invoice:${idempotencyToken}`,
+        lines: journalLines,
+        postingDate: b.invoiceDate ? toDateISO(b.invoiceDate) : undefined,
+      });
+
+      await rawExecute(
+        `UPDATE journal_entries SET "relatedEntityType" = $1, "relatedEntityId" = $2, "paymentMethod" = $3, reference = $4, "isPaid" = $5, "attachmentUrl" = $6, "attachmentType" = $7, "operationType" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
+        ["supplier", b.supplierId, b.paid ? "cash" : "credit", b.invoiceNo || b.reference || null, b.paid, b.attachmentUrl ?? null, b.attachmentType ?? "invoice", "vendor_invoice", posted.journalId, effectiveCompanyId],
+      );
+
+      return { journalId: posted.journalId, alreadyExists: posted.alreadyExists };
+    });
+    markIdempotencyReplay(req, res, alreadyExists);
+
+    await createAuditLog({
+      companyId: effectiveCompanyId,
+      branchId: branchId ?? scope.branchId ?? undefined,
+      userId: scope.userId,
+      action: "vendor_invoice.created",
+      entity: "journal_entries",
+      entityId: journalId,
+      after: { ref, supplierId: b.supplierId, paid: b.paid, totalWithVat: plan.totalWithVat, lineCount: b.lines.length },
+      activeRoleKey: scope.selectedRoleKey ?? null,
+    });
+
+    emitEvent({
+      companyId: effectiveCompanyId,
+      userId: scope.userId,
+      action: "finance.vendor_invoice.created",
+      entity: "journal_entries",
+      entityId: journalId,
+      details: JSON.stringify({ ref, supplierId: b.supplierId, paid: b.paid, sourceAccountCode: plan.sourceAccountCode, apAccountCode: plan.apAccountCode, totalWithVat: plan.totalWithVat, lineCount: b.lines.length }),
+    }).catch((e) => logger.error(e, "finance-journal vendor-invoice event failed"));
+
+    const [created] = await rawQuery<Record<string, unknown>>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, effectiveCompanyId],
+    );
+    res.status(201).json({ ...(created || { id: journalId }), idempotentReplay: alreadyExists });
+  } catch (err) {
+    handleRouteError(err, res, "Create vendor invoice error:");
   }
 });
 
