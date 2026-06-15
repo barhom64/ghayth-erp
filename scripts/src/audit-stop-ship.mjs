@@ -109,11 +109,17 @@ const RBAC_PATTERNS = [
 // `writePrintJob()` internally — so any route calling renderPrint IS
 // auditing, just through one level of indirection. `auditMutation` is a
 // thin wrapper around createAuditLog in businessHelpers.ts that pulls
-// scope from `req` and forwards — counts identically. Add new entries
-// as new audit pipelines land.
+// scope from `req` and forwards — counts identically. `auditFromRequest`
+// is the CANONICAL route-level audit writer (businessHelpers.ts:422) —
+// it forwards to createAuditLog with the full IGOC context columns and
+// is the helper routes are told to use "instead of calling createAuditLog
+// directly", so it must count too (org.ts/inboxConversations.ts/
+// myFieldTracking.ts/fleet-optimizer.ts audit exclusively through it).
+// Add new entries as new audit pipelines land.
 const AUDIT_PATTERNS = [
   /\bcreateAuditLog\s*\(/,
   /\bauditMutation\s*\(/,
+  /\bauditFromRequest\s*\(/,
   /\brenderPrint\s*\(/,
   /\bwritePrintJob\s*\(/,
 ];
