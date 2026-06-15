@@ -1,4 +1,4 @@
--- 293_fleet_rental_inspection_and_driver.sql
+-- 282_fleet_rental_inspection_and_driver.sql
 --
 -- WHAT: extend `fleet_rental_contracts` (migration 247) with the columns
 --       the R5/R7/R9 steps of the canonical rental flow need:
@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS idx_fleet_rental_contracts_driver
 -- ADD CONSTRAINT throws 42710 (duplicate_object) if the constraint already
 -- exists — which crash-loops the migration runner in production (it
 -- re-throws on failure, freezing the whole chain) when this file (or its
--- collided twin 282_*) re-runs over a DB that already has the constraint.
+-- collided twin 293_*) re-runs over a DB that already has the constraint.
 -- The guard below only adds when absent, so re-runs are harmless.
 DO $$
 BEGIN

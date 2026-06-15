@@ -34,6 +34,10 @@ import { join } from "node:path";
 
 const API_ROOT = join(import.meta.dirname!, "../..");
 const GATE_SRC = readFileSync(join(API_ROOT, "src/lib/fiscalPeriodLifecycle.ts"), "utf8");
+// FIN-PERIOD-CLOSE (#2250) — the pending-manual-JE count moved into the
+// aggregating coordinator; the gate now delegates to it and throws once on the
+// full blocker set. Pin the count query against the coordinator source.
+const COORD_SRC = readFileSync(join(API_ROOT, "src/lib/periodCloseCoordinator.ts"), "utf8");
 
 // Pure mirror of the gate decision: a period may close ONLY when zero unposted
 // manual journals fall inside its range. Returns the would-be outcome.
@@ -95,15 +99,18 @@ describe("Scenario 6 — Period close truth gate: refuses to close on an integri
 });
 
 describe("Scenario 6 — Period close gate: static contract (real gate, DB-bound)", () => {
-  it("the gate COUNTs unposted manual journals in the period date range", () => {
-    expect(GATE_SRC).toContain("COUNT(*)");
-    expect(GATE_SRC).toContain('"createdAt"::date BETWEEN $2 AND $3');
-    expect(GATE_SRC).toMatch(/"approvalStatus" IS NULL OR "approvalStatus" IN \('draft','pending_review'\)/);
-    expect(GATE_SRC).toContain('"isManual" = TRUE');
+  it("the coordinator COUNTs unposted manual journals in the period date range", () => {
+    // #2250 — the pending-manual-JE count now lives in the coordinator.
+    expect(COORD_SRC).toContain("COUNT(*)");
+    expect(COORD_SRC).toContain('"createdAt"::date BETWEEN $2 AND $3');
+    expect(COORD_SRC).toMatch(/"approvalStatus" IS NULL OR "approvalStatus" IN \('draft','pending_review'\)/);
+    expect(COORD_SRC).toContain('"isManual" = TRUE');
   });
 
-  it("REFUSES (throws ConflictError) when any pending manual JE exists in range", () => {
-    expect(GATE_SRC).toMatch(/if\s*\(pendingCount\s*>\s*0\)/);
+  it("REFUSES (throws ConflictError) when any blocker exists in range", () => {
+    // #2250 — the gate aggregates the full blocker set and throws ONCE when > 0.
+    expect(COORD_SRC).toMatch(/if\s*\(pendingCount\s*>\s*0\)/);
+    expect(GATE_SRC).toMatch(/if\s*\(blockers\.length\s*>\s*0\)/);
     expect(GATE_SRC).toContain("ConflictError");
     expect(GATE_SRC).toContain("لا يمكن إقفال الفترة");
   });

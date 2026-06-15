@@ -109,7 +109,12 @@ describe("TA-T18-VRP Phase 2 — backend route file", () => {
     //   2. Vehicle still exists + not deleted
     //   3. Driver (if any) still active
     expect(ROUTE).toMatch(/async function validateProposedAssignment\(/);
-    expect(ROUTE).toMatch(/SELECT id, status FROM transport_booking_lines/);
+    // Phase 3a extended the booking-line SELECT to also pull the
+    // pickup/delivery window — the shape changed from (id, status) to
+    // (id, bookingId, status, scheduledPickupAt, scheduledDeliveryAt)
+    // so the dispatch order can be committed with the window from the
+    // booking line itself (greedy Phase 1 doesn't pick windows).
+    expect(ROUTE).toMatch(/SELECT id, "bookingId", status,[\s\S]+?FROM transport_booking_lines/);
     expect(ROUTE).toMatch(/SELECT id FROM fleet_vehicles/);
     expect(ROUTE).toMatch(/SELECT id, COALESCE\(status, 'active'\) AS status FROM fleet_drivers/);
   });
@@ -120,12 +125,16 @@ describe("TA-T18-VRP Phase 2 — backend route file", () => {
     expect(ROUTE).toMatch(/rejected\.length === 0\s*\?\s*"approved"[\s\S]+?accepted\.length === 0\s*\?\s*"rejected"[\s\S]+?:\s*"partially_approved"/);
   });
 
-  it("Phase 2 does NOT directly INSERT into transport_dispatch_orders (advisory-only)", () => {
-    // Per the owner brief, the optimizer is ADVISORY. Phase 2 stops
-    // at validation; actually creating dispatch orders is Phase 3
-    // (which will route through the existing single-pair create
-    // path so every hard guard re-fires).
-    expect(ROUTE).not.toMatch(/INSERT INTO transport_dispatch_orders/);
+  it("approve commits dispatch orders through the same guard chain the single-pair route uses (Phase 3a)", () => {
+    // Phase 2 originally stopped at validation. Phase 3a (this PR)
+    // delivers what the owner brief described: approve materialises
+    // the plan. The new invariant is "the batch path runs the SAME
+    // guards as `POST /transport/dispatch-orders`" — its own static
+    // test (fleetOptimizerPhase3AutoDispatchStatic.test.ts) pins the
+    // detailed contract.
+    expect(ROUTE).toMatch(/INSERT INTO transport_dispatch_orders/);
+    expect(ROUTE).toMatch(/assertDriverEligibility\(/);
+    expect(ROUTE).toMatch(/assertDriverRest\(/);
   });
 
   it("reject requires a non-empty reason + refuses terminal runs", () => {

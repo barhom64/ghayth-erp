@@ -2,6 +2,8 @@ import { Link, useLocation } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
 // Phase A — HR performance on unified primitives.
@@ -42,6 +44,17 @@ export default function PerformancePage() {
     { label: "مكتملة", value: items.filter((i: any) => i.status === "completed").length, icon: Award, color: "text-purple-600 bg-purple-50" },
     { label: "قيد التقييم", value: items.filter((i: any) => i.status === "draft" || i.status === "in_progress").length, icon: Users, color: "text-orange-600 bg-orange-50" },
   ];
+
+  // HR-REV — التحليلات المشتقّة التي كانت في صفحة «تحليلات الأداء المتقدمة»
+  // المكرّرة (مسارها يرتدّ هنا) صارت تبويب «التحليلات»: نفس بيانات /hr/performance.
+  const distribution = [
+    { range: "ممتاز (4.5-5)", count: items.filter((p: any) => Number(p.overallScore) >= 4.5).length, color: "bg-status-success-surface0" },
+    { range: "جيد جداً (3.5-4.4)", count: items.filter((p: any) => Number(p.overallScore) >= 3.5 && Number(p.overallScore) < 4.5).length, color: "bg-status-info-surface0" },
+    { range: "جيد (2.5-3.4)", count: items.filter((p: any) => Number(p.overallScore) >= 2.5 && Number(p.overallScore) < 3.5).length, color: "bg-status-warning-surface0" },
+    { range: "مقبول (1.5-2.4)", count: items.filter((p: any) => Number(p.overallScore) >= 1.5 && Number(p.overallScore) < 2.5).length, color: "bg-orange-500" },
+    { range: "ضعيف (أقل من 1.5)", count: items.filter((p: any) => Number(p.overallScore) < 1.5).length, color: "bg-status-error-surface0" },
+  ];
+  const topPerformers = [...items].sort((a: any, b: any) => Number(b.overallScore || 0) - Number(a.overallScore || 0)).slice(0, 10);
 
   const columns: DataTableColumn<any>[] = [
     {
@@ -135,6 +148,13 @@ export default function PerformancePage() {
       <HrTabsNav />
       <KpiGrid items={kpis} />
 
+      <Tabs defaultValue="list" dir="rtl" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="list">التقييمات</TabsTrigger>
+          <TabsTrigger value="analytics">التحليلات</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="list" className="space-y-4">
       <AdvancedFilters
         config={{
           searchPlaceholder: "بحث بالاسم...",
@@ -175,6 +195,54 @@ export default function PerformancePage() {
         pageSize={20}
         onRowClick={(row) => navigate(`/hr/performance/${row.id}`)}
       />
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle className="text-base">توزيع التقييمات</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {distribution.map((d) => (
+                  <div key={d.range} className="flex items-center gap-3">
+                    <span className="text-sm w-40">{d.range}</span>
+                    <div className="flex-1 bg-surface-subtle rounded-full h-6 overflow-hidden">
+                      <div className={cn("h-full rounded-full", d.color)} style={{ width: `${items.length > 0 ? (d.count / items.length) * 100 : 0}%` }} />
+                    </div>
+                    <span className="text-sm font-medium w-8 text-start">{d.count}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">أفضل الموظفين أداءً</CardTitle></CardHeader>
+            <CardContent>
+              <DataTable
+                columns={[
+                  { key: "rank", header: "#", render: (_v, i) => (
+                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold", i < 3 ? "bg-status-warning-surface text-status-warning-foreground" : "bg-surface-subtle text-status-neutral-foreground")}>{i + 1}</div>
+                  ) },
+                  { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
+                  { key: "overallScore", header: "التقييم", sortable: true, render: (v) => (
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, j) => (
+                        <Star key={j} className={cn("w-4 h-4", j < Number(v.overallScore) ? "text-yellow-400 fill-yellow-400" : "text-gray-200")} />
+                      ))}
+                      <span className="ms-2 font-bold">{Number(v.overallScore).toFixed(1)}</span>
+                    </div>
+                  ) },
+                  { key: "period", header: "الفترة", sortable: true, render: (v) => <span className="text-muted-foreground">{v.period || "-"}</span> },
+                ] as DataTableColumn<any>[]}
+                data={topPerformers}
+                noToolbar
+                emptyMessage="لا توجد تقييمات"
+                pageSize={10}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </PageShell>
   );
 }

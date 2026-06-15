@@ -27,6 +27,19 @@ DELETE FROM inventory_count_items
    GROUP BY "countId", "productId"
  );
 
-ALTER TABLE inventory_count_items
-  ADD CONSTRAINT inventory_count_items_count_product_unique
-  UNIQUE ("countId", "productId");
+-- Idempotent: a bare ADD CONSTRAINT throws 42710 if the constraint already
+-- exists, which crash-loops the production migration runner and freezes the
+-- whole chain. Guard with a pg_constraint existence check so a re-run over a
+-- DB that already has the constraint is a harmless no-op.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'inventory_count_items_count_product_unique'
+      AND conrelid = 'inventory_count_items'::regclass
+  ) THEN
+    ALTER TABLE inventory_count_items
+      ADD CONSTRAINT inventory_count_items_count_product_unique
+      UNIQUE ("countId", "productId");
+  END IF;
+END $$;

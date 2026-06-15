@@ -15,12 +15,13 @@
  */
 
 import { useMemo, useState } from "react";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
-import { Activity, RefreshCw } from "lucide-react";
+import { Activity, RefreshCw, AlertCircle } from "lucide-react";
 
 interface UsageRow {
   callDate: string;
@@ -37,6 +38,19 @@ interface UsageResponse {
   };
 }
 
+// TA-GAP-09 Phase 3 — operator-set thresholds (daily/monthly caps).
+interface ThresholdRow {
+  id: number;
+  period: "daily" | "monthly";
+  callCountThreshold: number;
+  warningPct: number;
+  isActive: boolean;
+  notes: string | null;
+}
+interface ThresholdsResponse {
+  data: { rows: ThresholdRow[] };
+}
+
 const WINDOW_CHOICES = [7, 14, 30, 60, 90] as const;
 
 export default function MapsUsagePage() {
@@ -45,8 +59,24 @@ export default function MapsUsagePage() {
     ["fleet-maps-usage", String(days)],
     `/transport/maps-usage?days=${days}`,
   );
+  // TA-GAP-09 Phase 3 — fetch + edit caps.
+  const { data: thrData, refetch: refetchThr } = useApiQuery<ThresholdsResponse>(
+    ["fleet-maps-thresholds"],
+    `/transport/maps-usage/thresholds`,
+  );
+  const upsertMut = useApiMutation<unknown, { period: "daily" | "monthly"; callCountThreshold: number; warningPct?: number }>(
+    `/transport/maps-usage/thresholds`,
+    "PUT",
+    [["fleet-maps-thresholds"]],
+    { successMessage: "تم حفظ العتبة" },
+  );
+  const [editDaily, setEditDaily] = useState<string>("");
+  const [editMonthly, setEditMonthly] = useState<string>("");
 
   const rows = data?.data?.rows ?? [];
+  const thresholds = thrData?.data?.rows ?? [];
+  const dailyCap   = thresholds.find((t) => t.period === "daily");
+  const monthlyCap = thresholds.find((t) => t.period === "monthly");
 
   // Aggregate per-day totals across all (provider, apiSurface) pairs
   // for the header "Total in window" cards.
@@ -135,6 +165,88 @@ export default function MapsUsagePage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* TA-GAP-09 Phase 3 — operator-set caps + alert state */}
+      <Card className="mt-4">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <div className="font-medium text-sm">حدود الاستهلاك والتنبيهات</div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            عند تجاوز الاستهلاك للنسبة المحدّدة (افتراضيًّا 80%) يُطلق تنبيه «warning»،
+            وعند بلوغ السقف 100% يُطلق تنبيه «critical». الـcron يفحص كل 15 دقيقة.
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Daily cap */}
+            <div className="border rounded p-3 space-y-2">
+              <div className="text-xs text-muted-foreground">سقف يومي (call/day)</div>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder={dailyCap ? String(dailyCap.callCountThreshold) : "مثال: 1000"}
+                  value={editDaily}
+                  onChange={(e) => setEditDaily(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const n = Number(editDaily);
+                    if (!n || n < 1) return;
+                    upsertMut.mutate(
+                      { period: "daily", callCountThreshold: n },
+                      { onSuccess: () => { setEditDaily(""); refetchThr(); } },
+                    );
+                  }}
+                  disabled={upsertMut.isPending || !editDaily}
+                >
+                  حفظ
+                </Button>
+              </div>
+              {dailyCap && (
+                <div className="text-xs text-muted-foreground">
+                  السقف الحالي: {dailyCap.callCountThreshold.toLocaleString("ar-SA")} ·
+                  تنبيه عند {dailyCap.warningPct}%
+                </div>
+              )}
+            </div>
+            {/* Monthly cap */}
+            <div className="border rounded p-3 space-y-2">
+              <div className="text-xs text-muted-foreground">سقف شهري (آخر 30 يوم)</div>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  placeholder={monthlyCap ? String(monthlyCap.callCountThreshold) : "مثال: 25000"}
+                  value={editMonthly}
+                  onChange={(e) => setEditMonthly(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const n = Number(editMonthly);
+                    if (!n || n < 1) return;
+                    upsertMut.mutate(
+                      { period: "monthly", callCountThreshold: n },
+                      { onSuccess: () => { setEditMonthly(""); refetchThr(); } },
+                    );
+                  }}
+                  disabled={upsertMut.isPending || !editMonthly}
+                >
+                  حفظ
+                </Button>
+              </div>
+              {monthlyCap && (
+                <div className="text-xs text-muted-foreground">
+                  السقف الحالي: {monthlyCap.callCountThreshold.toLocaleString("ar-SA")} ·
+                  تنبيه عند {monthlyCap.warningPct}%
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Daily breakdown */}
       <Card className="mt-4">

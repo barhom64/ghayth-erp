@@ -66,9 +66,11 @@ describe("#1812 — booking → terminal-state cascade (shared helper)", () => {
 
 describe("#1812 / #12 — single source of truth, atomic at both call sites", () => {
   it("dispatch board delegates to the helper between the dispatch UPDATE and the tx return", () => {
-    // Same `tx` → the cascade is atomic with the dispatch-order update.
+    // Same `tx` → the cascade is atomic with the dispatch-order update. The
+    // window between the UPDATE and the helper is generous: the cancel branch
+    // also runs the top-down trip-cancel cascade in this span, all on `tx`.
     expect(BOOKINGS).toMatch(
-      /UPDATE transport_dispatch_orders[\s\S]{0,5000}cascadeDispatchToBooking\(tx, \{[\s\S]{0,2000}return \{ previous: order\.status, next: target \}/,
+      /UPDATE transport_dispatch_orders[\s\S]{0,7000}cascadeDispatchToBooking\(tx, \{[\s\S]{0,2000}return \{ previous: order\.status, next: target \}/,
     );
   });
 
@@ -82,5 +84,58 @@ describe("#1812 / #12 — single source of truth, atomic at both call sites", ()
     // "نقل المعتمرين متعدد المقاطع" scenario: total > 0 AND total === matching
     // before promoting the booking.
     expect(CASCADE).toMatch(/total > 0 && total === matching/);
+  });
+});
+
+// Booking-cancel policy — completing the top of the cancel hierarchy. The
+// bottom-up cascade (above) flips booking states FROM driver/dispatch actions;
+// the dispatch board's top-down cancel (#2463) releases a single order's trip.
+// This closes the last gap: cancelling the BOOKING itself. Because force-
+// cancelling a booking with a driver already en route is a strong action, the
+// behaviour is a configurable company preference (key fleet.bookings.cancelPolicy)
+// rather than hardcoded — "guard" (safe default) or "cascade".
+describe("booking-cancel policy (configurable top-down cancel)", () => {
+  it("resolves the company preference from the 3-level settings engine, default guard", () => {
+    expect(BOOKINGS).toMatch(/resolveSettings\(\s*["']fleet\.bookings\.cancelPolicy["']/);
+    // anything that isn't an explicit "cascade" opt-in stays on the safe guard.
+    expect(BOOKINGS).toMatch(/rawPolicy === "cascade" \? "cascade" : "guard"/);
+    // only fires when the booking actually transitions INTO cancelled.
+    expect(BOOKINGS).toMatch(/b\.status === "cancelled" && existing\.status !== "cancelled"/);
+  });
+
+  it("guard policy refuses the cancel while an active dispatch order exists", () => {
+    const block = BOOKINGS.match(/if \(policy === "guard"\) \{[\s\S]{0,900}/)?.[0] ?? "";
+    // counts only the LIVE dispatch states — terminal ones can't orphan anything.
+    expect(block).toMatch(/status IN \('pending', 'notified', 'accepted', 'executing'\)/);
+    expect(block).toMatch(/active > 0/);
+    expect(block).toMatch(/ConflictError/);
+    expect(block).toMatch(/لا يمكن إلغاء الحجز/);
+  });
+
+  it("cascade policy cancels orders → trips → lines → booking atomically", () => {
+    // The whole top-down cancel runs inside ONE withTransaction so a mid-cascade
+    // failure rolls back the booking flip too.
+    const block =
+      BOOKINGS.match(/\/\/ "cascade" — do the whole top-down[\s\S]{0,3200}bookingUpdateDone = true/)?.[0] ?? "";
+    expect(block).toMatch(/withTransaction\(async \(tx\)/);
+    // selects the active orders FOR UPDATE …
+    expect(block).toMatch(/FROM transport_dispatch_orders[\s\S]{0,200}FOR UPDATE/);
+    // … then per order: cancel it, end its nav session …
+    expect(block).toMatch(/UPDATE transport_dispatch_orders[\s\S]{0,120}status = 'cancelled'/);
+    expect(block).toMatch(/driver_navigation_sessions[\s\S]{0,120}status = 'cancelled'/);
+    // … reusing the SAME trip-cancel + resource-release helper as the board …
+    expect(block).toMatch(/cancelTripsForDispatchOrder\(tx, \{/);
+    expect(block).toMatch(/cascadeDispatchToBooking\(tx, \{[\s\S]{0,120}target: "cancelled"/);
+    // pending legs with no order are cancelled too; completed legs survive.
+    expect(block).toMatch(/UPDATE transport_booking_lines[\s\S]{0,220}status NOT IN \('completed', 'cancelled'\)/);
+    // the booking row itself is updated on the SAME tx client.
+    expect(block).toMatch(/tx\.query\(bookingUpdateSql, params\)/);
+  });
+
+  it("imports the shared helpers (no inline duplication of the cascade)", () => {
+    expect(BOOKINGS).toMatch(
+      /import \{ cascadeDispatchToBooking, cancelTripsForDispatchOrder \} from "\.\.\/lib\/transportDispatchCascade\.js"/,
+    );
+    expect(BOOKINGS).toMatch(/import \{ resolveSettings \} from "\.\.\/lib\/settings\.js"/);
   });
 });
