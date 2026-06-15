@@ -42,6 +42,7 @@ import { upsertSetting } from "../lib/settings.js";
 import {
   calculateCommissionForPlan,
   simulateCommission,
+  simulateCommissionAdHoc,
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
 import {
@@ -197,6 +198,53 @@ const updateCommissionPlanSchema = z.object({
 const simulateCommissionSchema = z.object({
   month: z.coerce.number({ required_error: "الشهر مطلوب" }),
   year: z.coerce.number({ required_error: "السنة مطلوبة" }),
+  // §5 of #1870 — what-if overrides. Were sent by the FE simulator
+  // form for months and silently ignored on the server (engine read
+  // actuals from the DB only). Each field falls back to the actual
+  // when undefined, so the existing month/year-only callers keep
+  // working unchanged.
+  totalMutamers: z.coerce.number().nonnegative().optional(),
+  avgProfitPerVisa: z.coerce.number().nonnegative().optional(),
+  avgSalePrice: z.coerce.number().nonnegative().optional(),
+  salesPercent: z.coerce.number().min(0).max(100).optional(),
+});
+
+// Ad-hoc simulation against an unsaved plan — same shape as the
+// persisted-plan endpoint but takes the plan + tiers inline so the
+// editor can drive the simulator in create mode (before the operator
+// has clicked "save"). Only the columns the engine actually reads
+// are required.
+const simulatePlanInlineSchema = z.object({
+  plan: z.object({
+    companyId: z.coerce.number().int().optional(),
+    seasonId: z.coerce.number().int(),
+    employeeId: z.coerce.number().int(),
+    commissionType: z.string(),
+    percentageRate: z.coerce.number().nullable().optional(),
+    fixedAmount: z.coerce.number().nullable().optional(),
+    conditionType: z.string().nullable().optional(),
+    minProfitPerVisa: z.coerce.number().nullable().optional(),
+    minSalesPercent: z.coerce.number().nullable().optional(),
+    minAvgPrice: z.coerce.number().nullable().optional(),
+    excludedMonths: z.array(z.coerce.number().int()).optional(),
+    tierUnit: z.string().optional(),
+    partialTiersAllowed: z.boolean().optional(),
+    assignmentId: z.coerce.number().int().nullable().optional(),
+    violationBlocksCommission: z.boolean().optional(),
+  }),
+  tiers: z.array(z.object({
+    fromCount: z.coerce.number().int().nonnegative(),
+    toCount: z.union([z.coerce.number().int().nonnegative(), z.null()]).optional(),
+    bonusPerUnit: z.coerce.number().nonnegative(),
+    isCumulative: z.boolean().optional(),
+    tierOrder: z.coerce.number().int().min(1),
+  })).default([]),
+  month: z.coerce.number(),
+  year: z.coerce.number(),
+  totalMutamers: z.coerce.number().nonnegative().optional(),
+  avgProfitPerVisa: z.coerce.number().nonnegative().optional(),
+  avgSalePrice: z.coerce.number().nonnegative().optional(),
+  salesPercent: z.coerce.number().min(0).max(100).optional(),
 });
 
 const generateInvoiceSchema = z.object({
@@ -1799,14 +1847,42 @@ router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "upd
 router.post("/commission-plans/:id/simulate", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const parsed = zodParse(simulateCommissionSchema.safeParse(req.body));
-    const { month, year } = parsed;
+    const { month, year, totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent } = parsed;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const result = await simulateCommission(id, month, year, scope.companyId);
+    const result = await simulateCommission(id, month, year, scope.companyId, {
+      totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent,
+    });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_commission_plans", entityId: id, after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(result);
   } catch (err) { handleRouteError(err, res, "Simulate commission"); }
+});
+
+// Simulate against an unsaved plan — for the editor's create-mode
+// simulator tab. Mirrors the persisted-plan endpoint but takes the
+// plan + tiers in the request body. No DB writes; no audit row (it's
+// what-if math, not a preview of a real plan).
+router.post("/commission-plans/simulate", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const parsed = zodParse(simulatePlanInlineSchema.safeParse(req.body));
+    const { plan, tiers, month, year, totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent } = parsed;
+    const scope = req.scope!;
+    // The engine's compute() reads companyId off the plan for its
+    // SQL stats queries; force the request scope's tenant so a
+    // cross-tenant id can't be slipped in via the body.
+    const planForEngine: any = { ...plan, companyId: scope.companyId };
+    const tiersForEngine: any = (tiers ?? []).map((t) => ({
+      ...t,
+      toCount: t.toCount ?? null,
+      isCumulative: t.isCumulative ?? false,
+    }));
+    const result = await simulateCommissionAdHoc(
+      planForEngine, tiersForEngine, month, year,
+      { totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent },
+    );
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Simulate commission (ad-hoc)"); }
 });
 
 router.post("/commission-plans/:id/calculate", authorize({ feature: "umrah", action: "create" }), async (req, res) => {

@@ -21,7 +21,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentMonthPaddedRiyadh, currentYearRiyadh } from "@/lib/formatters";
 import { ArrowRight, Plus, Save, Trash2, Calculator, AlertCircle } from "lucide-react";
 
 // Simulator schema. Its FormShell is independent because the
@@ -182,7 +182,15 @@ export default function UmrahCommissionPlanEditor() {
       notes: "",
     };
   })();
-  const remountKey = isEditMode ? (loadQ.data?.data?.id ?? "loading") : "new";
+  // Stable in edit mode once data arrives; in create mode it's just
+  // "new". The previous "loading" placeholder caused FormShell to
+  // first mount with empty defaults, then remount with the loaded
+  // plan when the data arrived — but PageStateWrapper above blocks
+  // the render anyway, so we never want the placeholder branch to
+  // fire. Using `String(planId)` keeps the key derivation entirely
+  // off `loadQ.data`, which made the form blank out when the query
+  // refetched. §5 of #1870.
+  const remountKey = isEditMode ? (planId ?? "loading") : "new";
 
   // Split into two static mutations — POST for create, PATCH for
   // edit — so the wiring audit can see each URL + method as a literal
@@ -227,24 +235,9 @@ export default function UmrahCommissionPlanEditor() {
   const [simResult, setSimResult] = useState<any>(null);
   const [simBusy, setSimBusy] = useState(false);
 
-  const runSim = async (values: SimForm) => {
-    if (!planRowId) {
-      toast({ variant: "destructive", title: "يرجى حفظ الخطة أولاً قبل التشغيل التجريبي" });
-      return;
-    }
-    setSimBusy(true);
-    try {
-      const res: any = await apiFetch(`/umrah/commission-plans/${planRowId}/simulate`, {
-        method: "POST",
-        body: JSON.stringify(values),
-      });
-      setSimResult(res?.data ?? res);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: err?.message ?? "تعذّر التشغيل التجريبي" });
-    } finally {
-      setSimBusy(false);
-    }
-  };
+  // Reset the simulator state when the plan switches (edit → another
+  // edit; otherwise stale numbers linger).
+  useEffect(() => { setSimResult(null); }, [planRowId]);
 
   const employees = employeesQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
@@ -325,35 +318,14 @@ export default function UmrahCommissionPlanEditor() {
             </TabsContent>
 
             <TabsContent value="simulator">
-              {/* Independent FormShell — its inputs aren't part of the plan. */}
               <Card>
                 <CardContent className="p-4 space-y-4">
-                  {!planRowId && (
-                    <div className="flex items-start gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded text-sm">
-                      <AlertCircle className="h-4 w-4 text-status-warning-foreground shrink-0 mt-0.5" />
-                      <span className="text-status-warning-foreground">يرجى حفظ الخطة أولاً قبل التشغيل التجريبي.</span>
-                    </div>
-                  )}
-                  <FormShell
-                    schema={simSchema}
-                    defaultValues={{
-                      totalMutamers: 0,
-                      avgProfitPerVisa: 0,
-                      salesPercent: 0,
-                      avgSalePrice: 0,
-                    }}
-                    submitLabel={simBusy ? "جاري التشغيل..." : "تشغيل المحاكاة"}
-                    onSubmit={async (values) => {
-                      await runSim(values);
-                    }}
-                  >
-                    <FormGrid cols={2}>
-                      <FormNumberField name="totalMutamers" label="عدد المعتمرين" />
-                      <FormNumberField name="avgProfitPerVisa" label="متوسط الربح / تأشيرة" />
-                      <FormNumberField name="salesPercent" label="نسبة المبيعات (%)" />
-                      <FormNumberField name="avgSalePrice" label="متوسط سعر البيع" />
-                    </FormGrid>
-                  </FormShell>
+                  <SimulatorTab
+                    planRowId={planRowId}
+                    simBusy={simBusy}
+                    setSimBusy={setSimBusy}
+                    setSimResult={setSimResult}
+                  />
 
                   {simResult && (
                     <div className="rounded border bg-muted/20 p-4 space-y-3">
@@ -430,7 +402,7 @@ function BasicTab({
         ]}
       />
       <FormTextField name="planName" label="اسم الخطة" required placeholder="مثال: خطة مندوب مبيعات 1447" />
-      <FormNumberField name="baseSalary" label="الراتب الأساسي" required />
+      <BaseSalaryField />
       <FormSelectField
         name="commissionType"
         label="نوع العمولة"
@@ -450,6 +422,180 @@ function BasicTab({
       )}
       <FormTextareaField name="notes" label="ملاحظات" rows={2} className="md:col-span-2" />
     </FormGrid>
+  );
+}
+
+// §5 of #1870 — the simulator runs in BOTH edit AND create mode.
+// Previously refused to run without a saved plan row, blocking
+// the operator from experimenting with payouts before committing.
+//
+// Two paths now:
+//   - planRowId present (edit + post-create) → POST to
+//     /commission-plans/:id/simulate (engine reads plan + tiers
+//     from the DB by id, what-if overrides honoured).
+//   - planRowId absent (create, pre-save) → POST to
+//     /commission-plans/simulate (no :id) with the LIVE form
+//     state as the plan body — read via useFormContext on the
+//     PARENT FormShell so we never miss a keystroke + don't
+//     need to lift any state.
+//
+// Today's month/year is used by default — the operator just
+// wants a quick what-if, not a date-specific roll-up.
+function SimulatorTab({
+  planRowId,
+  simBusy,
+  setSimBusy,
+  setSimResult,
+}: {
+  planRowId: number | undefined;
+  simBusy: boolean;
+  setSimBusy: (b: boolean) => void;
+  setSimResult: (r: any) => void;
+}) {
+  const { toast } = useToast();
+  // useFormContext binds to the PARENT FormShell — the simulator
+  // tab is rendered inside the same FormShell, so getValues()
+  // returns the live plan body.
+  const { getValues: getPlanValues } = useFormContext<PlanForm>();
+
+  const runSim = async (values: SimForm) => {
+    setSimBusy(true);
+    try {
+      // Riyadh-local month/year — the check:finance-period-drift
+      // guard rejects `new Date().getMonth()` for finance-impacting
+      // sites because Saudi operators wall-clock differs from UTC by
+      // 3h, which silently shifts the calculation month by a day.
+      const month = Number(currentMonthPaddedRiyadh());
+      const year = currentYearRiyadh();
+      let res: any;
+      if (planRowId) {
+        res = await apiFetch(`/umrah/commission-plans/${planRowId}/simulate`, {
+          method: "POST",
+          body: JSON.stringify({ month, year, ...values }),
+        });
+      } else {
+        const live = getPlanValues();
+        if (!live.employeeId || !live.seasonId) {
+          toast({
+            variant: "destructive",
+            title: "أكمل المعلومات الأساسية أولاً",
+            description: "اختر الموظف والموسم في تبويب «المعلومات الأساسية» ثم شغّل المحاكاة.",
+          });
+          return;
+        }
+        res = await apiFetch(`/umrah/commission-plans/simulate`, {
+          method: "POST",
+          body: JSON.stringify({
+            plan: {
+              seasonId: Number(live.seasonId),
+              employeeId: Number(live.employeeId),
+              commissionType: live.commissionType,
+              percentageRate: live.percentageRate ?? null,
+              fixedAmount: live.fixedAmount ?? null,
+              conditionType: live.conditionType ?? "none",
+              minProfitPerVisa: live.minProfitPerVisa ?? null,
+              minSalesPercent: live.minSalesPercent ?? null,
+              minAvgPrice: live.minAvgPrice ?? null,
+              excludedMonths: live.excludedMonths ?? [],
+              assignmentId: live.assignmentId ?? null,
+            },
+            tiers: (live.tiers ?? []).map((t) => ({
+              fromCount: Number(t.fromCount),
+              toCount: t.toCount === null || t.toCount === undefined ? null : Number(t.toCount),
+              bonusPerUnit: Number(t.bonusPerUnit),
+              isCumulative: !!t.isCumulative,
+              tierOrder: Number(t.tierOrder),
+            })),
+            month, year,
+            ...values,
+          }),
+        });
+      }
+      setSimResult(res?.data ?? res);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err?.message ?? "تعذّر التشغيل التجريبي" });
+    } finally {
+      setSimBusy(false);
+    }
+  };
+
+  return (
+    <>
+      {!planRowId && (
+        <div className="flex items-start gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded text-sm" data-testid="simulator-create-mode-hint">
+          <AlertCircle className="h-4 w-4 text-status-info-foreground shrink-0 mt-0.5" />
+          <span className="text-status-info-foreground">
+            وضع المحاكاة قبل الحفظ — يتم تشغيل المحاكاة على بيانات النموذج الحالية. احفظ الخطة لاحقاً لتسجيل النتيجة.
+          </span>
+        </div>
+      )}
+      <FormShell
+        schema={simSchema}
+        defaultValues={{
+          totalMutamers: 0,
+          avgProfitPerVisa: 0,
+          salesPercent: 0,
+          avgSalePrice: 0,
+        }}
+        submitLabel={simBusy ? "جاري التشغيل..." : "تشغيل المحاكاة"}
+        onSubmit={async (values) => {
+          await runSim(values);
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormNumberField name="totalMutamers" label="عدد المعتمرين" />
+          <FormNumberField name="avgProfitPerVisa" label="متوسط الربح / تأشيرة" />
+          <FormNumberField name="salesPercent" label="نسبة المبيعات (%)" />
+          <FormNumberField name="avgSalePrice" label="متوسط سعر البيع" />
+        </FormGrid>
+      </FormShell>
+    </>
+  );
+}
+
+// §5 of #1870 — auto-fill `baseSalary` from the selected HR
+// assignment. Was a manual `<FormNumberField name="baseSalary">`
+// that asked the operator to retype the salary HR already has on
+// file. Now watches assignmentId; on every change, pulls the
+// matching umrah_employee_assignment row's `salary` and updates
+// the form field via setValue (unless the operator has overridden
+// it manually — `dirty` flag preserves that).
+function BaseSalaryField() {
+  const { setValue, formState } = useFormContext<PlanForm>();
+  const employeeId = useWatch<PlanForm, "employeeId">({ name: "employeeId" });
+  const assignmentId = useWatch<PlanForm, "assignmentId">({ name: "assignmentId" });
+  const enabled = !!employeeId && employeeId > 0;
+  // Reuse the same query key as AssignmentField so react-query
+  // dedupes the request — only one fetch round-trip per employee.
+  const assignmentsQ = useApiQuery<{ data: any[] }>(
+    ["umrah-employee-assignments", String(employeeId ?? "")],
+    `/umrah/employees/${employeeId}/assignments`,
+    enabled,
+  );
+  const assignments = assignmentsQ.data?.data ?? [];
+  const selected = assignmentId
+    ? assignments.find((a: any) => String(a.id) === String(assignmentId))
+    : null;
+  useEffect(() => {
+    // Only auto-fill if (a) we found a matching assignment with a
+    // numeric salary, AND (b) the operator hasn't manually typed
+    // into baseSalary yet on this form session. Without the dirty
+    // check, every employee/assignment switch would clobber the
+    // operator's manual override.
+    if (selected && typeof selected.salary === "number" && !formState.dirtyFields.baseSalary) {
+      setValue("baseSalary", Number(selected.salary), { shouldDirty: false });
+    }
+  }, [selected?.id, selected?.salary, setValue, formState.dirtyFields.baseSalary]);
+  const hint = selected && typeof selected.salary === "number"
+    ? `مأخوذ تلقائياً من HR — تعيين #${selected.id}`
+    : enabled && assignments.length === 0
+      ? "لا يوجد تعيين HR — أدخل الراتب يدوياً"
+      : "اختر تعيين العمرة ليُملأ الراتب تلقائياً";
+  return (
+    <div className="space-y-1">
+      <FormNumberField name="baseSalary" label="الراتب الأساسي" required />
+      <p className="text-[11px] text-muted-foreground pe-1" data-testid="base-salary-hint">{hint}</p>
+    </div>
   );
 }
 

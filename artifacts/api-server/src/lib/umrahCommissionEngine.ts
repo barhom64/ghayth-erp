@@ -245,11 +245,31 @@ export async function calculateCommissionForPlan(
 // Simulate — read-only, no writes
 // ---------------------------------------------------------------------------
 
+/**
+ * Optional what-if inputs for the simulator. When any of these are
+ * provided, compute() uses them in place of the DB-derived actuals
+ * for that month — letting the operator answer "what would this
+ * plan pay if we sold X visas at Y profit?" without having to
+ * actually book the data. Undefined fields fall back to the actuals.
+ *
+ * Closes §5 of #1870 (operator-reported "المحاكي لا يعمل"). Without
+ * these overrides the simulator's four FE inputs were sent to the
+ * server but silently ignored — the engine read actuals only, so
+ * the result never reflected what the operator typed.
+ */
+export interface CommissionSimulationOverrides {
+  totalMutamers?: number;
+  avgProfitPerVisa?: number;
+  avgSalePrice?: number;
+  salesPercent?: number;
+}
+
 export async function simulateCommission(
   planId: number,
   month: number,
   year: number,
   companyId?: number,
+  overrides?: CommissionSimulationOverrides,
 ): Promise<CalculationResult> {
   const [plan] = await rawQuery<CommissionPlan>(
     `SELECT * FROM employee_commission_plans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -263,7 +283,30 @@ export async function simulateCommission(
   );
 
   const queryFn: QueryFn = (sql, params) => rawQuery(sql, params).then((rows) => ({ rows }));
-  return compute(queryFn, plan, tiers, month, year);
+  return compute(queryFn, plan, tiers, month, year, overrides);
+}
+
+/**
+ * Run the simulator against a plan the operator hasn't saved yet.
+ * Mirrors `simulateCommission` but takes the plan + tiers inline
+ * (from the editor form). The plan object only needs the fields
+ * compute() actually reads — companyId/employeeId/seasonId for the
+ * SQL stats, commissionType + percentageRate + fixedAmount for the
+ * payout formula, condition* for the gate check, excludedMonths,
+ * tierUnit/partialTiersAllowed.
+ *
+ * No persistence side-effects. The route guards with the same
+ * `umrah:list` permission `simulateCommission` uses.
+ */
+export async function simulateCommissionAdHoc(
+  plan: CommissionPlan,
+  tiers: CommissionTier[],
+  month: number,
+  year: number,
+  overrides?: CommissionSimulationOverrides,
+): Promise<CalculationResult> {
+  const queryFn: QueryFn = (sql, params) => rawQuery(sql, params).then((rows) => ({ rows }));
+  return compute(queryFn, plan, tiers, month, year, overrides);
 }
 
 // ---------------------------------------------------------------------------
@@ -276,6 +319,7 @@ async function compute(
   tiers: CommissionTier[],
   month: number,
   year: number,
+  overrides?: CommissionSimulationOverrides,
 ): Promise<CalculationResult> {
   const excludedMonths: number[] = Array.isArray(plan.excludedMonths) ? plan.excludedMonths : [];
   const isExcludedMonth = excludedMonths.includes(month);
@@ -295,9 +339,14 @@ async function compute(
     [plan.companyId, plan.seasonId, month, year, plan.employeeId]
   )).rows[0] ?? { total: 0, avg_profit: 0, avg_price: 0 };
 
-  const totalMutamers = Number(mutamerStats.total) || 0;
-  const avgProfitPerVisa = Number(mutamerStats.avg_profit) || 0;
-  const avgSalePrice = Number(mutamerStats.avg_price) || 0;
+  // What-if overrides — each field falls back to the DB-derived
+  // actual when undefined. The operator can override one input
+  // (e.g. "what if I sell 50 visas at the current avg profit?")
+  // without having to seed all four. §5 of #1870 fix: before
+  // this, the FE simulator inputs were sent + silently ignored.
+  const totalMutamers = overrides?.totalMutamers ?? (Number(mutamerStats.total) || 0);
+  const avgProfitPerVisa = overrides?.avgProfitPerVisa ?? (Number(mutamerStats.avg_profit) || 0);
+  const avgSalePrice = overrides?.avgSalePrice ?? (Number(mutamerStats.avg_price) || 0);
 
   const totalSalesRes = (await queryFn(
     `SELECT COALESCE(SUM("totalAmount"), 0)::numeric(12,2) AS total_sales
@@ -316,9 +365,9 @@ async function compute(
        AND ni."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $4)`,
     [plan.companyId, month, year, plan.employeeId]
   )).rows[0];
-  const salesPercent = totalCompanySales > 0
+  const salesPercent = overrides?.salesPercent ?? (totalCompanySales > 0
     ? Math.round((Number(employeeSalesRes?.emp_sales) / totalCompanySales) * 10000) / 100
-    : 0;
+    : 0);
 
   const { conditionMet, conditionDetails } = checkConditions(plan, avgProfitPerVisa, salesPercent);
 
