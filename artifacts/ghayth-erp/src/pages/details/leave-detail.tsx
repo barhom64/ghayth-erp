@@ -4,7 +4,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -292,7 +292,7 @@ export default function LeaveDetail() {
       actions={
         <>
           {leave && (
-            <EntityPrintButton
+            <PrintButton
               entityType="leave_request"
               entityId={leave.id ?? id}
              />

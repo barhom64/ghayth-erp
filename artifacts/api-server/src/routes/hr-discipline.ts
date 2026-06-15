@@ -15,7 +15,7 @@
 
 import { Router } from "express";
 import type { PoolClient } from "pg";
-import { HR_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -781,7 +781,7 @@ router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: 
 
     // authorisation: الموظف نفسه أو HR/GM/Owner
     const isOwnerOfMemo = scope.activeAssignmentId === memo.assignmentId;
-    const isHR = HR_ROLES.includes(scope.role);
+    const isHR = scopeCan(scope, "hr.discipline", "update");
     if (!isOwnerOfMemo && !isHR) {
       throw new ForbiddenError("لا تملك صلاحية تقديم التبرير على هذا المحضر");
     }
@@ -1107,7 +1107,7 @@ router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "
 
     // authorisation: صاحب المحضر نفسه أو HR/GM/Owner (مطابقة لمسار التبرير justify).
     const isOwnerOfMemo = scope.activeAssignmentId === memo.assignmentId;
-    const isHR = HR_ROLES.includes(scope.role);
+    const isHR = scopeCan(scope, "hr.discipline", "update");
     if (!isOwnerOfMemo && !isHR) {
       throw new ForbiddenError("لا تملك صلاحية تقديم استئناف على هذا المحضر");
     }
@@ -1385,7 +1385,7 @@ router.get("/auto-detection/settings", authorize({ feature: "hr.discipline", act
 router.put("/auto-detection/settings", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.discipline", "update")) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات الرصد التلقائي");
     }
     const body: Partial<AutoDetectionSettings> = zodParse(autoDetectionSettingsSchema.safeParse(req.body));
@@ -1414,7 +1414,7 @@ router.put("/auto-detection/settings", authorize({ feature: "hr.discipline", act
 router.post("/auto-detection/run", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.discipline", "update")) {
       throw new ForbiddenError("غير مصرح بتشغيل الرصد التلقائي");
     }
     const body = zodParse(autoDetectionRunSchema.safeParse(req.body));

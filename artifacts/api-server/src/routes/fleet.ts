@@ -24,6 +24,11 @@ import { registerObligation, markObligationMet, cancelObligation } from "../lib/
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { fleetEngine, hrEngine } from "../lib/engines/index.js";
+import {
+  computeDriverReputation,
+  loadDriverReputation,
+  recomputeAllDrivers,
+} from "../lib/fleet/driverReputation.js";
 import { z } from "zod";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
@@ -135,7 +140,7 @@ const createVehicleSchema = z.object({
 const createDriverSchema = z.object({
   name: z.string().min(1),
   phone: z.string().min(1),
-  licenseNumber: z.string().min(1),
+  licenseNumber: z.string().optional(),
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
@@ -160,13 +165,19 @@ const createDriverSchema = z.object({
     // Non-Saudi origin (gcc / international / temporary) → must carry iqamaNumber.
     if (!d.licenseOrigin) return true; // legacy / not yet specified
     if (d.licenseOrigin === "saudi") return !!d.nationalId;
-    return !!d.iqamaNumber;
+    // Non-Saudi must carry both an iqama AND a real license number
+    // (Saudi licenses use the national ID, so licenseNumber is optional there).
+    return !!d.iqamaNumber && !!d.licenseNumber;
   },
   (d) => ({
     message: d.licenseOrigin === "saudi"
       ? "الرخصة سعودية — رقم الهوية الوطنية مطلوب"
-      : "السائق غير سعودي — رقم الإقامة مطلوب",
-    path: d.licenseOrigin === "saudi" ? ["nationalId"] : ["iqamaNumber"],
+      : !d.iqamaNumber
+      ? "السائق غير سعودي — رقم الإقامة مطلوب"
+      : "السائق غير سعودي — رقم الرخصة مطلوب",
+    path: d.licenseOrigin === "saudi"
+      ? ["nationalId"]
+      : !d.iqamaNumber ? ["iqamaNumber"] : ["licenseNumber"],
   }),
 );
 
@@ -1436,6 +1447,90 @@ router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view"
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
+// TA-T18-DR Phase 1 — Driver Reputation Scoring.
+//
+//   GET  /drivers/:id/reputation              — read persisted breakdown
+//   POST /drivers/:id/recompute-reputation    — recompute one driver
+//   POST /drivers/reputation/recompute-all    — recompute every active driver
+//
+// Phase 1 is storage + compute + read API only. The engine integration
+// (using `reputationScore` as a scoring axis with rebalanced weights)
+// lands in a follow-up PR after this data has populated.
+router.get(
+  "/drivers/:id/reputation",
+  authorize({ feature: "fleet.vehicles", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const reputation = await loadDriverReputation(scope.companyId, id);
+      if (!reputation) throw new NotFoundError("السائق غير موجود");
+      res.json({ data: reputation });
+    } catch (err) {
+      handleRouteError(err, res, "Get driver reputation error:");
+    }
+  },
+);
+
+const recomputeOneSchema = z.object({
+  windowDays: z.coerce.number().int().min(7).max(365).optional(),
+});
+
+router.post(
+  "/drivers/:id/recompute-reputation",
+  authorize({ feature: "fleet.vehicles", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(recomputeOneSchema.safeParse(req.body ?? {}));
+      // Verify driver belongs to scope before doing the compute.
+      const [exists] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_drivers
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!exists) throw new NotFoundError("السائق غير موجود");
+      const reputation = await computeDriverReputation({
+        companyId: scope.companyId,
+        driverId: id,
+        windowDays: b.windowDays,
+      });
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "fleet_drivers", entityId: id,
+        after: { reputationScore: reputation.reputationScore, recomputed: true },
+      }).catch((e) => logger.error(e, "driver reputation audit failed"));
+      res.json({ data: reputation });
+    } catch (err) {
+      handleRouteError(err, res, "Recompute driver reputation error:");
+    }
+  },
+);
+
+router.post(
+  "/drivers/reputation/recompute-all",
+  authorize({ feature: "fleet.vehicles", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const b = zodParse(recomputeOneSchema.safeParse(req.body ?? {}));
+      const result = await recomputeAllDrivers({
+        companyId: scope.companyId,
+        windowDays: b.windowDays,
+      });
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "fleet_drivers", entityId: scope.companyId,
+        after: { bulkReputationRecompute: result },
+      }).catch((e) => logger.error(e, "bulk reputation audit failed"));
+      res.json({ data: result });
+    } catch (err) {
+      handleRouteError(err, res, "Bulk recompute reputation error:");
+    }
+  },
+);
+
 router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2548,12 +2643,14 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       },
     });
 
-    // Auto journal entry for maintenance cost
+    // #TA-T18 finance-boundary — completing maintenance no longer posts
+    // GL directly. It queues an EXPENSE candidate for the accountant, who
+    // materialises it (postMaintenanceGL runs then, in finance). Transport
+    // never touches the ledger; finance is the authority for the money.
     if (finalCost > 0) {
-      // Maintenance JE lands on the vehicle's branch, not the operator's.
-      // Pre-fix the cost JE used scope.branchId, so a vehicle assigned to
-      // Branch A but serviced by a session working Branch B silently
-      // booked the cost to Branch B and broke per-branch fleet P&L.
+      // The candidate (and the eventual JE) lands on the VEHICLE's branch,
+      // not the operator's — a vehicle on Branch A serviced from Branch B
+      // must still book to Branch A for correct per-branch fleet P&L.
       const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
         `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [m.vehicleId, scope.companyId]
@@ -2561,10 +2658,10 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const vehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const { fleetEngine } = await import("../lib/engines/index.js");
-      await fleetEngine.postMaintenanceGL(
+      await fleetEngine.createMaintenanceExpenseCandidate(
         { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id, vehicleId: m.vehicleId as number, totalCost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
-      ).catch((e: unknown) => logger.error(e, "Maintenance GL failed:"));
+        { id, vehicleId: m.vehicleId as number, cost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Maintenance expense candidate failed:"));
     }
 
     // Mark the scheduled obligation as met and register the next one

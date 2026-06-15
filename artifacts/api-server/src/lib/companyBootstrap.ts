@@ -297,6 +297,9 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "2160", name: "إيرادات مقبوضة مقدماً", nameEn: "Unearned Revenue", type: "liability", level: 3, parentCode: "2100" },
   { code: "2161", name: "إيجارات مقبوضة مقدماً", nameEn: "Unearned Rent", type: "liability", level: 4, parentCode: "2160" },
   { code: "2170", name: "تأمينات وضمانات من العملاء", nameEn: "Customer Deposits", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2155", name: "عمولات مستحقة", nameEn: "Commissions Payable", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2156", name: "ذمم مُلّاك العقارات", nameEn: "Property Owners Payable", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2157", name: "غرامات مرورية مستحقة", nameEn: "Traffic Fines Payable", type: "liability", level: 3, parentCode: "2100" },
 
   // 22xx الالتزامات طويلة الأجل
   { code: "2200", name: "الالتزامات طويلة الأجل", nameEn: "Long-Term Liabilities", type: "liability", level: 2, parentCode: "2000", allowPosting: false },
@@ -337,6 +340,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "4920", name: "أرباح بيع أصول ثابتة", nameEn: "Gain on Sale of Assets", type: "revenue", level: 3, parentCode: "4900" },
   { code: "4930", name: "إيرادات متنوعة", nameEn: "Miscellaneous Income", type: "revenue", level: 3, parentCode: "4900" },
   { code: "4940", name: "تخفيضات وخصومات مكتسبة", nameEn: "Discounts Earned", type: "revenue", level: 3, parentCode: "4900" },
+  { code: "4950", name: "أرباح فروق عملة", nameEn: "FX Revaluation Gain", type: "revenue", level: 3, parentCode: "4900" },
 
   // ============ 5xxx المصروفات ============
   { code: "5000", name: "المصروفات", nameEn: "Expenses", type: "expense", level: 1, allowPosting: false },

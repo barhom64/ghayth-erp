@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -2194,7 +2194,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
-            <EntityPrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
+            <PrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
             {id && <EntityPnlButton entityType="employee" entityId={Number(id)} />}
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>

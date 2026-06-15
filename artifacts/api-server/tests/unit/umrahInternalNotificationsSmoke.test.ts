@@ -72,7 +72,12 @@ describe("umrahInternalNotifications — three documented helpers", () => {
 describe("cron handlers route through the internal helpers, not SMS", () => {
   it("visa expiry cron imports notifyInternalVisaExpiring (not notifyVisaExpiringSoon)", () => {
     // The legacy SMS import is gone; the internal helper takes over.
-    expect(CRON).toMatch(/notifyInternalVisaExpiring \} = await import\("\.\/umrahInternalNotifications\.js"\)/);
+    // U-17-P4 added a sibling import for resolveInternalRecipients in
+    // the same destructure, so the regex tolerates an optional
+    // comma-separated second binding before the closing brace.
+    expect(CRON).toMatch(
+      /notifyInternalVisaExpiring(?:,\s*\w+)?\s*\} = await import\("\.\/umrahInternalNotifications\.js"\)/,
+    );
   });
 
   it("departure cron renamed: umrah_departure_reminder_notify (no _sms)", () => {
