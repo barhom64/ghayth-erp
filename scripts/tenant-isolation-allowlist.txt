@@ -9,8 +9,6 @@ routes/admin-observability.ts:cron_logs
 routes/admin.ts:cron_jobs
 routes/admin.ts:cron_logs
 routes/automation.ts:cron_jobs
-routes/bi.ts:alert_fatigue_settings
-routes/bi.ts:notifications
 # careersPortal.ts:job_postings — public careers portal. The flagged reads
 # are an applicant viewing their OWN applications (JOIN job_postings, scoped by
 # applicantAccountId / application id), not a company session. Adding companyId
