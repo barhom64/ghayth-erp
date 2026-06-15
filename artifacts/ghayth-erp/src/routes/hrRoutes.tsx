@@ -18,7 +18,10 @@ const PerformanceCreate = lazy(() => import("@/pages/create/hr/performance-creat
 const Training = lazy(() => import("@/pages/hr/training"));
 const TrainingDetail = lazy(() => import("@/pages/hr/training-detail"));
 const TrainingCreate = lazy(() => import("@/pages/create/hr/training-create"));
-const Organization = lazy(() => import("@/pages/hr/organization"));
+// HR-REV-2 (ADR-HR-02) — `org-tree` هو الهيكل التنظيمي الموحّد القانوني؛
+// /hr/organization و /hr/organization/structure أُبقِيا redirect إليه (لا 404
+// للروابط القديمة). صفحتا العرض المكرّرتان (مجرّد KPIs وبطاقات) أُزيلتا
+// (retire) لأن org-tree يُغنيهما، وaudit:routes يمنع الصفحات اليتيمة.
 const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
 const RecruitmentCreate = lazy(() => import("@/pages/create/hr/recruitment-create"));
 const JobDetail = lazy(() => import("@/pages/hr/job-detail"));
@@ -52,7 +55,7 @@ const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
-const OrganizationStructure = lazy(() => import("@/pages/hr/organization-structure"));
+// (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
 const PerformanceAdvanced = lazy(() => import("@/pages/hr/performance-advanced"));
 const RecruitmentAdvanced = lazy(() => import("@/pages/hr/recruitment-advanced"));
 const TrainingAdvanced = lazy(() => import("@/pages/hr/training-advanced"));
@@ -154,8 +157,8 @@ export const hrRoutes = [
   { path: "/hr/training/create", component: TrainingCreate, subKey: "training" },
   { path: "/hr/training/advanced", component: redirectTo("/hr/training"), subKey: "training" },
   { path: "/hr/training/:id", component: TrainingDetail, subKey: "training" },
-  { path: "/hr/organization", component: Organization, subKey: "organization" },
-  { path: "/hr/organization/structure", component: OrganizationStructure, subKey: "organization" },
+  { path: "/hr/organization", component: redirectTo("/hr/org-tree"), subKey: "organization" },
+  { path: "/hr/organization/structure", component: redirectTo("/hr/org-tree"), subKey: "organization" },
   { path: "/hr/recruitment", component: Recruitment, subKey: "recruitment" },
   { path: "/hr/recruitment/create", component: RecruitmentCreate, subKey: "recruitment" },
   { path: "/hr/recruitment/applicants/create", component: ApplicantsCreate, subKey: "recruitment" },
