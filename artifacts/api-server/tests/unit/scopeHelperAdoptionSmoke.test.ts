@@ -136,6 +136,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // (companyId, id) — no list cascade where buildScopedWhere would add
   // branch/department filtering. Manual companyId scoping is correct here.
   "transport-billing-candidates.ts",
+  // transport-calendar.ts: TR-022 unified transport calendar — per-day
+  // COUNT roll-ups keyed on (companyId, date) across 5 layers, mirroring
+  // calendar.ts / umrah-entities.ts. Aggregate shape, not a list cascade —
+  // buildScopedWhere has no branch/department filter to add.
+  "transport-calendar.ts",
   // transport-bookings.ts: #1733 Booking + Dispatch layer. List queries
   // filter by (companyId, status / customer / date window) — buildScopedWhere
   // would unnecessarily branch-cascade. The booking lookup is by id keyed on
@@ -264,9 +269,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: routes/finance-memory.ts (financial-memory
       // foundation) — point-lookup/upsert CRUD keyed by (companyId, …),
       // allowlisted above with justification (mirrors parties.ts/org.ts).
-      total: 120,
+      // +1 total/manualOnly: TR-022 routes/transport-calendar.ts — unified
+      // transport calendar aggregate keyed on (companyId, date); allowlisted
+      // like calendar.ts / umrah-entities.ts (no list-cascade branch filter).
+      total: 121,
       helperUsers: 39,
-      manualOnly: 78,
+      manualOnly: 79,
     });
   });
 });

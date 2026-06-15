@@ -28,16 +28,7 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { PromptDialog } from "@/components/shared/prompt-dialog";
 import { useAppContext } from "@/contexts/app-context";
 
@@ -403,29 +394,17 @@ export default function EmployeeActivationPage() {
         pageSize={20}
       />
 
-      {/* Activate: no reason field, plain confirmation. */}
-      <AlertDialog
+      {/* Activate: no reason field, plain confirmation. GAP_MATRIX P1 UI-unification §6.2 */}
+      <ConfirmActionDialog
         open={pending?.action === "activate"}
         onOpenChange={(open) => { if (!open) setPending(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{cfg?.title}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pending && cfg?.description(pending.employee.name)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={lifecyclePending}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); confirmActivate(); }}
-              disabled={lifecyclePending}
-            >
-              {lifecyclePending ? "جاري التنفيذ..." : cfg?.confirmLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        variant="confirm"
+        title={cfg?.title ?? ""}
+        description={pending && cfg ? cfg.description(pending.employee.name) : ""}
+        confirmLabel={lifecyclePending ? "جاري التنفيذ..." : (cfg?.confirmLabel ?? "تأكيد")}
+        pending={lifecyclePending}
+        onConfirm={confirmActivate}
+      />
 
       {/* Suspend / Terminate: capture a required reason via PromptDialog. */}
       <PromptDialog
