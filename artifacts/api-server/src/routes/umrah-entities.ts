@@ -6415,4 +6415,130 @@ router.get(
   },
 );
 
+// ─────────────────────────────────────────────────────────────────────────────
+// U-19-P6 — Recovery hub aggregate (read-only)
+//
+// One operator screen that surfaces every stuck stage of the umrah
+// journey in a single response. Helps an operator triage what to
+// rescue first instead of opening 4 different pages.
+//
+// Buckets:
+//   1. Imports with stuck unlinked rows — batches that ran but still
+//      have pilgrims with groupId IS NULL.
+//   2. Sub-agents waiting to be linked — sub-agents with NO clientId.
+//   3. Groups uninvoiced > 7 days — groups whose pilgrims exist but
+//      no sales invoice has been issued.
+//   4. Invoices unpaid > 30 days — sales invoices past the 30-day
+//      window with paidAmount < total.
+//
+// READ-ONLY. Tenant-scoped. No writes. Same shape style as the
+// journey helpers (P1/P1b) so the FE recovery-hub page can render
+// a uniform card grid.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/reports/recovery-hub",
+  authorize({ feature: "umrah", action: "list" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+
+      // Two operator-tunable thresholds. Both are bound by Number()
+      // so a string like ?uninvoicedDays=foo doesn't trickle into the
+      // SQL — falls back to the default.
+      const uninvoicedDays = Number(req.query.uninvoicedDays) > 0
+        ? Number(req.query.uninvoicedDays)
+        : 7;
+      const unpaidDays = Number(req.query.unpaidDays) > 0
+        ? Number(req.query.unpaidDays)
+        : 30;
+
+      const [
+        stuckImports,
+        unlinkedSubAgents,
+        uninvoicedGroups,
+        unpaidInvoices,
+      ] = await Promise.all([
+        rawQuery<{ count: string }>(
+          // Pilgrims attributed to a sub-agent / agent but never
+          // assigned to a group. The U-08 recovery surface handles
+          // resolution one-by-one; this is just the count.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "groupId" IS NULL
+              AND "subAgentId" IS NOT NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId],
+        ),
+        rawQuery<{ count: string }>(
+          // Sub-agents created but never wired to a client. Same shape
+          // as the sub-agents/:id/journey "linked" check.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_sub_agents
+            WHERE "companyId" = $1
+              AND "clientId" IS NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId],
+        ),
+        rawQuery<{ count: string }>(
+          // Groups whose pilgrims exist but no sales invoice covers
+          // them. groupRefs uses the same LIKE pattern as the
+          // journey helpers so the row sets stay consistent.
+          // The 7-day threshold is anchored on g."createdAt".
+          `SELECT COUNT(DISTINCT g.id)::text AS count
+             FROM umrah_groups g
+             JOIN umrah_pilgrims p
+               ON p."groupId" = g.id
+              AND p."companyId" = g."companyId"
+              AND p."deletedAt" IS NULL
+            WHERE g."companyId" = $1
+              AND g."deletedAt" IS NULL
+              AND g."createdAt" < NOW() - ($2 || ' days')::interval
+              AND NOT EXISTS (
+                SELECT 1 FROM umrah_sales_invoices si
+                 WHERE si."companyId" = g."companyId"
+                   AND si."deletedAt" IS NULL
+                   AND si."groupRefs" LIKE '%' || g.id || '%'
+              )`,
+          [scope.companyId, uninvoicedDays],
+        ),
+        rawQuery<{ count: string; total: string }>(
+          // Sales invoices past unpaidDays with paidAmount < total.
+          // Drafts excluded — operator's mental model is "money I
+          // expected but never landed".
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM(COALESCE(total, 0) - COALESCE("paidAmount", 0)), 0)::text AS total
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "deletedAt" IS NULL
+              AND status NOT IN ('draft', 'void')
+              AND "createdAt" < NOW() - ($2 || ' days')::interval
+              AND COALESCE("paidAmount", 0) < COALESCE(total, 0)`,
+          [scope.companyId, unpaidDays],
+        ),
+      ]);
+
+      res.json(
+        maskFields(req, {
+          thresholds: {
+            uninvoicedDays,
+            unpaidDays,
+          },
+          buckets: {
+            stuckImports: Number(stuckImports[0]?.count ?? 0),
+            unlinkedSubAgents: Number(unlinkedSubAgents[0]?.count ?? 0),
+            uninvoicedGroups: Number(uninvoicedGroups[0]?.count ?? 0),
+            unpaidInvoices: {
+              count: Number(unpaidInvoices[0]?.count ?? 0),
+              outstandingTotal: Number(unpaidInvoices[0]?.total ?? 0),
+            },
+          },
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Recovery-hub aggregate");
+    }
+  },
+);
+
 export default router;
