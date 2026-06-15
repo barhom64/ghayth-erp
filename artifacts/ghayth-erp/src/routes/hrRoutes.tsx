@@ -66,7 +66,9 @@ const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 // (ViolationsManagement أُزيل — قائمة المخالفات الخام + الاعتماد + التحليل صارت
 // تبويب «المخالفات الخام» داخل /hr/violations، و/hr/violations/management يُعاد
 // توجيهه إليها. HR-REV-7)
-const ShiftsManagement = lazy(() => import("@/pages/hr/shifts-management"));
+// (ShiftsManagement أُزيل — نموذج إسناد الموظف لوردية صار في تبويب «التعيينات»
+// بصفحة /hr/shifts (كان التبويب للعرض فقط)، والمسار /hr/shifts/management يُعاد
+// توجيهه إليها. HR-REV)
 const ApplicationList = lazy(() => import("@/pages/hr/application-list"));
 const Evaluation360 = lazy(() => import("@/pages/hr/evaluation-360"));
 const Evaluation360Create = lazy(() => import("@/pages/create/hr/evaluation-360-create"));
