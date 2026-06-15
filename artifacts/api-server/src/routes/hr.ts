@@ -63,7 +63,13 @@ import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
-import { PR_APPROVAL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES } from "../lib/rbacCatalog.js";
+// PR_APPROVAL_ROLES + BRANCH_GM_ROLES are deliberately RETAINED (HR-REV-1 #1):
+// they encode org-POSITION / data-scope logic (the receiving branch manager;
+// branch-vs-self data windows; approval-chain stage role matching), NOT a
+// capability that RBAC grants express — converting them to scopeCan would
+// break separation of duties (e.g. let any hr.exit:update holder "receive" a
+// transfer). Only capability gates were migrated to scopeCan.
+import { PR_APPROVAL_ROLES, BRANCH_GM_ROLES } from "../lib/rbacCatalog.js";
 import { scopeCan } from "../lib/rbac/authzEngine.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 
@@ -4245,7 +4251,7 @@ router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organizat
     const id = parseId(req.params.id, "id");
     const { approved, reason } = zodParse(approvalRequestDecisionSchema.safeParse(req.body ?? {}));
 
-    if (!OPS_CLOSE_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.organization", "approve")) {
       throw new ForbiddenError("غير مصرح بالموافقة أو الرفض");
     }
 
