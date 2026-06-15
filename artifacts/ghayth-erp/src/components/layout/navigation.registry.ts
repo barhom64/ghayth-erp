@@ -293,7 +293,7 @@ export const allNavSections: NavSection[] = [
       { label: "اللوحات والإقفال", path: "/finance", icon: BarChart3, module: "finance", children: [
         { label: "لوحة المالية", path: "/finance", icon: BarChart3 },
         { label: "مركز سير العمل المالي", path: "/finance/workflows-hub", icon: Sparkles },
-        { label: "CFO Cockpit", path: "/finance/cfo-cockpit", icon: BarChart3 },
+        { label: "لوحة المدير المالي", path: "/finance/cfo-cockpit", icon: BarChart3 },
         { label: "فحص الإغلاق اليومي", path: "/finance/daily-close-checklist", icon: ListChecks },
         { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart },
       ]},
@@ -325,7 +325,6 @@ export const allNavSections: NavSection[] = [
         { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
         { label: "السندات", path: "/finance/vouchers", icon: FileText },
         { label: "المصروفات", path: "/finance/expenses", icon: Wallet },
-        { label: "مصروفات متعددة البنود", path: "/finance/expenses/multi-line", icon: Layers },
         { label: "اعتماد مصاريف بالجملة", path: "/finance/expense-bulk-approvals", icon: CheckSquare },
         { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
         { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
@@ -362,7 +361,7 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
         { label: "تقويم النقدية", path: "/finance/cash-calendar", icon: Calendar },
-        { label: "13-Week Cash", path: "/finance/cash-13week", icon: TrendingUp },
+        { label: "توقعات النقد (13 أسبوع)", path: "/finance/cash-13week", icon: TrendingUp },
         { label: "حاسبة الوضع النقدي", path: "/finance/cash-position-calculator", icon: Calculator },
       ]},
       { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
@@ -389,7 +388,7 @@ export const allNavSections: NavSection[] = [
       { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
         { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
-        { label: "Cost Center P&L", path: "/finance/cost-center-pnl", icon: BarChart3 },
+        { label: "قائمة الدخل حسب مركز التكلفة", path: "/finance/cost-center-pnl", icon: BarChart3 },
         { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
       ]},
@@ -410,7 +409,7 @@ export const allNavSections: NavSection[] = [
         { label: "P&L مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
         { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
-        { label: "Y/Y Comparison", path: "/finance/reports/yoy", icon: BarChart2 },
+        { label: "المقارنة السنوية (سنة/سنة)", path: "/finance/reports/yoy", icon: BarChart2 },
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
         { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
         { label: "محفظة ربحية المشاريع", path: "/finance/project-portfolio", icon: BarChart2 },
@@ -454,7 +453,6 @@ export const allNavSections: NavSection[] = [
         { label: "تقادم الذمم", path: "/finance/ar-aging", icon: Clock },
         { label: "متابعة Dunning", path: "/finance/dunning", icon: Bell },
         { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
-        { label: "الديون المشكوك بها", path: "/finance/bad-debt-provision", icon: ShieldAlert },
         { label: "الديون المعدومة", path: "/finance/bad-debt", icon: ShieldAlert },
       ]},
       // F6 (audit) — العملات الأجنبية: rates + revaluation + history في
