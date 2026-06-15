@@ -8015,7 +8015,9 @@ CREATE TABLE public.employee_commission_plans (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
-    version integer DEFAULT 1 NOT NULL
+    version integer DEFAULT 1 NOT NULL,
+    "agentId" integer,
+    "subAgentId" integer
 );
 
 
