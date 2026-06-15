@@ -376,7 +376,8 @@ export const financeRoutes = [
   { path: "/finance/custodies/:id", component: CustodyDetail },
   // GAP_MATRIX P1 — v1 is a duplicate of v2; redirect so only one URL is canonical.
   { path: "/finance/fiscal-periods", component: redirectTo("/finance/fiscal-periods-v2") },
-  { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2 },
+  // GAP_MATRIX P0 — fiscal period management changes financial reporting boundaries; gate at 70.
+  { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2, minRoleLevel: 70 },
   { path: "/finance/period-close-preflight", component: PeriodClosePreflight },
   { path: "/finance/salary-advances", component: SalaryAdvances },
   { path: "/finance/salary-advances/:id", component: SalaryAdvanceDetail },
@@ -398,11 +399,12 @@ export const financeRoutes = [
   { path: "/finance/fixed-assets/:id", component: FixedAssetDetail },
   { path: "/finance/inventory-costing", component: InventoryCosting },
   { path: "/finance/bank-guarantees", component: BankGuarantees },
-  { path: "/finance/journal-manual", component: JournalManual },
-  { path: "/finance/journal-manual/create", component: JournalManualCreate },
-  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates },
-  { path: "/finance/journal/reverse", component: JournalReversal },
-  { path: "/finance/journal-manual/:id", component: JournalManualDetail },
+  // GAP_MATRIX P0 — manual journals touch the GL directly; gate at 70 (managers).
+  { path: "/finance/journal-manual", component: JournalManual, minRoleLevel: 70 },
+  { path: "/finance/journal-manual/create", component: JournalManualCreate, minRoleLevel: 70 },
+  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates, minRoleLevel: 70 },
+  { path: "/finance/journal/reverse", component: JournalReversal, minRoleLevel: 70 },
+  { path: "/finance/journal-manual/:id", component: JournalManualDetail, minRoleLevel: 70 },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
@@ -416,13 +418,15 @@ export const financeRoutes = [
   { path: "/finance/umrah-season-portfolio", component: UmrahSeasonPortfolio },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
-  { path: "/finance/opening-balances", component: OpeningBalances },
-  { path: "/finance/opening-balances/create", component: OpeningBalancesCreate },
+  // GAP_MATRIX P0 — opening balances are a one-time GL adjustment; gate at 70.
+  { path: "/finance/opening-balances", component: OpeningBalances, minRoleLevel: 70 },
+  { path: "/finance/opening-balances/create", component: OpeningBalancesCreate, minRoleLevel: 70 },
   { path: "/finance/recurring-journals", component: RecurringJournals },
   { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
-  { path: "/finance/year-end-close", component: YearEndClose },
+  // GAP_MATRIX P0 — year-end close is irreversible; gate at 70.
+  { path: "/finance/year-end-close", component: YearEndClose, minRoleLevel: 70 },
   { path: "/finance/treasury", component: Treasury },
   { path: "/finance/treasury/transfer", component: AccountTransfer },
   // Phase D — non-colliding routes from the enterprise-hardening branch

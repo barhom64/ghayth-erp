@@ -241,7 +241,13 @@ const RULES = [
       || file.endsWith("/components/shared/entity-print.tsx")
       || file.includes("/components/print-layout") // legacy, type-only export
       || file.endsWith("/components/page-shell.tsx") // imports types from print-layout
-      || file.endsWith("/lib/branch-utils.ts"),
+      || file.endsWith("/lib/branch-utils.ts")
+      // GAP_MATRIX P0 — BI analytics dashboards (recharts) cannot use /print/render
+      // because content is client-rendered. These pages call logClientPrint() BEFORE
+      // window.print() to record the audit event in print_jobs, satisfying the audit
+      // requirement while keeping the visual dashboard intact.
+      || file.endsWith("/pages/bi-admin-reports.tsx")
+      || file.endsWith("/pages/bi-operations.tsx"),
     // Match direct PDF/print generation calls that should go through
     // the Print Engine instead. The Print Platform decision (Phase 0 of
     // docs/architecture/print-platform.md) requires that every PDF,

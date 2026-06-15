@@ -154,7 +154,8 @@ const createProjectSchema = z.object({
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+// GAP_MATRIX P0 — fiscal period management; gate at 70 to match close/open mutations.
+financeHardeningRouter.get("/fiscal-periods-v2", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -557,7 +558,8 @@ financeHardeningRouter.post("/journal-manual", requireMinLevel(70), authorize({ 
   }
 });
 
-financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+// GAP_MATRIX P0 — manual journals expose GL entries; gate at 70 to match mutations.
+financeHardeningRouter.get("/journal-manual", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
@@ -589,7 +591,7 @@ financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hard
   }
 });
 
-financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/journal-manual/:id", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
