@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import {
@@ -162,61 +162,25 @@ export default function UmrahTransportReport() {
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          {rows.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-12 text-center" data-testid="transport-empty">
-              لا طلبات نقل تطابق الفلاتر.
-            </p>
-          ) : (
-            <table className="w-full text-sm" data-testid="transport-table">
-              <thead className="bg-muted/40">
-                <tr>
-                  <th className="p-2 text-start">رقم الطلب</th>
-                  <th className="p-2 text-start">المجموعة</th>
-                  <th className="p-2 text-start">الوكيل</th>
-                  <th className="p-2 text-start">المسار</th>
-                  <th className="p-2 text-start">التاريخ</th>
-                  <th className="p-2 text-end">عدد الركاب</th>
-                  <th className="p-2 text-start">الرحلة</th>
-                  <th className="p-2 text-start">الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const tone = STATUS_TONE[r.status] ?? STATUS_TONE.draft;
-                  return (
-                    <tr key={r.bookingId} className="border-t hover:bg-muted/20" data-testid={`transport-row-${r.bookingId}`}>
-                      <td className="p-2 font-mono text-xs">{r.bookingNumber}</td>
-                      <td className="p-2">
-                        {r.groupId ? (
-                          <Link href={`/umrah/groups/${r.groupId}`} className="text-blue-600 hover:underline">
-                            {r.groupName ?? r.nuskGroupNumber ?? `#${r.groupId}`}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="p-2">
-                        {r.agentId ? (
-                          <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline">
-                            {r.agentName ?? `#${r.agentId}`}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="p-2 text-xs">
-                        {r.fromLocation} ← {r.toLocation}
-                      </td>
-                      <td className="p-2 text-xs">{r.requestedPickupDate ?? "—"}</td>
-                      <td className="p-2 text-end font-mono">{r.passengerCount ?? "—"}</td>
-                      <td className="p-2 text-xs">{r.flightNumber ?? "—"}</td>
-                      <td className="p-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>
-                          {STATUS_LABEL_AR[r.status] ?? r.status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+          <div data-testid="transport-empty">
+          <DataTable<TransportRow>
+            data={rows}
+            rowKey={(r) => String(r.bookingId)}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا طلبات نقل تطابق الفلاتر."
+            columns={[
+              { key: "bookingNumber", header: "رقم الطلب", className: "font-mono text-xs" },
+              { key: "groupId", header: "المجموعة", render: (r) => r.groupId ? <Link href={`/umrah/groups/${r.groupId}`} className="text-blue-600 hover:underline">{r.groupName ?? r.nuskGroupNumber ?? `#${r.groupId}`}</Link> : "—" },
+              { key: "agentId", header: "الوكيل", render: (r) => r.agentId ? <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline">{r.agentName ?? `#${r.agentId}`}</Link> : "—" },
+              { key: "fromLocation", header: "المسار", render: (r) => <span className="text-xs">{r.fromLocation} ← {r.toLocation}</span> },
+              { key: "requestedPickupDate", header: "التاريخ", render: (r) => <span className="text-xs">{r.requestedPickupDate ?? "—"}</span> },
+              { key: "passengerCount", header: "عدد الركاب", align: "end" as const, className: "font-mono", render: (r) => r.passengerCount ?? "—" },
+              { key: "flightNumber", header: "الرحلة", render: (r) => <span className="text-xs">{r.flightNumber ?? "—"}</span> },
+              { key: "status", header: "الحالة", render: (r) => { const tone = STATUS_TONE[r.status] ?? STATUS_TONE.draft; return <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>{STATUS_LABEL_AR[r.status] ?? r.status}</span>; } },
+            ] satisfies DataTableColumn<TransportRow>[]}
+          />
+          </div>
         </CardContent>
       </Card>
     </PageShell>

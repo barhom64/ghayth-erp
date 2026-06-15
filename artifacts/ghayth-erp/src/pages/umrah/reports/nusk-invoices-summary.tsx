@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -248,69 +248,26 @@ export default function NuskInvoicesSummaryReport() {
               آخر 100 فاتورة
             </p>
           </div>
-          {(data?.recent ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground py-12 text-center" data-testid="nusk-recent-empty">
-              لا فواتير تطابق الفلاتر.
-            </p>
-          ) : (
-            <table className="w-full text-sm" data-testid="nusk-recent-table">
-              <thead className="bg-muted/40">
-                <tr>
-                  <th className="p-2 text-start">رقم نُسك</th>
-                  <th className="p-2 text-start">المجموعة</th>
-                  <th className="p-2 text-start">الوكيل</th>
-                  <th className="p-2 text-start">الإصدار</th>
-                  <th className="p-2 text-start">الانتهاء</th>
-                  <th className="p-2 text-end">معتمرون</th>
-                  <th className="p-2 text-end">الإجمالي</th>
-                  <th className="p-2 text-start">قيد AP</th>
-                  <th className="p-2 text-start">الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.recent ?? []).map((r) => {
-                  const tone = STATUS_TONE[r.nuskStatus] ?? "bg-slate-100 text-slate-700 border-slate-300";
-                  return (
-                    <tr key={r.id} className="border-t hover:bg-muted/20" data-testid={`nusk-recent-row-${r.id}`}>
-                      <td className="p-2 font-mono text-xs">{r.nuskInvoiceNumber}</td>
-                      <td className="p-2 text-xs">
-                        {r.groupId ? (
-                          <Link href={`/umrah/groups/${r.groupId}`} className="text-blue-600 hover:underline">
-                            {r.groupName ?? `#${r.groupId}`}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="p-2 text-xs">
-                        {r.agentId ? (
-                          <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline">
-                            {r.agentName ?? `#${r.agentId}`}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="p-2 text-xs">{r.issueDate ?? "—"}</td>
-                      <td className="p-2 text-xs">{r.expiryDate ?? "—"}</td>
-                      <td className="p-2 text-end font-mono">{r.mutamerCount}</td>
-                      <td className="p-2 text-end font-mono">{formatCurrency(Number(r.totalAmount) || 0)}</td>
-                      <td className="p-2">
-                        {r.purchaseInvoiceId ? (
-                          <span className="text-[10px] text-emerald-700">✓ مرحَّل</span>
-                        ) : (
-                          <span className="text-[10px] text-rose-700 inline-flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" /> بانتظار
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>
-                          {STATUS_LABEL_AR[r.nuskStatus] ?? r.nuskStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+          <div data-testid="nusk-recent-empty">
+          <DataTable<SummaryResp["recent"][number]>
+            data={data?.recent ?? []}
+            rowKey={(r) => String(r.id)}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا فواتير تطابق الفلاتر."
+            columns={[
+              { key: "nuskInvoiceNumber", header: "رقم نُسك", className: "font-mono text-xs" },
+              { key: "groupId", header: "المجموعة", render: (r) => r.groupId ? <Link href={`/umrah/groups/${r.groupId}`} className="text-blue-600 hover:underline text-xs">{r.groupName ?? `#${r.groupId}`}</Link> : "—" },
+              { key: "agentId", header: "الوكيل", render: (r) => r.agentId ? <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline text-xs">{r.agentName ?? `#${r.agentId}`}</Link> : "—" },
+              { key: "issueDate", header: "الإصدار", render: (r) => <span className="text-xs">{r.issueDate ?? "—"}</span> },
+              { key: "expiryDate", header: "الانتهاء", render: (r) => <span className="text-xs">{r.expiryDate ?? "—"}</span> },
+              { key: "mutamerCount", header: "معتمرون", align: "end" as const, className: "font-mono" },
+              { key: "totalAmount", header: "الإجمالي", align: "end" as const, render: (r) => <span className="font-mono">{formatCurrency(Number(r.totalAmount) || 0)}</span> },
+              { key: "purchaseInvoiceId", header: "قيد AP", render: (r) => r.purchaseInvoiceId ? <span className="text-[10px] text-emerald-700">✓ مرحَّل</span> : <span className="text-[10px] text-rose-700 inline-flex items-center gap-1"><AlertCircle className="h-3 w-3" /> بانتظار</span> },
+              { key: "nuskStatus", header: "الحالة", render: (r) => { const tone = STATUS_TONE[r.nuskStatus] ?? "bg-slate-100 text-slate-700 border-slate-300"; return <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>{STATUS_LABEL_AR[r.nuskStatus] ?? r.nuskStatus}</span>; } },
+            ] satisfies DataTableColumn<SummaryResp["recent"][number]>[]}
+          />
+          </div>
         </CardContent>
       </Card>
     </PageShell>
@@ -351,35 +308,21 @@ function BreakdownRows({
     return <p className="text-sm text-muted-foreground py-8 text-center">لا بيانات.</p>;
   }
   const totalCount = rows.reduce((acc, r) => acc + r.count, 0);
+  type AugRow = typeof rows[number] & { pct: number };
+  const augRows: AugRow[] = rows.map((r) => ({ ...r, pct: totalCount > 0 ? Math.round((r.count / totalCount) * 100) : 0 }));
   return (
-    <table className="w-full text-sm mt-2" data-testid={testid}>
-      <thead className="bg-muted/40">
-        <tr>
-          <th className="p-2 text-start">العنصر</th>
-          <th className="p-2 text-end">العدد</th>
-          <th className="p-2 text-end">الإجمالي</th>
-          <th className="p-2 text-end">%</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => {
-          const pct = totalCount > 0 ? Math.round((r.count / totalCount) * 100) : 0;
-          return (
-            <tr key={r.key} className="border-t" data-testid={`${testid}-row-${r.key}`}>
-              <td className="p-2">
-                {r.href ? (
-                  <Link href={r.href} className="text-blue-600 hover:underline">{r.label}</Link>
-                ) : r.tone ? (
-                  <span className={`text-[10px] px-2 py-0.5 rounded border ${r.tone}`}>{r.label}</span>
-                ) : r.label}
-              </td>
-              <td className="p-2 text-end font-mono">{r.count}</td>
-              <td className="p-2 text-end font-mono">{formatCurrency(r.total)}</td>
-              <td className="p-2 text-end font-mono">{pct}%</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <DataTable<AugRow>
+      data={augRows}
+      rowKey={(r) => r.key}
+      noToolbar
+      pageSize={0}
+      emptyMessage="لا بيانات."
+      columns={[
+        { key: "label", header: "العنصر", render: (r) => r.href ? <Link href={r.href} className="text-blue-600 hover:underline">{r.label}</Link> : r.tone ? <span className={`text-[10px] px-2 py-0.5 rounded border ${r.tone}`}>{r.label}</span> : r.label },
+        { key: "count", header: "العدد", align: "end" as const, className: "font-mono" },
+        { key: "total", header: "الإجمالي", align: "end" as const, render: (r) => <span className="font-mono">{formatCurrency(r.total)}</span> },
+        { key: "pct", header: "%", align: "end" as const, render: (r) => <span className="font-mono">{r.pct}%</span> },
+      ]}
+    />
   );
 }
