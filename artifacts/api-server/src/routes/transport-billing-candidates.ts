@@ -172,7 +172,7 @@ transportBillingCandidatesRouter.post(
               : "هذا الترشيح مرفوض ولا يمكن ترحيله",
           );
         }
-        if (candidate.sourceType !== "cargo_manifest") {
+        if (candidate.sourceType !== "cargo_manifest" && candidate.sourceType !== "maintenance") {
           throw new ValidationError(
             `نوع المصدر ${candidate.sourceType} غير مدعوم بعد للترحيل التلقائي`,
           );
@@ -181,22 +181,30 @@ transportBillingCandidatesRouter.post(
         const revenue = overrides.freightRevenue ?? Number(candidate.suggestedRevenue ?? 0) ?? 0;
         const cost = overrides.freightCost ?? Number(candidate.suggestedCost ?? 0) ?? 0;
 
-        const journal = await fleetEngine.postCargoDeliveryGL(
-          {
-            companyId: scope.companyId,
-            branchId: scope.branchId ?? candidate.branchId ?? 0,
-            createdBy: scope.userId,
-          },
-          {
-            id: candidate.sourceId,
-            manifestNumber: candidate.sourceRef ?? String(candidate.sourceId),
-            freightRevenue: revenue,
-            freightCost: cost,
-            customerId: candidate.customerId,
-            vehicleId: candidate.vehicleId,
-            driverId: candidate.driverId,
-          },
-        );
+        const glCtx = {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? candidate.branchId ?? 0,
+          createdBy: scope.userId,
+        };
+        // #TA-T18 finance-boundary — the accountant materialises the
+        // expense/billing candidate; THIS is where transport GL is posted
+        // (never at the operational create/complete step).
+        const journal = candidate.sourceType === "maintenance"
+          ? await fleetEngine.postMaintenanceGL(glCtx, {
+              id: candidate.sourceId,
+              vehicleId: candidate.vehicleId ?? 0,
+              totalCost: cost,
+              description: candidate.sourceRef ?? undefined,
+            })
+          : await fleetEngine.postCargoDeliveryGL(glCtx, {
+              id: candidate.sourceId,
+              manifestNumber: candidate.sourceRef ?? String(candidate.sourceId),
+              freightRevenue: revenue,
+              freightCost: cost,
+              customerId: candidate.customerId,
+              vehicleId: candidate.vehicleId,
+              driverId: candidate.driverId,
+            });
         const journalEntryId = (journal as { id?: number } | null)?.id ?? null;
 
         await tx.query(

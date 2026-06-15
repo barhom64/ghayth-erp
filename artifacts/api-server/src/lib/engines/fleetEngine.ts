@@ -454,6 +454,71 @@ class FleetEngineImpl implements DomainEngine {
   }
 
   /**
+   * #TA-T18 finance-boundary — maintenance cost → Accounting Candidate.
+   * Owner's rule: transport NEVER posts GL directly. Completing a
+   * maintenance ticket queues an EXPENSE candidate the accountant
+   * reviews + materialises (postMaintenanceGL runs at materialise-time,
+   * not on completion). Mirrors createCargoBillingCandidate; revenue is
+   * NULL (pure expense), suggestedCost carries the amount. Idempotent on
+   * (company, sourceType, sourceId).
+   */
+  async createMaintenanceExpenseCandidate(
+    ctx: FleetGLContext,
+    maintenance: { id: number; vehicleId: number; cost: number; type?: string | null; description?: string | null; sourceRef?: string | null }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const cost = Number(maintenance.cost) || 0;
+    if (cost <= 0) return null;
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "serviceType", "serviceDate",
+           "vehicleId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue", "suggestedCost",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'maintenance', $3, $4,
+           'maintenance', CURRENT_DATE,
+           $5,
+           1, 'service',
+           'completed',
+           NULL, $6,
+           $7,
+           $8
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'maintenance' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        maintenance.id,
+        maintenance.sourceRef ?? `MAINT-${maintenance.id}`,
+        maintenance.vehicleId,
+        cost,
+        maintenance.description ?? null,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
    * #1812 — rental close → Accounting Candidate (الإيراد عند الإغلاق).
    * Mirrors createCargoBillingCandidate for the third transport leg.
    * Fired from the rental /return endpoint after the contract flips

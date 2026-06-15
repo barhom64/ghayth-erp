@@ -2643,12 +2643,14 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       },
     });
 
-    // Auto journal entry for maintenance cost
+    // #TA-T18 finance-boundary — completing maintenance no longer posts
+    // GL directly. It queues an EXPENSE candidate for the accountant, who
+    // materialises it (postMaintenanceGL runs then, in finance). Transport
+    // never touches the ledger; finance is the authority for the money.
     if (finalCost > 0) {
-      // Maintenance JE lands on the vehicle's branch, not the operator's.
-      // Pre-fix the cost JE used scope.branchId, so a vehicle assigned to
-      // Branch A but serviced by a session working Branch B silently
-      // booked the cost to Branch B and broke per-branch fleet P&L.
+      // The candidate (and the eventual JE) lands on the VEHICLE's branch,
+      // not the operator's — a vehicle on Branch A serviced from Branch B
+      // must still book to Branch A for correct per-branch fleet P&L.
       const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
         `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [m.vehicleId, scope.companyId]
@@ -2656,10 +2658,10 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const vehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const { fleetEngine } = await import("../lib/engines/index.js");
-      await fleetEngine.postMaintenanceGL(
+      await fleetEngine.createMaintenanceExpenseCandidate(
         { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id, vehicleId: m.vehicleId as number, totalCost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
-      ).catch((e: unknown) => logger.error(e, "Maintenance GL failed:"));
+        { id, vehicleId: m.vehicleId as number, cost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Maintenance expense candidate failed:"));
     }
 
     // Mark the scheduled obligation as met and register the next one
