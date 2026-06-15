@@ -9,6 +9,26 @@
 #   payroll_commission_expense) → calculation flips to paid + payrollLineId
 #   stamped → a SECOND consumption attempt finds nothing (exactly-once).
 #
+# ─── U-06-P5 NOTE ────────────────────────────────────────────────────────
+# This script is the MANUAL E2E smoke against a live provisioned database.
+# It complements (but does NOT replace) the static U-06-P1 smoke:
+#   artifacts/api-server/tests/unit/umrahCommissionPayrollCaptureContractSmoke.test.ts
+#
+# Layer-by-layer coverage:
+#   - Static contract (U-06-P1): runs in CI on every PR, no DB needed.
+#       Pins source-level invariants the live verify script depends on
+#       (engine routes commission via HR, exactly-once stamping, period
+#       gate on /payroll).
+#   - Live E2E (this script): runs manually against a provisioned DB.
+#       Walks the full journey end-to-end with real HTTP calls + real
+#       Postgres asserts.
+#   - Dynamic integration (U-06-P2/P3/P4): planned addition — runs in
+#       CI against a test DB, programmatic, no HTTP.
+#
+# When the dynamic integration ships, prefer it for regression coverage.
+# Keep this script as the manual proof for new provisioned environments.
+# ─────────────────────────────────────────────────────────────────────────
+#
 # Prereqs: provisioned head-of-main DB (pnpm db:provision-agent) + built
 # server. Al-Diyaa tenant (companyId=2).
 set -euo pipefail
