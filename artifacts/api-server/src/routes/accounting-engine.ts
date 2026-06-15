@@ -886,7 +886,7 @@ export async function retrySubsidiaryProvisioningFailure(failureId: number, comp
     { branchId: f.branchId },
   );
   const [after] = await rawQuery<{ resolved: boolean }>(
-    `SELECT resolved FROM subsidiary_account_provisioning_failures WHERE id=$1`, [failureId],
+    `SELECT resolved FROM subsidiary_account_provisioning_failures WHERE id=$1 AND "companyId"=$2`, [failureId, companyId],
   );
   return after ?? null;
 }
