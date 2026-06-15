@@ -21,6 +21,8 @@ const read = (rel: string) => readFileSync(join(apiSrc, rel), "utf8");
 const BOOKINGS_ROUTE = read("routes/transport-bookings.ts");
 const ROUTES_INDEX = read("routes/index.ts");
 const FEATURE_CATALOG = read("lib/rbac/featureCatalog.ts");
+const CASCADE_LIB = read("lib/transportDispatchCascade.ts");
+const FLEET_ROUTE = read("routes/fleet.ts");
 
 const BOOKING_STATES = [
   "draft", "submitted", "pending_approval", "approved",
@@ -182,16 +184,40 @@ describe("#1733 Booking + Dispatch — state machines", () => {
     expect(block).toMatch(/declined\s*:\s*\[\s*\]/);
   });
 
-  it("accepted dispatch auto-advances a scheduled booking to dispatched (#12 cascade)", () => {
-    // Runtime cascade (not the static map): when the driver ACCEPTS the
-    // dispatch order, a still-"scheduled" booking auto-advances to
-    // "dispatched" so the operator never has to flip it by hand. Guarded to
-    // "scheduled" so it can't drag a booking already past dispatch backwards.
-    expect(BOOKINGS_ROUTE).toMatch(
-      /if \(target === "accepted" \|\| target === "executing"/,
-    );
-    expect(BOOKINGS_ROUTE).toMatch(
+  it("dispatch→booking cascade is a single shared helper (no per-route drift)", () => {
+    // The cascade lives in lib/transportDispatchCascade and is invoked by BOTH
+    // the dispatch board (transport-bookings) and the fleet trip-completion
+    // path (#12), so the two can never disagree on the rules.
+    expect(CASCADE_LIB).toMatch(/export async function cascadeDispatchToBooking/);
+    // accepted (driver took the order) advances a still-"scheduled" booking to
+    // "dispatched"; guarded to "scheduled" so it can't drag one already past
+    // dispatch backwards.
+    expect(CASCADE_LIB).toMatch(
       /target === "accepted" && lineRow\.bookingStatus === "scheduled"[\s\S]{0,80}nextBookingStatus = "dispatched"/,
+    );
+    // booking only completes/cancels once ALL its lines are terminal.
+    expect(CASCADE_LIB).toMatch(/total > 0 && total === matching/);
+    // dispatch board delegates to the helper instead of an inline cascade.
+    expect(BOOKINGS_ROUTE).toMatch(/await cascadeDispatchToBooking\(tx, \{/);
+    expect(BOOKINGS_ROUTE).toMatch(
+      /import \{ cascadeDispatchToBooking \} from "\.\.\/lib\/transportDispatchCascade\.js"/,
+    );
+  });
+
+  it("completing a dispatch-linked trip auto-completes the dispatch order (#12)", () => {
+    // A trip created from a dispatch order carries sourceKey
+    // "dispatch:<id>:<token>"; on trip completion fleet.ts must parse that,
+    // complete the still-"executing" dispatch order, and run the shared
+    // booking cascade — so the operator never closes the board entry by hand.
+    expect(FLEET_ROUTE).toMatch(
+      /import \{ cascadeDispatchToBooking \} from "\.\.\/lib\/transportDispatchCascade\.js"/,
+    );
+    expect(FLEET_ROUTE).toMatch(/\/\^dispatch:\(\\d\+\):\//);
+    // only auto-completes an order still "executing" (never force-closes one
+    // the operator already moved past).
+    expect(FLEET_ROUTE).toMatch(/transport_dispatch_orders[\s\S]{0,120}status = 'executing'/);
+    expect(FLEET_ROUTE).toMatch(
+      /cascadeDispatchToBooking\(client, \{[\s\S]{0,120}target: "completed"/,
     );
   });
 });
