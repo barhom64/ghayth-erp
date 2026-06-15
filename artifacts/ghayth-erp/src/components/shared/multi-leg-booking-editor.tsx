@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { DateField } from "@/components/shared/form-field-wrapper";
 import { Plus, Trash2, ArrowDown, ArrowUp } from "lucide-react";
 import { ROUTE_TYPES } from "@/lib/transport-constants";
 
@@ -194,22 +195,18 @@ export function MultiLegBookingEditor({ legs, onChange }: Props) {
                 </Select>
               </div>
 
-              <div>
-                <Label className="text-xs">وقت الانطلاق</Label>
-                <Input
-                  type="datetime-local"
-                  value={leg.scheduledPickupAt ?? ""}
-                  onChange={(e) => update(idx, { scheduledPickupAt: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">وقت الوصول</Label>
-                <Input
-                  type="datetime-local"
-                  value={leg.scheduledDeliveryAt ?? ""}
-                  onChange={(e) => update(idx, { scheduledDeliveryAt: e.target.value })}
-                />
-              </div>
+              <DateField
+                label="وقت الانطلاق"
+                mode="datetime"
+                value={leg.scheduledPickupAt ?? ""}
+                onChange={(v) => update(idx, { scheduledPickupAt: v })}
+              />
+              <DateField
+                label="وقت الوصول"
+                mode="datetime"
+                value={leg.scheduledDeliveryAt ?? ""}
+                onChange={(v) => update(idx, { scheduledDeliveryAt: v })}
+              />
 
               <div>
                 <Label className="text-xs">عدد الركاب</Label>

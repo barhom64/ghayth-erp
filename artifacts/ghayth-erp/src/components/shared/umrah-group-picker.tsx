@@ -101,7 +101,8 @@ export function UmrahGroupPicker({ onSelect, trigger }: Props) {
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
               ربط الحجز بمجموعة عمرة من النظام يجلب تلقائياً عدد المعتمرين وفترة الموسم،
-              ويثبّت مصدر الحجز في سجل التدقيق.
+              ويثبّت مصدر الحجز في سجل التدقيق. الفندق يُدخَل يدوياً (قد تتوزّع
+              المجموعة على أكثر من فندق).
             </p>
             <Input
               placeholder="ابحث برقم نسك أو اسم المجموعة…"

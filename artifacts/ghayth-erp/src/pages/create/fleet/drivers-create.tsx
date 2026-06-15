@@ -67,10 +67,13 @@ export default function DriversCreate() {
     // #1812 KSA identity rule: saudi → nationalId required; otherwise → iqamaNumber.
     const needsIqama = form.licenseOrigin && form.licenseOrigin !== "saudi";
     const needsNationalId = form.licenseOrigin === "saudi";
+    // Saudi licenses carry no separate license number — the national ID
+    // is the license identity. Require licenseNumber only for non-Saudi.
+    const needsLicenseNumber = form.licenseOrigin !== "saudi";
     const firstError = validate({
       name: form.name.trim() ? null : "اسم السائق مطلوب",
       phone: form.phone.trim() ? null : "رقم الهاتف مطلوب",
-      licenseNumber: form.licenseNumber.trim() ? null : "رقم الرخصة مطلوب",
+      licenseNumber: needsLicenseNumber && !form.licenseNumber.trim() ? "رقم الرخصة مطلوب" : null,
       licenseExpiry: expiryInPast ? "تاريخ انتهاء الرخصة يجب أن يكون في المستقبل" : null,
       nationalId: needsNationalId && !/^\d{10}$/.test(form.nationalId)
         ? "الهوية الوطنية مطلوبة (10 أرقام) للرخصة السعودية" : null,
@@ -142,7 +145,7 @@ export default function DriversCreate() {
 
         <TextField
           label="رقم الرخصة"
-          required
+          required={form.licenseOrigin !== "saudi"}
           value={form.licenseNumber}
           onChange={(v) => setForm((f) => ({ ...f, licenseNumber: v }))}
           error={fieldErrors.licenseNumber}

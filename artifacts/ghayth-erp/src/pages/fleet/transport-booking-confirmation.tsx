@@ -25,6 +25,7 @@ interface ConfirmationData {
   bookingSource: string;
   transportServiceType: string;
   customerName: string | null;
+  linkedCustomerName: string | null;
   customerPhone: string | null;
   fromLocationText: string | null;
   toLocationText: string | null;
@@ -142,7 +143,7 @@ export default function TransportBookingConfirmation() {
 
           <table className="w-full text-sm mb-4" style={{ borderCollapse: "collapse" }}>
             <tbody>
-              <tr><td className="py-1 pl-3 text-muted-foreground w-32">العميل</td><td className="font-medium">{c.customerName || "—"}</td></tr>
+              <tr><td className="py-1 pl-3 text-muted-foreground w-32">العميل</td><td className="font-medium">{c.linkedCustomerName || c.customerName || "—"}</td></tr>
               <tr><td className="py-1 pl-3 text-muted-foreground">رقم الهاتف</td><td className="font-mono" dir="ltr">{c.customerPhone || "—"}</td></tr>
               <tr><td className="py-1 pl-3 text-muted-foreground">نوع الخدمة</td><td>{SERVICE_TYPE_LABEL[c.transportServiceType] || c.transportServiceType}</td></tr>
               {c.umrahGroupId && <tr><td className="py-1 pl-3 text-muted-foreground">مجموعة عمرة</td><td className="font-mono">#{c.umrahGroupId}</td></tr>}
