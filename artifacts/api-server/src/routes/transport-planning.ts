@@ -47,6 +47,8 @@ import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
+// TR-021 — operating-window helper for a realistic utilisation denominator.
+import { dailyOperatingMinutes, type OperatingWindowSettings } from "../lib/fleet/operatingWindow.js";
 // Maps Provider Adapter — masking helper is exported separately so
 // any route that needs to echo the planning settings goes through
 // the single chokepoint instead of re-implementing the masking.
@@ -408,6 +410,18 @@ transportPlanningRouter.get(
         [scope.companyId, startDate],
       );
 
+      // TR-021 / UTIL-02 — the utilisation denominator honours the
+      // company's configured operating window (falls back to 12h/day)
+      // instead of a flat 24×7, so the % matches what the assignment
+      // engine scores on and isn't artificially halved.
+      const [windowRow] = await rawQuery<OperatingWindowSettings>(
+        `SELECT "operatingStartTime", "operatingEndTime", "operatingDaysMask"
+           FROM transport_planning_settings
+          WHERE "companyId" = $1`,
+        [scope.companyId],
+      );
+      const weeklyOperatingSeconds = dailyOperatingMinutes(windowRow ?? null) * 7 * 60;
+
       // Per-vehicle utilisation: minutes booked across the 7-day window
       // / total minutes in the window. Sorts heaviest at top so the
       // dispatcher can spot the at-risk units (and the under-used ones).
@@ -429,7 +443,7 @@ transportPlanningRouter.get(
                 ROUND(
                   COALESCE(SUM(
                     EXTRACT(EPOCH FROM (o."scheduledEndAt" - o."scheduledStartAt"))
-                  )::numeric, 0) / NULLIF(7 * 24 * 3600, 0) * 100,
+                  )::numeric, 0) / NULLIF($3, 0) * 100,
                   1
                 ) AS utilisation
            FROM fleet_vehicles v
@@ -444,8 +458,28 @@ transportPlanningRouter.get(
           HAVING COUNT(o.id) > 0 OR v.status = 'available'
           ORDER BY utilisation DESC NULLS LAST, v.id ASC
           LIMIT 100`,
-        [scope.companyId, startDate],
+        [scope.companyId, startDate, weeklyOperatingSeconds],
       );
+
+      // TR-021 — fleet-level rollup so the dispatcher sees the whole
+      // picture at a glance (idle vs over-worked units), not just the
+      // per-vehicle list. Derived from the rows already fetched — no
+      // extra round-trip.
+      const activeRows = vehicleUtilisation.filter((v) => v.bookedMinutes > 0);
+      const avgUtilisation = activeRows.length > 0
+        ? Math.round(
+            (activeRows.reduce((s, v) => s + Number(v.utilisation), 0) / activeRows.length) * 10,
+          ) / 10
+        : 0;
+      const fleetSummary = {
+        vehiclesTracked: vehicleUtilisation.length,
+        activeVehicles: activeRows.length,
+        idleVehicles: vehicleUtilisation.length - activeRows.length,
+        avgUtilisation,
+        overUtilised: vehicleUtilisation.filter((v) => Number(v.utilisation) > 80).length,
+        underUtilised: activeRows.filter((v) => Number(v.utilisation) < 30).length,
+        operatingHoursPerDay: Math.round(dailyOperatingMinutes(windowRow ?? null) / 60 * 10) / 10,
+      };
 
       res.json(maskFields(req, {
         data: {
@@ -454,6 +488,7 @@ transportPlanningRouter.get(
             .toISOString().slice(0, 10),
           daily,
           vehicleUtilisation,
+          fleetSummary,
         },
       }));
     } catch (err) {

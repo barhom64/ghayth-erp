@@ -48,11 +48,10 @@ describe("warehouse/inventory-count — create-session form on FormShell + zod",
     expect(SRC).toContain('from "@/components/ui/input"');
   });
 
-  it("approve AlertDialog from #290 preserved (not regressed)", () => {
-    // The previous migration in #290 swapped window.confirm() for an
-    // AlertDialog. Verify we didn't accidentally remove it.
+  it("approve confirmation via ConfirmActionDialog (GAP_MATRIX P1 §6.2, migrated from AlertDialog #290)", () => {
+    // §6.2 batch upgraded the AlertDialog gate to canonical ConfirmActionDialog.
     expect(SRC).toContain("approveTargetId");
-    expect(SRC).toContain("<AlertDialog");
+    expect(SRC).toContain("ConfirmActionDialog");
   });
 
   it("submit handler types values via z.infer — was implicit untyped", () => {
