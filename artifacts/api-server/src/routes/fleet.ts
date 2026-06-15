@@ -15,7 +15,7 @@ import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
 import { issueNumber, voidNumber } from "../lib/numberingService.js";
 import { haversineKm } from "../lib/algorithms.js";
-import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { createAuditLog, createNotification, emitEvent, todayISO, currentYear, toDateISO, roundTo2, currentDateInTz } from "../lib/businessHelpers.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { getVehicleStatusImpact } from "../lib/impactPreview.js";
@@ -4426,8 +4426,12 @@ router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(rentalReturnSchema.safeParse(req.body));
-    const [c] = await rawQuery<{ id: number; status: string; handoverAt: string | null }>(
-      `SELECT id, status, "handoverAt"
+    const [c] = await rawQuery<{
+      id: number; status: string; handoverAt: string | null;
+      clientId: number; vehicleId: number; startDate: string;
+      totalAmount: number | null;
+    }>(
+      `SELECT id, status, "handoverAt", "clientId", "vehicleId", "startDate", "totalAmount"
          FROM fleet_rental_contracts
         WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId],
@@ -4451,7 +4455,7 @@ router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles
               "updatedAt" = NOW()
         WHERE id = $6 AND "companyId" = $7`,
       [b.returnOdometer, b.returnFuelLevel, b.returnNotes ?? null,
-       b.actualEndDate ?? null, b.overageAmount ?? null,
+       b.actualEndDate ?? currentDateInTz(), b.overageAmount ?? null,
        id, scope.companyId],
     );
     createAuditLog({
@@ -4468,7 +4472,17 @@ router.post("/rental-contracts/:id/return", authorize({ feature: "fleet.vehicles
       entity: "fleet_rental_contracts", entityId: id,
       details: JSON.stringify({ overageAmount: b.overageAmount ?? 0 }),
     }).catch((e) => logger.error(e, "rental return event failed"));
-    res.json({ ok: true });
+    const candidate = await fleetEngine.createRentalBillingCandidate(
+      { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+      {
+        id, clientId: c.clientId, vehicleId: c.vehicleId,
+        startDate: c.startDate,
+        actualEndDate: b.actualEndDate ?? currentDateInTz(),
+        totalAmount: c.totalAmount,
+        overageAmount: b.overageAmount ?? null,
+      },
+    ).catch((e) => { logger.error(e, "rental billing candidate failed"); return null; });
+    res.json({ ok: true, billingCandidateId: candidate?.id ?? null });
   } catch (err) { handleRouteError(err, res, "rental return error"); }
 });
 

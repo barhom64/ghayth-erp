@@ -64,7 +64,9 @@ describe("pilgrim-detail page — reassign modal", () => {
   });
 
   it("opens an EntityEditDialog wired to the existing PATCH endpoint", () => {
-    expect(PAGE).toMatch(/EntityEditDialog<PilgrimReassignForm>/);
+    // Generic type arg removed (Babel plugin crash fix) — type is still inferred
+    expect(PAGE).toMatch(/EntityEditDialog/);
+    expect(PAGE).toMatch(/PilgrimReassignForm/);
     expect(PAGE).toMatch(/endpoint=\{`\/umrah\/pilgrims\/\$\{id\}`\}/);
   });
 
