@@ -31,6 +31,8 @@ interface LedgerTruthResponse {
   byDoor: Array<{ door: string; missingLines: number; missingValue: number }>;
   fallbackByOperation: Array<{ operationType: string; count: number }>;
   manual: { total: number; noReason: number; noDimension: number; blind: number };
+  nonPostableAccountEntries: Array<{ journalId: number; ref: string | null; createdAt: string; accountCode: string; accountName: string; reason: string }>;
+  manualOperationalNoReason: Array<{ journalId: number; ref: string | null; createdAt: string; description: string | null }>;
   ratchetReadiness: Array<{ expectedDim: string; missingLines: number; missingValue: number; completenessPct: number }>;
 }
 
@@ -53,7 +55,7 @@ export default function LedgerTruthPage() {
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
 
-  const { summary, dimensionCompleteness, byDoor, fallbackByOperation, manual, ratchetReadiness } = data;
+  const { summary, dimensionCompleteness, byDoor, fallbackByOperation, manual, nonPostableAccountEntries, manualOperationalNoReason, ratchetReadiness } = data;
 
   const dimColumns: DataTableColumn<LedgerTruthResponse["dimensionCompleteness"][number]>[] = [
     { key: "expectedDim", header: "البُعد المطلوب", render: (r) => <span className="font-medium">{DIM_LABEL[r.expectedDim] ?? r.expectedDim}</span> },
@@ -72,6 +74,22 @@ export default function LedgerTruthPage() {
   const fbColumns: DataTableColumn<LedgerTruthResponse["fallbackByOperation"][number]>[] = [
     { key: "operationType", header: "نوع العملية", render: (r) => <span className="font-mono text-xs">{r.operationType}</span> },
     { key: "count", header: "مرات الحساب الافتراضي", sortable: true, render: (r) => <span className="text-destructive font-semibold">{formatNumber(r.count)}</span> },
+  ];
+
+  const nonPostableColumns: DataTableColumn<LedgerTruthResponse["nonPostableAccountEntries"][number]>[] = [
+    { key: "journalId", header: "القيد", render: (r) => <span className="font-mono text-xs">#{r.journalId}</span> },
+    { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs">{r.ref ?? "—"}</span> },
+    { key: "accountCode", header: "الحساب", render: (r) => <span className="font-mono text-xs">{r.accountCode}</span> },
+    { key: "accountName", header: "اسم الحساب", render: (r) => r.accountName },
+    { key: "reason", header: "السبب", render: (r) => <span className="text-destructive font-semibold">{r.reason}</span> },
+    { key: "createdAt", header: "التاريخ", render: (r) => <span className="text-xs">{r.createdAt.slice(0, 10)}</span> },
+  ];
+
+  const manualNoReasonColumns: DataTableColumn<LedgerTruthResponse["manualOperationalNoReason"][number]>[] = [
+    { key: "journalId", header: "القيد", render: (r) => <span className="font-mono text-xs">#{r.journalId}</span> },
+    { key: "ref", header: "المرجع", render: (r) => <span className="font-mono text-xs">{r.ref ?? "—"}</span> },
+    { key: "description", header: "الوصف", render: (r) => <span className="text-status-warning-foreground">{r.description || "بلا سبب"}</span> },
+    { key: "createdAt", header: "التاريخ", render: (r) => <span className="text-xs">{r.createdAt.slice(0, 10)}</span> },
   ];
 
   const ratchetColumns: DataTableColumn<LedgerTruthResponse["ratchetReadiness"][number]>[] = [
@@ -158,6 +176,16 @@ export default function LedgerTruthPage() {
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">بلا أي بُعد</p><p className="text-lg font-bold mt-1">{formatNumber(manual.noDimension)}</p></CardContent></Card>
           <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">أعمى (الاثنان)</p><p className="text-lg font-bold text-status-warning-foreground mt-1">{formatNumber(manual.blind)}</p></CardContent></Card>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-base font-semibold mb-3">قيود على حساب غير قابل للترحيل (allowPosting=false / غير نشط / محذوف)</h3>
+        <DataTable columns={nonPostableColumns} data={nonPostableAccountEntries} emptyMessage="لا قيود على حسابات غير قابلة للترحيل" noToolbar />
+      </div>
+
+      <div className="mt-6">
+        <h3 className="text-base font-semibold mb-3">قيود يدوية مرتبطة تشغيليًا بلا سبب</h3>
+        <DataTable columns={manualNoReasonColumns} data={manualOperationalNoReason} emptyMessage="لا قيود يدوية تشغيلية بلا سبب" noToolbar />
       </div>
 
       <div className="mt-6">
