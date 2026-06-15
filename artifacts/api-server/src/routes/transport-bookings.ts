@@ -398,8 +398,8 @@ transportBookingsRouter.get(
       );
       if (!booking) throw new NotFoundError("الحجز غير موجود");
       const lines = await rawQuery<Record<string, unknown>>(
-        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
-        [id],
+        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
+        [id, scope.companyId],
       );
       const dispatchOrders = await rawQuery<Record<string, unknown>>(
         `SELECT d.*, v."plateNumber" AS "vehiclePlate", dr.name AS "driverName"
@@ -506,8 +506,8 @@ transportBookingsRouter.get(
       );
       if (!booking) throw new NotFoundError("الحجز غير موجود");
       const lines = await rawQuery<Record<string, unknown>>(
-        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
-        [id],
+        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
+        [id, scope.companyId],
       );
       const dispatchOrders = await rawQuery<Record<string, unknown>>(
         `SELECT d.*, v."plateNumber" AS "vehiclePlate", dr.name AS "driverName", dr.phone AS "driverPhone"
