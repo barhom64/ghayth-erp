@@ -138,7 +138,8 @@ export const hrRoutes = [
   { path: "/hr/leaves", component: Leaves, subKey: "leaves" },
   { path: "/hr/leaves/create", component: LeavesCreate, subKey: "leaves" },
   // Literal sub-routes must precede "/hr/leaves/:id" (see attendance above).
-  { path: "/hr/leaves/management", component: LeaveManagement, subKey: "leaves" },
+  // GAP_MATRIX P1 — redirect /management until merged as tab inside base page.
+  { path: "/hr/leaves/management", component: redirectTo("/hr/leaves"), subKey: "leaves" },
   { path: "/hr/leaves/approval-chains", component: ApprovalChains, subKey: "leaves" },
   { path: "/hr/leaves/:id/edit", component: LeavesEdit, subKey: "leaves" },
   { path: "/hr/leaves/:id", component: LeaveDetail, subKey: "leaves" },

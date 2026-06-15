@@ -64,10 +64,7 @@ const BOOKING_SOURCES = [
   "recurring_schedule",
 ] as const;
 
-const TRANSPORT_SERVICE_TYPES = [
-  "cargo_load", "passenger_umrah", "passenger_general",
-  "equipment_rental", "internal_transfer", "other",
-] as const;
+import { TRANSPORT_SERVICE_TYPES } from "../lib/transportEnums.js";
 
 // #1812 Comment 4663005810 — explicit cargo vs passenger family.
 // The booking row carries a `tripFamily` column (migration 284) so
@@ -1312,7 +1309,7 @@ transportBookingsRouter.patch(
         }
 
         // Booking-level cascade: only flip when the change is meaningful.
-        if (target === "executing" || target === "completed" || target === "cancelled") {
+        if (target === "accepted" || target === "executing" || target === "completed" || target === "cancelled") {
           // Need the booking_id; load it via the line.
           const lineLookup = await tx.query<{ bookingId: number; bookingStatus: string }>(
             `SELECT l."bookingId", b.status AS "bookingStatus"
@@ -1325,6 +1322,15 @@ transportBookingsRouter.patch(
           const lineRow = lineLookup.rows[0];
           if (lineRow) {
             let nextBookingStatus: string | null = null;
+            // accepted (driver took the order) advances a still-scheduled
+            // booking to "dispatched" — applies the cascade declared in the
+            // map above (accepted → booking: dispatched) that was previously
+            // only mirrored onto the line, leaving the booking stuck at
+            // "scheduled" until the executing event. Guarded to scheduled so
+            // it never drags a booking already past dispatch backwards.
+            if (target === "accepted" && lineRow.bookingStatus === "scheduled") {
+              nextBookingStatus = "dispatched";
+            }
             if (target === "executing" && lineRow.bookingStatus !== "in_progress") {
               nextBookingStatus = "in_progress";
             }

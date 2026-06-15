@@ -181,6 +181,19 @@ describe("#1733 Booking + Dispatch — state machines", () => {
     expect(block).toMatch(/closed\s*:\s*\[\s*\]/);
     expect(block).toMatch(/declined\s*:\s*\[\s*\]/);
   });
+
+  it("accepted dispatch auto-advances a scheduled booking to dispatched (#12 cascade)", () => {
+    // Runtime cascade (not the static map): when the driver ACCEPTS the
+    // dispatch order, a still-"scheduled" booking auto-advances to
+    // "dispatched" so the operator never has to flip it by hand. Guarded to
+    // "scheduled" so it can't drag a booking already past dispatch backwards.
+    expect(BOOKINGS_ROUTE).toMatch(
+      /if \(target === "accepted" \|\| target === "executing"/,
+    );
+    expect(BOOKINGS_ROUTE).toMatch(
+      /target === "accepted" && lineRow\.bookingStatus === "scheduled"[\s\S]{0,80}nextBookingStatus = "dispatched"/,
+    );
+  });
 });
 
 describe("#1733 Booking + Dispatch — RBAC features registered", () => {
