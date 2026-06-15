@@ -80,6 +80,7 @@ const Collections = lazy(() => import("@/pages/finance/collections"));
 const EntityStatements = lazy(() => import("@/pages/finance/entity-statements"));
 const JournalTemplates = lazy(() => import("@/pages/finance/journal-templates"));
 const SubsidiaryAccounts = lazy(() => import("@/pages/finance/subsidiary-accounts"));
+const CustomerReceipt = lazy(() => import("@/pages/create/finance/customer-receipt"));
 const Budget = lazy(() => import("@/pages/finance/budget"));
 const BudgetCreate = lazy(() => import("@/pages/create/finance/budget-create"));
 const BudgetDetail = lazy(() => import("@/pages/details/budget-detail"));
@@ -367,6 +368,7 @@ export const financeRoutes = [
   { path: "/finance/receivables/receipt", component: CustomerReceiptWizard },
   { path: "/finance/customer-statement-print", component: CustomerStatementPrint },
   { path: "/finance/customer-360-sheet", component: Customer360Sheet },
+  { path: "/finance/receivables/receipt", component: CustomerReceipt },
   { path: "/finance/customer-risk", component: CustomerRisk },
   { path: "/finance/bad-debt-provision", component: BadDebtProvision },
   { path: "/finance/receivables/:id", component: ReceivableDetail },
