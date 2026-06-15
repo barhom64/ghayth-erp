@@ -14423,7 +14423,11 @@ CREATE TABLE public.onboarding_tasks (
     "completedAt" timestamp without time zone,
     "completedBy" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "ownerRole" character varying(40),
+    reason text,
+    mandatory boolean DEFAULT true,
+    "serviceType" character varying(40)
 );
 
 
