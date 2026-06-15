@@ -110,7 +110,7 @@ describe("umrah — the legacy doImport helper is gone", () => {
 
 describe("engine — confirmMutamersImport DOES resolve the FK fields", () => {
   it("calls resolveGroup before INSERT", () => {
-    expect(ENGINE).toMatch(/const groupId = await resolveGroup\(client, scope, row\)/);
+    expect(ENGINE).toMatch(/const groupId = await resolveGroup\(client, scope, row/);
   });
 
   it("calls resolveAgent before INSERT", () => {
