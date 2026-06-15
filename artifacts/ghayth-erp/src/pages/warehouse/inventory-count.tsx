@@ -25,16 +25,7 @@ import {
 } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { todayLocal } from "@/lib/formatters";
 
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
@@ -463,34 +454,22 @@ export default function InventoryCountPage() {
         onRowClick={(row) => loadItems(row.id)}
       />
 
-      <AlertDialog
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
         open={approveTargetId !== null}
         onOpenChange={(next) => { if (!next) setApproveTargetId(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>اعتماد جلسة الجرد</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيؤدي اعتماد الجرد إلى تحديث رصيد المخزون تلقائيًا وفق العدّ الفعلي.
-              لا يمكن التراجع عن هذا الإجراء.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setApproveTargetId(null)}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (approveTargetId != null) {
-                  const id = approveTargetId;
-                  setApproveTargetId(null);
-                  confirmApprove(id);
-                }
-              }}
-            >
-              اعتماد
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        variant="destructive"
+        title="اعتماد جلسة الجرد"
+        description="سيؤدي اعتماد الجرد إلى تحديث رصيد المخزون تلقائيًا وفق العدّ الفعلي. لا يمكن التراجع عن هذا الإجراء."
+        confirmLabel="اعتماد"
+        onConfirm={() => {
+          if (approveTargetId != null) {
+            const id = approveTargetId;
+            setApproveTargetId(null);
+            confirmApprove(id);
+          }
+        }}
+      />
     </PageShell>
   );
 }

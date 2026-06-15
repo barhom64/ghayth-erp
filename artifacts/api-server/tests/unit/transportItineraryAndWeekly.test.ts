@@ -116,10 +116,22 @@ describe("#1812 — weekly planning endpoint", () => {
     expect(PLANNING).toMatch(/WHERE o\.status IN \('pending', 'notified'\)[\s\S]{0,200}INTERVAL '15 minutes'/);
   });
 
-  it("computes per-vehicle utilisation as bookedSeconds / weekSeconds × 100", () => {
+  it("computes per-vehicle utilisation against the operating-window denominator (UTIL-02)", () => {
     expect(PLANNING).toContain("vehicleUtilisation");
-    expect(PLANNING).toMatch(/7 \* 24 \* 3600/);
+    // TR-021: the denominator is now the company's configured operating
+    // window (dailyOperatingMinutes × 7 × 60), not a flat 24×7 — so the
+    // ops-weekly % matches what the assignment engine scores on.
+    expect(PLANNING).toMatch(/NULLIF\(\$3, 0\)/);
+    expect(PLANNING).toMatch(/dailyOperatingMinutes\(windowRow \?\? null\) \* 7 \* 60/);
     expect(PLANNING).toMatch(/EXTRACT\(EPOCH FROM/);
+    expect(PLANNING).not.toMatch(/NULLIF\(7 \* 24 \* 3600/);
+  });
+
+  it("TR-021 — exposes a fleet-level utilisation summary", () => {
+    expect(PLANNING).toMatch(/fleetSummary/);
+    for (const k of ["vehiclesTracked", "activeVehicles", "idleVehicles", "avgUtilisation", "overUtilised", "underUtilised", "operatingHoursPerDay"]) {
+      expect(PLANNING, `fleetSummary.${k} missing`).toContain(k);
+    }
   });
 
   it("excludes declined + cancelled dispatch orders from utilisation", () => {

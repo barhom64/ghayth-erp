@@ -23,15 +23,19 @@ const EXIT = readFileSync(
   "utf8",
 );
 
-// ─── SEC-1 — /exit/:id/complete gates on HR_ROLES ────────────────────────
+// ─── SEC-1 — /exit/:id/complete gates on an elevated grant ───────────────
+// HR-REV-1 #1 migrated this inline gate off the hardcoded HR_ROLES array to
+// a grant-derived scopeCan(hr.exit:approve) check (the seeded HR_ROLES —
+// hr_manager/owner/gm — are exactly the holders of hr.exit:approve). The
+// SoD requirement is unchanged: "update" alone is not enough to complete.
 
-describe("SEC-1: /exit/:id/complete requires HR_ROLES (not feature update alone)", () => {
-  it("checks HR_ROLES.includes(scope.role) before applying transition", () => {
+describe("SEC-1: /exit/:id/complete requires an elevated grant (not feature update alone)", () => {
+  it("checks scopeCan(hr.exit:approve) before applying transition", () => {
     const completeBlock = EXIT.slice(
       EXIT.indexOf('router.patch("/exit/:id/complete"'),
       EXIT.indexOf('router.patch("/exit/:id/complete"') + 4000,
     );
-    expect(completeBlock).toContain("HR_ROLES.includes(scope.role)");
+    expect(completeBlock).toContain('scopeCan(scope, "hr.exit", "approve")');
     expect(completeBlock).toContain(
       "غير مصرّح لك بإتمام نهاية الخدمة — يلزم دور موارد بشرية",
     );
