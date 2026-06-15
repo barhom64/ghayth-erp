@@ -178,23 +178,25 @@ describe("FIN-P4-SLICE-A §D — SLICE-B engine wiring is present", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §E — No caller has migrated to the façade yet (SLICE-C hasn't shipped)
+// §E — SLICE-C migration path opens BUT the legacy path stays available
 // ─────────────────────────────────────────────────────────────────────────────
-describe("FIN-P4-SLICE-A §E — no caller invokes postSalesInvoice yet", () => {
-  // The ENGINE source itself references the symbol (declaration +
-  // type annotations + smoke-relevant strings). Any USE outside the
-  // engine file would mean SLICE-C shipped without the gate.
+describe("FIN-P4-SLICE-A §E — SLICE-C: both legacy + façade paths live side-by-side", () => {
   const UMRAH_INVOICING = readFileSync(
     join(REPO_ROOT, "artifacts/api-server/src/lib/umrahInvoicingEngine.ts"),
     "utf8",
   );
 
-  it("umrahInvoicingEngine still uses createGuardedJournalEntry directly", () => {
+  it("legacy generateSalesInvoice still uses createGuardedJournalEntry directly", () => {
     expect(UMRAH_INVOICING).toMatch(/createGuardedJournalEntry/);
   });
 
-  it("umrahInvoicingEngine does NOT call financialEngine.postSalesInvoice", () => {
-    expect(UMRAH_INVOICING).not.toMatch(/financialEngine\.postSalesInvoice/);
-    expect(UMRAH_INVOICING).not.toMatch(/postSalesInvoice\(/);
+  it("new generateSalesInvoiceViaFacade is exported (SLICE-C migration path)", () => {
+    expect(UMRAH_INVOICING).toMatch(
+      /export\s+async\s+function\s+generateSalesInvoiceViaFacade\(/,
+    );
+  });
+
+  it("the new path routes through financialEngine.postSalesInvoice", () => {
+    expect(UMRAH_INVOICING).toMatch(/financialEngine\.postSalesInvoice/);
   });
 });
