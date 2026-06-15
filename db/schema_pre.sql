@@ -20552,6 +20552,7 @@ CREATE TABLE public.umrah_pilgrims (
     "visaIssuedAt" timestamp with time zone,
     "visaRejectedAt" timestamp with time zone,
     "visaRejectionReason" text,
+    notifications_opt_out boolean,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 

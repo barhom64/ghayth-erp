@@ -34,6 +34,26 @@ export interface InternalNotifyContext {
  * single-recipient behaviour without crashing when the company has
  * no configured manager yet.
  */
+/**
+ * U-17-P5 — pilgrim opt-out check.
+ *
+ * Returns true when the pilgrim is flagged `notifications_opt_out = true`.
+ * Null (the default) is treated as "no opt-out" so the existing pilgrim
+ * population behaves identically.
+ */
+async function isPilgrimOptedOut(
+  companyId: number,
+  pilgrimId: number,
+): Promise<boolean> {
+  const rows = await rawQuery<{ optedOut: boolean | null }>(
+    `SELECT notifications_opt_out AS "optedOut"
+       FROM umrah_pilgrims
+      WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    [pilgrimId, companyId],
+  );
+  return rows[0]?.optedOut === true;
+}
+
 export async function resolveInternalRecipients(
   ctx: InternalNotifyContext,
 ): Promise<number[]> {
@@ -79,6 +99,10 @@ export async function notifyInternalVisaExpiring(
     after: { daysRemaining, reason: "visa_expiring" },
   }).catch((e) => logger.error(e, "[umrah internal notify] overstay_risk emit failed"));
 
+  // U-17-P5 — pilgrim opt-out gate. The risk event still fires
+  // because downstream automations may need to react regardless;
+  // we only suppress the operator NOTIFICATION dispatch.
+  if (await isPilgrimOptedOut(ctx.companyId, ctx.pilgrimId)) return 0;
   const recipients = await resolveInternalRecipients(ctx);
   if (recipients.length === 0) return 0;
   const title = daysRemaining <= 0
@@ -115,6 +139,8 @@ export async function notifyInternalDepartureTomorrow(
   ctx: InternalNotifyContext,
   payload: { tripDate: string; flightNumber: string | null },
 ): Promise<number> {
+  // U-17-P5 — pilgrim opt-out gate.
+  if (await isPilgrimOptedOut(ctx.companyId, ctx.pilgrimId)) return 0;
   const recipients = await resolveInternalRecipients(ctx);
   if (recipients.length === 0) return 0;
   const flightSeg = payload.flightNumber ? ` على رحلة ${payload.flightNumber}` : "";
@@ -150,6 +176,8 @@ export async function notifyInternalOverstayWarning(
   ctx: InternalNotifyContext,
   daysOverstayed: number,
 ): Promise<number> {
+  // U-17-P5 — pilgrim opt-out gate.
+  if (await isPilgrimOptedOut(ctx.companyId, ctx.pilgrimId)) return 0;
   const recipients = await resolveInternalRecipients(ctx);
   if (recipients.length === 0) return 0;
   const title = `🚨 معتمر متجاوز — ${ctx.pilgrimName ?? "#" + ctx.pilgrimId}`;
