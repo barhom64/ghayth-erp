@@ -34,6 +34,12 @@ const LIFECYCLE = readFileSync(
   join(API_SRC, "lib/fiscalPeriodLifecycle.ts"),
   "utf8",
 );
+// FIN-PERIOD-CLOSE (#2250) — the per-blocker checks moved out of the gate into
+// the aggregating coordinator; the gate now calls it and throws ONCE on the set.
+const COORDINATOR = readFileSync(
+  join(API_SRC, "lib/periodCloseCoordinator.ts"),
+  "utf8",
+);
 const ROUTE = readFileSync(
   join(API_SRC, "routes/finance-deferred-revenue.ts"),
   "utf8",
@@ -215,11 +221,15 @@ describe("idempotency — two-layer guard", () => {
 // ── Period-close gate (static) ────────────────────────────────────────────────
 describe("period-close gate", () => {
   it("closeFiscalPeriodCanonical refuses when a due un-posted recognition exists", () => {
-    expect(LIFECYCLE).toMatch(/findUnpostedDueRecognitions/);
-    expect(LIFECYCLE).toMatch(/pendingDefRev\.length > 0/);
+    // #2250 — the deferred-revenue check now lives in the coordinator, which adds
+    // a 'deferred_revenue' blocker; the gate aggregates ALL blockers, throws ONCE.
+    expect(COORDINATOR).toMatch(/findUnpostedDueRecognitions/);
+    expect(COORDINATOR).toMatch(/pendingDefRev/);
+    expect(COORDINATOR).toMatch(/type:\s*"deferred_revenue"/);
+    expect(LIFECYCLE).toMatch(/collectPeriodCloseBlockers/);
     expect(LIFECYCLE).toMatch(/throw new ConflictError/);
-    // the gate is company-scoped (mirrors the amortization / pending-manual-JE gate).
-    expect(LIFECYCLE).toMatch(/companyId:\s*scope\.companyId/);
+    // the coordinator is company-scoped (mirrors the amortization / pending-JE gate).
+    expect(COORDINATOR).toMatch(/companyId/);
   });
 
   it("the gate helper is company-scoped + reads the postings ledger", () => {
