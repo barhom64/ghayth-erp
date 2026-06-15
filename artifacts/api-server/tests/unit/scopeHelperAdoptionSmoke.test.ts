@@ -71,6 +71,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // lookups + a per-company recognition run, not a branch list cascade.
   // Manual scope.companyId scoping is correct here (mirrors finance-memory.ts).
   "finance-amortization.ts",
+  // finance-deferred-revenue.ts: FIN-DEFERRED-REVENUE (#2248) deferred-revenue
+  // recognition CRUD + run trigger — the symmetric counterpart of
+  // finance-amortization.ts. List/insert/run keyed by (companyId, …) — point
+  // lookups + a per-company recognition run, not a branch list cascade. Manual
+  // scope.companyId scoping is correct here (mirrors finance-amortization.ts).
+  "finance-deferred-revenue.ts",
   "finance-custodies.ts",
   "finance-gl-helpers.ts",
   "finance-hardening.ts",
@@ -281,9 +287,13 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // routes/finance-amortization.ts — prepaid-amortization CRUD + run
       // trigger keyed by (companyId, …); allowlisted with justification
       // (mirrors finance-memory.ts, point-lookup/per-company-run shape).
-      total: 122,
+      // +1 total/manualOnly: FIN-DEFERRED-REVENUE (#2248)
+      // routes/finance-deferred-revenue.ts — deferred-revenue recognition CRUD
+      // + run trigger keyed by (companyId, …); allowlisted with justification
+      // (the symmetric counterpart of finance-amortization.ts).
+      total: 123,
       helperUsers: 39,
-      manualOnly: 80,
+      manualOnly: 81,
     });
   });
 });
