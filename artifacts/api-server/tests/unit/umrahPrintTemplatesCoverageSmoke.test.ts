@@ -87,6 +87,8 @@ describe("U-14-P5 §A — dataLoader umrah_* cases all have a BESPOKE_PRESETS en
     "umrah_nusk_invoice",
     // U-14-P3 (next phase) — the employee commission-plan contract.
     "umrah_commission_plan",
+    // U-14-P3 (next phase) — the per-month calculation receipt.
+    "umrah_commission_calculation",
     "umrah_penalty",
     "umrah_violation",
     "umrah_transport",
