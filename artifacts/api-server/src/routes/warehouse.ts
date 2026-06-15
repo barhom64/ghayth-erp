@@ -1891,8 +1891,8 @@ router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inv
     // Pre-fetch count items so we can use them inside onApply and for
     // GL posting after the transition commits.
     const items = await rawQuery<Record<string, unknown>>(
-      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 LIMIT 10000`,
-      [countId]
+      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 AND wp."companyId"=$2 LIMIT 10000`,
+      [countId, scope.companyId]
     );
 
     // P02-MED2 — GL posting failures used to be swallowed by a bare
