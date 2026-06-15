@@ -294,6 +294,10 @@ router.get("/:entityType/:entityId", authorize({ feature: "admin.audit", action:
     );
 
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
+    // GAP_MATRIX P1 — reading entity audit trail is itself auditable (PDPL / forensics).
+    auditFromRequest(req, "audit_logs.entity_read", "audit_logs", Number(entityId) || 0, {
+      after: { entityType, entityId, total: rows.length },
+    });
   } catch (err) {
     handleRouteError(err, res, "Get entity audit logs error:");
   }
