@@ -140,9 +140,11 @@ describe("#1733 — routes + nav integration", () => {
     expect(FLEET_ROUTES).toContain("TransportDispatch");
   });
 
-  it("fleet tabs nav includes the new \"حجوزات النقل\" tab", () => {
-    expect(FLEET_TABS).toMatch(/حجوزات النقل/);
+  it("fleet tabs nav links to the transport cluster + mounts the transport sub-nav", () => {
+    // Reorganized: the top tab is the "النقل" cluster entry; a dedicated
+    // TransportTabsNav (القائمة السفلية) renders under it on transport routes.
     expect(FLEET_TABS).toContain("/fleet/transport/bookings");
+    expect(FLEET_TABS).toMatch(/TransportTabsNav/);
   });
 });
 
