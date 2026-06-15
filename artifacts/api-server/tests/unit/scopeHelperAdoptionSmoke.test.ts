@@ -66,6 +66,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "execDashboard.ts",
   "export.ts",
   "finance-algorithms.ts",
+  // finance-amortization.ts: FIN-TIME-SPREADING (#2247) prepaid-amortization
+  // CRUD + run trigger. List/insert/run keyed by (companyId, …) — point
+  // lookups + a per-company recognition run, not a branch list cascade.
+  // Manual scope.companyId scoping is correct here (mirrors finance-memory.ts).
+  "finance-amortization.ts",
   "finance-custodies.ts",
   "finance-gl-helpers.ts",
   "finance-hardening.ts",
@@ -272,9 +277,13 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: TR-022 routes/transport-calendar.ts — unified
       // transport calendar aggregate keyed on (companyId, date); allowlisted
       // like calendar.ts / umrah-entities.ts (no list-cascade branch filter).
-      total: 121,
+      // +1 total/manualOnly: FIN-TIME-SPREADING (#2247)
+      // routes/finance-amortization.ts — prepaid-amortization CRUD + run
+      // trigger keyed by (companyId, …); allowlisted with justification
+      // (mirrors finance-memory.ts, point-lookup/per-company-run shape).
+      total: 122,
       helperUsers: 39,
-      manualOnly: 79,
+      manualOnly: 80,
     });
   });
 });
