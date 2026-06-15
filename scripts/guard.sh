@@ -128,6 +128,14 @@ run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migration
 # db/schema_pre.sql (fresh installs never re-run pre-cutoff migrations, so a
 # stale dump silently 500s clean environments — the 2026-06 inbox incident).
 run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
+# Named value-set CHECK-constraint drift — a migration may widen/narrow a
+# CHECK set (e.g. notification_delivery_log 'suppressed', #817) that a
+# dump-only provisioning path keeps STALE, so writing the new value 23514s on
+# fresh/CI DBs. OFFLINE (migrations vs committed dump, no DB); baseline in
+# scripts/constraint-drift-allowlist.txt, fails only on NEW drift. Pure-logic
+# fixtures guard the detector itself.
+run_step "check:constraint-drift:tests" node scripts/src/check-constraint-drift.test.mjs
+run_step "check:constraint-drift" node scripts/src/check-constraint-drift.mjs
 # Invalid interactive-element nesting: <Link><Button> renders <a><button>,
 # which is invalid HTML and breaks keyboard / screen-reader semantics.
 # OFFLINE source scan; baseline in scripts/button-nesting-allowlist.txt,
@@ -141,6 +149,13 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
 # Pure-logic fixtures guard the detector.
 run_step "check:dup-filenames:tests" node scripts/src/check-dup-filenames.test.mjs
 run_step "check:dup-filenames" node scripts/src/check-dup-filenames.mjs
+# WRITE endpoints (POST/PUT/PATCH/DELETE) with no detectable audit trail —
+# threat-model Repudiation requires every sensitive mutation to log who/what/
+# when. OFFLINE source scan (mirrors api-to-audit-map detection); baseline in
+# scripts/audit-coverage-allowlist.txt, fails only on a NEW unaudited write.
+# Pure-logic fixtures guard the detector.
+run_step "check:audit-coverage:tests" node scripts/src/check-audit-coverage.test.mjs
+run_step "check:audit-coverage" node scripts/src/check-audit-coverage.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
 run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs
