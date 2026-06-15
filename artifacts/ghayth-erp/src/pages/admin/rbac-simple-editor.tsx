@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Shield, Search, Users, Copy, Info, Eye } from "lucide-react";
@@ -389,18 +389,16 @@ export default function RbacSimpleEditor() {
         </div>
       </PageStateWrapper>
 
-      <AlertDialog open={pendingRoleSwitch !== false} onOpenChange={(o) => { if (!o) setPendingRoleSwitch(false); }}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader className="text-right">
-            <AlertDialogTitle>تغييرات غير محفوظة</AlertDialogTitle>
-            <AlertDialogDescription>لديك تغييرات غير محفوظة على هذا الدور. هل تريد تجاهلها والانتقال؟</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row-reverse gap-2">
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmRoleSwitch} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">تجاهل والانتقال</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={pendingRoleSwitch !== false}
+        onOpenChange={(o) => { if (!o) setPendingRoleSwitch(false); }}
+        variant="caution"
+        title="تغييرات غير محفوظة"
+        description="لديك تغييرات غير محفوظة على هذا الدور. هل تريد تجاهلها والانتقال؟"
+        confirmLabel="تجاهل والانتقال"
+        onConfirm={confirmRoleSwitch}
+      />
     </PageShell>
   );
 }
