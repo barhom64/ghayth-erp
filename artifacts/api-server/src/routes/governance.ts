@@ -234,8 +234,8 @@ router.get("/policies/:id", authorize({ feature: "governance", action: "view" })
     );
     row.modules = links.map((l: Record<string, unknown>) => l.module);
     const versions = await rawQuery<Record<string, unknown>>(
-      `SELECT id, version, title, status, "createdAt" FROM governance_policies WHERE ("parentId"=$1 OR id=$1) AND "deletedAt" IS NULL ORDER BY version DESC`,
-      [row.id]
+      `SELECT id, version, title, status, "createdAt" FROM governance_policies WHERE ("parentId"=$1 OR id=$1) AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL ORDER BY version DESC`,
+      [row.id, scope.companyId]
     );
     row.versions = versions;
     res.json(maskFields(req, row));
@@ -300,8 +300,8 @@ router.post("/policies/:id/new-version", authorize({ feature: "governance", acti
     if (!parent) throw new NotFoundError("السياسة غير موجودة");
 
     const [maxVersion] = await rawQuery<Record<string, unknown>>(
-      `SELECT COALESCE(MAX(version), 0) + 1 as next FROM governance_policies WHERE ("parentId"=$1 OR id=$1) AND "deletedAt" IS NULL`,
-      [parentId]
+      `SELECT COALESCE(MAX(version), 0) + 1 as next FROM governance_policies WHERE ("parentId"=$1 OR id=$1) AND ("companyId"=$2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
+      [parentId, scope.companyId]
     );
     const nextVersion = Number(maxVersion?.next || Number(parent.version) + 1);
 
@@ -368,8 +368,8 @@ router.get("/policies/:id/module-links", authorize({ feature: "governance", acti
     );
     if (!policy) throw new NotFoundError("السياسة غير موجودة");
     const rows = await rawQuery(
-      `SELECT * FROM policy_module_links WHERE "policyId"=$1 LIMIT 500`,
-      [policyId]
+      `SELECT * FROM policy_module_links WHERE "policyId"=$1 AND ("companyId"=$2 OR "companyId" IS NULL) LIMIT 500`,
+      [policyId, scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "governance"); }
