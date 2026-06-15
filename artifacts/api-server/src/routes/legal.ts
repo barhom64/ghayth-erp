@@ -1163,7 +1163,7 @@ router.get("/cases/:caseId/correspondence", authorize({ feature: "legal.cases", 
     const caseId = parseId(req.params.caseId, "caseId");
     const [lc] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 AND "companyId"=$2 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId, scope.companyId]);
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });
