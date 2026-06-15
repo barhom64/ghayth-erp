@@ -29,25 +29,36 @@ ALTER TABLE public.fleet_drivers
 -- Range guards so a bad recompute can't poison the column with a
 -- 200% rate. Idempotent guard so a re-run on a partially-applied DB
 -- doesn't fail with 42710.
+-- Idempotent + per-constraint: each CHECK is guarded by its OWN
+-- pg_constraint existence test. The previous single-guard form keyed the
+-- whole block on `..._score_range` only, so a partially-applied DB (one
+-- range present, another missing) would 42710 on the missing one and
+-- crash-loop the production migration runner, freezing the whole chain.
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-     WHERE conname = 'fleet_drivers_reputation_score_range'
-  ) THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fleet_drivers_reputation_score_range') THEN
     ALTER TABLE public.fleet_drivers
       ADD CONSTRAINT fleet_drivers_reputation_score_range CHECK (
         "reputationScore" IS NULL OR
         ("reputationScore" >= 0 AND "reputationScore" <= 100)
-      ),
+      );
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fleet_drivers_reputation_on_time_range') THEN
+    ALTER TABLE public.fleet_drivers
       ADD CONSTRAINT fleet_drivers_reputation_on_time_range CHECK (
         "reputationOnTimeRate" IS NULL OR
         ("reputationOnTimeRate" >= 0 AND "reputationOnTimeRate" <= 100)
-      ),
+      );
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fleet_drivers_reputation_completion_range') THEN
+    ALTER TABLE public.fleet_drivers
       ADD CONSTRAINT fleet_drivers_reputation_completion_range CHECK (
         "reputationCompletionRate" IS NULL OR
         ("reputationCompletionRate" >= 0 AND "reputationCompletionRate" <= 100)
-      ),
+      );
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fleet_drivers_reputation_start_range') THEN
+    ALTER TABLE public.fleet_drivers
       ADD CONSTRAINT fleet_drivers_reputation_start_range CHECK (
         "reputationStartRate" IS NULL OR
         ("reputationStartRate" >= 0 AND "reputationStartRate" <= 100)

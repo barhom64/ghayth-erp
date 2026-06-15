@@ -55,12 +55,16 @@
 ALTER TABLE public.invoices
   DROP CONSTRAINT IF EXISTS "invoices_clientId_fkey";
 ALTER TABLE public.invoices
+  DROP CONSTRAINT IF EXISTS invoices_client_company_fk;
+ALTER TABLE public.invoices
   ADD CONSTRAINT invoices_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
 
 ALTER TABLE public.credit_memos
   DROP CONSTRAINT IF EXISTS "credit_memos_clientId_fkey";
+ALTER TABLE public.credit_memos
+  DROP CONSTRAINT IF EXISTS credit_memos_client_company_fk;
 ALTER TABLE public.credit_memos
   ADD CONSTRAINT credit_memos_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
@@ -69,12 +73,16 @@ ALTER TABLE public.credit_memos
 ALTER TABLE public.debit_memos
   DROP CONSTRAINT IF EXISTS "debit_memos_clientId_fkey";
 ALTER TABLE public.debit_memos
+  DROP CONSTRAINT IF EXISTS debit_memos_client_company_fk;
+ALTER TABLE public.debit_memos
   ADD CONSTRAINT debit_memos_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
 
 ALTER TABLE public.customer_advances
   DROP CONSTRAINT IF EXISTS "customer_advances_clientId_fkey";
+ALTER TABLE public.customer_advances
+  DROP CONSTRAINT IF EXISTS customer_advances_client_company_fk;
 ALTER TABLE public.customer_advances
   ADD CONSTRAINT customer_advances_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
@@ -83,6 +91,8 @@ ALTER TABLE public.customer_advances
 ALTER TABLE public.dunning_letters
   DROP CONSTRAINT IF EXISTS "dunning_letters_clientId_fkey";
 ALTER TABLE public.dunning_letters
+  DROP CONSTRAINT IF EXISTS dunning_letters_client_company_fk;
+ALTER TABLE public.dunning_letters
   ADD CONSTRAINT dunning_letters_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
@@ -90,12 +100,16 @@ ALTER TABLE public.dunning_letters
 ALTER TABLE public.vouchers
   DROP CONSTRAINT IF EXISTS "vouchers_clientId_fkey";
 ALTER TABLE public.vouchers
+  DROP CONSTRAINT IF EXISTS vouchers_client_company_fk;
+ALTER TABLE public.vouchers
   ADD CONSTRAINT vouchers_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
 
 ALTER TABLE public.pricing_rule_applications
   DROP CONSTRAINT IF EXISTS "pricing_rule_applications_clientId_fkey";
+ALTER TABLE public.pricing_rule_applications
+  DROP CONSTRAINT IF EXISTS pricing_rule_applications_client_company_fk;
 ALTER TABLE public.pricing_rule_applications
   ADD CONSTRAINT pricing_rule_applications_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
@@ -105,12 +119,16 @@ ALTER TABLE public.pricing_rule_applications
 ALTER TABLE public.crm_opportunities
   DROP CONSTRAINT IF EXISTS "crm_opportunities_clientId_fkey";
 ALTER TABLE public.crm_opportunities
+  DROP CONSTRAINT IF EXISTS crm_opportunities_client_company_fk;
+ALTER TABLE public.crm_opportunities
   ADD CONSTRAINT crm_opportunities_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
 
 ALTER TABLE public.crm_contacts
   DROP CONSTRAINT IF EXISTS "crm_contacts_clientId_fkey";
+ALTER TABLE public.crm_contacts
+  DROP CONSTRAINT IF EXISTS crm_contacts_client_company_fk;
 ALTER TABLE public.crm_contacts
   ADD CONSTRAINT crm_contacts_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
@@ -120,6 +138,8 @@ ALTER TABLE public.crm_contacts
 ALTER TABLE public.projects
   DROP CONSTRAINT IF EXISTS "projects_clientId_fkey";
 ALTER TABLE public.projects
+  DROP CONSTRAINT IF EXISTS projects_client_company_fk;
+ALTER TABLE public.projects
   ADD CONSTRAINT projects_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
@@ -127,12 +147,16 @@ ALTER TABLE public.projects
 ALTER TABLE public.support_tickets
   DROP CONSTRAINT IF EXISTS "support_tickets_clientId_fkey";
 ALTER TABLE public.support_tickets
+  DROP CONSTRAINT IF EXISTS support_tickets_client_company_fk;
+ALTER TABLE public.support_tickets
   ADD CONSTRAINT support_tickets_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
 
 ALTER TABLE public.tasks
   DROP CONSTRAINT IF EXISTS "tasks_clientId_fkey";
+ALTER TABLE public.tasks
+  DROP CONSTRAINT IF EXISTS tasks_client_company_fk;
 ALTER TABLE public.tasks
   ADD CONSTRAINT tasks_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
@@ -142,12 +166,16 @@ ALTER TABLE public.tasks
 ALTER TABLE public.umrah_sub_agents
   DROP CONSTRAINT IF EXISTS "umrah_sub_agents_clientId_fkey";
 ALTER TABLE public.umrah_sub_agents
+  DROP CONSTRAINT IF EXISTS umrah_sub_agents_client_company_fk;
+ALTER TABLE public.umrah_sub_agents
   ADD CONSTRAINT umrah_sub_agents_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
 
 ALTER TABLE public.umrah_sales_invoices
   DROP CONSTRAINT IF EXISTS "umrah_sales_invoices_clientId_fkey";
+ALTER TABLE public.umrah_sales_invoices
+  DROP CONSTRAINT IF EXISTS umrah_sales_invoices_client_company_fk;
 ALTER TABLE public.umrah_sales_invoices
   ADD CONSTRAINT umrah_sales_invoices_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
@@ -156,6 +184,8 @@ ALTER TABLE public.umrah_sales_invoices
 ALTER TABLE public.fleet_trips
   DROP CONSTRAINT IF EXISTS "fleet_trips_clientId_fkey";
 ALTER TABLE public.fleet_trips
+  DROP CONSTRAINT IF EXISTS fleet_trips_client_company_fk;
+ALTER TABLE public.fleet_trips
   ADD CONSTRAINT fleet_trips_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")
   ON DELETE SET NULL NOT VALID;
@@ -163,6 +193,8 @@ ALTER TABLE public.fleet_trips
 -- invoice_payments has a clientId column added later; tighten that too.
 ALTER TABLE public.invoice_payments
   DROP CONSTRAINT IF EXISTS "invoice_payments_clientId_fkey";
+ALTER TABLE public.invoice_payments
+  DROP CONSTRAINT IF EXISTS invoice_payments_client_company_fk;
 ALTER TABLE public.invoice_payments
   ADD CONSTRAINT invoice_payments_client_company_fk
   FOREIGN KEY ("clientId", "companyId") REFERENCES public.clients(id, "companyId")

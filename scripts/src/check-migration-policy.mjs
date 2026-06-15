@@ -55,6 +55,54 @@ const DESTRUCTIVE_RE =
 const NON_IDEMPOTENT_CREATE_RE = /\bCREATE\s+TABLE\s+(?!IF\s+NOT\s+EXISTS)/i;
 const BREAKING_ACK_RE = /--\s*@policy:breaking\b/i;
 
+// Constraint adds are NOT idempotent: Postgres has no
+// `ADD CONSTRAINT IF NOT EXISTS`, so a bare `ADD CONSTRAINT` throws 42710
+// (duplicate_object) the moment the constraint already exists. In production
+// the migration runner re-throws on failure and crash-loops, which freezes
+// the ENTIRE remaining migration chain (the fleet_rental_contracts
+// twin-migration incident: 282_/293_ both added the same fuel-range checks,
+// so the second one to run 42710'd and stalled every later migration —
+// surfacing as a generic "load error" on pages whose columns never landed).
+// A new migration that ADDs a constraint must therefore guard it: either a
+// `DROP CONSTRAINT IF EXISTS <name>` first, or a `pg_constraint` existence
+// check (`DO $$ ... IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE
+// conname = '<name>') ... $$`).
+const ADD_CONSTRAINT_RE = /\bADD\s+CONSTRAINT\s+("[^"]+"|[A-Za-z_]\w*)/gi;
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Strip SQL comments but KEEP string literals (the guard scan needs
+ *  `conname = '<name>'`, whose name lives inside a string literal). */
+export function stripComments(sql) {
+  return sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");
+}
+
+/**
+ * Find `ADD CONSTRAINT <name>` statements whose constraint is not protected by
+ * an idempotency guard in the SAME migration. Returns de-duplicated constraint
+ * names; empty when every add is guarded. A constraint is "guarded" when the
+ * file also contains a `DROP CONSTRAINT IF EXISTS <name>` or a `pg_constraint`
+ * existence check keyed on that exact `conname`.
+ */
+export function findUnguardedAddConstraints(content) {
+  const code = stripComments(content);
+  const unguarded = new Set();
+  let m;
+  ADD_CONSTRAINT_RE.lastIndex = 0;
+  while ((m = ADD_CONSTRAINT_RE.exec(code)) !== null) {
+    const name = m[1].replace(/"/g, "");
+    const dropGuard = new RegExp(
+      `DROP\\s+CONSTRAINT\\s+IF\\s+EXISTS\\s+"?${escapeRe(name)}"?`,
+      "i",
+    );
+    const existsGuard = new RegExp(`conname\\s*=\\s*'${escapeRe(name)}'`, "i");
+    if (!dropGuard.test(code) && !existsGuard.test(code)) unguarded.add(name);
+  }
+  return [...unguarded];
+}
+
 // Backward-incompatible ("breaking") changes that do NOT destroy data but
 // break a concurrently-running OLD app version during a rolling deploy
 // (see docs/MIGRATION_POLICY.md §4 + §7/§8). Reversible, unlike DROP/TRUNCATE,
@@ -218,6 +266,18 @@ async function main() {
       warnings.push(
         `${file}: CREATE TABLE without "IF NOT EXISTS" — prefer idempotent ` +
           "DDL so a partially-applied migration can be re-run safely.",
+      );
+    }
+
+    const unguardedConstraints = findUnguardedAddConstraints(content);
+    if (unguardedConstraints.length > 0) {
+      errors.push(
+        `${file}: non-idempotent ADD CONSTRAINT (${unguardedConstraints.join("; ")}) ` +
+          "without an idempotency guard. A bare ADD CONSTRAINT throws 42710 on " +
+          "re-run and crash-loops the production migration runner, freezing the " +
+          'whole chain. Guard it with a "DROP CONSTRAINT IF EXISTS <name>" first, ' +
+          'or a "DO $$ ... IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE ' +
+          "conname = '<name>') ... $$\" block. See docs/MIGRATION_POLICY.md.",
       );
     }
   }
