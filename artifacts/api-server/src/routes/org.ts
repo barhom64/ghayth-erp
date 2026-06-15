@@ -43,6 +43,21 @@ const HR_EMPLOYEES_READ = { feature: "hr.employees", action: "list" } as const;
 const HR_ATTENDANCE_READ = { feature: "hr.attendance", action: "list" } as const;
 const HR_ATTENDANCE_WRITE = { feature: "hr.attendance", action: "update" } as const;
 
+// HR-REV-1 §6 decision #4 — supervision_lines + approval_authorities are
+// part of the ORGANIZATION model (who reports to whom; who may approve
+// what), so they belong on the domain-correct `hr.organization` feature —
+// NOT the generic `admin` gate. `admin` is too tight here: it is held only
+// by the owner (no seeded role grants it, and `hr:*`/`governance:*` do not
+// expand to it), so the HR Manager this file is explicitly built for
+// («تُمكِّن مدير الموارد البشرية من إدارة supervision_lines/approval_authorities»)
+// was locked out. `hr.organization` is already held by owner (*) and by
+// general_manager/hr_manager (hr:*), so this LETS THE RIGHT OPERATORS IN
+// with zero migration and no lockout — same split rationale as the
+// HR_ATTENDANCE gates above (PR-3 #2077).
+const ORG_READ = { feature: "hr.organization", action: "list" } as const;
+const ORG_CREATE = { feature: "hr.organization", action: "create" } as const;
+const ORG_DELETE = { feature: "hr.organization", action: "delete" } as const;
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 function requireScope(req: any): { companyId: number; userId: number } {
   const scope = req.scope;
@@ -445,7 +460,7 @@ const supervisionLineSchema = z.object({
   isPrimary: z.boolean().optional(),
 });
 
-router.get("/supervision-lines", authorize(ADMIN), async (req, res) => {
+router.get("/supervision-lines", authorize(ORG_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const where: string[] = [`sl."companyId" = $1`];
@@ -481,7 +496,7 @@ router.get("/supervision-lines", authorize(ADMIN), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر جلب خطوط الإشراف"); }
 });
 
-router.post("/supervision-lines", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/supervision-lines", authorize(ORG_CREATE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const body = zodParse(supervisionLineSchema.safeParse(req.body));
@@ -506,7 +521,7 @@ router.post("/supervision-lines", authorize(ADMIN_WRITE), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر إنشاء خط الإشراف"); }
 });
 
-router.delete("/supervision-lines/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/supervision-lines/:id", authorize(ORG_DELETE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);
@@ -535,7 +550,7 @@ const approvalAuthoritySchema = z.object({
   expiresAt: z.string().optional().nullable(),
 });
 
-router.get("/approval-authorities", authorize(ADMIN), async (req, res) => {
+router.get("/approval-authorities", authorize(ORG_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const where: string[] = [`aa."companyId" = $1`];
@@ -567,7 +582,7 @@ router.get("/approval-authorities", authorize(ADMIN), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر جلب صلاحيات الاعتماد"); }
 });
 
-router.post("/approval-authorities", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/approval-authorities", authorize(ORG_CREATE), async (req, res) => {
   try {
     const { companyId, userId } = requireScope(req);
     const body = zodParse(approvalAuthoritySchema.safeParse(req.body));
@@ -595,7 +610,7 @@ router.post("/approval-authorities", authorize(ADMIN_WRITE), async (req, res) =>
   } catch (e) { handleRouteError(e, res, "تعذّر منح صلاحية الاعتماد"); }
 });
 
-router.delete("/approval-authorities/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/approval-authorities/:id", authorize(ORG_DELETE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);
