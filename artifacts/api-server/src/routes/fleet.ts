@@ -3169,7 +3169,9 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
     );
     assertInsert(insertId, "fleet_fuel_logs");
 
-    // Auto journal entry for fuel cost (vehicle's branch, not operator's)
+    // #TA-T18 finance-boundary — logging fuel no longer posts GL directly;
+    // it queues an EXPENSE candidate the accountant materialises (then the
+    // GL is posted, in finance). Transport never touches the ledger.
     if (totalCost > 0) {
       const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
         `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -3178,10 +3180,10 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const vehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const { fleetEngine } = await import("../lib/engines/index.js");
-      await fleetEngine.postFuelExpenseGL(
+      await fleetEngine.createFuelExpenseCandidate(
         { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: insertId, vehicleId: resolvedVehicleId, amount: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
-      ).catch((e: unknown) => logger.error(e, "Fuel GL failed:"));
+        { id: insertId, vehicleId: resolvedVehicleId, cost: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Fuel expense candidate failed:"));
     }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -3277,10 +3279,10 @@ router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create
       const insuranceType = b.type || b.insuranceType || 'comprehensive';
       const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
       const { fleetEngine } = await import("../lib/engines/index.js");
-      await fleetEngine.postInsuranceGL(
+      await fleetEngine.createInsuranceExpenseCandidate(
         { companyId: scope.companyId, branchId: insuranceVehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: insertId, vehicleId: Number(b.vehicleId), premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
-      ).catch((e: unknown) => logger.error(e, "Insurance GL failed:"));
+        { id: insertId, vehicleId: Number(b.vehicleId), cost: premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Insurance expense candidate failed:"));
     }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
