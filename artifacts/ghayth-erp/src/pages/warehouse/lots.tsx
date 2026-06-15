@@ -11,10 +11,7 @@ import { Package, Plus, ShieldCheck, ShieldX, AlertTriangle } from "lucide-react
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
 import { FormShell, FormTextField, FormDateField, FormGrid } from "@workspace/ui-core";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 const STATUS_LABELS: Record<string, { label: string; variant: any }> = {
   active:     { label: "نشط",       variant: "default" },
@@ -165,33 +162,32 @@ export default function WarehouseLotsPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={!!rejectTarget} onOpenChange={(o) => !o && setRejectTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>رفض الدفعة</AlertDialogTitle>
-            <AlertDialogDescription>الدفعة ستنتقل إلى "متلف". أدخل سبب الرفض:</AlertDialogDescription>
-          </AlertDialogHeader>
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="السبب" />
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={reject} disabled={!reason.trim()}>تأكيد الرفض</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={!!rejectTarget}
+        onOpenChange={(o) => { if (!o) { setRejectTarget(null); setReason(""); } }}
+        variant="destructive"
+        title="رفض الدفعة"
+        description='الدفعة ستنتقل إلى "متلف". أدخل سبب الرفض:'
+        confirmLabel="تأكيد الرفض"
+        disabled={!reason.trim()}
+        onConfirm={reject}
+      >
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="السبب" className="mt-2" />
+      </ConfirmActionDialog>
 
-      <AlertDialog open={!!recallTarget} onOpenChange={(o) => !o && setRecallTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>استدعاء الدفعة</AlertDialogTitle>
-            <AlertDialogDescription>هذا الإجراء سيمنع بيع الدفعة. أدخل سبب الاستدعاء:</AlertDialogDescription>
-          </AlertDialogHeader>
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="السبب" />
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={recall} disabled={!reason.trim()}>تأكيد الاستدعاء</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={!!recallTarget}
+        onOpenChange={(o) => { if (!o) { setRecallTarget(null); setReason(""); } }}
+        variant="destructive"
+        title="استدعاء الدفعة"
+        description="هذا الإجراء سيمنع بيع الدفعة. أدخل سبب الاستدعاء:"
+        confirmLabel="تأكيد الاستدعاء"
+        disabled={!reason.trim()}
+        onConfirm={recall}
+      >
+        <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="السبب" className="mt-2" />
+      </ConfirmActionDialog>
     </PageShell>
   );
 }
