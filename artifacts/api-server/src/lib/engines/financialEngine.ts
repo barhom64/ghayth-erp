@@ -586,7 +586,7 @@ class FinancialEngineImpl implements DomainEngine {
       );
     }
 
-    const invoiceDate = request.invoiceDate ?? new Date().toISOString().slice(0, 10);
+    const invoiceDate = request.invoiceDate ?? todayISO();
     const currency = request.currency ?? "SAR";
 
     // ── Step 1: number (centralised via numberingService)
