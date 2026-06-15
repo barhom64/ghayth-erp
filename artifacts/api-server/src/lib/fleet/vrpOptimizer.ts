@@ -112,9 +112,14 @@ interface VehiclePoint {
  * Greedy nearest-neighbour solver: for each booking (in input order),
  * pick the closest vehicle that hasn't been assigned yet. Each vehicle
  * carries one booking per run (Phase 1 doesn't model multi-stop
- * routes — that's Phase 2's job).
+ * routes — that's a future phase).
  *
  * Deterministic: same inputs in the same order produce the same plan.
+ *
+ * NOTE: As of Phase 3b, `runOptimization` defaults to `hungarianAssign`
+ * (globally optimal). `greedyAssign` is kept for:
+ *   - regression tests that pin the original behaviour
+ *   - a fallback path if the Hungarian solver fails on an edge case
  */
 export function greedyAssign(
   bookings: BookingPoint[],
@@ -152,6 +157,147 @@ export function greedyAssign(
     }
   });
 
+  return { assignments, unassigned, totalDistanceMeters };
+}
+
+// ── Hungarian (Kuhn-Munkres) solver — Phase 3b ──────────────────────
+
+/**
+ * Globally-optimal one-to-one assignment minimising total haversine
+ * distance. The Kuhn-Munkres algorithm solves the bipartite-matching
+ * problem in O(n³); for the route's caps (200 × 100) that's < 10M ops
+ * which finishes in single-digit milliseconds.
+ *
+ * Why this exists (Phase 3b): the greedy heuristic depends on the
+ * input order of bookings. Two bookings that are both nearest to the
+ * same vehicle force the second to fall back to a worse vehicle even
+ * when a better global pairing exists. Hungarian sees the whole cost
+ * matrix in one go and picks the globally minimum-cost set of pairs.
+ *
+ * Determinism: a tied global minimum can have several valid pairings.
+ * The implementation iterates rows/cols in their natural order so the
+ * SAME input always yields the SAME plan — pinned by static test.
+ *
+ * Rectangular case: when N bookings ≠ M vehicles, the matrix is
+ * padded with sentinel rows/columns whose cost is `Infinity`. Real
+ * assignments never pair against a sentinel; the padded slots fall
+ * out and the booking/vehicle on the other side stays unassigned.
+ */
+export function hungarianAssign(
+  bookings: BookingPoint[],
+  vehicles: VehiclePoint[],
+): { assignments: OptimizationAssignment[]; unassigned: number[]; totalDistanceMeters: number } {
+  const B = bookings.length;
+  const V = vehicles.length;
+  if (B === 0) {
+    return { assignments: [], unassigned: [], totalDistanceMeters: 0 };
+  }
+  if (V === 0) {
+    return {
+      assignments: [],
+      unassigned: bookings.map((b) => b.id),
+      totalDistanceMeters: 0,
+    };
+  }
+  const N = Math.max(B, V);
+  const SENTINEL = Number.MAX_SAFE_INTEGER / 4;
+  // Build the square cost matrix in meters, padded with the sentinel
+  // for rows or columns past the real input size.
+  const cost: number[][] = [];
+  for (let i = 0; i < N; i++) {
+    const row: number[] = new Array(N);
+    for (let j = 0; j < N; j++) {
+      if (i < B && j < V) {
+        row[j] = haversineMeters(
+          vehicles[j].currentLat, vehicles[j].currentLng,
+          bookings[i].pickupLat, bookings[i].pickupLng,
+        );
+      } else {
+        row[j] = SENTINEL;
+      }
+    }
+    cost[i] = row;
+  }
+  // Kuhn-Munkres (rectangular variant on square padded matrix).
+  // Standard "labels + slack" formulation; O(n³).
+  const u: number[] = new Array(N + 1).fill(0);
+  const v: number[] = new Array(N + 1).fill(0);
+  const p: number[] = new Array(N + 1).fill(0); // p[j] = row matched to column j
+  const way: number[] = new Array(N + 1).fill(0);
+  for (let i = 1; i <= N; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv: number[] = new Array(N + 1).fill(Infinity);
+    const used: boolean[] = new Array(N + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = Infinity;
+      let j1 = -1;
+      for (let j = 1; j <= N; j++) {
+        if (!used[j]) {
+          const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+          if (cur < minv[j]) {
+            minv[j] = cur;
+            way[j] = j0;
+          }
+          if (minv[j] < delta) {
+            delta = minv[j];
+            j1 = j;
+          }
+        }
+      }
+      for (let j = 0; j <= N; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else {
+          minv[j] -= delta;
+        }
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    // Augment the alternating path: shift the matched column back.
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0 !== 0);
+  }
+  // Read assignments out of p[]. p[j] holds the row matched to column j
+  // (1-indexed); convert back to (vehicle index, booking index) and
+  // skip sentinel pairings (where one side is past the real input).
+  const assignments: OptimizationAssignment[] = [];
+  const assignedBookings = new Set<number>();
+  let totalDistanceMeters = 0;
+  for (let j = 1; j <= N; j++) {
+    const i = p[j];
+    if (i === 0) continue;
+    const bookingIdx = i - 1;
+    const vehicleIdx = j - 1;
+    if (bookingIdx >= B || vehicleIdx >= V) continue;
+    const distance = cost[bookingIdx][vehicleIdx];
+    if (distance >= SENTINEL) continue;
+    assignedBookings.add(bookingIdx);
+    totalDistanceMeters += distance;
+    assignments.push({
+      bookingLineId: bookings[bookingIdx].id,
+      vehicleId: vehicles[vehicleIdx].id,
+      driverId: vehicles[vehicleIdx].driverId,
+      distanceMeters: distance,
+      sequenceOrder: bookingIdx,
+      reason: "إسناد أمثلي (Hungarian)",
+    });
+  }
+  // Stable sort by sequenceOrder so the output reads in booking order.
+  assignments.sort((a, b) => a.sequenceOrder - b.sequenceOrder);
+  // Re-number sequenceOrder densely (0..k-1) so the SPA renders
+  // 1, 2, 3 instead of 0, 2, 5.
+  assignments.forEach((a, idx) => { a.sequenceOrder = idx; });
+  const unassigned: number[] = [];
+  bookings.forEach((b, idx) => {
+    if (!assignedBookings.has(idx)) unassigned.push(b.id);
+  });
   return { assignments, unassigned, totalDistanceMeters };
 }
 
@@ -229,15 +375,18 @@ export async function runOptimization(input: OptimizationInput): Promise<Optimiz
       [input.companyId, input.vehicleIds],
     );
 
-    // 4. Run the heuristic.
-    const { assignments, unassigned, totalDistanceMeters } = greedyAssign(bookings, vehicles);
+    // 4. Run the solver. Phase 3b promotes Kuhn-Munkres (Hungarian)
+    //    to the default — globally optimal 1-to-1 minimum-distance
+    //    matching, same shape as the greedy output but never inferior.
+    //    The greedy variant remains exported as a fallback + for tests.
+    const { assignments, unassigned, totalDistanceMeters } = hungarianAssign(bookings, vehicles);
     const solveDurationMs = Date.now() - startedAt;
 
     // 5. Persist the result.
     await rawExecute(
       `UPDATE vrp_optimization_runs
           SET status = 'solved',
-              algorithm = 'greedy_nearest_neighbor',
+              algorithm = 'hungarian_min_distance',
               "assignmentsJson"      = $2::jsonb,
               "unassignedJson"       = $3::jsonb,
               "totalDistanceMeters"  = $4,
@@ -261,7 +410,7 @@ export async function runOptimization(input: OptimizationInput): Promise<Optimiz
     return {
       runId,
       status: "solved",
-      algorithm: "greedy_nearest_neighbor",
+      algorithm: "hungarian_min_distance",
       assignments,
       unassigned,
       totalDistanceMeters,
@@ -280,7 +429,7 @@ export async function runOptimization(input: OptimizationInput): Promise<Optimiz
     return {
       runId,
       status: "failed",
-      algorithm: "greedy_nearest_neighbor",
+      algorithm: "hungarian_min_distance",
       assignments: [],
       unassigned: input.bookingLineIds,
       totalDistanceMeters: 0,
