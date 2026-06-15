@@ -139,17 +139,17 @@ router.get(
               rawQuery<Record<string, unknown>>(
                 `SELECT id::text, 'leave' AS kind, 'طلب إجازة' AS label, status, "createdAt"
                    FROM hr_leave_requests
-                  WHERE "assignmentId" = $1 AND status = 'pending' AND hr_leave_requests."deletedAt" IS NULL
+                  WHERE "assignmentId" = $1 AND hr_leave_requests."companyId" = $2 AND status = 'pending' AND hr_leave_requests."deletedAt" IS NULL
                  UNION ALL
                  SELECT id::text, 'loan', CONCAT('سلفة ', "loanNumber"), status, "createdAt"
                    FROM hr_employee_loans
-                  WHERE "assignmentId" = $1 AND status = 'pending' AND hr_employee_loans."deletedAt" IS NULL
+                  WHERE "assignmentId" = $1 AND hr_employee_loans."companyId" = $2 AND status = 'pending' AND hr_employee_loans."deletedAt" IS NULL
                  UNION ALL
                  SELECT id::text, 'overtime', CONCAT('وقت إضافي ', "requestNumber"), status, "createdAt"
                    FROM hr_overtime_requests
-                  WHERE "assignmentId" = $1 AND status = 'pending' AND hr_overtime_requests."deletedAt" IS NULL
+                  WHERE "assignmentId" = $1 AND hr_overtime_requests."companyId" = $2 AND status = 'pending' AND hr_overtime_requests."deletedAt" IS NULL
                  ORDER BY "createdAt" DESC LIMIT 5`,
-                [assignmentId],
+                [assignmentId, companyId],
               ),
               "myPendingRequests",
             )
