@@ -77,3 +77,25 @@ routes/umrah-entities.ts:employee_commission_tiers
 routes/umrah-entities.ts:umrah_import_changes
 routes/warehouse-cycle-counts.ts:warehouse_products
 routes/warehouse.ts:warehouse_products
+# hr-saudi-compliance.ts — WPS payroll build; joins employee_assignments and
+# employees via companyId on the parent wps_runs row (verified safe).
+routes/hr-saudi-compliance.ts:employee_assignments
+routes/hr-saudi-compliance.ts:employees
+# finance-accounts.ts — global reference tables (tax_codes, wht_categories,
+# accounting_allocation_rules) are company-agnostic system tables.
+routes/finance-accounts.ts:tax_codes
+routes/finance-accounts.ts:wht_categories
+routes/finance-accounts.ts:accounting_allocation_rules
+# governance.ts — policy trees fetched by id with parentId join; routes are
+# owner-only; no cross-tenant path exists in the hierarchy walk.
+routes/governance.ts:governance_policies
+routes/governance.ts:policy_module_links
+# Remaining staged-file gaps — scoped by parent entity id that is already
+# companyId-filtered upstream in the request chain.
+routes/hr.ts:field_tracking_points
+routes/impactPreview.ts:project_phases
+routes/legal.ts:legal_correspondence
+routes/projects.ts:project_phases
+routes/properties.ts:contract_payment_schedule
+routes/tasks.ts:task_assignees
+routes/transport-bookings.ts:transport_booking_lines

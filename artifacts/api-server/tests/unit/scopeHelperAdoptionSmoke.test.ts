@@ -80,6 +80,10 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "fleet-telematics.ts",
   "governance.ts",
   "hr-compliance.ts",
+  // hr-saudi-compliance.ts: WPS/Mudad endpoints — point lookups keyed on
+  // (companyId) for credentials and run lists. buildScopedWhere targets
+  // branch-cascade list endpoints; these are per-company atomic operations.
+  "hr-saudi-compliance.ts",
   "hr-discipline.ts",
   "hr-wps.ts",
   "impactPreview.ts",
@@ -272,9 +276,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: TR-022 routes/transport-calendar.ts — unified
       // transport calendar aggregate keyed on (companyId, date); allowlisted
       // like calendar.ts / umrah-entities.ts (no list-cascade branch filter).
-      total: 121,
+      // +1 total/manualOnly: routes/hr-saudi-compliance.ts (Task #272)
+      // WPS/Mudad endpoints — point-lookup CRUD keyed on (companyId); no
+      // branch-cascade list endpoints; manual scoping correct here.
+      total: 122,
       helperUsers: 39,
-      manualOnly: 79,
+      manualOnly: 80,
     });
   });
 });

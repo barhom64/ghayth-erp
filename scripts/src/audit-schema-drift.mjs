@@ -92,6 +92,14 @@ const BUILTIN_IDENTIFIERS = new Set([
   // (inbox_task_sla_reminder_scan).
   "slaReminderSentAt",
   "slaFinalReminderSentAt",
+  // Mudad integration columns on `companies` table — added via migration,
+  // not yet reflected in db/schema.sql dump.
+  "mudadClientId",
+  "mudadClientSecret",
+  "mudadEnv",
+  "mudadEstablishmentId",
+  // WPS bank credentials table column — added via migration.
+  "bankFormat",
 ]);
 
 async function walk(dir, acc = []) {

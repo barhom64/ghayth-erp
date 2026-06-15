@@ -134,6 +134,7 @@ import overtimeRouter from "./hr-overtime.js";
 import exitRouter from "./hr-exit.js";
 import wpsRouter from "./hr-wps.js";
 import complianceRouter from "./hr-compliance.js";
+import saudiComplianceRouter from "./hr-saudi-compliance.js";
 import digitalSignatureRouter from "./digital-signature.js";
 import { eventsRouter } from "./events.js";
 import { execDashboardRouter } from "./execDashboard.js";
@@ -358,6 +359,7 @@ router.use("/hr", requireModule("hr"), overtimeRouter);
 router.use("/hr", requireModule("hr"), exitRouter);
 router.use("/hr", requireModule("hr"), wpsRouter);
 router.use("/hr", requireModule("hr"), complianceRouter);
+router.use("/hr/saudi", requireModule("hr"), saudiComplianceRouter);
 router.use("/hr/training", requireModule("hr"), trainingRouter);
 router.use("/hr/recruitment", requireModule("hr"), recruitmentRouter);
 // نموذج المؤسسة التشغيلي — مرفق تحت /org، يتطلب صلاحية HR (نفس family).

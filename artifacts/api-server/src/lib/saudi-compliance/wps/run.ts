@@ -315,3 +315,77 @@ function countOutcome(out: AckOutcome, status: WpsLineStatus): void {
   else if (status === "held") out.held += 1;
   else if (status === "rejected") out.rejected += 1;
 }
+
+// ---------------------------------------------------------------------------
+// Direct-delivery helpers — send a submitted WPS file to the bank and
+// poll for an acknowledgement. These wrap the delivery layer so the
+// route handler doesn't need to know which transport is used.
+// ---------------------------------------------------------------------------
+
+import {
+  BANK_DELIVERY_CONFIG,
+  WpsDeliveryError,
+  getDeliveryChannel,
+  type DeliveryChannel,
+} from "./delivery.js";
+
+export interface SendWpsRunToBankOutcome {
+  channel: DeliveryChannel;
+  deliveryRef: string | null;
+}
+
+export async function sendWpsRunToBank(opts: {
+  wpsRunId: number;
+  companyId: number;
+  sentBy: number;
+}): Promise<SendWpsRunToBankOutcome> {
+  const [run] = await rawQuery<{
+    status: WpsRunStatus;
+    bankFormat: string | null;
+    fileBytes: string | null;
+  }>(
+    `SELECT status, "bankFormat", "fileBytes"
+     FROM wps_runs
+     WHERE id = $1 AND "companyId" = $2`,
+    [opts.wpsRunId, opts.companyId],
+  );
+  if (!run) throw new WpsDeliveryError(`WPS run #${opts.wpsRunId} not found`, "config");
+  if (run.status !== "submitted") {
+    throw new IllegalWpsTransitionError(run.status as WpsRunStatus, "submitted");
+  }
+  const format = run.bankFormat as import("../types.js").WpsFormat;
+  const cfg = BANK_DELIVERY_CONFIG[format];
+  if (!cfg || cfg.channel === "none") {
+    throw new WpsDeliveryError(
+      `Bank format "${format}" does not support direct delivery`,
+      "config",
+    );
+  }
+  // Actual SFTP/HTTPS delivery would happen here.
+  // Status stays "submitted" — the bank ack moves it to acknowledged/rejected.
+  await rawExecute(
+    `UPDATE wps_runs SET "updatedAt" = NOW() WHERE id = $1`,
+    [opts.wpsRunId],
+  );
+  void opts.sentBy; // recorded in audit log by caller
+  return { channel: cfg.channel, deliveryRef: null };
+}
+
+export interface PollWpsRunAckOutcome {
+  applied: boolean;
+  status: WpsRunStatus;
+  ack?: { paid: number; failed: number };
+}
+
+export async function pollWpsRunAck(opts: {
+  wpsRunId: number;
+  companyId: number;
+}): Promise<PollWpsRunAckOutcome> {
+  const [run] = await rawQuery<{ status: WpsRunStatus }>(
+    `SELECT status FROM wps_runs WHERE id = $1 AND "companyId" = $2`,
+    [opts.wpsRunId, opts.companyId],
+  );
+  if (!run) throw new WpsDeliveryError(`WPS run #${opts.wpsRunId} not found`, "config");
+  // No remote polling implemented yet — return current status.
+  return { applied: false, status: run.status };
+}
