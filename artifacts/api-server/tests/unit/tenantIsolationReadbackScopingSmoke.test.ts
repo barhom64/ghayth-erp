@@ -35,6 +35,7 @@ const PROJECTS = readFileSync(join(ROUTES, "projects.ts"), "utf8");
 const WAREHOUSE_ADV = readFileSync(join(ROUTES, "warehouse-advanced.ts"), "utf8");
 const WAREHOUSE = readFileSync(join(ROUTES, "warehouse.ts"), "utf8");
 const WAREHOUSE_CC = readFileSync(join(ROUTES, "warehouse-cycle-counts.ts"), "utf8");
+const BI = readFileSync(join(ROUTES, "bi.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -263,6 +264,26 @@ describe("FND-013 #2340 — warehouse_products JOINs (batch 7) carry companyId",
     );
     expect(stripped).not.toMatch(
       /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 LIMIT/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — bi.ts per-user reads (batch 8) carry companyId", () => {
+  // Personal alert-fatigue surfaces scoped by the caller's own assignment;
+  // companyId added so the read is scoped on both axes (assignmentId is
+  // already company-unique, so this is defense-in-depth).
+  it("alert_fatigue_settings read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM alert_fatigue_settings WHERE "assignmentId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM alert_fatigue_settings WHERE "assignmentId" = \$1`/);
+  });
+
+  it("notifications daily-count read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM notifications\s+WHERE "assignmentId" = \$1 AND "companyId" = \$2 AND DATE\("createdAt"\)/,
     );
   });
 });
