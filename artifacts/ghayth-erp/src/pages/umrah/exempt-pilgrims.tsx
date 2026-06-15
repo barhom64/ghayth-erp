@@ -13,16 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -456,35 +447,27 @@ export default function UmrahExemptPilgrims() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={bulkConfirmOpen} onOpenChange={(o) => { if (!o && !bulkRunning) setBulkConfirmOpen(false); }}>
-        <AlertDialogContent data-testid="exempt-bulk-confirm-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إلغاء الاستثناء الجماعي</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إلغاء استثناء {selectedIds.size} معتمر من مسح التأخّر اليومي. كل سطر سيتم تسجيله في سجل التدقيق.
-              {bulkResult && (
-                <span className="block mt-2 text-xs">
-                  آخر تشغيل: نجحت {bulkResult.ok} — فشلت {bulkResult.failed}
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={bulkRunning}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async (e: React.MouseEvent) => {
-                e.preventDefault();
-                await runBulkUnExempt();
-                setBulkConfirmOpen(false);
-              }}
-              disabled={bulkRunning}
-              data-testid="exempt-bulk-confirm-button"
-            >
-              {bulkRunning ? "جاري المعالجة…" : "تأكيد"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={bulkConfirmOpen}
+        onOpenChange={(o) => { if (!o && !bulkRunning) setBulkConfirmOpen(false); }}
+        variant="destructive"
+        title="تأكيد إلغاء الاستثناء الجماعي"
+        description={
+          <>
+            سيتم إلغاء استثناء {selectedIds.size} معتمر من مسح التأخّر اليومي. كل سطر سيتم تسجيله في سجل التدقيق.
+            {bulkResult && (
+              <span className="block mt-2 text-xs">
+                آخر تشغيل: نجحت {bulkResult.ok} — فشلت {bulkResult.failed}
+              </span>
+            )}
+          </>
+        }
+        confirmLabel={bulkRunning ? "جاري المعالجة…" : "تأكيد"}
+        pending={bulkRunning}
+        onConfirm={async () => { await runBulkUnExempt(); setBulkConfirmOpen(false); }}
+        contentTestId="exempt-bulk-confirm-dialog"
+        confirmButtonTestId="exempt-bulk-confirm-button"
+      />
     </PageShell>
   );
 }

@@ -25,10 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -521,49 +518,39 @@ export default function VendorDocumentsPage() {
       </Tabs>
 
       {/* حوار التطبيق على أمر شراء */}
-      <AlertDialog open={!!applyTarget} onOpenChange={(o) => { if (!o) setApplyTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {applyTarget?.kind === "advance" ? "تطبيق الدفعة المقدمة على أمر شراء" : "تطبيق الإشعار الدائن على أمر شراء"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {applyTarget && (
-                <>المرجع {applyTarget.row.ref} — مورد {applyTarget.row.supplierName ?? "—"}. الخادم يرفض تجاوز المتبقي ويرفض الفترات المقفلة.</>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <Label htmlFor="vd-apply-po">أمر الشراء <span className="text-status-error-foreground">*</span></Label>
-              <select id="vd-apply-po" value={applyPo} onChange={(e) => setApplyPo(e.target.value)}
-                className="w-full h-9 px-2 border rounded bg-background text-sm">
-                <option value="">— اختر أمر الشراء —</option>
-                {pos
-                  .filter((p) => !applyTarget || !p.supplierId || p.supplierId === applyTarget.row.supplierId)
-                  .map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {(p.poNumber || p.ref || `#${p.id}`) as string}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="vd-apply-amount">المبلغ (ر.س) <span className="text-status-error-foreground">*</span></Label>
-              <Input id="vd-apply-amount" value={applyAmount} dir="ltr"
-                onChange={(e) => setApplyAmount(e.target.value)} />
-            </div>
+      <ConfirmActionDialog
+        open={!!applyTarget}
+        onOpenChange={(o) => { if (!o) setApplyTarget(null); }}
+        variant="caution"
+        title={applyTarget?.kind === "advance" ? "تطبيق الدفعة المقدمة على أمر شراء" : "تطبيق الإشعار الدائن على أمر شراء"}
+        description={applyTarget ? `المرجع ${applyTarget.row.ref} — مورد ${applyTarget.row.supplierName ?? "—"}. الخادم يرفض تجاوز المتبقي ويرفض الفترات المقفلة.` : ""}
+        confirmLabel={applyAdv.isPending || applyCrd.isPending ? "جاري التطبيق..." : "تأكيد التطبيق"}
+        pending={applyAdv.isPending || applyCrd.isPending}
+        onConfirm={submitApply}
+        confirmPerm="finance:create"
+      >
+        <div className="space-y-3 py-2">
+          <div className="space-y-1">
+            <Label htmlFor="vd-apply-po">أمر الشراء <span className="text-status-error-foreground">*</span></Label>
+            <select id="vd-apply-po" value={applyPo} onChange={(e) => setApplyPo(e.target.value)}
+              className="w-full h-9 px-2 border rounded bg-background text-sm">
+              <option value="">— اختر أمر الشراء —</option>
+              {pos
+                .filter((p) => !applyTarget || !p.supplierId || p.supplierId === applyTarget.row.supplierId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {(p.poNumber || p.ref || `#${p.id}`) as string}
+                  </option>
+                ))}
+            </select>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton perm="finance:create"
-              onClick={(e: React.MouseEvent) => { e.preventDefault(); submitApply(); }}
-              disabled={applyAdv.isPending || applyCrd.isPending}>
-              {applyAdv.isPending || applyCrd.isPending ? "جاري التطبيق..." : "تأكيد التطبيق"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <div className="space-y-1">
+            <Label htmlFor="vd-apply-amount">المبلغ (ر.س) <span className="text-status-error-foreground">*</span></Label>
+            <Input id="vd-apply-amount" value={applyAmount} dir="ltr"
+              onChange={(e) => setApplyAmount(e.target.value)} />
+          </div>
+        </div>
+      </ConfirmActionDialog>
     </PageShell>
   );
 }

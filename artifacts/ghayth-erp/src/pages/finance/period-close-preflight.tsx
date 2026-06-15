@@ -10,11 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
@@ -159,6 +155,7 @@ function countOf(d: ListResp | undefined): number {
 export default function PeriodClosePreflightPage() {
   const { toast } = useToast();
   const [reason, setReason] = useState<string>("");
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   const { data: periods, isLoading: periodsLoading, isError: periodsError } =
     useApiQuery<{ data: FiscalPeriod[] }>(["fiscal-periods-v2"], `/finance/fiscal-periods-v2`);
@@ -505,31 +502,22 @@ export default function PeriodClosePreflightPage() {
                   <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
                     placeholder="مثال: إقفال شهر أبريل بعد تطابق VAT وقفل الرواتب" />
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <GuardedButton perm="finance:approve" disabled={!canClose}
-                      className={canClose ? "bg-emerald-600 hover:bg-emerald-700" : ""}>
-                      <Lock className="h-4 w-4 me-1" /> إقفال الفترة
-                    </GuardedButton>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>تأكيد إقفال "{period.name}"؟</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        بعد الإقفال لن يُسمح بالترحيل على هذه الفترة. الإعادة تتطلب
-                        صلاحية CFO + سبب موثّق. تأكد من تطابق VAT والبنك قبل
-                        المتابعة.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleClose}
-                        className="bg-emerald-600 hover:bg-emerald-700">
-                        نعم، أقفل
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <GuardedButton perm="finance:approve" disabled={!canClose}
+                  className={canClose ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+                  onClick={() => setConfirmCloseOpen(true)}>
+                  <Lock className="h-4 w-4 me-1" /> إقفال الفترة
+                </GuardedButton>
+                <ConfirmActionDialog
+                  open={confirmCloseOpen}
+                  onOpenChange={setConfirmCloseOpen}
+                  variant="destructive"
+                  title={`تأكيد إقفال "${period.name}"؟`}
+                  description="بعد الإقفال لن يُسمح بالترحيل على هذه الفترة. الإعادة تتطلب صلاحية CFO + سبب موثّق. تأكد من تطابق VAT والبنك قبل المتابعة."
+                  confirmLabel={closeMut?.isPending ? "جاري الإقفال…" : "نعم، أقفل"}
+                  pending={closeMut?.isPending}
+                  onConfirm={() => { setConfirmCloseOpen(false); handleClose(); }}
+                  confirmPerm="finance:approve"
+                />
               </div>
             </CardContent>
           </Card>
