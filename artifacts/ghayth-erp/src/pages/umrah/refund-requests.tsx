@@ -32,15 +32,7 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import {
   Undo2, Clock, CheckCircle2, Banknote, Plus, XCircle, Lock,
 } from "lucide-react";
@@ -441,78 +433,62 @@ export default function UmrahRefundRequests() {
       />
 
       {/* حوار الرفض — سبب إلزامي */}
-      <AlertDialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) setRejectTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>رفض طلب الاسترداد</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيُرفض طلب {rejectTarget?.pilgrimName ?? rejectTarget?.agentName ?? ""} بمبلغ{" "}
-              {formatCurrency(Number(rejectTarget?.grossAmount || 0))}. الرفض حالة نهائية لا رجوع عنها.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="refund-reject-reason">سبب الرفض <span className="text-status-error-foreground">*</span></Label>
-            <Input id="refund-reject-reason" value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              placeholder="مثال: لا يستوفي شروط الاسترداد" autoFocus />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton perm="umrah:update"
-              onClick={(e: React.MouseEvent) => { e.preventDefault(); submitReject(); }}
-              disabled={rejectMut.isPending}>
-              {rejectMut.isPending ? "جاري الرفض..." : "تأكيد الرفض"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={!!rejectTarget}
+        onOpenChange={(o) => { if (!o) setRejectTarget(null); }}
+        variant="destructive"
+        title="رفض طلب الاسترداد"
+        description={`سيُرفض طلب ${rejectTarget?.pilgrimName ?? rejectTarget?.agentName ?? ""} بمبلغ ${formatCurrency(Number(rejectTarget?.grossAmount || 0))}. الرفض حالة نهائية لا رجوع عنها.`}
+        confirmLabel={rejectMut.isPending ? "جاري الرفض..." : "تأكيد الرفض"}
+        pending={rejectMut.isPending}
+        onConfirm={submitReject}
+        confirmPerm="umrah:update"
+      >
+        <div className="space-y-2 py-2">
+          <Label htmlFor="refund-reject-reason">سبب الرفض <span className="text-status-error-foreground">*</span></Label>
+          <Input id="refund-reject-reason" value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="مثال: لا يستوفي شروط الاسترداد" autoFocus />
+        </div>
+      </ConfirmActionDialog>
 
       {/* حوار الصرف — مبلغ + خزينة + مرجع */}
-      <AlertDialog open={!!payTarget} onOpenChange={(o) => { if (!o) setPayTarget(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>صرف مبلغ الاسترداد</AlertDialogTitle>
-            <AlertDialogDescription>
-              صرف لـ{payTarget?.pilgrimName ?? payTarget?.agentName ?? ""} — الإجمالي{" "}
-              {formatCurrency(Number(payTarget?.grossAmount || 0))}
-              {Number(payTarget?.mofaRetention || 0) > 0 &&
-                ` (استقطاع الوزارة ${formatCurrency(Number(payTarget?.mofaRetention))})`}.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1">
-              <Label htmlFor="refund-pay-amount">مبلغ التسوية (ر.س) <span className="text-status-error-foreground">*</span></Label>
-              <Input id="refund-pay-amount" value={payAmount} dir="ltr"
-                onChange={(e) => setPayAmount(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="refund-pay-treasury">حساب الخزينة <span className="text-status-error-foreground">*</span></Label>
-              <select id="refund-pay-treasury" value={payTreasury}
-                onChange={(e) => setPayTreasury(e.target.value)}
-                className="w-full h-9 px-2 border rounded bg-background text-sm">
-                <option value="">— اختر الخزينة —</option>
-                {treasuries.map((t) => (
-                  <option key={t.id} value={t.id}>{t.code} — {t.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="refund-pay-ref">مرجع الدفع <span className="text-status-error-foreground">*</span></Label>
-              <Input id="refund-pay-ref" value={payReference}
-                onChange={(e) => setPayReference(e.target.value)}
-                placeholder="رقم الحوالة / سند الصرف" />
-            </div>
+      <ConfirmActionDialog
+        open={!!payTarget}
+        onOpenChange={(o) => { if (!o) setPayTarget(null); }}
+        variant="caution"
+        title="صرف مبلغ الاسترداد"
+        description={`صرف لـ${payTarget?.pilgrimName ?? payTarget?.agentName ?? ""} — الإجمالي ${formatCurrency(Number(payTarget?.grossAmount || 0))}${Number(payTarget?.mofaRetention || 0) > 0 ? ` (استقطاع الوزارة ${formatCurrency(Number(payTarget?.mofaRetention))})` : ""}.`}
+        confirmLabel={payMut.isPending ? "جاري الصرف..." : "تأكيد الصرف"}
+        pending={payMut.isPending}
+        onConfirm={submitPay}
+        confirmPerm="umrah:create"
+      >
+        <div className="space-y-3 py-2">
+          <div className="space-y-1">
+            <Label htmlFor="refund-pay-amount">مبلغ التسوية (ر.س) <span className="text-status-error-foreground">*</span></Label>
+            <Input id="refund-pay-amount" value={payAmount} dir="ltr"
+              onChange={(e) => setPayAmount(e.target.value)} />
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton perm="umrah:create"
-              onClick={(e: React.MouseEvent) => { e.preventDefault(); submitPay(); }}
-              disabled={payMut.isPending}>
-              {payMut.isPending ? "جاري الصرف..." : "تأكيد الصرف"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <div className="space-y-1">
+            <Label htmlFor="refund-pay-treasury">حساب الخزينة <span className="text-status-error-foreground">*</span></Label>
+            <select id="refund-pay-treasury" value={payTreasury}
+              onChange={(e) => setPayTreasury(e.target.value)}
+              className="w-full h-9 px-2 border rounded bg-background text-sm">
+              <option value="">— اختر الخزينة —</option>
+              {treasuries.map((t) => (
+                <option key={t.id} value={t.id}>{t.code} — {t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="refund-pay-ref">مرجع الدفع <span className="text-status-error-foreground">*</span></Label>
+            <Input id="refund-pay-ref" value={payReference}
+              onChange={(e) => setPayReference(e.target.value)}
+              placeholder="رقم الحوالة / سند الصرف" />
+          </div>
+        </div>
+      </ConfirmActionDialog>
     </PageShell>
   );
 }

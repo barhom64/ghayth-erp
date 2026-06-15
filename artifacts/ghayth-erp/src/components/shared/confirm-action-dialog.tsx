@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 /**
  * ConfirmActionDialog — UI-unification §6.2.
@@ -103,6 +104,29 @@ export interface ConfirmActionDialogProps {
    * a reason, a checkbox to acknowledge, etc.
    */
   children?: ReactNode;
+  /** data-testid placed on AlertDialogContent (for E2E tests). */
+  contentTestId?: string;
+  /** data-testid placed on the confirm button (for E2E tests). */
+  confirmButtonTestId?: string;
+  /**
+   * RBAC permission string (e.g. "umrah:approve"). When set the confirm
+   * button is rendered as a GuardedButton and hidden when the user lacks
+   * the permission. Use this for dialogs whose destructive action must be
+   * additionally gated beyond the page-level route protection.
+   */
+  confirmPerm?: string | string[];
+  /**
+   * Optional secondary action rendered in the footer alongside confirm/cancel.
+   * Use sparingly — only when a dialog genuinely has two mutually exclusive
+   * outcomes (e.g., approve vs. reject in an inline review dialog).
+   */
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+    variant?: "destructive" | "outline" | "default";
+    disabled?: boolean;
+    perm?: string | string[];
+  };
 }
 
 interface VariantStyles {
@@ -145,13 +169,53 @@ export function ConfirmActionDialog({
   pending = false,
   disabled = false,
   children,
+  contentTestId,
+  confirmButtonTestId,
+  confirmPerm,
+  secondaryAction,
 }: ConfirmActionDialogProps) {
   const styles = VARIANT_STYLES[variant];
   const Icon = styles.Icon;
 
+  const confirmContent = pending ? (
+    <>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      {styles.pendingLabel}
+    </>
+  ) : (
+    confirmLabel
+  );
+
+  const confirmButton = confirmPerm ? (
+    <GuardedButton
+      perm={confirmPerm}
+      variant={styles.buttonVariant}
+      size="sm"
+      onClick={onConfirm}
+      disabled={pending || disabled}
+      className="gap-1.5"
+      rateLimitAware
+      data-testid={confirmButtonTestId}
+    >
+      {confirmContent}
+    </GuardedButton>
+  ) : (
+    <Button
+      variant={styles.buttonVariant}
+      size="sm"
+      onClick={onConfirm}
+      disabled={pending || disabled}
+      className="gap-1.5"
+      rateLimitAware
+      data-testid={confirmButtonTestId}
+    >
+      {confirmContent}
+    </Button>
+  );
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent dir="rtl" className="max-w-lg">
+      <AlertDialogContent dir="rtl" className="max-w-lg" data-testid={contentTestId}>
         <AlertDialogHeader className="text-right">
           <AlertDialogTitle className="flex items-center gap-2">
             <Icon className={`h-5 w-5 ${styles.iconClass}`} />
@@ -164,24 +228,32 @@ export function ConfirmActionDialog({
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex-row justify-start gap-2">
-          <Button
-            variant={styles.buttonVariant}
-            size="sm"
-            onClick={onConfirm}
-            disabled={pending || disabled}
-            className="gap-1.5"
-            rateLimitAware
-          >
-            {pending ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {styles.pendingLabel}
-              </>
+        <AlertDialogFooter className="flex-row justify-start gap-2 flex-wrap">
+          {confirmButton}
+          {secondaryAction && (
+            secondaryAction.perm ? (
+              <GuardedButton
+                perm={secondaryAction.perm}
+                variant={secondaryAction.variant ?? "outline"}
+                size="sm"
+                onClick={secondaryAction.onClick}
+                disabled={secondaryAction.disabled ?? pending}
+                className="gap-1.5"
+              >
+                {secondaryAction.label}
+              </GuardedButton>
             ) : (
-              confirmLabel
-            )}
-          </Button>
+              <Button
+                variant={secondaryAction.variant ?? "outline"}
+                size="sm"
+                onClick={secondaryAction.onClick}
+                disabled={secondaryAction.disabled ?? pending}
+                className="gap-1.5"
+              >
+                {secondaryAction.label}
+              </Button>
+            )
+          )}
           <Button
             variant="outline"
             size="sm"

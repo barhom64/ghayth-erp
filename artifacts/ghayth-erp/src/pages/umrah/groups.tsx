@@ -7,16 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { DataTable, type DataTableColumn, PageShell, resolveStatus } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
@@ -366,207 +357,156 @@ export default function UmrahGroups() {
       />
 
       {/* SPLIT dialog */}
-      <AlertDialog open={!!splitSource} onOpenChange={(o) => { if (!o) setSplitSource(null); }}>
-        <AlertDialogContent className="max-w-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تقسيم المجموعة — {splitSource?.nuskGroupNumber}</AlertDialogTitle>
-            <AlertDialogDescription>
-              اختر المعتمرين الذين ستنقلهم لمجموعة جديدة. الوكيل + الوكيل الفرعي + الموسم
-              ينقل تلقائياً من المصدر.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            {sourceGroupQ.data && (
-              <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2 grid grid-cols-2 gap-1">
-                <span>الوكيل: <span className="font-medium">{sourceGroupQ.data.agentName ?? "—"}</span></span>
-                <span>الموسم: <span className="font-medium">{sourceGroupQ.data.seasonName ?? sourceGroupQ.data.season ?? "—"}</span></span>
-                <span>عدد المعتمرين: <span className="font-mono">{sourceGroupQ.data.pilgrimsCount ?? "—"}</span></span>
-                <span>الباقة: <span className="font-medium">{sourceGroupQ.data.packageName ?? "—"}</span></span>
+      {/* SPLIT dialog */}
+      <ConfirmActionDialog
+        open={!!splitSource}
+        onOpenChange={(o) => { if (!o) setSplitSource(null); }}
+        variant="caution"
+        title={`تقسيم المجموعة — ${splitSource?.nuskGroupNumber ?? ""}`}
+        description="اختر المعتمرين الذين ستنقلهم لمجموعة جديدة. الوكيل + الوكيل الفرعي + الموسم ينقل تلقائياً من المصدر."
+        confirmLabel={splitMutation.isPending ? "جاري التقسيم…" : "تأكيد التقسيم"}
+        pending={splitMutation.isPending}
+        disabled={splitPilgrimIds.length === 0}
+        onConfirm={handleSplitSubmit}
+        confirmPerm="umrah:approve"
+      >
+        <div className="space-y-3 py-2">
+          {sourceGroupQ.data && (
+            <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2 grid grid-cols-2 gap-1">
+              <span>الوكيل: <span className="font-medium">{sourceGroupQ.data.agentName ?? "—"}</span></span>
+              <span>الموسم: <span className="font-medium">{sourceGroupQ.data.seasonName ?? sourceGroupQ.data.season ?? "—"}</span></span>
+              <span>عدد المعتمرين: <span className="font-mono">{sourceGroupQ.data.pilgrimsCount ?? "—"}</span></span>
+              <span>الباقة: <span className="font-medium">{sourceGroupQ.data.packageName ?? "—"}</span></span>
+            </div>
+          )}
+          <div>
+            <Label htmlFor="split-name">اسم المجموعة الجديدة (اختياري)</Label>
+            <Input
+              id="split-name"
+              value={splitName}
+              onChange={(e) => setSplitName(e.target.value)}
+              placeholder={`${splitSource?.name || ""} - تقسيم`}
+            />
+          </div>
+          <div>
+            <Label className="mb-2 inline-block">المعتمرون ({sourcePilgrims.length})</Label>
+            {sourcePilgrimsQ.isLoading ? (
+              <p className="text-sm text-muted-foreground">جاري التحميل…</p>
+            ) : (
+              <div className="max-h-60 overflow-y-auto rounded-md border p-2 space-y-1">
+                {sourcePilgrims.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">لا معتمرون في هذه المجموعة</p>
+                ) : (
+                  sourcePilgrims.map((p) => (
+                    <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={splitPilgrimIds.includes(p.id)}
+                        onCheckedChange={(c) =>
+                          setSplitPilgrimIds((prev) => (c ? [...prev, p.id] : prev.filter((id) => id !== p.id)))
+                        }
+                      />
+                      <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                      <span className="font-medium">{p.fullName}</span>
+                      <span className="text-muted-foreground">({p.nuskNumber})</span>
+                    </label>
+                  ))
+                )}
               </div>
             )}
-            <div>
-              <Label htmlFor="split-name">اسم المجموعة الجديدة (اختياري)</Label>
-              <Input
-                id="split-name"
-                value={splitName}
-                onChange={(e) => setSplitName(e.target.value)}
-                placeholder={`${splitSource?.name || ""} - تقسيم`}
-              />
-            </div>
-            <div>
-              <Label className="mb-2 inline-block">المعتمرون ({sourcePilgrims.length})</Label>
-              {sourcePilgrimsQ.isLoading ? (
-                <p className="text-sm text-muted-foreground">جاري التحميل…</p>
-              ) : (
-                <div className="max-h-60 overflow-y-auto rounded-md border p-2 space-y-1">
-                  {sourcePilgrims.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">لا معتمرون في هذه المجموعة</p>
-                  ) : (
-                    sourcePilgrims.map((p) => (
-                      <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
-                        <Checkbox
-                          checked={splitPilgrimIds.includes(p.id)}
-                          onCheckedChange={(c) =>
-                            setSplitPilgrimIds((prev) => (c ? [...prev, p.id] : prev.filter((id) => id !== p.id)))
-                          }
-                        />
-                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                        <span className="font-medium">{p.fullName}</span>
-                        <span className="text-muted-foreground">({p.nuskNumber})</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground mt-1">
-                المحدد: {splitPilgrimIds.length} من {sourcePilgrims.length}
-              </p>
-            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              المحدد: {splitPilgrimIds.length} من {sourcePilgrims.length}
+            </p>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton perm="umrah:approve"
-              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleSplitSubmit(); }}
-              disabled={splitMutation.isPending || splitPilgrimIds.length === 0}
-            >
-              {splitMutation.isPending ? "جاري التقسيم…" : "تأكيد التقسيم"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        </div>
+      </ConfirmActionDialog>
 
       {/* MERGE dialog */}
-      <AlertDialog open={mergeOpen} onOpenChange={setMergeOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>دمج {selectedIds.length} مجموعة</AlertDialogTitle>
-            <AlertDialogDescription>
-              ستنقل كل المعتمرين من المجموعات المحددة إلى مجموعة الهدف، ثم تُحذف المجموعات المصدر (soft delete).
-              لا يمكن الدمج إذا كانت أي مجموعة مصدر مفوترة (الخادم سيرفض 409).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="merge-target">مجموعة الهدف <span className="text-status-error-foreground">*</span></Label>
-            <Select value={mergeTarget} onValueChange={setMergeTarget}>
-              <SelectTrigger id="merge-target"><SelectValue placeholder="اختر مجموعة..." /></SelectTrigger>
-              <SelectContent>
-                {mergeTargetOptions.map((g) => (
-                  <SelectItem key={g.id} value={String(g.id)}>
-                    {g.nuskGroupNumber} — {g.name || "بدون اسم"} ({g.mutamerCount} معتمر)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton perm="umrah:approve"
-              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleMergeSubmit(); }}
-              disabled={mergeMutation.isPending || !mergeTarget}
-            >
-              {mergeMutation.isPending ? "جاري الدمج…" : "تأكيد الدمج"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        variant="caution"
+        title={`دمج ${selectedIds.length} مجموعة`}
+        description="ستنقل كل المعتمرين من المجموعات المحددة إلى مجموعة الهدف، ثم تُحذف المجموعات المصدر (soft delete). لا يمكن الدمج إذا كانت أي مجموعة مصدر مفوترة (الخادم سيرفض 409)."
+        confirmLabel={mergeMutation.isPending ? "جاري الدمج…" : "تأكيد الدمج"}
+        pending={mergeMutation.isPending}
+        disabled={!mergeTarget}
+        onConfirm={handleMergeSubmit}
+        confirmPerm="umrah:approve"
+      >
+        <div className="space-y-2 py-2">
+          <Label htmlFor="merge-target">مجموعة الهدف <span className="text-status-error-foreground">*</span></Label>
+          <Select value={mergeTarget} onValueChange={setMergeTarget}>
+            <SelectTrigger id="merge-target"><SelectValue placeholder="اختر مجموعة..." /></SelectTrigger>
+            <SelectContent>
+              {mergeTargetOptions.map((g) => (
+                <SelectItem key={g.id} value={String(g.id)}>
+                  {g.nuskGroupNumber} — {g.name || "بدون اسم"} ({g.mutamerCount} معتمر)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </ConfirmActionDialog>
 
-      {/* Create-new-group dialog. The backend infers nuskGroupNumber +
-          seasonId from defaults; a custom name is optional. */}
-      <AlertDialog open={createOpen} onOpenChange={(o) => { if (!o) { setCreateOpen(false); setNewGroupName(""); } }}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>مجموعة جديدة</AlertDialogTitle>
-            <AlertDialogDescription>
-              مجموعة فارغة جاهزة لإضافة المعتمرين. اسم المجموعة اختياري — يُولَّد رقم نسك تلقائياً.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2 space-y-2">
-            <Label htmlFor="new-group-name">اسم المجموعة (اختياري)</Label>
-            <Input
-              id="new-group-name"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              placeholder="مثال: مجموعة شعبان 1"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton
-              perm="umrah:create"
-              onClick={() => createGroupMut.mutate({ name: newGroupName })}
-              disabled={createGroupMut.isPending}
-              rateLimitAware
-            >
-              {createGroupMut.isPending ? "جاري الإنشاء…" : "إنشاء"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Create-new-group dialog */}
+      <ConfirmActionDialog
+        open={createOpen}
+        onOpenChange={(o) => { if (!o) { setCreateOpen(false); setNewGroupName(""); } }}
+        variant="confirm"
+        title="مجموعة جديدة"
+        description="مجموعة فارغة جاهزة لإضافة المعتمرين. اسم المجموعة اختياري — يُولَّد رقم نسك تلقائياً."
+        confirmLabel={createGroupMut.isPending ? "جاري الإنشاء…" : "إنشاء"}
+        pending={createGroupMut.isPending}
+        onConfirm={() => createGroupMut.mutate({ name: newGroupName })}
+        confirmPerm="umrah:create"
+      >
+        <div className="py-2 space-y-2">
+          <Label htmlFor="new-group-name">اسم المجموعة (اختياري)</Label>
+          <Input
+            id="new-group-name"
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            placeholder="مثال: مجموعة شعبان 1"
+          />
+        </div>
+      </ConfirmActionDialog>
 
-      {/* Rename group dialog — wires PATCH /umrah/groups/:id which was
-          previously unwired. We only expose name for now; the backend
-          accepts the full {agentId,subAgentId,mutamerCount,programDuration,
-          status} too but those are populated elsewhere (split / merge /
-          season assignment). */}
-      <AlertDialog
+      {/* Rename group dialog */}
+      <ConfirmActionDialog
         open={!!editingGroup}
         onOpenChange={(o) => { if (!o) { setEditingGroup(null); setEditName(""); } }}
+        variant="confirm"
+        title="تعديل المجموعة"
+        description={editingGroup?.nuskGroupNumber ? `رقم نسك: ${editingGroup.nuskGroupNumber}` : ""}
+        confirmLabel={updateGroupMut.isPending ? "جاري الحفظ…" : "حفظ"}
+        pending={updateGroupMut.isPending}
+        disabled={!editingGroup}
+        onConfirm={() => editingGroup && updateGroupMut.mutate({ id: editingGroup.id, name: editName })}
+        confirmPerm="umrah:update"
       >
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تعديل المجموعة</AlertDialogTitle>
-            <AlertDialogDescription>
-              {editingGroup?.nuskGroupNumber ? `رقم نسك: ${editingGroup.nuskGroupNumber}` : ""}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2 space-y-2">
-            <Label htmlFor="edit-group-name">اسم المجموعة</Label>
-            <Input
-              id="edit-group-name"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              placeholder="اسم المجموعة"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton
-              perm="umrah:update"
-              onClick={() => editingGroup && updateGroupMut.mutate({ id: editingGroup.id, name: editName })}
-              disabled={updateGroupMut.isPending || !editingGroup}
-              rateLimitAware
-            >
-              {updateGroupMut.isPending ? "جاري الحفظ…" : "حفظ"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <div className="py-2 space-y-2">
+          <Label htmlFor="edit-group-name">اسم المجموعة</Label>
+          <Input
+            id="edit-group-name"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="اسم المجموعة"
+          />
+        </div>
+      </ConfirmActionDialog>
 
-      {/* Per-row delete confirm. Only reachable for empty/un-invoiced
-          rows — the action button is hidden for the rest, but the
-          server still enforces the same rule (this is just UX). */}
-      <AlertDialog open={!!deletingGroup} onOpenChange={(o) => { if (!o) setDeletingGroup(null); }}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>حذف المجموعة</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deletingGroup ? `سيتم حذف المجموعة "${deletingGroup.name ?? deletingGroup.nuskGroupNumber}". الإجراء غير قابل للتراجع.` : ""}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton
-              perm="umrah:delete"
-              variant="destructive"
-              onClick={() => deletingGroup && deleteGroupMut.mutate({ id: deletingGroup.id })}
-              disabled={deleteGroupMut.isPending}
-              rateLimitAware
-            >
-              {deleteGroupMut.isPending ? "جاري الحذف…" : "تأكيد الحذف"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Per-row delete confirm */}
+      <ConfirmActionDialog
+        open={!!deletingGroup}
+        onOpenChange={(o) => { if (!o) setDeletingGroup(null); }}
+        variant="destructive"
+        title="حذف المجموعة"
+        description={deletingGroup ? `سيتم حذف المجموعة "${deletingGroup.name ?? deletingGroup.nuskGroupNumber}". الإجراء غير قابل للتراجع.` : ""}
+        confirmLabel={deleteGroupMut.isPending ? "جاري الحذف…" : "تأكيد الحذف"}
+        pending={deleteGroupMut.isPending}
+        onConfirm={() => deletingGroup && deleteGroupMut.mutate({ id: deletingGroup.id })}
+        confirmPerm="umrah:delete"
+      />
     </PageShell>
   );
 }
