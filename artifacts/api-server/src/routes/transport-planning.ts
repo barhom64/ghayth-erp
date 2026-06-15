@@ -1165,6 +1165,29 @@ transportPlanningRouter.post(
         entity: "driver_navigation_sessions", entityId: dispatchOrderId,
       }).catch((e) => logger.error(e, "navigation complete event failed"));
 
+      // TA-T18-DR Phase 2 — recompute the driver's reputation lazily
+      // after each completion. Best-effort + isolated so a recompute
+      // failure never blocks the operator's "I'm done" action.
+      (async () => {
+        try {
+          const [order] = await rawQuery<{ driverId: number }>(
+            `SELECT "driverId" FROM transport_dispatch_orders
+              WHERE id = $1 AND "companyId" = $2`,
+            [dispatchOrderId, scope.companyId],
+          );
+          if (order) {
+            const { computeDriverReputation } =
+              await import("../lib/fleet/driverReputation.js");
+            await computeDriverReputation({
+              companyId: scope.companyId,
+              driverId: order.driverId,
+            });
+          }
+        } catch (e) {
+          logger.warn({ err: e, dispatchOrderId }, "post-complete reputation recompute failed");
+        }
+      })().catch(() => undefined);
+
       res.json({ ok: true });
     } catch (err) {
       handleRouteError(err, res, "Complete navigation error:");
