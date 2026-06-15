@@ -64,10 +64,7 @@ const BOOKING_SOURCES = [
   "recurring_schedule",
 ] as const;
 
-const TRANSPORT_SERVICE_TYPES = [
-  "cargo_load", "passenger_umrah", "passenger_general",
-  "equipment_rental", "internal_transfer", "other",
-] as const;
+import { TRANSPORT_SERVICE_TYPES } from "../lib/transportEnums.js";
 
 // #1812 Comment 4663005810 — explicit cargo vs passenger family.
 // The booking row carries a `tripFamily` column (migration 284) so
