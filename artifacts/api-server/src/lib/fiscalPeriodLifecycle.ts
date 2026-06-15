@@ -106,6 +106,29 @@ export async function closeFiscalPeriodCanonical(
     );
   }
 
+  // FIN-DEFERRED-REVENUE (#2248) — the SYMMETRIC counterpart of the gate above.
+  // A period MUST NOT close while a deferred-revenue recognition month that is
+  // due (<= period end) within the period window is still un-posted. Closing
+  // first would strand the systematic revenue, leaving the deferred-revenue
+  // liability overstated and the P&L understated for the period. Same company
+  // scope as the amortization / pending-manual-JE gates.
+  const { findUnpostedDueRecognitions } = await import("./engines/deferredRevenueEngine.js");
+  const pendingDefRev = await findUnpostedDueRecognitions({
+    companyId: scope.companyId,
+    periodStart: period.startDate,
+    periodEnd: period.endDate,
+  });
+  if (pendingDefRev.length > 0) {
+    throw new ConflictError(
+      `لا يمكن إقفال الفترة "${period.name}": يوجد ${pendingDefRev.length} تحقّق مستحق لإيرادات مؤجلة لم يُرحّل بعد`,
+      {
+        field: "deferredRevenue",
+        fix: "نفّذ تحقّق الإيرادات المؤجلة المستحقة (POST /finance/deferred-revenue/run) قبل إقفال الفترة",
+        meta: { pendingDeferredRevenueCount: pendingDefRev.length, periodId, periodName: period.name },
+      }
+    );
+  }
+
   const runTransition = async (c?: pg.PoolClient) =>
     applyTransition<Record<string, unknown>>({
       entity: "financial_periods",
