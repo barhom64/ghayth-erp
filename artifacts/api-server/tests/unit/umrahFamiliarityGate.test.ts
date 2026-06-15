@@ -251,8 +251,15 @@ describe("#2079 PE-06 — boundary pins", () => {
     expect(ENGINE).not.toMatch(/financeJournalEngine|journalEngine|postingEngine|financialEngine/);
   });
 
-  it("PE-06 does not introduce reputation / VRP / Driver-Reputation symbols", () => {
-    expect(ENGINE).not.toMatch(/driverReputation|reputationScore/i);
+  it("PE-06 (`umrahFamiliarity.ts` itself) stays disentangled from reputation / VRP / Driver-Reputation symbols", () => {
+    // PE-06 originally pinned that NO reputation symbol leaks anywhere
+    // in the engine. TA-T18-DR Phase 2 (#TA-T18-DR Phase 2 PR) ships
+    // the reputation axis as a separate, intentional integration —
+    // weight 0.05, funded from `conflict` (0.25 → 0.20), with its own
+    // dedicated static test (`driverReputationEngineIntegrationStatic.test.ts`).
+    // The invariant that survives: PE-06's OWN code path
+    // (`umrahFamiliarity.ts`) stays free of reputation/VRP symbols
+    // — the two axes are independent.
     expect(LIB).not.toMatch(/reputation/i);
     expect(LIB).not.toMatch(/vrp|optimi[sz]er|tsp/i);
   });
