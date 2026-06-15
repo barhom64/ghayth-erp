@@ -16,6 +16,12 @@ interface CommissionPlan {
   employeeId: number;
   assignmentId: number;
   seasonId: number;
+  // U-05-P2 — agent attribution backed by migration 348 nullable columns.
+  // Drives the umrahAgentId dimension on the commission JE so finance-side
+  // reports can split commission expense by marketer (agent) when the
+  // plan was set up for that workflow.
+  agentId: number | null;
+  subAgentId: number | null;
   planName: string;
   baseSalary: number;
   commissionType: string;
@@ -220,13 +226,13 @@ export async function calculateCommissionForPlan(
         // umrahSeasonId carries the season tied to this commission plan
         // so commission-expense reports can drill by season alongside
         // the existing employee dimension (financial-integrity audit #5).
-        // umrahAgentId would carry the marketer's agent attribution but
-        // employee_commission_plans has no agentId column today — the
-        // dimension is left undefined here and will be added when the
-        // plan schema gains an agent FK in a follow-up.
+        // U-05-P2: umrahAgentId now carries the marketer attribution
+        // when the plan was set up against a specific agent (migration
+        // 348 surfaced the column as nullable). Sub-agent attribution
+        // ships once journal_entry_lines gains the column.
         lines: [
-          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
-          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: payableDescription, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
+          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId, umrahAgentId: plan.agentId ?? undefined },
+          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: payableDescription, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId, umrahAgentId: plan.agentId ?? undefined },
         ],
       }, { table: "employee_commission_calculations", id: planId });
     }

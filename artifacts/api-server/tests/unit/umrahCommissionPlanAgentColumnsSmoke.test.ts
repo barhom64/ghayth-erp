@@ -27,18 +27,16 @@ import { join } from "node:path";
  *   - Migration adds a NOT NULL or DEFAULT → §B fails (would break
  *     legacy rows without backfill).
  *   - Migration adds a FK constraint → §C fails (no FK by design).
- *   - Engine starts reading `plan.agentId` ahead of P2 ratification
- *     → §D fails.
+ *
+ * Note: the original §D "engine still skips agent dim (P2 hard-pause)"
+ * block was removed when U-05-P2 shipped the engine wiring; the new
+ * positive pin lives in `umrahCommissionJeDimsSmoke.test.ts`.
  */
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const MIGRATION = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/migrations/348_umrah_commission_plan_agent_columns.sql"),
-  "utf8",
-);
-const COMMISSION_ENGINE = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/lib/umrahCommissionEngine.ts"),
   "utf8",
 );
 
@@ -103,28 +101,6 @@ describe("U-05-P1 §C — no FK constraint on either column", () => {
 
   it("no ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY", () => {
     expect(MIGRATION).not.toMatch(/ADD CONSTRAINT[\s\S]{0,200}?FOREIGN KEY/i);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// §D — Engine stays out of the new columns until P2 ratification
-// ─────────────────────────────────────────────────────────────────────────────
-describe("U-05-P1 §D — commission engine still skips agent dimension (P2 hard-pause guard)", () => {
-  it("engine has not started reading plan.agentId yet", () => {
-    expect(COMMISSION_ENGINE).not.toMatch(/plan\.agentId/);
-  });
-
-  it("engine has not started reading plan.subAgentId yet", () => {
-    expect(COMMISSION_ENGINE).not.toMatch(/plan\.subAgentId/);
-  });
-
-  it("engine still includes the follow-up comment marking the gap", () => {
-    // The comment block in umrahCommissionEngine.ts:223-226 spells out
-    // the gap. Until P2 ships the wiring, this comment is the live
-    // marker that the wiring is INTENTIONALLY absent.
-    expect(COMMISSION_ENGINE).toMatch(
-      /employee_commission_plans has no agentId column today/,
-    );
   });
 });
 
