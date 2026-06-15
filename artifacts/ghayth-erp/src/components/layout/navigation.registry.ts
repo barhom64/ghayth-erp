@@ -225,9 +225,9 @@ export const allNavSections: NavSection[] = [
         perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
         children: [
         // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
-        // هي المدخل الوحيد. أُزيل تكرار «إدارة المخالفات» (/hr/violations/management
-        // = صفحة stats أصغر)؛ المسار يبقى مسجَّلًا deep-link — لا حذف ولا 404.
-        // متابعة: دمج عرض الإحصاء/التصعيد كتبويب داخل violations.tsx ثم retire.
+        // هي المدخل الوحيد. صفحة «إدارة المخالفات» (/hr/violations/management) صار
+        // محتواها (قائمة المخالفات الخام + الاعتماد + التحليل) تبويب «المخالفات الخام»
+        // داخل violations.tsx، والصفحة الميتة أُزيلت (retire) والمسار يُعاد توجيهه.
         { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
         { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
         { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
