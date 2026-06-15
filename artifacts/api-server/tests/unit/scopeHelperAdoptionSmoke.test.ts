@@ -87,6 +87,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
   // company/branch list cascades which this surface intentionally isn't.
   "finance-memory.ts",
+  // fleet-optimizer.ts: TA-T18-VRP Phase 2 — five short handlers that
+  // each touch a single tenant-scoped table with literal `"companyId" =
+  // $N`; the buildScopedWhere helper adds noise without changing
+  // behaviour. Manual is the right call here and is explicitly signed
+  // off in this file.
+  "fleet-optimizer.ts",
   "fleet-telematics-webhook.ts",
   "fleet-telematics.ts",
   "governance.ts",
@@ -291,9 +297,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // routes/finance-deferred-revenue.ts — deferred-revenue recognition CRUD
       // + run trigger keyed by (companyId, …); allowlisted with justification
       // (the symmetric counterpart of finance-amortization.ts).
-      total: 123,
+      // +1 total/manualOnly: TA-T18-VRP Phase 2 routes/fleet-optimizer.ts
+      // — five short handlers each scoped on a single tenant table; the
+      // helper adds noise without behaviour change, manual is intentional.
+      total: 124,
       helperUsers: 39,
-      manualOnly: 81,
+      manualOnly: 82,
     });
   });
 });
