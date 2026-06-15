@@ -21,6 +21,7 @@ import {
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahAttachmentsPanel } from "@/components/shared/umrah-attachments-panel";
 import { EntityTags } from "@/components/shared/entity-tags";
+import { JourneyStepIndicator } from "@/components/shared/journey-step-indicator";
 import { UserPlus, FileText, ExternalLink, Phone, Mail, MapPin, DollarSign, Plus, X, Wallet } from "lucide-react";
 
 // Pilgrim status labels — mirrors the route's PILGRIM_STATUSES enum.
@@ -192,6 +193,14 @@ export default function UmrahSubAgentDetail() {
 
   const overview = (
     <div className="space-y-4">
+      {/* U-19-P4 — journey step indicator pinned at the top of the overview tab. */}
+      {sa && (
+        <JourneyStepIndicator
+          subjectKind="sub-agent"
+          subjectId={sa.id}
+          currentStage="linked"
+        />
+      )}
       {statement && (
         <Card>
           <CardHeader className="pb-2">
