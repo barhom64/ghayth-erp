@@ -103,3 +103,55 @@ export async function cascadeDispatchToBooking(
     }
   }
 }
+
+/**
+ * Top-down cancel — cancelling a dispatch order (or its parent booking) must
+ * also cancel the fleet trip it spawned and release the held vehicle/driver,
+ * or the trip is orphaned and the resources stay locked forever. A
+ * dispatch-spawned trip carries the sourceKey "dispatch:<orderId>:<token>";
+ * the status guard bounds the update to non-terminal trips so a finished trip
+ * is never reopened and the call is idempotent.
+ *
+ * Extracted from the dispatch-action route handler so the IDENTICAL release
+ * runs whether the cancel originates at the dispatch board
+ * (POST /transport/dispatch-orders/:id/action) or cascades down from a booking
+ * cancel (PATCH /transport/bookings/:id, status → cancelled under the "cascade"
+ * policy). One copy keeps the two entry points from drifting on the
+ * resource-release rule — the same reason `cascadeDispatchToBooking` is shared.
+ *
+ * Runs on the caller's transaction client so it stays atomic with the
+ * order/booking status change that triggered it.
+ */
+export async function cancelTripsForDispatchOrder(
+  client: PoolClient,
+  args: { dispatchOrderId: number; companyId: number; reason: string },
+): Promise<void> {
+  const { dispatchOrderId, companyId, reason } = args;
+  const cancelledTrips = await client.query<{
+    vehicleId: number | null; driverId: number | null;
+  }>(
+    `UPDATE fleet_trips
+        SET status = 'cancelled', "cancelledAt" = NOW(),
+            "cancellationReason" = $3, "updatedAt" = NOW()
+      WHERE "companyId" = $1 AND "sourceKey" LIKE $2
+        AND status IN ('scheduled', 'planned', 'in_progress')
+      RETURNING "vehicleId", "driverId"`,
+    [companyId, `dispatch:${dispatchOrderId}:%`, reason],
+  );
+  for (const trip of cancelledTrips.rows) {
+    if (trip.vehicleId) {
+      await client.query(
+        `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW()
+          WHERE id=$1 AND "companyId"=$2 AND status='in_use' AND "deletedAt" IS NULL`,
+        [trip.vehicleId, companyId],
+      );
+    }
+    if (trip.driverId) {
+      await client.query(
+        `UPDATE fleet_drivers SET status='available'
+          WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`,
+        [trip.driverId, companyId],
+      );
+    }
+  }
+}
