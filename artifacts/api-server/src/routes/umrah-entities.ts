@@ -6293,6 +6293,154 @@ router.get(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
+// U-19-P1b — group journey-status helper (read-only)
+//
+// Same shape as the sub-agent variant above, but keyed on
+// `umrah_groups.id` and surfaced for the group-detail FE drill-down.
+//
+// Stages:
+//   1. imported   — pilgrims attributed to this group
+//   2. linked     — whether the group has any pilgrim with a linked
+//                   subAgent → client chain (boolean roll-up)
+//   3. invoiced   — sales invoices whose groupRefs include this id
+//   4. collected  — payments tied to those invoices
+//
+// READ-ONLY. No writes. Tenant-scoped via the standard group
+// existence guard.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/groups/:id/journey",
+  authorize({ feature: "umrah", action: "view" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      // Group existence + tenant scope. Same guard shape as the
+      // sub-agents/:id route — leaking journey data through a stale
+      // FK is the failure mode this gates.
+      const [group] = await rawQuery<{ id: number; name: string; agentId: number | null; subAgentId: number | null }>(
+        `SELECT id, name, "agentId", "subAgentId"
+           FROM umrah_groups
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!group) throw new NotFoundError("المجموعة غير موجودة");
+
+      const [
+        importRow,
+        linkedRow,
+        invoiceRow,
+        paymentRow,
+      ] = await Promise.all([
+        rawQuery<{ count: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "groupId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Linked = at least one pilgrim in the group whose sub-agent
+          // has a clientId set. Same "linked" definition the sub-agent
+          // route uses (sub_agent.clientId IS NOT NULL), just folded
+          // up to the group level via the pilgrim → sub_agent chain.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_pilgrims p
+             JOIN umrah_sub_agents sa
+               ON sa.id = p."subAgentId"
+              AND sa."companyId" = p."companyId"
+              AND sa."deletedAt" IS NULL
+            WHERE p."companyId" = $1
+              AND p."groupId" = $2
+              AND p."deletedAt" IS NULL
+              AND sa."clientId" IS NOT NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          // groupRefs is the text-LIKE pattern used by the sub-agent
+          // variant. Same approach so the two routes return shapes
+          // operators can compare 1:1.
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM(total), 0)::text AS total,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "deletedAt" IS NULL
+              AND "groupRefs" LIKE '%' || $2 || '%'`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          // Payments via invoices touching this group. Reuses the
+          // groupRefs LIKE pattern via an EXISTS subquery so the same
+          // string-match semantics carry through.
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM("sarAmount"), 0)::text AS total,
+                  MAX(pmt."createdAt")::text AS "latestAt"
+             FROM umrah_payments pmt
+            WHERE pmt."companyId" = $1
+              AND pmt."deletedAt" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM umrah_sales_invoices si
+                 WHERE si.id = pmt."invoiceId"
+                   AND si."companyId" = pmt."companyId"
+                   AND si."deletedAt" IS NULL
+                   AND si."groupRefs" LIKE '%' || $2 || '%'
+              )`,
+          [scope.companyId, id],
+        ),
+      ]);
+
+      const importedCount = Number(importRow[0]?.count ?? 0);
+      const linkedCount = Number(linkedRow[0]?.count ?? 0);
+      const invoicedCount = Number(invoiceRow[0]?.count ?? 0);
+      const invoicedTotal = Number(invoiceRow[0]?.total ?? 0);
+      const collectedCount = Number(paymentRow[0]?.count ?? 0);
+      const collectedTotal = Number(paymentRow[0]?.total ?? 0);
+
+      res.json(
+        maskFields(req, {
+          group: {
+            id: group.id,
+            name: group.name,
+            agentId: group.agentId,
+            subAgentId: group.subAgentId,
+          },
+          stages: [
+            {
+              stage: "imported",
+              count: importedCount,
+              ts: importRow[0]?.latestAt ?? null,
+            },
+            {
+              stage: "linked",
+              count: linkedCount,
+              ts: null,
+            },
+            {
+              stage: "invoiced",
+              count: invoicedCount,
+              total: invoicedTotal,
+              ts: invoiceRow[0]?.latestAt ?? null,
+            },
+            {
+              stage: "collected",
+              count: collectedCount,
+              total: collectedTotal,
+              ts: paymentRow[0]?.latestAt ?? null,
+            },
+          ],
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Group journey");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // U-15-P5 — Packages vs. allocations pricing-drift report.
 //
 // For each umrah_packages row that has been linked to a hotel via the
@@ -6411,6 +6559,132 @@ router.get(
       );
     } catch (err) {
       handleRouteError(err, res, "Pricing-drift report");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U-19-P6 — Recovery hub aggregate (read-only)
+//
+// One operator screen that surfaces every stuck stage of the umrah
+// journey in a single response. Helps an operator triage what to
+// rescue first instead of opening 4 different pages.
+//
+// Buckets:
+//   1. Imports with stuck unlinked rows — batches that ran but still
+//      have pilgrims with groupId IS NULL.
+//   2. Sub-agents waiting to be linked — sub-agents with NO clientId.
+//   3. Groups uninvoiced > 7 days — groups whose pilgrims exist but
+//      no sales invoice has been issued.
+//   4. Invoices unpaid > 30 days — sales invoices past the 30-day
+//      window with paidAmount < total.
+//
+// READ-ONLY. Tenant-scoped. No writes. Same shape style as the
+// journey helpers (P1/P1b) so the FE recovery-hub page can render
+// a uniform card grid.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/reports/recovery-hub",
+  authorize({ feature: "umrah", action: "list" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+
+      // Two operator-tunable thresholds. Both are bound by Number()
+      // so a string like ?uninvoicedDays=foo doesn't trickle into the
+      // SQL — falls back to the default.
+      const uninvoicedDays = Number(req.query.uninvoicedDays) > 0
+        ? Number(req.query.uninvoicedDays)
+        : 7;
+      const unpaidDays = Number(req.query.unpaidDays) > 0
+        ? Number(req.query.unpaidDays)
+        : 30;
+
+      const [
+        stuckImports,
+        unlinkedSubAgents,
+        uninvoicedGroups,
+        unpaidInvoices,
+      ] = await Promise.all([
+        rawQuery<{ count: string }>(
+          // Pilgrims attributed to a sub-agent / agent but never
+          // assigned to a group. The U-08 recovery surface handles
+          // resolution one-by-one; this is just the count.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "groupId" IS NULL
+              AND "subAgentId" IS NOT NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId],
+        ),
+        rawQuery<{ count: string }>(
+          // Sub-agents created but never wired to a client. Same shape
+          // as the sub-agents/:id/journey "linked" check.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_sub_agents
+            WHERE "companyId" = $1
+              AND "clientId" IS NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId],
+        ),
+        rawQuery<{ count: string }>(
+          // Groups whose pilgrims exist but no sales invoice covers
+          // them. groupRefs uses the same LIKE pattern as the
+          // journey helpers so the row sets stay consistent.
+          // The 7-day threshold is anchored on g."createdAt".
+          `SELECT COUNT(DISTINCT g.id)::text AS count
+             FROM umrah_groups g
+             JOIN umrah_pilgrims p
+               ON p."groupId" = g.id
+              AND p."companyId" = g."companyId"
+              AND p."deletedAt" IS NULL
+            WHERE g."companyId" = $1
+              AND g."deletedAt" IS NULL
+              AND g."createdAt" < NOW() - ($2 || ' days')::interval
+              AND NOT EXISTS (
+                SELECT 1 FROM umrah_sales_invoices si
+                 WHERE si."companyId" = g."companyId"
+                   AND si."deletedAt" IS NULL
+                   AND si."groupRefs" LIKE '%' || g.id || '%'
+              )`,
+          [scope.companyId, uninvoicedDays],
+        ),
+        rawQuery<{ count: string; total: string }>(
+          // Sales invoices past unpaidDays with paidAmount < total.
+          // Drafts excluded — operator's mental model is "money I
+          // expected but never landed".
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM(COALESCE(total, 0) - COALESCE("paidAmount", 0)), 0)::text AS total
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "deletedAt" IS NULL
+              AND status NOT IN ('draft', 'void')
+              AND "createdAt" < NOW() - ($2 || ' days')::interval
+              AND COALESCE("paidAmount", 0) < COALESCE(total, 0)`,
+          [scope.companyId, unpaidDays],
+        ),
+      ]);
+
+      res.json(
+        maskFields(req, {
+          thresholds: {
+            uninvoicedDays,
+            unpaidDays,
+          },
+          buckets: {
+            stuckImports: Number(stuckImports[0]?.count ?? 0),
+            unlinkedSubAgents: Number(unlinkedSubAgents[0]?.count ?? 0),
+            uninvoicedGroups: Number(uninvoicedGroups[0]?.count ?? 0),
+            unpaidInvoices: {
+              count: Number(unpaidInvoices[0]?.count ?? 0),
+              outstandingTotal: Number(unpaidInvoices[0]?.total ?? 0),
+            },
+          },
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Recovery-hub aggregate");
     }
   },
 );

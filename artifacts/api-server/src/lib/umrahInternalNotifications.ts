@@ -22,6 +22,11 @@ export interface InternalNotifyContext {
   pilgrimId: number;
   pilgrimName: string | null;
   agentId: number | null;
+  // U-17-P3 — the sub-agent attached to the pilgrim event. If the
+  // sub-agent (or its parent agent) has a contactEmployeeId set, that
+  // operator is also added to the recipient pool so the right person
+  // sees the alert without a manual hand-off.
+  subAgentId?: number | null;
 }
 
 /**
@@ -34,6 +39,26 @@ export interface InternalNotifyContext {
  * single-recipient behaviour without crashing when the company has
  * no configured manager yet.
  */
+/**
+ * U-17-P5 — pilgrim opt-out check.
+ *
+ * Returns true when the pilgrim is flagged `notifications_opt_out = true`.
+ * Null (the default) is treated as "no opt-out" so the existing pilgrim
+ * population behaves identically.
+ */
+async function isPilgrimOptedOut(
+  companyId: number,
+  pilgrimId: number,
+): Promise<boolean> {
+  const rows = await rawQuery<{ optedOut: boolean | null }>(
+    `SELECT notifications_opt_out AS "optedOut"
+       FROM umrah_pilgrims
+      WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    [pilgrimId, companyId],
+  );
+  return rows[0]?.optedOut === true;
+}
+
 export async function resolveInternalRecipients(
   ctx: InternalNotifyContext,
 ): Promise<number[]> {
@@ -52,6 +77,45 @@ export async function resolveInternalRecipients(
     [ctx.companyId],
   );
   for (const r of gms) out.add(r.id);
+  // U-17-P3 — sub-agent + agent contact-employee expansion.
+  // The contactEmployeeId column is the employee ID of the operator
+  // designated to liaise with this agent/sub-agent. We need their
+  // active employee_assignments id to feed createNotification, so
+  // each lookup joins employee_assignments.
+  if (ctx.subAgentId) {
+    const subAgentContact = await rawQuery<{ assignmentId: number }>(
+      `SELECT ea.id AS "assignmentId"
+         FROM umrah_sub_agents sa
+         JOIN employee_assignments ea
+           ON ea."employeeId" = sa."contactEmployeeId"
+          AND ea."companyId" = sa."companyId"
+          AND ea.status = 'active'
+        WHERE sa.id = $1
+          AND sa."companyId" = $2
+          AND sa."deletedAt" IS NULL
+          AND sa."contactEmployeeId" IS NOT NULL
+        LIMIT 1`,
+      [ctx.subAgentId, ctx.companyId],
+    );
+    if (subAgentContact[0]) out.add(subAgentContact[0].assignmentId);
+  }
+  if (ctx.agentId) {
+    const agentContact = await rawQuery<{ assignmentId: number }>(
+      `SELECT ea.id AS "assignmentId"
+         FROM umrah_agents a
+         JOIN employee_assignments ea
+           ON ea."employeeId" = a."contactEmployeeId"
+          AND ea."companyId" = a."companyId"
+          AND ea.status = 'active'
+        WHERE a.id = $1
+          AND a."companyId" = $2
+          AND a."deletedAt" IS NULL
+          AND a."contactEmployeeId" IS NOT NULL
+        LIMIT 1`,
+      [ctx.agentId, ctx.companyId],
+    );
+    if (agentContact[0]) out.add(agentContact[0].assignmentId);
+  }
   return [...out];
 }
 
@@ -79,6 +143,10 @@ export async function notifyInternalVisaExpiring(
     after: { daysRemaining, reason: "visa_expiring" },
   }).catch((e) => logger.error(e, "[umrah internal notify] overstay_risk emit failed"));
 
+  // U-17-P5 — pilgrim opt-out gate. The risk event still fires
+  // because downstream automations may need to react regardless;
+  // we only suppress the operator NOTIFICATION dispatch.
+  if (await isPilgrimOptedOut(ctx.companyId, ctx.pilgrimId)) return 0;
   const recipients = await resolveInternalRecipients(ctx);
   if (recipients.length === 0) return 0;
   const title = daysRemaining <= 0
@@ -115,6 +183,8 @@ export async function notifyInternalDepartureTomorrow(
   ctx: InternalNotifyContext,
   payload: { tripDate: string; flightNumber: string | null },
 ): Promise<number> {
+  // U-17-P5 — pilgrim opt-out gate.
+  if (await isPilgrimOptedOut(ctx.companyId, ctx.pilgrimId)) return 0;
   const recipients = await resolveInternalRecipients(ctx);
   if (recipients.length === 0) return 0;
   const flightSeg = payload.flightNumber ? ` على رحلة ${payload.flightNumber}` : "";
@@ -150,6 +220,8 @@ export async function notifyInternalOverstayWarning(
   ctx: InternalNotifyContext,
   daysOverstayed: number,
 ): Promise<number> {
+  // U-17-P5 — pilgrim opt-out gate.
+  if (await isPilgrimOptedOut(ctx.companyId, ctx.pilgrimId)) return 0;
   const recipients = await resolveInternalRecipients(ctx);
   if (recipients.length === 0) return 0;
   const title = `🚨 معتمر متجاوز — ${ctx.pilgrimName ?? "#" + ctx.pilgrimId}`;

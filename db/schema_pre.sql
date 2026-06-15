@@ -19854,6 +19854,7 @@ CREATE TABLE public.umrah_agents (
     "createdBy" integer,
     "updatedBy" integer,
     "deletedAt" timestamp with time zone,
+    "contactEmployeeId" integer,
     CONSTRAINT umrah_agents_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('suspended'::character varying)::text, ('blocked'::character varying)::text])))
 );
 
@@ -20552,6 +20553,7 @@ CREATE TABLE public.umrah_pilgrims (
     "visaIssuedAt" timestamp with time zone,
     "visaRejectedAt" timestamp with time zone,
     "visaRejectionReason" text,
+    notifications_opt_out boolean,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -20948,7 +20950,8 @@ CREATE TABLE public.umrah_sub_agents (
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "contactEmployeeId" integer
 );
 
 
