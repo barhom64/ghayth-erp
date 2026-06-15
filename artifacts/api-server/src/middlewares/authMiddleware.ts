@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { verifyToken, type JWTPayload } from "../lib/auth.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
+import { loadFineGrantKeys } from "../lib/rbac/authzEngine.js";
 
 export interface RequestScope {
   userId: number;
@@ -51,6 +52,14 @@ export interface RequestScope {
    * Mutable — set late in the request lifecycle by authorize().
    */
   resolvedScope?: string | null;
+  /**
+   * HR-REV-1 #1: the caller's effective RBAC v2 grants flattened to both
+   * fine `feature:action` and coarse `module:action` keys, loaded once in
+   * buildScope (reusing the authzEngine grant cache). Lets in-handler
+   * authorization use scopeCan(scope, feature, action) instead of parallel
+   * hardcoded role lists, so grants are the single source of truth.
+   */
+  fineGrants?: ReadonlySet<string>;
 }
 
 declare global {
@@ -263,7 +272,7 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     }
   }
 
-  return {
+  const scope: RequestScope = {
     userId: payload.userId,
     employeeId: assignment.employeeId,
     companyId: assignment.companyId,
@@ -282,4 +291,9 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     userName: assignment.userName ?? "مستخدم",
     selectedRoleKey,
   };
+  // HR-REV-1 #1 — flatten the caller's grants onto the scope so handlers
+  // authorize from grants (single source of truth) rather than hardcoded
+  // role lists. loadFineGrantKeys never throws (degrades to empty set).
+  scope.fineGrants = await loadFineGrantKeys(scope);
+  return scope;
 }
