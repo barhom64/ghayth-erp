@@ -5,7 +5,7 @@ import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -89,7 +89,7 @@ export default function LedgerPage() {
           <Button asChild variant="outline" size="sm"><Link href={`/finance/account-recon-workpaper?accountCode=${code}`}>
               <FileCheck2 className="h-3.5 w-3.5 me-1" />ورقة تسوية
             </Link></Button>
-          <EntityPrintButton
+          <PrintButton
             entityType="report_general_ledger"
             entityId={`${code}:${startDate ?? ""}..${endDate ?? ""}`}
            

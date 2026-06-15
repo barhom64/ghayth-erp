@@ -3,7 +3,7 @@ import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -283,7 +283,7 @@ export default function OwnerDetail() {
                       كشف الحساب
                     </GuardedButton>
                   </Link>
-                  <EntityPrintButton
+                  <PrintButton
                     entityType="owner"
                     entityId={id ?? 0}
                   />

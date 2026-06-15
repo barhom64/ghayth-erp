@@ -4,7 +4,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -293,7 +293,7 @@ export default function TransferDetail() {
       actions={
         <>
           {transfer && (
-            <EntityPrintButton
+            <PrintButton
               entityType="transfer"
               entityId={id ?? 0}
              />

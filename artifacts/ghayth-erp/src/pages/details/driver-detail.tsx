@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -307,7 +307,7 @@ export default function DriverDetail() {
       hideTabs={hideTabs}
       actions={
         <>
-          <EntityPrintButton
+          <PrintButton
             entityType="driver"
             entityId={id ?? 0}
            />
