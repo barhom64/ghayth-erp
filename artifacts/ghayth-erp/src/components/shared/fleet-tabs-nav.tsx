@@ -5,13 +5,14 @@ import {
   BarChart3, Calendar, CalendarDays, AlertTriangle, Satellite, Package, Disc,
   Clipboard, FileSignature,
 } from "lucide-react";
+import { TransportTabsNav } from "./transport-tabs-nav";
 
 const TABS = [
   { href: "/fleet", label: "المركبات", icon: Car, match: ["/fleet"], exact: true },
   { href: "/fleet/drivers", label: "السائقون", icon: Users, match: ["/fleet/drivers"] },
   // #1733 Comment 9 — booking + dispatch surface lives next to trips
   // because operators reach for it before the trip exists.
-  { href: "/fleet/transport/bookings", label: "حجوزات النقل", icon: Clipboard, match: ["/fleet/transport"] },
+  { href: "/fleet/transport/bookings", label: "النقل", icon: Clipboard, match: ["/fleet/transport"] },
   { href: "/fleet/trips", label: "الرحلات", icon: Navigation, match: ["/fleet/trips"] },
   { href: "/fleet/cargo", label: "نقل البضائع", icon: Package, match: ["/fleet/cargo"] },
   // #2079 TA-T18-13 (FIX-12) — rental was orphaned from the in-page
@@ -36,32 +37,38 @@ const TABS = [
 
 export function FleetTabsNav() {
   const [location] = useLocation();
+  // On the transport cluster, render the secondary transport nav below
+  // the top fleet tabs (القائمة السفلية تحت العلوية).
+  const inTransport = location.startsWith("/fleet/transport");
 
   return (
-    <div className="border-b mb-4 -mt-2 overflow-x-auto">
-      <nav className="flex gap-1 min-w-max" dir="rtl">
-        {TABS.map((tab) => {
-          const isActive = tab.exact
-            ? location === tab.href
-            : tab.match.some((m) => location === m || location.startsWith(`${m}/`));
-          const Icon = tab.icon;
-          return (
-            <Link key={tab.href} href={tab.href}>
-              <a
-                className={cn(
-                  "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
-                  isActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </a>
-            </Link>
-          );
-        })}
-      </nav>
-    </div>
+    <>
+      <div className="border-b mb-4 -mt-2 overflow-x-auto">
+        <nav className="flex gap-1 min-w-max" dir="rtl">
+          {TABS.map((tab) => {
+            const isActive = tab.exact
+              ? location === tab.href
+              : tab.match.some((m) => location === m || location.startsWith(`${m}/`));
+            const Icon = tab.icon;
+            return (
+              <Link key={tab.href} href={tab.href}>
+                <a
+                  className={cn(
+                    "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
+                    isActive
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                </a>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+      {inTransport && <TransportTabsNav />}
+    </>
   );
 }
