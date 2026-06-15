@@ -7,7 +7,7 @@ import { join } from "node:path";
  *
  * Scope (autonomous-class under
  * UMRAH_REMAINING_WORK_ROADMAP.md §4 + U-15 audit §3.4):
- *   - Migration 365 adds a COMMENT ON COLUMN marking the field as
+ *   - Migration 366 adds a COMMENT ON COLUMN marking the field as
  *     deprecated.
  *   - No NEW route writes to `hotelName`. The two legacy writers
  *     (POST /umrah/pilgrims and PUT /umrah/pilgrims/:id) are
@@ -34,7 +34,7 @@ const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const MIGRATION = readFileSync(
   join(
     REPO_ROOT,
-    "artifacts/api-server/src/migrations/365_umrah_pilgrims_hotelname_deprecation.sql",
+    "artifacts/api-server/src/migrations/366_umrah_pilgrims_hotelname_deprecation.sql",
   ),
   "utf8",
 );
