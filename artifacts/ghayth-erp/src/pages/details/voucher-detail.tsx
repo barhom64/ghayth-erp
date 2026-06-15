@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useRoute, useLocation } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useRoute, useLocation, Link } from "wouter";
+import { useApiQuery } from "@/lib/api";
 import { z } from "zod";
 import {
   DetailPageLayout,
@@ -18,9 +18,21 @@ import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
+import { ActionHistory } from "@workspace/workflow-kit";
+import { FinancialDecisionPanel } from "@/components/shared/financial-decision-panel";
+import {
+  FinancialAttachmentViewer,
+  type FinancialAttachment,
+} from "@/components/shared/financial-attachment-viewer";
+import {
+  DOCUMENT_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  POSTING_STATUS_LABELS,
+  mapJournalStatus,
+  derivePaymentStatus,
+} from "@/lib/finance/status-model";
 
-import { Edit, Paperclip, Eye, Receipt, Trash2 } from "lucide-react";
+import { Edit, Receipt, Trash2, ScrollText, Link2, ArrowLeftRight } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PAYMENT_METHODS } from "@/lib/finance-type-maps";
 import { useToast } from "@/hooks/use-toast";
@@ -89,7 +101,131 @@ export default function VoucherDetail() {
     return Number(voucher?.amount ?? 0);
   }, [voucher?.amount]);
 
-  const hasAttachment = !!voucher?.attachmentUrl;
+  // The voucher GET (/finance/vouchers/:id) projects the GROUPed header only —
+  // it does NOT return `lines` (the voucher IS a journal_entries row whose id is
+  // the journal id). Read whatever lines the row may carry, else an empty trace.
+  const lines: any[] = useMemo(() => {
+    return Array.isArray(voucher?.lines) ? voucher.lines : [];
+  }, [voucher?.lines]);
+
+  // #2240 (FIN-P10-DETAIL-WORKSPACE) — while the voucher is awaiting a decision
+  // the bespoke attachment card + bespoke ApprovalActions are REPLACED by the
+  // unified FinancialDecisionPanel. Everything else (history, edit, delete,
+  // tags) stays exactly as before.
+  const isPending = !!voucher && ["pending", "pending_approval", "draft", "returned"].includes(voucher.status);
+
+  // The FinancialAttachment[] shape both the decision panel and the read-only
+  // detail viewer consume; the row carries at most one attachment.
+  const decisionAttachments: FinancialAttachment[] = useMemo(() => {
+    if (!voucher?.attachmentUrl) return [];
+    return [{
+      id: voucher.id ?? id ?? undefined,
+      url: voucher.attachmentUrl,
+      name: voucher.attachmentType || "مستند السند",
+      type: voucher.attachmentMimeType ?? null,
+      documentType: voucher.attachmentType ?? null,
+      status: "linked",
+    }];
+  }, [voucher?.attachmentUrl, voucher?.attachmentType, voucher?.attachmentMimeType, voucher?.id, id]);
+
+  // ── #2240 — the read-only TRACE: document → journal → operational effect ──
+  // (1) the THREE separated status axes. Prefer the backend-derived axes the
+  //     voucher GET now surfaces (documentStatus/paymentStatus/postingStatus —
+  //     FIN-SUB-03b); fall back to the shared status-model when absent.
+  const { documentStatus, postingStatus } = useMemo(
+    () => mapJournalStatus(voucher?.status),
+    [voucher?.status],
+  );
+  const paymentStatus = useMemo(() => {
+    const hasMoneySource = !!(voucher?.paymentMethod || voucher?.sourceAccountCode);
+    return derivePaymentStatus({
+      doc: documentStatus,
+      hasMoneySource,
+      paidAmount: voucher?.paidAmount != null ? Number(voucher.paidAmount) : undefined,
+      totalAmount: amount || undefined,
+    });
+  }, [documentStatus, voucher?.paymentMethod, voucher?.sourceAccountCode, voucher?.paidAmount, amount]);
+
+  const totalDebit = useMemo(
+    () => lines.reduce((s, l) => s + Number(l?.debit || 0), 0),
+    [lines],
+  );
+  const totalCredit = useMemo(
+    () => lines.reduce((s, l) => s + Number(l?.credit || 0), 0),
+    [lines],
+  );
+
+  // (3) operational EFFECT navigation links — only entities present on the row.
+  //     The voucher IS the journal entry, so its id doubles as the journal id.
+  const traceLinks = useMemo(() => {
+    const out: { key: string; label: string; value: string; href: string }[] = [];
+    if (!voucher) return out;
+    if (id) {
+      out.push({
+        key: "journal",
+        label: "القيد المحاسبي",
+        value: voucher.ref || `قيد #${id}`,
+        href: `/finance/journal/${id}`,
+      });
+    }
+    if (voucher.vendorId) {
+      out.push({
+        key: "vendor",
+        label: "المورد",
+        value: voucher.vendorName || `مورد #${voucher.vendorId}`,
+        href: `/finance/vendors/${voucher.vendorId}`,
+      });
+    }
+    if (voucher.clientId) {
+      out.push({
+        key: "client",
+        label: "العميل",
+        value: voucher.clientName || `عميل #${voucher.clientId}`,
+        href: `/clients/${voucher.clientId}`,
+      });
+    }
+    if (voucher.employeeId) {
+      out.push({
+        key: "employee",
+        label: "الموظف",
+        value: voucher.employeeName || `موظف #${voucher.employeeId}`,
+        href: `/hr/employees/${voucher.employeeId}`,
+      });
+    }
+    if (voucher.relatedEntityType === "supplier" && voucher.relatedEntityId) {
+      out.push({
+        key: "supplier",
+        label: "المورد",
+        value: voucher.relatedEntityName || `مورد #${voucher.relatedEntityId}`,
+        href: `/finance/vendors/${voucher.relatedEntityId}`,
+      });
+    }
+    if (voucher.relatedEntityType === "vehicle" && voucher.relatedEntityId) {
+      out.push({
+        key: "vehicle",
+        label: "المركبة",
+        value: voucher.relatedEntityName || `مركبة #${voucher.relatedEntityId}`,
+        href: `/fleet/${voucher.relatedEntityId}`,
+      });
+    }
+    if (voucher.projectId) {
+      out.push({
+        key: "project",
+        label: "المشروع",
+        value: voucher.projectName || `مشروع #${voucher.projectId}`,
+        href: `/projects/${voucher.projectId}`,
+      });
+    }
+    if (voucher.relatedEntityType === "property" && voucher.relatedEntityId) {
+      out.push({
+        key: "property",
+        label: "العقار",
+        value: voucher.relatedEntityName || `عقار #${voucher.relatedEntityId}`,
+        href: `/properties/${voucher.relatedEntityId}`,
+      });
+    }
+    return out;
+  }, [voucher, id]);
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -143,6 +279,7 @@ export default function VoucherDetail() {
 
 
   const overview = (
+    <div className="space-y-4">
     <div className="grid gap-4 md:grid-cols-3">
       {/* Primary info — big amount + core metadata */}
       <Card className="md:col-span-2">
@@ -210,63 +347,41 @@ export default function VoucherDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Attachment */}
-        {hasAttachment && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Paperclip className="h-4 w-4 text-muted-foreground" />
-                المرفق
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2 p-2 rounded border text-xs hover:bg-surface-subtle">
-                <span className="truncate min-w-0">
-                  {voucher.attachmentType || "مستند السند"}
-                </span>
-                <a
-                  href={voucher.attachmentUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-status-info-foreground hover:text-status-info-foreground shrink-0"
-                  title="فتح"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                </a>
-              </div>
-            </CardContent>
-          </Card>
+        {/* #2240 — while pending, the bespoke attachment card + bespoke
+            ApprovalActions are REPLACED by the unified FinancialDecisionPanel.
+            No voucher impact-preview endpoint exists, so journalPreview is
+            omitted (the panel renders without it). request-attachment / comment
+            endpoints have no voucher equivalent and are omitted too. */}
+        {id && isPending && (
+          <FinancialDecisionPanel
+            documentType="voucher"
+            documentId={id}
+            record={voucher}
+            lines={lines}
+            attachments={decisionAttachments}
+            journalPreview={undefined}
+            approveEndpoint={`/finance/vouchers/${id}/approve`}
+            rejectEndpoint={`/finance/vouchers/${id}/approve`}
+            returnEndpoint={`/finance/vouchers/${id}/approve`}
+            invalidateKeys={[["voucher", String(id)], ["vouchers"]]}
+            onDone={() => {
+              refetch();
+              toast({ title: "تم تحديث السند" });
+            }}
+          />
         )}
 
-        {/* Approval actions — visible while pending */}
-        {id && voucher && ["pending", "draft"].includes(voucher.status) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="voucher"
-                entityId={id}
-                currentStatus={voucher.status}
-                approveEndpoint={`/finance/vouchers/${id}/approve`}
-                rejectEndpoint={`/finance/vouchers/${id}/approve`}
-                returnEndpoint={`/finance/vouchers/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["pending", "pending_approval", "draft", "returned"]}
-                invalidateKeys={[["vouchers"]]}
-                onDone={() => {
-                  refetch();
-                  toast({ title: "تم تحديث السند" });
-                }}
-              />
-            </CardContent>
-          </Card>
+        {/* #2240 — read-only attachment in the unified "detail" mode. Shown
+            only when NOT pending (the decision panel owns the attachment while
+            a decision is in flight). The viewer renders its own empty
+            placeholder when the row carries no attachment. */}
+        {!isPending && (
+          <FinancialAttachmentViewer
+            attachments={decisionAttachments}
+            mode="detail"
+            documentType={voucher?.attachmentType ?? "مستند السند"}
+            documentId={id ?? undefined}
+          />
         )}
 
         {/* Action history */}
@@ -282,6 +397,159 @@ export default function VoucherDetail() {
         )}
       </div>
 
+    </div>
+
+      {/* ──────────────────────────────────────────────────────────────────
+          #2240 (FIN-P10-DETAIL-WORKSPACE) — the read-only TRACE workspace.
+          Rendered only in the NON-pending view (the pending view is owned by
+          P9's FinancialDecisionPanel). It traces: document → three status axes
+          → journal (the voucher IS the journal entry) → operational effect,
+          all with wouter <Link> navigation. NO editors here. */}
+      {!isPending && voucher && (
+        <div className="space-y-4" data-testid="detail-trace">
+          {/* (1) the THREE status axes — separated per the owner mandate. */}
+          <Card data-testid="status-axes">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">حالة المستند</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">حالة المستند</p>
+                  <Badge variant="outline">{DOCUMENT_STATUS_LABELS[documentStatus]}</Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">حالة الدفع</p>
+                  <Badge variant="outline">{PAYMENT_STATUS_LABELS[paymentStatus]}</Badge>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">حالة الترحيل</p>
+                  <Badge variant="outline">{POSTING_STATUS_LABELS[postingStatus]}</Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* (2) read-only ITEMS table = the linked JOURNAL. The voucher IS the
+              GL entry; present its lines (when the row carries them) with the
+              account code/name, debit/credit and dimensions. NO inputs. */}
+          <Card data-testid="journal-lines">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <ScrollText className="h-4 w-4 text-muted-foreground" />
+                  القيد المحاسبي
+                </span>
+                {id && (
+                  <Link
+                    href={`/finance/journal/${id}`}
+                    className="text-xs font-normal text-status-info-foreground hover:underline"
+                  >
+                    {voucher.ref || `قيد #${id}`}
+                  </Link>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                <span>المرجع: <span className="font-mono text-status-neutral-foreground">{voucher.ref || `#${id}`}</span></span>
+                {voucher.createdAt && <span>التاريخ: {formatDateAr(voucher.createdAt)}</span>}
+                {lines.length > 0 && (
+                  <span>
+                    التوازن:{" "}
+                    <span className={totalDebit === totalCredit ? "text-status-success-foreground" : "text-status-error-foreground"}>
+                      {totalDebit === totalCredit ? "متوازن" : "غير متوازن"}
+                    </span>
+                  </span>
+                )}
+              </div>
+              {lines.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  عرض بنود القيد عبر <Link href={`/finance/journal/${id}`} className="text-status-info-foreground hover:underline">القيد المحاسبي</Link>.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs" data-testid="lines-table">
+                    <thead>
+                      <tr className="border-b text-muted-foreground text-right">
+                        <th className="py-1.5 pe-2 font-medium">الحساب</th>
+                        <th className="py-1.5 px-2 font-medium">الأبعاد</th>
+                        <th className="py-1.5 px-2 font-medium text-left">مدين</th>
+                        <th className="py-1.5 ps-2 font-medium text-left">دائن</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map((l: any, i: number) => {
+                        const dims = [
+                          l?.vehicleId ? `مركبة #${l.vehicleId}` : null,
+                          l?.costCenter ? `مركز: ${l.costCenter}` : null,
+                          l?.projectId ? `مشروع #${l.projectId}` : null,
+                          l?.project ? `مشروع: ${l.project}` : null,
+                        ].filter(Boolean);
+                        return (
+                          <tr key={l?.id ?? i} className="border-b last:border-0">
+                            <td className="py-1.5 pe-2">
+                              <span className="font-mono text-muted-foreground">{l?.accountCode ?? "-"}</span>{" "}
+                              <span className="text-status-neutral-foreground">{l?.accountName ?? ""}</span>
+                            </td>
+                            <td className="py-1.5 px-2 text-muted-foreground">
+                              {dims.length ? dims.join(" · ") : "-"}
+                            </td>
+                            <td className="py-1.5 px-2 text-left tabular-nums">
+                              {Number(l?.debit || 0) ? formatCurrency(Number(l.debit)) : "-"}
+                            </td>
+                            <td className="py-1.5 ps-2 text-left tabular-nums">
+                              {Number(l?.credit || 0) ? formatCurrency(Number(l.credit)) : "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="font-semibold">
+                        <td className="py-1.5 pe-2">الإجمالي</td>
+                        <td className="py-1.5 px-2" />
+                        <td className="py-1.5 px-2 text-left tabular-nums">{formatCurrency(totalDebit)}</td>
+                        <td className="py-1.5 ps-2 text-left tabular-nums">{formatCurrency(totalCredit)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* (3) operational EFFECT — navigation links to every entity present
+              on the record (journal / vendor / client / employee / vehicle /
+              project / property). */}
+          {traceLinks.length > 0 && (
+            <Card data-testid="trace-links">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Link2 className="h-4 w-4 text-muted-foreground" />
+                  الأثر التشغيلي والروابط
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {traceLinks.map((t) => (
+                    <Link
+                      key={t.key}
+                      href={t.href}
+                      data-testid={`trace-link-${t.key}`}
+                      className="flex items-center justify-between gap-2 rounded border p-2 text-xs hover:bg-surface-subtle"
+                    >
+                      <span className="flex items-center gap-1.5 text-muted-foreground">
+                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                        {t.label}
+                      </span>
+                      <span className="truncate min-w-0 text-status-info-foreground">{t.value}</span>
+                    </Link>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 
