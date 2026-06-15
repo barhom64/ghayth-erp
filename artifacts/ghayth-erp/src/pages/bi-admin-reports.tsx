@@ -15,11 +15,12 @@ import {
 } from "recharts";
 import {
   Calendar, TrendingUp, TrendingDown, Users, DollarSign, CheckCircle2,
-  Clock, Headphones, FileText,
+  Clock, Headphones, FileText, Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
+import { logClientPrint } from "@/lib/print-client";
 
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
@@ -93,6 +94,11 @@ function DailyReportTab() {
           <Label>التاريخ</Label>
           <DatePicker value={date} onChange={setDate} className="w-48" />
         </div>
+        {/* GAP_MATRIX P0 — audit Ctrl+P prints via logClientPrint before window.print() */}
+        <Button variant="outline" size="sm" className="mr-auto" onClick={() => { logClientPrint("report_bi_admin"); window.print(); }}>
+          <Printer className="h-4 w-4 ml-2" />
+          طباعة
+        </Button>
       </div>
 
       <div className="text-center print:block hidden mb-4">

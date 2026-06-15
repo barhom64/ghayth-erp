@@ -1069,6 +1069,10 @@ describe("Print platform — Stop-Ship: no parallel print systems", () => {
     /artifacts\/ghayth-erp\/src\/components\/shared\/entity-print\.tsx$/,
     /artifacts\/ghayth-erp\/src\/lib\/print-client\.ts$/,
     /artifacts\/ghayth-erp\/src\/pages\/admin\/print-/,
+    // GAP_MATRIX P0 — BI analytics pages use logClientPrint() before window.print()
+    // to record an audit row; recharts content cannot be server-rendered.
+    /artifacts\/ghayth-erp\/src\/pages\/bi-admin-reports\.tsx$/,
+    /artifacts\/ghayth-erp\/src\/pages\/bi-operations\.tsx$/,
     /artifacts\/ghayth-erp\/src\/components\/print-layout\.tsx$/,
     /artifacts\/ghayth-erp\/src\/styles\/print\.css$/,
     /tests\//,
