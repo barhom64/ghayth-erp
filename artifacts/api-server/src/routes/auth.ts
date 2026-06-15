@@ -154,8 +154,8 @@ const loginLimiter = rateLimit({
     !config.isProduction && req.headers["x-e2e-test"] === "1",
 });
 
-// Per-user limiter for the authenticated /auth/* endpoints (/me, /logout,
-// /switch-assignment). The /auth router is mounted in routes/index.ts
+// Per-user limiter for the authenticated /auth/(me,logout,switch) endpoints
+// (/me, /logout, /switch-assignment). The /auth router is mounted in routes/index.ts
 // BEFORE the global authMiddleware mount, so the per-route authMiddleware
 // must run first inside each route chain to set req.scope. Owner/admin
 // exempt — these are routine session management calls.
