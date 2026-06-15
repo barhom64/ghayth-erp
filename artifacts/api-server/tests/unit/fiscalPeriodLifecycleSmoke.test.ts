@@ -15,6 +15,13 @@ const JOURNAL = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/routes/finance-journal.ts"),
   "utf8"
 );
+// FIN-PERIOD-CLOSE (#2250) — the integrity-blocker checks (pending manual JEs,
+// amortization, deferred revenue, dimensions, fallback, manual-no-reason,
+// posting failures) moved into the aggregating coordinator; the gate delegates.
+const COORD = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/lib/periodCloseCoordinator.ts"),
+  "utf8"
+);
 
 // ─── Audit F3 — Fiscal-period lifecycle canonical helper ───────────────────
 // Locks the contract of `closeFiscalPeriodCanonical` and proves both
@@ -36,14 +43,17 @@ describe("closeFiscalPeriodCanonical — guards", () => {
   it("rejects when period does not exist (NotFoundError)", () => {
     expect(SVC).toContain('throw new NotFoundError("الفترة غير موجودة")');
   });
-  it("rejects when pending manual JEs exist (ConflictError)", () => {
+  it("rejects when any integrity blocker exists (ConflictError, aggregated)", () => {
+    // #2250 — the gate aggregates ALL blockers via the coordinator and throws
+    // ONCE; the pending-manual-JE detection now lives in the coordinator.
     expect(SVC).toContain('throw new ConflictError');
-    expect(SVC).toContain("pendingCount");
-    expect(SVC).toMatch(/"isManual"\s*=\s*TRUE/);
-    expect(SVC).toMatch(/'draft'\s*,\s*'pending_review'/);
+    expect(SVC).toMatch(/if\s*\(blockers\.length\s*>\s*0\)/);
+    expect(COORD).toContain("pendingCount");
+    expect(COORD).toMatch(/"isManual"\s*=\s*TRUE/);
+    expect(COORD).toMatch(/'draft'\s*,\s*'pending_review'/);
   });
   it("only counts journals dated inside the period", () => {
-    expect(SVC).toMatch(/"createdAt"::date BETWEEN \$2 AND \$3/);
+    expect(COORD).toMatch(/"createdAt"::date BETWEEN \$2 AND \$3/);
   });
 });
 
