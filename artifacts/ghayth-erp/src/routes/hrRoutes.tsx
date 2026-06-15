@@ -57,7 +57,8 @@ const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 // (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
-const PerformanceAdvanced = lazy(() => import("@/pages/hr/performance-advanced"));
+// (PerformanceAdvanced أُزيل — توزيع التقييمات + أفضل ١٠ صارا تبويب «التحليلات»
+// في /hr/performance، والمسار /hr/performance/advanced يُعاد توجيهه إليها. HR-REV)
 const RecruitmentAdvanced = lazy(() => import("@/pages/hr/recruitment-advanced"));
 const TrainingAdvanced = lazy(() => import("@/pages/hr/training-advanced"));
 // (ViolationsManagement أُزيل — قائمة المخالفات الخام + الاعتماد + التحليل صارت
