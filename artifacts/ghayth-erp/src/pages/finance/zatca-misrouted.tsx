@@ -5,16 +5,7 @@ import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
@@ -183,51 +174,34 @@ export default function ZatcaMisroutedPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
         open={confirmRow !== null}
-        onOpenChange={(open) => !open && !creditMut.isPending && setConfirmRow(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إصدار إشعار دائن</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إصدار إشعار دائن للفاتورة{" "}
-              <b>{confirmRow?.ref}</b> بكامل الرصيد المفتوح، ثم يجب عليك إعادة
-              إصدارها من شاشة الفواتير لتُسلَّك تحت مسار B2B الصحيح. هل تريد
-              المتابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={creditMut.isPending}>
-              إلغاء
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={creditMut.isPending}
-              onClick={(e) => {
-                e.preventDefault();
-                if (!confirmRow) return;
-                const total = Number(confirmRow.total) || 0;
-                const paid = Number(confirmRow.paidAmount) || 0;
-                const open = Math.max(0, total - paid);
-                if (open <= 0) {
-                  toast({
-                    title: "لا يوجد رصيد مفتوح لإصدار إشعار دائن",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-                creditMut.mutate({
-                  invoiceId: confirmRow.id,
-                  amount: open,
-                  reason: CREDIT_REASON,
-                });
-              }}
-            >
-              {creditMut.isPending ? "جارٍ الإصدار..." : "تأكيد"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onOpenChange={(open) => { if (!open && !creditMut.isPending) setConfirmRow(null); }}
+        variant="destructive"
+        title="تأكيد إصدار إشعار دائن"
+        description={
+          <>
+            سيتم إصدار إشعار دائن للفاتورة{" "}
+            <b>{confirmRow?.ref}</b> بكامل الرصيد المفتوح، ثم يجب عليك إعادة
+            إصدارها من شاشة الفواتير لتُسلَّك تحت مسار B2B الصحيح. هل تريد
+            المتابعة؟
+          </>
+        }
+        confirmLabel="تأكيد"
+        pending={creditMut.isPending}
+        onConfirm={() => {
+          if (!confirmRow) return;
+          const total = Number(confirmRow.total) || 0;
+          const paid = Number(confirmRow.paidAmount) || 0;
+          const openAmt = Math.max(0, total - paid);
+          if (openAmt <= 0) {
+            toast({ title: "لا يوجد رصيد مفتوح لإصدار إشعار دائن", variant: "destructive" });
+            return;
+          }
+          creditMut.mutate({ invoiceId: confirmRow.id, amount: openAmt, reason: CREDIT_REASON });
+        }}
+      />
     </PageShell>
   );
 }
