@@ -872,11 +872,17 @@ function IntakeRulesPanel() {
 
 // ────────────────────────────── Planning settings ─────────────────────
 
+// #1812 Maps Provider Adapter (owner brief 2026-06-15) — the UI lists
+// only the three providers the backend accepts end-to-end. `mapbox` +
+// `here_maps` were removed because they fall through to manual on the
+// server, so picking them silently produced manual estimates while
+// the operator thought they'd activated a real provider. `auto` is
+// the operator-friendly default: Google if a key is configured, else
+// internal estimate.
 const MAP_PROVIDERS_UI = [
-  { value: "manual_only", label: "يدوي فقط" },
-  { value: "google_maps", label: "Google Maps" },
-  { value: "mapbox", label: "Mapbox" },
-  { value: "here_maps", label: "HERE Maps" },
+  { value: "auto",        label: "تلقائي — Google إذا توفّر المفتاح، وإلا تقدير داخلي" },
+  { value: "google_maps", label: "Google Maps فقط" },
+  { value: "manual_only", label: "تقدير داخلي فقط (بدون Google)" },
 ];
 
 function PlanningSettingsPanel() {
@@ -884,11 +890,13 @@ function PlanningSettingsPanel() {
   const { data, isLoading, refetch } = useApiQuery<any>(["transport-planning-settings"], "/transport/planning-settings");
   const s = data?.data || data || {};
   const [form, setForm] = useState<Record<string, string>>({});
+  const [enableExternalNav, setEnableExternalNav] = useState<boolean>(true);
+  const [newApiKey, setNewApiKey] = useState<string>("");
   const [loaded, setLoaded] = useState(false);
 
   if (!isLoading && !loaded) {
     setForm({
-      mapProvider: s.mapProvider || "manual_only",
+      mapProvider: s.mapProvider || "auto",
       defaultRestHoursRequired: String(s.defaultRestHoursRequired ?? ""),
       defaultLoadingMinutes: String(s.defaultLoadingMinutes ?? ""),
       defaultUnloadingMinutes: String(s.defaultUnloadingMinutes ?? ""),
@@ -896,24 +904,34 @@ function PlanningSettingsPanel() {
       defaultDeadheadKmh: String(s.defaultDeadheadKmh ?? ""),
       estimateCacheTtlMinutes: String(s.estimateCacheTtlMinutes ?? ""),
     });
+    setEnableExternalNav(s.enableExternalNavigationUrls !== false);
     setLoaded(true);
   }
 
   const save = async () => {
     try {
+      const payload: Record<string, unknown> = {
+        mapProvider: form.mapProvider || undefined,
+        defaultRestHoursRequired: form.defaultRestHoursRequired ? Number(form.defaultRestHoursRequired) : undefined,
+        defaultLoadingMinutes: form.defaultLoadingMinutes ? Number(form.defaultLoadingMinutes) : undefined,
+        defaultUnloadingMinutes: form.defaultUnloadingMinutes ? Number(form.defaultUnloadingMinutes) : undefined,
+        defaultBufferMinutes: form.defaultBufferMinutes ? Number(form.defaultBufferMinutes) : undefined,
+        defaultDeadheadKmh: form.defaultDeadheadKmh ? Number(form.defaultDeadheadKmh) : undefined,
+        estimateCacheTtlMinutes: form.estimateCacheTtlMinutes ? Number(form.estimateCacheTtlMinutes) : undefined,
+        enableExternalNavigationUrls: enableExternalNav,
+      };
+      // Only send the API key when the operator typed a new one. An
+      // empty input means "leave the saved value alone"; the special
+      // sentinel `__clear__` is the explicit "remove the saved key".
+      if (newApiKey === "__clear__") payload.mapProviderApiKey = null;
+      else if (newApiKey.trim().length > 0) payload.mapProviderApiKey = newApiKey.trim();
+
       await apiFetch("/transport/planning-settings", {
         method: "PATCH",
-        body: JSON.stringify({
-          mapProvider: form.mapProvider || undefined,
-          defaultRestHoursRequired: form.defaultRestHoursRequired ? Number(form.defaultRestHoursRequired) : undefined,
-          defaultLoadingMinutes: form.defaultLoadingMinutes ? Number(form.defaultLoadingMinutes) : undefined,
-          defaultUnloadingMinutes: form.defaultUnloadingMinutes ? Number(form.defaultUnloadingMinutes) : undefined,
-          defaultBufferMinutes: form.defaultBufferMinutes ? Number(form.defaultBufferMinutes) : undefined,
-          defaultDeadheadKmh: form.defaultDeadheadKmh ? Number(form.defaultDeadheadKmh) : undefined,
-          estimateCacheTtlMinutes: form.estimateCacheTtlMinutes ? Number(form.estimateCacheTtlMinutes) : undefined,
-        }),
+        body: JSON.stringify(payload),
       });
       toast({ title: "تم حفظ الإعدادات" });
+      setNewApiKey("");
       setLoaded(false);
       refetch();
     } catch (err: any) {
@@ -923,18 +941,75 @@ function PlanningSettingsPanel() {
 
   if (isLoading) return <LoadingSpinner />;
 
+  const usingFallback = Boolean(s.usingFallback);
+  const fallbackNotice = s.fallbackNoticeAr as string | null;
+  const keyConfigured = Boolean(s.mapProviderApiKeyConfigured);
+  const maskedKey = s.mapProviderApiKey as string | null;
+
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">إعدادات تخطيط النقل</CardTitle></CardHeader>
       <CardContent className="space-y-4">
+        {usingFallback && fallbackNotice && (
+          <div
+            data-testid="maps-fallback-notice"
+            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          >
+            <span className="inline-block ms-1 align-middle">⚠️</span>
+            {fallbackNotice}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4">
-          <div>
+          <div className="col-span-2">
             <Label>مزوّد الخريطة</Label>
-            <select className="w-full h-10 border rounded-md px-2 mt-1" value={form.mapProvider || "manual_only"}
+            <select className="w-full h-10 border rounded-md px-2 mt-1" value={form.mapProvider || "auto"}
               onChange={(e) => setForm((f) => ({ ...f, mapProvider: e.target.value }))}>
               {MAP_PROVIDERS_UI.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
+            <div className="text-xs text-muted-foreground mt-1">
+              المزوّد الفعّال حالياً: <span className="font-mono">{s.effectiveProvider || "manual_only"}</span>
+              {" · "}دقة التقدير: <span className="font-mono">{s.routingPrecision || "estimated"}</span>
+            </div>
           </div>
+
+          <div className="col-span-2">
+            <Label>مفتاح Google Maps API</Label>
+            <Input
+              type="password"
+              autoComplete="off"
+              className="mt-1"
+              placeholder={keyConfigured && maskedKey ? `محفوظ — ${maskedKey}` : "ألصق المفتاح هنا لتفعيل Google Maps"}
+              value={newApiKey === "__clear__" ? "" : newApiKey}
+              onChange={(e) => setNewApiKey(e.target.value)}
+            />
+            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
+              <span>
+                {keyConfigured
+                  ? "مفتاح محفوظ على الخادم — لن يُعرض النص الكامل أبداً."
+                  : "لا يوجد مفتاح. النظام يعمل بوضع التقدير الداخلي."}
+              </span>
+              {keyConfigured && (
+                <button
+                  type="button"
+                  className="text-red-600 hover:underline"
+                  onClick={() => setNewApiKey("__clear__")}
+                >
+                  حذف المفتاح المحفوظ
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="col-span-2 flex items-center justify-between border rounded-md p-3">
+            <div>
+              <Label className="block">السماح بفتح خرائط Google خارج التطبيق للملاحة</Label>
+              <div className="text-xs text-muted-foreground mt-1">
+                زر «ابدأ الملاحة» على شاشة السائق يفتح خرائط Google بدون الحاجة لمفتاح API.
+              </div>
+            </div>
+            <Switch checked={enableExternalNav} onCheckedChange={setEnableExternalNav} />
+          </div>
+
           <div>
             <Label>ساعات الراحة المطلوبة (افتراضي)</Label>
             <Input type="number" className="mt-1" value={form.defaultRestHoursRequired || ""}

@@ -250,9 +250,13 @@ export default function MeDriverNavigation() {
             </div>
           </div>
 
-          {/* In-app map placeholder. Phase 2 will mount a real Maps
-              widget here; for now we show a neutral panel + a deep
-              link to external navigation as the fallback. */}
+          {/* Maps Provider Adapter (owner brief 2026-06-15) — until the
+              in-app map widget lands (Phase 2), the primary action
+              for the driver is the "ابدأ الملاحة" button that opens
+              Google Maps directly. The deep link is keyless, so it
+              works whether or not a Google API key is configured on
+              the server. The driver never has to leave-and-search:
+              the destination is pre-filled. */}
           <div className="mt-3 rounded-md border-2 border-dashed border-status-info-foreground/30 bg-status-info-surface/30 p-6 text-center">
             <MapPin className="h-12 w-12 mx-auto text-status-info-foreground/40 mb-2" />
             <div className="text-sm text-muted-foreground">
@@ -263,16 +267,23 @@ export default function MeDriverNavigation() {
                 موقعك الحالي: {Number(session.lastLat).toFixed(5)}, {Number(session.lastLng).toFixed(5)}
               </div>
             )}
-            {externalLink && (
-              <a
-                href={externalLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 mt-3 text-xs text-status-info-foreground hover:underline"
+            {externalLink ? (
+              <Button
+                asChild
+                size="lg"
+                className="mt-4 w-full sm:w-auto"
+                data-testid="start-navigation-button"
               >
-                <ExternalLink className="h-3 w-3" />
-                فتح في خرائط Google (احتياطي)
-              </a>
+                <a href={externalLink} target="_blank" rel="noreferrer">
+                  <Navigation className="h-5 w-5 me-2" />
+                  ابدأ الملاحة
+                  <ExternalLink className="h-3 w-3 ms-2 opacity-70" />
+                </a>
+              </Button>
+            ) : (
+              <div className="mt-4 text-xs text-muted-foreground">
+                إحداثيات الوجهة غير متوفرة — راجع التحكم لتثبيت الإحداثيات على الحجز.
+              </div>
             )}
           </div>
 
