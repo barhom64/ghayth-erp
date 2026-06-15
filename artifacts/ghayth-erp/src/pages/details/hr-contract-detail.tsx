@@ -6,7 +6,7 @@ import {
   type RelatedEntity,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionHistory } from "@workspace/workflow-kit";
@@ -228,7 +228,7 @@ export default function HrContractDetail() {
       actions={
         <>
           {contract && (
-            <EntityPrintButton
+            <PrintButton
               entityType="employee_contract"
               entityId={contract.id ?? id}
              />

@@ -11,7 +11,7 @@ import { FormGrid, FormTextareaField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { LineAllocationStatusBanner } from "@/components/shared/line-allocation-status-banner";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import {
@@ -450,7 +450,7 @@ export default function ExpenseDetail() {
         actions={
           <>
             {expense && (
-              <EntityPrintButton
+              <PrintButton
                 entityType="expense"
                 entityId={id ?? 0}
                />
