@@ -9,7 +9,7 @@ import {
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, CheckCircle2, Clock, User, MapPin, FileText, Plus, Trash2 } from "lucide-react";
@@ -305,7 +305,7 @@ export default function TaskDetail() {
               تعليم كمكتملة
             </GuardedButton>
           )}
-          <EntityPrintButton
+          <PrintButton
             entityType="task"
             entityId={id ?? 0}
            />

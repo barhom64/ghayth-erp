@@ -5,7 +5,7 @@ import { useApiQuery, apiPatch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, GitBranch, TrendingUp, TrendingDown, Layers, BookOpen, ChevronDown, ChevronRight, CheckCircle, Search, Edit2, Trash2, Scale, Percent } from "lucide-react";
@@ -302,7 +302,7 @@ export default function AccountsPage() {
             <Button asChild size="sm" variant="outline"><Link href="/finance/tax-codes">
                 <Percent className="h-4 w-4 me-1" />رموز الضريبة
               </Link></Button>
-            <EntityPrintButton entityType="report_chart_of_accounts" entityId="all" />
+            <PrintButton entityType="report_chart_of_accounts" entityId="all" />
             <Button
               size="sm"
               variant={viewMode === "tree" ? "default" : "outline"}

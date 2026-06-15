@@ -3,7 +3,7 @@ import { PageShell } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency } from "@/lib/formatters";
 import { DollarSign, TrendingUp, TrendingDown, FileText } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +34,7 @@ export default function MyPayslip() {
       subtitle="عرض مفصّل لراتبك الشهري"
       actions={
         hasData && payslip?.id ? (
-          <EntityPrintButton entityType="payslip" entityId={payslip.id} />
+          <PrintButton entityType="payslip" entityId={payslip.id} />
         ) : undefined
       }
     >
