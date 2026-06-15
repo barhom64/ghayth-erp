@@ -37,6 +37,7 @@ export const CREATED_BY_IDENTITY: Record<string, CreatedByIdentity> = {
   hr_violations: "user",
   marketing_campaigns: "user",
   payment_runs: "user",
+  property_sales: "user",
   public_announcements: "user",
   umrah_agent_invoices: "user",
   umrah_import_batches: "user",
@@ -44,6 +45,7 @@ export const CREATED_BY_IDENTITY: Record<string, CreatedByIdentity> = {
   umrah_packages: "user",
   umrah_penalties: "user",
   umrah_transport: "user",
+  vrp_optimization_runs: "user",
   // FK → employee_assignments (must hold an assignment id)
   bank_guarantees: "assignment",
   intercompany_transactions: "assignment",

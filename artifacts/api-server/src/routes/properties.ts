@@ -4775,7 +4775,7 @@ router.post("/sales", authorize({ feature: "properties.buildings", action: "crea
       details: `بيع عقار لـ ${b.buyerName} بمبلغ ${b.salePrice}` });
 
     const [sale] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM property_sales WHERE id=$1`, [insertId]
+      `SELECT * FROM property_sales WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]
     );
     res.status(201).json(sale);
   } catch (err) { handleRouteError(err, res, "Property sale create error:"); }
