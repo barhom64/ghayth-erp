@@ -13,6 +13,8 @@ import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { seedRolesAndGrantsV2 } from "../lib/rbac/autoMigrate.js";
+import { consumeAuthToken } from "../lib/authTokens.js";
+import { sendAuthEmail } from "../lib/authNotifications.js";
 import {
   authenticateUserByPassword,
   createUserSession,
@@ -102,14 +104,23 @@ const switchAssignmentSchema = z.object({
   assignmentId: z.coerce.number({ required_error: "التعيين مطلوب" }),
 });
 
+// Shared strong-password rule (mirrors change-password).
+const newPasswordRule = z.string()
+  .min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
+  .regex(/[A-Z]/, "يجب أن تحتوي على حرف كبير واحد على الأقل")
+  .regex(/[a-z]/, "يجب أن تحتوي على حرف صغير واحد على الأقل")
+  .regex(/[0-9]/, "يجب أن تحتوي على رقم واحد على الأقل")
+  .regex(/[^a-zA-Z0-9]/, "يجب أن تحتوي على رمز خاص واحد على الأقل");
+
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
-  newPassword: z.string()
-    .min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
-    .regex(/[A-Z]/, "يجب أن تحتوي على حرف كبير واحد على الأقل")
-    .regex(/[a-z]/, "يجب أن تحتوي على حرف صغير واحد على الأقل")
-    .regex(/[0-9]/, "يجب أن تحتوي على رقم واحد على الأقل")
-    .regex(/[^a-zA-Z0-9]/, "يجب أن تحتوي على رمز خاص واحد على الأقل"),
+  newPassword: newPasswordRule,
+});
+
+// #2137 slice 2 — token-driven account recovery (public, token-authenticated).
+const tokenResetSchema = z.object({
+  token: z.string().min(16, "الرمز غير صالح").max(200),
+  newPassword: newPasswordRule,
 });
 
 // NOTE: A router-wide per-IP authRouteLimiter previously sat here. It has
@@ -727,9 +738,118 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     }).catch((e) => logger.error(e, "auth background task failed"));
     clearAuthCookies(res);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.password.changed", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    // Security notice (best-effort, no secret) — #2137 slice 2.
+    void notifyPasswordChanged(scope.companyId, scope.userId).catch((e) => logger.warn(e, "password-changed notice"));
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Change password error:");
+  }
+});
+
+// ─────────────────────── #2137 slice 2 — account recovery ─────────────────
+
+interface AccountRow {
+  userId: number;
+  email: string;
+  companyId: number;
+  name: string;
+}
+
+/**
+ * Resolve a login account by email → its user id, company, and display
+ * name (for templated emails). Email is the login identity (users.email).
+ * Returns null when no active user matches — callers MUST stay silent
+ * about which case occurred (no user enumeration).
+ */
+async function lookupAccountByEmail(email: string): Promise<AccountRow | null> {
+  const [row] = await rawQuery<AccountRow>(
+    `SELECT u.id AS "userId", u.email AS email,
+            COALESCE(ea."companyId", 0) AS "companyId",
+            COALESCE(e.name, u.email) AS name
+       FROM users u
+       LEFT JOIN employees e ON e.id = u."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = u."employeeId" AND ea.status = 'active'
+      WHERE LOWER(u.email) = LOWER($1) AND u."isActive" = TRUE
+      ORDER BY ea."isPrimary" DESC NULLS LAST
+      LIMIT 1`,
+    [email],
+  );
+  return row ?? null;
+}
+
+/** Best-effort password-changed security notice. No secret. */
+async function notifyPasswordChanged(companyId: number, userId: number): Promise<void> {
+  const [row] = await rawQuery<{ email: string; name: string }>(
+    `SELECT u.email AS email, COALESCE(e.name, u.email) AS name
+       FROM users u LEFT JOIN employees e ON e.id = u."employeeId"
+      WHERE u.id = $1 LIMIT 1`,
+    [userId],
+  );
+  if (!row?.email) return;
+  await sendAuthEmail({
+    companyId, userId,
+    recipientEmail: row.email,
+    recipientName: row.name,
+    templateKey: "auth.password_changed.email",
+    vars: { userName: row.name, changedAt: new Date().toISOString() },
+  });
+}
+
+/**
+ * POST /auth/reset-password — consume a password-reset token (single-use,
+ * unexpired) and set the new password. Public + token-authenticated, so
+ * CSRF-exempt and per-IP rate-limited like login. Atomically rotates the
+ * password and revokes all refresh tokens, then sends the password-changed
+ * security notice. A bad/expired/used token yields ONE generic error.
+ */
+router.post("/reset-password", loginLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = zodParse(tokenResetSchema.safeParse(req.body));
+    const consumed = await consumeAuthToken({ rawToken: token, purpose: "password_reset" });
+    if (!consumed || !consumed.userId) {
+      throw new ForbiddenError("رابط إعادة التعيين غير صالح أو منتهي الصلاحية. اطلب رابطاً جديداً.");
+    }
+    const hashed = await hashPassword(newPassword);
+    await withTransaction(async (client) => {
+      const { rowCount } = await client.query(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, consumed.userId]);
+      if (!rowCount) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(`UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`, [consumed.userId]);
+    });
+    void createAuditLog({ companyId: 0, userId: consumed.userId, action: "password_reset_completed", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "audit reset"));
+    void emitEvent({ companyId: 0, branchId: 0, userId: consumed.userId, action: "auth.password.reset_completed", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "event reset"));
+    void notifyPasswordChanged(0, consumed.userId).catch((e) => logger.warn(e, "password-changed notice"));
+    res.json({ success: true, message: "تم تعيين كلمة المرور الجديدة. يمكنك تسجيل الدخول الآن." });
+  } catch (err) {
+    handleRouteError(err, res, "reset-password");
+  }
+});
+
+/**
+ * POST /auth/activate — consume an activation/invitation token and set the
+ * account's first password. Public + token-authenticated. Same single-use
+ * + revoke + notice flow as reset-password; accepts either purpose.
+ */
+router.post("/activate", loginLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = zodParse(tokenResetSchema.safeParse(req.body));
+    // Try invitation first, then activation — both grant first-password set.
+    const consumed =
+      (await consumeAuthToken({ rawToken: token, purpose: "invitation" })) ??
+      (await consumeAuthToken({ rawToken: token, purpose: "activation" }));
+    if (!consumed || !consumed.userId) {
+      throw new ForbiddenError("رابط التفعيل غير صالح أو منتهي الصلاحية. اطلب دعوة جديدة.");
+    }
+    const hashed = await hashPassword(newPassword);
+    await withTransaction(async (client) => {
+      const { rowCount } = await client.query(`UPDATE users SET "passwordHash"=$1, "isActive"=TRUE WHERE id=$2`, [hashed, consumed.userId]);
+      if (!rowCount) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(`UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`, [consumed.userId]);
+    });
+    void createAuditLog({ companyId: 0, userId: consumed.userId, action: "account_activated", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "audit activate"));
+    void emitEvent({ companyId: 0, branchId: 0, userId: consumed.userId, action: "auth.account.activated", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "event activate"));
+    res.json({ success: true, message: "تم تفعيل حسابك وتعيين كلمة المرور. يمكنك تسجيل الدخول الآن." });
+  } catch (err) {
+    handleRouteError(err, res, "activate");
   }
 });
 
