@@ -31,6 +31,7 @@ const TRANSPORT = readFileSync(join(ROUTES, "transport-bookings.ts"), "utf8");
 const IMPACT = readFileSync(join(ROUTES, "impactPreview.ts"), "utf8");
 const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
 const TASKS = readFileSync(join(ROUTES, "tasks.ts"), "utf8");
+const PROJECTS = readFileSync(join(ROUTES, "projects.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -191,5 +192,28 @@ describe("FND-013 #2340 — tasks.ts task_assignees mutations (batch 4) are comp
     expect(stripped).toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1 AND "companyId" = \$2/);
     expect(stripped).not.toMatch(/UPDATE task_assignees SET role = \$1 WHERE id = \$2`/);
     expect(stripped).not.toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1`/);
+  });
+});
+
+describe("FND-013 #2340 — projects.ts project_phases reads (batch 5) are company-scoped", () => {
+  // Every project_phases read sits behind a companyId-verified project
+  // (assertProjectAccess / a companyId-scoped project lookup). Each read must
+  // also carry companyId so it stays safe if that upstream check ever moves.
+  it("all project_phases reads carry a companyId predicate — none bare", () => {
+    const stripped = stripComments(PROJECTS);
+    const reads = [...stripped.matchAll(/FROM project_phases\b[\s\S]*?`/g)];
+    expect(reads.length).toBeGreaterThanOrEqual(6);
+    for (const m of reads) {
+      // Skip the INSERT...RETURNING-less paths: these are all SELECTs by
+      // projectId/id; require companyId in each.
+      expect(m[0]).toMatch(/"companyId"\s*=\s*\$\d/);
+    }
+  });
+
+  it("no bare project_phases WHERE projectId/id forms remain", () => {
+    const stripped = stripComments(PROJECTS);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1 ORDER/);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1`/);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE id=\$1 AND "projectId"=\$2`/);
   });
 });
