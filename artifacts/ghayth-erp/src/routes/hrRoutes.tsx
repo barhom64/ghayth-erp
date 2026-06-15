@@ -59,8 +59,10 @@ const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 // (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
 // (PerformanceAdvanced أُزيل — توزيع التقييمات + أفضل ١٠ صارا تبويب «التحليلات»
 // في /hr/performance، والمسار /hr/performance/advanced يُعاد توجيهه إليها. HR-REV)
-const RecruitmentAdvanced = lazy(() => import("@/pages/hr/recruitment-advanced"));
-const TrainingAdvanced = lazy(() => import("@/pages/hr/training-advanced"));
+// (RecruitmentAdvanced أُزيل — كان عرضًا تحليليًّا مكرّرًا مشمولًا بالكامل في
+// /hr/recruitment، والمسار /hr/recruitment/advanced يُعاد توجيهه إليها. HR-REV)
+// (TrainingAdvanced أُزيل — «البرامج حسب الحالة» صار قسمًا في تبويب البرامج بصفحة
+// /hr/training، والمسار /hr/training/advanced يُعاد توجيهه إليها. HR-REV)
 // (ViolationsManagement أُزيل — قائمة المخالفات الخام + الاعتماد + التحليل صارت
 // تبويب «المخالفات الخام» داخل /hr/violations، و/hr/violations/management يُعاد
 // توجيهه إليها. HR-REV-7)
