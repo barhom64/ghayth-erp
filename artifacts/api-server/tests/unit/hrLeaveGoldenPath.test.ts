@@ -220,7 +220,8 @@ describe("HR Leave security contracts", () => {
   it("role authorization restricts approvers", () => {
     const idx = HR_ROUTE.indexOf('"/leave-requests/:id/approve"');
     const approvalSection = HR_ROUTE.slice(idx, idx + 1200);
-    expect(approvalSection).toContain("HR_APPROVAL_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the HR_APPROVAL_ROLES array.
+    expect(approvalSection).toContain('scopeCan(scope, "hr", "approve")');
   });
 });
 
