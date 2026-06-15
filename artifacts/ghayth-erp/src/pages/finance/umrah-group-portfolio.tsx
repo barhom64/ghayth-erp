@@ -99,7 +99,7 @@ export default function UmrahGroupPortfolioDashboard() {
       columns: [
         { key: "id",                label: "id" },
         { key: "name",              label: "name" },
-        { key: "nuskGroupNumber",   label: "nuskGroupNumber" },
+        { key: "nuskGroupNumber",   label: "رقم المجموعة في نُسُك" },
         { key: "status",            label: "status" },
         { key: "seasonTitle",       label: "seasonTitle" },
         { key: "agentName",         label: "agentName" },

@@ -100,7 +100,7 @@ export default function UmrahAgentBalancesReport() {
       columns: [
         { key: "id",                label: "id" },
         { key: "name",              label: "name" },
-        { key: "nuskAgentNumber",   label: "nuskAgentNumber" },
+        { key: "nuskAgentNumber",   label: "رقم وكيل نُسُك" },
         { key: "country",           label: "country" },
         { key: "phone",             label: "phone" },
         { key: "status",            label: "status" },
