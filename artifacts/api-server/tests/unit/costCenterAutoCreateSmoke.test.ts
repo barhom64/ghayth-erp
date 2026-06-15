@@ -78,7 +78,7 @@ describe("createCostCenterForEntity — naming + idempotency", () => {
 
   it("fills autoCreatedBy + autoCreatedReason — migration 203's traceability columns", () => {
     expect(HELPER).toMatch(/"autoCreatedBy", "autoCreatedReason"/);
-    const reasons = HELPER.match(/const REASON_BY_TYPE[\s\S]{0,400}\};/);
+    const reasons = HELPER.match(/const REASON_BY_TYPE[\s\S]{0,700}\};/);
     expect(reasons).toBeTruthy();
     expect(reasons![0]).toContain("auto-created on branch insert");
     expect(reasons![0]).toContain("auto-created on project insert");
