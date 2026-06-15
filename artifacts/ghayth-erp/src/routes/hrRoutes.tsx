@@ -20,7 +20,8 @@ const TrainingDetail = lazy(() => import("@/pages/hr/training-detail"));
 const TrainingCreate = lazy(() => import("@/pages/create/hr/training-create"));
 // HR-REV-2 (ADR-HR-02) — `org-tree` هو الهيكل التنظيمي الموحّد القانوني؛
 // /hr/organization و /hr/organization/structure أُبقِيا redirect إليه (لا 404
-// للروابط القديمة) بدل صفحتين مكرّرتين. ملفّا الصفحتين يبقيان للمرجع.
+// للروابط القديمة). صفحتا العرض المكرّرتان (مجرّد KPIs وبطاقات) أُزيلتا
+// (retire) لأن org-tree يُغنيهما، وaudit:routes يمنع الصفحات اليتيمة.
 const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
 const RecruitmentCreate = lazy(() => import("@/pages/create/hr/recruitment-create"));
 const JobDetail = lazy(() => import("@/pages/hr/job-detail"));
