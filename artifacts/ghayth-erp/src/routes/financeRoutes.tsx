@@ -67,6 +67,7 @@ const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
+const VendorInvoiceCreate = lazy(() => import("@/pages/create/finance/vendor-invoice-create"));
 // Duplicate multi-line form removed — the unified expenses-create
 // page now handles multi-line via "حفظ وإضافة آخر" button.
 // The /finance/expenses/multi-line route below redirects there.
@@ -285,6 +286,10 @@ export const financeRoutes = [
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
+  // FIN-P11 (#2241) — vendor invoice (supplier bill): a SEPARATE multi-line
+  // entry path from the expense/fuel path; credit leg = supplier payable (آجل)
+  // or money source (paid).
+  { path: "/finance/vendor-invoices/create", component: VendorInvoiceCreate },
   // Legacy multi-line route now redirects to the unified expenses-create
   // form, which supports multi-line via the "حفظ وإضافة آخر" button.
   { path: "/finance/expenses/multi-line", component: ExpensesCreate },
