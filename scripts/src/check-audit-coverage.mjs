@@ -49,17 +49,42 @@ const INDEX_TS = join(ROUTES, "index.ts");
 const AUDIT_MW = join(REPO, "artifacts/api-server/src/middlewares/auditMiddleware.ts");
 const ALLOWLIST_PATH = join(REPO, "scripts/audit-coverage-allowlist.txt");
 
-// ── mount map: routerFile.ts → [mountPrefix, ...] (parsed from routes/index.ts)
-function buildMountMap() {
-  const src = readFileSync(INDEX_TS, "utf8");
-  const importRe = /import\s+(?:\{?\s*(\w+)\s*\}?)\s+from\s+["'](\.\/[^"']+)["']/g;
+// ── import clause → { localSymbol: routerFile.ts }. Handles default imports
+// (`import foo from "./x"`), namespace (`import * as foo from "./x"`), and —
+// critically — multi-symbol named lists (`import { a, b as c, d } from "./x"`),
+// each with optional `as` aliases. The earlier single-(\w+) regex captured only
+// the FIRST symbol of a named list, so every router after the first (e.g. the
+// wiring-stubs.js routers) fell back to an empty mount prefix and produced
+// non-canonical allowlist keys like `POST /:id/ocr/rerun`.
+function parseRouterImports(src) {
   const routerToFile = {};
+  const importRe = /import\s+([^;]+?)\s+from\s+["'](\.\/[^"']+)["']/g;
   let m;
   while ((m = importRe.exec(src))) {
-    routerToFile[m[1]] = m[2].replace(/\.js$/, ".ts").replace(/^\.\//, "");
+    const clause = m[1].trim();
+    const file = m[2].replace(/\.js$/, ".ts").replace(/^\.\//, "");
+    const brace = clause.match(/\{([^}]*)\}/);
+    if (brace) {
+      for (const part of brace[1].split(",")) {
+        const name = part.trim().split(/\s+as\s+/).pop().trim();
+        if (/^\w+$/.test(name)) routerToFile[name] = file;
+      }
+    } else {
+      const name = clause.replace(/^\*\s+as\s+/, "").trim();
+      if (/^\w+$/.test(name)) routerToFile[name] = file;
+    }
   }
+  return routerToFile;
+}
+
+// ── mount map: routerFile.ts → [mountPrefix, ...] (parsed from routes/index.ts)
+// `srcOverride` lets the test feed synthetic index.ts source without disk I/O.
+export function buildMountMap(srcOverride) {
+  const src = srcOverride != null ? srcOverride : readFileSync(INDEX_TS, "utf8");
+  const routerToFile = parseRouterImports(src);
   const useRe = /router\.use\(\s*["']([^"']+)["']([^;]*?)(\w+Router)\s*\)/g;
   const map = {};
+  let m;
   while ((m = useRe.exec(src))) {
     const file = routerToFile[m[3]];
     if (!file) continue;
