@@ -69,6 +69,13 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "finance-custodies.ts",
   "finance-gl-helpers.ts",
   "finance-hardening.ts",
+  // finance-memory.ts: financial-memory CRUD (manual journal templates,
+  // expense-category memory, supplier finance defaults). Point lookups +
+  // upserts keyed by (companyId, supplierId)/(companyId, categoryKey)/
+  // (companyId, id) — not list cascades; tight scope.companyId scoping is
+  // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
+  // company/branch list cascades which this surface intentionally isn't.
+  "finance-memory.ts",
   "fleet-telematics-webhook.ts",
   "fleet-telematics.ts",
   "governance.ts",
@@ -254,9 +261,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // because both routes serve the caller's own data via
       // scope.userId (selfService:true), where scoped lists wouldn't
       // apply. Counted under manualOnly to preserve the invariant.
-      total: 119,
+      // +1 total/manualOnly: routes/finance-memory.ts (financial-memory
+      // foundation) — point-lookup/upsert CRUD keyed by (companyId, …),
+      // allowlisted above with justification (mirrors parties.ts/org.ts).
+      total: 120,
       helperUsers: 39,
-      manualOnly: 77,
+      manualOnly: 78,
     });
   });
 });
