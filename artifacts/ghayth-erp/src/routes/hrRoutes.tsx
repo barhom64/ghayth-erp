@@ -47,7 +47,8 @@ const ShiftsCreate = lazy(() => import("@/pages/create/hr/shifts-create"));
 const ShiftDetail = lazy(() => import("@/pages/details/shift-detail"));
 
 const AttendanceReports = lazy(() => import("@/pages/hr/attendance-reports"));
-const LeaveManagement = lazy(() => import("@/pages/hr/leave-management"));
+// (LeaveManagement أُزيل — أرصدة/أنواع الإجازات صارت تبويبات في صفحة الإجازات
+// الموحّدة، و/hr/leaves/management يُعاد توجيهه إليها. HR-REV-2)
 const ApprovalChains = lazy(() => import("@/pages/hr/approval-chains"));
 const FieldTracking = lazy(() => import("@/pages/hr/field-tracking"));
 const QRScanner = lazy(() => import("@/pages/hr/qr-scanner"));

@@ -206,7 +206,6 @@ export const allNavSections: NavSection[] = [
         { label: "كتالوج الخدمات", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
         { label: "صندوق الواردات HR", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
-        { label: "إدارة الإجازات", path: "/hr/leaves/management", icon: ClipboardList, subKey: "leaves" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
         { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
         { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
