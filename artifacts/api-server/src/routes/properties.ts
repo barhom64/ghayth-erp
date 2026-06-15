@@ -2383,8 +2383,8 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
     const isEmergency = emergencyKeywords.some(kw => descLower.includes(kw));
 
     const pastRequests = await rawQuery<Record<string, unknown>>(
-      `SELECT EXTRACT(EPOCH FROM ("completedAt"::timestamp - "createdAt"::timestamp))/86400 AS days FROM maintenance_requests WHERE "unitId"=$1 AND status='completed' AND "completedAt" IS NOT NULL ORDER BY id DESC LIMIT 10`,
-      [b.unitId]
+      `SELECT EXTRACT(EPOCH FROM ("completedAt"::timestamp - "createdAt"::timestamp))/86400 AS days FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND status='completed' AND "completedAt" IS NOT NULL ORDER BY id DESC LIMIT 10`,
+      [b.unitId, scope.companyId]
     );
     const responseDays = pastRequests.map((r: Record<string, unknown>) => Number(r.days)).filter((d: number) => d > 0);
     const avgResponseDays = responseDays.length > 0 ? movingAverage(responseDays) : 5;
