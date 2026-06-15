@@ -3227,7 +3227,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requireMinLevel(70)
 // OPENING BALANCES (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+// GAP_MATRIX P0 — opening balances expose initial GL amounts; gate at 70 to match mutations.
+journalRouter.get("/opening-balances", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { periodStart } = req.query as { periodStart?: string };

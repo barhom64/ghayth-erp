@@ -47,6 +47,9 @@ import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
+// Maps Provider Adapter — masking helper is exported separately so
+// any route that needs to echo the planning settings goes through
+// the single chokepoint instead of re-implementing the masking.
 import {
   suggestAssignments,
   suggestForLeg,
@@ -63,16 +66,18 @@ transportPlanningRouter.use(authMiddleware);
 // #2079 FIX-11 (DEAD-02) — the `mapbox` and `here_maps` providers
 // remain declared in the TS type union and the DB CHECK constraint
 // (migration 271:130) because old rows may still carry them, but
-// the mapsService falls back to `manual_only` for both of them
-// (mapsService.ts:305-309). Exposing them as a settable value
-// through the PATCH endpoint is misleading — the operator picks
-// "mapbox", clicks save, then notices every estimate is still a
-// straight-line manual approximation. Restrict the input enum to
-// the two providers that ACTUALLY work (`manual_only` +
-// `google_maps`). DB rows already on `mapbox`/`here_maps` keep
-// loading correctly — the type union stays — but no new write
-// can set those values via the public PATCH.
-const MAP_PROVIDERS_WRITABLE = ["manual_only", "google_maps"] as const;
+// the mapsService falls back to `manual_only` for both of them.
+// Exposing them as a settable value through the PATCH endpoint is
+// misleading — the operator picks "mapbox", clicks save, then
+// notices every estimate is still a straight-line manual
+// approximation. Restrict the input enum to the three providers
+// that ACTUALLY work end-to-end:
+//   • manual_only — explicit "use internal estimate, do not call Google"
+//   • google_maps — explicit "always use Google, fail loud if no key"
+//   • auto        — operator-friendly: use Google if a key exists,
+//                   else fall back to the internal estimate
+// (Maps Provider Adapter, owner brief 2026-06-15.)
+const MAP_PROVIDERS_WRITABLE = ["manual_only", "google_maps", "auto"] as const;
 
 transportPlanningRouter.get(
   "/transport/planning-settings",
@@ -81,7 +86,11 @@ transportPlanningRouter.get(
     try {
       const scope = req.scope!;
       const settings = await loadPlanningSettings(scope.companyId);
-      res.json(maskFields(req, { data: settings }));
+      // Maps Provider Adapter — `toClientSettings` is the SINGLE
+      // chokepoint that strips the raw API key (returns the masked
+      // form) and adds the SPA-ready fallback notice. Wrap with
+      // `maskFields` so any future per-field policy still applies.
+      res.json(maskFields(req, { data: MapsService.toClientSettings(settings) }));
     } catch (err) {
       handleRouteError(err, res, "Load planning settings error:");
     }
@@ -91,7 +100,7 @@ transportPlanningRouter.get(
 const updateSettingsSchema = z.object({
   mapProvider: z.enum(MAP_PROVIDERS_WRITABLE, {
     errorMap: () => ({
-      message: "مزوّد الخرائط المختار غير مفعَّل في النظام — المسموح: manual_only أو google_maps",
+      message: "مزوّد الخرائط المختار غير مفعَّل في النظام — المسموح: manual_only أو google_maps أو auto",
     }),
   }).optional(),
   mapProviderApiKey: z.string().max(255).nullable().optional(),
@@ -101,6 +110,16 @@ const updateSettingsSchema = z.object({
   defaultBufferMinutes: z.coerce.number().int().min(0).max(480).optional(),
   defaultDeadheadKmh: z.coerce.number().int().min(10).max(200).optional(),
   estimateCacheTtlMinutes: z.coerce.number().int().min(15).max(43200).optional(),
+  // Maps Provider Adapter (owner brief 2026-06-15) — operator toggle
+  // for the driver's "ابدأ الملاحة" external link. The link itself is
+  // keyless; this flag is for fleets that want to forbid the driver
+  // from leaving the app even when no in-app map is available. We
+  // accept boolean OR the strings "true"/"false" since some form
+  // libraries serialize toggles as strings; everything else rejects.
+  enableExternalNavigationUrls: z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .transform((v) => (typeof v === "string" ? v === "true" : v))
+    .optional(),
 });
 
 transportPlanningRouter.patch(
@@ -111,12 +130,23 @@ transportPlanningRouter.patch(
       const scope = req.scope!;
       const b = zodParse(updateSettingsSchema.safeParse(req.body));
       const updated = await updatePlanningSettings(scope.companyId, b);
+      // Audit-log the PATCH body, but never the raw API key. Owner
+      // brief: «لا تطبعه في logs». Replace it with `[set]`/`[cleared]`
+      // before the row hits the audit trail.
+      const auditPayload: Record<string, unknown> = { ...b };
+      if ("mapProviderApiKey" in auditPayload) {
+        auditPayload.mapProviderApiKey =
+          auditPayload.mapProviderApiKey == null || auditPayload.mapProviderApiKey === ""
+            ? "[cleared]"
+            : "[set]";
+      }
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
         action: "update", entity: "transport_planning_settings", entityId: scope.companyId,
-        after: { ...b },
+        after: auditPayload,
       }).catch((e) => logger.error(e, "planning settings audit failed"));
-      res.json({ data: updated });
+      // Echo back the masked client view, never the raw settings row.
+      res.json({ data: MapsService.toClientSettings(updated) });
     } catch (err) {
       handleRouteError(err, res, "Update planning settings error:");
     }

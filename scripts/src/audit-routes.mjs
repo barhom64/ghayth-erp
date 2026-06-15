@@ -55,6 +55,12 @@ const ALLOWLIST = new Set([
   // GAP_MATRIX P1 — duplicate eliminated: /settings/print-templates now
   // redirects to /admin/print-templates (canonical). File kept for reference.
   "pages/settings/print-templates.tsx",
+  // GAP_MATRIX P1 — BI wrapper pages (bi-dashboards/bi-kpis/bi-reports) created
+  // a dual-nav structure alongside bi.tsx in-page tabs. Routes now redirect to /bi.
+  // Files kept as reference until the tabs content is merged into bi.tsx.
+  "pages/bi-dashboards.tsx",
+  "pages/bi-kpis.tsx",
+  "pages/bi-reports.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];
