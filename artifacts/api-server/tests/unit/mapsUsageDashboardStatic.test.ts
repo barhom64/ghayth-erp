@@ -147,14 +147,16 @@ describe("TA-GAP-09 Phase 2 — boundary intact", () => {
     expect(counter).toMatch(/ON CONFLICT \("companyId", "callDate", provider, "apiSurface"\)/);
   });
 
-  it("Phase 2 ships NO threshold cron yet (deferred)", () => {
-    // The cron job will land separately once the operator sets a cap.
-    // If a future change adds a cron handler before that, the
-    // listeners file would carry the new key — this catches it.
-    const listeners = readFileSync(
-      join(repoRoot, "artifacts/api-server/src/lib/cronScheduler.ts"),
+  it("the threshold cron / SPA chart land in Phase 3 (separate PR)", () => {
+    // The original Phase 2 boundary expected no cron at all. Phase 3
+    // (#TA-GAP-09 follow-up) intentionally adds the cron — the boundary
+    // shifts to "the threshold table + cron live separately from this
+    // PR's surface". The cron itself + its tests live in
+    // mapsUsageThresholdAlertsStatic.test.ts.
+    const phase3Tests = readFileSync(
+      join(repoRoot, "artifacts/api-server/tests/unit/mapsUsageThresholdAlertsStatic.test.ts"),
       "utf8",
     );
-    expect(listeners).not.toMatch(/maps[_-]?usage[_-]?(threshold|alert|cap)/i);
+    expect(phase3Tests).toMatch(/cron registers `maps_usage_threshold_alerts`/);
   });
 });

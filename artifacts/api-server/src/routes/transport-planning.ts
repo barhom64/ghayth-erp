@@ -50,6 +50,10 @@ import {
 // TA-GAP-09 Phase 2 — read-only usage dashboard counts. Loader is
 // best-effort and never throws; the route handler echoes its result.
 import { loadMapsUsage } from "../lib/fleet/mapsUsageCounter.js";
+// TA-GAP-09 Phase 3 — operator-set caps + the alert sweep that
+// follows. Routes below expose the configuration; the cron registered
+// in cronScheduler.ts runs the sweep.
+import { loadActiveThresholds, upsertThreshold } from "../lib/fleet/mapsUsageThresholdAlerts.js";
 // TR-021 — operating-window helper for a realistic utilisation denominator.
 import { dailyOperatingMinutes, type OperatingWindowSettings } from "../lib/fleet/operatingWindow.js";
 // Maps Provider Adapter — masking helper is exported separately so
@@ -195,6 +199,58 @@ transportPlanningRouter.get(
       res.json({ data: { rows, windowDays: days } });
     } catch (err) {
       handleRouteError(err, res, "Load maps usage error:");
+    }
+  },
+);
+
+// TA-GAP-09 Phase 3 — operator-set quota thresholds (daily + monthly).
+// Companion to /transport/maps-usage: the GET returns the active caps
+// so the SPA can show the cap line + the PUT lets the operator set
+// or update them.
+transportPlanningRouter.get(
+  "/transport/maps-usage/thresholds",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const rows = await loadActiveThresholds(scope.companyId);
+      res.json({ data: { rows } });
+    } catch (err) {
+      handleRouteError(err, res, "Load maps thresholds error:");
+    }
+  },
+);
+
+const upsertThresholdSchema = z.object({
+  period: z.enum(["daily", "monthly"]),
+  callCountThreshold: z.coerce.number().int().positive(),
+  warningPct: z.coerce.number().int().min(1).max(99).optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+transportPlanningRouter.put(
+  "/transport/maps-usage/thresholds",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const b = zodParse(upsertThresholdSchema.safeParse(req.body));
+      const result = await upsertThreshold({
+        companyId: scope.companyId,
+        period: b.period,
+        callCountThreshold: b.callCountThreshold,
+        warningPct: b.warningPct,
+        notes: b.notes ?? null,
+        createdBy: scope.userId,
+      });
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "maps_usage_thresholds", entityId: result.id,
+        after: { period: b.period, callCountThreshold: b.callCountThreshold, warningPct: b.warningPct ?? 80 },
+      }).catch((e) => logger.error(e, "maps threshold audit failed"));
+      res.json({ data: result });
+    } catch (err) {
+      handleRouteError(err, res, "Upsert maps threshold error:");
     }
   },
 );
