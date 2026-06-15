@@ -547,6 +547,10 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert, perm: "fleet.telematics.sync:list" },
         { label: "تكلفة الملكية (TCO)", path: "/fleet/tco", icon: DollarSign, perm: "fleet.vehicles:list" },
         { label: "التقارير", path: "/fleet/reports", icon: FileBarChart, perm: "fleet.vehicles:list" },
+        // TA-GAP-09 Phase 2 — استهلاك واجهة الخرائط (مراقبة حصة Google Maps).
+        // الـAPI الخلفية تستخدم fleet.bookings:view؛ هنا نُبقي القائمة مرئية
+        // لنفس أدوار التخطيط النقلي.
+        { label: "استهلاك الخرائط", path: "/fleet/maps/usage", icon: Activity, perm: "fleet.bookings:list" },
         { label: "الشحن والبضائع", path: "/fleet/cargo", icon: Package, perm: "fleet.cargo:list" },
         { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
         { label: "الإطارات", path: "/fleet/tires", icon: Settings, perm: "fleet.maintenance:list" },
