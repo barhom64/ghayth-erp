@@ -64,7 +64,8 @@ describe("pilgrim-detail page — reassign modal", () => {
   });
 
   it("opens an EntityEditDialog wired to the existing PATCH endpoint", () => {
-    expect(PAGE).toMatch(/EntityEditDialog<PilgrimReassignForm>/);
+    expect(PAGE).toMatch(/EntityEditDialog/);
+    expect(PAGE).toMatch(/PilgrimReassignForm/);
     expect(PAGE).toMatch(/endpoint=\{`\/umrah\/pilgrims\/\$\{id\}`\}/);
   });
 

@@ -58,9 +58,9 @@ describe("WHT report exposes filters", () => {
       expect(HANDLER).toContain(`${f}`);
     });
   }
-  it("date filters bind against je.postingDate (not createdAt — accountancy needs ledger date)", () => {
-    expect(HANDLER).toMatch(/je\."postingDate" >= \$\$\{params\.length\}/);
-    expect(HANDLER).toMatch(/je\."postingDate" < \(\$\$\{params\.length\}::date \+ 1\)/);
+  it("date filters bind against je.date (not createdAt — accountancy needs ledger date; postingDate alias is output-only)", () => {
+    expect(HANDLER).toMatch(/je\."date" >= \$\$\{params\.length\}/);
+    expect(HANDLER).toMatch(/je\."date" < \(\$\$\{params\.length\}::date \+ 1\)/);
   });
   it("supplierId filter binds against sup.id (joined table)", () => {
     expect(HANDLER).toMatch(/sup\.id = \$\$\{params\.length\}/);
