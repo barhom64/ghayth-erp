@@ -135,7 +135,7 @@ const createVehicleSchema = z.object({
 const createDriverSchema = z.object({
   name: z.string().min(1),
   phone: z.string().min(1),
-  licenseNumber: z.string().min(1),
+  licenseNumber: z.string().optional(),
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
@@ -160,13 +160,19 @@ const createDriverSchema = z.object({
     // Non-Saudi origin (gcc / international / temporary) → must carry iqamaNumber.
     if (!d.licenseOrigin) return true; // legacy / not yet specified
     if (d.licenseOrigin === "saudi") return !!d.nationalId;
-    return !!d.iqamaNumber;
+    // Non-Saudi must carry both an iqama AND a real license number
+    // (Saudi licenses use the national ID, so licenseNumber is optional there).
+    return !!d.iqamaNumber && !!d.licenseNumber;
   },
   (d) => ({
     message: d.licenseOrigin === "saudi"
       ? "الرخصة سعودية — رقم الهوية الوطنية مطلوب"
-      : "السائق غير سعودي — رقم الإقامة مطلوب",
-    path: d.licenseOrigin === "saudi" ? ["nationalId"] : ["iqamaNumber"],
+      : !d.iqamaNumber
+      ? "السائق غير سعودي — رقم الإقامة مطلوب"
+      : "السائق غير سعودي — رقم الرخصة مطلوب",
+    path: d.licenseOrigin === "saudi"
+      ? ["nationalId"]
+      : !d.iqamaNumber ? ["iqamaNumber"] : ["licenseNumber"],
   }),
 );
 
