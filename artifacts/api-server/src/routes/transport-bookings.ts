@@ -1278,6 +1278,47 @@ transportBookingsRouter.patch(
           }
         }
 
+        // Top-down cancel cascade — cancelling the dispatch order must also
+        // cancel the trip it spawned ("dispatch:<id>:<token>" sourceKey), else
+        // the trip is orphaned and its vehicle/driver stay locked. Mirrors the
+        // fleet trip-cancel resource release; the status guard bounds it to
+        // non-terminal trips so a finished trip is never reopened, and makes it
+        // idempotent. No re-dispatch loop: the order is already 'cancelled'
+        // here, so the fleet trip-cancel re-dispatch guard (status IN
+        // 'accepted'/'executing') no-ops. (A simultaneous trip-cancel locks
+        // trip→order while this locks order→trip; the rare inversion is
+        // Postgres-detected and self-heals on retry since both sides no-op once
+        // the other has run.)
+        if (target === "cancelled") {
+          const cancelledTrips = await tx.query<{
+            vehicleId: number | null; driverId: number | null;
+          }>(
+            `UPDATE fleet_trips
+                SET status = 'cancelled', "cancelledAt" = NOW(),
+                    "cancellationReason" = $3, "updatedAt" = NOW()
+              WHERE "companyId" = $1 AND "sourceKey" LIKE $2
+                AND status IN ('scheduled', 'planned', 'in_progress')
+              RETURNING "vehicleId", "driverId"`,
+            [scope.companyId, `dispatch:${id}:%`, "أُلغي أمر التوزيع المرتبط"],
+          );
+          for (const trip of cancelledTrips.rows) {
+            if (trip.vehicleId) {
+              await tx.query(
+                `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW()
+                  WHERE id=$1 AND "companyId"=$2 AND status='in_use' AND "deletedAt" IS NULL`,
+                [trip.vehicleId, scope.companyId],
+              );
+            }
+            if (trip.driverId) {
+              await tx.query(
+                `UPDATE fleet_drivers SET status='available'
+                  WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`,
+                [trip.driverId, scope.companyId],
+              );
+            }
+          }
+        }
+
         // #1812 — cascade the dispatch state down to the booking line and up
         // to the booking. Shared with the fleet trip-completion auto-status
         // path (#12) via lib/transportDispatchCascade so the two entry points
