@@ -66,6 +66,7 @@ const Expenses = lazy(() => import("@/pages/finance/expenses"));
 const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
+const ExpenseMixAnalyzer = lazy(() => import("@/pages/finance/expense-mix-analyzer"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
 const VendorInvoiceCreate = lazy(() => import("@/pages/create/finance/vendor-invoice-create"));
 // Duplicate multi-line form removed — the unified expenses-create
@@ -285,6 +286,7 @@ export const financeRoutes = [
   { path: "/finance/expenses", component: Expenses },
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
+  { path: "/finance/expense-mix", component: ExpenseMixAnalyzer },
   { path: "/finance/expenses/create", component: ExpensesCreate },
   // FIN-P11 (#2241) — vendor invoice (supplier bill): a SEPARATE multi-line
   // entry path from the expense/fuel path; credit leg = supplier payable (آجل)
