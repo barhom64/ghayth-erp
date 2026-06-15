@@ -115,6 +115,18 @@ export interface ConfirmActionDialogProps {
    * additionally gated beyond the page-level route protection.
    */
   confirmPerm?: string | string[];
+  /**
+   * Optional secondary action rendered in the footer alongside confirm/cancel.
+   * Use sparingly — only when a dialog genuinely has two mutually exclusive
+   * outcomes (e.g., approve vs. reject in an inline review dialog).
+   */
+  secondaryAction?: {
+    label: string;
+    onClick: () => void;
+    variant?: "destructive" | "outline" | "default";
+    disabled?: boolean;
+    perm?: string | string[];
+  };
 }
 
 interface VariantStyles {
@@ -160,6 +172,7 @@ export function ConfirmActionDialog({
   contentTestId,
   confirmButtonTestId,
   confirmPerm,
+  secondaryAction,
 }: ConfirmActionDialogProps) {
   const styles = VARIANT_STYLES[variant];
   const Icon = styles.Icon;
@@ -215,8 +228,32 @@ export function ConfirmActionDialog({
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex-row justify-start gap-2">
+        <AlertDialogFooter className="flex-row justify-start gap-2 flex-wrap">
           {confirmButton}
+          {secondaryAction && (
+            secondaryAction.perm ? (
+              <GuardedButton
+                perm={secondaryAction.perm}
+                variant={secondaryAction.variant ?? "outline"}
+                size="sm"
+                onClick={secondaryAction.onClick}
+                disabled={secondaryAction.disabled ?? pending}
+                className="gap-1.5"
+              >
+                {secondaryAction.label}
+              </GuardedButton>
+            ) : (
+              <Button
+                variant={secondaryAction.variant ?? "outline"}
+                size="sm"
+                onClick={secondaryAction.onClick}
+                disabled={secondaryAction.disabled ?? pending}
+                className="gap-1.5"
+              >
+                {secondaryAction.label}
+              </Button>
+            )
+          )}
           <Button
             variant="outline"
             size="sm"
