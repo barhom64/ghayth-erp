@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { GuardedButton } from "@/components/shared/permission-gate";
 
 /**
  * ConfirmActionDialog — UI-unification §6.2.
@@ -107,6 +108,13 @@ export interface ConfirmActionDialogProps {
   contentTestId?: string;
   /** data-testid placed on the confirm button (for E2E tests). */
   confirmButtonTestId?: string;
+  /**
+   * RBAC permission string (e.g. "umrah:approve"). When set the confirm
+   * button is rendered as a GuardedButton and hidden when the user lacks
+   * the permission. Use this for dialogs whose destructive action must be
+   * additionally gated beyond the page-level route protection.
+   */
+  confirmPerm?: string | string[];
 }
 
 interface VariantStyles {
@@ -151,9 +159,46 @@ export function ConfirmActionDialog({
   children,
   contentTestId,
   confirmButtonTestId,
+  confirmPerm,
 }: ConfirmActionDialogProps) {
   const styles = VARIANT_STYLES[variant];
   const Icon = styles.Icon;
+
+  const confirmContent = pending ? (
+    <>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      {styles.pendingLabel}
+    </>
+  ) : (
+    confirmLabel
+  );
+
+  const confirmButton = confirmPerm ? (
+    <GuardedButton
+      perm={confirmPerm}
+      variant={styles.buttonVariant}
+      size="sm"
+      onClick={onConfirm}
+      disabled={pending || disabled}
+      className="gap-1.5"
+      rateLimitAware
+      data-testid={confirmButtonTestId}
+    >
+      {confirmContent}
+    </GuardedButton>
+  ) : (
+    <Button
+      variant={styles.buttonVariant}
+      size="sm"
+      onClick={onConfirm}
+      disabled={pending || disabled}
+      className="gap-1.5"
+      rateLimitAware
+      data-testid={confirmButtonTestId}
+    >
+      {confirmContent}
+    </Button>
+  );
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -171,24 +216,7 @@ export function ConfirmActionDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-row justify-start gap-2">
-          <Button
-            variant={styles.buttonVariant}
-            size="sm"
-            onClick={onConfirm}
-            disabled={pending || disabled}
-            className="gap-1.5"
-            rateLimitAware
-            data-testid={confirmButtonTestId}
-          >
-            {pending ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {styles.pendingLabel}
-              </>
-            ) : (
-              confirmLabel
-            )}
-          </Button>
+          {confirmButton}
           <Button
             variant="outline"
             size="sm"
