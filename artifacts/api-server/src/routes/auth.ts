@@ -777,21 +777,27 @@ async function lookupAccountByEmail(email: string): Promise<AccountRow | null> {
   return row ?? null;
 }
 
-/** Best-effort password-changed security notice. No secret. */
+/**
+ * Best-effort password-changed security notice. No secret.
+ *
+ * Looks the user up by their globally-unique PK (users.id) only — no
+ * tenant-scoped join — because this runs in public token-auth contexts
+ * (reset/activate) that have no company scope. The greeting uses the
+ * email; a display-name join would pull in the tenant-scoped employees
+ * table for no security benefit on a self-addressed notice.
+ */
 async function notifyPasswordChanged(companyId: number, userId: number): Promise<void> {
-  const [row] = await rawQuery<{ email: string; name: string }>(
-    `SELECT u.email AS email, COALESCE(e.name, u.email) AS name
-       FROM users u LEFT JOIN employees e ON e.id = u."employeeId"
-      WHERE u.id = $1 LIMIT 1`,
+  const [row] = await rawQuery<{ email: string }>(
+    `SELECT email FROM users WHERE id = $1 LIMIT 1`,
     [userId],
   );
   if (!row?.email) return;
   await sendAuthEmail({
     companyId, userId,
     recipientEmail: row.email,
-    recipientName: row.name,
+    recipientName: row.email,
     templateKey: "auth.password_changed.email",
-    vars: { userName: row.name, changedAt: new Date().toISOString() },
+    vars: { userName: row.email, changedAt: new Date().toISOString() },
   });
 }
 
