@@ -104,7 +104,8 @@ describe("HR Leave cancel lifecycle", () => {
   it("cancel restricts to owner or HR/GM roles", () => {
     const idx = HR_ROUTE.indexOf('"/leave-requests/:id/cancel"');
     const section = HR_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain("HR_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the HR_ROLES array.
+    expect(section).toContain('scopeCan(scope, "hr", "update")');
   });
 });
 
