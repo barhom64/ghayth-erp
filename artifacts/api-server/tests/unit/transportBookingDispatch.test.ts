@@ -199,8 +199,9 @@ describe("#1733 Booking + Dispatch — state machines", () => {
     expect(CASCADE_LIB).toMatch(/total > 0 && total === matching/);
     // dispatch board delegates to the helper instead of an inline cascade.
     expect(BOOKINGS_ROUTE).toMatch(/await cascadeDispatchToBooking\(tx, \{/);
+    // (the import may carry sibling helpers like cancelTripsForDispatchOrder).
     expect(BOOKINGS_ROUTE).toMatch(
-      /import \{ cascadeDispatchToBooking \} from "\.\.\/lib\/transportDispatchCascade\.js"/,
+      /import \{ cascadeDispatchToBooking[^}]*\} from "\.\.\/lib\/transportDispatchCascade\.js"/,
     );
   });
 
@@ -241,21 +242,25 @@ describe("#1733 Booking + Dispatch — state machines", () => {
     expect(cancelBlock).not.toMatch(/cascadeDispatchToBooking[\s\S]{0,80}target: "cancelled"/);
   });
 
-  it("cancelling a dispatch order cascades DOWN to cancel the linked trip", () => {
+  it("cancelling a dispatch order cascades DOWN to cancel the linked trip (shared helper)", () => {
     // Top-down: cancelling the order from the board must also cancel the trip it
     // spawned ("dispatch:<id>:<token>" sourceKey) and release its vehicle/driver,
-    // or the trip is orphaned and the resources stay locked. Bounded to
-    // non-terminal trips (idempotent); the standalone `target === "cancelled"`
-    // block distinguishes it from the shared nav-session cleanup above.
-    const block =
-      BOOKINGS_ROUTE.match(/if \(target === "cancelled"\) \{[\s\S]{0,1800}/)?.[0] ?? "";
-    expect(block).toMatch(/UPDATE\s+fleet_trips[\s\S]{0,120}status = 'cancelled'/);
-    expect(block).toMatch(/"sourceKey" LIKE \$2/);
-    expect(block).toMatch(/`dispatch:\$\{id\}:%`/);
-    expect(block).toMatch(/status IN \('scheduled', 'planned', 'in_progress'\)/);
+    // or the trip is orphaned and the resources stay locked. The release lives in
+    // the shared cancelTripsForDispatchOrder helper so the booking-cancel cascade
+    // (PATCH /bookings/:id, "cascade" policy) reuses the IDENTICAL rule instead of
+    // a second copy. Bounded to non-terminal trips → idempotent.
+    expect(CASCADE_LIB).toMatch(/export async function cancelTripsForDispatchOrder/);
+    expect(CASCADE_LIB).toMatch(/UPDATE\s+fleet_trips[\s\S]{0,120}status = 'cancelled'/);
+    expect(CASCADE_LIB).toMatch(/"sourceKey" LIKE \$2/);
+    expect(CASCADE_LIB).toMatch(/`dispatch:\$\{dispatchOrderId\}:%`/);
+    expect(CASCADE_LIB).toMatch(/status IN \('scheduled', 'planned', 'in_progress'\)/);
     // releases the held resources, mirroring the fleet trip-cancel handler.
-    expect(block).toMatch(/fleet_vehicles SET status='available'[\s\S]{0,80}status='in_use'/);
-    expect(block).toMatch(/fleet_drivers SET status='available'[\s\S]{0,80}status='on_trip'/);
+    expect(CASCADE_LIB).toMatch(/fleet_vehicles SET status='available'[\s\S]{0,80}status='in_use'/);
+    expect(CASCADE_LIB).toMatch(/fleet_drivers SET status='available'[\s\S]{0,80}status='on_trip'/);
+    // the dispatch board's cancel branch delegates to the helper (no inline copy).
+    const block =
+      BOOKINGS_ROUTE.match(/if \(target === "cancelled"\) \{[\s\S]{0,400}/)?.[0] ?? "";
+    expect(block).toMatch(/cancelTripsForDispatchOrder\(tx, \{/);
   });
 });
 

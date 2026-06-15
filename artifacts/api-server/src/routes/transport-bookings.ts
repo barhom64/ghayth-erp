@@ -49,7 +49,8 @@ import { checkAccess } from "../lib/rbac/authzEngine.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
-import { cascadeDispatchToBooking } from "../lib/transportDispatchCascade.js";
+import { cascadeDispatchToBooking, cancelTripsForDispatchOrder } from "../lib/transportDispatchCascade.js";
+import { resolveSettings } from "../lib/settings.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
 import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
@@ -762,11 +763,113 @@ transportBookingsRouter.patch(
       if (sets.length === 0) { res.json({ data: { id } }); return; }
       sets.push(`"updatedAt" = NOW()`);
       params.push(id, scope.companyId);
-      await rawExecute(
+      const bookingUpdateSql =
         `UPDATE transport_bookings SET ${sets.join(", ")}
-          WHERE id = $${p++} AND "companyId" = $${p++} AND "deletedAt" IS NULL`,
-        params,
-      );
+          WHERE id = $${p++} AND "companyId" = $${p++} AND "deletedAt" IS NULL`;
+
+      // ─── booking-cancel policy (configurable, top of the cascade) ────────
+      // Cancelling a booking has downstream operational state: its dispatch
+      // orders, the fleet trips those spawned, and the held driver/vehicle.
+      // Until now the PATCH flipped only the booking row and orphaned all of
+      // it. How the downstream is handled is a company preference resolved from
+      // the 3-level `settings` engine (key: fleet.bookings.cancelPolicy):
+      //   • "guard"   (default) — refuse the cancel while any dispatch order is
+      //                still active; the operator cancels those first (which,
+      //                via the dispatch-cancel cascade, releases the trips and
+      //                resources) and only then cancels the booking. Safest: it
+      //                never force-cancels a trip with a driver already en route.
+      //   • "cascade" — cancel everything top-down in ONE atomic step: each
+      //                active dispatch order → cancelled, its nav session ended,
+      //                its trip cancelled + vehicle/driver released (shared
+      //                helper), every non-terminal line cancelled, then the
+      //                booking row itself.
+      const cancelling = b.status === "cancelled" && existing.status !== "cancelled";
+      let bookingUpdateDone = false;
+      if (cancelling) {
+        const rawPolicy = await resolveSettings(
+          "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
+        );
+        const policy = rawPolicy === "cascade" ? "cascade" : "guard";
+
+        if (policy === "guard") {
+          const [activeRow] = await rawQuery<{ active: number }>(
+            `SELECT COUNT(*)::int AS active
+               FROM transport_dispatch_orders
+              WHERE "companyId" = $1 AND "bookingId" = $2
+                AND status IN ('pending', 'notified', 'accepted', 'executing')`,
+            [scope.companyId, id],
+          );
+          const active = activeRow?.active ?? 0;
+          if (active > 0) {
+            throw new ConflictError(
+              `لا يمكن إلغاء الحجز: يوجد ${active} أمر توزيع نشط. ألغِ أوامر التوزيع أولاً (سيُلغى معها الرحلة المرتبطة وتُحرَّر المركبة/السائق تلقائيًا) ثم ألغِ الحجز.`,
+            );
+          }
+          // No active orders → nothing to orphan; fall through to the generic
+          // UPDATE below, which simply marks the booking cancelled.
+        } else {
+          // "cascade" — do the whole top-down cancel atomically with the
+          // booking row update so a mid-cascade failure rolls everything back.
+          await withTransaction(async (tx) => {
+            const ordersRes = await tx.query<{ id: number; bookingLineId: number }>(
+              `SELECT id, "bookingLineId"
+                 FROM transport_dispatch_orders
+                WHERE "companyId" = $1 AND "bookingId" = $2
+                  AND status IN ('pending', 'notified', 'accepted', 'executing')
+                FOR UPDATE`,
+              [scope.companyId, id],
+            );
+            for (const order of ordersRes.rows) {
+              await tx.query(
+                `UPDATE transport_dispatch_orders
+                    SET status = 'cancelled', "updatedAt" = NOW()
+                  WHERE id = $1 AND "companyId" = $2`,
+                [order.id, scope.companyId],
+              );
+              // End the driver's active nav session (mirrors the dispatch-action
+              // cancel branch's session cleanup).
+              await tx.query(
+                `UPDATE driver_navigation_sessions
+                    SET status = 'cancelled', "endedAt" = NOW(), "updatedAt" = NOW()
+                  WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+                    AND status NOT IN ('ended', 'cancelled')`,
+                [order.id, scope.companyId],
+              );
+              // Cancel the spawned trip + release vehicle/driver (shared helper,
+              // identical to the dispatch board's top-down cancel).
+              await cancelTripsForDispatchOrder(tx, {
+                dispatchOrderId: order.id,
+                companyId: scope.companyId,
+                reason: "أُلغي الحجز المرتبط",
+              });
+              // Cascade the cancelled state down to the booking line (and up to
+              // the booking once every line is terminal).
+              await cascadeDispatchToBooking(tx, {
+                bookingLineId: order.bookingLineId,
+                target: "cancelled",
+                companyId: scope.companyId,
+              });
+            }
+            // Cancel any remaining non-terminal lines that had no active order
+            // (e.g. still-"pending" legs awaiting dispatch) so the booking is
+            // consistently closed; completed legs are left intact.
+            await tx.query(
+              `UPDATE transport_booking_lines
+                  SET status = 'cancelled', "updatedAt" = NOW()
+                WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+                  AND status NOT IN ('completed', 'cancelled')`,
+              [id, scope.companyId],
+            );
+            // Finally the booking row itself (+ any other PATCHed fields).
+            await tx.query(bookingUpdateSql, params);
+          });
+          bookingUpdateDone = true;
+        }
+      }
+
+      if (!bookingUpdateDone) {
+        await rawExecute(bookingUpdateSql, params);
+      }
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
         action: "update", entity: "transport_bookings", entityId: id,
@@ -1279,44 +1382,22 @@ transportBookingsRouter.patch(
         }
 
         // Top-down cancel cascade — cancelling the dispatch order must also
-        // cancel the trip it spawned ("dispatch:<id>:<token>" sourceKey), else
-        // the trip is orphaned and its vehicle/driver stay locked. Mirrors the
-        // fleet trip-cancel resource release; the status guard bounds it to
-        // non-terminal trips so a finished trip is never reopened, and makes it
-        // idempotent. No re-dispatch loop: the order is already 'cancelled'
-        // here, so the fleet trip-cancel re-dispatch guard (status IN
-        // 'accepted'/'executing') no-ops. (A simultaneous trip-cancel locks
-        // trip→order while this locks order→trip; the rare inversion is
-        // Postgres-detected and self-heals on retry since both sides no-op once
-        // the other has run.)
+        // cancel the trip it spawned ("dispatch:<id>:<token>" sourceKey) and
+        // release its vehicle/driver, else the trip is orphaned and the
+        // resources stay locked. Extracted to the shared helper so the booking
+        // cancel cascade (PATCH /transport/bookings/:id, "cascade" policy)
+        // releases resources by the identical rule. No re-dispatch loop: the
+        // order is already 'cancelled' here, so the fleet trip-cancel
+        // re-dispatch guard (status IN 'accepted'/'executing') no-ops. (A
+        // simultaneous trip-cancel locks trip→order while this locks
+        // order→trip; the rare inversion is Postgres-detected and self-heals on
+        // retry since both sides no-op once the other has run.)
         if (target === "cancelled") {
-          const cancelledTrips = await tx.query<{
-            vehicleId: number | null; driverId: number | null;
-          }>(
-            `UPDATE fleet_trips
-                SET status = 'cancelled', "cancelledAt" = NOW(),
-                    "cancellationReason" = $3, "updatedAt" = NOW()
-              WHERE "companyId" = $1 AND "sourceKey" LIKE $2
-                AND status IN ('scheduled', 'planned', 'in_progress')
-              RETURNING "vehicleId", "driverId"`,
-            [scope.companyId, `dispatch:${id}:%`, "أُلغي أمر التوزيع المرتبط"],
-          );
-          for (const trip of cancelledTrips.rows) {
-            if (trip.vehicleId) {
-              await tx.query(
-                `UPDATE fleet_vehicles SET status='available', "updatedAt"=NOW()
-                  WHERE id=$1 AND "companyId"=$2 AND status='in_use' AND "deletedAt" IS NULL`,
-                [trip.vehicleId, scope.companyId],
-              );
-            }
-            if (trip.driverId) {
-              await tx.query(
-                `UPDATE fleet_drivers SET status='available'
-                  WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`,
-                [trip.driverId, scope.companyId],
-              );
-            }
-          }
+          await cancelTripsForDispatchOrder(tx, {
+            dispatchOrderId: id,
+            companyId: scope.companyId,
+            reason: "أُلغي أمر التوزيع المرتبط",
+          });
         }
 
         // #1812 — cascade the dispatch state down to the booking line and up
