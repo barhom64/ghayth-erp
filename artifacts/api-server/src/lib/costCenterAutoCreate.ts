@@ -47,7 +47,8 @@ export type CostCenterEntityType =
   | "vehicle"
   | "department"
   | "property"
-  | "unit";
+  | "unit"
+  | "umrah_agent";
 
 interface AutoCreateOptions {
   /**
@@ -100,6 +101,7 @@ const PREFIX_BY_TYPE: Record<CostCenterEntityType, string> = {
   department: "D",
   property:   "PR",
   unit:       "UN",
+  umrah_agent: "UA",
 };
 
 const REASON_BY_TYPE: Record<CostCenterEntityType, string> = {
@@ -110,6 +112,7 @@ const REASON_BY_TYPE: Record<CostCenterEntityType, string> = {
   department: "auto-created on department insert",
   property:   "auto-created on property insert",
   unit:       "auto-created on unit insert",
+  umrah_agent: "auto-created on umrah agent insert",
 };
 
 /**
