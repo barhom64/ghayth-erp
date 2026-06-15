@@ -170,13 +170,15 @@ Mandatory enforced fields (`tripFamily = cargo`):
 
 - **Single OR recurring** — single = direct booking; recurring = materialised from `transport_route_patterns`
 - **Route Pattern (when recurring)** — `daysOfWeekMask` + `departureTime` + `activeFrom`/`activeUntil` + cargo defaults
-- **Operational checkpoints** — `cargoOperationalMetadata` jsonb captures:
+- **Operational checkpoints** — `cargoOperationalMetadata` JSONB column exists in `transport_bookings` (migration 284). The intended shape is:
   - `loadingPoints[]` — where cargo is loaded
   - `scale` — weighing station + weighedAt + weighKg
   - `inspection` — inspector / result / photo URLs
   - `restStops[]` — planned rest pauses per driver-rest rules
   - `fuelStops[]` — planned refuel stations with expected liters
   - `unloading` — destination unloading + receivedBy
+
+  > ⚠️ **Status (2026-06-09 audit)**: the column exists but the SPA editor is NOT yet shipped. The shape above is the **target contract** — implementers must build the cargo-operational-metadata editor as a follow-up PR. Until then, this field stays NULL on every booking. **No code currently reads or writes it.**
 
 ### Cargo route_pattern materialisation
 
@@ -265,10 +267,12 @@ Cascade to booking_line + booking:
 
 | dispatch.status | line.status → | booking.status → (when ALL lines settle) |
 |-----------------|---------------|------------------------------------------|
-| `accepted` | `dispatched` | `dispatched` |
-| `executing` | `in_progress` | `in_progress` |
-| `completed` | `completed` | `completed` |
-| `cancelled` | `cancelled` | `cancelled` (if every line cancelled) |
+| `accepted` | `dispatched` | ⚠️ **NOT cascaded** — line flips, booking unchanged. Operator manually moves `approved → scheduled` for the visible state. |
+| `executing` | `in_progress` | `in_progress` (cascades when total_lines = lines_in_progress) |
+| `completed` | `completed` | `completed` (cascades when ALL lines completed) |
+| `cancelled` | `cancelled` | `cancelled` (cascades when every line cancelled) |
+
+> **Audit note (2026-06-09)**: code at `transport-bookings.ts` line 998 filters the booking-level cascade to `executing | completed | cancelled` only. Acceptance triggers line-level cascade but NOT booking-level — by design (operator can still see `scheduled` while dispatches are accepted but not yet started). Earlier docs claimed `accepted → booking.dispatched` — that was an overstatement; this table now matches the code.
 
 **Multi-leg safety**: booking-level cascade fires only when `total_lines = lines_in_target_state`. A 3-leg umrah trip with leg 1 completed stays `in_progress`.
 
@@ -339,8 +343,8 @@ Per Comment 4663005810, these are the 6 acceptance scenarios the system must pas
 1. Operator opens /fleet/transport/bookings/create
 2. Service type = cargo_load
 3. tripFamily auto-set to 'cargo' — passenger fields hidden
-4. Operator fills cargoOperationalMetadata (loading, scale, inspection, unloading)
-5. AssignmentSuggestionEngine ranks only validForCargo vehicles
+4. Operator fills cargo description + weight (cargoOperationalMetadata editor is TBD, see §D)
+5. AssignmentSuggestionEngine ranks only validForCargo vehicles (filter wired in PR #1970)
 ```
 
 ### 4. حمولة متكررة

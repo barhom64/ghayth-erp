@@ -59,9 +59,11 @@ describe("#1733 — booking create form", () => {
     expect(CREATE_PAGE).toMatch(/isPassenger\s*=\s*transportServiceType\.startsWith\("passenger_"\)/);
     // Cargo block guarded by isCargo (JSX block; window covers card header + input).
     expect(CREATE_PAGE).toMatch(/\{isCargo &&[\s\S]{0,1500}cargoDescription/);
-    // Umrah-only fields (flightNumber, hotelName, supervisorName, routeType)
-    // appear inside an isUmrah block nested inside isPassenger.
-    expect(CREATE_PAGE).toMatch(/\{isUmrah &&[\s\S]{0,4000}flightNumber/);
+    // #1812 audit fix — Umrah fields were moved out of an inline {isUmrah && ...}
+    // block on booking-create into the canonical UmrahContextQuestionnaire
+    // component (rendered conditionally on isUmrah). The duplicate inline
+    // form is gone; the questionnaire is wired with active={isUmrah}.
+    expect(CREATE_PAGE).toMatch(/<UmrahContextQuestionnaire[\s\S]{0,400}active=\{isUmrah\}/);
   });
 
   it("POSTs to /transport/bookings + navigates to detail on success", () => {

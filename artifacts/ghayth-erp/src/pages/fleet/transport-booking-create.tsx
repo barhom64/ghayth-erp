@@ -134,7 +134,9 @@ export default function TransportBookingCreate() {
   const [customerId, setCustomerId] = useState<string>("");
   const [contractId, setContractId] = useState<string>("");
   const [projectId, setProjectId] = useState<string>("");
-  const [recurringTemplateId, setRecurringTemplateId] = useState<string>("");
+  // #1812 audit fix — renamed from recurringTemplateId (dead-letter — no backend column).
+  // Maps to transport_bookings.routePatternId from migration 284.
+  const [routePatternId, setRoutePatternId] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [fromLocationText, setFromLocationText] = useState("");
   const [toLocationText, setToLocationText] = useState("");
@@ -197,7 +199,7 @@ export default function TransportBookingCreate() {
     if (p.projectId) setProjectId(String(p.projectId));
     if (p.umrahGroupId) setUmrahGroupId(String(p.umrahGroupId));
     if (p.passengerCount != null) setPassengerCount(String(p.passengerCount));
-    if (p.recurringTemplateId) setRecurringTemplateId(String(p.recurringTemplateId));
+    if (p.routePatternId) setRoutePatternId(String(p.routePatternId));
   };
 
   const isCargo = transportServiceType === "cargo_load";
@@ -237,7 +239,7 @@ export default function TransportBookingCreate() {
         customerId: customerId ? Number(customerId) : undefined,
         contractId: contractId ? Number(contractId) : undefined,
         projectId: projectId ? Number(projectId) : undefined,
-        recurringTemplateId: recurringTemplateId ? Number(recurringTemplateId) : undefined,
+        routePatternId: routePatternId ? Number(routePatternId) : undefined,
         customerName: customerName.trim() || undefined,
         customerPhone: customerPhone.trim() || undefined,
         fromLocationText: fromLocationText.trim() || undefined,
@@ -609,78 +611,13 @@ export default function TransportBookingCreate() {
                 <Label htmlFor="passengerCount">عدد الركاب</Label>
                 <Input id="passengerCount" type="number" min={0} value={passengerCount} onChange={(e) => setPassengerCount(e.target.value)} />
               </div>
-              {isUmrah && (
-                <>
-                  <div className="md:col-span-2">
-                    <Label htmlFor="umrahGroupId">مجموعة العمرة (من النظام)</Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        id="umrahGroupId"
-                        type="number"
-                        min={0}
-                        value={umrahGroupId}
-                        onChange={(e) => setUmrahGroupId(e.target.value)}
-                        placeholder="اختر من القائمة لتعبئة البيانات تلقائياً"
-                        className="flex-1"
-                      />
-                      <UmrahGroupPicker
-                        onSelect={(g) => {
-                          setUmrahGroupId(String(g.id));
-                          // Auto-fill passenger count from the group's
-                          // mutamerCount — operator can still edit.
-                          if (g.mutamerCount > 0) {
-                            setPassengerCount(String(g.mutamerCount));
-                          }
-                          // Auto-fill customer name with group name as a
-                          // sensible default (the operator can override).
-                          if (!customerName && g.name) {
-                            setCustomerName(g.name);
-                          }
-                          // Flip booking source so audit trail shows the
-                          // link, not "manual_entry".
-                          setBookingSource("umrah_group");
-                          toast({
-                            title: `تم ربط المجموعة ${g.nuskGroupNumber}`,
-                            description: `${g.mutamerCount} معتمر — تم تعبئة عدد الركاب تلقائياً.`,
-                          });
-                        }}
-                      />
-                    </div>
-                    {umrahGroupId && (
-                      <div className="text-xs text-status-info-foreground mt-1">
-                        مرتبط بمجموعة العمرة #{umrahGroupId} — أي تعديل على عدد الركاب موثّق في سجل التدقيق.
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <Label htmlFor="flightNumber">رقم الرحلة</Label>
-                    <Input id="flightNumber" value={flightNumber} onChange={(e) => setFlightNumber(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="routeType">نوع المسار</Label>
-                    <Select value={routeType} onValueChange={setRouteType}>
-                      <SelectTrigger id="routeType"><SelectValue placeholder="اختر نوع المسار" /></SelectTrigger>
-                      <SelectContent>
-                        {ROUTE_TYPES.map((r) => (
-                          <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="supervisorName">اسم المشرف</Label>
-                    <Input id="supervisorName" value={supervisorName} onChange={(e) => setSupervisorName(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="supervisorPhone">جوال المشرف</Label>
-                    <Input id="supervisorPhone" value={supervisorPhone} onChange={(e) => setSupervisorPhone(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="hotelName">الفندق</Label>
-                    <Input id="hotelName" value={hotelName} onChange={(e) => setHotelName(e.target.value)} />
-                  </div>
-                </>
-              )}
+              {/* #1812 audit fix — duplicate umrah UX removed.
+                  UmrahContextQuestionnaire (rendered above) already provides:
+                    * مجموعة العمرة via UmrahGroupPicker + auto-fill
+                    * flightNumber + hotelName + supervisorName + supervisorPhone
+                    * routeType select
+                  Operators were filling the same data twice. The questionnaire
+                  is the canonical surface. */}
             </CardContent>
           </Card>
         )}

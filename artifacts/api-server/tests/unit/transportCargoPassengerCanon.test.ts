@@ -100,7 +100,9 @@ describe("#1812 §K3-K4 — backend deriveTripFamily + persistence", () => {
   });
 
   it("INSERT writes the tripFamily column derived from request", () => {
-    expect(ROUTER).toMatch(/"tripFamily"\)/);
+    // #1812 audit fix — INSERT now also writes routePatternId (was a dead-letter).
+    // Match either "tripFamily") (original) or "tripFamily", "routePatternId") (post-audit).
+    expect(ROUTER).toMatch(/"tripFamily"(?:, "routePatternId")?\)/);
     expect(ROUTER).toMatch(/deriveTripFamily\(b\.transportServiceType, b\.passengerCount, b\.cargoWeight\)/);
   });
 });
