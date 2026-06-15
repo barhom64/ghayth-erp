@@ -58,7 +58,6 @@ routes/mySpace.ts:notifications
 routes/mySpace.ts:payroll_runs
 routes/mySpace.ts:shifts
 routes/mySpace.ts:tasks
-routes/numbering.ts:numbering_counters
 routes/operationsCenter.ts:system_settings
 routes/projects.ts:employees
 routes/projects.ts:project_resources

@@ -36,6 +36,7 @@ const WAREHOUSE_ADV = readFileSync(join(ROUTES, "warehouse-advanced.ts"), "utf8"
 const WAREHOUSE = readFileSync(join(ROUTES, "warehouse.ts"), "utf8");
 const WAREHOUSE_CC = readFileSync(join(ROUTES, "warehouse-cycle-counts.ts"), "utf8");
 const BI = readFileSync(join(ROUTES, "bi.ts"), "utf8");
+const NUMBERING = readFileSync(join(ROUTES, "numbering.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -285,5 +286,18 @@ describe("FND-013 #2340 — bi.ts per-user reads (batch 8) carry companyId", () 
     expect(stripped).toMatch(
       /FROM notifications\s+WHERE "assignmentId" = \$1 AND "companyId" = \$2 AND DATE\("createdAt"\)/,
     );
+  });
+});
+
+describe("FND-013 #2340 — numbering_counters read (batch 9) carries companyId", () => {
+  // numbering_counters.companyId is NOT NULL — strictly per-company. The
+  // scheme is companyId-verified first; the counters list under it must be
+  // scoped too (numbering integrity: never surface another tenant's counters).
+  it("scheme-counters list scopes by companyId", () => {
+    const stripped = stripComments(NUMBERING);
+    expect(stripped).toMatch(
+      /FROM numbering_counters\s+WHERE "schemeId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM numbering_counters\s+WHERE "schemeId" = \$1\s+ORDER/);
   });
 });
