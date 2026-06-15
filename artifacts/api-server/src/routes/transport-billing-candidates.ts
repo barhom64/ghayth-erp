@@ -218,7 +218,7 @@ transportBillingCandidatesRouter.post(
             driverId: candidate.driverId,
           });
         }
-        const journalEntryId = (journal as { id?: number } | null)?.id ?? null;
+        const journalEntryId = (journal as { journalId?: number } | null)?.journalId ?? null;
 
         await tx.query(
           `UPDATE transport_billing_candidates

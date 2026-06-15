@@ -35,6 +35,11 @@ const TABS = readFileSync(
   join(repoRoot, "artifacts/ghayth-erp/src/components/shared/fleet-tabs-nav.tsx"),
   "utf8",
 );
+const SUBNAV = readFileSync(
+  join(repoRoot, "artifacts/ghayth-erp/src/components/shared/transport-tabs-nav.tsx"),
+  "utf8",
+);
+void TABS;
 
 /* ── 1. Route aggregates the five layers ─────────────────────── */
 
@@ -121,7 +126,9 @@ describe("TR-022 — SPA route + tab wired", () => {
     expect(catchIdx).toBeGreaterThan(-1);
     expect(calIdx).toBeLessThan(catchIdx);
   });
-  it("adds a fleet nav tab pointing at /fleet/transport/calendar", () => {
-    expect(TABS).toMatch(/href:\s*"\/fleet\/transport\/calendar"/);
+  it("surfaces the calendar in the transport sub-nav (القائمة السفلية)", () => {
+    // Calendar moved from the top fleet tabs into the transport sub-nav
+    // (TransportTabsNav) to avoid the dual-active-tab overlap.
+    expect(SUBNAV).toMatch(/href:\s*"\/fleet\/transport\/calendar"/);
   });
 });

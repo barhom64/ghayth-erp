@@ -279,6 +279,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadUmrahAgentInvoice(companyId, entityId);
     case "umrah_nusk_invoice":
       return await loadUmrahNuskInvoice(companyId, entityId);
+    case "umrah_commission_plan":
+      return await loadUmrahCommissionPlan(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
     case "umrah_violation":
@@ -1527,6 +1529,34 @@ async function loadUmrahNuskInvoice(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: invoice ?? { id } };
+}
+
+// U-14-P3 — umrah commission plan loader. Reads the plan + its
+// tiers list + joined employee + season for the printed contract /
+// signature copy. Pure SELECT; tenant-scoped.
+async function loadUmrahCommissionPlan(companyId: number, id: string) {
+  const [plan] = await rawQuery<Record<string, unknown>>(
+    `SELECT cp.*,
+            e.name AS "employeeName",
+            s.name AS "seasonName"
+       FROM employee_commission_plans cp
+       LEFT JOIN employees e
+         ON e.id = cp."employeeId" AND e."companyId" = $2 AND e."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = cp."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!plan) return { entity: { id } };
+  const tiers = await rawQuery<Record<string, unknown>>(
+    `SELECT "tierOrder", "fromCount", "toCount", "bonusPerUnit", "isCumulative"
+       FROM employee_commission_tiers
+      WHERE "planId" = $1 AND "deletedAt" IS NULL
+      ORDER BY "tierOrder" ASC`,
+    [id],
+  ).catch(() => []);
+  return { entity: plan, tiers };
 }
 
 async function loadUmrahPenalty(companyId: number, id: string) {
