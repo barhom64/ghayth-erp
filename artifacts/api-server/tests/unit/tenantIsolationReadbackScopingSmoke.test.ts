@@ -32,6 +32,7 @@ const IMPACT = readFileSync(join(ROUTES, "impactPreview.ts"), "utf8");
 const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
 const TASKS = readFileSync(join(ROUTES, "tasks.ts"), "utf8");
 const PROJECTS = readFileSync(join(ROUTES, "projects.ts"), "utf8");
+const WAREHOUSE_ADV = readFileSync(join(ROUTES, "warehouse-advanced.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -215,5 +216,23 @@ describe("FND-013 #2340 — projects.ts project_phases reads (batch 5) are compa
     expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1 ORDER/);
     expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1`/);
     expect(stripped).not.toMatch(/FROM project_phases WHERE id=\$1 AND "projectId"=\$2`/);
+  });
+});
+
+describe("FND-013 #2340 — warehouse-advanced post-insert read-backs (batch 6) are scoped", () => {
+  it("warehouse_stock_lots read-back carries companyId", () => {
+    const stripped = stripComments(WAREHOUSE_ADV);
+    expect(stripped).toMatch(
+      /FROM warehouse_stock_lots l WHERE l\.id=\$1 AND l\."companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(/FROM warehouse_stock_lots l WHERE l\.id=\$1 AND l\."deletedAt"/);
+  });
+
+  it("warehouse_stock_serials read-back carries companyId", () => {
+    const stripped = stripComments(WAREHOUSE_ADV);
+    expect(stripped).toMatch(
+      /FROM warehouse_stock_serials WHERE id=\$1 AND "companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(/FROM warehouse_stock_serials WHERE id=\$1 AND "deletedAt"/);
   });
 });
