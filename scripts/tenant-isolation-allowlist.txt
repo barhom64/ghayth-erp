@@ -44,7 +44,6 @@ routes/hr.ts:hr_leave_types
 routes/hr.ts:peer_evaluations
 routes/hr.ts:shifts
 routes/hr.ts:system_evaluations
-routes/impactPreview.ts:project_phases
 routes/inboxConversations.ts:conversation_links
 routes/meInsights.ts:hr_employee_loans
 routes/meInsights.ts:hr_leave_requests
@@ -66,7 +65,6 @@ routes/operationsCenter.ts:system_settings
 routes/projects.ts:employees
 routes/projects.ts:project_phases
 routes/projects.ts:project_resources
-routes/properties.ts:contract_payment_schedule
 routes/properties.ts:maintenance_requests
 routes/properties.ts:property_units
 routes/properties.ts:rental_contracts
@@ -76,7 +74,6 @@ routes/rbacV2.ts:rbac_sod_rules
 routes/rbacV2.ts:rbac_user_roles
 routes/store.ts:store_products
 routes/tasks.ts:task_assignees
-routes/transport-bookings.ts:transport_booking_lines
 routes/umrah-entities.ts:employee_commission_calculations
 routes/umrah-entities.ts:employee_commission_tiers
 routes/umrah-entities.ts:umrah_import_changes
