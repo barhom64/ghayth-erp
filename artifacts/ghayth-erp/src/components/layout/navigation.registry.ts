@@ -557,6 +557,11 @@ export const allNavSections: NavSection[] = [
         { label: "حجوزات النقل", path: "/fleet/transport/bookings", icon: ClipboardList, perm: "fleet.bookings:list" },
         { label: "الإرسال (Dispatch)", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
         { label: "خطط المسارات", path: "/fleet/transport/itineraries", icon: Navigation, perm: "fleet.dispatch:list" },
+        // TR-022 (audit doc file 20 §10) — التقويم الموحَّد التفاعلي.
+        // الصفحة والـAPI شُحِنا سابقًا (transport-calendar.tsx +
+        // routes/transport-calendar.ts) لكن لم يكونا مرئيين في القائمة
+        // الجانبية. هذا الـentry يفتح الـdiscoverability.
+        { label: "التقويم الموحَّد للنقل", path: "/fleet/transport/calendar", icon: Calendar, perm: "fleet.dispatch:list" },
         // #2079 TA-T18-04 — قوالب الحجوزات المتكررة (cargo recurring).
         // SPA-only over endpoints القائمة /transport/route-patterns*.
         { label: "قوالب المسارات المتكررة", path: "/fleet/transport/route-patterns", icon: CalendarClock, perm: "fleet.bookings:list" },

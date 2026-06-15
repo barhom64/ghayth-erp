@@ -277,6 +277,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadUmrahSalesInvoice(companyId, entityId);
     case "umrah_agent_invoice":
       return await loadUmrahAgentInvoice(companyId, entityId);
+    case "umrah_nusk_invoice":
+      return await loadUmrahNuskInvoice(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
     case "umrah_violation":
@@ -1191,12 +1193,17 @@ async function loadVehicle(companyId: number, id: string) {
 // preset (templateResolver.ts) renders the corresponding template.
 async function loadTransportBookingConfirmation(companyId: number, id: string) {
   const [booking] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM transport_bookings
-       WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
-       LIMIT 1`,
+    `SELECT b.*, c.name AS "linkedCustomerName"
+       FROM transport_bookings b
+       LEFT JOIN clients c ON c.id = b."customerId" AND c."companyId" = b."companyId" AND c."deletedAt" IS NULL
+      WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL
+      LIMIT 1`,
     [id, companyId],
   ).catch(() => [null]);
   if (!booking) return { entity: { id } };
+  // #TA-T18 — the printed confirmation shows the LINKED customer (master
+  // data), not the free-text snapshot, matching the on-screen confirmation.
+  if (booking.linkedCustomerName) booking.customerName = booking.linkedCustomerName;
   const lines = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM transport_booking_lines
        WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
@@ -1488,6 +1495,34 @@ async function loadUmrahAgentInvoice(companyId: number, id: string) {
        LEFT JOIN umrah_agents a ON a.id = ai."agentId" AND a."companyId" = $2
        LEFT JOIN umrah_seasons s ON s.id = ai."seasonId" AND s."companyId" = $2
       WHERE ai.id = $1 AND ai."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: invoice ?? { id } };
+}
+
+// U-14-P3 — Nusk invoice loader. The Nusk invoice is the
+// PURCHASE-side document (what the Nusk system charges the agency
+// for one group's services) — distinct from sales invoice (charged
+// to the sub-agent) and agent invoice (charged to the main agent).
+// Joins agent / sub-agent / group / season for the meta block.
+async function loadUmrahNuskInvoice(companyId: number, id: string) {
+  const [invoice] = await rawQuery<Record<string, unknown>>(
+    `SELECT ni.*,
+            a.name AS "agentName",
+            sa.name AS "subAgentName",
+            g.name AS "groupName",
+            s.name AS "seasonName"
+       FROM umrah_nusk_invoices ni
+       LEFT JOIN umrah_agents a
+         ON a.id = ni."agentId" AND a."companyId" = $2 AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa
+         ON sa.id = ni."subAgentId" AND sa."companyId" = $2 AND sa."deletedAt" IS NULL
+       LEFT JOIN umrah_groups g
+         ON g.id = ni."groupId" AND g."companyId" = $2 AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = g."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE ni.id = $1 AND ni."companyId" = $2
       LIMIT 1`,
     [id, companyId]
   ).catch(() => [null]);
