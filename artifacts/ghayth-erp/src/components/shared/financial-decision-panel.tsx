@@ -46,7 +46,7 @@ export interface GovernanceEffect {
 }
 
 export interface FinancialDecisionPanelProps {
-  documentType: "expense";
+  documentType: "expense" | "voucher";
   documentId: number | string;
   record: any;
   lines: any[];
