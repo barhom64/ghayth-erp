@@ -39,6 +39,7 @@ import { config } from "../config.js";
 import {
   googleEstimateRoute, googleGeocode, googleReverseGeocode, googleHealthCheck,
 } from "./mapsGoogleProvider.js";
+import { recordMapsCall } from "./mapsUsageCounter.js";
 
 // #1812 Maps Provider Adapter (owner brief 2026-06-15) — `auto` is the
 // operator-friendly setting: "use Google if a key is configured, fall
@@ -357,6 +358,14 @@ export const MapsService = {
         originLng: req.originLng,
         destinationLat: req.destinationLat,
         destinationLng: req.destinationLng,
+      });
+      // TA-GAP-09 Phase 1 — count every Google call (success + failure
+      // is `errored: true`). Best-effort: the counter never throws.
+      await recordMapsCall({
+        companyId: req.companyId,
+        provider: "google_maps",
+        apiSurface: "estimateRoute",
+        errored: real === null,
       });
       if (real) {
         await writeCache(req, "google_maps", real, settings.estimateCacheTtlMinutes);
