@@ -127,7 +127,9 @@ const Custodies = lazy(() => import("@/pages/finance/custodies"));
 const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
 const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
 const CustodyWorkbench = lazy(() => import("@/pages/finance/custody-workbench"));
-const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
+// (FiscalPeriods v1 أُزيل — كان عرض إحصاءات مشتقّة بلا إنشاء فترة، وكل قدراته
+// (الإقفال/إعادة الفتح) تستدعي endpoints v2 أصلًا؛ v2 هي superset كامل (إنشاء +
+// إقفال + قفل نهائي + السجل). /finance/fiscal-periods يبقى redirect إلى v2.)
 const FiscalPeriodsV2 = lazy(() => import("@/pages/finance/fiscal-periods-v2"));
 const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-preflight"));
 const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
