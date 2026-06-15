@@ -29,7 +29,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
+  BarChart2, ShieldAlert, Flag, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
   Satellite, Bot, HardDrive, Video as VideoIcon, Award,
   ShieldCheck,
@@ -198,7 +198,8 @@ export const allNavSections: NavSection[] = [
         { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
         { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
-        { label: "إدارة الورديات", path: "/hr/shifts/management", icon: Cog, subKey: "shifts" },
+        // HR-REV — أُزيل «إدارة الورديات» المكرّر: /hr/shifts/management يرتدّ إلى
+        // /hr/shifts، ونموذج إسناد الموظف صار تبويب «التعيينات» في الصفحة نفسها.
       ]},
 
       // 4. الطلبات — single inbox for leaves/OT/excuses + the new
@@ -242,11 +243,12 @@ export const allNavSections: NavSection[] = [
       // (previously 2 separate top-level entries)
       { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
         { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
-        { label: "التقييم المتقدم", path: "/hr/performance/advanced", icon: BarChart3, subKey: "performance" },
         { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Activity, subKey: "performance" },
         { label: "خطط التطوير الفردية", path: "/hr/idp", icon: BookOpen, subKey: "performance" },
         { label: "البرامج التدريبية", path: "/hr/training", icon: GraduationCap, subKey: "training" },
-        { label: "التدريب المتقدم", path: "/hr/training/advanced", icon: BarChart3, subKey: "training" },
+        // HR-REV — أُزيل «التقييم المتقدم» و«التدريب المتقدم» المكرّران: مساراهما
+        // (/hr/performance/advanced و/hr/training/advanced) يرتدّان للصفحة الأم،
+        // وتحليلاتهما صارت تبويب «التحليلات» / قسم «البرامج حسب الحالة» داخلها.
       ]},
 
       // 7. الرواتب — payroll + components + loans + EOS + accruals + WPS
@@ -265,7 +267,8 @@ export const allNavSections: NavSection[] = [
       { label: "التقارير", path: "/hr/turnover-report", icon: FileBarChart, module: "hr", children: [
         { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
         { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
-        { label: "تحليلات التوظيف المتقدمة", path: "/hr/recruitment/advanced", icon: TrendingUp, subKey: "recruitment" },
+        // HR-REV — أُزيل «تحليلات التوظيف المتقدمة» المكرّر: /hr/recruitment/advanced
+        // يرتدّ إلى /hr/recruitment (مدخل «وظائف التوظيف») التي تشمله بالكامل.
       ]},
 
       // 9. الإعدادات — attendance policy + holidays
@@ -377,8 +380,10 @@ export const allNavSections: NavSection[] = [
       { label: "الموازنة والفترات والالتزامات", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
         { label: "خريطة حرارية", path: "/finance/budget-heatmap", icon: BarChart3 },
-        { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
-        { label: "إقفال الفترات", path: "/finance/fiscal-periods-v2", icon: Lock, minRoleLevel: 70 },
+        // مدخل واحد للفترات المالية → الصفحة v2 (تُنشئ/تعرض/تُقفل/تقفل نهائيًّا).
+        // أُزيل المدخل المكرّر «الفترات المالية» الذي كان يرتدّ لنفس v2 (صفحة v1
+        // مُقاعَدة)، وأُبقي بوّابة الصلاحية. /finance/fiscal-periods يبقى redirect.
+        { label: "الفترات المالية", path: "/finance/fiscal-periods-v2", icon: Calendar, minRoleLevel: 70 },
         { label: "فحص قبل الإقفال", path: "/finance/period-close-preflight", icon: ShieldAlert, minRoleLevel: 70 },
         { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive, minRoleLevel: 70 },
         { label: "الالتزامات", path: "/finance/commitments", icon: FileSignature },

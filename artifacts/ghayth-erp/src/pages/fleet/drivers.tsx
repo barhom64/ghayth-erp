@@ -25,6 +25,26 @@ import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
+// TA-T18-DR — driver reputation badge. The score (0..100) is the
+// persisted `reputationScore` from the compute service (#2397);
+// NULL = no trips yet → neutral "لا توجد بيانات". Thresholds mirror
+// the engine's tiering (#2409): ≥85 high, <60 low.
+function ReputationBadge({ score }: { score: number | string | null | undefined }) {
+  if (score == null || score === "") {
+    return <span className="text-xs text-muted-foreground">لا توجد بيانات</span>;
+  }
+  const n = Number(score);
+  const cls =
+    n >= 85 ? "bg-status-success-surface text-status-success-foreground"
+    : n < 60 ? "bg-status-warning-surface text-status-warning-foreground"
+    : "bg-status-info-surface text-status-info-foreground";
+  return (
+    <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {n.toFixed(0)}/100
+    </span>
+  );
+}
+
 export default function DriversPage() {
   const [, navigate] = useLocation();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
@@ -87,6 +107,15 @@ export default function DriversPage() {
     { label: "نوع الرخصة", key: "licenseType", type: "badge" },
     { label: "انتهاء الرخصة", key: "licenseExpiry", type: "date" },
     { label: "الحالة", key: "status", type: "status" },
+    // TA-T18-DR — reputation breakdown (#2397). The list `SELECT d.*`
+    // already returns every sub-component; surfacing them here gives
+    // the dispatcher the "why" behind the score.
+    { label: "درجة السمعة", key: "reputationScore" },
+    { label: "نسبة الالتزام بالموعد", key: "reputationOnTimeRate" },
+    { label: "نسبة الإتمام", key: "reputationCompletionRate" },
+    { label: "نسبة البدء", key: "reputationStartRate" },
+    { label: "عدد الرحلات المحتسبة", key: "reputationTripsConsidered" },
+    { label: "آخر احتساب للسمعة", key: "reputationComputedAt", type: "date" },
   ];
 
   const { editingId, deletingId, editForm, setEditForm, startEdit, startDelete, cancelEdit, cancelDelete, isPending, handleSave, handleDelete } = useInlineActions({
@@ -127,6 +156,13 @@ export default function DriversPage() {
       header: "الحالة",
       sortable: true,
       render: (d) => <PageStatusBadge status={d.status || "available"} domain="driver" />,
+    },
+    {
+      // TA-T18-DR — surface the persisted reputation score (#2397/#2409).
+      key: "reputationScore",
+      header: "السمعة",
+      sortable: true,
+      render: (d) => <ReputationBadge score={d.reputationScore} />,
     },
     {
       key: "actions",

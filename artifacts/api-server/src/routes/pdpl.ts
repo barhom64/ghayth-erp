@@ -183,8 +183,8 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
     // GAP_MATRIX P0 — PDPL DSAR export must be tracked in print_jobs for PDPL
     // compliance and in audit_logs for the forensic trail.
     rawExecute(
-      `INSERT INTO print_jobs ("companyId","branchId","requestedBy","entityType","entityId","format","status","printedAt")
-       VALUES ($1,$2,$3,'report_pdpl_dsar',$4,'json','completed',NOW())`,
+      `INSERT INTO print_jobs ("companyId","branchId","userId","entityType","entityId","format","status")
+       VALUES ($1,$2,$3,'report_pdpl_dsar',$4,'json','completed')`,
       [scope.companyId, scope.branchId ?? null, scope.userId, employeeId]
     ).catch((e) => logger.error(e, "pdpl: print_jobs insert failed"));
     auditFromRequest(req, "pdpl.dsar.export", "employees", employeeId, {
