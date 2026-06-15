@@ -90,7 +90,7 @@ router.post("/lots", authorize({ feature: "warehouse.inventory", action: "create
       details: `دفعة جديدة ${b.lotNumber} — ${product.name}`,
     }).catch((e) => logger.error(e, "warehouse-advanced background task failed"));
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT l.*, l."qualityControlStatus" AS "qcStatus" FROM warehouse_stock_lots l WHERE l.id=$1 AND l."deletedAt" IS NULL`, [insertId]
+      `SELECT l.*, l."qualityControlStatus" AS "qcStatus" FROM warehouse_stock_lots l WHERE l.id=$1 AND l."companyId"=$2 AND l."deletedAt" IS NULL`, [insertId, scope.companyId]
     );
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Lot create error:"); }
@@ -240,7 +240,7 @@ router.post("/serials", authorize({ feature: "warehouse.inventory", action: "cre
       action: "create", entity: "warehouse_stock_serials", entityId: insertId,
       after: { productId: b.productId, serialNumber: b.serialNumber },
     }).catch((e) => logger.error(e, "warehouse-advanced background task failed"));
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_stock_serials WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM warehouse_stock_serials WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Serial create error:"); }
 });
