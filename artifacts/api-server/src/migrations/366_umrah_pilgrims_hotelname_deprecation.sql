@@ -13,6 +13,11 @@
 -- This migration only adds a column COMMENT. No DDL, no data move,
 -- no constraint change. The actual column drop is U-15-P6 (separate
 -- slice, hard-pause).
+--
+-- @rollback: COMMENT ON COLUMN umrah_pilgrims."hotelName" IS NULL;
+-- (the marker is purely metadata; restoring NULL clears it. The
+-- column itself, its data, and all write paths are unchanged by
+-- this migration, so the rollback is non-destructive.)
 
 COMMENT ON COLUMN umrah_pilgrims."hotelName" IS
   '[DEPRECATED — U-15-P4] free-text legacy field. New writes should populate accommodation_bookings via the structured 3-table model (migration 246). Read paths retained for dashboard + import-history backwards-compat. Column drop is U-15-P6.';
