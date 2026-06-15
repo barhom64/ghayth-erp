@@ -202,6 +202,12 @@ SEED_REPLAY_ALLOWLIST=(
   # DO NOTHING). Provision-harness-only — a real boot already has
   # companies + COA before 338 runs. #2140 slice 5-a.
   "338_fixed_assets_anchors.sql"
+  # 377 corrects the asset_disposal_cash anchor (1100 control-parent →
+  # 1111 main-cash leaf). It MUST replay AFTER 338 (which creates the
+  # asset_disposal_cash row during this same 5b pass) — array order is
+  # preserved by the replay loop, so this entry stays below 338.
+  # Idempotent UPDATE scoped to one operationType. #2140 slice 5-a.
+  "377_fix_asset_disposal_cash_anchor.sql"
 )
 is_replay_seed() {
   for s in "${SEED_REPLAY_ALLOWLIST[@]}"; do
