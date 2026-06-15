@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { exportRowsToCsv } from "@/lib/unified-export";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -244,103 +244,58 @@ export default function UmrahSubAgentBalancesReport() {
         ))}
       </div>
 
-      <Card>
+      <Card data-testid="subagent-balances-table">
         <CardContent className="p-0">
-          {visibleRows.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground text-sm" data-testid="subagent-balances-empty">
-              لا يوجد وكلاء فرعيون ضمن الفلتر الحالي.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs" data-testid="subagent-balances-table">
-                <thead>
-                  <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                    <th className="p-2 font-medium">الوكيل الفرعي</th>
-                    <th className="p-2 font-medium">رمز نسك</th>
-                    <th className="p-2 font-medium">الوكيل الرئيسي</th>
-                    <th className="p-2 font-medium">شروط الدفع</th>
-                    <th className="p-2 font-medium">معتمرون</th>
-                    <th className="p-2 font-medium">فواتير</th>
-                    <th className="p-2 font-medium">المُفوتر</th>
-                    <th className="p-2 font-medium">المُحصَّل</th>
-                    <th className="p-2 font-medium">المستحق</th>
-                    <th className="p-2 font-medium">آخر دفعة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.map((r) => {
-                    const outstanding = Number(r.outstanding ?? 0);
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-b last:border-b-0 hover:bg-muted/30"
-                        data-testid={`subagent-balances-row-${r.id}`}
-                      >
-                        <td className="p-2">
-                          <Link
-                            href={`/umrah/sub-agents/${r.id}`}
-                            className="text-blue-600 hover:underline font-medium"
-                          >
-                            {r.name}
-                          </Link>
-                          {!r.isActive && (
-                            <Badge variant="outline" className="mr-1 text-[9px]">غير نشط</Badge>
-                          )}
-                          {r.phone && <p className="text-[10px] text-muted-foreground" dir="ltr">{r.phone}</p>}
-                        </td>
-                        <td className="p-2 font-mono text-[10px]">{r.nuskCode || "—"}</td>
-                        <td className="p-2 text-[11px]">
-                          {r.agentId ? (
-                            <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline">
-                              {r.agentName || `#${r.agentId}`}
-                            </Link>
-                          ) : "—"}
-                        </td>
-                        <td className="p-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {r.paymentTerms === "prepaid" ? "مقدم" : r.paymentTerms === "postpaid" ? "آجل" : (r.paymentTerms || "—")}
-                          </Badge>
-                        </td>
-                        <td className="p-2">{r.pilgrimCount}</td>
-                        <td className="p-2">{r.invoiceCount}</td>
-                        <td className="p-2 font-semibold">{formatCurrency(Number(r.totalInvoiced))}</td>
-                        <td className="p-2 text-status-success-foreground">
-                          <div className="flex items-center gap-1">
-                            <Wallet className="h-3 w-3" />
-                            {formatCurrency(Number(r.totalReceived))}
-                          </div>
-                          {Number(r.paymentCount ?? 0) > 0 && (
-                            <p className="text-[10px] text-muted-foreground">
-                              {r.paymentCount} دفعة · فاتورة: {formatCurrency(Number(r.totalPaidOnInvoices))}
-                            </p>
-                          )}
-                        </td>
-                        <td
-                          className={`p-2 font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}
-                          data-testid={`subagent-balances-outstanding-${r.id}`}
-                        >
-                          {formatCurrency(outstanding)}
-                        </td>
-                        <td className="p-2 text-[11px]">
-                          {r.lastPaymentAt ? (
-                            <>
-                              <div className="flex items-center gap-1">
-                                <Receipt className="h-3 w-3" />
-                                {formatUmrahDate(r.lastPaymentAt)}
-                              </div>
-                              {r.lastPaymentRef && (
-                                <p className="text-[10px] font-mono text-muted-foreground">{r.lastPaymentRef}</p>
-                              )}
-                            </>
-                          ) : <span className="text-muted-foreground">لا توجد دفعات</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable<SubAgentBalanceRow>
+            data={visibleRows}
+            rowKey={(r) => String(r.id)}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا يوجد وكلاء فرعيون ضمن الفلتر الحالي."
+            columns={[
+              {
+                key: "name", header: "الوكيل الفرعي",
+                render: (r) => (
+                  <div data-testid={`subagent-balances-row-${r.id}`}>
+                    <Link href={`/umrah/sub-agents/${r.id}`} className="text-blue-600 hover:underline font-medium">{r.name}</Link>
+                    {!r.isActive && <Badge variant="outline" className="mr-1 text-[9px]">غير نشط</Badge>}
+                    {r.phone && <p className="text-[10px] text-muted-foreground" dir="ltr">{r.phone}</p>}
+                  </div>
+                ),
+              },
+              { key: "nuskCode", header: "رمز نسك", className: "font-mono text-[10px]", render: (r) => r.nuskCode || "—" },
+              { key: "agentId", header: "الوكيل الرئيسي", render: (r) => r.agentId ? <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline text-[11px]">{r.agentName || `#${r.agentId}`}</Link> : "—" },
+              { key: "paymentTerms", header: "شروط الدفع", render: (r) => <Badge variant="outline" className="text-[10px]">{r.paymentTerms === "prepaid" ? "مقدم" : r.paymentTerms === "postpaid" ? "آجل" : (r.paymentTerms || "—")}</Badge> },
+              { key: "pilgrimCount", header: "معتمرون", align: "end" as const },
+              { key: "invoiceCount", header: "فواتير", align: "end" as const },
+              { key: "totalInvoiced", header: "المُفوتر", align: "end" as const, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.totalInvoiced))}</span> },
+              {
+                key: "totalReceived", header: "المُحصَّل", align: "end" as const,
+                render: (r) => (
+                  <span className="text-status-success-foreground">
+                    <div className="flex items-center gap-1"><Wallet className="h-3 w-3" />{formatCurrency(Number(r.totalReceived))}</div>
+                    {Number(r.paymentCount ?? 0) > 0 && <p className="text-[10px] text-muted-foreground">{r.paymentCount} دفعة · فاتورة: {formatCurrency(Number(r.totalPaidOnInvoices))}</p>}
+                  </span>
+                ),
+              },
+              {
+                key: "outstanding", header: "المستحق", align: "end" as const,
+                render: (r) => {
+                  const outstanding = Number(r.outstanding ?? 0);
+                  return <span data-testid={`subagent-balances-outstanding-${r.id}`} className={`font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}>{formatCurrency(outstanding)}</span>;
+                },
+              },
+              {
+                key: "lastPaymentAt", header: "آخر دفعة",
+                render: (r) => r.lastPaymentAt ? (
+                  <>
+                    <div className="flex items-center gap-1 text-[11px]"><Receipt className="h-3 w-3" />{formatUmrahDate(r.lastPaymentAt)}</div>
+                    {r.lastPaymentRef && <p className="text-[10px] font-mono text-muted-foreground">{r.lastPaymentRef}</p>}
+                  </>
+                ) : <span className="text-muted-foreground text-[11px]">لا توجد دفعات</span>,
+              },
+            ] satisfies DataTableColumn<SubAgentBalanceRow>[]}
+          />
         </CardContent>
       </Card>
     </PageShell>
