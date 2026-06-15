@@ -80,6 +80,7 @@ import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
 import { financeMemoryRouter } from "./finance-memory.js";
+import { financeAmortizationRouter } from "./finance-amortization.js";
 import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
 import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
@@ -382,6 +383,7 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
 // #1733 — Transport-to-finance handoff queue. Lives under /finance because
 // only finance-side roles see it (transport NEVER materialises JEs).
