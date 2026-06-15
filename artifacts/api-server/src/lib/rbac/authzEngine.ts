@@ -240,6 +240,53 @@ async function loadEffectiveGrants(userId: number, companyId: number, selectedRo
   return result;
 }
 
+/**
+ * Flatten the caller's effective RBAC v2 grants into a Set of both fine
+ * `feature:action` and coarse `module:action` keys. Reuses the 30s grant
+ * cache keyed identically to authorize(), so once the foundation loads it
+ * in buildScope the subsequent authorize() call is a warm hit — near-zero
+ * added cost. This is the bridge that lets in-handler authorization read
+ * from grants (the single source of truth) instead of hardcoded role
+ * lists — closing the HR-REV-1 #1 "parallel role-set" duplication.
+ *
+ * Never throws: any failure degrades to an empty set, and scopeCan() then
+ * falls back to the owner-only check. The auth hot path must not break.
+ */
+export async function loadFineGrantKeys(scope: RequestScope): Promise<ReadonlySet<string>> {
+  const keys = new Set<string>();
+  if (!scope?.userId || !scope?.companyId) return keys;
+  try {
+    const { grants } = await loadEffectiveGrants(scope.userId, scope.companyId, scope.selectedRoleKey ?? null);
+    for (const g of grants) {
+      const fk = (g.feature_key ?? "").trim();
+      if (!fk) continue;
+      const mod = fk.split(".")[0];
+      for (const raw of g.actions ?? []) {
+        const act = String(raw ?? "").trim();
+        if (!act) continue;
+        keys.add(`${fk}:${act}`);
+        if (mod) keys.add(`${mod}:${act}`);
+      }
+    }
+  } catch {
+    /* degrade to empty — owner-only fallback in scopeCan() */
+  }
+  return keys;
+}
+
+/**
+ * In-handler permission check derived from RBAC v2 grants — replaces the
+ * hardcoded `ROLE_SET.includes(scope.role)` pattern. Owners always pass
+ * (they hold the `*` wildcard, same as every existing gate). Accepts a
+ * fine feature key (`hr.payroll`) or a coarse module (`hr`); both forms
+ * are present in the projected set. Returns false when grants haven't been
+ * loaded onto the scope (defensive — buildScope always loads them).
+ */
+export function scopeCan(scope: RequestScope, feature: string, action: string): boolean {
+  if (scope?.isOwner) return true;
+  return scope?.fineGrants?.has(`${feature}:${action}`) ?? false;
+}
+
 // Subscribe once per process: when another replica publishes an
 // invalidation, drop our local grant cache for that company so the
 // next request re-reads from Postgres.
