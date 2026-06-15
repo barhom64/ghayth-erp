@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -216,63 +216,22 @@ export default function ViolationsSummaryReport() {
               آخر 100 مخالفة
             </p>
           </div>
-          {(data?.recent ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground py-12 text-center" data-testid="violations-recent-empty">
-              لا مخالفات تطابق الفلاتر.
-            </p>
-          ) : (
-            <table className="w-full text-sm" data-testid="violations-recent-table">
-              <thead className="bg-muted/40">
-                <tr>
-                  <th className="p-2 text-start">#</th>
-                  <th className="p-2 text-start">التاريخ</th>
-                  <th className="p-2 text-start">النوع</th>
-                  <th className="p-2 text-start">الحالة</th>
-                  <th className="p-2 text-start">المعتمر</th>
-                  <th className="p-2 text-start">الوكيل</th>
-                  <th className="p-2 text-end">الغرامة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.recent ?? []).map((r) => {
-                  const tone = STATUS_TONE[r.status] ?? "bg-slate-100 text-slate-700 border-slate-300";
-                  return (
-                    <tr key={r.id} className="border-t hover:bg-muted/20" data-testid={`violations-recent-row-${r.id}`}>
-                      <td className="p-2">
-                        <Link href={`/umrah/violations/${r.id}`} className="text-blue-600 hover:underline font-mono text-xs">
-                          #{r.id}
-                        </Link>
-                      </td>
-                      <td className="p-2 text-xs">{r.detectedAt?.slice(0, 10)}</td>
-                      <td className="p-2 text-xs">{r.type}</td>
-                      <td className="p-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>
-                          {STATUS_LABEL_AR[r.status] ?? r.status}
-                        </span>
-                      </td>
-                      <td className="p-2 text-xs">
-                        {r.mutamerId ? (
-                          <Link href={`/umrah/pilgrims/${r.mutamerId}`} className="text-blue-600 hover:underline">
-                            {r.mutamerName ?? `#${r.mutamerId}`}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="p-2 text-xs">
-                        {r.agentId ? (
-                          <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline">
-                            {r.agentName ?? `#${r.agentId}`}
-                          </Link>
-                        ) : "—"}
-                      </td>
-                      <td className="p-2 text-end font-mono">
-                        {formatCurrency(Number(r.penaltyAmount) || 0)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+          <DataTable<SummaryResp["recent"][number]>
+            data={data?.recent ?? []}
+            rowKey={(r) => String(r.id)}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا مخالفات تطابق الفلاتر."
+            columns={[
+              { key: "id", header: "#", render: (r) => <Link href={`/umrah/violations/${r.id}`} className="text-blue-600 hover:underline font-mono text-xs">#{r.id}</Link> },
+              { key: "detectedAt", header: "التاريخ", render: (r) => <span className="text-xs">{r.detectedAt?.slice(0, 10)}</span> },
+              { key: "type", header: "النوع", className: "text-xs" },
+              { key: "status", header: "الحالة", render: (r) => { const tone = STATUS_TONE[r.status] ?? "bg-slate-100 text-slate-700 border-slate-300"; return <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>{STATUS_LABEL_AR[r.status] ?? r.status}</span>; } },
+              { key: "mutamerId", header: "المعتمر", render: (r) => r.mutamerId ? <Link href={`/umrah/pilgrims/${r.mutamerId}`} className="text-blue-600 hover:underline text-xs">{r.mutamerName ?? `#${r.mutamerId}`}</Link> : "—" },
+              { key: "agentId", header: "الوكيل", render: (r) => r.agentId ? <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline text-xs">{r.agentName ?? `#${r.agentId}`}</Link> : "—" },
+              { key: "penaltyAmount", header: "الغرامة", align: "end" as const, render: (r) => <span className="font-mono">{formatCurrency(Number(r.penaltyAmount) || 0)}</span> },
+            ] satisfies DataTableColumn<SummaryResp["recent"][number]>[]}
+          />
         </CardContent>
       </Card>
     </PageShell>
@@ -316,36 +275,23 @@ function BreakdownTable<T extends { count: number; total: number; [k: string]: a
     return <p className="text-sm text-muted-foreground py-8 text-center">لا بيانات.</p>;
   }
   const totalCount = rows.reduce((acc, r) => acc + r.count, 0);
+  const augRows = rows.map((r) => {
+    const key = String(r[keyField]);
+    return { ...r, _pct: totalCount > 0 ? Math.round((r.count / totalCount) * 100) : 0, _label: labels?.[key] ?? key, _tone: tones?.[key] };
+  });
   return (
-    <table className="w-full text-sm mt-2" data-testid={testid}>
-      <thead className="bg-muted/40">
-        <tr>
-          <th className="p-2 text-start">{String(keyField)}</th>
-          <th className="p-2 text-end">العدد</th>
-          <th className="p-2 text-end">إجمالي الغرامة</th>
-          <th className="p-2 text-end">%</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => {
-          const key = String(r[keyField]);
-          const tone = tones?.[key];
-          const label = labels?.[key] ?? key;
-          const pct = totalCount > 0 ? Math.round((r.count / totalCount) * 100) : 0;
-          return (
-            <tr key={key} className="border-t" data-testid={`${testid}-row-${key}`}>
-              <td className="p-2">
-                {tone ? (
-                  <span className={`text-[10px] px-2 py-0.5 rounded border ${tone}`}>{label}</span>
-                ) : label}
-              </td>
-              <td className="p-2 text-end font-mono">{r.count}</td>
-              <td className="p-2 text-end font-mono">{formatCurrency(Number(r.total) || 0)}</td>
-              <td className="p-2 text-end font-mono">{pct}%</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <DataTable<typeof augRows[number]>
+      data={augRows}
+      rowKey={(r) => String(r[keyField as string])}
+      noToolbar
+      pageSize={0}
+      emptyMessage="لا بيانات."
+      columns={[
+        { key: "_label" as const, header: String(keyField), render: (r) => r._tone ? <span className={`text-[10px] px-2 py-0.5 rounded border ${r._tone}`}>{r._label}</span> : r._label },
+        { key: "count" as const, header: "العدد", align: "end" as const, className: "font-mono" },
+        { key: "total" as const, header: "إجمالي الغرامة", align: "end" as const, render: (r) => <span className="font-mono">{formatCurrency(Number(r.total) || 0)}</span> },
+        { key: "_pct" as const, header: "%", align: "end" as const, render: (r) => <span className="font-mono">{r._pct}%</span> },
+      ]}
+    />
   );
 }
