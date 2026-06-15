@@ -2431,8 +2431,8 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
       throw new ValidationError("إحداثيات النقطة مطلوبة", { field: "lat", fix: "أرسل lat و lon (أو latitude و longitude) في جسم الطلب" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,NOW())`,
-      [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
+      `INSERT INTO fleet_gps_tracking ("companyId","vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,$6,NOW())`,
+      [scope.companyId, trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
     );
     assertInsert(insertId, "fleet_gps_tracking");
     emitEvent({
@@ -2447,7 +2447,7 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
       after: { tripId, lat, lon, speed: b.speed || 0 },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_gps_tracking WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_gps_tracking WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
