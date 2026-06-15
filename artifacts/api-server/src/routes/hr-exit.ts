@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
-import { HR_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -470,12 +470,12 @@ router.patch("/exit/:id/approve", authorize({ feature: "hr.exit", action: "updat
     const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.exit", "approve")) {
       throw new ForbiddenError(
         "صلاحية اعتماد نهاية الخدمة محصورة بمدير HR أو المدير العام أو المالك",
         {
           fix: "هذا الإجراء يتطلب صلاحية إدارية عليا.",
-          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+          meta: { yourRole: scope.role, requiredGrant: "hr.exit:approve" },
         }
       );
     }
@@ -633,10 +633,10 @@ router.patch("/exit/:id/complete", authorize({ feature: "hr.exit", action: "upda
     // separation-of-duties events that the feature-level "update"
     // permission alone is not enough to authorize. The /approve
     // endpoint already gates on HR_ROLES; /complete must too.
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.exit", "approve")) {
       res.status(403).json({
         error: "غير مصرّح لك بإتمام نهاية الخدمة — يلزم دور موارد بشرية",
-        meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+        meta: { yourRole: scope.role, requiredGrant: "hr.exit:approve" },
       });
       return;
     }

@@ -14,10 +14,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Edit, CalendarDays, XCircle, ChevronsUp, Trash2 } from "lucide-react";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { formatDateAr } from "@/lib/formatters";
@@ -363,20 +360,16 @@ export default function LeaveDetail() {
         onDeleted={() => setLocation("/hr/leaves")}
       />
     )}
-    <AlertDialog open={confirmEscalate} onOpenChange={(o) => !o && setConfirmEscalate(false)}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>تأكيد التصعيد</AlertDialogTitle>
-          <AlertDialogDescription>
-            سيتم تصعيد الطلب للمرحلة التالية إذا انقضت مهلة 48 ساعة. متابعة؟
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>إلغاء</AlertDialogCancel>
-          <AlertDialogAction onClick={confirmedEscalate}>تأكيد التصعيد</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+    <ConfirmActionDialog
+      open={confirmEscalate}
+      onOpenChange={(o) => { if (!o) setConfirmEscalate(false); }}
+      variant="caution"
+      title="تأكيد التصعيد"
+      description="سيتم تصعيد الطلب للمرحلة التالية إذا انقضت مهلة 48 ساعة. متابعة؟"
+      confirmLabel="تأكيد التصعيد"
+      onConfirm={confirmedEscalate}
+    />
     <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
       <DialogContent>
         <DialogHeader>

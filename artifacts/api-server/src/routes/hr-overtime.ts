@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
-import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -429,7 +429,7 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
     const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.overtime", "approve")) {
       throw new ForbiddenError(
         "صلاحية اعتماد الوقت الإضافي محصورة بالمدير أو HR أو المالك",
         { fix: "اطلب من مديرك المباشر تنفيذ الموافقة.", meta: { yourRole: scope.role } }
@@ -545,7 +545,7 @@ router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.overtime", "reject")) {
       throw new ForbiddenError("صلاحية رفض طلبات الوقت الإضافي محصورة بالمدير أو HR أو المالك");
     }
 

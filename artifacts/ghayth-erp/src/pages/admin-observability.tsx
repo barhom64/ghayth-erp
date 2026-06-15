@@ -20,10 +20,7 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useState } from "react";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { apiFetch, useApiQuery } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -772,20 +769,16 @@ export default function AdminObservability() {
           )}
         </div>
       </PageStateWrapper>
-      <AlertDialog open={confirmResolveId !== null} onOpenChange={(o) => !o && setConfirmResolveId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إزالة الحدث</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم تعليم الحدث كمحلول وحذفه من قائمة الفشل بدون إعادة محاولة. متابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmedResolveEntry}>تأكيد الإزالة</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={confirmResolveId !== null}
+        onOpenChange={(o) => { if (!o) setConfirmResolveId(null); }}
+        variant="caution"
+        title="تأكيد إزالة الحدث"
+        description="سيتم تعليم الحدث كمحلول وحذفه من قائمة الفشل بدون إعادة محاولة. متابعة؟"
+        confirmLabel="تأكيد الإزالة"
+        onConfirm={confirmedResolveEntry}
+      />
     </PageShell>
   );
 }

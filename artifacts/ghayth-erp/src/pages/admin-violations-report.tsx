@@ -11,7 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -412,20 +412,17 @@ export default function ViolationsReportPage() {
           />
         </CardContent>
       </Card>
-      <AlertDialog open={bulkResolveOpen} onOpenChange={setBulkResolveOpen}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader className="text-right">
-            <AlertDialogTitle>إغلاق المخالفات المفتوحة</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إغلاق كل المخالفات المفتوحة المطابقة ({scopeLabel}). لا يمكن التراجع عن هذا الإجراء.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row-reverse gap-2">
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmBulkResolve} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">تأكيد الإغلاق</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={bulkResolveOpen}
+        onOpenChange={setBulkResolveOpen}
+        variant="destructive"
+        title="إغلاق المخالفات المفتوحة"
+        description={`سيتم إغلاق كل المخالفات المفتوحة المطابقة (${scopeLabel}). لا يمكن التراجع عن هذا الإجراء.`}
+        confirmLabel="تأكيد الإغلاق"
+        pending={bulkMut.isPending}
+        onConfirm={confirmBulkResolve}
+      />
     </PageShell>
   );
 }
