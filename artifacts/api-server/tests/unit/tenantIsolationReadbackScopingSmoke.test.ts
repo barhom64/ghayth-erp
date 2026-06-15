@@ -27,6 +27,9 @@ const ACCOUNTS = readFileSync(join(ROUTES, "finance-accounts.ts"), "utf8");
 const ENGINE = readFileSync(join(ROUTES, "accounting-engine.ts"), "utf8");
 const LEGAL = readFileSync(join(ROUTES, "legal.ts"), "utf8");
 const GOVERNANCE = readFileSync(join(ROUTES, "governance.ts"), "utf8");
+const TRANSPORT = readFileSync(join(ROUTES, "transport-bookings.ts"), "utf8");
+const IMPACT = readFileSync(join(ROUTES, "impactPreview.ts"), "utf8");
+const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -114,5 +117,46 @@ describe("FND-013 #2340 — parent-verified list reads are company-scoped", () =
       /FROM policy_module_links WHERE "policyId"=\$1 AND \("companyId"=\$2 OR "companyId" IS NULL\)/,
     );
     expect(stripped).not.toMatch(/FROM policy_module_links WHERE "policyId"=\$1 LIMIT/);
+  });
+});
+
+describe("FND-013 #2340 — parent-verified child reads (batch 3) are company-scoped", () => {
+  it("transport_booking_lines reads (by bookingId) all carry companyId — no bare form left", () => {
+    const stripped = stripComments(TRANSPORT);
+    const scoped = [
+      ...stripped.matchAll(
+        /FROM transport_booking_lines WHERE "bookingId" = \$1 AND "companyId" = \$2/g,
+      ),
+    ];
+    expect(scoped.length).toBeGreaterThanOrEqual(2);
+    expect(stripped).not.toMatch(
+      /FROM transport_booking_lines WHERE "bookingId" = \$1 AND "deletedAt"/,
+    );
+  });
+
+  it("impactPreview project_phases count (by projectId) carries companyId", () => {
+    const stripped = stripComments(IMPACT);
+    expect(stripped).toMatch(
+      /FROM project_phases WHERE "projectId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId" = \$1`/);
+  });
+
+  it("contract_payment_schedule reads (by contractId) all carry companyId — no bare form left", () => {
+    const stripped = stripComments(PROPERTIES);
+    const scoped = [
+      ...stripped.matchAll(
+        /FROM contract_payment_schedule WHERE "contractId"=\$1 AND "companyId"=\$2/g,
+      ),
+    ];
+    expect(scoped.length).toBeGreaterThanOrEqual(3);
+    // No occurrence of the table followed by contractId with no companyId before
+    // the next clause (ORDER / closing backtick).
+    expect(stripped).not.toMatch(
+      /FROM contract_payment_schedule WHERE "contractId"=\$1 ORDER/,
+    );
+    expect(stripped).not.toMatch(
+      /FROM contract_payment_schedule WHERE "contractId"=\$1`/,
+    );
   });
 });
