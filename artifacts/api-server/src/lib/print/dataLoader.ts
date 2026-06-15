@@ -1191,12 +1191,17 @@ async function loadVehicle(companyId: number, id: string) {
 // preset (templateResolver.ts) renders the corresponding template.
 async function loadTransportBookingConfirmation(companyId: number, id: string) {
   const [booking] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM transport_bookings
-       WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
-       LIMIT 1`,
+    `SELECT b.*, c.name AS "linkedCustomerName"
+       FROM transport_bookings b
+       LEFT JOIN clients c ON c.id = b."customerId" AND c."companyId" = b."companyId" AND c."deletedAt" IS NULL
+      WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL
+      LIMIT 1`,
     [id, companyId],
   ).catch(() => [null]);
   if (!booking) return { entity: { id } };
+  // #TA-T18 — the printed confirmation shows the LINKED customer (master
+  // data), not the free-text snapshot, matching the on-screen confirmation.
+  if (booking.linkedCustomerName) booking.customerName = booking.linkedCustomerName;
   const lines = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM transport_booking_lines
        WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
