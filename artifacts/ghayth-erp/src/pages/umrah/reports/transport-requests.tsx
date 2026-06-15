@@ -162,6 +162,7 @@ export default function UmrahTransportReport() {
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
+          <div data-testid="transport-empty">
           <DataTable<TransportRow>
             data={rows}
             rowKey={(r) => String(r.bookingId)}
@@ -179,6 +180,7 @@ export default function UmrahTransportReport() {
               { key: "status", header: "الحالة", render: (r) => { const tone = STATUS_TONE[r.status] ?? STATUS_TONE.draft; return <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>{STATUS_LABEL_AR[r.status] ?? r.status}</span>; } },
             ] satisfies DataTableColumn<TransportRow>[]}
           />
+          </div>
         </CardContent>
       </Card>
     </PageShell>

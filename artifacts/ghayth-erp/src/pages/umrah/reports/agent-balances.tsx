@@ -214,7 +214,7 @@ export default function UmrahAgentBalancesReport() {
         ))}
       </div>
 
-      <Card>
+      <Card data-testid="agent-balances-table">
         <CardContent className="p-0">
           <DataTable<AgentBalanceRow>
             data={visibleRows}
@@ -226,10 +226,10 @@ export default function UmrahAgentBalancesReport() {
               {
                 key: "name", header: "الوكيل",
                 render: (r) => (
-                  <>
+                  <div data-testid={`agent-balances-row-${r.id}`}>
                     <Link href={`/umrah/agents/${r.id}`} className="text-blue-600 hover:underline font-medium">{r.name}</Link>
                     {r.phone && <p className="text-[10px] text-muted-foreground" dir="ltr">{r.phone}</p>}
-                  </>
+                  </div>
                 ),
               },
               { key: "nuskAgentNumber", header: "رقم نسك", className: "font-mono text-[10px]", render: (r) => r.nuskAgentNumber || "—" },
@@ -242,7 +242,7 @@ export default function UmrahAgentBalancesReport() {
                 key: "outstanding", header: "المستحق", align: "end" as const,
                 render: (r) => {
                   const outstanding = Number(r.outstanding ?? 0);
-                  return <span className={`font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}>{formatCurrency(outstanding)}</span>;
+                  return <span data-testid={`agent-balances-outstanding-${r.id}`} className={`font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}>{formatCurrency(outstanding)}</span>;
                 },
               },
               {

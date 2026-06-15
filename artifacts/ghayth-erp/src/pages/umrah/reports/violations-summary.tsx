@@ -216,6 +216,7 @@ export default function ViolationsSummaryReport() {
               آخر 100 مخالفة
             </p>
           </div>
+          <div data-testid="violations-recent-empty">
           <DataTable<SummaryResp["recent"][number]>
             data={data?.recent ?? []}
             rowKey={(r) => String(r.id)}
@@ -232,6 +233,7 @@ export default function ViolationsSummaryReport() {
               { key: "penaltyAmount", header: "الغرامة", align: "end" as const, render: (r) => <span className="font-mono">{formatCurrency(Number(r.penaltyAmount) || 0)}</span> },
             ] satisfies DataTableColumn<SummaryResp["recent"][number]>[]}
           />
+          </div>
         </CardContent>
       </Card>
     </PageShell>

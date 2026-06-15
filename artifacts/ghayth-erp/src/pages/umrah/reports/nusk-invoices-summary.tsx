@@ -248,6 +248,7 @@ export default function NuskInvoicesSummaryReport() {
               آخر 100 فاتورة
             </p>
           </div>
+          <div data-testid="nusk-recent-empty">
           <DataTable<SummaryResp["recent"][number]>
             data={data?.recent ?? []}
             rowKey={(r) => String(r.id)}
@@ -266,6 +267,7 @@ export default function NuskInvoicesSummaryReport() {
               { key: "nuskStatus", header: "الحالة", render: (r) => { const tone = STATUS_TONE[r.nuskStatus] ?? "bg-slate-100 text-slate-700 border-slate-300"; return <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>{STATUS_LABEL_AR[r.nuskStatus] ?? r.nuskStatus}</span>; } },
             ] satisfies DataTableColumn<SummaryResp["recent"][number]>[]}
           />
+          </div>
         </CardContent>
       </Card>
     </PageShell>

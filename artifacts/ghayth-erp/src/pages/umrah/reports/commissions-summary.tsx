@@ -254,6 +254,7 @@ export default function CommissionsSummaryReport() {
               آخر 100 احتساب
             </p>
           </div>
+          <div data-testid="commissions-recent-empty">
           <DataTable<SummaryResp["recent"][number]>
             data={data?.recent ?? []}
             rowKey={(r) => String(r.id)}
@@ -271,6 +272,7 @@ export default function CommissionsSummaryReport() {
               { key: "finalAmount", header: "النهائية", align: "end" as const, render: (r) => <span className="font-mono font-bold">{formatCurrency(Number(r.finalAmount) || 0)}</span> },
             ] satisfies DataTableColumn<SummaryResp["recent"][number]>[]}
           />
+          </div>
         </CardContent>
       </Card>
     </PageShell>
