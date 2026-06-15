@@ -13,7 +13,7 @@ import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";
 import { syncLegacyToV2 } from "./lib/rbac/autoMigrate.js";
-import { warmVendorSettingsCache } from "./lib/vendorSettings.js";
+import { ensureVendorSecretsSeed, warmVendorSettingsCache } from "./lib/vendorSettings.js";
 import { pool } from "./lib/rawdb.js";
 import { config, assertEnvOrExit, describeConfig } from "./lib/config.js";
 import http from "http";
@@ -89,6 +89,17 @@ async function start() {
   // values immediately instead of falling back to env on the first
   // call. Non-fatal if the table doesn't exist yet — migration 219
   // creates it.
+  // Guarantee the six operator-facing vendor cards exist on EVERY boot,
+  // independent of whether the migration-runner reached the 219/340
+  // seed (orphaned-seed class — see ensureVendorSecretsSeed). Idempotent
+  // ON CONFLICT DO NOTHING, zero secrets, never touches a configured row.
+  try {
+    await ensureVendorSecretsSeed();
+    logger.info("Vendor secrets baseline rows ensured");
+  } catch (seedErr) {
+    logger.warn({ err: seedErr }, "Vendor secrets ensure skipped (table may not exist yet)");
+  }
+
   try {
     await warmVendorSettingsCache();
     logger.info("Vendor settings cache warmed");
