@@ -1491,8 +1491,8 @@ router.post(
         }).safeParse(req.body)
       );
       const { insertId } = await rawExecute(
-        `INSERT INTO print_jobs ("companyId","branchId","requestedBy","entityType","entityId","format","status","printedAt","ipAddress","userAgent")
-         VALUES ($1,$2,$3,$4,$5,$6,'completed',NOW(),$7,$8)`,
+        `INSERT INTO print_jobs ("companyId","branchId","userId","entityType","entityId","format","status","ipAddress","userAgent")
+         VALUES ($1,$2,$3,$4,$5,$6,'completed',$7,$8)`,
         [
           scope.companyId,
           scope.branchId ?? null,
