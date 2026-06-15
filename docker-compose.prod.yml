@@ -68,6 +68,20 @@ services:
     networks:
       - ghayth_internal
 
+  # Mobile app served as a same-origin static web export under /mobile/.
+  # Kept as its OWN image/service (not folded into `web`) so a mobile build
+  # failure never takes down the main web UI. The web nginx proxies /mobile/
+  # here at request time via Docker DNS, so this being down only 502s /mobile/.
+  mobile:
+    build:
+      context: .
+      dockerfile: Dockerfile.mobile
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - ghayth_internal
+
   web:
     build:
       context: .

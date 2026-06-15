@@ -166,6 +166,21 @@ fi
 # Only recreate web after the api swap succeeded, so api+web never go out of sync.
 dc up -d --no-deps web >> "$LOG_FILE" 2>&1
 
+# Mobile web export — ISOLATED + non-fatal. Built/brought up separately AFTER
+# api+web are healthy so a mobile build failure can never roll back or block the
+# core stack; the web nginx resolves the `mobile` host at request time, so a
+# missing/stale mobile container only 502s /mobile/ (the main UI stays up). We
+# only log a warning on failure and let the next run retry.
+if dc build mobile >> "$LOG_FILE" 2>&1; then
+  if dc up -d --no-deps mobile >> "$LOG_FILE" 2>&1; then
+    log "mobile deployed"
+  else
+    log "WARN mobile up failed; api+web stay deployed, will retry next run"
+  fi
+else
+  log "WARN mobile build failed; api+web stay deployed, will retry next run"
+fi
+
 sleep 5
 if curl -fsS http://127.0.0.1:8088/api/healthz >/dev/null 2>&1; then log "post-deploy api healthz OK"; else log "WARN post-deploy api healthz FAILED"; fi
 if curl -fsS http://127.0.0.1:8088/healthz   >/dev/null 2>&1; then log "post-deploy web healthz OK"; else log "WARN post-deploy web healthz FAILED"; fi
