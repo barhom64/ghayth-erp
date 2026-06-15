@@ -594,6 +594,10 @@ router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الموسم");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
+    // Per-season cost centre — season is a time-bound cost/profit bucket
+    // (costs carry umrahSeasonId on their journal lines); auto-provision it so
+    // per-season P&L drill-down works from day one, like project/agent.
+    createCostCenterForEntity(scope.companyId, "umrah_season", rows[0].id as number, b.title, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah season cost-centre auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
