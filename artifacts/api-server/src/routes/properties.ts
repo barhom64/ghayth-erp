@@ -1309,7 +1309,7 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
     } catch (obErr) { logger.error(obErr, "Contract obligation registration failed:"); }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
-    const schedule = await rawQuery<Record<string, unknown>>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`, [insertId]);
+    const schedule = await rawQuery<Record<string, unknown>>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2 ORDER BY "installmentNumber" LIMIT 500`, [insertId, scope.companyId]);
 
     // Lifecycle event: lease.created
     await emitEvent({
@@ -1573,8 +1573,8 @@ router.post("/contracts/:id/renew", authorize({ feature: "properties.contracts",
         const installmentCount = Math.ceil(renewalMonths / freqMonths);
         const installmentAmount = roundTo2(newTotal / installmentCount);
         const maxRes = await client.query(
-          `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
-          [id]
+          `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2`,
+          [id, scope.companyId]
         );
         const startNum = Number(maxRes.rows[0]?.max || 0);
         for (let i = 0; i < installmentCount; i++) {
@@ -4158,8 +4158,8 @@ router.get("/contracts/:id/schedule", authorize({ feature: "properties.contracts
     const [contract] = await rawQuery<Record<string, unknown>>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [contractId, scope.companyId]);
     if (!contract) throw new NotFoundError("العقد غير موجود");
     const schedule = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`,
-      [contractId]
+      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2 ORDER BY "installmentNumber" LIMIT 500`,
+      [contractId, scope.companyId]
     );
     res.json(maskFields(req, { data: schedule, total: schedule.length }));
   } catch (err) { handleRouteError(err, res, "Payment schedule error:"); }

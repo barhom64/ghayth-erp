@@ -11,6 +11,10 @@ routes/admin.ts:cron_logs
 routes/automation.ts:cron_jobs
 routes/bi.ts:alert_fatigue_settings
 routes/bi.ts:notifications
+# careersPortal.ts:job_postings — public careers portal. The flagged reads
+# are an applicant viewing their OWN applications (JOIN job_postings, scoped by
+# applicantAccountId / application id), not a company session. Adding companyId
+# would break cross-company applicants. Triaged #2340 → intentionally retained.
 routes/careersPortal.ts:job_postings
 routes/events.ts:event_outbox
 routes/finance-algorithms.ts:cip_costs
@@ -23,8 +27,6 @@ routes/fleet-telematics.ts:fleet_telematics_devices
 routes/fleet-telematics.ts:fleet_video_channels
 routes/fleet.ts:driver_portal_accounts
 routes/fleet.ts:fleet_gps_tracking
-routes/governance.ts:governance_policies
-routes/governance.ts:policy_module_links
 routes/health.ts:cron_logs
 routes/health.ts:event_dlq
 routes/hr-wps.ts:employees
@@ -42,9 +44,7 @@ routes/hr.ts:hr_leave_types
 routes/hr.ts:peer_evaluations
 routes/hr.ts:shifts
 routes/hr.ts:system_evaluations
-routes/impactPreview.ts:project_phases
 routes/inboxConversations.ts:conversation_links
-routes/legal.ts:legal_correspondence
 routes/meInsights.ts:hr_employee_loans
 routes/meInsights.ts:hr_leave_requests
 routes/meInsights.ts:hr_overtime_requests
@@ -65,7 +65,6 @@ routes/operationsCenter.ts:system_settings
 routes/projects.ts:employees
 routes/projects.ts:project_phases
 routes/projects.ts:project_resources
-routes/properties.ts:contract_payment_schedule
 routes/properties.ts:maintenance_requests
 routes/properties.ts:property_units
 routes/properties.ts:rental_contracts
@@ -75,7 +74,6 @@ routes/rbacV2.ts:rbac_sod_rules
 routes/rbacV2.ts:rbac_user_roles
 routes/store.ts:store_products
 routes/tasks.ts:task_assignees
-routes/transport-bookings.ts:transport_booking_lines
 routes/umrah-entities.ts:employee_commission_calculations
 routes/umrah-entities.ts:employee_commission_tiers
 routes/umrah-entities.ts:umrah_import_changes
