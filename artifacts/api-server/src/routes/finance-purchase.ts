@@ -996,6 +996,41 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
       );
     }
 
+    // #2296 — budget enforcement at PO approval (the commitment point).
+    // A purchase order is a spend commitment; approving it is where the
+    // money is effectively earmarked, so this is where the same role-aware
+    // 80/100/110% gate the vendor-invoice path applies belongs. Without it
+    // an over-budget PO sails through approval and only trips the gate
+    // later at invoice time — after the supplier commitment already exists.
+    // Lines are aggregated per expense account so the check matches the
+    // budget grain (one budgets row per accountCode+period). The PO's own
+    // creation month is the budget period; validateBudget falls back to the
+    // current period when createdAt is unexpectedly empty.
+    if (newStatus === "approved") {
+      const poPeriod = String((po as Record<string, unknown>).createdAt ?? "").slice(0, 7) || undefined;
+      const poLines = await rawQuery<{ accountCode: string; amt: string }>(
+        `SELECT "accountCode", SUM("lineTotal")::text AS amt
+           FROM purchase_order_items
+          WHERE "orderId" = $1 AND "accountCode" IS NOT NULL
+          GROUP BY "accountCode"`,
+        [id],
+      );
+      for (const ln of poLines) {
+        const amt = Number(ln.amt);
+        if (!(amt > 0)) continue;
+        const budgetCheck = await validateBudget({
+          companyId: scope.companyId, accountCode: String(ln.accountCode), amount: amt, period: poPeriod, role: scope.role,
+        });
+        if (!budgetCheck.canProceed) {
+          const meta = { utilization: budgetCheck.utilization, status: budgetCheck.status, accountCode: ln.accountCode };
+          if (budgetCheck.status === "rejected") {
+            throw new ConflictError(budgetCheck.message, { field: "amount", fix: "أعد تقييم الميزانية أو قلّل المبلغ", meta });
+          }
+          throw new ForbiddenError(budgetCheck.message, { fix: `يلزم موافقة ${budgetCheck.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`, meta });
+        }
+      }
+    }
+
     await applyTransition({
       entity: "purchase_orders",
       id,
