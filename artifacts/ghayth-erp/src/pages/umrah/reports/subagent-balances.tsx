@@ -107,7 +107,7 @@ export default function UmrahSubAgentBalancesReport() {
       columns: [
         { key: "id",                   label: "id" },
         { key: "name",                 label: "name" },
-        { key: "nuskCode",             label: "nuskCode" },
+        { key: "nuskCode",             label: "رمز الوكيل الفرعي" },
         { key: "agentName",            label: "agentName" },
         { key: "country",              label: "country" },
         { key: "phone",                label: "phone" },
