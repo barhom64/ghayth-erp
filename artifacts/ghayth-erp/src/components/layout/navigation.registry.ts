@@ -618,21 +618,33 @@ export const allNavSections: NavSection[] = [
     title: "المستودعات والمتجر",
     items: [
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
-        // Agent-5: explicit module="bi" matches backend gate.
-        // PR-1 / #2163 — was module:"bi" (FU-2).
+        // #2493-follow-up — كانت «المستودعات» قائمة مسطّحة من 13 مدخلاً.
+        // أُعيد تنظيمها إلى لوحة + مجموعات (تشغيل ثم تقارير). إعادة تجميع فقط.
+        // Agent-5/PR-1 (#2163): تبقى لوحة التحكم ورقة مستقلة (module: warehouse)
+        // مع تعليقها قبلها — كي لا يقع مسار /module-dashboards داخل نطاق فخّ
+        // الـregex في platformWave2Pr1…DecouplingSmoke.
         { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard, module: "warehouse" },
-        { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
-        { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
-        { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
-        { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
-        { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
-        { label: "الدفعات", path: "/warehouse/lots", icon: Package },
-        { label: "الأرقام التسلسلية", path: "/warehouse/serials", icon: ListChecks },
-        { label: "الجرد الدوري", path: "/warehouse/cycle-counts", icon: ClipboardCheck },
-        { label: "تصنيف ABC", path: "/warehouse/abc", icon: BarChart3 },
-        { label: "تقرير دقة الجرد", path: "/warehouse/reports/accuracy", icon: BarChart3 },
-        { label: "تقرير الأصناف المنتهية", path: "/warehouse/reports/expiring", icon: AlertTriangle },
-        { label: "تقادم الدفعات", path: "/warehouse/reports/lot-aging", icon: FileBarChart },
+        // 1) المخزون والحركات.
+        { label: "المخزون والحركات", path: "/warehouse/movements", icon: Activity, children: [
+          { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
+          { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
+          { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
+          { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
+        ]},
+        // 2) الدفعات والتسلسلات والجرد المتقدّم.
+        { label: "الدفعات والتسلسلات", path: "/warehouse/advanced", icon: Layers, children: [
+          { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
+          { label: "الدفعات", path: "/warehouse/lots", icon: Package },
+          { label: "الأرقام التسلسلية", path: "/warehouse/serials", icon: ListChecks },
+          { label: "الجرد الدوري", path: "/warehouse/cycle-counts", icon: ClipboardCheck },
+          { label: "تصنيف ABC", path: "/warehouse/abc", icon: BarChart3 },
+        ]},
+        // 3) التقارير.
+        { label: "التقارير", path: "/warehouse/reports/accuracy", icon: FileBarChart, children: [
+          { label: "تقرير دقة الجرد", path: "/warehouse/reports/accuracy", icon: BarChart3 },
+          { label: "تقرير الأصناف المنتهية", path: "/warehouse/reports/expiring", icon: AlertTriangle },
+          { label: "تقادم الدفعات", path: "/warehouse/reports/lot-aging", icon: FileBarChart },
+        ]},
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         // Agent-5: explicit module="bi" matches backend gate.
@@ -650,20 +662,35 @@ export const allNavSections: NavSection[] = [
     title: "إدارة الأملاك",
     items: [
       { label: "إدارة الأملاك", path: "/properties/dashboard", icon: Home, module: "property", children: [
+        // #2493-follow-up — كانت «إدارة الأملاك» قائمة مسطّحة من 14 مدخلاً.
+        // أُعيد تنظيمها إلى لوحة + مجموعات موضوعية (تشغيل ثم تقارير/أدلة).
+        // إعادة تجميع فقط — كل مسار محفوظ.
         { label: "نظرة عامة", path: "/properties/dashboard", icon: LayoutDashboard },
-        { label: "المباني والمجمعات", path: "/properties/buildings", icon: Building2 },
-        { label: "الوحدات العقارية", path: "/properties", icon: Building },
-        { label: "المستأجرون", path: "/properties/tenants", icon: Users2 },
-        { label: "الملاك", path: "/properties/owners", icon: User },
-        { label: "كشف حساب المالك", path: "/properties/owners/statement", icon: FileBarChart },
-        { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
-        { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
-        { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },
-        { label: "الفحص والتفتيش", path: "/properties/inspections", icon: ClipboardCheck },
-        { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
-        { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
-        { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
-        { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
+        // 1) العقارات والأطراف.
+        { label: "العقارات والأطراف", path: "/properties/buildings", icon: Building2, children: [
+          { label: "المباني والمجمعات", path: "/properties/buildings", icon: Building2 },
+          { label: "الوحدات العقارية", path: "/properties", icon: Building },
+          { label: "المستأجرون", path: "/properties/tenants", icon: Users2 },
+          { label: "الملاك", path: "/properties/owners", icon: User },
+        ]},
+        // 2) العقود والمالية.
+        { label: "العقود والمالية", path: "/properties/contracts", icon: FileSignature, children: [
+          { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
+          { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
+          { label: "كشف حساب المالك", path: "/properties/owners/statement", icon: FileBarChart },
+          { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
+        ]},
+        // 3) الصيانة والتفتيش.
+        { label: "الصيانة والتفتيش", path: "/properties/maintenance", icon: Hammer, children: [
+          { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },
+          { label: "الفحص والتفتيش", path: "/properties/inspections", icon: ClipboardCheck },
+        ]},
+        // 4) التقارير والأدلة.
+        { label: "التقارير والأدلة", path: "/properties/occupancy-report", icon: BarChart3, children: [
+          { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
+          { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
+          { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
+        ]},
       ]},
     ],
   },
