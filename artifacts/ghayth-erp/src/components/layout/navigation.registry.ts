@@ -680,38 +680,63 @@ export const allNavSections: NavSection[] = [
       // backend never granted, so the entry collapsed for everyone
       // except owner/GM (who get every module).
       { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "operations", children: [
+        // #2488-follow-up — كانت «إدارة العمرة» قائمة مسطّحة من 27 مدخلاً بلا
+        // تجميع. أُعيد تنظيمها إلى مجموعات فرعية موضوعية (نفس نمط الأسطول/المالية):
+        // اللوحة أولاً ثم دورة العمل ثم التقارير ثم الإعدادات آخراً. إعادة تجميع
+        // فقط — كل مسار/صلاحية محفوظ (لا أيتام ولا روابط ميتة).
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
+        // 1) المعتمرون والوكلاء.
         // U-18-P2 — sidebar plural unification. Standalone labels use
         // the nominative plural ("المعتمرون", "الوكلاء الرئيسيون",
         // "الوكلاء الفرعيون") per the UMRAH_CANONICAL_GLOSSARY.md
         // rule. Object-position phrases ("حركات المعتمرين",
         // "كشف المعتمرين", etc.) keep the accusative form.
-        { label: "المعتمرون", path: "/umrah/pilgrims", icon: Users },
-        { label: "الوكلاء الرئيسيون", path: "/umrah/agents", icon: Building2 },
-        { label: "الوكلاء الفرعيون", path: "/umrah/sub-agents", icon: Users },
-        { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
-        { label: "الباقات", path: "/umrah/packages", icon: Package },
-        { label: "المجموعات", path: "/umrah/groups", icon: Users2 },
-        { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
-        { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
-        { label: "حساب العمولات", path: "/umrah/commission-calculations", icon: Calculator },
-        { label: "الفواتير", path: "/umrah/invoices", icon: Receipt },
-        { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
-        { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: Sparkles },
-        { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
-        { label: "طلبات الاسترداد", path: "/umrah/refund-requests", icon: RefreshCw },
-        { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
-        { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
-        { label: "طلبات النقل", path: "/umrah/transport-requests", icon: Truck, perm: "umrah:list" },
-        { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
-        { label: "التقويم التشغيلي", path: "/umrah/calendar", icon: CalendarClock },
-        { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
-        { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
-        { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
-        { label: "السكن والإقامة", path: "/umrah/accommodations", icon: Home },
-        { label: "المعتمرون المعفون", path: "/umrah/exempt-pilgrims", icon: Users },
-        { label: "الامتثال", path: "/umrah/compliance", icon: FileCheck },
-        { label: "الإعدادات", path: "/umrah/settings", icon: Settings },
+        { label: "المعتمرون والوكلاء", path: "/umrah/pilgrims", icon: Users, children: [
+          { label: "المعتمرون", path: "/umrah/pilgrims", icon: Users },
+          { label: "المعتمرون المعفون", path: "/umrah/exempt-pilgrims", icon: Users },
+          { label: "الوكلاء الرئيسيون", path: "/umrah/agents", icon: Building2 },
+          { label: "الوكلاء الفرعيون", path: "/umrah/sub-agents", icon: Users },
+        ]},
+        // 2) المواسم والباقات والمجموعات والسكن.
+        { label: "المواسم والباقات", path: "/umrah/seasons", icon: Calendar, children: [
+          { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
+          { label: "الباقات", path: "/umrah/packages", icon: Package },
+          { label: "المجموعات", path: "/umrah/groups", icon: Users2 },
+          { label: "السكن والإقامة", path: "/umrah/accommodations", icon: Home },
+        ]},
+        // 3) التسعير والعمولات.
+        { label: "التسعير والعمولات", path: "/umrah/pricing", icon: DollarSign, children: [
+          { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
+          { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
+          { label: "حساب العمولات", path: "/umrah/commission-calculations", icon: Calculator },
+        ]},
+        // 4) المبيعات والفوترة.
+        { label: "المبيعات والفوترة", path: "/umrah/sales-wizard", icon: Sparkles, children: [
+          { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: Sparkles },
+          { label: "الفواتير", path: "/umrah/invoices", icon: Receipt },
+          { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
+          { label: "طلبات الاسترداد", path: "/umrah/refund-requests", icon: RefreshCw },
+        ]},
+        // 5) العمليات والنقل.
+        { label: "العمليات والنقل", path: "/umrah/daily-runsheet", icon: CalendarClock, children: [
+          { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
+          { label: "التقويم التشغيلي", path: "/umrah/calendar", icon: CalendarClock },
+          { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
+          { label: "طلبات النقل", path: "/umrah/transport-requests", icon: Truck, perm: "umrah:list" },
+        ]},
+        // 6) الالتزام والمخالفات.
+        { label: "الالتزام والمخالفات", path: "/umrah/compliance", icon: FileCheck, children: [
+          { label: "الامتثال", path: "/umrah/compliance", icon: FileCheck },
+          { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
+          { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
+        ]},
+        // 7) التسوية والبيانات.
+        { label: "التسوية والبيانات", path: "/umrah/reconciliation", icon: RefreshCw, children: [
+          { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
+          { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
+          { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
+        ]},
+        // 8) التقارير — مجموعة قائمة، تبقى كما هي.
         { label: "التقارير", path: "/umrah/reports", icon: FileBarChart, children: [
           { label: "أرصدة الوكلاء", path: "/umrah/reports/agent-balances", icon: DollarSign },
           { label: "أرصدة الوكلاء الفرعيين", path: "/umrah/reports/subagent-balances", icon: DollarSign },
@@ -728,6 +753,8 @@ export const allNavSections: NavSection[] = [
           { label: "ملخّص المخالفات", path: "/umrah/reports/violations-summary", icon: Shield },
           { label: "ملخّص أخطاء الاستيراد", path: "/umrah/reports/import-errors-summary", icon: AlertTriangle },
         ]},
+        // 9) الإعدادات آخراً (معيار #1715).
+        { label: "الإعدادات", path: "/umrah/settings", icon: Settings },
       ]},
     ],
   },

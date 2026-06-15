@@ -219,6 +219,24 @@ BEGIN
   INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '5930', 'تأمين عام (مباني/مسؤولية)', 'General Insurance', 'expense', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='5900'), '5900', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
   INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '9999', 'فروقات التقريب', 'Rounding Differences', 'expense', NULL, NULL, 1, true) ON CONFLICT ("companyId", code) DO NOTHING;
 
+  -- Parity gap fix (2026-06-15): these 9 accounts exist in the
+  -- production DEFAULT_CHART_OF_ACCOUNTS (companyBootstrap.ts) but had
+  -- drifted out of this hand-maintained seed. The finance dynamic
+  -- tests (fixedAssetAnchors, vendorApAnchors, the impairment/
+  -- revaluation/FX-gain posting paths) treat the production default as
+  -- their contract, so a freshly-provisioned company-2 must carry
+  -- them. Pulled verbatim (code/name/type/level/parentCode) from
+  -- DEFAULT_CHART_OF_ACCOUNTS; parents already seeded above.
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '1190', 'دفعات مقدمة للموردين', 'Advances to Suppliers', 'asset', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='1100'), '1100', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '1291', 'مجمع انخفاض قيمة الأصول الثابتة', 'Accum. Impairment – Fixed Assets', 'asset', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='1200'), '1200', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '2155', 'عمولات مستحقة', 'Commissions Payable', 'liability', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='2100'), '2100', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '2156', 'ذمم مُلّاك العقارات', 'Property Owners Payable', 'liability', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='2100'), '2100', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '2157', 'غرامات مرورية مستحقة', 'Traffic Fines Payable', 'liability', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='2100'), '2100', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '3600', 'فائض إعادة التقييم', 'Revaluation Surplus', 'equity', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='3000'), '3000', 2, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '4950', 'أرباح فروق عملة', 'FX Revaluation Gain', 'revenue', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='4900'), '4900', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '5850', 'خسارة انخفاض قيمة الأصول الثابتة', 'Impairment Loss – Fixed Assets', 'expense', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='5800'), '5800', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+  INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting") VALUES (v_company_id, '5860', 'خسارة إعادة تقييم الأصول الثابتة', 'Revaluation Loss – Fixed Assets', 'expense', (SELECT id FROM chart_of_accounts WHERE "companyId"=v_company_id AND code='5800'), '5800', 3, true) ON CONFLICT ("companyId", code) DO NOTHING;
+
 
   -- =====================================================================
   -- Violation types (as system_settings JSON entries)
