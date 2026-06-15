@@ -151,7 +151,9 @@ describe("TA-T18-VRP Phase 3a — boundary intact", () => {
       "utf8",
     );
     expect(phase1).toMatch(/export async function runOptimization\(/);
-    expect(phase1).toMatch(/algorithm\s*=\s*'greedy_nearest_neighbor'/);
+    // Phase 3b promoted Kuhn-Munkres to the default; the persisted
+    // algorithm string updated. greedyAssign stays exported as a fallback.
+    expect(phase1).toMatch(/algorithm\s*=\s*'hungarian_min_distance'/);
     // Phase 1 still doesn't touch dispatch orders directly.
     expect(phase1).not.toMatch(/INSERT INTO transport_dispatch_orders/);
   });
