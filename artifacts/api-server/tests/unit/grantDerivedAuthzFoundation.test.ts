@@ -55,6 +55,37 @@ describe("scopeCan — grant-derived in-handler authorization", () => {
     expect(scopeCan(s, "hr.attendance", "update")).toBe(false);
   });
 
+  // ── wildcard parity with checkAccess() — the regression these guard ──
+  it("a module-wildcard grant (hr.*) matches FINE feature checks (hr_manager / migration 258)", () => {
+    const s = mkScope({ fineGrants: new Set(["hr.*:approve"]) });
+    expect(scopeCan(s, "hr.loans", "approve")).toBe(true);
+    expect(scopeCan(s, "hr.discipline", "approve")).toBe(true);
+    expect(scopeCan(s, "hr", "approve")).toBe(true); // coarse too
+    expect(scopeCan(s, "finance.invoices", "approve")).toBe(false); // other module
+  });
+
+  it("an action-wildcard grant (feature:*) matches any action (autoMigrate hr:* bundles)", () => {
+    const s = mkScope({ fineGrants: new Set(["hr.payroll:*"]) });
+    expect(scopeCan(s, "hr.payroll", "view")).toBe(true);
+    expect(scopeCan(s, "hr.payroll", "delete")).toBe(true);
+    expect(scopeCan(s, "hr.leaves", "view")).toBe(false);
+  });
+
+  it("a global super-grant (*) matches everything (branch_manager '*' grant, migration 258)", () => {
+    const s = mkScope({ fineGrants: new Set(["*:approve"]) });
+    expect(scopeCan(s, "hr.loans", "approve")).toBe(true);
+    expect(scopeCan(s, "finance.invoices", "approve")).toBe(true);
+  });
+
+  it("a CONCRETE per-feature grant does NOT widen to the coarse module (no over-grant)", () => {
+    // department_manager-style: holds hr.leaves:approve only — must NOT pass
+    // a coarse scopeCan(hr, approve) the way a real HR manager (hr.*) does.
+    const s = mkScope({ fineGrants: new Set(["hr.leaves:approve"]) });
+    expect(scopeCan(s, "hr.leaves", "approve")).toBe(true);
+    expect(scopeCan(s, "hr", "approve")).toBe(false);
+    expect(scopeCan(s, "hr.loans", "approve")).toBe(false);
+  });
+
   it("denies (non-owner) when grants were never loaded onto the scope", () => {
     expect(scopeCan(mkScope({ fineGrants: undefined }), "hr.payroll", "view")).toBe(false);
   });

@@ -241,13 +241,16 @@ async function loadEffectiveGrants(userId: number, companyId: number, selectedRo
 }
 
 /**
- * Flatten the caller's effective RBAC v2 grants into a Set of both fine
- * `feature:action` and coarse `module:action` keys. Reuses the 30s grant
- * cache keyed identically to authorize(), so once the foundation loads it
- * in buildScope the subsequent authorize() call is a warm hit — near-zero
- * added cost. This is the bridge that lets in-handler authorization read
- * from grants (the single source of truth) instead of hardcoded role
- * lists — closing the HR-REV-1 #1 "parallel role-set" duplication.
+ * Flatten the caller's effective RBAC v2 grants into a Set of raw
+ * `feature_key:action` keys — preserving wildcard forms exactly as stored
+ * (`hr.*:approve`, `*:view`, `hr.payroll:*`). scopeCan() then matches them
+ * with the SAME feature/action wildcard semantics as checkAccess(), so an
+ * in-handler scopeCan() decision is identical to what authorize() would
+ * enforce. Reuses the 30s grant cache keyed identically to authorize(), so
+ * the subsequent authorize() call is a warm hit — near-zero added cost.
+ * This is the bridge that lets in-handler authorization read from grants
+ * (the single source of truth) instead of hardcoded role lists — closing
+ * the HR-REV-1 #1 "parallel role-set" duplication.
  *
  * Never throws: any failure degrades to an empty set, and scopeCan() then
  * falls back to the owner-only check. The auth hot path must not break.
@@ -260,12 +263,12 @@ export async function loadFineGrantKeys(scope: RequestScope): Promise<ReadonlySe
     for (const g of grants) {
       const fk = (g.feature_key ?? "").trim();
       if (!fk) continue;
-      const mod = fk.split(".")[0];
       for (const raw of g.actions ?? []) {
         const act = String(raw ?? "").trim();
         if (!act) continue;
+        // Store raw — including wildcard feature keys (`hr.*`, `*`) and the
+        // wildcard action (`*`). scopeCan() expands the match, not the set.
         keys.add(`${fk}:${act}`);
-        if (mod) keys.add(`${mod}:${act}`);
       }
     }
   } catch {
@@ -276,15 +279,24 @@ export async function loadFineGrantKeys(scope: RequestScope): Promise<ReadonlySe
 
 /**
  * In-handler permission check derived from RBAC v2 grants — replaces the
- * hardcoded `ROLE_SET.includes(scope.role)` pattern. Owners always pass
- * (they hold the `*` wildcard, same as every existing gate). Accepts a
- * fine feature key (`hr.payroll`) or a coarse module (`hr`); both forms
- * are present in the projected set. Returns false when grants haven't been
- * loaded onto the scope (defensive — buildScope always loads them).
+ * hardcoded `ROLE_SET.includes(scope.role)` pattern. Mirrors checkAccess()
+ * matching EXACTLY: a grant authorizes `feature:action` when its
+ * feature_key is the feature itself, the feature's `<module>.*`, or the
+ * global `*`; AND its action set contains the action or the `*` wildcard.
+ * So a role seeded with `hr.*` (migration 258) or a `*` super-grant matches
+ * fine checks like scopeCan(scope, "hr.loans", "approve") just as
+ * authorize() does. Owners always pass. Accepts a fine feature key
+ * (`hr.payroll`) or a coarse module (`hr`).
  */
 export function scopeCan(scope: RequestScope, feature: string, action: string): boolean {
   if (scope?.isOwner) return true;
-  return scope?.fineGrants?.has(`${feature}:${action}`) ?? false;
+  const grants = scope?.fineGrants;
+  if (!grants) return false;
+  const moduleKey = feature.split(".")[0];
+  for (const fk of [feature, `${moduleKey}.*`, "*"]) {
+    if (grants.has(`${fk}:${action}`) || grants.has(`${fk}:*`)) return true;
+  }
+  return false;
 }
 
 // Subscribe once per process: when another replica publishes an
