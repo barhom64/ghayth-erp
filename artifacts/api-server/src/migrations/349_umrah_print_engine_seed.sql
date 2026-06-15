@@ -38,9 +38,20 @@
 
 BEGIN;
 
+-- Fix 2026-06-15 (TA-T18-DR follow-up after migration 339 fix):
+-- the original INSERT referenced `templateType` and `entityKind`
+-- columns that don't exist on the live schema. The real columns
+-- per the schema dump + sibling migration 172 are `"type"` (no
+-- `templateType`) and there's no `entityKind` at all (the
+-- entity-type identity already lives on `"entityType"`). `category`
+-- is the print-vs-other classifier — sibling 172 uses the literal
+-- 'print' for it, so we follow the same convention here instead of
+-- duplicating `entity_type` into category. CI never caught this
+-- because guard.yml marks every migration as already-applied; only
+-- fresh `provision-agent-db.sh` runs hit the wall.
 INSERT INTO document_templates (
   name, description, "entityType",
-  "templateType", "entityKind", category,
+  "type", category,
   "paperSize", mode, "presetKey",
   variables, "htmlContent",
   "isDefault", "isActive", "isThermal", version
@@ -49,9 +60,8 @@ SELECT
   t.label || ' — كلاسيكي',
   'قالب افتراضي — ' || t.label,
   t.entity_type,
+  t.entity_type,
   'print',
-  t.entity_type,
-  t.entity_type,
   'A4',
   'preset',
   'classic',

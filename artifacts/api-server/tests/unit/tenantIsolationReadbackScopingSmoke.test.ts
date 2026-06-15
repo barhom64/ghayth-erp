@@ -30,6 +30,7 @@ const GOVERNANCE = readFileSync(join(ROUTES, "governance.ts"), "utf8");
 const TRANSPORT = readFileSync(join(ROUTES, "transport-bookings.ts"), "utf8");
 const IMPACT = readFileSync(join(ROUTES, "impactPreview.ts"), "utf8");
 const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
+const TASKS = readFileSync(join(ROUTES, "tasks.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -158,5 +159,37 @@ describe("FND-013 #2340 — parent-verified child reads (batch 3) are company-sc
     expect(stripped).not.toMatch(
       /FROM contract_payment_schedule WHERE "contractId"=\$1`/,
     );
+  });
+});
+
+describe("FND-013 #2340 — tasks.ts task_assignees mutations (batch 4) are company-scoped", () => {
+  // The team-sync handler and the single-assignee add/remove handlers mutate
+  // task_assignees by (taskId, assignmentId) or by row id. The parent task /
+  // membership is companyId-verified upstream, but each mutation must also
+  // carry companyId so it's self-defending. (EXISTS subqueries and the count
+  // CTE are dynamic-`${}` / already-scoped, so they're out of scope here.)
+  it("team-sync removedAt + role updates (by taskId,assignmentId) carry companyId", () => {
+    const stripped = stripComments(TASKS);
+    expect(stripped).toMatch(
+      /UPDATE task_assignees SET "removedAt" = NOW\(\)\s+WHERE "taskId" = \$1 AND "assignmentId" = \$2 AND "companyId" = \$3/,
+    );
+    expect(stripped).toMatch(
+      /UPDATE task_assignees SET role = \$1\s+WHERE "taskId" = \$2 AND "assignmentId" = \$3 AND "companyId" = \$4/,
+    );
+  });
+
+  it("existence SELECT (by taskId,assignmentId) carries companyId", () => {
+    const stripped = stripComments(TASKS);
+    expect(stripped).toMatch(
+      /SELECT id FROM task_assignees\s+WHERE "taskId" = \$1 AND "assignmentId" = \$2 AND "companyId" = \$3/,
+    );
+  });
+
+  it("by-id role updates carry companyId — no bare WHERE id form left", () => {
+    const stripped = stripComments(TASKS);
+    expect(stripped).toMatch(/UPDATE task_assignees SET role = \$1 WHERE id = \$2 AND "companyId" = \$3/);
+    expect(stripped).toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1 AND "companyId" = \$2/);
+    expect(stripped).not.toMatch(/UPDATE task_assignees SET role = \$1 WHERE id = \$2`/);
+    expect(stripped).not.toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1`/);
   });
 });

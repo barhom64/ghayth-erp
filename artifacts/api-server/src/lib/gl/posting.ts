@@ -21,7 +21,7 @@
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { checkFinancialPeriodOpen, todayISO } from "../businessHelpers.js";
-import { assertDimensionContract } from "../financePostingPolicy.js";
+import { assertLedgerTruth } from "../financePostingPolicy.js";
 import type { JournalEntryPayload } from "./journal-poster.js";
 
 export type JournalEntryStatus = "draft" | "posted";
@@ -163,9 +163,11 @@ export async function postJournalEntry(
     // journal_lines.accountId is the canonical FK).
     const codeById = new Map(accounts.map((a) => [a.id, a.code]));
 
-    // FIN-INTEGRITY-CONTRACT (#2233) — عقد البُعد عند الباب الـtyped أيضًا.
-    // تدريجي: enforce لوقود المركبة (5510)، warn لبقية الأصناف.
-    const dimContract = assertDimensionContract({
+    // FIN-INTEGRITY-CONTRACT (#2246 SLICE 1) — عقد صدق دفتر الأستاذ عند الباب الـtyped.
+    // مُنسِّق يُركّب عقد البُعد (enforce وقود 5510 + warn البقية، دون تغيير) +
+    // سيناريو فاتورة المورد (enforce vendorId) + حوكمة القيد اليدوي التشغيلي.
+    // السلوك الصافي مطابق لليوم عدا إنفاذ vendorId لسيناريو فاتورة المورد.
+    const dimContract = assertLedgerTruth({
       lines: payload.lines.map((l) => ({
         accountCode: codeById.get(l.accountId) ?? null,
         vehicleId: l.vehicleId ?? null,
@@ -174,6 +176,12 @@ export async function postJournalEntry(
         vendorId: l.vendorId ?? null,
         clientId: l.clientId ?? null,
       })),
+      header: {
+        type: ctx.type ?? null,
+        sourceType: ctx.sourceType ?? null,
+        isManual: ctx.sourceType === "manual_journal" || ctx.type === "manual",
+      },
+      context: { companyId: ctx.companyId, accountRows: accounts },
     });
     if (dimContract.warnings.length > 0) {
       logger.warn(
