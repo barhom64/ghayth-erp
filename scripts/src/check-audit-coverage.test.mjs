@@ -11,7 +11,7 @@
 // Exits 0 on pass, 1 on any assertion failure.
 //
 
-import { unauditedWriteKeys } from "./check-audit-coverage.mjs";
+import { unauditedWriteKeys, buildMountMap } from "./check-audit-coverage.mjs";
 
 let failed = 0;
 function assert(cond, label) {
@@ -79,6 +79,42 @@ console.log("negatives — must NOT flag");
   assert(
     JSON.stringify(keys) === JSON.stringify(["POST /w-gap"]),
     "mixed set isolates only the unaudited write",
+  );
+}
+
+// ── mount-map parsing: every router symbol must map to its file, including
+// multi-symbol named-import lists and `as` aliases (the bug that produced
+// non-canonical keys like `POST /:id/ocr/rerun`) ────────────────────────────
+console.log("mount map — every imported router resolves to its mount prefix");
+{
+  const src = [
+    'import { aRouter, bRouter, cRouter } from "./wiring-stubs.js";',
+    'import documentsRouter from "./documents.js";',
+    'import { x as financeRouter } from "./finance.js";',
+    "const router = Router();",
+    'router.use("/wh", aRouter);',
+    'router.use("/docs", bRouter);',
+    'router.use("/admin", cRouter);',
+    'router.use("/documents", documentsRouter);',
+    'router.use("/finance", financeRouter);',
+  ].join("\n");
+  const mm = buildMountMap(src);
+  assert(
+    (mm["wiring-stubs.ts"] || []).includes("/wh"),
+    "first router of a named-import list maps",
+  );
+  assert(
+    (mm["wiring-stubs.ts"] || []).includes("/docs") &&
+      (mm["wiring-stubs.ts"] || []).includes("/admin"),
+    "2nd+ routers of a named-import list ALSO map (the fixed bug)",
+  );
+  assert(
+    (mm["documents.ts"] || []).includes("/documents"),
+    "default import maps to its file",
+  );
+  assert(
+    (mm["finance.ts"] || []).includes("/finance"),
+    "aliased named import (x as financeRouter) maps via the alias",
   );
 }
 
