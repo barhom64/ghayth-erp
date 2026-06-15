@@ -18,16 +18,7 @@ import {
   PageStatusBadge,
 } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -327,56 +318,36 @@ export default function JournalPage() {
         }}
       />
 
-      <AlertDialog
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
         open={!!reversalTarget}
         onOpenChange={(open) => {
-          if (!open) {
-            setReversalTarget(null);
-            setReversalReason("");
+          if (!open) { setReversalTarget(null); setReversalReason(""); }
+        }}
+        variant="caution"
+        title={`عكس القيد ${reversalTarget?.ref || `JE-${reversalTarget?.id}`}`}
+        description="سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه."
+        confirmLabel="تأكيد العكس"
+        pending={reverseMut.isPending}
+        disabled={!reversalReason.trim()}
+        onConfirm={() => {
+          if (!reversalReason.trim()) {
+            toast({ variant: "destructive", title: "السبب مطلوب" });
+            return;
           }
+          reverseMut.mutate({ id: reversalTarget!.id, reason: reversalReason });
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              عكس القيد {reversalTarget?.ref || `JE-${reversalTarget?.id}`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء
-              لا يمكن التراجع عنه.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2">
-            <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
-            <Textarea
-              value={reversalReason}
-              onChange={(e) => setReversalReason(e.target.value)}
-              placeholder="أدخل سبب عكس القيد..."
-              rows={3}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-amber-600 hover:bg-amber-700"
-              onClick={(e) => {
-                e.preventDefault();
-                if (!reversalReason.trim()) {
-                  toast({ variant: "destructive", title: "السبب مطلوب" });
-                  return;
-                }
-                reverseMut.mutate({
-                  id: reversalTarget.id,
-                  reason: reversalReason,
-                });
-              }}
-              disabled={reverseMut.isPending}
-            >
-              {reverseMut.isPending ? "جاري العكس..." : "تأكيد العكس"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <div className="py-2">
+          <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
+          <Textarea
+            value={reversalReason}
+            onChange={(e) => setReversalReason(e.target.value)}
+            placeholder="أدخل سبب عكس القيد..."
+            rows={3}
+          />
+        </div>
+      </ConfirmActionDialog>
     </PageShell>
   );
 }
