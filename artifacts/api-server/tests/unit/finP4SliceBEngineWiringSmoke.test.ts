@@ -168,19 +168,22 @@ describe("FIN-P4-SLICE-B §E — operational INSERT delegated to caller + JE ins
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §F — No caller has migrated to the façade yet (SLICE-C still pending)
+// §F — SLICE-C: opt-in migration path exists alongside the legacy path
 // ─────────────────────────────────────────────────────────────────────────────
-describe("FIN-P4-SLICE-B §F — umrahInvoicingEngine has NOT migrated to the façade yet", () => {
+describe("FIN-P4-SLICE-B §F — umrahInvoicingEngine exposes both paths", () => {
   const UMRAH_INVOICING = readFileSync(
     join(REPO_ROOT, "artifacts/api-server/src/lib/umrahInvoicingEngine.ts"),
     "utf8",
   );
 
-  it("umrahInvoicingEngine still calls createGuardedJournalEntry directly", () => {
+  it("legacy generateSalesInvoice still calls createGuardedJournalEntry directly", () => {
     expect(UMRAH_INVOICING).toMatch(/createGuardedJournalEntry/);
   });
 
-  it("umrahInvoicingEngine does NOT yet call financialEngine.postSalesInvoice", () => {
-    expect(UMRAH_INVOICING).not.toMatch(/financialEngine\.postSalesInvoice/);
+  it("new generateSalesInvoiceViaFacade calls financialEngine.postSalesInvoice", () => {
+    expect(UMRAH_INVOICING).toMatch(/financialEngine\.postSalesInvoice/);
+    expect(UMRAH_INVOICING).toMatch(
+      /export\s+async\s+function\s+generateSalesInvoiceViaFacade\(/,
+    );
   });
 });
