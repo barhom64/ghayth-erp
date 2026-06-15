@@ -17,10 +17,10 @@ const PERMS = read("permissions.ts");
 // ── Gov Integrations ───────────────────────────────────────────────────────
 
 describe("gov-integrations — endpoints", () => {
-  it("GET / requires admin:write", () => {
+  it("GET / requires the governance feature (HR-REV-1 #4-style, not generic admin)", () => {
     const idx = GOV_INT.indexOf('router.get("/",');
     const section = GOV_INT.slice(idx, idx + 200);
-    expect(section).toContain('authorize(');
+    expect(section).toContain('authorize({ feature: "governance", action: "view" })');
   });
 
   it("PUT /:id for updating integration config", () => {
