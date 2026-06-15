@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
@@ -11,7 +11,6 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import dns from "node:dns/promises";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
-import { GOV_ADMIN_ROLES, GOV_READ_ROLES } from "../lib/rbacCatalog.js";
 
 const updateIntegrationSchema = z.object({
   config: z.record(z.unknown()).optional(),
@@ -53,19 +52,12 @@ function isPrivateIP(ip: string): boolean {
 
 const router = Router();
 
-function requireGovAdmin(scope: any, res: any): boolean {
-  if (!scope || !GOV_ADMIN_ROLES.includes(scope.role)) {
-    throw new ForbiddenError("ليس لديك صلاحية الوصول لإعدادات التكاملات الحكومية");
-  }
-  return true;
-}
-
-function requireGovRead(scope: any, res: any): boolean {
-  if (!scope || !GOV_READ_ROLES.includes(scope.role)) {
-    throw new ForbiddenError("ليس لديك صلاحية عرض التكاملات الحكومية");
-  }
-  return true;
-}
+// HR-REV-1 #4-style — government-integration routes are gated on the
+// domain-correct `governance` feature (read=view, write=update), not the
+// generic `admin` capability (which is held only by the owner, so the
+// settings page was effectively owner-only). The old requireGovAdmin/
+// requireGovRead helpers + GOV_ADMIN_ROLES/GOV_READ_ROLES were dead code
+// (defined, never called) and have been removed.
 
 const GOV_SYSTEM_NAMES: Record<string, string> = {
   muqeem: "نظام مقيم — إدارة الإقامات",
@@ -160,7 +152,7 @@ interface GovLinkRow {
   integrationName: string;
 }
 
-router.get("/", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.get("/", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { where, params } = buildScopedWhere(scope, {}, { disableBranchScope: true });
@@ -186,7 +178,7 @@ router.get("/", authorize({ feature: "admin", action: "update" }), async (req, r
   } catch (err) { handleRouteError(err, res, "Gov integrations list error:"); }
 });
 
-router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.put("/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(updateIntegrationSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -244,7 +236,7 @@ router.put("/:id", authorize({ feature: "admin", action: "update" }), async (req
   } catch (err) { handleRouteError(err, res, "Gov integration update error:"); }
 });
 
-router.post("/:id/test", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.post("/:id/test", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     zodParse(testIntegrationSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -354,7 +346,7 @@ router.post("/:id/test", authorize({ feature: "admin", action: "update" }), asyn
   } catch (err) { handleRouteError(err, res, "Gov integration test error:"); }
 });
 
-router.get("/expiring/iqama", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.get("/expiring/iqama", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -382,7 +374,7 @@ router.get("/expiring/iqama", authorize({ feature: "admin", action: "update" }),
   } catch (err) { handleRouteError(err, res, "Expiring iqama error:"); }
 });
 
-router.get("/expiring/registration", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.get("/expiring/registration", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const days = Number(req.query.days) || 30;
@@ -405,7 +397,7 @@ router.get("/expiring/registration", authorize({ feature: "admin", action: "upda
   } catch (err) { handleRouteError(err, res, "Expiring registration error:"); }
 });
 
-router.get("/links", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.get("/links", authorize({ feature: "governance", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { entityType, entityId } = req.query as Record<string, string | undefined>;
@@ -428,7 +420,7 @@ router.get("/links", authorize({ feature: "admin", action: "update" }), async (r
   } catch (err) { handleRouteError(err, res, "Gov links list error:"); }
 });
 
-router.post("/links", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.post("/links", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(createLinkSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -471,7 +463,7 @@ router.post("/links", authorize({ feature: "admin", action: "update" }), async (
   } catch (err) { handleRouteError(err, res, "Gov link create error:"); }
 });
 
-router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.patch("/links/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const body = zodParse(patchLinkSchema.safeParse(req.body));
     const scope = req.scope!;
@@ -507,7 +499,7 @@ router.patch("/links/:id", authorize({ feature: "admin", action: "update" }), as
   } catch (err) { handleRouteError(err, res, "Gov link update error:"); }
 });
 
-router.delete("/links/:id", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+router.delete("/links/:id", authorize({ feature: "governance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
