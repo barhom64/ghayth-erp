@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
 import { BookingSourceContextPanel } from "@/components/shared/booking-source-context-panel";
+import { DateField } from "@/components/shared/form-field-wrapper";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -532,14 +533,10 @@ export default function TransportBookingDetail() {
                 <Input className="h-8 mt-1 text-sm" value={lineForm.unitOfMeasure}
                   onChange={e => setLineForm(f => ({ ...f, unitOfMeasure: e.target.value }))} placeholder="trip, kg, pax..." />
               </div>
-              <div><label className="text-xs text-muted-foreground">موعد الاستلام</label>
-                <Input type="datetime-local" className="h-8 mt-1 text-sm" value={lineForm.scheduledPickupAt}
-                  onChange={e => setLineForm(f => ({ ...f, scheduledPickupAt: e.target.value }))} />
-              </div>
-              <div><label className="text-xs text-muted-foreground">موعد التسليم</label>
-                <Input type="datetime-local" className="h-8 mt-1 text-sm" value={lineForm.scheduledDeliveryAt}
-                  onChange={e => setLineForm(f => ({ ...f, scheduledDeliveryAt: e.target.value }))} />
-              </div>
+              <DateField label="موعد الاستلام" mode="datetime" value={lineForm.scheduledPickupAt}
+                onChange={v => setLineForm(f => ({ ...f, scheduledPickupAt: v }))} />
+              <DateField label="موعد التسليم" mode="datetime" value={lineForm.scheduledDeliveryAt}
+                onChange={v => setLineForm(f => ({ ...f, scheduledDeliveryAt: v }))} />
             </div>
             <div className="flex justify-end mt-3">
               <Button size="sm" onClick={async () => {
