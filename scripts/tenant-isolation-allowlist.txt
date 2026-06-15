@@ -73,7 +73,6 @@ routes/rbacV2.ts:rbac_roles
 routes/rbacV2.ts:rbac_sod_rules
 routes/rbacV2.ts:rbac_user_roles
 routes/store.ts:store_products
-routes/tasks.ts:task_assignees
 routes/umrah-entities.ts:employee_commission_calculations
 routes/umrah-entities.ts:employee_commission_tiers
 routes/umrah-entities.ts:umrah_import_changes
