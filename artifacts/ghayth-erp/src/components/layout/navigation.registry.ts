@@ -508,77 +508,106 @@ export const allNavSections: NavSection[] = [
   {
     title: "الأسطول والنقل",
     items: [
+      // #2475-follow-up — كانت «إدارة الأسطول» قائمة مسطّحة من 38 مدخلاً
+      // (سائق + مركبات + صيانة + تتبّع + نقل + تقارير + قواعد) بلا تجميع،
+      // على عكس «الموارد البشرية» (#1799) و«المالية» (#1715) و«مدير النظام».
+      // أُعيد تنظيمها هنا إلى مجموعات فرعية موضوعية بنفس نمط «مدير النظام»:
+      // لا يُحذف ولا يُنقل أي مسار — فقط التجميع تغيّر (لا أيتام ولا روابط
+      // ميتة، وبوّابة check-sidebar-coverage تبقى خضراء). الترتيب: التشغيل
+      // اليومي أولاً ثم التقارير ثم القواعد/الإعدادات آخراً.
       { label: "إدارة الأسطول", path: "/fleet", icon: Truck, module: "fleet", children: [
-        // Driver self-service home. Gated by the fleet MODULE (not a fine perm):
-        // the backend grants `fleet.driver.me` to the driver role, but that grant
-        // is NOT surfaced in /permissions/my (which feeds can()), so a perm gate
-        // would wrongly hide this from the very role that needs it. Module-gating
-        // shows it to anyone with fleet access; non-driver managers who click it
-        // hit a graceful "لا يوجد سجل سائق" empty state, never an error.
-        { label: "لوحة السائق", path: "/me/driver", icon: User, module: "fleet" },
-        // ملاحة السائق — نفس بوابة لوحة السائق (module بدل perm) ولنفس السبب.
-        { label: "ملاحة السائق", path: "/me/driver/navigation", icon: Navigation, module: "fleet" },
-        // Agent-5: explicit module="bi" matches backend gate.
-        // PR-1 / #2163 — was module:"bi" (FU-2).
-        { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "fleet" },
+        // 1) اللوحات والسائق — نقاط الدخول العامة + الخدمة الذاتية للسائق.
+        { label: "اللوحات والسائق", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, children: [
+          // PR-1 / #2163 — this dashboard is gated to the fleet module and now
+          // agrees with the backend (it was previously mis-attributed to BI).
+          // NB: keep this comment free of the literal module-colon-"bi" string —
+          // platformWave2Pr1…DecouplingSmoke regex-scans this file and a
+          // /module-dashboards group-parent puts the comment inside its match span.
+          { label: "لوحة التحكم", path: "/module-dashboards?tab=fleet", icon: LayoutDashboard, module: "fleet" },
+          // Driver self-service home. Gated by the fleet MODULE (not a fine perm):
+          // the backend grants `fleet.driver.me` to the driver role, but that grant
+          // is NOT surfaced in /permissions/my (which feeds can()), so a perm gate
+          // would wrongly hide this from the very role that needs it. Module-gating
+          // shows it to anyone with fleet access; non-driver managers who click it
+          // hit a graceful "لا يوجد سجل سائق" empty state, never an error.
+          { label: "لوحة السائق", path: "/me/driver", icon: User, module: "fleet" },
+          // ملاحة السائق — نفس بوابة لوحة السائق (module بدل perm) ولنفس السبب.
+          { label: "ملاحة السائق", path: "/me/driver/navigation", icon: Navigation, module: "fleet" },
+        ]},
+        // 2) المركبات والتشغيل — الأصول وتشغيلها اليومي.
         // Management children are gated by the exact backend feature:action each
         // page requires, so a role lacking the grant (e.g. driver) never sees a
         // link that would 403 into "حدث خطأ في تحميل البيانات". Owner bypasses
         // via can() (isOwnerRole), so the owner still sees every link.
-        { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
-        { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
-        { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench, perm: "fleet.maintenance:list" },
-        { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
-        { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
-        { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
-        // تأجير المركبات — صفحة العقود.
-        // #2079 TA-T18-09 — هاجرت إلى fleet.rentals كميزة مستقلة (كانت
-        // تحت fleet.vehicles؛ الـPERM-02 طلب فصلها كي يُمنح موظف تأجير
-        // الصلاحية دون فتح CRUD كامل للمركبات).
-        { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.rentals:list" },
-        { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
-        { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock, perm: "fleet.maintenance:list" },
-        { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle, perm: "fleet.vehicles:list" },
-        { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite, perm: "fleet.telematics.live:list" },
-        { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot, perm: "fleet.telematics.ai_alerts:list" },
-        { label: "بطاقة أداء السائقين", path: "/fleet/telematics/scorecard", icon: Award, perm: "fleet.telematics.ai_alerts:list" },
-        { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity, perm: "fleet.telematics.sensors:list" },
-        { label: "أرشيف الأدلة", path: "/fleet/telematics/evidence", icon: Archive, perm: "fleet.telematics.ai_alerts:list" },
-        { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon, perm: "fleet.telematics.video:list" },
-        { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive, perm: "fleet.telematics.devices:list" },
-        { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings, perm: "fleet.telematics.configure:list" },
-        { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert, perm: "fleet.telematics.sync:list" },
-        { label: "تكلفة الملكية (TCO)", path: "/fleet/tco", icon: DollarSign, perm: "fleet.vehicles:list" },
-        { label: "التقارير", path: "/fleet/reports", icon: FileBarChart, perm: "fleet.vehicles:list" },
-        // TA-GAP-09 Phase 2 — استهلاك واجهة الخرائط (مراقبة حصة Google Maps).
-        // الـAPI الخلفية تستخدم fleet.bookings:view؛ هنا نُبقي القائمة مرئية
-        // لنفس أدوار التخطيط النقلي.
-        { label: "استهلاك الخرائط", path: "/fleet/maps/usage", icon: Activity, perm: "fleet.bookings:list" },
-        { label: "الشحن والبضائع", path: "/fleet/cargo", icon: Package, perm: "fleet.cargo:list" },
-        { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
-        { label: "الإطارات", path: "/fleet/tires", icon: Settings, perm: "fleet.maintenance:list" },
+        { label: "المركبات والتشغيل", path: "/fleet/drivers", icon: Car, children: [
+          { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
+          { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
+          { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
+          { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },
+          // تأجير المركبات — صفحة العقود.
+          // #2079 TA-T18-09 — هاجرت إلى fleet.rentals كميزة مستقلة (كانت
+          // تحت fleet.vehicles؛ الـPERM-02 طلب فصلها كي يُمنح موظف تأجير
+          // الصلاحية دون فتح CRUD كامل للمركبات).
+          { label: "تأجير المركبات", path: "/fleet/rental-contracts", icon: FileSignature, perm: "fleet.rentals:list" },
+          { label: "مخالفات المرور", path: "/fleet/traffic-violations", icon: AlertTriangle, perm: "fleet.vehicles:list" },
+          { label: "التنبيهات", path: "/fleet/alerts", icon: Bell, perm: "fleet.vehicles:list" },
+          { label: "الشحن والبضائع", path: "/fleet/cargo", icon: Package, perm: "fleet.cargo:list" },
+        ]},
+        // 3) الصيانة والإطارات.
+        { label: "الصيانة والإطارات", path: "/fleet/maintenance", icon: Wrench, children: [
+          { label: "الصيانة", path: "/fleet/maintenance", icon: Wrench, perm: "fleet.maintenance:list" },
+          { label: "أثر الصيانة → التذاكر", path: "/fleet/maintenance-impact", icon: AlertTriangle, perm: "fleet.maintenance:list" },
+          { label: "خطط الصيانة الوقائية", path: "/fleet/preventive-plans", icon: CalendarClock, perm: "fleet.maintenance:list" },
+          { label: "الإطارات", path: "/fleet/tires", icon: Settings, perm: "fleet.maintenance:list" },
+        ]},
+        // 4) التتبع (Telematics) — المركز + الخريطة الحيّة والأجهزة والأدلة.
+        { label: "التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, children: [
+          { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
+          { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite, perm: "fleet.telematics.live:list" },
+          { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot, perm: "fleet.telematics.ai_alerts:list" },
+          { label: "بطاقة أداء السائقين", path: "/fleet/telematics/scorecard", icon: Award, perm: "fleet.telematics.ai_alerts:list" },
+          { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity, perm: "fleet.telematics.sensors:list" },
+          { label: "أرشيف الأدلة", path: "/fleet/telematics/evidence", icon: Archive, perm: "fleet.telematics.ai_alerts:list" },
+          { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon, perm: "fleet.telematics.video:list" },
+          { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive, perm: "fleet.telematics.devices:list" },
+          { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert, perm: "fleet.telematics.sync:list" },
+          { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings, perm: "fleet.telematics.configure:list" },
+        ]},
+        // 5) النقل والإرسال — دورة الحجز ← الإرسال ← المسارات.
         // النقل والمواصلات (#1812) — كانت هذه الصفحات مركّبة لكن بلا مدخل في
-        // القائمة (orphan)، فلا يصل إليها المستخدم إلا برابط مباشر. أُضيفت
-        // بنفس بوابات الـ backend: الحجوزات/التسعير/القواعد عبر fleet.bookings،
-        // والإرسال/المسارات/لوحة العمليات عبر fleet.dispatch.
-        { label: "حجوزات النقل", path: "/fleet/transport/bookings", icon: ClipboardList, perm: "fleet.bookings:list" },
-        { label: "الإرسال (Dispatch)", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
-        { label: "خطط المسارات", path: "/fleet/transport/itineraries", icon: Navigation, perm: "fleet.dispatch:list" },
-        // TA-T18-VRP Phase 2 — مُحسِّن إسناد الأسطول (Fleet Optimizer
-        // batch-mode). صفحة قائمة الـruns + تفاصيلها (الموافقة/الرفض).
-        { label: "مُحسِّن الإسناد", path: "/fleet/optimizer/runs", icon: Calculator, perm: "fleet.dispatch:list" },
-        // TR-022 (audit doc file 20 §10) — التقويم الموحَّد التفاعلي.
-        // الصفحة والـAPI شُحِنا سابقًا (transport-calendar.tsx +
-        // routes/transport-calendar.ts) لكن لم يكونا مرئيين في القائمة
-        // الجانبية. هذا الـentry يفتح الـdiscoverability.
-        { label: "التقويم الموحَّد للنقل", path: "/fleet/transport/calendar", icon: Calendar, perm: "fleet.dispatch:list" },
-        // #2079 TA-T18-04 — قوالب الحجوزات المتكررة (cargo recurring).
-        // SPA-only over endpoints القائمة /transport/route-patterns*.
-        { label: "قوالب المسارات المتكررة", path: "/fleet/transport/route-patterns", icon: CalendarClock, perm: "fleet.bookings:list" },
-        { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
-        { label: "قواعد تسعير النقل", path: "/fleet/transport/price-rules", icon: Percent, perm: "fleet.bookings:list" },
-        { label: "قواعد استقبال النقل", path: "/fleet/transport/rules", icon: ListChecks, perm: "fleet.bookings:list" },
-        { label: "تكامل النقل", path: "/fleet/transport/integration", icon: Network, perm: "fleet.bookings:list" },
+        // القائمة (orphan)؛ بوّاباتها: الحجوزات/القوالب عبر fleet.bookings،
+        // والإرسال/المسارات/لوحة العمليات/المُحسِّن عبر fleet.dispatch.
+        { label: "النقل والإرسال", path: "/fleet/transport/bookings", icon: Send, children: [
+          { label: "حجوزات النقل", path: "/fleet/transport/bookings", icon: ClipboardList, perm: "fleet.bookings:list" },
+          { label: "الإرسال (Dispatch)", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
+          { label: "خطط المسارات", path: "/fleet/transport/itineraries", icon: Navigation, perm: "fleet.dispatch:list" },
+          // TA-T18-VRP Phase 2 — مُحسِّن إسناد الأسطول (Fleet Optimizer batch-mode).
+          { label: "مُحسِّن الإسناد", path: "/fleet/optimizer/runs", icon: Calculator, perm: "fleet.dispatch:list" },
+          // TR-022 (audit doc file 20 §10) — التقويم الموحَّد التفاعلي.
+          { label: "التقويم الموحَّد للنقل", path: "/fleet/transport/calendar", icon: Calendar, perm: "fleet.dispatch:list" },
+          // #2079 TA-T18-04 — قوالب الحجوزات المتكررة (cargo recurring).
+          { label: "قوالب المسارات المتكررة", path: "/fleet/transport/route-patterns", icon: CalendarClock, perm: "fleet.bookings:list" },
+          { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
+          // كانت orphan: صفحة مركّبة بلا مدخل في القائمة. طابور المحاسب لتسعير
+          // وفوترة بنود خدمة النقل — GET /transport/service-lines مبوّب على
+          // finance.transport_billing:list (إجراءات التسعير/الفوترة على :approve).
+          { label: "طابور تسعير بنود النقل", path: "/fleet/transport/service-lines", icon: Receipt, perm: "finance.transport_billing:list" },
+        ]},
+        // 6) التقارير والتكاليف.
+        { label: "التقارير والتكاليف", path: "/fleet/reports", icon: FileBarChart, children: [
+          { label: "التقارير", path: "/fleet/reports", icon: FileBarChart, perm: "fleet.vehicles:list" },
+          { label: "تكلفة الملكية (TCO)", path: "/fleet/tco", icon: DollarSign, perm: "fleet.vehicles:list" },
+          // TA-GAP-09 Phase 2 — استهلاك واجهة الخرائط (مراقبة حصة Google Maps).
+          // الـAPI الخلفية تستخدم fleet.bookings:view؛ هنا نُبقي القائمة مرئية
+          // لنفس أدوار التخطيط النقلي.
+          { label: "استهلاك الخرائط", path: "/fleet/maps/usage", icon: Activity, perm: "fleet.bookings:list" },
+        ]},
+        // 7) قواعد النقل والتكامل — الإعدادات آخراً (معيار #1715).
+        { label: "قواعد النقل والتكامل", path: "/fleet/transport/price-rules", icon: ListChecks, children: [
+          { label: "قواعد تسعير النقل", path: "/fleet/transport/price-rules", icon: Percent, perm: "fleet.bookings:list" },
+          { label: "قواعد استقبال النقل", path: "/fleet/transport/rules", icon: ListChecks, perm: "fleet.bookings:list" },
+          { label: "تكامل النقل", path: "/fleet/transport/integration", icon: Network, perm: "fleet.bookings:list" },
+        ]},
       ]},
     ],
   },
