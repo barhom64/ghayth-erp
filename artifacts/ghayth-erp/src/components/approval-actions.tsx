@@ -74,6 +74,15 @@ export interface ApprovalActionsProps {
   pendingStatuses?: string[];
   onDone?: () => void;
   invalidateKeys?: string[][];
+  /**
+   * #2239 (FIN-P9-APPROVAL-WORKSPACE) — when the surrounding decision workspace
+   * has determined the document cannot be approved (e.g. journal-preview
+   * blockers, a missing required attachment), it disables only the approve
+   * button and surfaces the reason. reject/return stay enabled. Optional and
+   * fully back-compatible: callers that omit it behave exactly as before.
+   */
+  approveDisabled?: boolean;
+  approveDisabledReason?: string;
 }
 
 const defaultPendingStatuses = ["pending", "in_review", "returned", "draft"];
@@ -101,6 +110,8 @@ export function ApprovalActions({
   pendingStatuses = defaultPendingStatuses,
   onDone,
   invalidateKeys,
+  approveDisabled = false,
+  approveDisabledReason,
 }: ApprovalActionsProps) {
   const [action, setAction] = useState<ApprovalActionType | null>(null);
   const { toast } = useToast();
@@ -174,7 +185,14 @@ export function ApprovalActions({
   if (!action) {
     return (
       <div className="flex items-center gap-1.5 flex-wrap">
-        <Button size="sm" variant="ghost" className="h-7 px-2 text-status-success-foreground hover:bg-status-success-surface hover:text-status-success-foreground" onClick={() => setAction("approve")}>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 px-2 text-status-success-foreground hover:bg-status-success-surface hover:text-status-success-foreground"
+          onClick={() => setAction("approve")}
+          disabled={approveDisabled}
+          title={approveDisabled ? approveDisabledReason : undefined}
+        >
           <CheckCircle className="h-3.5 w-3.5 me-1" />قبول
         </Button>
         <Button size="sm" variant="ghost" className="h-7 px-2 text-status-error-foreground hover:bg-status-error-surface hover:text-status-error-foreground" onClick={() => setAction("reject")}>
@@ -194,6 +212,12 @@ export function ApprovalActions({
           <Button size="sm" variant="ghost" className="h-7 px-2 text-purple-600 hover:bg-purple-50 hover:text-purple-700" onClick={() => setAction("escalate")}>
             <ArrowUpCircle className="h-3.5 w-3.5 me-1" />تصعيد
           </Button>
+        )}
+        {approveDisabled && approveDisabledReason && (
+          <p className="basis-full text-xs text-status-error-foreground flex items-start gap-1">
+            <XCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+            <span>{approveDisabledReason}</span>
+          </p>
         )}
       </div>
     );

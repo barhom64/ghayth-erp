@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import {
   DetailPageLayout,
   type RelatedEntity,
@@ -21,7 +22,9 @@ import {
 } from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
+import { ActionHistory } from "@workspace/workflow-kit";
+import { FinancialDecisionPanel } from "@/components/shared/financial-decision-panel";
+import { type FinancialAttachment } from "@/components/shared/financial-attachment-viewer";
 import { ApprovalTimeline } from "@/components/shared/approval-timeline";
 import { Edit, Paperclip, Eye, Wallet } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -139,6 +142,76 @@ export default function ExpenseDetail() {
 
   // Single attachment reference on the row (journal_entries.attachmentUrl).
   const hasAttachment = !!expense?.attachmentUrl;
+
+  // #2239 (FIN-P9-APPROVAL-WORKSPACE) — while the expense is awaiting a
+  // decision, the bespoke attachment link + bespoke ApprovalActions cards are
+  // REPLACED by the unified FinancialDecisionPanel. Everything else (history,
+  // timeline, edit-description, comments) stays exactly as before.
+  const isPending = !!expense && ["pending", "pending_approval", "draft", "returned"].includes(expense.status);
+
+  // The same FinancialAttachment[] shape the viewer consumes; the row carries
+  // at most one attachment (journal_entries.attachmentUrl).
+  const decisionAttachments: FinancialAttachment[] = useMemo(() => {
+    if (!expense?.attachmentUrl) return [];
+    return [{
+      id: expense.id ?? id ?? undefined,
+      url: expense.attachmentUrl,
+      name: expense.attachmentType || "مستند المصروف",
+      type: expense.attachmentMimeType ?? null,
+      documentType: expense.attachmentType ?? null,
+      status: "linked",
+    }];
+  }, [expense?.attachmentUrl, expense?.attachmentType, expense?.attachmentMimeType, expense?.id, id]);
+
+  // The REAL journal plan for review — built by the backend through the same
+  // resolver the save path uses. Only fetched while pending (the decision
+  // surface needs it); POSTs the expense's fields to impact-preview.
+  const { data: previewData } = useQuery<any>({
+    queryKey: ["expense-impact-preview", String(id), expense?.status],
+    enabled: !!id && isPending,
+    queryFn: () =>
+      apiFetch<any>("/finance/expenses/impact-preview", {
+        method: "POST",
+        body: JSON.stringify({
+          amount,
+          expenseType: expense?.expenseType,
+          paymentMethod: expense?.paymentMethod,
+          operationType: expense?.operationType,
+          accountCode: expense?.accountCode,
+          sourceAccountCode: expense?.sourceAccountCode,
+          relatedEntityType: expense?.relatedEntityType,
+          relatedEntityId: expense?.relatedEntityId,
+          costCenter: expense?.costCenter,
+        }),
+      }),
+  });
+  const journalPreview = previewData?.journalPreview ?? null;
+
+  // Governance/causedBy effects derived from the record: a vehicle-linked or
+  // fuel/maintenance expense emits an OPERATIONAL event on approval — surfaced
+  // read-only so the approver understands the cross-domain consequence.
+  const governanceEffects = useMemo(() => {
+    if (!expense) return [];
+    const out: { type: string; label: string; note?: string }[] = [];
+    const isVehicle = expense.relatedEntityType === "vehicle";
+    const isFuelOrMaint = ["fuel", "maintenance"].includes(expense.operationType);
+    if (isVehicle || isFuelOrMaint) {
+      out.push({
+        type: "fleet_operational",
+        label: isFuelOrMaint
+          ? `اعتماد ${expense.operationType === "fuel" ? "وقود" : "صيانة"} مركبة سيُسجّل سجلًا تشغيليًا للأسطول`
+          : "اعتماد مصروف مرتبط بمركبة سيُصدر حدثًا تشغيليًا للأسطول",
+        note: "هذا الاعتماد سيُصدر حدثًا تشغيليًا — لا يُقرَّر نيابةً عن الأسطول/الموارد البشرية",
+      });
+    }
+    return out;
+  }, [expense]);
+
+  // A required attachment when ZATCA-linked or a vendor invoice — used to gate
+  // the approve button (mirrors the backend's expectation of a source document).
+  const attachmentRequired = !!expense && (
+    expense.isTaxLinked === true || expense.operationType === "vendor_invoice"
+  );
 
   const relatedEntities: RelatedEntity[] = useMemo(() => {
     const out: RelatedEntity[] = [];
@@ -314,8 +387,35 @@ export default function ExpenseDetail() {
       </Card>
 
       <div className="space-y-3">
-        {/* Attachment — expenses carry a single attachmentUrl on the row */}
-        {hasAttachment && (
+        {/* #2239 — while pending, the bespoke attachment link + bespoke
+            ApprovalActions are REPLACED by the unified FinancialDecisionPanel.
+            The approved/posted view keeps the bespoke attachment card below. */}
+        {id && isPending && (
+          <FinancialDecisionPanel
+            documentType="expense"
+            documentId={id}
+            record={expense}
+            lines={lines}
+            attachments={decisionAttachments}
+            journalPreview={journalPreview}
+            governanceEffects={governanceEffects}
+            approveEndpoint={`/finance/expenses/${id}/approve`}
+            rejectEndpoint={`/finance/expenses/${id}/approve`}
+            returnEndpoint={`/finance/expenses/${id}/approve`}
+            requestAttachmentEndpoint={`/finance/expenses/${id}/request-attachment`}
+            commentEndpoint={`/finance/expenses/${id}/comment`}
+            attachmentRequired={attachmentRequired}
+            invalidateKeys={[["expense", String(id)], ["expenses"]]}
+            onDone={() => {
+              refetch();
+              toast({ title: "تم تحديث المصروف" });
+            }}
+          />
+        )}
+
+        {/* Attachment — expenses carry a single attachmentUrl on the row.
+            Hidden while pending (the decision panel shows the attachment). */}
+        {!isPending && hasAttachment && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -338,37 +438,6 @@ export default function ExpenseDetail() {
                   <Eye className="h-3.5 w-3.5" />
                 </a>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Approval actions — visible while pending */}
-        {id && expense && ["pending", "pending_approval", "draft", "returned"].includes(expense.status) && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">إجراءات الاعتماد</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ApprovalActions
-                entityType="expense"
-                entityId={id}
-                currentStatus={expense.status}
-                approveEndpoint={`/finance/expenses/${id}/approve`}
-                rejectEndpoint={`/finance/expenses/${id}/approve`}
-                returnEndpoint={`/finance/expenses/${id}/approve`}
-                approveMethod="PATCH"
-                rejectMethod="PATCH"
-                returnMethod="PATCH"
-                approveBody={(notes) => ({ approved: true, notes: notes || undefined })}
-                rejectBody={(notes) => ({ approved: false, notes })}
-                returnBody={(notes) => ({ approved: "returned", notes })}
-                pendingStatuses={["draft", "pending_approval", "returned"]}
-                invalidateKeys={[["expenses"]]}
-                onDone={() => {
-                  refetch();
-                  toast({ title: "تم تحديث المصروف" });
-                }}
-              />
             </CardContent>
           </Card>
         )}
