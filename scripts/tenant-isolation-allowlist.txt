@@ -75,5 +75,3 @@ routes/store.ts:store_products
 routes/umrah-entities.ts:employee_commission_calculations
 routes/umrah-entities.ts:employee_commission_tiers
 routes/umrah-entities.ts:umrah_import_changes
-routes/warehouse-cycle-counts.ts:warehouse_products
-routes/warehouse.ts:warehouse_products

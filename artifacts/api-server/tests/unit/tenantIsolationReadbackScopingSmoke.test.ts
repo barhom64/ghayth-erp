@@ -33,6 +33,8 @@ const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
 const TASKS = readFileSync(join(ROUTES, "tasks.ts"), "utf8");
 const PROJECTS = readFileSync(join(ROUTES, "projects.ts"), "utf8");
 const WAREHOUSE_ADV = readFileSync(join(ROUTES, "warehouse-advanced.ts"), "utf8");
+const WAREHOUSE = readFileSync(join(ROUTES, "warehouse.ts"), "utf8");
+const WAREHOUSE_CC = readFileSync(join(ROUTES, "warehouse-cycle-counts.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -234,5 +236,33 @@ describe("FND-013 #2340 — warehouse-advanced post-insert read-backs (batch 6) 
       /FROM warehouse_stock_serials WHERE id=\$1 AND "companyId"=\$2/,
     );
     expect(stripped).not.toMatch(/FROM warehouse_stock_serials WHERE id=\$1 AND "deletedAt"/);
+  });
+});
+
+describe("FND-013 #2340 — warehouse_products JOINs (batch 7) carry companyId", () => {
+  // Display joins (product name / stock) behind a companyId-verified parent
+  // (cycle-count / inventory-count). The driving line tables have no companyId
+  // column, so the joined warehouse_products is scoped via scope.companyId.
+  it("cycle-count line reads scope the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE_CC);
+    const joins = [...stripped.matchAll(/JOIN warehouse_products p ON p\.id=l\."productId"/g)];
+    expect(joins.length).toBeGreaterThanOrEqual(2);
+    // Every such statement must carry p."companyId"=$N somewhere.
+    for (const m of stripped.matchAll(/FROM warehouse_cycle_count_lines l[\s\S]*?`/g)) {
+      if (/JOIN warehouse_products p/.test(m[0])) {
+        expect(m[0]).toMatch(/p\."companyId"=\$\d/);
+      }
+    }
+  });
+
+  it("inventory-count item read scopes the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE);
+    // The pre-apply fetch (LIMIT 10000) must carry wp."companyId".
+    expect(stripped).toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 AND wp\."companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 LIMIT/,
+    );
   });
 });
