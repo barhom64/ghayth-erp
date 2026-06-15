@@ -19,9 +19,9 @@ import {
  */
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const read = (p: string) => readFileSync(join(REPO_ROOT, p), "utf8");
-const MIG_TEMPLATES = read("artifacts/api-server/src/migrations/361_manual_journal_templates.sql");
-const MIG_EXPENSE = read("artifacts/api-server/src/migrations/362_expense_category_memory.sql");
-const MIG_PAYEE = read("artifacts/api-server/src/migrations/363_supplier_finance_defaults.sql");
+const MIG_TEMPLATES = read("artifacts/api-server/src/migrations/362_manual_journal_templates.sql");
+const MIG_EXPENSE = read("artifacts/api-server/src/migrations/363_expense_category_memory.sql");
+const MIG_PAYEE = read("artifacts/api-server/src/migrations/364_supplier_finance_defaults.sql");
 const ROUTER = read("artifacts/api-server/src/routes/finance-memory.ts");
 const LIB = read("artifacts/api-server/src/lib/financialMemory.ts");
 

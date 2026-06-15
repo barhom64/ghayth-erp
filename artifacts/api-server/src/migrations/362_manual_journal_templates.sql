@@ -1,4 +1,4 @@
--- 361_manual_journal_templates.sql
+-- 362_manual_journal_templates.sql
 -- FIN-FINANCIAL-MEMORY-FOUNDATION — recurring MANUAL journal templates.
 --
 -- Codifies a repeated manual journal as a recallable memory: a header plus

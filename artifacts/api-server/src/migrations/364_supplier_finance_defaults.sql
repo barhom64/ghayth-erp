@@ -1,4 +1,4 @@
--- 363_supplier_finance_defaults.sql
+-- 364_supplier_finance_defaults.sql
 -- FIN-FINANCIAL-MEMORY-FOUNDATION — payee / counterparty finance memory.
 --
 -- Per-supplier finance defaults (payment method / currency / account PURPOSE /

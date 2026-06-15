@@ -1,4 +1,4 @@
--- 362_expense_category_memory.sql
+-- 363_expense_category_memory.sql
 -- FIN-FINANCIAL-MEMORY-FOUNDATION — expense memory per category / cost-center.
 --
 -- "What account purpose / tax / cost-center does THIS expense category usually
