@@ -6,6 +6,7 @@ import {
   VehicleSelect, ProjectSelect, SupplierSelect, ClientSelect,
   EmployeeSelect, DriverSelect,
 } from "@/components/shared/entity-selects";
+import { SupplierItemPicker } from "@/components/shared/supplier-item-picker";
 import type { LineAllocation } from "@/components/shared/line-allocation-panel";
 import type { FinanceTarget } from "@/lib/finance/scenario-model";
 import { useApiQuery } from "@/lib/api";
@@ -52,6 +53,8 @@ export interface AllocationTargetValue {
   // toggles the draft-only free-text exception.
   fuelStation?: string;
   fuelSupplierUnregistered?: boolean;
+  // #2235 — the chosen supplier item (memory): fills the suggested price/unit.
+  fuelItemId?: string;
 }
 
 const TARGET_OPTIONS: { value: AllocationTarget; label: string }[] = [
@@ -202,6 +205,24 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
                       <p className="text-xs text-yellow-700 bg-status-warning-surface border border-yellow-300 rounded p-2">
                         ⚠ المورد غير محفوظ — لا يُسمح بالترحيل النهائي إلا إذا سمحت سياسة الشركة. يُفضَّل حفظ المحطة كمورد.
                       </p>
+                    )}
+                    {/* #2235 — بعد اختيار المورد، تظهر بنوده المعتادة لسيناريو الوقود؛
+                        اختيار البند يملأ السعر المقترح (آخر سعر). يعيد accountPurpose
+                        لا حسابًا نهائيًا — financialEngine يشتق الحساب. */}
+                    {!value.fuelSupplierUnregistered && value.allocation.vendorId && (
+                      <SupplierItemPicker
+                        supplierId={value.allocation.vendorId}
+                        scenario="vehicle_fuel"
+                        value={value.fuelItemId ?? ""}
+                        onPick={(item) =>
+                          onChange({
+                            ...value,
+                            fuelItemId: item ? String(item.id) : undefined,
+                            fuelCostPerLiter:
+                              item?.lastPrice != null ? String(item.lastPrice) : value.fuelCostPerLiter,
+                          })
+                        }
+                      />
                     )}
                   </div>
                 </div>

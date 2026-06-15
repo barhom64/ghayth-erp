@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { statusLabel } from "@/lib/transport-status-labels";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,24 +57,8 @@ interface NavigationSession {
   toLocationText: string | null;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  active: "في الطريق",
-  arrived_pickup: "وصلت موقع التحميل",
-  loaded: "تم التحميل",
-  arrived_dropoff: "وصلت موقع التسليم",
-  delivered: "تم التسليم",
-  ended: "انتهت",
-  cancelled: "ملغاة",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  active: "bg-status-info-surface text-status-info-foreground",
-  arrived_pickup: "bg-purple-50 text-purple-700",
-  loaded: "bg-status-warning-surface text-status-warning-foreground",
-  arrived_dropoff: "bg-purple-50 text-purple-700",
-  delivered: "bg-status-success-surface text-status-success-foreground",
-  ended: "bg-surface-subtle text-muted-foreground",
-};
+// #TA-T18-UX-AUDIT-01 — حالات جلسة الملاحة من القاموس الموحّد
+// (lib/transport-status-labels، كيان "navigation") بدل خريطتين محليتين.
 
 const NEXT_EVENT: Record<string, { event: string; label: string; icon: typeof CheckCircle2 } | null> = {
   active:          { event: "arrived_pickup",  label: "وصلت موقع التحميل", icon: MapPin },
@@ -240,8 +225,8 @@ export default function MeDriverNavigation() {
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3">
             <Navigation className="h-5 w-5 text-status-info-foreground" />
-            <Badge className={STATUS_TONE[session.status] ?? ""}>
-              {STATUS_LABEL[session.status] ?? session.status}
+            <Badge className={statusLabel("navigation", session.status).tone}>
+              {statusLabel("navigation", session.status).label}
             </Badge>
             <span className="ms-auto text-xs text-muted-foreground">
               المزود: {session.provider}

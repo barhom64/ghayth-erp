@@ -53,24 +53,9 @@ interface DriverCargo {
   vehiclePlate: string | null;
 }
 
-const TRIP_STATUS: Record<string, { label: string; tone: string }> = {
-  scheduled:   { label: "مجدولة",   tone: "bg-status-info-surface text-status-info-foreground" },
-  planned:     { label: "مخططة",    tone: "bg-status-info-surface text-status-info-foreground" },
-  in_progress: { label: "جارية",    tone: "bg-status-warning-surface text-status-warning-foreground" },
-  completed:   { label: "مكتملة",   tone: "bg-status-success-surface text-status-success-foreground" },
-  cancelled:   { label: "ملغاة",    tone: "bg-surface-subtle text-muted-foreground" },
-};
-
-// #2079 TA-T18-06 — labels from shared dictionary. Driver-side
-// statuses (available/on_trip/off_duty/suspended) are local to this
-// surface and stay inline; cargo manifest statuses come from the
-// shared dictionary (server enum source of truth: CARGO_STATUSES).
-const DRIVER_STATUS: Record<string, { label: string; tone: string }> = {
-  available: { label: "متاح",       tone: "bg-status-success-surface text-status-success-foreground" },
-  on_trip:   { label: "في رحلة",    tone: "bg-status-info-surface text-status-info-foreground" },
-  off_duty:  { label: "خارج الدوام", tone: "bg-status-warning-surface text-status-warning-foreground" },
-  suspended: { label: "موقوف",      tone: "bg-rose-100 text-rose-700" },
-};
+// #TA-T18-UX-AUDIT-01 — حالات الرحلة والسائق والشحن كلها من القاموس الموحّد
+// (lib/transport-status-labels): trip / driver / cargo — لا خرائط محلية،
+// إنهاءً لـRM-03 «صفر fallback إنجليزي» على شاشة السائق.
 
 export default function MeDriver() {
   const qc = useQueryClient();
@@ -161,7 +146,7 @@ export default function MeDriver() {
     );
   }
 
-  const driverTone = DRIVER_STATUS[me.status] ?? { label: me.status, tone: "bg-surface-subtle" };
+  const driverTone = statusLabel("driver", me.status);
   const activeTrip = trips.find((t) => t.status === "in_progress");
   const activeCargo = cargo.find((m) => m.status === "in_transit");
 
@@ -234,7 +219,7 @@ export default function MeDriver() {
               <RouteIcon className="h-10 w-10 mx-auto opacity-30 mb-2" />لا توجد رحلات مسندة إليك
             </CardContent></Card>
           ) : trips.map((t) => {
-            const tone = TRIP_STATUS[t.status] ?? { label: t.status, tone: "bg-surface-subtle" };
+            const tone = statusLabel("trip", t.status);
             return (
               <Card key={t.id}>
                 <CardHeader className="pb-2">

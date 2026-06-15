@@ -45,6 +45,8 @@ interface TransportEntry {
   driverName?: string;
 }
 
+// نقل العمرة كيان عمرة قديم بتسمياته المحروسة (umrahViolationStatusArabicSmoke)
+// — يبقى محليًا ولا يُوحَّد على كيان "trip" الذي يستخدم تسميات شاشة السائق.
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   scheduled: { label: "مجدولة", color: "bg-status-info-surface text-status-info-foreground" },
   in_progress: { label: "في الطريق", color: "bg-status-warning-surface text-yellow-800" },
