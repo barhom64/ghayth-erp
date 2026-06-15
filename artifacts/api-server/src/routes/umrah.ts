@@ -16,6 +16,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -593,6 +594,10 @@ router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الموسم");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
+    // Per-season cost centre — season is a time-bound cost/profit bucket
+    // (costs carry umrahSeasonId on their journal lines); auto-provision it so
+    // per-season P&L drill-down works from day one, like project/agent.
+    createCostCenterForEntity(scope.companyId, "umrah_season", rows[0].id as number, b.title, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah season cost-centre auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
@@ -766,6 +771,10 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
     // this agent route to its own revenue leaf via resolveRevenueAccount.
     createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
+    // Per-agent cost centre — backs /reports/profitability/umrah-agent with a real
+    // cost_centers row (the agent already had a subsidiary account + umrahAgentId
+    // dimension, but no auto cost centre — the one asymmetry vs vehicle/property).
+    createCostCenterForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent cost-centre auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
