@@ -125,7 +125,10 @@ describe("IGOC-001 — authMiddleware populates new scope fields", () => {
   });
 
   it("return value includes impersonationSourceUser", () => {
-    expect(AUTHMW_SRC).toMatch(/return \{[\s\S]*?impersonationSourceUser,/);
+    // buildScope now builds the object into `const scope: RequestScope = {…}`
+    // (so HR-REV-1 #1 can attach scope.fineGrants before returning) — the
+    // field is still part of the returned scope literal.
+    expect(AUTHMW_SRC).toMatch(/const scope: RequestScope = \{[\s\S]*?impersonationSourceUser,/);
   });
 });
 
