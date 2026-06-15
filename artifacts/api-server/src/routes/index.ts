@@ -85,6 +85,7 @@ import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
+import { transportCalendarRouter } from "./transport-calendar.js"; // TR-022
 import { transportIntegrationRouter } from "./transport-integration.js";
 import { transportRoutePatternsRouter } from "./transport-route-patterns.js";
 import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
@@ -429,6 +430,7 @@ router.use(transportBookingsRouter);
 router.use(vehicleProfileRouter);
 router.use(transportPricingRouter);
 router.use(transportPlanningRouter);
+router.use(transportCalendarRouter); // TR-022 unified transport calendar
 router.use(transportIntegrationRouter);
 router.use(transportRoutePatternsRouter);
 router.use(fleetRulesAdminRouter);
