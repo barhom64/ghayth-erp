@@ -165,6 +165,11 @@ router.get("/employee-data-export/:employeeId", authMiddleware, pdplUserLimiter,
       ]
     ).catch((e) => logger.error(e, "pdpl background task failed"));
 
+    // GAP_MATRIX P1 — PDPL DSAR export must appear in app_security_events (forensics / PDPL Art.4)
+    auditFromRequest(req, "pdpl.dsar.export", "employees", employeeId, {
+      after: { exportedEmployeeId: employeeId, isOwnData },
+    });
+
     res.json({
       exportedAt: new Date().toISOString(),
       requestedBy: scope.userId,
