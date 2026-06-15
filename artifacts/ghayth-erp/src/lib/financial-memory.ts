@@ -34,6 +34,35 @@ export function useSupplierFinanceDefaults(supplierId: string | number | null | 
   );
 }
 
+/**
+ * Supplier item memory (FIN-P5-SUPPLIER-ITEMS-MEMORY / FIN-P11 #2241).
+ * A supplier's usual items, optionally filtered by scenario. Each item carries
+ * an `accountPurpose` (TEXT) — NEVER a final GL code; the engine resolves it.
+ */
+export interface SupplierItemMemory {
+  id: number;
+  supplierId: number;
+  name: string;
+  itemType: string | null;
+  defaultUnit: string | null;
+  defaultTaxCodeId: number | null;
+  accountPurpose: string | null;
+  allowedScenarios: string[] | null;
+  lastPrice: number | string | null;
+  priceCurrency: string | null;
+}
+
+/** Recall a supplier's usual items (GET /warehouse/suppliers/:id/items). */
+export function useSupplierItems(supplierId: string | number | null | undefined, scenario?: string) {
+  const enabled = !!supplierId;
+  const qs = scenario ? `?scenario=${encodeURIComponent(scenario)}` : "";
+  return useApiQuery<{ data: SupplierItemMemory[] }>(
+    ["supplier-items", String(supplierId ?? ""), scenario ?? ""],
+    `/warehouse/suppliers/${supplierId}/items${qs}`,
+    { enabled },
+  );
+}
+
 /** Recall the saved expense default for a category (purpose/tax/cost-center). */
 export function useExpenseCategoryMemory(category: string | null | undefined) {
   const enabled = !!category;
