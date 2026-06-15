@@ -4961,12 +4961,13 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
     const scope = req.scope!;
     const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
     const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+    const agentId     = req.query.agentId     ? Number(req.query.agentId)     : null;
     const yearParam   = req.query.year        ? Number(req.query.year)        : null;
     const statusParam = req.query.status      ? String(req.query.status)      : null;
 
     // Year + employee + status filter via cc.* columns. seasonId
-    // chains through employee_commission_plans (the calculations
-    // table doesn't carry seasonId itself).
+    // and agentId chain through employee_commission_plans (the
+    // calculations table doesn't carry either dim itself).
     const params: unknown[] = [scope.companyId];
     let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
     if (yearParam) {
@@ -4988,6 +4989,18 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
          WHERE cp.id = cc."planId"
            AND cp."companyId" = cc."companyId"
            AND cp."seasonId" = $${params.length}
+      )`;
+    }
+    // U-04-P4 — agentId filter (matches the umrahAgentId dim that
+    // U-05-P2 surfaces on the JE). The plan-level column is the
+    // attribution source; cc rows inherit it transitively via planId.
+    if (agentId) {
+      params.push(agentId);
+      where += ` AND EXISTS (
+        SELECT 1 FROM employee_commission_plans cp
+         WHERE cp.id = cc."planId"
+           AND cp."companyId" = cc."companyId"
+           AND cp."agentId" = $${params.length}
       )`;
     }
 
@@ -5136,6 +5149,7 @@ router.get(
       const scope = req.scope!;
       const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
       const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+      const agentId     = req.query.agentId     ? Number(req.query.agentId)     : null;
       const yearParam   = req.query.year        ? Number(req.query.year)        : null;
       const statusParam = req.query.status      ? String(req.query.status)      : null;
 
@@ -5160,6 +5174,17 @@ router.get(
            WHERE cp.id = cc."planId"
              AND cp."companyId" = cc."companyId"
              AND cp."seasonId" = $${params.length}
+        )`;
+      }
+      // U-04-P4 — same agentId filter as the summary route so the
+      // CSV export carries the same row set as the on-screen list.
+      if (agentId) {
+        params.push(agentId);
+        where += ` AND EXISTS (
+          SELECT 1 FROM employee_commission_plans cp
+           WHERE cp.id = cc."planId"
+             AND cp."companyId" = cc."companyId"
+             AND cp."agentId" = $${params.length}
         )`;
       }
 
