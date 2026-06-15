@@ -206,7 +206,11 @@ describe("TA-T18-VRP Phase 1 — design contract", () => {
   });
 
   it("solver records the algorithm name on the run (forward-compat with Phase 2's OR-Tools swap)", () => {
-    expect(SVC).toMatch(/algorithm\s*=\s*'greedy_nearest_neighbor'/);
+    // Phase 3b promoted Kuhn-Munkres to the default; the persisted
+    // algorithm string updated accordingly. The legacy 'greedy_nearest_neighbor'
+    // value still appears in the LIB for the exported helper's reason
+    // text — the SQL column write is the source of truth.
+    expect(SVC).toMatch(/algorithm\s*=\s*'hungarian_min_distance'/);
   });
 
   it("optimizer is ADVISORY — never INSERTs/UPDATEs into transport_dispatch_orders", () => {
