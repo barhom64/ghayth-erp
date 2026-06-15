@@ -5,7 +5,6 @@
 # then delete its line). The guard fails on any NEW offender not listed here.
 # Whole-file exception: routes/<file>.ts (no colon). Comments start with #.
 
-routes/accounting-engine.ts:subsidiary_account_provisioning_failures
 routes/admin-observability.ts:cron_logs
 routes/admin.ts:cron_jobs
 routes/admin.ts:cron_logs
@@ -14,9 +13,6 @@ routes/bi.ts:alert_fatigue_settings
 routes/bi.ts:notifications
 routes/careersPortal.ts:job_postings
 routes/events.ts:event_outbox
-routes/finance-accounts.ts:accounting_allocation_rules
-routes/finance-accounts.ts:tax_codes
-routes/finance-accounts.ts:wht_categories
 routes/finance-algorithms.ts:cip_costs
 routes/fleet-telematics-webhook.ts:fleet_telematics_integrations
 routes/fleet-telematics.ts:fleet_ai_alerts
