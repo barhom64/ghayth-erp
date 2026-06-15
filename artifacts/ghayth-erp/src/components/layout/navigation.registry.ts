@@ -29,7 +29,7 @@ import {
   BarChart3, UserPlus, ClipboardList, Navigation, Percent, Zap,
   Sparkles, Brain, Search, ArrowLeftRight,
   Plus, Printer, CheckSquare, Download, Send, Star, Settings, BookOpen, Radar, Timer, ListChecks,
-  BarChart2, ShieldAlert, Flag, Lock, Layers, Calculator, LayoutGrid,
+  BarChart2, ShieldAlert, Flag, Layers, Calculator, LayoutGrid,
   RefreshCw, Globe, TrendingDown as TrendingDown2,
   Satellite, Bot, HardDrive, Video as VideoIcon, Award,
   ShieldCheck,
@@ -380,8 +380,10 @@ export const allNavSections: NavSection[] = [
       { label: "الموازنة والفترات والالتزامات", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
         { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
         { label: "خريطة حرارية", path: "/finance/budget-heatmap", icon: BarChart3 },
-        { label: "الفترات المالية", path: "/finance/fiscal-periods", icon: Calendar },
-        { label: "إقفال الفترات", path: "/finance/fiscal-periods-v2", icon: Lock, minRoleLevel: 70 },
+        // مدخل واحد للفترات المالية → الصفحة v2 (تُنشئ/تعرض/تُقفل/تقفل نهائيًّا).
+        // أُزيل المدخل المكرّر «الفترات المالية» الذي كان يرتدّ لنفس v2 (صفحة v1
+        // مُقاعَدة)، وأُبقي بوّابة الصلاحية. /finance/fiscal-periods يبقى redirect.
+        { label: "الفترات المالية", path: "/finance/fiscal-periods-v2", icon: Calendar, minRoleLevel: 70 },
         { label: "فحص قبل الإقفال", path: "/finance/period-close-preflight", icon: ShieldAlert, minRoleLevel: 70 },
         { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive, minRoleLevel: 70 },
         { label: "الالتزامات", path: "/finance/commitments", icon: FileSignature },
