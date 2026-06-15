@@ -1260,6 +1260,12 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
       return contractId;
     });
 
+    // Per-lease cost centre, nested under the unit's cost centre — gives
+    // per-contract P&L drill-down (rent revenue vs maintenance/penalties for
+    // this lease). The legal-contract path already auto-creates one; rental
+    // contracts didn't — closing that asymmetry. Fire-and-forget.
+    createCostCenterForEntity(scope.companyId, "contract", insertId, `عقد إيجار ${contractNumber}`, { parentEntityType: "unit", parentEntityId: Number(b.unitId), actorUserId: scope.userId }).catch((e) => logger.error(e, "rental contract cost-centre auto-create failed"));
+
     await applyTransition({
       entity: "property_units",
       id: Number(b.unitId),
