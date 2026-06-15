@@ -26,6 +26,8 @@ import { eventBus } from "../eventBus.js";
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import type { DomainEngine, GLPostingRequest } from "./domainEngineBase.js";
 import { logger } from "../logger.js";
+import { issueNumber } from "../numberingService.js";
+import { computeTaxFromTaxCode } from "../taxCodes.js";
 
 export interface GLPostingResult {
   journalId: number;
@@ -60,6 +62,90 @@ export interface InvoiceCreationRequest {
     amount: number;
     vatAmount?: number;
   }>;
+}
+
+// ─── FIN-P4-SLICE-A — postSalesInvoice façade contract ────────────────────
+//
+// FIN-P4-CONTRACT (#2257) §3 / §4 — a single high-level entry-point so a
+// caller (umrah, properties, fleet, ...) sends its OPERATIONAL data and
+// gets back the FINANCIAL outputs without touching numbering/tax/AR/JE
+// individually.
+//
+// This slice (SLICE-A) ships the request + response interfaces only.
+// The implementation is a stub that throws — the actual engine wiring
+// of numbering + tax + account resolution + GL posting + AR landing is
+// SLICE-B (separate PR), and the umrah-side swap from
+// `createGuardedJournalEntry` direct to this façade is SLICE-C.
+//
+// The stub is intentional: shipping the contract early lets U-05-P3
+// smoke + the spec doc reference the canonical shape from one source.
+// Owner ratified the full §11 architecture rule on 2026-06-14 02:49
+// (see #2257 §9 owner decision); the stub keeps the gate while making
+// the contract visible.
+
+/** Per-line input to the postSalesInvoice façade. */
+export interface SalesInvoiceLineInput {
+  description: string;
+  quantity: number;
+  unitPriceExclTax: number;
+  isTaxable: boolean;
+  /** Tax code from the catalog (e.g. "VAT_STANDARD", "VAT_ZERO"). */
+  taxCode: string;
+  productId?: number;
+  serviceCode?: string;
+  /** Source attribution carried onto the resulting JE dims. */
+  sourceRefs?: {
+    groupId?: number;
+    nuskInvoiceId?: number;
+    pilgrimId?: number;
+  };
+}
+
+/** Sales-invoice request envelope — the OPERATIONAL data only. */
+export interface SalesInvoiceRequest {
+  companyId: number;
+  branchId: number;
+  createdBy: number;
+  /** Module identifier for numbering service (e.g. "umrah", "crm"). */
+  moduleKey: string;
+  /** Entity identifier within the module (e.g. "sales_invoice"). */
+  entityKey: string;
+  /** Counterparty client id — the AR account is resolved from this. */
+  clientId: number;
+  invoiceDate?: string;
+  dueDate?: string;
+  currency?: string;
+  /** Module-side ids surfacing on the JE dimensions. */
+  dimensions?: {
+    agentId?: number;
+    subAgentId?: number;
+    seasonId?: number;
+    groupId?: number;
+    sourceNuskInvoiceId?: number;
+  };
+  /** Source attribution for idempotency keying. */
+  sourceRefs: {
+    sourceType: string;
+    sourceId: number;
+    sourceKey: string;
+  };
+  lines: SalesInvoiceLineInput[];
+  notes?: string;
+}
+
+/** Sales-invoice response — the FINANCIAL outputs only. */
+export interface SalesInvoiceResponse {
+  invoiceNumber: string;
+  invoiceId: number;
+  journalEntryId: number | null;
+  journalEntryNumber: string | null;
+  arAccountCode: string;
+  /** Revenue account per line (same order as request.lines). */
+  revenueAccountCode: string[];
+  taxAccountCode: string | null;
+  period: string;
+  postingStatus: "posted" | "deferred" | "failed";
+  failureReason: string | null;
 }
 
 class FinancialEngineImpl implements DomainEngine {
@@ -404,6 +490,35 @@ class FinancialEngineImpl implements DomainEngine {
       [params.companyId, params.ref, params.description, params.requestedBy]
     );
     return { insertId };
+  }
+
+  // ─── FIN-P4-SLICE-A — postSalesInvoice façade (contract surface) ────────
+  //
+  // High-level entry point: callers send OPERATIONAL data; the engine
+  // returns FINANCIAL outputs (invoice number, JE id, AR/revenue/tax
+  // account codes, period, status). The actual implementation chain
+  //   numberingService.issueNumber → computeTaxFromTaxCode (per line) →
+  //   revenueAccountResolver.resolveRevenueAccount (per line) →
+  //   getAccountCodeFromMapping (AR/tax/penalty) → checkFinancialPeriodOpen
+  //   → createGuardedJournalEntry → emit event
+  // ships in SLICE-B (separate PR). SLICE-A pins the contract.
+  //
+  // The stub throws so anyone trying to call this before SLICE-B lands
+  // fails loudly with the correct error pointing at the next gate. The
+  // umrah-side swap from `createGuardedJournalEntry` direct to this
+  // façade is SLICE-C.
+  async postSalesInvoice(_request: SalesInvoiceRequest): Promise<SalesInvoiceResponse> {
+    // Touch the imports so they aren't flagged as unused — they wire
+    // into the SLICE-B implementation in the next PR.
+    void issueNumber;
+    void computeTaxFromTaxCode;
+    throw new Error(
+      "[FinancialEngine.postSalesInvoice] FIN-P4-SLICE-B not implemented — " +
+        "the façade contract is published (SLICE-A) but the engine wiring " +
+        "(numbering + tax + account resolution + GL posting + AR landing) " +
+        "ships in the next slice. Callers must wait for SLICE-B before " +
+        "switching off `createGuardedJournalEntry` direct.",
+    );
   }
 }
 
