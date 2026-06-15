@@ -34,6 +34,7 @@ import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { LiveImpactPreview } from "@/components/shared/impact-preview";
+import { FinancialAttachmentViewer } from "@/components/shared/financial-attachment-viewer";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -277,6 +278,41 @@ export default function ExpensesCreate() {
   const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.includes(form.operationType) ||
     (form.operationType === "payment" && Number(form.amount) >= 5000);
 
+  // #2237 — financial attachment workspace: feed the side viewer from the
+  // current attachment (uploaded file or pasted link) and let it upload/replace/
+  // remove through the SAME state the bottom block uses (no break to existing
+  // upload). The viewer is display-only — it never touches the journal.
+  const ATTACHMENT_TYPE_LABELS: Record<string, string> = {
+    invoice: "فاتورة", receipt: "وصل استلام", transfer: "إشعار تحويل",
+    contract: "عقد", approval: "موافقة", other: "أخرى",
+  };
+  const viewerAttachments = form.attachmentUrl
+    ? [{
+        url: form.attachmentUrl,
+        name: attachments[0]?.name,
+        type: attachments[0]?.type ?? null,
+        documentType: ATTACHMENT_TYPE_LABELS[form.attachmentType] ?? form.attachmentType,
+        // Internal serial: expense attachments are stored inline (attachmentUrl)
+        // with no dedicated attachment entity, so there is no internal serial yet
+        // (documented gap — needs a future financial_attachments table).
+        serialNo: null,
+        status: form.attachmentUrl ? "linked" : "pending",
+      }]
+    : [];
+  const applyAttachmentFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAttachments([{ name: file.name, size: file.size, type: file.type, dataUrl }]);
+      setForm((prev) => ({ ...prev, attachmentUrl: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
+  const clearAttachment = () => {
+    setAttachments([]);
+    setForm((prev) => (prev.attachmentUrl.startsWith("data:") ? { ...prev, attachmentUrl: "" } : prev));
+  };
+
   useEffect(() => {
     if (form.autoDescription) {
       const autoDesc = generateAutoDescription({
@@ -465,7 +501,23 @@ export default function ExpensesCreate() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
-      <div data-form>
+      <div data-form className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-4 lg:items-start">
+        {/* #2237 — financial attachment workspace: the document sits beside the
+            items form (left in RTL, sticky) during entry, instead of a bottom
+            upload field. Reusable across entry/approval/view (create mode here). */}
+        <aside className="mb-4 lg:mb-0 lg:order-2 lg:sticky lg:top-4">
+          <FinancialAttachmentViewer
+            mode="create"
+            attachments={viewerAttachments}
+            documentType={ATTACHMENT_TYPE_LABELS[form.attachmentType] ?? form.attachmentType}
+            canReplace={canManualOverride}
+            canDownload
+            onUpload={applyAttachmentFile}
+            onReplace={applyAttachmentFile}
+            onRemove={clearAttachment}
+          />
+        </aside>
+        <div className="min-w-0 lg:order-1">
         <ActiveContextNotice ctx={activeCtx} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <FormFieldWrapper label="التاريخ" required>
@@ -1073,6 +1125,7 @@ export default function ExpensesCreate() {
           <Button onClick={() => handleSubmit()} disabled={createMut.isPending || !activeCtx.ready || journalBlockers.length > 0 || (isFuelScenario && fuelHardMissing.length > 0)} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
+        </div>
         </div>
       </div>
     </CreatePageLayout>
