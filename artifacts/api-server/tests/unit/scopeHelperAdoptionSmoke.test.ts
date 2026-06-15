@@ -80,11 +80,10 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "finance-custodies.ts",
   "finance-gl-helpers.ts",
   "finance-hardening.ts",
-  // finance-insurance.ts: FIN-PROPERTY-MEDICAL-INSURANCE (#2249) property +
-  // medical insurance premium intake. Each POST opens a premium JE + a
-  // prepaid_amortization_schedule (#2247) keyed by scope.companyId — a
-  // per-company create, not a branch list cascade. Manual scope.companyId
-  // scoping is correct here (mirrors finance-amortization.ts).
+  // finance-insurance.ts: FIN-PROPERTY-MEDICAL-INSURANCE (#2249) insurance
+  // premium posting + amortization schedule insertion. Three short POST
+  // handlers keyed by (companyId, …) — point-lookup shape, no list cascade;
+  // mirrors finance-amortization.ts. Manual scope.companyId is correct here.
   "finance-insurance.ts",
   // finance-memory.ts: financial-memory CRUD (manual journal templates,
   // expense-category memory, supplier finance defaults). Point lookups +
@@ -307,10 +306,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // — five short handlers each scoped on a single tenant table; the
       // helper adds noise without behaviour change, manual is intentional.
       // +1 total/manualOnly: FIN-PROPERTY-MEDICAL-INSURANCE (#2249)
-      // routes/finance-insurance.ts — property + medical insurance premium
-      // intake keyed by scope.companyId; each POST opens a premium JE + a
-      // prepaid_amortization_schedule (#2247). Allowlisted with justification
-      // (per-company create, mirrors finance-amortization.ts).
+      // routes/finance-insurance.ts — insurance premium posting + schedule
+      // insertion. Three short POST handlers keyed by (companyId, …);
+      // mirrors finance-amortization.ts (point-lookup, no branch cascade).
       total: 125,
       helperUsers: 39,
       manualOnly: 83,
