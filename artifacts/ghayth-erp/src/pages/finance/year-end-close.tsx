@@ -13,16 +13,7 @@ import { formatCurrency, currentYearRiyadh } from "@/lib/formatters";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { PrintButton } from "@/components/shared/print-button";
 import { Archive, TrendingUp, TrendingDown, Calculator, CheckCircle } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 interface YearEndPreview {
   dryRun?: boolean;
@@ -277,31 +268,25 @@ export default function YearEndClosePage() {
 
   return (
     <>
-      <AlertDialog
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
         open={confirmingClose}
         onOpenChange={(v) => { if (!v) setConfirmingClose(false); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إقفال السنة المالية {year}</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم نقل أرصدة الإيرادات والمصروفات إلى الأرباح المحتجزة وقفل السنة.
-              <strong className="block mt-2">لا يمكن التراجع عن هذه العملية.</strong>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmingClose(false)}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setConfirmingClose(false);
-                confirmMut.mutate({ retainedEarningsAccountCode, force });
-              }}
-            >
-              تأكيد الإقفال
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        variant="destructive"
+        title={`تأكيد إقفال السنة المالية ${year}`}
+        description={
+          <>
+            سيتم نقل أرصدة الإيرادات والمصروفات إلى الأرباح المحتجزة وقفل السنة.
+            <strong className="block mt-2">لا يمكن التراجع عن هذه العملية.</strong>
+          </>
+        }
+        confirmLabel="تأكيد الإقفال"
+        pending={confirmMut.isPending}
+        onConfirm={() => {
+          setConfirmingClose(false);
+          confirmMut.mutate({ retainedEarningsAccountCode, force });
+        }}
+      />
     <EntityDetailPage
       title="إقفال السنة المالية"
       subtitle="ترحيل الإيرادات والمصروفات إلى الأرباح المحتجزة وإقفال السنة"

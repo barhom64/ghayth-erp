@@ -22,6 +22,11 @@ export interface InternalNotifyContext {
   pilgrimId: number;
   pilgrimName: string | null;
   agentId: number | null;
+  // U-17-P3 — the sub-agent attached to the pilgrim event. If the
+  // sub-agent (or its parent agent) has a contactEmployeeId set, that
+  // operator is also added to the recipient pool so the right person
+  // sees the alert without a manual hand-off.
+  subAgentId?: number | null;
 }
 
 /**
@@ -52,6 +57,45 @@ export async function resolveInternalRecipients(
     [ctx.companyId],
   );
   for (const r of gms) out.add(r.id);
+  // U-17-P3 — sub-agent + agent contact-employee expansion.
+  // The contactEmployeeId column is the employee ID of the operator
+  // designated to liaise with this agent/sub-agent. We need their
+  // active employee_assignments id to feed createNotification, so
+  // each lookup joins employee_assignments.
+  if (ctx.subAgentId) {
+    const subAgentContact = await rawQuery<{ assignmentId: number }>(
+      `SELECT ea.id AS "assignmentId"
+         FROM umrah_sub_agents sa
+         JOIN employee_assignments ea
+           ON ea."employeeId" = sa."contactEmployeeId"
+          AND ea."companyId" = sa."companyId"
+          AND ea.status = 'active'
+        WHERE sa.id = $1
+          AND sa."companyId" = $2
+          AND sa."deletedAt" IS NULL
+          AND sa."contactEmployeeId" IS NOT NULL
+        LIMIT 1`,
+      [ctx.subAgentId, ctx.companyId],
+    );
+    if (subAgentContact[0]) out.add(subAgentContact[0].assignmentId);
+  }
+  if (ctx.agentId) {
+    const agentContact = await rawQuery<{ assignmentId: number }>(
+      `SELECT ea.id AS "assignmentId"
+         FROM umrah_agents a
+         JOIN employee_assignments ea
+           ON ea."employeeId" = a."contactEmployeeId"
+          AND ea."companyId" = a."companyId"
+          AND ea.status = 'active'
+        WHERE a.id = $1
+          AND a."companyId" = $2
+          AND a."deletedAt" IS NULL
+          AND a."contactEmployeeId" IS NOT NULL
+        LIMIT 1`,
+      [ctx.agentId, ctx.companyId],
+    );
+    if (agentContact[0]) out.add(agentContact[0].assignmentId);
+  }
   return [...out];
 }
 
