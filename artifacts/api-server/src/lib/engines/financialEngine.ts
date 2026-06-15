@@ -146,7 +146,56 @@ export interface SalesInvoiceResponse {
   period: string;
   postingStatus: "posted" | "deferred" | "failed";
   failureReason: string | null;
+  /** Per-line tax breakdown (same order as request.lines). */
+  lineBreakdown: Array<{
+    description: string;
+    quantity: number;
+    unitPriceExclTax: number;
+    taxCode: string;
+    taxRate: number;
+    taxAmount: number;
+    lineTotalExclTax: number;
+    lineTotalInclTax: number;
+    revenueAccountCode: string;
+  }>;
+  /** Totals from the line breakdown. */
+  totals: {
+    subtotalExclTax: number;
+    taxTotal: number;
+    grandTotal: number;
+  };
 }
+
+// ─── FIN-P4-SLICE-B — prepared invoice payload passed to the caller's
+// row-insert callback. The callback INSERTs the operational row (umrah_
+// sales_invoices / invoices / etc.) using its module-specific schema and
+// returns the new row id. The engine then uses that id to anchor the
+// guarded JE.
+export interface PreparedSalesInvoiceForInsert {
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string | null;
+  currency: string;
+  subtotalExclTax: number;
+  taxTotal: number;
+  grandTotal: number;
+  arAccountCode: string;
+  revenueAccountCode: string[];
+  taxAccountCode: string | null;
+  lineBreakdown: SalesInvoiceResponse["lineBreakdown"];
+  period: string;
+}
+
+/**
+ * The caller-supplied INSERT function. The engine prepares numbering +
+ * tax + accounts + period gate, hands the prepared payload to this fn,
+ * and expects it to INSERT the module-specific row (umrah_sales_invoices
+ * etc.) inside the same client/transaction the engine opened.
+ */
+export type InsertSalesInvoiceFn = (
+  prepared: PreparedSalesInvoiceForInsert,
+  client: import("pg").PoolClient,
+) => Promise<{ invoiceId: number }>;
 
 class FinancialEngineImpl implements DomainEngine {
   readonly domainId = "finance";
@@ -507,18 +556,224 @@ class FinancialEngineImpl implements DomainEngine {
   // fails loudly with the correct error pointing at the next gate. The
   // umrah-side swap from `createGuardedJournalEntry` direct to this
   // façade is SLICE-C.
-  async postSalesInvoice(_request: SalesInvoiceRequest): Promise<SalesInvoiceResponse> {
-    // Touch the imports so they aren't flagged as unused — they wire
-    // into the SLICE-B implementation in the next PR.
-    void issueNumber;
-    void computeTaxFromTaxCode;
-    throw new Error(
-      "[FinancialEngine.postSalesInvoice] FIN-P4-SLICE-B not implemented — " +
-        "the façade contract is published (SLICE-A) but the engine wiring " +
-        "(numbering + tax + account resolution + GL posting + AR landing) " +
-        "ships in the next slice. Callers must wait for SLICE-B before " +
-        "switching off `createGuardedJournalEntry` direct.",
+  async postSalesInvoice(
+    request: SalesInvoiceRequest,
+    insertInvoice: InsertSalesInvoiceFn,
+  ): Promise<SalesInvoiceResponse> {
+    // FIN-P4-SLICE-B — full engine wiring:
+    //   1) Issue invoice number via the central numbering service.
+    //   2) Compute per-line tax via computeTaxFromTaxCode.
+    //   3) Resolve AR / revenue / VAT accounts via getAccountCodeFromMapping.
+    //   4) Gate on checkFinancialPeriodOpen against invoiceDate.
+    //   5) Inside one transaction: let caller INSERT the operational row
+    //      (its module-specific table; the engine doesn't know which one),
+    //      then post the guarded JE referencing the new row id.
+    //   6) Return the SalesInvoiceResponse with all financial outputs.
+    //
+    // The 2-argument signature (request + insertInvoice callback) is
+    // deliberate: the engine owns numbering/tax/accounts/GL ceremony, the
+    // caller owns the operational-row INSERT (because the engine doesn't
+    // know which table to target — umrah_sales_invoices, invoices, etc.).
+
+    if (!request.lines || request.lines.length === 0) {
+      throw new Error(
+        "[FinancialEngine.postSalesInvoice] empty lines — invoice must carry at least one line",
+      );
+    }
+    if (!request.sourceRefs?.sourceKey) {
+      throw new Error(
+        "[FinancialEngine.postSalesInvoice] sourceRefs.sourceKey is required for JE idempotency",
+      );
+    }
+
+    const invoiceDate = request.invoiceDate ?? todayISO();
+    const currency = request.currency ?? "SAR";
+
+    // ── Step 1: number (centralised via numberingService)
+    const numbering = await issueNumber({
+      moduleKey: request.moduleKey,
+      entityKey: request.entityKey,
+      companyId: request.companyId,
+      branchId: request.branchId,
+      entityTable: request.sourceRefs.sourceType,
+      actorId: request.createdBy,
+      expectedTiming: "on_posting",
+    });
+
+    // ── Step 2: per-line tax + revenue account
+    const lineBreakdown: SalesInvoiceResponse["lineBreakdown"] = [];
+    const revenueAccountCodes: string[] = [];
+    let subtotalExclTax = 0;
+    let taxTotal = 0;
+    for (const line of request.lines) {
+      const lineTotalExclTax = Number((line.unitPriceExclTax * line.quantity).toFixed(2));
+      const tax = line.isTaxable
+        ? await computeTaxFromTaxCode({
+            companyId: request.companyId,
+            amount: lineTotalExclTax,
+            taxInclusive: false,
+            taxCode: line.taxCode,
+          })
+        : { net: lineTotalExclTax, tax: 0, gross: lineTotalExclTax, taxCode: line.taxCode, rate: 0 };
+      // Revenue account per line — module-specific operation key the caller
+      // is responsible for mapping. Default fallback: `<moduleKey>_revenue`
+      // (e.g. `umrah_revenue`). For now we use a single mapping key per
+      // module; per-product mapping is a future enhancement.
+      const revOperation = `${request.moduleKey}_revenue`;
+      const revAccount = await getAccountCodeFromMapping(
+        request.companyId,
+        revOperation,
+        "credit",
+        "4110", // generic revenue fallback
+      );
+      lineBreakdown.push({
+        description: line.description,
+        quantity: line.quantity,
+        unitPriceExclTax: line.unitPriceExclTax,
+        taxCode: line.taxCode,
+        taxRate: tax.rate,
+        taxAmount: tax.tax,
+        lineTotalExclTax,
+        lineTotalInclTax: Number((lineTotalExclTax + tax.tax).toFixed(2)),
+        revenueAccountCode: revAccount,
+      });
+      revenueAccountCodes.push(revAccount);
+      subtotalExclTax += lineTotalExclTax;
+      taxTotal += tax.tax;
+    }
+    subtotalExclTax = Number(subtotalExclTax.toFixed(2));
+    taxTotal = Number(taxTotal.toFixed(2));
+    const grandTotal = Number((subtotalExclTax + taxTotal).toFixed(2));
+
+    // ── Step 3: AR + VAT accounts
+    const arOperation = `${request.moduleKey}_ar`;
+    const arAccountCode = await getAccountCodeFromMapping(
+      request.companyId,
+      arOperation,
+      "debit",
+      "1210", // generic AR fallback
     );
+    let taxAccountCode: string | null = null;
+    if (taxTotal > 0) {
+      taxAccountCode = await getAccountCodeFromMapping(
+        request.companyId,
+        "vat_output",
+        "credit",
+        "2310", // generic VAT payable fallback
+      );
+    }
+
+    // ── Step 4: period gate
+    const periodCheck = await checkFinancialPeriodOpen(request.companyId, invoiceDate);
+    if (!periodCheck.open) {
+      // Surface the prepared totals + accounts so the caller can decide
+      // whether to defer (queue for the next period) or surface the error.
+      return {
+        invoiceNumber: numbering.number,
+        invoiceId: 0,
+        journalEntryId: null,
+        journalEntryNumber: null,
+        arAccountCode,
+        revenueAccountCode: revenueAccountCodes,
+        taxAccountCode,
+        period: invoiceDate.slice(0, 7),
+        postingStatus: "deferred",
+        failureReason: `financial period is closed${periodCheck.periodName ? ` (${periodCheck.periodName})` : ""}`,
+        lineBreakdown,
+        totals: { subtotalExclTax, taxTotal, grandTotal },
+      };
+    }
+
+    const period = invoiceDate.slice(0, 7);
+    const prepared: PreparedSalesInvoiceForInsert = {
+      invoiceNumber: numbering.number,
+      invoiceDate,
+      dueDate: request.dueDate ?? null,
+      currency,
+      subtotalExclTax,
+      taxTotal,
+      grandTotal,
+      arAccountCode,
+      revenueAccountCode: revenueAccountCodes,
+      taxAccountCode,
+      lineBreakdown,
+      period,
+    };
+
+    // ── Step 5: caller INSERT + JE inside one transaction
+    return await withTransaction(async (client) => {
+      const { invoiceId } = await insertInvoice(prepared, client);
+      if (!invoiceId || invoiceId <= 0) {
+        throw new Error(
+          "[FinancialEngine.postSalesInvoice] insertInvoice callback returned no invoiceId — caller is responsible for inserting the operational row and returning the id",
+        );
+      }
+
+      // Build JE lines: AR debit, per-line revenue credits, VAT credit.
+      const jeLines = [
+        {
+          accountCode: arAccountCode,
+          debit: grandTotal,
+          credit: 0,
+          description: `AR — ${prepared.invoiceNumber}`,
+          umrahSeasonId: request.dimensions?.seasonId,
+          umrahAgentId: request.dimensions?.agentId,
+        },
+        ...lineBreakdown.map((l) => ({
+          accountCode: l.revenueAccountCode,
+          debit: 0,
+          credit: l.lineTotalExclTax,
+          description: l.description,
+          umrahSeasonId: request.dimensions?.seasonId,
+          umrahAgentId: request.dimensions?.agentId,
+        })),
+      ];
+      if (taxAccountCode && taxTotal > 0) {
+        jeLines.push({
+          accountCode: taxAccountCode,
+          debit: 0,
+          credit: taxTotal,
+          description: `VAT — ${prepared.invoiceNumber}`,
+          umrahSeasonId: request.dimensions?.seasonId,
+          umrahAgentId: request.dimensions?.agentId,
+        });
+      }
+
+      // Note: createGuardedJournalEntry is called inside the same engine
+      // module; this is the SINGLE allowed entry point per the doctrine
+      // §1.1. SLICE-C will swap umrahInvoicingEngine to call this façade
+      // instead of createGuardedJournalEntry directly.
+      const journalEntryId = await createGuardedJournalEntry(
+        {
+          companyId: request.companyId,
+          branchId: request.branchId,
+          createdBy: request.createdBy,
+          ref: prepared.invoiceNumber,
+          description: `${request.moduleKey} ${request.entityKey} — ${prepared.invoiceNumber}`,
+          type: "sale",
+          sourceType: request.sourceRefs.sourceType,
+          sourceId: invoiceId,
+          sourceKey: request.sourceRefs.sourceKey,
+          lines: jeLines,
+        },
+        { table: request.sourceRefs.sourceType, id: invoiceId },
+      );
+
+      return {
+        invoiceNumber: prepared.invoiceNumber,
+        invoiceId,
+        journalEntryId: journalEntryId,
+        journalEntryNumber: prepared.invoiceNumber, // mirrored from invoice ref
+        arAccountCode,
+        revenueAccountCode: revenueAccountCodes,
+        taxAccountCode,
+        period,
+        postingStatus: "posted",
+        failureReason: null,
+        lineBreakdown,
+        totals: { subtotalExclTax, taxTotal, grandTotal },
+      };
+    });
   }
 }
 
