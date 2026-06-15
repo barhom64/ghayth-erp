@@ -422,11 +422,11 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   fleet_driver: () => buildDriverCardPreset(),
   legal_correspondence: () => buildCorrespondenceCardPreset(),
   // U-14-P1 — umrah_group was aliased to the pilgrim preset (wrong:
-  // a group is a COLLECTION of pilgrims with its own meta). Removing
-  // the key here lets the resolver fall through to universalFallback
-  // (templateResolver line 142: `BESPOKE_PRESETS[entityType]?.() ??
-  // universalFallback(entityType)`), which renders the group row's
-  // actual columns. A bespoke buildUmrahGroupPreset is U-14-P3.
+  // a group is a COLLECTION of pilgrims with its own meta). U-14-P3
+  // now ships the dedicated builder so the resolver no longer falls
+  // through to universalFallback — operators see the group meta block
+  // + pilgrim manifest.
+  umrah_group: () => buildUmrahGroupPreset(),
   //
   // U-14-P2 — `umrah_agent_invoice` used to re-use the buyer-side
   // sales-invoice preset (pilgrim/group meta block), which was the
@@ -2722,6 +2722,71 @@ function buildUmrahPilgrimPreset(): PrintTemplate {
   <div>{{entity.emergencyPhone}}</div>
 </div>
 <div style="margin:14px 0;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+// U-14-P3 — dedicated umrah_group preset.
+//
+// The U-14-P1 fix removed the wrong `umrah_group → buildUmrahPilgrim`
+// alias and let the resolver fall through to universalFallback. That
+// rendered the bare group ROW columns, which is correct but not the
+// usable doc operators wanted: a meta block + the pilgrim manifest.
+//
+// loadUmrahGroup returns:
+//   entity   — group row joined with agentName / subAgentName / seasonName
+//   pilgrims — manifest array (fullName, passport, visa, nationality, ...)
+//
+// The body below renders both. Same totals-style block + table convention
+// the rest of the umrah-side presets use.
+function buildUmrahGroupPreset(): PrintTemplate {
+  return makePreset({
+    id: -107, presetKey: "umrah_group_classic", entityType: "umrah_group",
+    name: "مجموعة عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">مجموعة عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المجموعة</div>
+      <div>{{entity.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الموسم: {{entity.seasonName}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>الوكيل الرئيسي:</strong> {{entity.agentName}}</div>
+      <div><strong>الوكيل الفرعي:</strong> {{entity.subAgentName}}</div>
+      <div><strong>تاريخ الوصول:</strong> {{entity.arrivalDate}}</div>
+      <div><strong>تاريخ المغادرة:</strong> {{entity.departureDate}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<h3 style="margin:14px 0 6px 0;font-size:11pt;color:#334155">قائمة المعتمرين</h3>
+<table style="width:100%;border-collapse:collapse;margin:6px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">الاسم</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">رقم الجواز</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">التأشيرة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">الجنسية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">الحالة</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each pilgrims}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.fullName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left"><span dir="ltr">{{this.passportNumber}}</span></td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left"><span dir="ltr">{{this.visaNumber}}</span></td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.nationality}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.status}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
   });
 }
 
