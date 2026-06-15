@@ -435,6 +435,8 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   umrah_agent_invoice: () => buildUmrahAgentInvoicePreset(),
   // U-14-P3 — Nusk invoice preset (PURCHASE-side document).
   umrah_nusk_invoice: () => buildUmrahNuskInvoicePreset(),
+  // U-14-P3 — umrah commission-plan preset (employee contract).
+  umrah_commission_plan: () => buildUmrahCommissionPlanPreset(),
   // Cargo bill of lading — new bespoke preset wired with loadCargoManifest.
   cargo_manifest: () => buildCargoManifestPreset(),
   manifest: () => buildCargoManifestPreset(),
@@ -2866,6 +2868,75 @@ function buildUmrahNuskInvoicePreset(): PrintTemplate {
   });
 }
 
+// U-14-P3 — umrah commission-plan preset.
+//
+// The commission plan is the EMPLOYEE-side document operators print
+// for the salary-plus-commission contract signature. Body carries
+// the plan meta (employee + season + plan name + status), the
+// computation rules (commissionType / percentageRate / fixedAmount
+// + condition shape), and the tiers ladder iterated via the loader's
+// `tiers` array. Same convention as the other umrah presets.
+function buildUmrahCommissionPlanPreset(): PrintTemplate {
+  return makePreset({
+    id: -109, presetKey: "umrah_commission_plan_classic", entityType: "umrah_commission_plan",
+    name: "خطة عمولات عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">خطة عمولات عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.planName}}</div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{entity.employeeName}}</div>
+      <div style="color:#64748b;font-size:9pt">الموسم: {{entity.seasonName}}</div>
+      <div style="color:#64748b;font-size:9pt">الراتب الأساسي: {{entity.baseSalary}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>اسم الخطة:</strong> {{entity.planName}}</div>
+      <div><strong>نوع العمولة:</strong> {{entity.commissionType}}</div>
+      <div><strong>النسبة المئوية:</strong> {{entity.percentageRate}}</div>
+      <div><strong>المبلغ الثابت:</strong> {{entity.fixedAmount}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">شروط الاحتساب</div>
+  <div><strong>نوع الشرط:</strong> {{entity.conditionType}}</div>
+  <div><strong>الحد الأدنى للربح/تأشيرة:</strong> {{entity.minProfitPerVisa}}</div>
+  <div><strong>الحد الأدنى لنسبة المبيعات:</strong> {{entity.minSalesPercent}}</div>
+  <div><strong>الحد الأدنى لمتوسط السعر:</strong> {{entity.minAvgPrice}}</div>
+  <div><strong>الوحدة:</strong> {{entity.tierUnit}}</div>
+  <div><strong>السماح بشرائح جزئية:</strong> {{entity.partialTiersAllowed}}</div>
+  <div><strong>المخالفات تمنع العمولة:</strong> {{entity.violationBlocksCommission}}</div>
+</div>
+<h3 style="margin:14px 0 6px 0;font-size:11pt;color:#334155">سُلَّم الشرائح</h3>
+<table style="width:100%;border-collapse:collapse;margin:6px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:60px">الترتيب</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">من</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">إلى</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:140px">المكافأة/الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">تراكمي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each tiers}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.tierOrder}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.fromCount}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.toCount}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.bonusPerUnit}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.isCumulative}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
 function buildUmrahAgentInvoicePreset(): PrintTemplate {
   return makePreset({
     id: -106, presetKey: "umrah_agent_invoice_classic", entityType: "umrah_agent_invoice",
@@ -4013,6 +4084,7 @@ export const ARABIC_TITLES: Record<string, string> = {
   umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
   umrah_group: "مجموعة عمرة", umrah_agent_invoice: "فاتورة وكيل عمرة",
   umrah_nusk_invoice: "فاتورة نُسُك",
+  umrah_commission_plan: "خطة عمولات عمرة",
   fleet_driver: "سائق أسطول", cargo_manifest: "بوليصة شحن", manifest: "بوليصة",
   transport_booking_confirmation: "تأكيد حجز نقل",
   umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",
