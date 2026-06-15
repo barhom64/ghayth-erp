@@ -103,6 +103,10 @@ export interface ConfirmActionDialogProps {
    * a reason, a checkbox to acknowledge, etc.
    */
   children?: ReactNode;
+  /** data-testid placed on AlertDialogContent (for E2E tests). */
+  contentTestId?: string;
+  /** data-testid placed on the confirm button (for E2E tests). */
+  confirmButtonTestId?: string;
 }
 
 interface VariantStyles {
@@ -145,13 +149,15 @@ export function ConfirmActionDialog({
   pending = false,
   disabled = false,
   children,
+  contentTestId,
+  confirmButtonTestId,
 }: ConfirmActionDialogProps) {
   const styles = VARIANT_STYLES[variant];
   const Icon = styles.Icon;
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent dir="rtl" className="max-w-lg">
+      <AlertDialogContent dir="rtl" className="max-w-lg" data-testid={contentTestId}>
         <AlertDialogHeader className="text-right">
           <AlertDialogTitle className="flex items-center gap-2">
             <Icon className={`h-5 w-5 ${styles.iconClass}`} />
@@ -172,6 +178,7 @@ export function ConfirmActionDialog({
             disabled={pending || disabled}
             className="gap-1.5"
             rateLimitAware
+            data-testid={confirmButtonTestId}
           >
             {pending ? (
               <>

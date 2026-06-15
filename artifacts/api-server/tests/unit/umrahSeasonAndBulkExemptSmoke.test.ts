@@ -151,8 +151,8 @@ describe("exempt-pilgrims page — bulk un-exempt action", () => {
   });
 
   it("confirm dialog warns about the audit-log side effect", () => {
-    expect(EXEMPT_PAGE).toContain('data-testid="exempt-bulk-confirm-dialog"');
-    expect(EXEMPT_PAGE).toContain('data-testid="exempt-bulk-confirm-button"');
+    expect(EXEMPT_PAGE).toContain('contentTestId="exempt-bulk-confirm-dialog"');
+    expect(EXEMPT_PAGE).toContain('confirmButtonTestId="exempt-bulk-confirm-button"');
     expect(EXEMPT_PAGE).toContain("سيتم إلغاء استثناء");
     expect(EXEMPT_PAGE).toContain("سجل التدقيق");
   });
