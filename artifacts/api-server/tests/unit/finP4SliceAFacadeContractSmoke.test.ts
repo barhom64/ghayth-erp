@@ -88,6 +88,9 @@ describe("FIN-P4-SLICE-A §B — SalesInvoiceResponse carries the canonical fiel
     "taxAccountCode",
     "period",
     "postingStatus",
+    // SLICE-B additions:
+    "lineBreakdown",
+    "totals",
   ]) {
     it(`carries '${field}'`, () => {
       expect(RESPONSE_BLOCK).toMatch(new RegExp(`\\b${field}\\b`));
@@ -109,10 +112,21 @@ describe("FIN-P4-SLICE-A §B — SalesInvoiceResponse carries the canonical fiel
 // §C — postSalesInvoice is published on the engine implementation
 // ─────────────────────────────────────────────────────────────────────────────
 describe("FIN-P4-SLICE-A §C — postSalesInvoice method is published", () => {
-  it("FinancialEngineImpl declares async postSalesInvoice(...)", () => {
+  it("FinancialEngineImpl declares async postSalesInvoice(request, insertInvoice) returning Promise<SalesInvoiceResponse>", () => {
+    // SLICE-B widened the signature from `(request)` to
+    // `(request, insertInvoice)` so the engine doesn't need to know
+    // which table the caller writes its operational row into.
     expect(ENGINE).toMatch(
-      /async\s+postSalesInvoice\(\s*_?request:\s*SalesInvoiceRequest\s*\)\s*:\s*Promise<SalesInvoiceResponse>/,
+      /async\s+postSalesInvoice\(\s*request:\s*SalesInvoiceRequest,\s*insertInvoice:\s*InsertSalesInvoiceFn\s*,?\s*\)\s*:\s*Promise<SalesInvoiceResponse>/,
     );
+  });
+
+  it("exports the InsertSalesInvoiceFn callback type", () => {
+    expect(ENGINE).toMatch(/export\s+type\s+InsertSalesInvoiceFn\s*=/);
+  });
+
+  it("exports the PreparedSalesInvoiceForInsert payload type", () => {
+    expect(ENGINE).toMatch(/export\s+interface\s+PreparedSalesInvoiceForInsert/);
   });
 
   it("financialEngine singleton is exported (so callers reach the method)", () => {
@@ -121,24 +135,41 @@ describe("FIN-P4-SLICE-A §C — postSalesInvoice method is published", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §D — Stub is intentional (SLICE-B not implemented)
+// §D — Implementation shipped (SLICE-B): body wires numbering + tax +
+//       accounts + period gate + GL posting via the central helpers.
 // ─────────────────────────────────────────────────────────────────────────────
-describe("FIN-P4-SLICE-A §D — stub throws with the SLICE-B gate message", () => {
-  it("body throws referencing FIN-P4-SLICE-B", () => {
-    expect(ENGINE).toMatch(/FIN-P4-SLICE-B not implemented/);
+describe("FIN-P4-SLICE-A §D — SLICE-B engine wiring is present", () => {
+  it("body no longer throws the SLICE-B-not-implemented gate", () => {
+    expect(ENGINE).not.toMatch(/FIN-P4-SLICE-B not implemented/);
   });
 
-  it("error message names the missing wiring steps", () => {
-    // Each component must be named so a future implementer sees the
-    // full chain in one error string.
-    expect(ENGINE).toMatch(/numbering/);
-    expect(ENGINE).toMatch(/tax/);
-    expect(ENGINE).toMatch(/account resolution/);
-    expect(ENGINE).toMatch(/GL posting/);
-    expect(ENGINE).toMatch(/AR landing/);
+  it("body calls issueNumber({moduleKey, entityKey})", () => {
+    expect(ENGINE).toMatch(
+      /issueNumber\(\s*\{[\s\S]{0,500}?moduleKey:\s*request\.moduleKey[\s\S]{0,200}?entityKey:\s*request\.entityKey/,
+    );
   });
 
-  it("imports issueNumber + computeTaxFromTaxCode (reserved for SLICE-B)", () => {
+  it("body calls computeTaxFromTaxCode per line", () => {
+    expect(ENGINE).toMatch(/computeTaxFromTaxCode\(\s*\{[\s\S]{0,400}?taxCode:\s*line\.taxCode/);
+  });
+
+  it("body resolves AR + revenue accounts via getAccountCodeFromMapping", () => {
+    expect(ENGINE).toMatch(/getAccountCodeFromMapping\(\s*request\.companyId,\s*arOperation/);
+    expect(ENGINE).toMatch(/getAccountCodeFromMapping\(\s*request\.companyId,\s*revOperation/);
+  });
+
+  it("body gates on checkFinancialPeriodOpen and returns 'deferred' if closed", () => {
+    expect(ENGINE).toMatch(/checkFinancialPeriodOpen\(\s*request\.companyId,\s*invoiceDate\s*\)/);
+    expect(ENGINE).toMatch(/postingStatus:\s*["']deferred["']/);
+  });
+
+  it("body posts via createGuardedJournalEntry inside withTransaction", () => {
+    expect(ENGINE).toMatch(
+      /withTransaction\(\s*async\s*\(\s*client\s*\)[\s\S]{0,2000}?createGuardedJournalEntry\(/,
+    );
+  });
+
+  it("imports issueNumber + computeTaxFromTaxCode (now actively used)", () => {
     expect(ENGINE).toMatch(/import\s*\{\s*issueNumber\s*\}\s*from\s*["']\.\.\/numberingService\.js["']/);
     expect(ENGINE).toMatch(
       /import\s*\{\s*computeTaxFromTaxCode\s*\}\s*from\s*["']\.\.\/taxCodes\.js["']/,
