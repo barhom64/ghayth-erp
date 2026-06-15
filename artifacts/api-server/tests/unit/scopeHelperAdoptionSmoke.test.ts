@@ -194,6 +194,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // the other transport surfaces; buildScopedWhere has no branch cascade to add.
   "transport-route-patterns.ts",
   "umrah-entities.ts",
+  // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
+  // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
+  // aggregates keyed on (companyId, …); inherits the same allowlist
+  // justification as the parent umrah-entities.ts (calendar/aggregate shape,
+  // not list cascades).
+  "umrah-journey-reports.ts",
   "umrah.ts",
   "wiring-stubs.ts",
   "workspace.ts",
@@ -309,9 +315,13 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // routes/finance-insurance.ts — insurance premium posting + schedule
       // insertion. Three short POST handlers keyed by (companyId, …);
       // mirrors finance-amortization.ts (point-lookup, no branch cascade).
-      total: 125,
+      // +1 total/manualOnly: U-07 Phase 1 routes/umrah-journey-reports.ts
+      // — 4 read-only journey/recovery/pricing-drift routes carved verbatim
+      // out of umrah-entities.ts. Same aggregate shape and same allowlist
+      // justification as the parent.
+      total: 126,
       helperUsers: 39,
-      manualOnly: 83,
+      manualOnly: 84,
     });
   });
 });
