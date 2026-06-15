@@ -91,6 +91,22 @@ const ENDPOINTS: Endpoint[] = [
   // Violations — write paths.
   { src: HR, verb: "post", path: "/violations",
     authorize: { feature: "hr.violations", action: "create" } },
+
+  // Approval decisions — HR-REV-1 §6 decision #2: the approve/reject
+  // routes are gated by the matching catalog action (approve / reject),
+  // NOT a generic "update", so `approvableActions` is meaningful and an
+  // update-only role can never approve. Pinned here so a future refactor
+  // can't silently weaken them back to "update".
+  { src: HR, verb: "patch", path: "/leave-requests/:id/approve",
+    authorize: { feature: "hr.leaves", action: "approve" } },
+  { src: HR, verb: "patch", path: "/violations/:id/approve",
+    authorize: { feature: "hr.violations", action: "approve" } },
+  { src: HR, verb: "patch", path: "/excuse-requests/:id/approve",
+    authorize: { feature: "hr.attendance", action: "approve" } },
+  { src: LOANS, verb: "patch", path: "/loans/:id/approve",
+    authorize: { feature: "hr.loans", action: "approve" } },
+  { src: OVERTIME, verb: "patch", path: "/overtime/:id/approve",
+    authorize: { feature: "hr.overtime", action: "approve" } },
 ];
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

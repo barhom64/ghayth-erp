@@ -2225,7 +2225,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
 });
 
 // Staged leave approval: manager (stage 1) → HR (stage 2)
-router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", action: "update" }), requireOwnership({ table: "hr_leave_requests", checks: ["company"] }), async (req, res) => {
+router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", action: "approve" }), requireOwnership({ table: "hr_leave_requests", checks: ["company"] }), async (req, res) => {
   // C2 fix: hr_leave_requests has no "branchId" column, so adding "branch"
   // to the ownership check made requireOwnership() throw a 500 with
   // SQL "column \"branchId\" does not exist" before the handler ran.
@@ -4235,7 +4235,7 @@ router.get("/approval-requests", authorize({ feature: "hr.organization", action:
   } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
 });
 
-router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
+router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -4564,9 +4564,9 @@ async function violationApprovalAction(req: any, res: any, newStatus: "approved"
     res.json({ message: labels[newStatus], status: newStatus });
   } catch (err) { handleRouteError(err, res, "Violation approval error:"); }
 }
-router.patch("/violations/:id/approve", authorize({ feature: "hr.violations", action: "update" }), (req, res) => violationApprovalAction(req, res, "approved"));
-router.patch("/violations/:id/reject", authorize({ feature: "hr.violations", action: "update" }), (req, res) => violationApprovalAction(req, res, "rejected"));
-router.patch("/violations/:id/return", authorize({ feature: "hr.violations", action: "update" }), (req, res) => violationApprovalAction(req, res, "returned"));
+router.patch("/violations/:id/approve", authorize({ feature: "hr.violations", action: "approve" }), (req, res) => violationApprovalAction(req, res, "approved"));
+router.patch("/violations/:id/reject", authorize({ feature: "hr.violations", action: "reject" }), (req, res) => violationApprovalAction(req, res, "rejected"));
+router.patch("/violations/:id/return", authorize({ feature: "hr.violations", action: "reject" }), (req, res) => violationApprovalAction(req, res, "returned"));
 
 router.patch("/shifts/:id", authorize({ feature: "hr.attendance", action: "update", resource: { table: "shifts", idParam: "id" } }), async (req, res) => {
   try {
@@ -5410,7 +5410,7 @@ router.delete("/official-letters/:id", authorize({ feature: "hr.organization", a
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
 });
 
-router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
+router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     if (!HR_APPROVAL_ROLES.includes(scope.role)) {
@@ -7013,7 +7013,7 @@ router.post("/transfers", authorize({ feature: "hr.exit", action: "create" }), a
 });
 
 // ── Step 1: HR Manager approves → notifies receiving branch manager ──
-router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "update" }), async (req, res) => {
+router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "approve" }), async (req, res) => {
   // Step 3 of the HR operational audit — HR approval step of a transfer.
   // Converts 2 raw res.status error sites to typed throws and emits a
   // canonical `hr.transfer.hr_approved` / `hr.transfer.rejected` event
@@ -7117,7 +7117,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
 });
 
 // ── Return a transfer to the requester for correction ──
-router.patch("/transfers/:id/return", authorize({ feature: "hr.exit", action: "update" }), async (req, res) => {
+router.patch("/transfers/:id/return", authorize({ feature: "hr.exit", action: "reject" }), async (req, res) => {
   // Explicit return action. A returned transfer is editable via
   // PATCH /transfers/:id, which resubmits it (returned -> pending). This is a
   // dedicated route rather than an overload of the /approve `approved` flag.
@@ -8233,7 +8233,7 @@ router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "c
   } catch (err) { handleRouteError(err, res, "Create excuse request error:"); }
 });
 
-router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
+router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr.attendance", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const excuseId = parseId(req.params.id, "id");

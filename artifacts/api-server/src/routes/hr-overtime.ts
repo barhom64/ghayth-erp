@@ -423,7 +423,7 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/approve — اعتماد الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
+router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action: "approve" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -541,7 +541,7 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/reject — رفض الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
+router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action: "reject" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

@@ -476,7 +476,7 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/approve — اعتماد السلفة + توليد جدول الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
+router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "approve" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
@@ -647,7 +647,7 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/reject — رفض السلفة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/reject", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
+router.patch("/loans/:id/reject", authorize({ feature: "hr.loans", action: "reject" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
