@@ -498,7 +498,10 @@ transportBookingsRouter.get(
       const scope = req.scope!;
       const id = parseId(req.params.id, "id");
       const [booking] = await rawQuery<Record<string, unknown>>(
-        `SELECT * FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        `SELECT b.*, c.name AS "linkedCustomerName"
+           FROM transport_bookings b
+           LEFT JOIN clients c ON c.id = b."customerId" AND c."companyId" = b."companyId" AND c."deletedAt" IS NULL
+          WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
         [id, scope.companyId],
       );
       if (!booking) throw new NotFoundError("الحجز غير موجود");

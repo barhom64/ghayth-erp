@@ -78,8 +78,14 @@ export default function TransportDispatchBoard() {
 
   const { data: vehiclesResp } = useApiQuery<any>(["fleet-vehicles-dispatch"], "/fleet/vehicles?limit=500");
   const { data: driversResp } = useApiQuery<any>(["fleet-drivers-dispatch"], "/fleet/drivers?limit=500");
-  const vehicles = asList(vehiclesResp);
   const drivers = asList(driversResp);
+  // Show ALL vehicles (the backend guards eligibility on assign), but
+  // surface each vehicle's status and float "available" to the top so
+  // the dispatcher's default pick is the sensible one.
+  const vehicles = [...asList(vehiclesResp)].sort((a: any, b: any) => {
+    const rank = (s: string) => (s === "available" ? 0 : s === "in_use" || s === "on_trip" ? 1 : 2);
+    return rank(a?.status) - rank(b?.status);
+  });
 
   const createOrder = async () => {
     try {
@@ -232,7 +238,11 @@ export default function TransportDispatchBoard() {
               <select className="w-full h-10 border rounded-md px-2" value={createForm.vehicleId}
                 onChange={(e) => setCreateForm((f) => ({ ...f, vehicleId: e.target.value }))}>
                 <option value="">— اختر —</option>
-                {vehicles.map((v: any) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
+                {vehicles.map((v: any) => (
+                  <option key={v.id} value={v.id}>
+                    {v.plateNumber}{v.status ? ` — ${statusLabel("vehicle", v.status).label}` : ""}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
