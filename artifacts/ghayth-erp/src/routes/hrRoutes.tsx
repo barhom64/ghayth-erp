@@ -60,7 +60,9 @@ const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 const PerformanceAdvanced = lazy(() => import("@/pages/hr/performance-advanced"));
 const RecruitmentAdvanced = lazy(() => import("@/pages/hr/recruitment-advanced"));
 const TrainingAdvanced = lazy(() => import("@/pages/hr/training-advanced"));
-const ViolationsManagement = lazy(() => import("@/pages/hr/violations-management"));
+// (ViolationsManagement أُزيل — قائمة المخالفات الخام + الاعتماد + التحليل صارت
+// تبويب «المخالفات الخام» داخل /hr/violations، و/hr/violations/management يُعاد
+// توجيهه إليها. HR-REV-7)
 const ShiftsManagement = lazy(() => import("@/pages/hr/shifts-management"));
 const ApplicationList = lazy(() => import("@/pages/hr/application-list"));
 const Evaluation360 = lazy(() => import("@/pages/hr/evaluation-360"));
