@@ -63,7 +63,7 @@ import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
-import { PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES } from "../lib/rbacCatalog.js";
+import { PR_APPROVAL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES } from "../lib/rbacCatalog.js";
 import { scopeCan } from "../lib/rbac/authzEngine.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 
@@ -2852,7 +2852,7 @@ router.get("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "view
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("مسير الرواتب غير موجود");
-    const canSeeSalary = PAYROLL_ROLES.includes(scope.role);
+    const canSeeSalary = scopeCan(scope, "hr.payroll", "view");
     const lines = await rawQuery<Record<string, unknown>>(
       `SELECT pl.*, e.name AS "employeeName"
        FROM payroll_lines pl
@@ -2914,11 +2914,12 @@ router.get("/payroll/:id/lines", authorize({ feature: "hr.payroll.runs", action:
 router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    // Payroll execution requires HR, Finance, Director or Owner role
-    if (!PAYROLL_ROLES.includes(scope.role)) {
+    // Payroll execution requires the core payroll authority (hr.payroll),
+    // a tighter SoD gate than the hr.payroll.runs capability alone.
+    if (!scopeCan(scope, "hr.payroll", "create")) {
       throw new ForbiddenError("ليس لديك الصلاحية لتشغيل مسير الرواتب", {
         meta: {
-          requiredRoles: PAYROLL_ROLES,
+          requiredGrant: "hr.payroll:create",
           yourRole: scope.role,
         },
       });
@@ -3555,7 +3556,7 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
 router.patch("/payroll/:id/approve", authorize({ feature: "hr.payroll.runs", action: "approve", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!PAYROLL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.payroll", "approve")) {
       throw new ForbiddenError("ليس لديك الصلاحية للموافقة على مسير الرواتب");
     }
     const id = parseId(req.params.id, "id");
@@ -4024,11 +4025,11 @@ router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action
     // EVERY future payroll run. The capability flag "hr.payroll.runs"
     // is too coarse — generic editors with payroll-update permission
     // shouldn't be allowed to set deduction rates or tax thresholds.
-    // Restrict the write paths to PAYROLL_ROLES.
-    if (!PAYROLL_ROLES.includes(scope.role)) {
+    // Restrict the write paths to the core payroll authority (hr.payroll).
+    if (!scopeCan(scope, "hr.payroll", "create")) {
       res.status(403).json({
         error: "تعديل مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
-        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+        meta: { yourRole: scope.role, requiredGrant: "hr.payroll" },
       });
       return;
     }
@@ -4058,10 +4059,10 @@ router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", a
     const scope = req.scope!;
     // SEC-3: same SoD gate as POST — payroll-component edits propagate
     // to every subsequent run.
-    if (!PAYROLL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.payroll", "update")) {
       res.status(403).json({
         error: "تعديل مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
-        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+        meta: { yourRole: scope.role, requiredGrant: "hr.payroll" },
       });
       return;
     }
@@ -4095,13 +4096,13 @@ router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", a
 router.delete("/salary-components/:id", authorize({ feature: "hr.payroll.runs", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    // SEC-3: delete is the most destructive write — same PAYROLL_ROLES
-    // gate. A deletion silently disappears the component from future
-    // payroll runs without any UI prompt to back it out.
-    if (!PAYROLL_ROLES.includes(scope.role)) {
+    // SEC-3: delete is the most destructive write — same hr.payroll
+    // authority gate. A deletion silently disappears the component from
+    // future payroll runs without any UI prompt to back it out.
+    if (!scopeCan(scope, "hr.payroll", "delete")) {
       res.status(403).json({
         error: "حذف مكوّنات الراتب يتطلب دور موارد بشرية أو مالية",
-        meta: { yourRole: scope.role, requiredRoles: PAYROLL_ROLES },
+        meta: { yourRole: scope.role, requiredGrant: "hr.payroll" },
       });
       return;
     }
@@ -5044,7 +5045,7 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!PAYROLL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.payroll", "update")) {
       throw new ForbiddenError("غير مصرح: تعديل الرواتب مقصور على HR أو المالية أو المالك");
     }
     const { status } = zodParse(payrollPatchSchema.safeParse(req.body ?? {}));

@@ -99,10 +99,11 @@ describe("Payroll run creation", () => {
     expect(line).toContain('authorize(');
   });
 
-  it("payroll restricts to HR/Finance/GM/Owner roles", () => {
+  it("payroll execution requires the hr.payroll authority", () => {
     const idx = HR_ROUTE.indexOf('router.post("/payroll"');
     const section = HR_ROUTE.slice(idx, idx + 800);
-    expect(section).toContain("PAYROLL_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the PAYROLL_ROLES array.
+    expect(section).toContain('scopeCan(scope, "hr.payroll", "create")');
   });
 
   it("payroll checks financial period is open", () => {
