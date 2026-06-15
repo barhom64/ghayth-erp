@@ -7,7 +7,7 @@ import { join } from "node:path";
  *
  * After this PR: 28 of ~280 useState forms now on FormShell + zod.
  *
- * Migration: hr/shifts-management.tsx — assign-shift form.
+ * Migration: hr/shifts.tsx — assign-shift form (في تبويب «التعيينات»).
  *
  * Fixes a PRE-EXISTING BUG: the form had `assignmentId` in state but
  * NO UI input for it. Every submit sent `Number("") = 0` as
@@ -16,6 +16,10 @@ import { join } from "node:path";
  *
  * §3.4 compliant: inline Card (no modal). §2.1 single objective
  * (migration + the obvious missing field — same form, no scope creep).
+ *
+ * HR-REV — the form moved from the now-retired hr/shifts-management.tsx
+ * (its route redirects to /hr/shifts) into the «التعيينات» tab of the
+ * canonical hr/shifts.tsx, so this ratchet now reads that page.
  */
 const ROOT = join(import.meta.dirname!, "../../../../artifacts/ghayth-erp/src/pages");
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
@@ -23,8 +27,8 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 }
 
-describe("hr/shifts-management — assign-shift form on FormShell + zod (fixes hidden FK bug)", () => {
-  const SRC = read("hr/shifts-management.tsx");
+describe("hr/shifts — assign-shift form on FormShell + zod (fixes hidden FK bug)", () => {
+  const SRC = read("hr/shifts.tsx");
 
   it("imports the FormShell stack with FormDateField + FormSelectField", () => {
     expect(
