@@ -141,6 +141,13 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
 # Pure-logic fixtures guard the detector.
 run_step "check:dup-filenames:tests" node scripts/src/check-dup-filenames.test.mjs
 run_step "check:dup-filenames" node scripts/src/check-dup-filenames.mjs
+# WRITE endpoints (POST/PUT/PATCH/DELETE) with no detectable audit trail —
+# threat-model Repudiation requires every sensitive mutation to log who/what/
+# when. OFFLINE source scan (mirrors api-to-audit-map detection); baseline in
+# scripts/audit-coverage-allowlist.txt, fails only on a NEW unaudited write.
+# Pure-logic fixtures guard the detector.
+run_step "check:audit-coverage:tests" node scripts/src/check-audit-coverage.test.mjs
+run_step "check:audit-coverage" node scripts/src/check-audit-coverage.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
 run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs
