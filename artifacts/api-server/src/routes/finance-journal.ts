@@ -201,6 +201,15 @@ const approvalSchema = z.object({
   notes: z.string().optional(),
 });
 
+// #2239 (FIN-P9-APPROVAL-WORKSPACE) — body for the request-attachment / comment
+// side actions. `notes` is required (the handler enforces a non-empty string
+// and throws a ValidationError otherwise); request-attachment may carry an
+// optional attachmentType hint.
+const expenseNoteActionSchema = z.object({
+  notes: z.string().min(1, "النص مطلوب"),
+  attachmentType: z.string().optional(),
+});
+
 const voucherAllocationSchema = z.object({
   obligationType: z.enum(["purchase_order", "nusk_invoice", "expense", "manual"]),
   obligationId: z.coerce.number().int().positive(),
@@ -1536,6 +1545,113 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Approve expense error:");
+  }
+});
+
+// #2239 (FIN-P9-APPROVAL-WORKSPACE) — two side actions an approver can take on
+// the unified decision workspace WITHOUT deciding the request: ask the
+// submitter for a missing source document, or leave a note. Both record an
+// approval_actions row + audit log + event, scoped to the company exactly like
+// the approve handler above (ref LIKE 'EXP%' + companyId), so they never trip
+// the tenant-isolation guard.
+journalRouter.post("/expenses/:id/request-attachment", authorize({ feature: "finance.journal", action: "approve", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const expenseId = parseId(req.params.id, "id");
+    const { notes, attachmentType } = zodParse(expenseNoteActionSchema.safeParse(req.body ?? {}));
+    if (!notes || !String(notes).trim()) {
+      throw new ValidationError("نص الطلب مطلوب", { field: "notes", fix: "اذكر المرفق المطلوب من مقدّم الطلب" });
+    }
+
+    const [exp] = await rawQuery<Record<string, unknown>>(
+      `SELECT ref, status FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      [expenseId, scope.companyId]
+    );
+    if (!exp) throw new NotFoundError("المصروف غير موجود");
+
+    await rawExecute(
+      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+       VALUES ('expense',$1,'request_attachment',$2,$3,$4)`,
+      [expenseId, String(notes).trim(), scope.userId, scope.companyId]
+    );
+
+    // Move it back to "returned" so the submitter sees it needs work — reuses
+    // the SAME state the approve handler's return path lands on. Guarded to the
+    // pending family so we never re-open a decided expense.
+    await rawExecute(
+      `UPDATE journal_entries SET status = 'returned'
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'
+          AND status IN ('draft','pending_approval','returned','pending')`,
+      [expenseId, scope.companyId]
+    );
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "request_attachment",
+      entity: "journal_entries",
+      entityId: expenseId,
+      before: { ref: exp.ref, status: exp.status },
+      after: { status: "returned", notes: String(notes).trim(), attachmentType: attachmentType ?? null },
+    });
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "expense.attachment_requested",
+      entity: "expenses",
+      entityId: expenseId,
+      details: JSON.stringify({ ref: exp.ref, notes: String(notes).trim(), attachmentType: attachmentType ?? null }),
+    }).catch((e) => logger.error(e, "finance-journal background task failed"));
+
+    res.json({ message: "تم طلب المرفق", status: "returned" });
+  } catch (err) {
+    handleRouteError(err, res, "Request attachment error:");
+  }
+});
+
+journalRouter.post("/expenses/:id/comment", authorize({ feature: "finance.journal", action: "view", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const expenseId = parseId(req.params.id, "id");
+    const { notes } = zodParse(expenseNoteActionSchema.safeParse(req.body ?? {}));
+    if (!notes || !String(notes).trim()) {
+      throw new ValidationError("نص الملاحظة مطلوب", { field: "notes", fix: "اكتب ملاحظتك" });
+    }
+
+    const [exp] = await rawQuery<Record<string, unknown>>(
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      [expenseId, scope.companyId]
+    );
+    if (!exp) throw new NotFoundError("المصروف غير موجود");
+
+    await rawExecute(
+      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+       VALUES ('expense',$1,'comment',$2,$3,$4)`,
+      [expenseId, String(notes).trim(), scope.userId, scope.companyId]
+    );
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "comment",
+      entity: "journal_entries",
+      entityId: expenseId,
+      after: { ref: exp.ref, notes: String(notes).trim() },
+    });
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "expense.commented",
+      entity: "expenses",
+      entityId: expenseId,
+      details: JSON.stringify({ ref: exp.ref, notes: String(notes).trim() }),
+    }).catch((e) => logger.error(e, "finance-journal background task failed"));
+
+    res.json({ message: "تمت إضافة الملاحظة" });
+  } catch (err) {
+    handleRouteError(err, res, "Comment expense error:");
   }
 });
 
