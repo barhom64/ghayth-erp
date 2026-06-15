@@ -1031,7 +1031,7 @@ accountsRouter.post("/tax-codes", authorize({ feature: "finance.accounts", actio
       ]
     );
     const newId = insRes.insertId;
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1`, [newId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2`, [newId, scope.companyId]);
 
     // The tax-codes module caches per (companyId, code) — invalidate
     // so subsequent calls see the new row immediately.
@@ -1088,7 +1088,7 @@ accountsRouter.patch("/tax-codes/:id", authorize({ feature: "finance.accounts", 
     const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
     clearTaxCodeCache(scope.companyId);
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1`, [id]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "tax_codes", entityId: id, after: row,
@@ -1199,7 +1199,7 @@ accountsRouter.post("/wht-categories", authorize({ feature: "finance.accounts", 
        p.payableAccountId ?? null, p.description ?? null, p.isActive ?? true]
     );
     const newId = insRes.insertId;
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1`, [newId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2`, [newId, scope.companyId]);
 
     const { clearWhtCache } = await import("../lib/withholdingTax.js");
     clearWhtCache(scope.companyId);
@@ -1249,7 +1249,7 @@ accountsRouter.patch("/wht-categories/:id", authorize({ feature: "finance.accoun
     const { clearWhtCache } = await import("../lib/withholdingTax.js");
     clearWhtCache(scope.companyId);
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1`, [id]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "wht_categories", entityId: id, after: row,
@@ -1412,7 +1412,7 @@ accountsRouter.post("/allocation-rules", authorize({ feature: "finance.accounts"
     );
     const newId = insRes.insertId;
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM accounting_allocation_rules WHERE id = $1`, [newId]
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1 AND "companyId" = $2`, [newId, scope.companyId]
     );
 
     createAuditLog({
@@ -1482,7 +1482,7 @@ accountsRouter.patch("/allocation-rules/:id", authorize({ feature: "finance.acco
     if (updRes.affectedRows === 0) throw new NotFoundError("قاعدة التوجيه غير موجودة");
 
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM accounting_allocation_rules WHERE id = $1`, [id]
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]
     );
 
     createAuditLog({
