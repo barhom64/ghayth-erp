@@ -3651,7 +3651,58 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
     const enabledRaw = await resolveSettings("umrah.notify.visa_expiry", c.id);
     const enabled = enabledRaw === true || enabledRaw === "true" || enabledRaw === 1;
     if (!enabled) continue;
-    const { notifyInternalVisaExpiring } = await import("./umrahInternalNotifications.js");
+    const { notifyInternalVisaExpiring, resolveInternalRecipients } = await import("./umrahInternalNotifications.js");
+    // U-17-P4 — digest mode. The U-17-P1 catalog exposes
+    // `umrah.notifications.digestMode` with values "per_event"
+    // (default — one notification per expiring pilgrim, the legacy
+    // behaviour preserved below) or "daily_digest" (one aggregated
+    // notification per recipient summarising every expiring pilgrim).
+    // Reading the setting once per company keeps the inner loop cheap.
+    const digestModeRaw = await resolveSettings("umrah.notifications.digestMode", c.id);
+    const digestMode = String(digestModeRaw ?? "per_event");
+    if (digestMode === "daily_digest") {
+      // Daily digest path — emit a single notification per recipient
+      // with a compact summary of every expiring row instead of N
+      // per-event dispatches.
+      const recipients = await resolveInternalRecipients({
+        companyId: c.id,
+        branchId: null,
+        pilgrimId: 0,
+        pilgrimName: null,
+        agentId: null,
+      });
+      if (recipients.length > 0) {
+        const lines = expiring
+          .slice(0, 50)
+          .map(
+            (p, i) =>
+              `${i + 1}. ${(p.fullName as string) ?? "معتمر #" + p.id} — تنتهي خلال ${p.daysRemaining ?? 0} يوم`,
+          )
+          .join("\n");
+        const overflow = expiring.length > 50 ? `\n…و ${expiring.length - 50} حالة أخرى` : "";
+        const title = `🔔 تنبيه يومي مُجمَّع — ${expiring.length} تأشيرة قاربت على الانتهاء`;
+        const body = `إجمالي ${expiring.length} معتمر بحاجة لمتابعة:\n${lines}${overflow}\n\nراجع القائمة الكاملة من شاشة المعتمرين.`;
+        for (const assignmentId of recipients) {
+          try {
+            await createNotification({
+              companyId: c.id,
+              assignmentId,
+              type: "umrah",
+              title,
+              body,
+              priority: "high",
+              refType: "umrah_pilgrims",
+              refId: 0,
+              actionUrl: "/umrah/pilgrims?visaExpiring=1",
+            });
+            notifSent++;
+          } catch (e) {
+            logger.error(e, "[cronScheduler] umrah visa digest notify failed");
+          }
+        }
+      }
+      continue;
+    }
     for (const row of expiring) {
       try {
         const recipients = await notifyInternalVisaExpiring(
