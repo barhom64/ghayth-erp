@@ -92,11 +92,14 @@ describe("#1733 — accountant-facing route + RBAC", () => {
     // The transaction must SELECT … FOR UPDATE before calling
     // fleetEngine.postCargoDeliveryGL so a concurrent double-click can't
     // post two journals against the same candidate.
-    const materialiseBlock = HANDOFF_ROUTE.match(
-      /\/materialize["'][\s\S]{0,7000}?\}\s*\);\s*\n/,
-    )?.[0]!;
+    const mi = HANDOFF_ROUTE.indexOf('/materialize"');
+    const materialiseBlock = HANDOFF_ROUTE.slice(mi, mi + 7000);
     expect(materialiseBlock).toContain("FOR UPDATE");
     expect(materialiseBlock).toContain("fleetEngine.postCargoDeliveryGL");
+    // FOR UPDATE must precede the GL post (now a per-source-type branch:
+    // maintenance / fuel / insurance expense + cargo billing).
+    expect(materialiseBlock.indexOf("FOR UPDATE"))
+      .toBeLessThan(materialiseBlock.indexOf("fleetEngine.postCargoDeliveryGL"));
     // Must reject a row that's not pending — covers re-materialise and
     // re-reject paths.
     expect(materialiseBlock).toMatch(/status !== ['"]pending['"]/);

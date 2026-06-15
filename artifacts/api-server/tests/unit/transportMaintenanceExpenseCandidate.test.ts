@@ -41,7 +41,30 @@ describe("#TA-T18 — maintenance expense candidate (finance boundary)", () => {
   it("the accountant materialize endpoint posts maintenance GL on approval", () => {
     expect(MATERIALIZE).toMatch(/sourceType === "maintenance"/);
     expect(MATERIALIZE).toMatch(/postMaintenanceGL/);
-    // both supported source types are accepted by the materialiser.
-    expect(MATERIALIZE).toMatch(/!== "cargo_manifest" &&[\s\S]{0,40}!== "maintenance"/);
+  });
+});
+
+describe("#TA-T18 — fuel + insurance expense candidates (same boundary)", () => {
+  it("engine exposes fuel + insurance expense candidate creators", () => {
+    expect(ENGINE).toMatch(/async createFuelExpenseCandidate\(/);
+    expect(ENGINE).toMatch(/async createInsuranceExpenseCandidate\(/);
+    expect(ENGINE).toMatch(/'fuel', \$3, \$4/);
+    expect(ENGINE).toMatch(/'insurance', \$3, \$4/);
+  });
+
+  it("fuel + insurance creation queues candidates, not a direct GL post", () => {
+    expect(FLEET).toMatch(/createFuelExpenseCandidate/);
+    expect(FLEET).toMatch(/createInsuranceExpenseCandidate/);
+    expect(FLEET).not.toMatch(/fleetEngine\.postFuelExpenseGL\(/);
+    expect(FLEET).not.toMatch(/fleetEngine\.postInsuranceGL\(/);
+  });
+
+  it("materialize posts fuel + insurance GL on accountant approval", () => {
+    expect(MATERIALIZE).toMatch(/sourceType === "fuel"/);
+    expect(MATERIALIZE).toMatch(/sourceType === "insurance"/);
+    expect(MATERIALIZE).toMatch(/postFuelExpenseGL/);
+    expect(MATERIALIZE).toMatch(/postInsuranceGL/);
+    // the materialiser accepts the full fleet-expense set.
+    expect(MATERIALIZE).toMatch(/SUPPORTED_SOURCE_TYPES = \["cargo_manifest", "maintenance", "fuel", "insurance"\]/);
   });
 });
