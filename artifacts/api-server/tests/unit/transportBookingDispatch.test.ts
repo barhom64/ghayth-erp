@@ -240,6 +240,23 @@ describe("#1733 Booking + Dispatch — state machines", () => {
     expect(cancelBlock).toMatch(/transport_booking_lines[\s\S]{0,120}status = 'pending'/);
     expect(cancelBlock).not.toMatch(/cascadeDispatchToBooking[\s\S]{0,80}target: "cancelled"/);
   });
+
+  it("cancelling a dispatch order cascades DOWN to cancel the linked trip", () => {
+    // Top-down: cancelling the order from the board must also cancel the trip it
+    // spawned ("dispatch:<id>:<token>" sourceKey) and release its vehicle/driver,
+    // or the trip is orphaned and the resources stay locked. Bounded to
+    // non-terminal trips (idempotent); the standalone `target === "cancelled"`
+    // block distinguishes it from the shared nav-session cleanup above.
+    const block =
+      BOOKINGS_ROUTE.match(/if \(target === "cancelled"\) \{[\s\S]{0,1800}/)?.[0] ?? "";
+    expect(block).toMatch(/UPDATE\s+fleet_trips[\s\S]{0,120}status = 'cancelled'/);
+    expect(block).toMatch(/"sourceKey" LIKE \$2/);
+    expect(block).toMatch(/`dispatch:\$\{id\}:%`/);
+    expect(block).toMatch(/status IN \('scheduled', 'planned', 'in_progress'\)/);
+    // releases the held resources, mirroring the fleet trip-cancel handler.
+    expect(block).toMatch(/fleet_vehicles SET status='available'[\s\S]{0,80}status='in_use'/);
+    expect(block).toMatch(/fleet_drivers SET status='available'[\s\S]{0,80}status='on_trip'/);
+  });
 });
 
 describe("#1733 Booking + Dispatch — RBAC features registered", () => {

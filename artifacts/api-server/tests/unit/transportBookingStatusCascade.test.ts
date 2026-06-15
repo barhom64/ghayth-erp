@@ -66,9 +66,11 @@ describe("#1812 — booking → terminal-state cascade (shared helper)", () => {
 
 describe("#1812 / #12 — single source of truth, atomic at both call sites", () => {
   it("dispatch board delegates to the helper between the dispatch UPDATE and the tx return", () => {
-    // Same `tx` → the cascade is atomic with the dispatch-order update.
+    // Same `tx` → the cascade is atomic with the dispatch-order update. The
+    // window between the UPDATE and the helper is generous: the cancel branch
+    // also runs the top-down trip-cancel cascade in this span, all on `tx`.
     expect(BOOKINGS).toMatch(
-      /UPDATE transport_dispatch_orders[\s\S]{0,5000}cascadeDispatchToBooking\(tx, \{[\s\S]{0,2000}return \{ previous: order\.status, next: target \}/,
+      /UPDATE transport_dispatch_orders[\s\S]{0,7000}cascadeDispatchToBooking\(tx, \{[\s\S]{0,2000}return \{ previous: order\.status, next: target \}/,
     );
   });
 
