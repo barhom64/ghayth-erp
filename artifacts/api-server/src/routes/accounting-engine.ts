@@ -8,7 +8,7 @@ import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawd
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { logger } from "../lib/logger.js";
 import { createAuditLog, emitEvent, assertPostableAccount } from "../lib/businessHelpers.js";
-import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import {
   getClassificationCenterSummary,
   linkAnalyticAccount,
@@ -77,7 +77,8 @@ const createSubsidiaryAccountSchema = z.object({
 const router = Router();
 
 function requireFinance(scope: any): void {
-  if (!FINANCE_ROLES.includes(scope.role)) {
+  // HR-REV-1 #1 — grant-derived finance write authority (replaces FINANCE_ROLES).
+  if (!scopeCan(scope, "finance", "update")) {
     throw new ForbiddenError("هذه العملية مخصصة لموظفي المالية فقط");
   }
 }

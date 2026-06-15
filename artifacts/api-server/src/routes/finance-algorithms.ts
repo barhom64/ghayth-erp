@@ -15,7 +15,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { checkFinancialPeriodOpen, updateAccountBalances, todayISO, currentPeriod, currentYear, currentDateInTz, toDateISO, roundTo2, roundTo4, emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { internalTechRef } from "../lib/internalRef.js";
-import { FINANCE_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { logger } from "../lib/logger.js";
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
 
@@ -194,9 +194,11 @@ const fxRevaluationPostSchema = z.object({
 });
 
 function assertFinanceRole(scope: any): void {
-  if (!FINANCE_ROLES.includes(scope.role)) {
+  // HR-REV-1 #1 — grant-derived: finance write authority (finance:update),
+  // held by finance_manager/gm (finance.*) and owner. Replaces FINANCE_ROLES.
+  if (!scopeCan(scope, "finance", "update")) {
     throw new ForbiddenError("هذه العملية مخصصة لموظفي المالية فقط", {
-      fix: `الأدوار المسموحة: ${FINANCE_ROLES.join(", ")}`,
+      fix: "تتطلب هذه العملية صلاحية كتابة في المالية (finance:update).",
     });
   }
 }
