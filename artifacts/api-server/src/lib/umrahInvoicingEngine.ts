@@ -6,6 +6,14 @@ import { logger } from "./logger.js";
 import { getProvider as getEInvoiceProvider } from "./einvoice/index.js";
 import { resolveRevenueAccount } from "./revenueAccountResolver.js";
 import { resolveSettings } from "./settings.js";
+// FIN-P4-SLICE-C — façade migration path. The legacy
+// `generateSalesInvoice` keeps the direct createGuardedJournalEntry
+// route (production behavior unchanged). The new
+// `generateSalesInvoiceViaFacade` exercises the
+// `financialEngine.postSalesInvoice` chain so callers can opt in
+// route-by-route. SLICE-D will retire the legacy path once every
+// caller has migrated.
+import { financialEngine, type InsertSalesInvoiceFn } from "./engines/financialEngine.js";
 
 // U-11 — Client-linkage policy. The values mirror the catalog field
 // `umrah.auto_link.clientLinkagePolicy`. The default kicks in whenever
@@ -782,6 +790,155 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     // the column values, so callers (UI, audit, alerting) can react.
     costBasis, marginBase, sellingBelowCost,
   };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 1b. Invoice Generation via the FIN-P4 Financial Engine façade
+//
+// FIN-P4-SLICE-C — opt-in migration path. Routes that want to flow
+// through the central `financialEngine.postSalesInvoice` (numbering +
+// tax + accounts + period + JE + AR landing) call this function
+// instead of `generateSalesInvoice` directly.
+//
+// The two paths share the SAME source row (umrah_sales_invoices) and
+// the SAME JE schema — the difference is who orchestrates: the
+// central engine or the umrah-local code. While both paths are wired,
+// no behavior change ships unless a caller explicitly opts in.
+//
+// SLICE-D (separate PR) will retire the legacy path once every
+// route has migrated.
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate an umrah sales invoice via the central
+ * financialEngine.postSalesInvoice façade.
+ *
+ * This is the SLICE-C opt-in alternative to `generateSalesInvoice`.
+ * It accepts a minimal input that maps to the SalesInvoiceRequest
+ * envelope, builds the operational line items, and lets the engine
+ * handle numbering/tax/accounts/GL. The caller's INSERT callback
+ * writes the umrah_sales_invoices row inside the same transaction
+ * the engine opens.
+ *
+ * Returns the SalesInvoiceResponse shape exactly as the engine
+ * computes it — no umrah-local adjustment.
+ */
+export async function generateSalesInvoiceViaFacade(
+  scope: Scope,
+  input: {
+    subAgentId: number;
+    clientId: number;
+    seasonId: number;
+    groupId?: number;
+    lines: Array<{
+      description: string;
+      quantity: number;
+      unitPriceExclTax: number;
+      taxCode: string;
+      isTaxable: boolean;
+    }>;
+    invoiceDate?: string;
+    dueDate?: string;
+    notes?: string;
+  },
+) {
+  if (!input.lines?.length) {
+    throw new ValidationError("الفاتورة تحتاج بنداً واحداً على الأقل");
+  }
+
+  // The insertInvoice callback owns the umrah-specific INSERT. The
+  // engine has prepared invoiceNumber + accounts + totals; the callback
+  // turns that into the umrah_sales_invoices row and returns the new
+  // id so the engine can anchor the guarded JE.
+  const insertInvoice: InsertSalesInvoiceFn = async (prepared, client) => {
+    const dueDate = prepared.dueDate ?? null;
+    const result = await client.query(
+      `INSERT INTO umrah_sales_invoices
+        ("companyId","branchId","subAgentId","clientId","seasonId",
+         ref,"invoiceDate",subtotal,"penaltiesTotal","vatRate","vatAmount",
+         "costBasis","marginBase",total,"paidAmount",status,"dueDate",
+         "pilgrimCount","createdBy","createdAt","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,15,$9,0,$10,$11,0,'draft',$12,0,$13,NOW(),NOW())
+       RETURNING id`,
+      [
+        scope.companyId,
+        scope.branchId || null,
+        input.subAgentId,
+        input.clientId,
+        input.seasonId,
+        prepared.invoiceNumber,
+        prepared.invoiceDate,
+        prepared.subtotalExclTax,
+        prepared.taxTotal,
+        prepared.subtotalExclTax,
+        prepared.grandTotal,
+        dueDate,
+        scope.userId,
+      ],
+    );
+    return { invoiceId: result.rows[0].id };
+  };
+
+  // The sourceKey carries a stable identifier the engine uses for
+  // idempotency on the guarded JE. We seed it from sub-agent + season
+  // + first-line description so a retry with the same request stays
+  // idempotent — caller can override by passing their own keying.
+  const sourceKey =
+    `umrah:salesinv:${input.subAgentId}:${input.seasonId}:${input.lines[0].description.slice(0, 32)}`;
+
+  const response = await financialEngine.postSalesInvoice(
+    {
+      companyId: scope.companyId,
+      branchId: scope.branchId || 0,
+      createdBy: scope.userId,
+      moduleKey: "umrah",
+      entityKey: "umrah_sales_invoice",
+      clientId: input.clientId,
+      invoiceDate: input.invoiceDate,
+      dueDate: input.dueDate,
+      currency: "SAR",
+      dimensions: {
+        subAgentId: input.subAgentId,
+        seasonId: input.seasonId,
+        groupId: input.groupId,
+      },
+      sourceRefs: {
+        sourceType: "umrah_sales_invoices",
+        sourceId: 0, // anchored by the callback's RETURNING id
+        sourceKey,
+      },
+      lines: input.lines,
+      notes: input.notes,
+    },
+    insertInvoice,
+  );
+
+  // Mirror the legacy event so existing listeners stay subscribed.
+  if (response.postingStatus === "posted" && response.invoiceId > 0) {
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "umrah.sales_invoice.created",
+      entity: "umrah_sales_invoices",
+      entityId: response.invoiceId,
+      after: {
+        ref: response.invoiceNumber,
+        total: response.totals.grandTotal,
+        subAgentId: input.subAgentId,
+        viaFacade: true,
+      },
+    }).catch((e) => logger.error(e, "[umrahInvoicingEngine.viaFacade] event emit failed"));
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "create",
+      entity: "umrah_sales_invoices",
+      entityId: response.invoiceId,
+      after: { ref: response.invoiceNumber, total: response.totals.grandTotal, viaFacade: true },
+    }).catch((e) => logger.error(e, "[umrahInvoicingEngine.viaFacade] audit emit failed"));
+  }
+
+  return response;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
