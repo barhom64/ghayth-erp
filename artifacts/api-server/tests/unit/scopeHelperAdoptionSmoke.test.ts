@@ -80,6 +80,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "finance-custodies.ts",
   "finance-gl-helpers.ts",
   "finance-hardening.ts",
+  // finance-insurance.ts: FIN-PROPERTY-MEDICAL-INSURANCE (#2249) insurance
+  // premium posting + amortization schedule insertion. Three short POST
+  // handlers keyed by (companyId, …) — point-lookup shape, no list cascade;
+  // mirrors finance-amortization.ts. Manual scope.companyId is correct here.
+  "finance-insurance.ts",
   // finance-memory.ts: financial-memory CRUD (manual journal templates,
   // expense-category memory, supplier finance defaults). Point lookups +
   // upserts keyed by (companyId, supplierId)/(companyId, categoryKey)/
@@ -300,9 +305,13 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: TA-T18-VRP Phase 2 routes/fleet-optimizer.ts
       // — five short handlers each scoped on a single tenant table; the
       // helper adds noise without behaviour change, manual is intentional.
-      total: 124,
+      // +1 total/manualOnly: FIN-PROPERTY-MEDICAL-INSURANCE (#2249)
+      // routes/finance-insurance.ts — insurance premium posting + schedule
+      // insertion. Three short POST handlers keyed by (companyId, …);
+      // mirrors finance-amortization.ts (point-lookup, no branch cascade).
+      total: 125,
       helperUsers: 39,
-      manualOnly: 82,
+      manualOnly: 83,
     });
   });
 });
