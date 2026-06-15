@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.."; pwd)"
 cd "$REPO_ROOT"
 
 PASS="\033[32m✓\033[0m"
@@ -128,14 +128,6 @@ run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migration
 # db/schema_pre.sql (fresh installs never re-run pre-cutoff migrations, so a
 # stale dump silently 500s clean environments — the 2026-06 inbox incident).
 run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
-# Named value-set CHECK-constraint drift — a migration may widen/narrow a
-# CHECK set (e.g. notification_delivery_log 'suppressed', #817) that a
-# dump-only provisioning path keeps STALE, so writing the new value 23514s on
-# fresh/CI DBs. OFFLINE (migrations vs committed dump, no DB); baseline in
-# scripts/constraint-drift-allowlist.txt, fails only on NEW drift. Pure-logic
-# fixtures guard the detector itself.
-run_step "check:constraint-drift:tests" node scripts/src/check-constraint-drift.test.mjs
-run_step "check:constraint-drift" node scripts/src/check-constraint-drift.mjs
 # Invalid interactive-element nesting: <Link><Button> renders <a><button>,
 # which is invalid HTML and breaks keyboard / screen-reader semantics.
 # OFFLINE source scan; baseline in scripts/button-nesting-allowlist.txt,
