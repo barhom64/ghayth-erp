@@ -92,10 +92,10 @@ describe("warehouse/inventory-count — approval via AlertDialog (non-delete)", 
     expect(callsConfirm(SRC)).toBe(false);
   });
 
-  it("imports AlertDialog primitives (no ConfirmDeleteDialog — not a delete)", () => {
-    expect(SRC).toContain('from "@/components/ui/alert-dialog"');
-    expect(SRC).toContain("AlertDialogAction");
-    expect(SRC).toContain("AlertDialogCancel");
+  it("uses ConfirmActionDialog (GAP_MATRIX P1 §6.2 migration, no raw AlertDialog)", () => {
+    // Migrated in the §6.2 batch to canonical ConfirmActionDialog.
+    expect(SRC).toContain("ConfirmActionDialog");
+    expect(SRC).not.toContain('from "@/components/ui/alert-dialog"');
     expect(SRC).not.toContain("ConfirmDeleteDialog");
   });
 
