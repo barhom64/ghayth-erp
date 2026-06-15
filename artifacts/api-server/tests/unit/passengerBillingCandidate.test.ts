@@ -140,8 +140,9 @@ describe("#2079 TA-T18-01 — boundary intact (no JE from transport surface)", (
 });
 
 describe("#2079 TA-T18-01 — symmetry with cargo + rental (canon respected)", () => {
-  it("all three candidate creators share the same ON CONFLICT key shape", () => {
-    expect(ENGINE.match(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/g)?.length).toBe(3);
+  it("all four candidate creators share the same ON CONFLICT key shape", () => {
+    // cargo / passenger / rental billing + maintenance expense (#TA-T18 finance-boundary).
+    expect(ENGINE.match(/ON CONFLICT \("companyId", "sourceType", "sourceId"\) DO NOTHING/g)?.length).toBe(4);
   });
   it("the three sourceType strings are present and distinct", () => {
     expect(ENGINE).toContain("'cargo_manifest'");
