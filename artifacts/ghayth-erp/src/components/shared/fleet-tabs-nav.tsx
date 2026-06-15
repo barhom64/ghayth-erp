@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
   Car, Users, Navigation, Wrench, Fuel, Shield, Bell,
-  BarChart3, Calendar, AlertTriangle, Satellite, Package, Disc,
+  BarChart3, Calendar, CalendarDays, AlertTriangle, Satellite, Package, Disc,
   Clipboard, FileSignature,
 } from "lucide-react";
 
@@ -25,6 +25,8 @@ const TABS = [
   { href: "/fleet/insurance", label: "التأمين", icon: Shield, match: ["/fleet/insurance"] },
   { href: "/fleet/tires", label: "الإطارات", icon: Disc, match: ["/fleet/tires"] },
   { href: "/fleet/preventive-plans", label: "الصيانة الوقائية", icon: Calendar, match: ["/fleet/preventive-plans"] },
+  // TR-022 — unified transport calendar (booking/dispatch/maintenance/rental/cargo).
+  { href: "/fleet/transport/calendar", label: "التقويم", icon: CalendarDays, match: ["/fleet/transport/calendar"] },
   { href: "/fleet/traffic-violations", label: "المخالفات", icon: AlertTriangle, match: ["/fleet/traffic-violations"] },
   { href: "/fleet/alerts", label: "التنبيهات", icon: Bell, match: ["/fleet/alerts"] },
   { href: "/fleet/telematics/live-map", label: "التتبع المباشر", icon: Satellite,
