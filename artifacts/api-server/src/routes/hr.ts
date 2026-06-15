@@ -63,7 +63,9 @@ import { ensureInquiryMemoForViolation } from "../lib/disciplineEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
-import { HR_ROLES, MGR_ROLES, HR_APPROVAL_ROLES , PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES} from "../lib/rbacCatalog.js";
+import { PR_APPROVAL_ROLES, PAYROLL_ROLES, OPS_CLOSE_ROLES, BRANCH_GM_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
+import type { RequestScope } from "../middlewares/authMiddleware.js";
 
 // ── Zod request-body schemas ──
 
@@ -1424,7 +1426,7 @@ router.get("/attendance/:id", authorize({ feature: "hr.attendance", action: "vie
 router.patch("/attendance/:id", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: تعديل سجلات الحضور مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -1487,8 +1489,9 @@ router.get("/leave-types", authorize({ feature: "hr.leaves", action: "list" }), 
 // `PATCH /hr/leave-types/:id` expecting to edit annualDays / isPaid /
 // gender restriction / minServiceMonths. The endpoint didn't exist —
 // the frontend was hitting a 404 and silently swallowing the error.
-// These three handlers close the gap; HR_ROLES gated because changing
-// leave entitlement is a compensation-level decision.
+// These three handlers close the gap; gated on the hr:update grant
+// (scopeCan) because changing leave entitlement is a compensation-level
+// decision.
 const leaveTypePayloadSchema = z.object({
   name: trimmedRequired("اسم نوع الإجازة مطلوب", HR_TEXT_LIMITS.NAME),
   annualDays: z.coerce.number().int().min(0).max(365).optional(),
@@ -1506,10 +1509,10 @@ router.post(
   async (req, res) => {
     try {
       const scope = req.scope!;
-      if (!HR_ROLES.includes(scope.role)) {
+      if (!scopeCan(scope, "hr", "update")) {
         res.status(403).json({
           error: "تعديل أنواع الإجازات يتطلب دور موارد بشرية",
-          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+          meta: { yourRole: scope.role, requiredGrant: "hr:update" },
         });
         return;
       }
@@ -1559,10 +1562,10 @@ router.patch(
   async (req, res) => {
     try {
       const scope = req.scope!;
-      if (!HR_ROLES.includes(scope.role)) {
+      if (!scopeCan(scope, "hr", "update")) {
         res.status(403).json({
           error: "تعديل أنواع الإجازات يتطلب دور موارد بشرية",
-          meta: { yourRole: scope.role, requiredRoles: HR_ROLES },
+          meta: { yourRole: scope.role, requiredGrant: "hr:update" },
         });
         return;
       }
@@ -2091,7 +2094,7 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
         "لا يوجد مدير معتمد لاستلام طلبات الإجازة",
         {
           fix: "الرجاء التواصل مع الإدارة لتعيين مدير فرع أو مدير موارد بشرية قبل تقديم الطلبات.",
-          meta: { missingRoles: HR_APPROVAL_ROLES },
+          meta: { missingGrant: "hr:approve" },
         }
       );
     }
@@ -2242,7 +2245,7 @@ router.patch("/leave-requests/:id/approve", authorize({ feature: "hr.leaves", ac
     const { approved, reason } = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
 
     // Authorization: only branch_manager, hr_manager, or owner roles can approve leave
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "approve")) {
       throw new ForbiddenError(
         "صلاحية الموافقة محصورة بالمدير أو HR أو المالك",
         {
@@ -2718,7 +2721,7 @@ router.patch("/leave-requests/:id/escalate", authorize({ feature: "hr.leaves", a
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
 
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "approve")) {
       throw new ForbiddenError("غير مصرح: التصعيد متاح فقط للمدير أو HR أو المالك");
     }
 
@@ -4159,7 +4162,7 @@ router.get("/approval-chain-definitions", authorize({ feature: "hr.employees", a
 router.post("/approval-chain-definitions", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح بإنشاء سلاسل موافقات");
     }
     const { name, chainType, minAmount, maxAmount, steps } = zodParse(approvalChainSchema.safeParse(req.body));
@@ -4199,7 +4202,7 @@ router.post("/approval-chain-definitions", authorize({ feature: "hr.employees", 
 router.delete("/approval-chain-definitions/:id", authorize({ feature: "hr.employees", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: يتطلب صلاحية مالك أو HR أو مدير عام");
     }
     const id = parseId(req.params.id, "id");
@@ -4384,7 +4387,7 @@ router.get("/attendance-policy", authorize({ feature: "hr.attendance", action: "
 router.put("/attendance-policy", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح");
     }
     const b = zodParse(attendancePolicySchema.safeParse(req.body ?? {}));
@@ -4491,7 +4494,7 @@ router.get("/violations-stats", authorize({ feature: "hr.violations", action: "l
 router.patch("/violations/:id", authorize({ feature: "hr.violations", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "approve")) {
       throw new ForbiddenError("غير مصرح: تعديل المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -4529,7 +4532,7 @@ router.patch("/violations/:id", authorize({ feature: "hr.violations", action: "u
 async function violationApprovalAction(req: any, res: any, newStatus: "approved" | "rejected" | "returned") {
   try {
     const scope = req.scope!;
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "approve")) {
       throw new ForbiddenError("غير مصرح: اعتماد المخالفات مقصور على HR أو المدير أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -4844,7 +4847,7 @@ router.patch("/leave-requests/:id", authorize({ feature: "hr.leaves", action: "u
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات الإجازة مقصور على HR أو المالك");
     }
     const { status, reason } = zodParse(leaveRequestPatchSchema.safeParse(req.body ?? {}));
@@ -4903,7 +4906,7 @@ router.post("/leave-requests/:id/cancel", authorize({ feature: "hr.leaves", acti
     if (!request) throw new NotFoundError("طلب الإجازة غير موجود");
 
     const isOwn = request.employeeId === scope.employeeId;
-    if (!isOwn && !HR_ROLES.includes(scope.role)) {
+    if (!isOwn && !scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError(
         "إلغاء الإجازة مقصور على صاحب الطلب أو HR أو المالك",
         { fix: "اطلب من مدير الموارد البشرية تنفيذ الإلغاء." },
@@ -4983,7 +4986,7 @@ router.delete("/leave-requests/:id", authorize({ feature: "hr.leaves", action: "
     );
     if (!leaveReq) throw new NotFoundError("طلب الإجازة غير موجود");
     const isOwnRequest = leaveReq.employeeId === scope.employeeId;
-    if (!isOwnRequest && !HR_ROLES.includes(scope.role)) {
+    if (!isOwnRequest && !scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError(
         "حذف طلبات الإجازة مقصور على صاحب الطلب أو HR أو المالك",
         { fix: "اطلب من مدير الموارد البشرية تنفيذ الحذف." }
@@ -5159,7 +5162,7 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
 router.delete("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "delete", resource: { table: "payroll_runs", idParam: "id" } }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: حذف الرواتب مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -5238,7 +5241,7 @@ router.patch("/performance/:id", authorize({ feature: "hr.performance", action: 
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "approve")) {
       throw new ForbiddenError("غير مصرح: تعديل التقييمات مقصور على HR أو المدير أو المالك");
     }
     const { overallScore, score, comments, feedback, status, strengths, improvements, goals } = zodParse(performancePatchSchema.safeParse(req.body ?? {}));
@@ -5278,7 +5281,7 @@ router.patch("/performance/:id", authorize({ feature: "hr.performance", action: 
 router.delete("/performance/:id", authorize({ feature: "hr.performance", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: حذف التقييمات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -5302,7 +5305,7 @@ router.delete("/performance/:id", authorize({ feature: "hr.performance", action:
 router.delete("/violations/:id", authorize({ feature: "hr.violations", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: حذف المخالفات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -5354,7 +5357,7 @@ router.get("/official-letters/:id", authorize({ feature: "hr.organization", acti
 router.patch("/official-letters/:id", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "approve")) {
       throw new ForbiddenError("غير مصرح: تعديل الخطابات مقصور على HR أو المدير أو المالك");
     }
     const { subject, content, status, type } = zodParse(officialLetterPatchSchema.safeParse(req.body ?? {}));
@@ -5390,7 +5393,7 @@ router.patch("/official-letters/:id", authorize({ feature: "hr.organization", ac
 router.delete("/official-letters/:id", authorize({ feature: "hr.organization", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: حذف الخطابات مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -5413,7 +5416,7 @@ router.delete("/official-letters/:id", authorize({ feature: "hr.organization", a
 router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "approve")) {
       throw new ForbiddenError("غير مصرح: لا تملك صلاحية اعتماد الخطابات");
     }
     const { id } = req.params;
@@ -5599,7 +5602,7 @@ router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "li
 router.put("/onboarding-steps", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات التهيئة");
     }
     const { steps } = zodParse(onboardingStepsSchema.safeParse(req.body ?? {}));
@@ -5748,11 +5751,11 @@ router.get("/employees-status", authorize({ feature: "hr.employees", action: "li
 // 360° SMART EVALUATION SYSTEM
 // ─────────────────────────────────────────────────────────────────────────────
 
-function isHR(scope: { role: string }): boolean {
-  return HR_ROLES.includes(scope.role);
+function isHR(scope: RequestScope): boolean {
+  return scopeCan(scope, "hr", "update");
 }
-function isMgr(scope: { role: string }): boolean {
-  return MGR_ROLES.includes(scope.role);
+function isMgr(scope: RequestScope): boolean {
+  return scopeCan(scope, "hr", "approve");
 }
 
 // Helper: compute system evaluation scores for an employee
@@ -6710,7 +6713,7 @@ router.get("/public-holidays", authorize({ feature: "hr.organization", action: "
 router.post("/public-holidays", authorize({ feature: "hr.organization", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: إدارة الإجازات الرسمية مقصورة على HR أو المالك");
     }
     const b = zodParse(publicHolidaySchema.safeParse(req.body));
@@ -6737,7 +6740,7 @@ router.post("/public-holidays", authorize({ feature: "hr.organization", action: 
 router.patch("/public-holidays/:id", authorize({ feature: "hr.organization", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح");
     }
     const id = parseId(req.params.id, "id");
@@ -6786,7 +6789,7 @@ router.get("/public-holidays/check", authorize({ feature: "hr.organization", act
 router.delete("/public-holidays/:id", authorize({ feature: "hr.organization", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح");
     }
     const id = parseId(req.params.id, "id");
@@ -6862,7 +6865,7 @@ router.get("/transfers/:id", authorize({ feature: "hr.exit", action: "view" }), 
 router.patch("/transfers/:id", authorize({ feature: "hr.exit", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات النقل مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
@@ -7020,7 +7023,7 @@ router.patch("/transfers/:id/approve", authorize({ feature: "hr.exit", action: "
   // so the audit trail sees every HR decision on a transfer.
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("هذه الخطوة محصورة بمدير الموارد البشرية أو المدير العام", {
         fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
       });
@@ -7123,7 +7126,7 @@ router.patch("/transfers/:id/return", authorize({ feature: "hr.exit", action: "r
   // dedicated route rather than an overload of the /approve `approved` flag.
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("هذه الخطوة محصورة بمدير الموارد البشرية أو المدير العام", {
         fix: "اطلب من مدير الموارد البشرية اتخاذ القرار.",
       });
@@ -8292,7 +8295,7 @@ router.patch("/excuse-requests/:id/approve", authorize({ feature: "hr.attendance
 router.patch("/excuse-requests/:id", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr", "update")) {
       throw new ForbiddenError("غير مصرح: تعديل طلبات الاستئذان مقصور على HR أو المالك");
     }
     const id = parseId(req.params.id, "id");
