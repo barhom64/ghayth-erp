@@ -81,13 +81,15 @@ const ENDPOINTS: Endpoint[] = [
   { src: EXIT, verb: "patch", path: "/exit/:id/complete",
     authorize: { feature: "hr.exit", action: "update" }, grantGate: { feature: "hr.exit", action: "approve" } },
 
-  // Payroll — maker-checker + PAYROLL_ROLES on approve.
+  // Payroll — maker-checker + the hr.payroll authority on approve (HR-REV-1
+  // #1 migrated the inline PAYROLL_ROLES gate to scopeCan(hr.payroll:approve),
+  // a tighter SoD layer than the hr.payroll.runs capability).
   { src: HR, verb: "post", path: "/payroll",
     authorize: { feature: "hr.payroll.runs", action: "create" } },
   { src: HR, verb: "patch", path: "/payroll/:id/approve",
     authorize: { feature: "hr.payroll.runs", action: "approve",
                  resource: "table: \"payroll_runs\"" },
-    roleGate: "PAYROLL_ROLES" },
+    grantGate: { feature: "hr.payroll", action: "approve" } },
 
   // Loans — write paths.
   { src: LOANS, verb: "post", path: "/loans",
