@@ -60,6 +60,14 @@ describe("HR-REV-3 (#2222) — onboarding plan + audit + numbering", () => {
   it("INSERTs into onboarding_tasks", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO onboarding_tasks/);
   });
+  it("routes each onboarding task to a distributed ownerRole (HR-REV-3 slice 1)", () => {
+    // Tasks are generated from the shared plan with an owning role + reason +
+    // mandatory flag, not flat title strings — so completion is distributed.
+    expect(QA_BLOCK).toMatch(/INSERT INTO onboarding_tasks[\s\S]*?"ownerRole"[\s\S]*?reason[\s\S]*?mandatory/);
+    expect(QA_BLOCK).toMatch(/DEFAULT_ONBOARDING_PLAN/);
+    expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"documents"/);
+    expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"department"/);
+  });
   it("calls createAuditLog", () => {
     expect(QA_BLOCK).toMatch(/createAuditLog\(/);
   });
