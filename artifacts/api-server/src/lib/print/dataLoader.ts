@@ -281,6 +281,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadUmrahNuskInvoice(companyId, entityId);
     case "umrah_commission_plan":
       return await loadUmrahCommissionPlan(companyId, entityId);
+    case "umrah_commission_calculation":
+      return await loadUmrahCommissionCalculation(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
     case "umrah_violation":
@@ -1557,6 +1559,34 @@ async function loadUmrahCommissionPlan(companyId: number, id: string) {
     [id],
   ).catch(() => []);
   return { entity: plan, tiers };
+}
+
+// U-14-P3 — umrah commission calculation (monthly slip).
+// Joins the plan + employee + season so the receipt carries the
+// human-readable context for one month's calculation result. Pure
+// SELECT; tenant-scoped.
+async function loadUmrahCommissionCalculation(companyId: number, id: string) {
+  const [calc] = await rawQuery<Record<string, unknown>>(
+    `SELECT cc.*,
+            cp."planName",
+            cp."commissionType",
+            cp."percentageRate",
+            cp."fixedAmount",
+            cp."baseSalary",
+            e.name AS "employeeName",
+            s.name AS "seasonName"
+       FROM employee_commission_calculations cc
+       LEFT JOIN employee_commission_plans cp
+         ON cp.id = cc."planId" AND cp."companyId" = $2 AND cp."deletedAt" IS NULL
+       LEFT JOIN employees e
+         ON e.id = cc."employeeId" AND e."companyId" = $2 AND e."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = cp."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE cc.id = $1 AND cc."companyId" = $2 AND cc."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: calc ?? { id } };
 }
 
 async function loadUmrahPenalty(companyId: number, id: string) {

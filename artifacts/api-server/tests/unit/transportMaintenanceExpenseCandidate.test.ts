@@ -41,6 +41,11 @@ describe("#TA-T18 — maintenance expense candidate (finance boundary)", () => {
   it("the accountant materialize endpoint posts maintenance GL on approval", () => {
     expect(MATERIALIZE).toMatch(/sourceType === "maintenance"/);
     expect(MATERIALIZE).toMatch(/postMaintenanceGL/);
+    // The recorded JE id reads the GL result's `journalId` field (the
+    // posting result is { journalId }, not { id }) so the candidate's
+    // materializedJournalEntryId link is actually populated.
+    expect(MATERIALIZE).toMatch(/\.journalId \?\? null/);
+    expect(MATERIALIZE).not.toMatch(/as \{ id\?: number \}[\s\S]{0,20}\)\?\.id \?\? null/);
   });
 });
 
