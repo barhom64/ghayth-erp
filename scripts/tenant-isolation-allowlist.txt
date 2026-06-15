@@ -63,7 +63,6 @@ routes/mySpace.ts:tasks
 routes/numbering.ts:numbering_counters
 routes/operationsCenter.ts:system_settings
 routes/projects.ts:employees
-routes/projects.ts:project_phases
 routes/projects.ts:project_resources
 routes/properties.ts:maintenance_requests
 routes/properties.ts:property_units
