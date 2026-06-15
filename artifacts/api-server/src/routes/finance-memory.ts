@@ -16,6 +16,8 @@ import {
 } from "../lib/errorHandler.js";
 import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 import {
   loadManualJournalTemplate, materializeTemplateLines, isTemplateMaterializationPostable,
 } from "../lib/financialMemory.js";
@@ -91,6 +93,12 @@ financeMemoryRouter.put(
            b.defaultAccountPurpose ?? null, b.defaultCostCenterId ?? null],
         );
       }
+      auditFromRequest(req, "finance.supplier_finance_defaults.updated", "supplier_finance_defaults", id, { after: b });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.supplier_finance_defaults.updated", entity: "supplier_finance_defaults", entityId: id,
+        supplierId: id, details: JSON.stringify({ supplierId: id }),
+      }).catch((e) => logger.error(e, "finance-memory background task failed"));
       res.json({ ok: true });
     } catch (err) { handleRouteError(err, res, "Save supplier finance defaults error:"); }
   },
@@ -136,6 +144,7 @@ financeMemoryRouter.put(
           WHERE "companyId"=$1 AND "categoryKey"=$2 AND "deletedAt" IS NULL`,
         [scope.companyId, b.categoryKey],
       );
+      let memoryId = existing?.id ?? 0;
       if (existing) {
         await rawExecute(
           `UPDATE expense_category_memory
@@ -144,13 +153,20 @@ financeMemoryRouter.put(
           [scope.companyId, existing.id, b.accountPurpose ?? null, b.defaultTaxCodeId ?? null, b.defaultCostCenterId ?? null],
         );
       } else {
-        await rawExecute(
+        const { insertId } = await rawExecute(
           `INSERT INTO expense_category_memory
              ("companyId","categoryKey","accountPurpose","defaultTaxCodeId","defaultCostCenterId")
            VALUES ($1,$2,$3,$4,$5)`,
           [scope.companyId, b.categoryKey, b.accountPurpose ?? null, b.defaultTaxCodeId ?? null, b.defaultCostCenterId ?? null],
         );
+        memoryId = insertId ?? 0;
       }
+      auditFromRequest(req, "finance.expense_memory.updated", "expense_category_memory", memoryId, { after: b });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.expense_memory.updated", entity: "expense_category_memory", entityId: memoryId,
+        categoryKey: b.categoryKey, details: JSON.stringify({ categoryKey: b.categoryKey }),
+      }).catch((e) => logger.error(e, "finance-memory background task failed"));
       res.json({ ok: true });
     } catch (err) { handleRouteError(err, res, "Save expense memory error:"); }
   },
@@ -239,6 +255,14 @@ financeMemoryRouter.post(
         );
       }
       const tpl = await loadManualJournalTemplate(scope.companyId, insertId);
+      auditFromRequest(req, "finance.journal_template.created", "manual_journal_templates", insertId, {
+        after: { name: b.name.trim(), lineCount: b.lines.length },
+      });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.journal_template.created", entity: "manual_journal_templates", entityId: insertId,
+        name: b.name.trim(), details: JSON.stringify({ name: b.name.trim(), lineCount: b.lines.length }),
+      }).catch((e) => logger.error(e, "finance-memory background task failed"));
       res.status(201).json(tpl);
     } catch (err) { handleRouteError(err, res, "Create journal template error:"); }
   },

@@ -22,7 +22,8 @@ import {
 } from "../lib/errorHandler.js";
 import { rawQuery, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { assertPostableAccount } from "../lib/businessHelpers.js";
+import { assertPostableAccount, auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 import {
   computeMonthlySchedule,
   runDueAmortizations,
@@ -114,6 +115,15 @@ financeAmortizationRouter.post(
         ],
       );
       assertInsert(row?.id, "prepaid_amortization_schedules");
+      auditFromRequest(req, "finance.amortization.scheduled", "prepaid_amortization_schedules", row.id, {
+        after: { totalAmount: b.totalAmount, months, monthlyAmount, prepaidAccountCode: b.prepaidAccountCode },
+      });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.amortization.scheduled", entity: "prepaid_amortization_schedules", entityId: row.id,
+        totalAmount: b.totalAmount, months,
+        details: JSON.stringify({ totalAmount: b.totalAmount, months, monthlyAmount }),
+      }).catch((e) => logger.error(e, "finance-amortization background task failed"));
       res.status(201).json({ id: row.id, months, monthlyAmount });
     } catch (err) { handleRouteError(err, res, "Amortization create error:"); }
   },
@@ -136,6 +146,15 @@ financeAmortizationRouter.post(
         createdBy: scope.activeAssignmentId ?? 0,
         scheduleId: b.scheduleId,
       });
+      auditFromRequest(req, "finance.amortization.recognized", "prepaid_amortization_schedules", b.scheduleId ?? 0, {
+        after: result,
+      });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.amortization.recognized", entity: "prepaid_amortization_schedules", entityId: b.scheduleId ?? 0,
+        posted: result.posted, schedulesProcessed: result.schedulesProcessed,
+        details: JSON.stringify(result),
+      }).catch((e) => logger.error(e, "finance-amortization background task failed"));
       res.json({ data: result });
     } catch (err) { handleRouteError(err, res, "Amortization run error:"); }
   },
