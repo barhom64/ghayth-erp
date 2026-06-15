@@ -61,16 +61,25 @@ type Endpoint = {
   authorize: { feature: string; action: string };
   /** Additional role gate (HR_ROLES, PAYROLL_ROLES, etc.) checked inline. */
   roleGate?: string;
+  /**
+   * HR-REV-1 #1: grant-derived inline gate via scopeCan() that REPLACED a
+   * hardcoded role list — grants are the single source of truth. Pinned so
+   * the gate can't be dropped or silently weakened back to a role array.
+   */
+  grantGate?: { feature: string; action: string };
 };
 
 const ENDPOINTS: Endpoint[] = [
-  // Exit lifecycle — already gated by HR_ROLES on approve + complete
-  // (SEC-1 hardening). The list below is the SOURCE OF TRUTH for what
-  // must stay gated; removing any entry fails the test.
+  // Exit lifecycle — SEC-1 hardening kept an inline elevated gate on
+  // approve + complete on top of the feature-level "update". HR-REV-1 #1
+  // migrated it off the hardcoded HR_ROLES array to a grant-derived
+  // scopeCan(hr.exit:approve) check (the seeded HR_ROLES — hr_manager/
+  // owner/gm — are exactly the holders of hr.exit:approve). The list below
+  // is the SOURCE OF TRUTH for what must stay gated.
   { src: EXIT, verb: "patch", path: "/exit/:id/approve",
-    authorize: { feature: "hr.exit", action: "update" }, roleGate: "HR_ROLES" },
+    authorize: { feature: "hr.exit", action: "update" }, grantGate: { feature: "hr.exit", action: "approve" } },
   { src: EXIT, verb: "patch", path: "/exit/:id/complete",
-    authorize: { feature: "hr.exit", action: "update" }, roleGate: "HR_ROLES" },
+    authorize: { feature: "hr.exit", action: "update" }, grantGate: { feature: "hr.exit", action: "approve" } },
 
   // Payroll — maker-checker + PAYROLL_ROLES on approve.
   { src: HR, verb: "post", path: "/payroll",
@@ -125,6 +134,13 @@ describe("HR permission-boundary — every sensitive write goes through authoriz
       it(`${ep.verb.toUpperCase()} ${ep.path} → ${ep.roleGate} inline check`, () => {
         const block = findHandler(ep.src, ep.verb, ep.path);
         expect(block).toContain(`${ep.roleGate}.includes(scope.role)`);
+      });
+    }
+
+    if (ep.grantGate) {
+      it(`${ep.verb.toUpperCase()} ${ep.path} → scopeCan(${ep.grantGate.feature}:${ep.grantGate.action}) inline check`, () => {
+        const block = findHandler(ep.src, ep.verb, ep.path);
+        expect(block).toContain(`scopeCan(scope, "${ep.grantGate!.feature}", "${ep.grantGate!.action}")`);
       });
     }
   }
