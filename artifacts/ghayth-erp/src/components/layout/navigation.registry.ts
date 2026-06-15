@@ -193,7 +193,8 @@ export const allNavSections: NavSection[] = [
       // (previously 2 separate top-level entries)
       { label: "النشاط والحضور", path: "/hr/attendance", icon: Clock, module: "hr", children: [
         { label: "السجل اليومي", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
-        { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
+        // HR-REV-2 §4.6 — «تقارير الحضور» تعيش في مجموعة «التقارير» الموحّدة
+        // (التي صُمِّمت لتجميع تقارير الحضور/الأداء/الرواتب)؛ أُزيل المكرّر هنا.
         { label: "التتبع الميداني", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
         { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
