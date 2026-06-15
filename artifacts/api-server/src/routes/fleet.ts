@@ -2442,6 +2442,53 @@ router.post("/trips/:id/cancel", authorize({ feature: "fleet.trips", action: "up
             [row.driverId, scope.companyId]
           );
         }
+        // Re-dispatch on cancel (operator decision) — a cancelled trip is NOT a
+        // cancelled booking. If this trip came from a dispatch order
+        // ("dispatch:<id>:<token>" sourceKey) that's still mid-flight, send the
+        // order back to the pool so another driver can be assigned, rather than
+        // cancelling the operational need. The order returns to "pending" (its
+        // accept/start stamps cleared; driverId/vehicleId are NOT NULL columns
+        // so they linger as the last assignment until the order is re-notified
+        // or reassigned via the assignment endpoint), its live navigation
+        // session is cancelled, and the booking line returns to "pending"
+        // (re-pickable). The booking itself is left unchanged — mirroring the
+        // driver-decline flow. A silent no-op for ad-hoc trips or orders already
+        // terminal. Runs on the transition client → atomic with the cancel.
+        const tripSourceKey = typeof row.sourceKey === "string" ? row.sourceKey : "";
+        const dispatchLink = /^dispatch:(\d+):/.exec(tripSourceKey);
+        if (dispatchLink) {
+          const dispatchOrderId = Number(dispatchLink[1]);
+          const dispRes = await client.query<{ id: number; bookingLineId: number }>(
+            `SELECT id, "bookingLineId"
+               FROM transport_dispatch_orders
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('accepted', 'executing')
+              FOR UPDATE`,
+            [dispatchOrderId, scope.companyId],
+          );
+          const disp = dispRes.rows[0];
+          if (disp) {
+            await client.query(
+              `UPDATE transport_dispatch_orders
+                  SET status = 'pending', "acceptedAt" = NULL, "startedAt" = NULL,
+                      "updatedAt" = NOW()
+                WHERE id = $1 AND "companyId" = $2`,
+              [disp.id, scope.companyId],
+            );
+            await client.query(
+              `UPDATE driver_navigation_sessions
+                  SET status = 'cancelled', "endedAt" = NOW(), "updatedAt" = NOW()
+                WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+                  AND status NOT IN ('ended', 'cancelled')`,
+              [disp.id, scope.companyId],
+            );
+            await client.query(
+              `UPDATE transport_booking_lines
+                  SET status = 'pending', "updatedAt" = NOW()
+                WHERE id = $1 AND "companyId" = $2`,
+              [disp.bookingLineId, scope.companyId],
+            );
+          }
+        }
       },
     });
     emitEvent({
