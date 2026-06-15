@@ -35,6 +35,10 @@ import {
   isDryRun,
 } from "../lib/requestIdempotency.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import {
+  isOperationallyLinkedEntry,
+  assertOperationalManualApprovalAllowed,
+} from "../lib/financePostingPolicy.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
@@ -381,6 +385,13 @@ const createJournalSchema = z.object({
 const reverseJournalSchema = z.object({
   reason: z.string().optional(),
   reverseDate: z.string().optional(),
+});
+
+// FIN-OPERATIONAL-MANUAL-JOURNAL-GUARD (#2239) — approve body. `reason` is
+// optional at the schema layer (ordinary manual JEs need none) but becomes
+// MANDATORY in the handler when the entry is operationally linked.
+const approveJournalSchema = z.object({
+  reason: z.string().optional(),
 });
 
 const yearEndCloseSchema = z.object({
@@ -2939,6 +2950,19 @@ journalRouter.post("/journal", requireMinLevel(50), authorize({ feature: "financ
     }
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
+    // FIN-OPERATIONAL-MANUAL-JOURNAL-GUARD (#2239) — a manual JE whose lines
+    // carry an operational dimension (vehicle/property/asset/employee/driver/
+    // unit/contract) enters a SPECIAL governance path: the reason (description)
+    // is MANDATORY and the object link must be non-null (it IS the dimension,
+    // already asserted by the line carrying it). Ordinary GL-only manual JEs
+    // are unaffected. Elevated approval is enforced at /journal/:id/approve.
+    const operationallyLinked = isOperationallyLinkedEntry(lines);
+    if (operationallyLinked && !String(description).trim()) {
+      throw new ValidationError("سبب القيد اليدوي المرتبط بكائن تشغيلي مطلوب", {
+        field: "description",
+        fix: "أدخل سبب/وصف القيد اليدوي المرتبط بالكائن التشغيلي لتوثيقه",
+      });
+    }
     for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
     // Reject negative amounts up front. Without this guard a user passing
     // `{debit:-100, credit:0}` produces a "negative debit" that survives
@@ -3060,7 +3084,7 @@ journalRouter.post("/journal", requireMinLevel(50), authorize({ feature: "financ
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch((e) => logger.error(e, "finance-journal background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit, operationallyLinked, reason: operationallyLinked ? description : undefined } }).catch((e) => logger.error(e, "finance-journal background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
     const [createdJournal] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
@@ -3125,10 +3149,42 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
 // FIN-013 — approve a draft manual journal. Pure status transition; no GL
 // movement yet. The companion `/post` endpoint runs the balance push.
 // GAP_MATRIX P0 — approve floor at 60 (branch_manager+): separation of duties.
+// FIN-OPERATIONAL-MANUAL-JOURNAL-GUARD (#2239) — when the entry is operationally
+// linked, the ordinary level-60 gate is INSUFFICIENT: a SPECIAL path applies —
+// elevated GM authority (scope.isOwner || OWNER_GM_ROLES → level 90 in the RBAC
+// catalog, strictly above the 60/70 finance gates) AND a mandatory approval
+// reason. The elevation is enforced INSIDE the handler (requireMinLevel is
+// static route middleware) after the entry is loaded and classified.
 journalRouter.post("/journal/:id/approve", requireMinLevel(60), authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    const { reason } = zodParse(approveJournalSchema.safeParse(req.body ?? {}));
+
+    // Load the entry header + lines (company-scoped) to classify its
+    // operational linkage before the transition. NotFound here mirrors the
+    // lifecycle engine's own not-found behaviour for a missing/foreign id.
+    const [header] = await rawQuery<{ relatedEntityType: string | null }>(
+      `SELECT "relatedEntityType" FROM journal_entries
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND "sourceType" = 'manual_journal' LIMIT 1`,
+      [id, scope.companyId],
+    );
+    const linkLines = await rawQuery<Record<string, unknown>>(
+      `SELECT "vehicleId", "propertyId", "assetId", "employeeId",
+              "driverId", "unitId", "contractId"
+         FROM journal_lines WHERE "journalId" = $1`,
+      [id],
+    );
+    const operationallyLinked = isOperationallyLinkedEntry(linkLines as any, header ?? null);
+    // SPECIAL governance path — throws ForbiddenError (403) if not GM/owner,
+    // ValidationError (422) if the reason is missing. No-op when not linked.
+    assertOperationalManualApprovalAllowed({
+      linked: operationallyLinked,
+      elevated: scope.isOwner || OWNER_GM_ROLES.includes(scope.role),
+      reason,
+    });
+
     try {
       const updated = await applyTransition<Record<string, unknown>>({
         entity: "journal_entries",
@@ -3143,8 +3199,8 @@ journalRouter.post("/journal/:id/approve", requireMinLevel(60), authorize({ feat
           "approvedAt": new Date(),
         },
       });
-      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "approve", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
-      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.approved", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "approve", entity: "journal_entries", entityId: id, after: { operationallyLinked, reason: operationallyLinked ? reason : undefined } }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.approved", entity: "journal_entries", entityId: id, details: JSON.stringify({ operationallyLinked }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
       res.json(updated);
     } catch (err) {
       const lifecycle = lifecycleErrorResponse(err);

@@ -7,7 +7,7 @@
 // `accountUsage` column.
 
 import { rawQuery } from "./rawdb.js";
-import { ValidationError } from "./errorHandler.js";
+import { ValidationError, ForbiddenError } from "./errorHandler.js";
 import {
   allowedUsagesForPaymentMethod,
   ACCOUNT_USAGE_LABELS_AR,
@@ -85,6 +85,114 @@ export interface DimensionContractLine {
   projectId?: number | string | null;
   vendorId?: number | string | null;
   clientId?: number | string | null;
+}
+
+/**
+ * FIN-OPERATIONAL-MANUAL-JOURNAL-GUARD (#2239) — حوكمة القيد اليدوي المرتبط تشغيليًا.
+ *
+ * المتطلب (تعليق #2239 الإلزامي): القيد اليدوي من النوع المرتبط تشغيليًا يجب أن
+ * يدخل مسار اعتماد خاص: سبب إلزامي، ربط إلزامي بالكائن، اعتماد المدير العام أو
+ * صلاحية محددة، Audit.
+ *
+ * `isOperationallyLinkedEntry` دالة نقية (بلا I/O): القيد «مرتبط تشغيليًا» إن
+ * حمل أيٌّ من سطوره بُعدًا تشغيليًا (مركبة/عقار/أصل/موظف/سائق/وحدة/عقد) أو كان
+ * نوع الكيان المرتبط على الرأس تشغيليًا. قابلة للاختبار وحدةً.
+ */
+export const OPERATIONAL_LINE_DIMENSIONS = [
+  "vehicleId",
+  "propertyId",
+  "assetId",
+  "employeeId",
+  "driverId",
+  "unitId",
+  "contractId",
+] as const;
+
+// relatedEntityType values that represent an operational object on the header
+// (journal_entries."relatedEntityType"). Mirrors cost_centers.relatedEntityType
+// usage ('vehicle' / 'employee' / …) — see fleetEngine.ts / finance-cost-centers.ts.
+export const OPERATIONAL_RELATED_ENTITY_TYPES = new Set<string>([
+  "vehicle",
+  "property",
+  "asset",
+  "employee",
+  "driver",
+  "unit",
+  "contract",
+]);
+
+export interface OperationalLinkLine {
+  vehicleId?: number | string | null;
+  propertyId?: number | string | null;
+  assetId?: number | string | null;
+  employeeId?: number | string | null;
+  driverId?: number | string | null;
+  unitId?: number | string | null;
+  contractId?: number | string | null;
+  [k: string]: unknown;
+}
+
+export interface OperationalLinkHeader {
+  relatedEntityType?: string | null;
+  relatedEntityId?: number | string | null;
+}
+
+function dimPresent(val: unknown): boolean {
+  return val !== null && val !== undefined && val !== "" && !(typeof val === "number" && Number.isNaN(val));
+}
+
+/**
+ * Pure predicate: is this entry operationally linked? True when any line carries
+ * an operational dimension FK, OR the header's relatedEntityType is operational.
+ */
+export function isOperationallyLinkedEntry(
+  lines: OperationalLinkLine[] | null | undefined,
+  header?: OperationalLinkHeader | null,
+): boolean {
+  if (Array.isArray(lines)) {
+    for (const line of lines) {
+      if (!line) continue;
+      for (const dim of OPERATIONAL_LINE_DIMENSIONS) {
+        if (dimPresent(line[dim])) return true;
+      }
+    }
+  }
+  if (header && header.relatedEntityType) {
+    const t = String(header.relatedEntityType).trim().toLowerCase();
+    if (OPERATIONAL_RELATED_ENTITY_TYPES.has(t)) return true;
+  }
+  return false;
+}
+
+/**
+ * Pure governance decision for the SPECIAL approval path of an operationally
+ * linked manual JE. Throws (ForbiddenError 403) when the caller lacks the
+ * elevated GM authority, or (ValidationError 422) when the mandatory approval
+ * reason is missing. Non-linked entries (`linked=false`) are a no-op — ordinary
+ * manual JEs are unaffected.
+ *
+ * `elevated` = caller holds GM/owner authority (the route resolves this from
+ * scope.isOwner / OWNER_GM_ROLES — level 90 in the RBAC catalog, strictly above
+ * the ordinary level-60 approve and the level-70 post gates).
+ */
+export function assertOperationalManualApprovalAllowed(args: {
+  linked: boolean;
+  elevated: boolean;
+  reason?: string | null;
+}): void {
+  if (!args.linked) return;
+  if (!args.elevated) {
+    throw new ForbiddenError(
+      "اعتماد القيد اليدوي المرتبط بكائن تشغيلي يتطلب صلاحية المدير العام",
+      { field: "approve", fix: "اطلب اعتماد المدير العام (أو صلاحية مكافئة) لهذا القيد" },
+    );
+  }
+  if (!args.reason || !String(args.reason).trim()) {
+    throw new ValidationError(
+      "سبب اعتماد القيد اليدوي المرتبط بكائن تشغيلي مطلوب",
+      { field: "reason", fix: "أدخل سبب الاعتماد لتوثيقه في سجل التدقيق" },
+    );
+  }
 }
 
 export function assertDimensionContract(args: { lines: DimensionContractLine[] }): { warnings: string[] } {
