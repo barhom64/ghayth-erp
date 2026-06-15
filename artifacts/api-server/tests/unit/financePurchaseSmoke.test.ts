@@ -93,6 +93,59 @@ describe("finance-purchase — purchase orders", () => {
   });
 });
 
+describe("finance-purchase — budget enforcement (#2296)", () => {
+  // The procurement channel must apply the same role-aware budget gate the
+  // manual-expense / vendor-invoice paths apply, otherwise an over-budget
+  // spend simply routes around the control by going through a PO.
+  it("imports validateBudget from businessHelpers", () => {
+    expect(SRC).toMatch(/import \{[\s\S]*?validateBudget[\s\S]*?\} from "\.\.\/lib\/businessHelpers\.js"/);
+  });
+
+  it("vendor-invoice approval calls validateBudget before posting the bill", () => {
+    // The expense-code budget check lives on the invoice-create path and
+    // throws (Conflict/Forbidden) when the role can't authorise the tier.
+    const idx = SRC.indexOf("const budgetCheck = await validateBudget(");
+    expect(idx).toBeGreaterThan(0);
+  });
+
+  it("PO approval enforces the budget at the commitment point", () => {
+    // poApprovalAction aggregates lines per accountCode and runs the gate
+    // only on the 'approved' transition — reject/return must not be blocked
+    // by budget.
+    const fn = SRC.slice(
+      SRC.indexOf("async function poApprovalAction("),
+      SRC.indexOf("purchaseRouter.patch(\"/purchase-orders/:id/approve\""),
+    );
+    expect(fn).toContain('if (newStatus === "approved")');
+    expect(fn).toContain("validateBudget(");
+    expect(fn).toContain("purchase_order_items");
+    expect(fn).toMatch(/GROUP BY "accountCode"/);
+  });
+
+  it("PO-approval gate throws ConflictError on rejected, ForbiddenError otherwise", () => {
+    const fn = SRC.slice(
+      SRC.indexOf("async function poApprovalAction("),
+      SRC.indexOf("purchaseRouter.patch(\"/purchase-orders/:id/approve\""),
+    );
+    expect(fn).toMatch(/budgetCheck\.status === "rejected"/);
+    expect(fn).toContain("new ConflictError(");
+    expect(fn).toContain("new ForbiddenError(");
+  });
+
+  it("budget gate runs strictly before the approval state transition", () => {
+    // If the transition ran first, the PO would already be 'approved' when
+    // the gate throws — the commitment would exist with a failed control.
+    const fn = SRC.slice(
+      SRC.indexOf("async function poApprovalAction("),
+      SRC.indexOf("purchaseRouter.patch(\"/purchase-orders/:id/approve\""),
+    );
+    const gateIdx = fn.indexOf("validateBudget(");
+    const transitionIdx = fn.indexOf("await applyTransition(");
+    expect(gateIdx).toBeGreaterThan(0);
+    expect(transitionIdx).toBeGreaterThan(gateIdx);
+  });
+});
+
 describe("finance-purchase — payment runs", () => {
   it("pending payments endpoint exists", () => {
     expect(SRC).toContain('"/payment-run/pending"');
