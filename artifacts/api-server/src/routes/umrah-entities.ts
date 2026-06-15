@@ -5227,19 +5227,23 @@ router.get(
         return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       };
 
+      // U-18-P4 — bilingual header policy: Arabic primary with English
+      // in parentheses so partner accounting / payroll systems that
+      // ingest the CSV in EN can map the columns without a separate
+      // glossary. Same convention applied to the pilgrims export.
       const headers: Array<[keyof typeof rows[number], string]> = [
-        ["id",               "رقم"],
-        ["year",             "السنة"],
-        ["month",            "الشهر"],
-        ["employeeName",     "الموظف"],
-        ["planName",         "الخطة"],
-        ["status",           "الحالة"],
-        ["commissionAmount", "العمولة المحتسبة"],
-        ["finalAmount",      "المبلغ النهائي"],
-        ["totalMutamers",    "عدد المعتمرين"],
-        ["conditionMet",     "تحقّق الشرط"],
-        ["hasViolations",    "وجود مخالفات"],
-        ["createdAt",        "تاريخ الإنشاء"],
+        ["id",               "رقم (ID)"],
+        ["year",             "السنة (Year)"],
+        ["month",             "الشهر (Month)"],
+        ["employeeName",     "الموظف (Employee)"],
+        ["planName",         "الخطة (Plan)"],
+        ["status",           "الحالة (Status)"],
+        ["commissionAmount", "العمولة المحتسبة (Calculated Commission)"],
+        ["finalAmount",      "المبلغ النهائي (Final Amount)"],
+        ["totalMutamers",    "عدد المعتمرين (Pilgrim Count)"],
+        ["conditionMet",     "تحقّق الشرط (Condition Met)"],
+        ["hasViolations",    "وجود مخالفات (Has Violations)"],
+        ["createdAt",        "تاريخ الإنشاء (Created At)"],
       ];
 
       const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
