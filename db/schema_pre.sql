@@ -20313,7 +20313,8 @@ CREATE TABLE public.umrah_packages (
     "updatedAt" timestamp with time zone DEFAULT now(),
     "createdBy" integer,
     "updatedBy" integer,
-    "branchId" integer
+    "branchId" integer,
+    "defaultHotelId" integer
 );
 
 
