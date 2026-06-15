@@ -61,6 +61,11 @@ const ALLOWLIST = new Set([
   "pages/bi-dashboards.tsx",
   "pages/bi-kpis.tsx",
   "pages/bi-reports.tsx",
+  // HR-REV-2 PR1 (ADR-HR-02) — /hr/organization and /hr/organization/structure
+  // now redirect to /hr/org-tree (canonical org-tree page). Files kept for
+  // reference until their content is fully merged into org-tree as tabs.
+  "pages/hr/organization.tsx",
+  "pages/hr/organization-structure.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];
