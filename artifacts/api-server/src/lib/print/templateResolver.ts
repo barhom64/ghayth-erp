@@ -433,6 +433,8 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   // wrong reading audience. It now points at its own builder carrying
   // agent + sub-agent + contract attribution.
   umrah_agent_invoice: () => buildUmrahAgentInvoicePreset(),
+  // U-14-P3 — Nusk invoice preset (PURCHASE-side document).
+  umrah_nusk_invoice: () => buildUmrahNuskInvoicePreset(),
   // Cargo bill of lading — new bespoke preset wired with loadCargoManifest.
   cargo_manifest: () => buildCargoManifestPreset(),
   manifest: () => buildCargoManifestPreset(),
@@ -2805,6 +2807,65 @@ function buildUmrahGroupPreset(): PrintTemplate {
 // `data.entity` is whatever `loadUmrahAgentInvoice(...)` returns. Keys
 // referenced here (`agentName` / `subAgentName` / `contractRef` /
 // `seasonName`) are pulled by that loader.
+// U-14-P3 — Nusk invoice preset.
+//
+// The Nusk invoice is the PURCHASE-side document: the bill the Nusk
+// system issues against the agency for one group's services (ground
+// services, electronic fees, visas, insurance, enrichment, transport,
+// hotel). It's distinct from the buyer-side sales invoice (sub-agent)
+// and the agent invoice (main agent). The body breaks the totals out
+// per service-line so an operator can sanity-check the figure being
+// passed through to the agent.
+function buildUmrahNuskInvoicePreset(): PrintTemplate {
+  return makePreset({
+    id: -108, presetKey: "umrah_nusk_invoice_classic", entityType: "umrah_nusk_invoice",
+    name: "فاتورة نُسُك",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فاتورة نُسُك</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المجموعة</div>
+      <div>{{entity.groupName}}</div>
+      <div style="color:#64748b;font-size:9pt">الموسم: {{entity.seasonName}}</div>
+      <div style="color:#64748b;font-size:9pt">الوكيل: {{entity.agentName}}</div>
+      <div style="color:#64748b;font-size:9pt">الوكيل الفرعي: {{entity.subAgentName}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم فاتورة نُسُك:</strong> <span dir="ltr">{{entity.nuskInvoiceNumber}}</span></div>
+      <div><strong>تاريخ الإصدار:</strong> {{entity.issueDate}}</div>
+      <div><strong>تاريخ الانتهاء:</strong> {{entity.expiryDate}}</div>
+      <div><strong>عدد المعتمرين:</strong> {{entity.mutamerCount}}</div>
+      <div><strong>الحالة:</strong> {{entity.nuskStatus}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">البند</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:140px;text-align:left">المبلغ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">خدمات أرضية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.groundServices}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">رسوم إلكترونية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.electronicFees}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">رسوم تأشيرات</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.visaFees}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">رسوم تأمين</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.insuranceFees}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">خدمات إثرائية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.enrichmentServices}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">خدمات إضافية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.additionalServices}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">إجمالي النقل</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.transportTotal}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">إجمالي الفنادق</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.hotelTotal}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">مبلغ الاسترداد</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.refundAmount}}</td></tr>
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">صافي التكلفة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.netCost}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalAmount}}</td></tr>
+</table>`,
+  });
+}
+
 function buildUmrahAgentInvoicePreset(): PrintTemplate {
   return makePreset({
     id: -106, presetKey: "umrah_agent_invoice_classic", entityType: "umrah_agent_invoice",
@@ -3951,6 +4012,7 @@ export const ARABIC_TITLES: Record<string, string> = {
   umrah_invoice: "فاتورة عمرة", umrah_statement: "كشف وكيل عمرة",
   umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
   umrah_group: "مجموعة عمرة", umrah_agent_invoice: "فاتورة وكيل عمرة",
+  umrah_nusk_invoice: "فاتورة نُسُك",
   fleet_driver: "سائق أسطول", cargo_manifest: "بوليصة شحن", manifest: "بوليصة",
   transport_booking_confirmation: "تأكيد حجز نقل",
   umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",
