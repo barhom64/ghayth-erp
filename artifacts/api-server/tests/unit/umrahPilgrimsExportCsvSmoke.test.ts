@@ -84,8 +84,10 @@ describe("GET /umrah/pilgrims/export.csv — endpoint shape", () => {
   it("manifest header order — NUSK first, then identity, then trip, then flight", () => {
     // The column order matters operationally — MOFA / hotel handouts
     // expect NUSK first. Pin the first three columns so a future
-    // re-ordering needs a deliberate change.
-    expect(ROUTE).toMatch(/\["nuskNumber",\s*"رقم نسك"\][\s\S]{0,300}\["fullName",\s*"الاسم"\][\s\S]{0,300}\["passportNumber",\s*"رقم الجواز"\]/);
+    // re-ordering needs a deliberate change. U-18-P4 made the labels
+    // bilingual (`Arabic (English)`) so we no longer pin the exact
+    // label literal — only the field-key order is structural.
+    expect(ROUTE).toMatch(/\["nuskNumber",\s*"[^"]+"\][\s\S]{0,300}\["fullName",\s*"[^"]+"\][\s\S]{0,300}\["passportNumber",\s*"[^"]+"\]/);
   });
 
   it("audits the export — sensitive identifying info leaving the system", () => {

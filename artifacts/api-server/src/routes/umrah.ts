@@ -1246,28 +1246,34 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     };
     // Manifest columns operators routinely need. Order matches what
     // MOFA / hotel / bus driver handouts use: identity → trip → flight.
+    //
+    // U-18-P4 — bilingual header policy: Arabic primary with English
+    // in parentheses so partner systems that operate in EN (MOFA
+    // status APIs, MOI border feed) can still parse the column set
+    // without a separate mapping table. Charter §3.2 endorses this
+    // direction.
     const headers = [
-      ["nuskNumber", "رقم نسك"],
-      ["fullName", "الاسم"],
-      ["passportNumber", "رقم الجواز"],
-      ["nationality", "الجنسية"],
-      ["gender", "الجنس"],
-      ["phone", "الهاتف"],
-      ["visaNumber", "رقم التأشيرة"],
-      ["visaExpiry", "صلاحية التأشيرة"],
-      ["mofaNumber", "رقم الموفا"],
-      ["borderNumber", "رقم الحدود"],
-      ["status", "الحالة"],
-      ["arrivalDate", "تاريخ الوصول"],
-      ["departureDate", "تاريخ المغادرة"],
-      ["entryFlight", "رحلة الوصول"],
-      ["exitFlight", "رحلة المغادرة"],
-      ["hotelName", "الفندق"],
-      ["roomNumber", "رقم الغرفة"],
-      ["seasonTitle", "الموسم"],
-      ["groupName", "المجموعة"],
-      ["agentName", "الوكيل الرئيسي"],
-      ["subAgentName", "الوكيل الفرعي"],
+      ["nuskNumber", "رقم نسك (Nusk No.)"],
+      ["fullName", "الاسم (Name)"],
+      ["passportNumber", "رقم الجواز (Passport No.)"],
+      ["nationality", "الجنسية (Nationality)"],
+      ["gender", "الجنس (Gender)"],
+      ["phone", "الهاتف (Phone)"],
+      ["visaNumber", "رقم التأشيرة (Visa No.)"],
+      ["visaExpiry", "صلاحية التأشيرة (Visa Expiry)"],
+      ["mofaNumber", "رقم الموفا (MOFA No.)"],
+      ["borderNumber", "رقم الحدود (Border No.)"],
+      ["status", "الحالة (Status)"],
+      ["arrivalDate", "تاريخ الوصول (Arrival Date)"],
+      ["departureDate", "تاريخ المغادرة (Departure Date)"],
+      ["entryFlight", "رحلة الوصول (Arrival Flight)"],
+      ["exitFlight", "رحلة المغادرة (Departure Flight)"],
+      ["hotelName", "الفندق (Hotel)"],
+      ["roomNumber", "رقم الغرفة (Room No.)"],
+      ["seasonTitle", "الموسم (Season)"],
+      ["groupName", "المجموعة (Group)"],
+      ["agentName", "الوكيل الرئيسي (Main Agent)"],
+      ["subAgentName", "الوكيل الفرعي (Sub-Agent)"],
     ] as const;
     const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
     const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
