@@ -31,6 +31,12 @@ const TRANSPORT = readFileSync(join(ROUTES, "transport-bookings.ts"), "utf8");
 const IMPACT = readFileSync(join(ROUTES, "impactPreview.ts"), "utf8");
 const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
 const TASKS = readFileSync(join(ROUTES, "tasks.ts"), "utf8");
+const PROJECTS = readFileSync(join(ROUTES, "projects.ts"), "utf8");
+const WAREHOUSE_ADV = readFileSync(join(ROUTES, "warehouse-advanced.ts"), "utf8");
+const WAREHOUSE = readFileSync(join(ROUTES, "warehouse.ts"), "utf8");
+const WAREHOUSE_CC = readFileSync(join(ROUTES, "warehouse-cycle-counts.ts"), "utf8");
+const BI = readFileSync(join(ROUTES, "bi.ts"), "utf8");
+const NUMBERING = readFileSync(join(ROUTES, "numbering.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -191,5 +197,107 @@ describe("FND-013 #2340 — tasks.ts task_assignees mutations (batch 4) are comp
     expect(stripped).toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1 AND "companyId" = \$2/);
     expect(stripped).not.toMatch(/UPDATE task_assignees SET role = \$1 WHERE id = \$2`/);
     expect(stripped).not.toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1`/);
+  });
+});
+
+describe("FND-013 #2340 — projects.ts project_phases reads (batch 5) are company-scoped", () => {
+  // Every project_phases read sits behind a companyId-verified project
+  // (assertProjectAccess / a companyId-scoped project lookup). Each read must
+  // also carry companyId so it stays safe if that upstream check ever moves.
+  it("all project_phases reads carry a companyId predicate — none bare", () => {
+    const stripped = stripComments(PROJECTS);
+    const reads = [...stripped.matchAll(/FROM project_phases\b[\s\S]*?`/g)];
+    expect(reads.length).toBeGreaterThanOrEqual(6);
+    for (const m of reads) {
+      // Skip the INSERT...RETURNING-less paths: these are all SELECTs by
+      // projectId/id; require companyId in each.
+      expect(m[0]).toMatch(/"companyId"\s*=\s*\$\d/);
+    }
+  });
+
+  it("no bare project_phases WHERE projectId/id forms remain", () => {
+    const stripped = stripComments(PROJECTS);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1 ORDER/);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1`/);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE id=\$1 AND "projectId"=\$2`/);
+  });
+});
+
+describe("FND-013 #2340 — warehouse-advanced post-insert read-backs (batch 6) are scoped", () => {
+  it("warehouse_stock_lots read-back carries companyId", () => {
+    const stripped = stripComments(WAREHOUSE_ADV);
+    expect(stripped).toMatch(
+      /FROM warehouse_stock_lots l WHERE l\.id=\$1 AND l\."companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(/FROM warehouse_stock_lots l WHERE l\.id=\$1 AND l\."deletedAt"/);
+  });
+
+  it("warehouse_stock_serials read-back carries companyId", () => {
+    const stripped = stripComments(WAREHOUSE_ADV);
+    expect(stripped).toMatch(
+      /FROM warehouse_stock_serials WHERE id=\$1 AND "companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(/FROM warehouse_stock_serials WHERE id=\$1 AND "deletedAt"/);
+  });
+});
+
+describe("FND-013 #2340 — warehouse_products JOINs (batch 7) carry companyId", () => {
+  // Display joins (product name / stock) behind a companyId-verified parent
+  // (cycle-count / inventory-count). The driving line tables have no companyId
+  // column, so the joined warehouse_products is scoped via scope.companyId.
+  it("cycle-count line reads scope the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE_CC);
+    const joins = [...stripped.matchAll(/JOIN warehouse_products p ON p\.id=l\."productId"/g)];
+    expect(joins.length).toBeGreaterThanOrEqual(2);
+    // Every such statement must carry p."companyId"=$N somewhere.
+    for (const m of stripped.matchAll(/FROM warehouse_cycle_count_lines l[\s\S]*?`/g)) {
+      if (/JOIN warehouse_products p/.test(m[0])) {
+        expect(m[0]).toMatch(/p\."companyId"=\$\d/);
+      }
+    }
+  });
+
+  it("inventory-count item read scopes the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE);
+    // The pre-apply fetch (LIMIT 10000) must carry wp."companyId".
+    expect(stripped).toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 AND wp\."companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 LIMIT/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — bi.ts per-user reads (batch 8) carry companyId", () => {
+  // Personal alert-fatigue surfaces scoped by the caller's own assignment;
+  // companyId added so the read is scoped on both axes (assignmentId is
+  // already company-unique, so this is defense-in-depth).
+  it("alert_fatigue_settings read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM alert_fatigue_settings WHERE "assignmentId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM alert_fatigue_settings WHERE "assignmentId" = \$1`/);
+  });
+
+  it("notifications daily-count read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM notifications\s+WHERE "assignmentId" = \$1 AND "companyId" = \$2 AND DATE\("createdAt"\)/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — numbering_counters read (batch 9) carries companyId", () => {
+  // numbering_counters.companyId is NOT NULL — strictly per-company. The
+  // scheme is companyId-verified first; the counters list under it must be
+  // scoped too (numbering integrity: never surface another tenant's counters).
+  it("scheme-counters list scopes by companyId", () => {
+    const stripped = stripComments(NUMBERING);
+    expect(stripped).toMatch(
+      /FROM numbering_counters\s+WHERE "schemeId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM numbering_counters\s+WHERE "schemeId" = \$1\s+ORDER/);
   });
 });

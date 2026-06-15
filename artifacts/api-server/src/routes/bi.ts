@@ -1306,8 +1306,8 @@ router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
-      [scope.activeAssignmentId]
+      `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1 AND "companyId" = $2`,
+      [scope.activeAssignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
@@ -1351,8 +1351,8 @@ router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "lis
     const scope = req.scope!;
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS today_count FROM notifications
-       WHERE "assignmentId" = $1 AND DATE("createdAt") = CURRENT_DATE`,
-      [scope.activeAssignmentId]
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND DATE("createdAt") = CURRENT_DATE`,
+      [scope.activeAssignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ today_count: 0 }]; });
     const limit = 50;
     const count = Number(row?.today_count ?? 0);

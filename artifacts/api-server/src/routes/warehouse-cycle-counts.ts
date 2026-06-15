@@ -200,8 +200,8 @@ router.get("/cycle-counts/:id", authorize({ feature: "warehouse.inventory", acti
       `SELECT l.*, p.name AS "productName", p.sku
        FROM warehouse_cycle_count_lines l
        JOIN warehouse_products p ON p.id=l."productId"
-       WHERE l."cycleCountId"=$1 ORDER BY l.id`,
-      [id]
+       WHERE l."cycleCountId"=$1 AND p."companyId"=$2 ORDER BY l.id`,
+      [id, scope.companyId]
     );
     res.json(maskFields(req, { ...cc, items }));
   } catch (err) { handleRouteError(err, res, "Cycle count detail error:"); }
@@ -298,8 +298,8 @@ router.post("/cycle-counts/:id/post", authorize({ feature: "warehouse.inventory"
       `SELECT l.id, l."productId", l.variance, p.name AS "productName", p."costPrice", p."lastWaCost"
        FROM warehouse_cycle_count_lines l
        JOIN warehouse_products p ON p.id=l."productId"
-       WHERE l."cycleCountId"=$1 AND l.variance <> 0 AND l."adjustmentJournalEntryId" IS NULL`,
-      [id]
+       WHERE l."cycleCountId"=$1 AND p."companyId"=$2 AND l.variance <> 0 AND l."adjustmentJournalEntryId" IS NULL`,
+      [id, scope.companyId]
     );
 
     const posted: Array<{ lineId: number; movementId: number; journalId: number | null }> = [];

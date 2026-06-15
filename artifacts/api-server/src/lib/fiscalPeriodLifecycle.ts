@@ -84,6 +84,28 @@ export async function closeFiscalPeriodCanonical(
     );
   }
 
+  // FIN-TIME-SPREADING (#2247) — a period MUST NOT close while a prepaid
+  // amortization month that is due (<= period end) within the period window is
+  // still un-posted. Closing first would strand the systematic expense, leaving
+  // the prepaid asset overstated and the P&L understated for the period.
+  // Mirror of the pending-manual-JE gate above; same company scope.
+  const { findUnpostedDueAmortizations } = await import("./engines/prepaidAmortizationEngine.js");
+  const pendingAmort = await findUnpostedDueAmortizations({
+    companyId: scope.companyId,
+    periodStart: period.startDate,
+    periodEnd: period.endDate,
+  });
+  if (pendingAmort.length > 0) {
+    throw new ConflictError(
+      `لا يمكن إقفال الفترة "${period.name}": يوجد ${pendingAmort.length} إطفاء مستحق لمصروفات مدفوعة مقدماً لم يُرحّل بعد`,
+      {
+        field: "prepaidAmortization",
+        fix: "نفّذ إطفاء المصروفات المدفوعة مقدماً المستحقة (POST /finance/amortization/run) قبل إقفال الفترة",
+        meta: { pendingAmortizationCount: pendingAmort.length, periodId, periodName: period.name },
+      }
+    );
+  }
+
   const runTransition = async (c?: pg.PoolClient) =>
     applyTransition<Record<string, unknown>>({
       entity: "financial_periods",

@@ -47,6 +47,9 @@ import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
+// TA-GAP-09 Phase 2 — read-only usage dashboard counts. Loader is
+// best-effort and never throws; the route handler echoes its result.
+import { loadMapsUsage } from "../lib/fleet/mapsUsageCounter.js";
 // TR-021 — operating-window helper for a realistic utilisation denominator.
 import { dailyOperatingMinutes, type OperatingWindowSettings } from "../lib/fleet/operatingWindow.js";
 // Maps Provider Adapter — masking helper is exported separately so
@@ -169,6 +172,29 @@ transportPlanningRouter.post(
       res.json({ data: { status } });
     } catch (err) {
       handleRouteError(err, res, "Maps provider health-check error:");
+    }
+  },
+);
+
+// TA-GAP-09 Phase 2 — Maps quota dashboard read endpoint.
+// Returns per-day, per-provider, per-apiSurface counts for the
+// caller's company. Phase 1 (#2439) wired the counter writes. This
+// endpoint exposes them for the SPA dashboard.
+//
+// RBAC: gated on `fleet.bookings:view` (same scope as the planning
+// settings — anyone who can read the maps provider config can read
+// our spend against it).
+transportPlanningRouter.get(
+  "/transport/maps-usage",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const days = Math.min(Math.max(Number(req.query.days ?? 30) || 30, 1), 366);
+      const rows = await loadMapsUsage({ companyId: scope.companyId, days });
+      res.json({ data: { rows, windowDays: days } });
+    } catch (err) {
+      handleRouteError(err, res, "Load maps usage error:");
     }
   },
 );
