@@ -35,9 +35,13 @@ const MAPS = readFileSync(
 );
 
 describe("#2079 FIX-11 — only implemented map providers are settable", () => {
-  it("the writable enum tuple lists EXACTLY manual_only + google_maps", () => {
+  it("the writable enum tuple lists EXACTLY {manual_only, google_maps, auto}", () => {
+    // Maps Provider Adapter (#1812 follow-up, owner brief 2026-06-15)
+    // added `auto` — the operator-friendly value that resolves to
+    // google_maps when a key is configured, else manual_only. The
+    // FIX-11 invariant (no mapbox / here_maps) is preserved.
     expect(ROUTE).toMatch(
-      /const\s+MAP_PROVIDERS_WRITABLE\s*=\s*\[\s*"manual_only"\s*,\s*"google_maps"\s*\]\s*as const/,
+      /const\s+MAP_PROVIDERS_WRITABLE\s*=\s*\[\s*"manual_only"\s*,\s*"google_maps"\s*,\s*"auto"\s*\]\s*as const/,
     );
   });
 
@@ -70,21 +74,27 @@ describe("#2079 FIX-11 — only implemented map providers are settable", () => {
   });
 });
 
-describe("#2079 FIX-11 — DB / type union remain unchanged (read-side safety)", () => {
-  it("the MapProvider type union still lists all four (DB rows may still carry mapbox/here_maps)", () => {
-    // Don't break the READ path: any row already storing one of
-    // the stubbed values must keep loading. The mapsService fallback
-    // logic at lines 305-309 silently downgrades them to manual_only
-    // at render time. That's the right place for the legacy fence.
-    expect(MAPS).toMatch(
-      /export type MapProvider\s*=\s*"manual_only"\s*\|\s*"google_maps"\s*\|\s*"mapbox"\s*\|\s*"here_maps"/,
-    );
+describe("#2079 FIX-11 — DB / type union remain backwards-compatible (read-side safety)", () => {
+  it("the MapProvider type union still carries mapbox + here_maps (DB rows may have them)", () => {
+    // Don't break the READ path: any row already storing one of the
+    // stubbed values must keep loading. The mapsService resolver
+    // silently downgrades them to manual_only at render time — that
+    // is the right place for the legacy fence.
+    expect(MAPS).toMatch(/export type MapProvider[\s\S]{0,200}?"mapbox"/);
+    expect(MAPS).toMatch(/export type MapProvider[\s\S]{0,200}?"here_maps"/);
+    // And the new Maps Provider Adapter value:
+    expect(MAPS).toMatch(/export type MapProvider[\s\S]{0,200}?"auto"/);
   });
 
-  it("mapsService still falls back to manual_only when a stubbed provider is loaded", () => {
-    // Regression pin on the existing fallback at line 305-309.
+  it("mapsService routes legacy mapbox/here_maps rows through `resolveEffectiveProvider`", () => {
+    // After the Maps Provider Adapter refactor, the literal
+    // `provider === "mapbox" || provider === "here_maps"` ladder is
+    // gone — replaced by a single resolver. The resolver only routes
+    // {google_maps, auto} + key → google; everything else falls back
+    // to manual_only. So mapbox/here_maps rows STILL downgrade
+    // safely, just via one chokepoint instead of an explicit ladder.
     expect(MAPS).toMatch(
-      /provider === "mapbox" \|\| provider === "here_maps"/,
+      /export function resolveEffectiveProvider[\s\S]{0,400}?\(configured\s*===\s*"google_maps"\s*\|\|\s*configured\s*===\s*"auto"\)\s*&&\s*apiKey[\s\S]{0,200}?return\s*\{\s*provider:\s*"manual_only"/,
     );
   });
 });
