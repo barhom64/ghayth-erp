@@ -43,9 +43,6 @@ routes/hr.ts:peer_evaluations
 routes/hr.ts:shifts
 routes/hr.ts:system_evaluations
 routes/inboxConversations.ts:conversation_links
-routes/meInsights.ts:hr_employee_loans
-routes/meInsights.ts:hr_leave_requests
-routes/meInsights.ts:hr_overtime_requests
 routes/mySpace.ts:attendance
 routes/mySpace.ts:attendance_deductions
 routes/mySpace.ts:employee_monthly_attendance

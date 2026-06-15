@@ -37,6 +37,7 @@ const WAREHOUSE = readFileSync(join(ROUTES, "warehouse.ts"), "utf8");
 const WAREHOUSE_CC = readFileSync(join(ROUTES, "warehouse-cycle-counts.ts"), "utf8");
 const BI = readFileSync(join(ROUTES, "bi.ts"), "utf8");
 const NUMBERING = readFileSync(join(ROUTES, "numbering.ts"), "utf8");
+const MEINSIGHTS = readFileSync(join(ROUTES, "meInsights.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -299,5 +300,25 @@ describe("FND-013 #2340 — numbering_counters read (batch 9) carries companyId"
       /FROM numbering_counters\s+WHERE "schemeId" = \$1 AND "companyId" = \$2/,
     );
     expect(stripped).not.toMatch(/FROM numbering_counters\s+WHERE "schemeId" = \$1\s+ORDER/);
+  });
+});
+
+describe("FND-013 #2340 — meInsights pending-requests UNION (batch 10) carries companyId", () => {
+  // /me/proactive-insights category 3 UNION-ALLs the caller's pending
+  // leave / loan / overtime requests, scoped by their own assignment. Each
+  // branch also carries companyId so all three tenant tables are scoped.
+  it("each UNION branch scopes its table by companyId", () => {
+    const stripped = stripComments(MEINSIGHTS);
+    for (const t of ["hr_leave_requests", "hr_employee_loans", "hr_overtime_requests"]) {
+      expect(stripped).toMatch(
+        new RegExp(`WHERE "assignmentId" = \\$1 AND ${t}\\."companyId" = \\$2 AND status = 'pending'`),
+      );
+    }
+    // No bare unscoped form left for any of the three.
+    for (const t of ["hr_leave_requests", "hr_employee_loans", "hr_overtime_requests"]) {
+      expect(stripped).not.toMatch(
+        new RegExp(`WHERE "assignmentId" = \\$1 AND status = 'pending' AND ${t}\\."deletedAt"`),
+      );
+    }
   });
 });
