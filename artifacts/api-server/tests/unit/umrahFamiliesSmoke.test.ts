@@ -77,7 +77,11 @@ describe("umrah-entities.ts — families CRUD endpoints", () => {
 
   it("POST /families inserts + emits audit + event", () => {
     expect(ROUTES).toMatch(/INSERT INTO umrah_families[\s\S]{0,200}"familyName","headPilgrimId"/);
-    expect(ROUTES).toMatch(/createAuditLog\(\{[\s\S]{0,400}action: "create"[\s\S]{0,200}entity: "umrah_families"/);
+    // U-07 Phase 2 — audit calls migrated from createAuditLog({...}) to
+    // auditFromRequest(req, action, entity, entityId, {...}) so the IGOC
+    // context (activeRoleKey/activeDepartmentId/resolvedScope/impersonation)
+    // lands on every row.
+    expect(ROUTES).toMatch(/auditFromRequest\(\s*req,\s*"create",\s*"umrah_families"/);
     expect(ROUTES).toMatch(/action: "umrah\.family\.created"/);
   });
 
