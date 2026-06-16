@@ -22,8 +22,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
+// U-07 Phase 4 — room-blocks list moved to umrah-hotels.ts (mounted via
+// umrah-entities.ts so URL surface unchanged).
 const SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-hotels.ts"),
   "utf8",
 );
 

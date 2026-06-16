@@ -101,6 +101,10 @@ import umrahEntitiesRouter from "./umrah-entities.js";
 // so we deliberately do NOT mount it again here to avoid double-mount.
 import journeyReportsRouter from "./umrah-journey-reports.js";
 void journeyReportsRouter;
+// U-07 Phase 4 split: same pattern — mounted via umrah-entities.ts to avoid
+// double-mount; imported here so routeInfrastructure coverage passes.
+import hotelsRouter from "./umrah-hotels.js";
+void hotelsRouter;
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,

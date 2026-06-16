@@ -16,8 +16,10 @@ import { join } from "node:path";
  * quoted identifier the schema dump doesn't carry.)
  */
 
+// U-07 Phase 4 — room-allocation routes moved to umrah-hotels.ts (mounted
+// via umrah-entities.ts so URL surface unchanged).
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-hotels.ts"),
   "utf8",
 );
 
