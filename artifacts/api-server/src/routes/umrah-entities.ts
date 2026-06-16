@@ -4208,6 +4208,20 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
       // by the operator-supplied `from` so the layer surfaces as
       // "today's outstanding overstayers" on the day the operator
       // opens the calendar. Cheap, useful, no schema change.
+      //
+      // NOTE: this layer is NOT date-ranged, so it references neither $3
+      // (toStr) nor the shared `pilgrimSeasonClause` index. Reusing the
+      // 3-element `baseParams` here bound 3 values against a 2-placeholder
+      // statement → Postgres 08P01 ("supplies 3 parameters, but prepared
+      // statement requires 2") whenever no seasonId was supplied (the
+      // default calendar view) → 500. Use a dedicated params array whose
+      // length always matches the placeholders.
+      const overstayParams: unknown[] = [scope.companyId, fromStr];
+      let overstaySeasonClause = "";
+      if (seasonId) {
+        overstayParams.push(seasonId);
+        overstaySeasonClause = ` AND p."seasonId" = $${overstayParams.length}`;
+      }
       runs.overstay = rawQuery<Row>(
         `SELECT $2::text AS date,
                 COUNT(*)::text AS c,
@@ -4215,9 +4229,9 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
            FROM umrah_pilgrims p
           WHERE p."companyId" = $1
             AND p.status IN ('overstayed', 'overstay_penalized')
-            AND p."deletedAt" IS NULL${pilgrimSeasonClause}
+            AND p."deletedAt" IS NULL${overstaySeasonClause}
           HAVING COUNT(*) > 0`,
-        baseParams,
+        overstayParams,
       );
     }
     if (requestedLayers.includes("transport_trip")) {

@@ -1629,11 +1629,17 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, status } = req.query as Record<string, string | undefined>;
+    const { employeeId, status, ownerRole, mandatory } = req.query as Record<string, string | undefined>;
     const conditions = [`ot."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
     if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
+    // HR-REV-3 (#2222) — per-owner queue: each owning department (الأسطول/
+    // الوثائق/الرواتب…) can pull just the activation tasks routed to it.
+    if (ownerRole) { params.push(ownerRole); conditions.push(`ot."ownerRole" = $${params.length}`); }
+    // mandatory=true|false narrows to the gating items (or the optional ones).
+    if (mandatory === "true") { conditions.push(`ot.mandatory IS NOT FALSE`); }
+    else if (mandatory === "false") { conditions.push(`ot.mandatory IS FALSE`); }
     interface OnboardingTaskRow extends Record<string, unknown> {
       id: number;
       companyId: number;
@@ -2122,10 +2128,15 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 ea."serialNumber", ea."assignedAt", ea."returnedAt",
                 ea."conditionOnAssign", ea."conditionOnReturn", ea.notes
            FROM employee_assets ea
-          WHERE ea."assignmentId" = $3 AND ea."companyId" = $2
+          WHERE ea."assignmentId" = $2 AND ea."companyId" = $1
           ORDER BY ea."returnedAt" NULLS FIRST, ea."assignedAt" DESC
           LIMIT 50`,
-        [id, scope.companyId, employee.assignmentId]
+        // NOTE: the employee `id` is NOT referenced by this child query (it
+        // filters by assignmentId + companyId), so it must NOT be bound — a
+        // leftover $1=id made Postgres 42P18 "could not determine data type of
+        // parameter $1", which the .catch swallowed → the «العهد» tab was
+        // silently always empty.
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees custodies query failed"); return []; }),
       // HR-012 / #1799 priority #1 — Employee 360 tab «المسميات».
       // Resolves the assignment's position (admin role) to its label
@@ -2139,9 +2150,11 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 p.level, p.description
            FROM employee_assignments ea
            JOIN positions p ON p.id = ea."positionId"
-            AND (p."companyId" IS NULL OR p."companyId" = $2)
-          WHERE ea.id = $3 LIMIT 1`,
-        [id, scope.companyId, employee.assignmentId]
+            AND (p."companyId" IS NULL OR p."companyId" = $1)
+          WHERE ea.id = $2 LIMIT 1`,
+        // employee `id` unreferenced here → not bound (was a $1 42P18 that the
+        // .catch swallowed, leaving «المسميات» blank).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees position query failed"); return []; }) : Promise.resolve([]),
       // HR-014 — Employee 360 overview enrichment (#1799 priority #10):
       // surface the latest monthly score + active (unacknowledged) signals
@@ -2154,15 +2167,16 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 "qualityScore", "managerScore", "developmentScore",
                 rationale, "computedAt"
            FROM employee_scores
-          WHERE "assignmentId" = $3 AND "companyId" = $2 AND scope = 'monthly'
+          WHERE "assignmentId" = $2 AND "companyId" = $1 AND scope = 'monthly'
           ORDER BY "periodKey" DESC LIMIT 1`,
-        [id, scope.companyId, employee.assignmentId]
+        // employee `id` unreferenced here → not bound (42P18-then-swallowed).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees latestScore query failed"); return []; }) : Promise.resolve([]),
       employee.assignmentId ? rawQuery<Record<string, unknown>>(
         `SELECT id, "signalType", severity, scope, "periodKey", title,
                 reasons, "compositeScore", "createdAt"
            FROM employee_signals
-          WHERE "assignmentId" = $3 AND "companyId" = $2
+          WHERE "assignmentId" = $2 AND "companyId" = $1
             AND "acknowledgedAt" IS NULL
             AND "createdAt" >= CURRENT_DATE - INTERVAL '90 days'
           ORDER BY
@@ -2172,7 +2186,8 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
             END,
             "createdAt" DESC
           LIMIT 20`,
-        [id, scope.companyId, employee.assignmentId]
+        // employee `id` unreferenced here → not bound (42P18-then-swallowed).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees activeSignals query failed"); return []; }) : Promise.resolve([]),
     ]);
 
