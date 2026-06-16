@@ -69,6 +69,19 @@ const CREATE_IN_SIDEBAR_ALLOWLIST = new Set([
   "/hr/leaves/create", // employee self-service "طلب إجازة" entry point
 ]);
 
+// Routes intentionally kept off the sidebar that the structural heuristics
+// (detail / create / redirect-stub) can't classify. Keep this list tiny and
+// justified — every entry is an explicit exception.
+const OFF_SIDEBAR_ALLOWLIST = new Set([
+  // Back-compat alias → /work-inbox (PR-4 #2163). The redirect is component-
+  // level (pages/my/work-queue.tsx calls setLocation), so the route reads as
+  // `component: WorkQueue` and the redirectTo/RedirectToXxx detection can't see
+  // it. /work-inbox (the canonical inbox) IS in the sidebar; this stays mounted
+  // only for old bookmarks, and is pinned as a redirect shell by
+  // platformWave2Pr4OrphansCleanupSmoke + hr015_016_017Smoke.
+  "/my/work-queue",
+]);
+
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
 function basePath(p) {
   return p.replace(/[?#].*$/, "");
@@ -132,13 +145,14 @@ function getSidebarPaths() {
  * create/edit page that's opened from another page (list or detail),
  * not from the nav drawer. Heuristics:
  *   - has `:` (route parameter) → detail/edit
- *   - ends with `/create` or `/new` → create page
- *   - ends with `/edit` → edit page
+ *   - ends with `/create`|`-create` or `/new`|`-new` → create page
+ *     (the `-` form covers variants like `…/quick-create`)
+ *   - ends with `/edit`|`-edit` → edit page
  *   - is the login page or the special shell roots
  */
 function isLegitimatelyOffSidebar(routePath) {
   if (routePath.includes(":")) return true;
-  if (/\/(create|new|edit)$/.test(routePath)) return true;
+  if (/[/-](create|new|edit)$/.test(routePath)) return true;
   if (routePath === "/login") return true;
   if (routePath === "/") return true;
   if (routePath === "/dashboard") return true; // home shell
@@ -148,7 +162,7 @@ function isLegitimatelyOffSidebar(routePath) {
 /** True when a nav-drawer path is a create/edit/detail page (convention breach). */
 function isCreateEditDetail(p) {
   const b = basePath(p);
-  return b.includes(":") || /\/(create|new|edit)$/.test(b);
+  return b.includes(":") || /[/-](create|new|edit)$/.test(b);
 }
 
 function main() {
@@ -165,7 +179,8 @@ function main() {
     if (sidebarSet.has(r)) continue;
     // Redirect stubs bounce to a canonical page — aliases, not pages, so they
     // don't need their own nav entry (same treatment as detail/create pages).
-    if (redirectPaths.has(r) || isLegitimatelyOffSidebar(r)) {
+    // OFF_SIDEBAR_ALLOWLIST covers the few that the heuristics can't classify.
+    if (OFF_SIDEBAR_ALLOWLIST.has(r) || redirectPaths.has(r) || isLegitimatelyOffSidebar(r)) {
       legitimatelyOff++;
       continue;
     }
