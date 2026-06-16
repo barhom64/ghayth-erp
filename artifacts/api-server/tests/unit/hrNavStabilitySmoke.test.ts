@@ -120,7 +120,7 @@ describe("HR top-nav stability — static guard", () => {
     }
   });
 
-  it("HrTabsNav itself declares the canonical 10 tabs in declared order", () => {
+  it("HrTabsNav mirrors the sidebar's top-level groups in declared order", () => {
     const navSrc = readFileSync(
       join(
         PAGES_ROOT,
@@ -136,18 +136,18 @@ describe("HR top-nav stability — static guard", () => {
     const re = /label:\s*"([^"]+)"/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(navSrc)) !== null) labelOrder.push(m[1]);
-    // The HR module declares exactly these 10 tabs in this order.
+    // HR-REV — the horizontal bar now mirrors the sidebar's top-level groups
+    // 1:1 (dashboard + the 8 functional groups) instead of a flat entity list.
     expect(labelOrder).toEqual([
+      "لوحة HR",
       "الموظفون",
-      "الحضور",
-      "الإجازات",
-      "المخالفات",
-      "التدريب",
-      "الأداء",
-      "الرواتب",
-      "التوظيف",
-      "الورديات",
-      "الهيكل",
+      "النشاط والحضور",
+      "الطلبات",
+      "الامتثال والجزاءات",
+      "الأداء والتطوير",
+      "الرواتب والمستحقات",
+      "التقارير",
+      "الإعدادات",
     ]);
   });
 });
