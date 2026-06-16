@@ -1068,16 +1068,19 @@ router.post("/classification-center/posting-failures/:id/classify", authorize({ 
       [body.failureCategory, body.failureReason ?? null, body.suggestedFix ?? null, userId, id, companyId]
     );
 
-    // Audit trail — who classified what and when
-    await rawExecute(
-      `INSERT INTO audit_logs ("companyId","userId",action,entity,"entityId","before","after")
-       VALUES ($1,$2,'classify_failure','financial_posting_failures',$3,$4,$5)`,
-      [
-        companyId, userId, id,
-        JSON.stringify(before),
-        JSON.stringify({ failureCategory: body.failureCategory, failureReason: body.failureReason, suggestedFix: body.suggestedFix }),
-      ]
-    ).catch((e) => logger.warn(e, "[classification-center] audit insert failed"));
+    // Audit trail — who classified what and when. Best-effort by design (the
+    // classification UPDATE above is the only meaningful write; a lost audit row
+    // must NOT roll it back), so route through the canonical createAuditLog
+    // helper, which is internally try/caught and never throws.
+    await createAuditLog({
+      companyId,
+      userId,
+      action: "classify_failure",
+      entity: "financial_posting_failures",
+      entityId: id,
+      before,
+      after: { failureCategory: body.failureCategory, failureReason: body.failureReason, suggestedFix: body.suggestedFix },
+    });
 
     res.json({ ok: true });
   } catch (err) {
