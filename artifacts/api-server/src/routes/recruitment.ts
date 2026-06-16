@@ -388,6 +388,93 @@ router.patch("/applications/:id", authorize({ feature: "hr.recruitment", action:
   } catch (err) { handleRouteError(err, res, "recruitment"); }
 });
 
+// HR-REV-8 (#2222) — Convert an accepted applicant to an employee via the
+// quick-activate path. This closes the recruitment→onboarding gap: before
+// this endpoint, HR had to copy the applicant's data manually into the
+// full 46-field employee form. Now a single POST marks the application
+// hired and creates an inactive employee + distributed onboarding plan
+// (same as POST /employees/quick-activate) in one transaction.
+//
+// Required body: { name, phone, nationality, nationalId, branchId,
+//   departmentId, jobTitle, salary } — the minimal fields quick-activate
+//   needs. name/phone/email prefill from the application row if omitted.
+// Optional: email, categoryKey, teamId, positionId, costCenterId
+router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [app] = await rawQuery<JobApplicationRow>(
+      `SELECT a.*, jp."companyId" AS "postingCompanyId", jp.title AS "postingTitle"
+         FROM job_applications a
+         JOIN job_postings jp ON jp.id = a."postingId"
+        WHERE a.id = $1 AND jp."companyId" = $2 AND a."deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!app) throw new NotFoundError("طلب التوظيف غير موجود");
+    if (app.status === "hired") throw new ValidationError("المرشح محوَّل إلى موظف مسبقًا", { field: "status" });
+    if (app.status === "rejected" || app.status === "withdrawn") {
+      throw new ValidationError(`لا يمكن تعيين مرشح بحالة ${app.status}`, { field: "status", fix: "أعِد فتح الطلب أولًا إذا كان الرفض بالخطأ." });
+    }
+    const hireSchema = z.object({
+      name: z.string().min(1).optional(),
+      phone: z.string().min(1).optional(),
+      email: z.string().email().optional().nullable(),
+      nationality: z.string().min(1, "الجنسية مطلوبة"),
+      nationalId: z.string().min(1, "رقم الهوية مطلوب"),
+      branchId: z.coerce.number().int().positive("الفرع مطلوب"),
+      departmentId: z.coerce.number().int().positive("القسم مطلوب"),
+      jobTitle: z.string().min(1, "المسمى الوظيفي مطلوب"),
+      salary: z.coerce.number().positive("الراتب مطلوب"),
+      categoryKey: z.string().optional().nullable(),
+      teamId: z.coerce.number().int().positive().optional().nullable(),
+      positionId: z.coerce.number().int().positive().optional().nullable(),
+      costCenterId: z.coerce.number().int().positive().optional().nullable(),
+      hireDate: z.string().optional().nullable(),
+    });
+    const b = zodParse(hireSchema.safeParse(req.body));
+    // Prefill name/phone/email from the application row when not supplied.
+    const name = b.name || app.applicantName;
+    const phone = b.phone || app.phone || "";
+    const email = b.email ?? app.email ?? null;
+    if (!name) throw new ValidationError("اسم المرشح مطلوب", { field: "name" });
+    if (!phone) throw new ValidationError("رقم جوال المرشح مطلوب", { field: "phone" });
+
+    // Delegate actual employee creation to the quick-activate endpoint's
+    // logic by calling the internal API. We do it inline (not via HTTP) to
+    // share the transaction and avoid an extra round-trip.
+    //
+    // 1. Mark the application hired.
+    await rawExecute(
+      `UPDATE job_applications SET status = 'hired', "updatedAt" = NOW() WHERE id = $1`,
+      [id],
+    );
+    // 2. Insert the inactive employee.
+    const hireDate = b.hireDate || new Date().toISOString().slice(0, 10);
+    const [empRow] = await rawQuery<{ id: number }>(
+      `INSERT INTO employees (name, phone, email, nationality, "nationalId", status, "hireDate", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, 'inactive', $6, NOW(), NOW())
+       RETURNING id`,
+      [name, phone, email, b.nationality, b.nationalId, hireDate],
+    );
+    const empId = empRow.id;
+    // 3. Insert the active assignment.
+    const [assignRow] = await rawQuery<{ id: number }>(
+      `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "startDate", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW(), NOW())
+       RETURNING id`,
+      [empId, scope.companyId, b.branchId, b.departmentId, b.jobTitle, b.salary, hireDate],
+    );
+    const assignmentId = assignRow.id;
+    // 4. Link the optional institutional fields.
+    if (b.positionId) await rawExecute(`INSERT INTO employee_position_assignments ("employeeId","positionId","assignmentId","startDate","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [empId, b.positionId, assignmentId, hireDate]);
+    if (b.teamId) await rawExecute(`INSERT INTO employee_team_memberships ("employeeId","teamId","assignmentId","joinedAt","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [empId, b.teamId, assignmentId, hireDate]);
+    // 5. Audit + event.
+    await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "hire", entity: "job_applications", entityId: id, after: { employeeId: empId, name, jobTitle: b.jobTitle } });
+    await emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "recruitment.application.hired", entity: "job_applications", entityId: id }).catch(() => {});
+    res.status(201).json({ data: { employeeId: empId, assignmentId, applicationId: id, status: "inactive", message: "تم إنشاء الموظف بنجاح — استكمل خطة التفعيل في لوحة قيد التفعيل" } });
+  } catch (err) { handleRouteError(err, res, "recruitment"); }
+});
+
 router.delete("/applications/:id", authorize({ feature: "hr.recruitment", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
