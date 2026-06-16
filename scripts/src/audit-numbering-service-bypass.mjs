@@ -38,6 +38,13 @@ const LEGITIMATE_WRITERS = new Set([
   "routes/numbering.ts",             // the admin route exposes service ops;
                                      // every UPDATE there is fronted by an
                                      // exported service function call.
+  // companyBootstrap clones the per-module numbering_schemes rows
+  // when a brand-new tenant is provisioned (mirrors the seed-replay
+  // pass in scripts/provision-agent-db.sh for tenants that came in
+  // post-migration). This is SCHEME REGISTRATION (config rows), not
+  // sequence allocation — the numbering service still owns every
+  // counter increment via numberingService.issueNumber.
+  "lib/companyBootstrap.ts",
 ]);
 
 // Migration files writing seed data are intentionally exempted —
