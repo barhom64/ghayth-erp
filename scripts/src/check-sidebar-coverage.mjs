@@ -83,8 +83,15 @@ const OFF_SIDEBAR_ALLOWLIST = new Set([
 ]);
 
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
-function basePath(p) {
+export function basePath(p) {
   return p.replace(/[?#].*$/, "");
+}
+
+/** Pure: every `{ path: "/x", … }` route-path literal in a source string. */
+export function extractRoutePaths(src) {
+  const out = [];
+  for (const m of src.matchAll(/\{\s*path:\s*["']([^"']+)["']/g)) out.push(m[1]);
+  return out;
 }
 
 /** Pull every `{ path: "/x", component: … }` literal from the routes/*.tsx files. */
@@ -92,11 +99,7 @@ function getMountedRoutes() {
   const set = new Set();
   for (const file of fs.readdirSync(ROUTES_DIR)) {
     if (!file.endsWith(".tsx")) continue;
-    const src = fs.readFileSync(path.join(ROUTES_DIR, file), "utf-8");
-    // Match `{ path: "/x", … }` shape. The path value is a string literal.
-    for (const m of src.matchAll(/\{\s*path:\s*["']([^"']+)["']/g)) {
-      set.add(m[1]);
-    }
+    for (const p of extractRoutePaths(fs.readFileSync(path.join(ROUTES_DIR, file), "utf-8"))) set.add(p);
   }
   return [...set].sort();
 }
@@ -109,35 +112,44 @@ function getMountedRoutes() {
  * expected to carry a sidebar entry. Returned as a Map so callers can both test
  * membership (`.has()`) and report the bounce target (`.get()`).
  */
+export function extractRedirectRoutes(src) {
+  const map = new Map();
+  // `redirectTo("/target")` — capture the literal target.
+  for (const m of src.matchAll(
+    /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*redirectTo\(\s*["']([^"']+)["']/g,
+  )) {
+    map.set(m[1], m[2]);
+  }
+  // Named `RedirectToXxx` components — target isn't a static literal here.
+  for (const m of src.matchAll(
+    /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*(RedirectTo[A-Za-z]*)/g,
+  )) {
+    if (!map.has(m[1])) map.set(m[1], m[2]);
+  }
+  return map;
+}
+
 function getRedirectRoutePaths() {
   const map = new Map();
   for (const file of fs.readdirSync(ROUTES_DIR)) {
     if (!file.endsWith(".tsx")) continue;
-    const src = fs.readFileSync(path.join(ROUTES_DIR, file), "utf-8");
-    // `redirectTo("/target")` — capture the literal target.
-    for (const m of src.matchAll(
-      /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*redirectTo\(\s*["']([^"']+)["']/g,
-    )) {
-      map.set(m[1], m[2]);
-    }
-    // Named `RedirectToXxx` components — target isn't a static literal here.
-    for (const m of src.matchAll(
-      /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*(RedirectTo[A-Za-z]*)/g,
-    )) {
-      if (!map.has(m[1])) map.set(m[1], m[2]);
+    for (const [p, t] of extractRedirectRoutes(fs.readFileSync(path.join(ROUTES_DIR, file), "utf-8"))) {
+      if (!map.has(p)) map.set(p, t);
     }
   }
   return map;
 }
 
+/** Pure: every `path: "/x"` value in a navigation-registry source string. */
+export function extractSidebarPaths(src) {
+  const out = [];
+  for (const m of src.matchAll(/\bpath:\s*["']([^"']+)["']/g)) out.push(m[1]);
+  return out;
+}
+
 /** Pull every `path: "/x"` value from the navigation registry. */
 function getSidebarPaths() {
-  const src = fs.readFileSync(SIDEBAR_FILE, "utf-8");
-  const set = new Set();
-  for (const m of src.matchAll(/\bpath:\s*["']([^"']+)["']/g)) {
-    set.add(m[1]);
-  }
-  return [...set].sort();
+  return [...new Set(extractSidebarPaths(fs.readFileSync(SIDEBAR_FILE, "utf-8")))].sort();
 }
 
 /**
@@ -150,7 +162,7 @@ function getSidebarPaths() {
  *   - ends with `/edit`|`-edit` → edit page
  *   - is the login page or the special shell roots
  */
-function isLegitimatelyOffSidebar(routePath) {
+export function isLegitimatelyOffSidebar(routePath) {
   if (routePath.includes(":")) return true;
   if (/[/-](create|new|edit)$/.test(routePath)) return true;
   if (routePath === "/login") return true;
@@ -160,7 +172,7 @@ function isLegitimatelyOffSidebar(routePath) {
 }
 
 /** True when a nav-drawer path is a create/edit/detail page (convention breach). */
-function isCreateEditDetail(p) {
+export function isCreateEditDetail(p) {
   const b = basePath(p);
   return b.includes(":") || /[/-](create|new|edit)$/.test(b);
 }
@@ -294,4 +306,8 @@ function main() {
   }
 }
 
-main();
+// Auto-run only when invoked directly (so the .test.mjs sibling can import the
+// pure helpers without triggering a scan/exit).
+const invokedDirectly =
+  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) main();
