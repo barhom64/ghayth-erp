@@ -53,7 +53,9 @@ describe("#1812 — backend loadSourceContext resolver", () => {
 
   it("response includes sourceContext alongside booking/lines/dispatch", () => {
     const block = ROUTER.slice(ROUTER.indexOf('"/transport/bookings/:id"'));
-    expect(block).toMatch(/res\.json\(maskFields\(req, \{ data: \{ \.\.\.booking, lines, dispatchOrders, sourceContext \} \}\)\)/);
+    // #2475-follow-up — the GET response also carries the resolved cancelPolicy
+    // (for the SPA's policy-aware cancel confirmation); pin updated to match.
+    expect(block).toMatch(/res\.json\(maskFields\(req, \{ data: \{ \.\.\.booking, lines, dispatchOrders, sourceContext, cancelPolicy \} \}\)\)/);
   });
 
   it("loader is defensive — wraps each query in catch", () => {
