@@ -13,8 +13,6 @@ routes/communications.ts:POST /click-to-call
 routes/communications.ts:POST /pbx/completed
 routes/communications.ts:POST /whatsapp/webhook
 routes/crm.ts:POST /opportunities
-routes/finance-hardening.ts:POST /bank-guarantees
-routes/finance-hardening.ts:POST /projects
 routes/finance-journal.ts:POST /expenses/:id/request-attachment
 routes/fleet-telematics.ts:POST /telematics/video/session/:id/stop
 routes/fleet.ts:POST /me/trips/:id/complete
