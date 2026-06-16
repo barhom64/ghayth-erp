@@ -679,6 +679,8 @@ export const allNavSections: NavSection[] = [
           { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
           { label: "كشف حساب المالك", path: "/properties/owners/statement", icon: FileBarChart },
           { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
+          // كانت orphan: صفحة المبيعات العقارية (بيع الوحدات) مركّبة بلا مدخل في القائمة.
+          { label: "المبيعات العقارية", path: "/properties/sales", icon: TrendingUp },
         ]},
         // 3) الصيانة والتفتيش.
         { label: "الصيانة والتفتيش", path: "/properties/maintenance", icon: Hammer, children: [
@@ -950,6 +952,9 @@ export const allNavSections: NavSection[] = [
         { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
       ]},
+      // كانت orphan: إدارة اشتراك المنشأة (الحالة/التفعيل/تمديد التجربة) — صفحة
+      // admin مستقلة مبوّبة على admin:view (على نمط «الأتمتة»).
+      { label: "اشتراك المنشأة", path: "/admin/subscription", icon: CreditCard, module: "admin", perm: "admin:view" },
       { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
         { label: "عام", path: "/settings", icon: Cog },
         { label: "الفروع", path: "/settings/branches", icon: Building, perm: "settings:write" },
