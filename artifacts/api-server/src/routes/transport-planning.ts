@@ -221,6 +221,165 @@ transportPlanningRouter.get(
   },
 );
 
+// ── Control Tower (audit doc file 22 + #1812 user brief) ──
+//
+// Single read endpoint that returns a one-shot snapshot of the entire
+// fleet operating state. The operator brief was:
+//   "هذه أهم شاشة ناقصة. لوحة كبيرة فيها: مركبات متاحة / مشغولة /
+//    صيانة / سائقون متاحون / في راحة / رحلات اليوم / متأخرة / حرجة"
+//
+// All counts are COUNT(*) FILTER queries against existing indexes —
+// no new schema. Today's matching is in Asia/Riyadh time (the operator
+// brief never said GMT).
+//
+//   late_dispatches : status IN ('accepted','executing'), startedAt
+//                     IS NULL, scheduledStartAt + 15min < NOW().
+//   critical_window : status IN ('pending','notified'),
+//                     scheduledStartAt within the next 2 hours.
+//   unassigned_today: bookings whose scheduledStart falls today but
+//                     have no active dispatch order (not declined,
+//                     not cancelled).
+transportPlanningRouter.get(
+  "/transport/control-tower",
+  authorize({ feature: "fleet.dispatch", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      // Day window: caller's date or today (Asia/Riyadh).
+      const dateParam = typeof req.query.date === "string" ? req.query.date : "";
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+        ? dateParam
+        : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
+
+      // ── Vehicles snapshot ────────────────────────────────────
+      const [vehiclesRow] = await rawQuery<{
+        total: number;
+        available: number;
+        inUse: number;
+        maintenance: number;
+        offDuty: number;
+        suspended: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE status = 'available')::int   AS available,
+           COUNT(*) FILTER (WHERE status = 'in_use')::int       AS "inUse",
+           COUNT(*) FILTER (WHERE status = 'maintenance')::int  AS maintenance,
+           COUNT(*) FILTER (WHERE status = 'off_duty')::int     AS "offDuty",
+           COUNT(*) FILTER (WHERE status = 'suspended')::int    AS suspended
+         FROM fleet_vehicles
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+        [scope.companyId],
+      );
+
+      // ── Drivers snapshot ─────────────────────────────────────
+      const [driversRow] = await rawQuery<{
+        total: number;
+        available: number;
+        onTrip: number;
+        offDuty: number;
+        suspended: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE COALESCE(status, 'available') = 'available')::int AS available,
+           COUNT(*) FILTER (WHERE status = 'on_trip')::int                          AS "onTrip",
+           COUNT(*) FILTER (WHERE status = 'off_duty')::int                         AS "offDuty",
+           COUNT(*) FILTER (WHERE status = 'suspended')::int                        AS suspended
+         FROM fleet_drivers
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+        [scope.companyId],
+      );
+
+      // ── Today's dispatches snapshot ──────────────────────────
+      const [dispatchesRow] = await rawQuery<{
+        total: number;
+        pending: number;
+        notified: number;
+        accepted: number;
+        executing: number;
+        completed: number;
+        late: number;
+        critical: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE status = 'pending')::int    AS pending,
+           COUNT(*) FILTER (WHERE status = 'notified')::int   AS notified,
+           COUNT(*) FILTER (WHERE status = 'accepted')::int   AS accepted,
+           COUNT(*) FILTER (WHERE status = 'executing')::int  AS executing,
+           COUNT(*) FILTER (WHERE status = 'completed')::int  AS completed,
+           COUNT(*) FILTER (WHERE status IN ('accepted','executing')
+                            AND "startedAt" IS NULL
+                            AND "scheduledStartAt" + INTERVAL '15 minutes' < NOW())::int AS late,
+           COUNT(*) FILTER (WHERE status IN ('pending','notified')
+                            AND "scheduledStartAt" > NOW()
+                            AND "scheduledStartAt" < NOW() + INTERVAL '2 hours')::int    AS critical
+         FROM transport_dispatch_orders
+         WHERE "companyId" = $1
+           AND DATE("scheduledStartAt" AT TIME ZONE 'Asia/Riyadh') = $2::date`,
+        [scope.companyId, day],
+      );
+
+      // ── Today's bookings snapshot (assigned vs not) ──────────
+      const [bookingsRow] = await rawQuery<{
+        total: number;
+        unassigned: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE NOT EXISTS (
+             SELECT 1 FROM transport_dispatch_orders d
+              WHERE d."bookingId" = b.id
+                AND d."companyId" = b."companyId"
+                AND d.status NOT IN ('declined','cancelled')
+           ))::int AS unassigned
+         FROM transport_bookings b
+         WHERE b."companyId" = $1
+           AND b."deletedAt" IS NULL
+           AND DATE(b."requestedPickupDate" AT TIME ZONE 'Asia/Riyadh') = $2::date`,
+        [scope.companyId, day],
+      );
+
+      // ── Alerts synthesis (operator-friendly, Arabic-labelled) ─
+      const alerts: Array<{ kind: string; severity: "critical" | "warn" | "info"; label: string }> = [];
+      if (dispatchesRow.late > 0) {
+        alerts.push({ kind: "late_dispatches", severity: "critical",
+          label: `${dispatchesRow.late} مهمة متأخرة عن موعد الانطلاق` });
+      }
+      if (dispatchesRow.critical > 0) {
+        alerts.push({ kind: "critical_window", severity: "warn",
+          label: `${dispatchesRow.critical} مهمة لم تُقبل وموعدها خلال ساعتين` });
+      }
+      if (bookingsRow.unassigned > 0) {
+        alerts.push({ kind: "unassigned_bookings", severity: "warn",
+          label: `${bookingsRow.unassigned} حجز اليوم بلا أمر تشغيل` });
+      }
+      if (vehiclesRow.available === 0 && dispatchesRow.pending > 0) {
+        alerts.push({ kind: "no_capacity", severity: "critical",
+          label: "لا مركبات متاحة مع وجود مهام pending" });
+      }
+      if (driversRow.total > 0 && driversRow.available === 0) {
+        alerts.push({ kind: "no_active_drivers", severity: "critical",
+          label: "لا سائقون متاحون حاليًّا" });
+      }
+
+      res.json({
+        data: {
+          date: day,
+          vehicles: vehiclesRow,
+          drivers: driversRow,
+          dispatches: dispatchesRow,
+          bookings: bookingsRow,
+          alerts,
+        },
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Control tower error:");
+    }
+  },
+);
+
 const upsertThresholdSchema = z.object({
   period: z.enum(["daily", "monthly"]),
   callCountThreshold: z.coerce.number().int().positive(),

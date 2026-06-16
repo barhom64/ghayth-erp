@@ -589,6 +589,9 @@ export const allNavSections: NavSection[] = [
           // #2079 TA-T18-04 — قوالب الحجوزات المتكررة (cargo recurring).
           { label: "قوالب المسارات المتكررة", path: "/fleet/transport/route-patterns", icon: CalendarClock, perm: "fleet.bookings:list" },
           { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
+          // Control Tower — audit doc file 22 + #1812. One-shot fleet
+          // snapshot. Same RBAC scope as ops-dashboard.
+          { label: "برج المراقبة", path: "/fleet/transport/control-tower", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
           // كانت orphan: صفحة مركّبة بلا مدخل في القائمة. طابور المحاسب لتسعير
           // وفوترة بنود خدمة النقل — GET /transport/service-lines مبوّب على
           // finance.transport_billing:list (إجراءات التسعير/الفوترة على :approve).
