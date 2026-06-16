@@ -73,6 +73,10 @@ export default function PilgrimCreate() {
   const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
   const { data: groups } = useApiQuery<any>(["umrah-groups"], "/umrah/groups");
   const { data: packages } = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
+  // U-15-P3 — هوتل picker. خيارات الـSelect قاعدتها /umrah/hotels (CRUD
+  // مُعرّف في N6/umrah-hotels). value = اسم الفندق (متوافق مع schema الحالي
+  // الذي يحفظ hotelName كنص حر) — التغيير UX-only، لا migration بعد.
+  const { data: hotels } = useApiQuery<any>(["umrah-hotels"], "/umrah/hotels");
 
   return (
     <CreatePageLayout
@@ -151,7 +155,15 @@ export default function PilgrimCreate() {
               />
               <FormDateField name="arrivalDate" label="تاريخ الوصول" />
               <FormDateField name="departureDate" label="تاريخ المغادرة" />
-              <FormTextField name="hotelName" label="الفندق" />
+              <FormSelectField
+                name="hotelName"
+                label="الفندق"
+                options={(hotels?.data || []).map((h: any) => ({
+                  value: h.name,
+                  label: h.city ? `${h.name} — ${h.city}` : h.name,
+                }))}
+                placeholder="اختر الفندق"
+              />
               <FormTextField name="roomNumber" label="رقم الغرفة" />
             </FormGrid>
             <FormTextareaField name="notes" label="ملاحظات" rows={3} />
