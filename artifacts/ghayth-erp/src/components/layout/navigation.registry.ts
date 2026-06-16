@@ -461,7 +461,7 @@ export const allNavSections: NavSection[] = [
       // مرتبطة بالـsidebar؛ مجمَّعة هنا الآن في مدخل واحد لتسهيل الوصول.
       { label: "التحصيل والديون", path: "/finance/collections", icon: AlertTriangle, module: "finance", children: [
         { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: DollarSign },
-        { label: "تقادم الذمم", path: "/finance/ar-aging", icon: Clock },
+        { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "متابعة Dunning", path: "/finance/dunning", icon: Bell },
         { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
         { label: "الديون المعدومة", path: "/finance/bad-debt", icon: ShieldAlert },
