@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
+import { VISA_TYPES, CONTRACT_TYPES, IQAMA_STATUS, hrLabel } from "@/lib/hr-type-maps";
 import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
@@ -1265,12 +1266,12 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الإقامة</p><p className="font-mono text-sm">{employee.iqamaNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">انتهاء الإقامة</p><p className="text-sm">{employee.iqamaExpiry ? formatDateAr(employee.iqamaExpiry) : "-"}</p></div>
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground">حالة الإقامة</p><p className="text-sm">{employee.iqamaStatus === "active" ? "سارية" : employee.iqamaStatus === "expired" ? "منتهية" : employee.iqamaStatus === "renewal_pending" ? "قيد التجديد" : employee.iqamaStatus || "-"}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground">حالة الإقامة</p><p className="text-sm">{hrLabel(IQAMA_STATUS, employee.iqamaStatus)}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الجواز</p><p className="font-mono text-sm">{employee.passportNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">انتهاء الجواز</p><p className="text-sm">{employee.passportExpiry ? formatDateAr(employee.passportExpiry) : "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الحدود</p><p className="font-mono text-sm">{employee.borderNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم التأشيرة</p><p className="font-mono text-sm">{employee.visaNumber || "-"}</p></div>
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground">نوع التأشيرة</p><p className="text-sm">{employee.visaType || "-"}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground">نوع التأشيرة</p><p className="text-sm">{hrLabel(VISA_TYPES, employee.visaType)}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">انتهاء التأشيرة</p><p className="text-sm">{employee.visaExpiry ? formatDateAr(employee.visaExpiry) : "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الكفيل / المنشأة</p><p className="font-mono text-sm">{employee.sponsorNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم رخصة العمل</p><p className="font-mono text-sm">{employee.workPermitNumber || "-"}</p></div>
@@ -1557,7 +1558,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">نوع العقد</p>
-                  <p className="text-sm">{contract.contractType || "—"}</p>
+                  <p className="text-sm">{hrLabel(CONTRACT_TYPES, contract.contractType)}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">الحالة</p>
