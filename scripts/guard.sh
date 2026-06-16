@@ -184,6 +184,15 @@ run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
 # scripts/rawquery-param-arity-allowlist.txt.
 run_step "check:rawquery-param-arity:tests" node scripts/src/check-rawquery-param-arity.test.mjs
 run_step "check:rawquery-param-arity" node scripts/src/check-rawquery-param-arity.mjs
+# SCOPED-BRANCH-QUALIFIED: a buildScopedWhere call that alias-qualifies its
+# companyColumn (the multi-table/aliased-FROM case) MUST also qualify its
+# branchColumn or set disableBranchScope:true. A qualified company + bare
+# default `"branchId"` is the warehouse-advanced (42702 ambiguous-column 500)
+# and warehouse-cycle-counts (wrong-table scoping) class. Offline static scan;
+# pure-logic fixtures first, then the live scan; vetted FPs in
+# scripts/scoped-branch-qualified-allowlist.txt.
+run_step "check:scoped-branch-qualified:tests" node scripts/src/check-scoped-branch-qualified.test.mjs
+run_step "check:scoped-branch-qualified" node scripts/src/check-scoped-branch-qualified.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
 # Fourth of the four originally-dormant guards from PR #574 — finally

@@ -247,11 +247,17 @@ export async function runAutoDetection(
            SELECT 1 FROM employee_violations ev
            WHERE ev."assignmentId" = a."assignmentId"
              AND ev.type IN ('early_leave','early_departure')
-             AND ev.period = $4
+             AND ev.period = $3
              AND ev."deletedAt" IS NULL
              AND ev.description LIKE '%' || $2 || '%'
          )`,
-      [companyId, date, settings.earlyLeaveThresholdMinutes, period]
+      // NOTE: the early-leave threshold is applied in JS below (computed from
+      // checkOut vs shiftEndTime), NOT in SQL — so it must NOT be bound here.
+      // Binding it as an unreferenced $3 made Postgres fail with 42P18
+      // "could not determine data type of parameter $3" (the daily auto-violation
+      // cron crashed every run). Params must be exactly the placeholders the SQL
+      // references: $1=companyId, $2=date, $3=period.
+      [companyId, date, period]
     );
 
     for (const rec of checkouts) {
@@ -619,8 +625,9 @@ export async function getDetectionLog(
     );
 
     return { data, total };
-  } catch (e) {
-    logger.warn(e, "auto_violations table may not exist");
+  } catch (e: any) {
+    if (e?.code !== "42P01") throw e;
+    logger.warn(e, "auto_violations table not yet created");
     return { data: [], total: 0 };
   }
 }
