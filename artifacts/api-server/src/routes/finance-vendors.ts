@@ -168,7 +168,7 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
       after: { name },
     }).catch((err) => logger.error(err, "[audit] vendor.created:"));
 
-    const [row] = await rawQuery<VendorRow>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<VendorRow>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, name, contactPerson, phone, email, taxNumber, category });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
@@ -487,7 +487,7 @@ vendorsRouter.get("/payments", authorize({ feature: "finance.vendors", action: "
       `SELECT je.id, je.ref, je.description, je."createdAt",
               COALESCE(SUM(jl.credit), 0) AS amount
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" LIKE '1%'
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL AND jl."accountCode" LIKE '1%'
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
          AND je.status = 'posted'
          AND (je.ref LIKE 'PV%' OR je.ref LIKE 'PAY%')
