@@ -122,6 +122,10 @@ describe("hrEngine sourceKey conventions", () => {
     expect(ENGINE_SRC).toContain("`hr:monthly_accruals:${ctx.companyId}:${accruals.period}`");
   });
 
+  it("postPayrollLiabilitySettlementGL uses hr:liab_settle:{type}:{runId}", () => {
+    expect(ENGINE_SRC).toContain("`hr:liab_settle:${settlement.liabilityType}:${settlement.runId}`");
+  });
+
   it("all sourceKeys start with hr: prefix", () => {
     const sourceKeys = ENGINE_SRC.matchAll(/sourceKey:\s*`(hr:[^`]+)`/g);
     let count = 0;
@@ -129,7 +133,7 @@ describe("hrEngine sourceKey conventions", () => {
       expect(m[1]).toMatch(/^hr:/);
       count++;
     }
-    expect(count).toBe(8);
+    expect(count).toBe(9);
   });
 });
 
