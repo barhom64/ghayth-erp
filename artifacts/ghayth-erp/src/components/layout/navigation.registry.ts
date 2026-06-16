@@ -692,7 +692,8 @@ export const allNavSections: NavSection[] = [
         { label: "التقارير والأدلة", path: "/properties/occupancy-report", icon: BarChart3, children: [
           { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
           { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
-          { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
+          // «دليل إرشادي مصور» (/guide/properties) أُزيل: مسارٌ قديم يعيد التوجيه
+          // إلى /properties/guide أعلاه — بندٌ مكرّر مسدود (نفس الصفحة، نفس المجموعة).
         ]},
       ]},
     ],

@@ -1629,11 +1629,17 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, status } = req.query as Record<string, string | undefined>;
+    const { employeeId, status, ownerRole, mandatory } = req.query as Record<string, string | undefined>;
     const conditions = [`ot."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
     if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
+    // HR-REV-3 (#2222) — per-owner queue: each owning department (الأسطول/
+    // الوثائق/الرواتب…) can pull just the activation tasks routed to it.
+    if (ownerRole) { params.push(ownerRole); conditions.push(`ot."ownerRole" = $${params.length}`); }
+    // mandatory=true|false narrows to the gating items (or the optional ones).
+    if (mandatory === "true") { conditions.push(`ot.mandatory IS NOT FALSE`); }
+    else if (mandatory === "false") { conditions.push(`ot.mandatory IS FALSE`); }
     interface OnboardingTaskRow extends Record<string, unknown> {
       id: number;
       companyId: number;
