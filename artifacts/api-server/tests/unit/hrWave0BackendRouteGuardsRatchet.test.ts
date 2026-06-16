@@ -149,12 +149,13 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // self-service mount lives outside the HR file set). All gated.
     // HR-REV-3 (#2222) added 1 (POST /employees/quick-activate, gated). 223→224.
     // HR-REV-8 (#2222) added 1 (POST /recruitment/applications/:id/hire, gated). 224→225.
-    expect(ALL_REGISTRATIONS.length).toBe(225);
+    // HR-REV-9 (#2222) added 2 (PATCH+DELETE /hr/employee-documents/:id, gated). 225→227.
+    expect(ALL_REGISTRATIONS.length).toBe(227);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(225);
+    expect(gated).toBe(227);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
@@ -166,8 +167,9 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
       // HR-REV-3 (#2222) added 1 (POST /quick-activate, gated). 18→19.
       "employees.ts": 19,
       // main merged 4 endpoints (121→125); PR-9 (#2077) added the
-      // field-ping eligibility mirror (125→126). All gated.
-      "hr.ts": 126,
+      // field-ping eligibility mirror (125→126). HR-REV-9 (#2222) added
+      // PATCH+DELETE /employee-documents/:id (126→128). All gated.
+      "hr.ts": 128,
       "hr-compliance.ts": 3,
       "hr-contracts.ts": 12,
       "hr-discipline.ts": 24,

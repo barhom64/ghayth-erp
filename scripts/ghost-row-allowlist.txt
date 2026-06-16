@@ -150,8 +150,6 @@ routes/finance-algorithms.ts:journal_lines
 routes/finance-algorithms.ts:store_products
 routes/finance-algorithms.ts:subsidiary_accounts
 routes/finance-algorithms.ts:warehouse_categories
-routes/finance-budget.ts:budgets
-routes/finance-budget.ts:journal_lines
 routes/finance-cost-centers.ts:chart_of_accounts
 routes/finance-cost-centers.ts:cost_centers
 routes/finance-cost-centers.ts:journal_lines

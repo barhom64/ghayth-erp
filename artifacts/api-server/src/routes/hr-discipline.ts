@@ -1176,17 +1176,45 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
       },
       after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
       onApply: async (_row, client) => {
-        if (decision === "accepted" && memo.violationId) {
-          await applyTransition({
-            entity: "employee_violations",
-            id: memo.violationId as number,
-            scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-            action: "hr.violation.appeal_accepted",
-            fromStates: ["approved"],
-            toState: "appeal_accepted",
-            extraWhere: `"deletedAt" IS NULL`,
-            client,
-          });
+        if (decision === "accepted") {
+          if (memo.violationId) {
+            await applyTransition({
+              entity: "employee_violations",
+              id: memo.violationId as number,
+              scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+              action: "hr.violation.appeal_accepted",
+              fromStates: ["approved"],
+              toState: "appeal_accepted",
+              extraWhere: `"deletedAt" IS NULL`,
+              client,
+            });
+          }
+          // Reverse the payroll deduction the GM approval inserted. Without
+          // this, an accepted appeal still leaves a `pending_payroll` row that
+          // the payroll cycle picks up — the employee is docked despite winning
+          // the appeal. We only touch rows not yet swept into a run
+          // (status='pending_payroll'); 'deducted_in_payroll' rows are already
+          // settled and must be handled by a payroll adjustment, not here.
+          const totalApplied =
+            Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0);
+          if (totalApplied > 0) {
+            const rawIncDate = memo.incidentDate as unknown as string | Date;
+            const incDate = rawIncDate instanceof Date ? rawIncDate : new Date(rawIncDate);
+            const period = `${incDate.getFullYear()}-${String(incDate.getMonth() + 1).padStart(2, "0")}`;
+            // ctid LIMIT 1 cancels exactly one matching row, so two distinct
+            // penalties for the same assignment+period+amount aren't both wiped.
+            await client.query(
+              `UPDATE attendance_deductions SET status = 'cancelled'
+                WHERE ctid IN (
+                  SELECT ctid FROM attendance_deductions
+                   WHERE "companyId" = $1 AND "assignmentId" = $2
+                     AND type = 'penalty' AND status = 'pending_payroll'
+                     AND period = $3 AND amount = $4
+                   LIMIT 1
+                )`,
+              [scope.companyId, memo.assignmentId, period, totalApplied]
+            );
+          }
         }
         await logMemoEvent({
           memoId: id, companyId: scope.companyId, actorId: scope.userId, client,
