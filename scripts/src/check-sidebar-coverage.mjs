@@ -69,6 +69,19 @@ const CREATE_IN_SIDEBAR_ALLOWLIST = new Set([
   "/hr/leaves/create", // employee self-service "طلب إجازة" entry point
 ]);
 
+// Routes intentionally kept off the sidebar that the structural heuristics
+// (detail / create / redirect-stub) can't classify. Keep this list tiny and
+// justified — every entry is an explicit exception.
+const OFF_SIDEBAR_ALLOWLIST = new Set([
+  // Back-compat alias → /work-inbox (PR-4 #2163). The redirect is component-
+  // level (pages/my/work-queue.tsx calls setLocation), so the route reads as
+  // `component: WorkQueue` and the redirectTo/RedirectToXxx detection can't see
+  // it. /work-inbox (the canonical inbox) IS in the sidebar; this stays mounted
+  // only for old bookmarks, and is pinned as a redirect shell by
+  // platformWave2Pr4OrphansCleanupSmoke + hr015_016_017Smoke.
+  "/my/work-queue",
+]);
+
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
 function basePath(p) {
   return p.replace(/[?#].*$/, "");
@@ -89,23 +102,32 @@ function getMountedRoutes() {
 }
 
 /**
- * Paths whose route component is a redirect — `component: redirectTo("/x")` or a
- * named `RedirectToXxx` component. These are deep-link / back-compat aliases that
- * bounce to a canonical page, not pages in their own right, so (like detail /
- * create pages) they are never expected to carry a sidebar entry.
+ * Map of redirect-route path → the target it forwards to. A redirect route is one
+ * whose component is `redirectTo("/x")` or a named `RedirectToXxx` component.
+ * These are deep-link / back-compat aliases that bounce to a canonical page, not
+ * pages in their own right, so (like detail / create pages) they are never
+ * expected to carry a sidebar entry. Returned as a Map so callers can both test
+ * membership (`.has()`) and report the bounce target (`.get()`).
  */
 function getRedirectRoutePaths() {
-  const set = new Set();
+  const map = new Map();
   for (const file of fs.readdirSync(ROUTES_DIR)) {
     if (!file.endsWith(".tsx")) continue;
     const src = fs.readFileSync(path.join(ROUTES_DIR, file), "utf-8");
+    // `redirectTo("/target")` — capture the literal target.
     for (const m of src.matchAll(
-      /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*(?:redirectTo\b|RedirectTo[A-Za-z]*)/g,
+      /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*redirectTo\(\s*["']([^"']+)["']/g,
     )) {
-      set.add(m[1]);
+      map.set(m[1], m[2]);
+    }
+    // Named `RedirectToXxx` components — target isn't a static literal here.
+    for (const m of src.matchAll(
+      /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*(RedirectTo[A-Za-z]*)/g,
+    )) {
+      if (!map.has(m[1])) map.set(m[1], m[2]);
     }
   }
-  return set;
+  return map;
 }
 
 /** Pull every `path: "/x"` value from the navigation registry. */
@@ -123,13 +145,14 @@ function getSidebarPaths() {
  * create/edit page that's opened from another page (list or detail),
  * not from the nav drawer. Heuristics:
  *   - has `:` (route parameter) → detail/edit
- *   - ends with `/create` or `/new` → create page
- *   - ends with `/edit` → edit page
+ *   - ends with `/create`|`-create` or `/new`|`-new` → create page
+ *     (the `-` form covers variants like `…/quick-create`)
+ *   - ends with `/edit`|`-edit` → edit page
  *   - is the login page or the special shell roots
  */
 function isLegitimatelyOffSidebar(routePath) {
   if (routePath.includes(":")) return true;
-  if (/\/(create|new|edit)$/.test(routePath)) return true;
+  if (/[/-](create|new|edit)$/.test(routePath)) return true;
   if (routePath === "/login") return true;
   if (routePath === "/") return true;
   if (routePath === "/dashboard") return true; // home shell
@@ -139,7 +162,7 @@ function isLegitimatelyOffSidebar(routePath) {
 /** True when a nav-drawer path is a create/edit/detail page (convention breach). */
 function isCreateEditDetail(p) {
   const b = basePath(p);
-  return b.includes(":") || /\/(create|new|edit)$/.test(b);
+  return b.includes(":") || /[/-](create|new|edit)$/.test(b);
 }
 
 function main() {
@@ -156,7 +179,8 @@ function main() {
     if (sidebarSet.has(r)) continue;
     // Redirect stubs bounce to a canonical page — aliases, not pages, so they
     // don't need their own nav entry (same treatment as detail/create pages).
-    if (redirectPaths.has(r) || isLegitimatelyOffSidebar(r)) {
+    // OFF_SIDEBAR_ALLOWLIST covers the few that the heuristics can't classify.
+    if (OFF_SIDEBAR_ALLOWLIST.has(r) || redirectPaths.has(r) || isLegitimatelyOffSidebar(r)) {
       legitimatelyOff++;
       continue;
     }
@@ -171,6 +195,14 @@ function main() {
     if (SHELL_PATHS.has(b)) continue;
     if (!routesSet.has(b)) deadLinks.push(p);
   }
+
+  // ── soft: nav entries that point at a redirect stub (dead-end bounce) ──
+  // Clicking these lands on a redirect route that immediately forwards to a
+  // canonical page (e.g. the BI dashboards/kpis/reports duplicates removed in
+  // #2518). The route resolves, so it's not a dead link — but the entry is a
+  // redundant bounce, usually a stale alias that should point straight at the
+  // target (or be dropped when the target is itself a sidebar entry).
+  const redirectLinks = sidebarPaths.filter((p) => redirectPaths.has(basePath(p)));
 
   // ── governance: create/edit/detail pages wired into the nav drawer ────
   const createInSidebar = sidebarPaths.filter(
@@ -198,7 +230,8 @@ function main() {
   console.log(`[HARD] orphan pages (missing from nav):  ${missing.length}`);
   console.log(`[HARD] dead links (nav → no route):      ${deadLinks.length}`);
   console.log(`[HARD] create/edit pages in nav drawer:  ${createInSidebar.length}`);
-  console.log(`[soft] nav leaves w/o perm/module gate:  ${noPerm.length}\n`);
+  console.log(`[soft] nav leaves w/o perm/module gate:  ${noPerm.length}`);
+  console.log(`[soft] nav entries → redirect stub:      ${redirectLinks.length}\n`);
 
   if (missing.length > 0) {
     console.log(`## [HARD] orphan pages (missing from the sidebar)\n`);
@@ -234,6 +267,16 @@ function main() {
   if (noPerm.length > 0) {
     console.log(`## [soft] nav leaves with no explicit perm/module gate (informational)\n`);
     for (const p of noPerm) console.log(`  ${p}`);
+    console.log();
+  }
+
+  if (redirectLinks.length > 0) {
+    console.log(`## [soft] nav entries pointing at a redirect stub (dead-end bounce)\n`);
+    console.log(`(clicking these forwards to a canonical page; repoint the entry at`);
+    console.log(` the target, or drop it when the target is itself a sidebar entry)\n`);
+    for (const p of redirectLinks) {
+      console.log(`  ${p}  →  ${redirectPaths.get(basePath(p))}`);
+    }
     console.log();
   }
 
