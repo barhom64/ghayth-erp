@@ -18,7 +18,6 @@
  *   PATCH  /transport/itineraries/:id/legs/:legId    — update a leg
  *   DELETE /transport/itineraries/:id/legs/:legId    — remove a leg
  *
- *   POST   /transport/dispatch-orders/:id/navigation/start    — start session
  *   POST   /transport/dispatch-orders/:id/navigation/ping     — driver ping
  *   POST   /transport/dispatch-orders/:id/navigation/event    — state transition
  *   POST   /transport/dispatch-orders/:id/navigation/complete — end session
@@ -1192,81 +1191,10 @@ transportPlanningRouter.post(
 );
 
 // ─── Navigation sessions ─────────────────────────────────────────────
-
-async function loadDispatchOrderForDriver(
-  companyId: number, dispatchOrderId: number,
-): Promise<{
-  id: number; driverId: number; vehicleId: number;
-  status: string; bookingLineId: number;
-  fromLat: number | null; fromLng: number | null;
-  toLat: number | null; toLng: number | null;
-} | null> {
-  const [row] = await rawQuery<{
-    id: number; driverId: number; vehicleId: number;
-    status: string; bookingLineId: number;
-    fromLat: number | null; fromLng: number | null;
-    toLat: number | null; toLng: number | null;
-  }>(
-    `SELECT d.id, d."driverId", d."vehicleId", d.status, d."bookingLineId",
-            fl.latitude  AS "fromLat",
-            fl.longitude AS "fromLng",
-            tl.latitude  AS "toLat",
-            tl.longitude AS "toLng"
-       FROM transport_dispatch_orders d
-            JOIN transport_booking_lines bl ON bl.id = d."bookingLineId" AND bl."deletedAt" IS NULL
-            JOIN transport_bookings b ON b.id = bl."bookingId" AND b."deletedAt" IS NULL
-            LEFT JOIN transport_locations fl ON fl.id = b."fromLocationId" AND fl."deletedAt" IS NULL
-            LEFT JOIN transport_locations tl ON tl.id = b."toLocationId" AND tl."deletedAt" IS NULL
-      WHERE d.id = $1 AND d."companyId" = $2`,
-    [dispatchOrderId, companyId],
-  );
-  return row ?? null;
-}
-
-transportPlanningRouter.post(
-  "/transport/dispatch-orders/:id/navigation/start",
-  authorize({ feature: "fleet.dispatch", action: "update" }),
-  async (req, res) => {
-    try {
-      const scope = req.scope!;
-      const dispatchOrderId = parseId(req.params.id, "id");
-      const order = await loadDispatchOrderForDriver(scope.companyId, dispatchOrderId);
-      if (!order) throw new NotFoundError("أمر التوزيع غير موجود");
-      if (!["accepted", "executing"].includes(order.status)) {
-        throw new ValidationError(
-          `لا يمكن بدء جلسة ملاحة على أمر بحالة "${order.status}". يجب قبول المهمة أولاً.`,
-          { field: "status" },
-        );
-      }
-      const settings = await loadPlanningSettings(scope.companyId);
-
-      const { insertId } = await rawExecute(
-        `INSERT INTO driver_navigation_sessions
-           ("companyId", "dispatchOrderId", "driverId", "vehicleId",
-            "originLat", "originLng", "destinationLat", "destinationLng",
-            provider)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          scope.companyId, dispatchOrderId, order.driverId, order.vehicleId,
-          order.fromLat, order.fromLng, order.toLat, order.toLng,
-          settings.mapProvider,
-        ],
-      );
-      assertInsert(insertId, "driver_navigation_sessions");
-
-      emitEvent({
-        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
-        action: "fleet.dispatch.navigation_started",
-        entity: "driver_navigation_sessions", entityId: insertId,
-        details: JSON.stringify({ dispatchOrderId, provider: settings.mapProvider }),
-      }).catch((e) => logger.error(e, "navigation start event failed"));
-
-      res.status(201).json({ data: { id: insertId, provider: settings.mapProvider } });
-    } catch (err) {
-      handleRouteError(err, res, "Start navigation session error:");
-    }
-  },
-);
+// The explicit "start session" route (POST .../navigation/start) was retired:
+// navigation sessions are now auto-created when a dispatch order is accepted
+// (the auto-start hook in PATCH /transport/dispatch-orders/:id — see
+// transport-bookings.ts). No client ever called the explicit endpoint.
 
 const pingSchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
