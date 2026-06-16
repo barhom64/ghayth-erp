@@ -104,8 +104,7 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
     path: "/finance/reports/zatca",
     canonicalLabel: "مركز تقارير ZATCA",
     aliases: ["ZATCA Reports Hub", "تقارير الضرائب والمخزون", "تقارير زاتكا والمخزون"],
-    ownerDecision: true,
-    note: "INVENTORY §8.أ — keep 'ZATCA' (proper noun); Arabise 'Reports Hub'.",
+    note: "INVENTORY §8.أ — applied slice 12. Kept 'ZATCA' (proper noun); Arabised 'Reports Hub'.",
   },
 
   // ── §1.أ — same path carrying more than one menu label ──
@@ -131,8 +130,7 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
     path: "/admin",
     canonicalLabel: "مدير النظام",
     aliases: ["الأدوار والصلاحيات (v2)", "لوحة الإدارة"],
-    ownerDecision: true,
-    note: "INVENTORY §1.أ — three names for /admin.",
+    note: "INVENTORY §1.أ — accepted group-leader pattern (group «مدير النظام» / overview «الأدوار والصلاحيات (v2)» / page «لوحة الإدارة»); no rename, like §1.ب.",
   },
 
   // ── §3/§4 — one function reached by several names, some via redirect ──
@@ -141,16 +139,14 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
     canonicalLabel: "ذكاء الأعمال",
     aliases: ["لوحة التحليلات", "نظرة عامة", "لوحات BI", "مؤشرات الأداء", "التقارير التحليلية"],
     redirectFrom: ["/bi/dashboards", "/bi/kpis", "/bi/reports"],
-    ownerDecision: true,
-    note: "INVENTORY §3/§4 — 4 menu entries resolve to /bi; 3 are redirects.",
+    note: "INVENTORY §3/§4 — applied slice 6: unified to one «ذكاء الأعمال» entry; the 3 redirect names are search aliases.",
   },
   {
     path: "/properties/guide",
     canonicalLabel: "دليل العقارات",
     aliases: ["دليل إرشادي مصور"],
     redirectFrom: ["/guide/properties"],
-    ownerDecision: true,
-    note: "INVENTORY §1.أ/§4 — two menu entries, second via redirect.",
+    note: "INVENTORY §1.أ/§4 — applied slice 12: removed the «دليل إرشادي مصور» duplicate nav entry; «دليل العقارات» is the single entry, alias kept for search.",
   },
 
   // ── §2 — same label reused for genuinely different functions ──

@@ -405,7 +405,7 @@ export const allNavSections: NavSection[] = [
         { label: "فئات WHT", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
         { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
-        { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
+        { label: "مركز تقارير ZATCA", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "فواتير B2C موجهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
         { label: "عملاء بلا رقم ضريبي", path: "/finance/zatca/missing-tax", icon: AlertTriangle },
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
@@ -692,7 +692,11 @@ export const allNavSections: NavSection[] = [
         { label: "التقارير والأدلة", path: "/properties/occupancy-report", icon: BarChart3, children: [
           { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
           { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
-          { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
+          // UX Nav Governance (شريحة 12) — أُزيل المدخل المكرّر «دليل إرشادي مصور»
+          // (كان → /guide/properties، وهو redirect إلى /properties/guide). يكفي
+          // مدخل «دليل العقارات» الواحد؛ الاسم البديل محفوظ للبحث في
+          // navigation.canonical-map.ts، والمسار /guide/properties يبقى redirect
+          // (لا حذف). الحارس المُرقّى يعدّه off-sidebar فلا يصير orphan.
         ]},
       ]},
     ],
