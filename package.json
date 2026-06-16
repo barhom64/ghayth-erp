@@ -33,6 +33,7 @@
     "check:on-conflict-targets": "node scripts/src/check-on-conflict-targets.mjs",
     "check:write-path-contracts": "node scripts/src/check-write-path-contracts.mjs",
     "check:sql-ambiguity": "node scripts/src/check-sql-ambiguity.mjs",
+    "check:scoped-branch-qualified": "node scripts/src/check-scoped-branch-qualified.mjs",
     "check:duplicate-migrations": "node scripts/src/check-duplicate-migrations.mjs",
     "check:button-nesting": "node scripts/src/check-button-nesting.mjs",
     "check:dup-filenames": "node scripts/src/check-dup-filenames.mjs",

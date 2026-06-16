@@ -164,6 +164,35 @@ run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
 # — dormant until their separate cleanup PRs land, since each still has
 # real findings unrelated to the guard wiring itself).
 run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
+# REDIRECT-TO-NOWHERE: every redirectTo("/x") alias in the ghayth-erp route
+# table must resolve to a real mounted route. Catches the A4-navigation failure
+# class (delete/rename a canonical page, leave its alias behind -> SPA 404)
+# statically, before merge. Pure-logic fixtures first, then the live scan.
+run_step "check:redirect-targets:tests" node scripts/src/check-redirect-targets.test.mjs
+run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
+# TABS-NAV COVERAGE: every tab in components/shared/*-tabs-nav.tsx must point at
+# a real mounted route — a dead tab silently 404s (companion to the sidebar +
+# redirect-target nav guards). Pure-logic fixtures first, then the live scan.
+run_step "check:tabs-coverage:tests" node scripts/src/check-tabs-coverage.test.mjs
+run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
+# RAWQUERY-PARAM-ARITY: a Postgres parameterized statement must be bound with
+# exactly max($N) values. Catches the 08P01 "bind message supplies N parameters,
+# but prepared statement requires M" class statically — e.g. the umrah
+# /calendar/events overstay 500, where a query referenced only $1,$2 while
+# sharing the 3-element `baseParams` its siblings filled via BETWEEN $2 AND $3.
+# Pure-logic fixtures first (no DB), then the live scan; vetted FPs in
+# scripts/rawquery-param-arity-allowlist.txt.
+run_step "check:rawquery-param-arity:tests" node scripts/src/check-rawquery-param-arity.test.mjs
+run_step "check:rawquery-param-arity" node scripts/src/check-rawquery-param-arity.mjs
+# SCOPED-BRANCH-QUALIFIED: a buildScopedWhere call that alias-qualifies its
+# companyColumn (the multi-table/aliased-FROM case) MUST also qualify its
+# branchColumn or set disableBranchScope:true. A qualified company + bare
+# default `"branchId"` is the warehouse-advanced (42702 ambiguous-column 500)
+# and warehouse-cycle-counts (wrong-table scoping) class. Offline static scan;
+# pure-logic fixtures first, then the live scan; vetted FPs in
+# scripts/scoped-branch-qualified-allowlist.txt.
+run_step "check:scoped-branch-qualified:tests" node scripts/src/check-scoped-branch-qualified.test.mjs
+run_step "check:scoped-branch-qualified" node scripts/src/check-scoped-branch-qualified.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
 # Fourth of the four originally-dormant guards from PR #574 — finally

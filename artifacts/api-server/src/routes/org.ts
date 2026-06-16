@@ -185,7 +185,13 @@ const positionSchema = z.object({
   labelAr: z.string().min(1, "الاسم بالعربية مطلوب").max(200),
   labelEn: z.string().max(200).optional().nullable(),
   description: z.string().optional().nullable(),
-  level: z.number().int().min(0).max(100),
+  // #institutional-link — `level` orders the position matrix but is NOT
+  // something the inline quick-create dialog (positionKey + labelAr only)
+  // can supply. It was a hard-required number, so "+ منصب جديد" from the
+  // employee-create picker always 422'd ("Required"). Coerce (the dialog
+  // sends strings) + default to 50 (the DB column default) so a minimal
+  // quick-create succeeds; the full positions admin form still sets it.
+  level: z.coerce.number().int().min(0).max(100).optional().default(50),
   isActive: z.boolean().optional(),
 });
 
