@@ -1695,10 +1695,16 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
           [r.employeeId, scope.companyId]
         );
         if (pending && pending.cnt === 0) {
+          // Tenant scope via the employee's assignment (employees.companyId is
+          // not populated on quick-activate; the assignment carries the tenant).
           await rawQuery(
             `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
-              WHERE id = $1 AND "activationStatus" = 'pending_activation'`,
-            [r.employeeId]
+              WHERE id = $1 AND "activationStatus" = 'pending_activation'
+                AND EXISTS (
+                  SELECT 1 FROM employee_assignments ea
+                  WHERE ea."employeeId" = employees.id AND ea."companyId" = $2
+                )`,
+            [r.employeeId, scope.companyId]
           );
         }
       }
