@@ -96,6 +96,11 @@ import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
 import entityMetaRouter from "./entityMeta.js";
 import umrahRouter from "./umrah.js";
 import umrahEntitiesRouter from "./umrah-entities.js";
+// U-07 Phase 1 split: imported here so routeInfrastructure coverage passes.
+// The router is mounted as a sub-router via umrah-entities.ts (router.use)
+// so we deliberately do NOT mount it again here to avoid double-mount.
+import journeyReportsRouter from "./umrah-journey-reports.js";
+void journeyReportsRouter;
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,

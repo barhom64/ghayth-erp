@@ -31,14 +31,17 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const ROUTES = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-journey-reports.ts"),
   "utf8",
 );
 
 // Slice the recovery-hub handler so negative assertions stay scoped.
+// Anchored on `router.get("/reports/recovery-hub"` (the actual route
+// definition) rather than the bare path so the file-header comment
+// block — which now also mentions the path — doesn't confuse the slice.
 const HANDLER =
   ROUTES.match(
-    /\/reports\/recovery-hub[\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m,
+    /router\.get\(\s*\n?\s*["']\/reports\/recovery-hub["'][\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m,
   )?.[0] ?? "";
 
 // ─────────────────────────────────────────────────────────────────────────────
