@@ -175,6 +175,13 @@ run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
 # redirect-target nav guards). Pure-logic fixtures first, then the live scan.
 run_step "check:tabs-coverage:tests" node scripts/src/check-tabs-coverage.test.mjs
 run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
+# SIDEBAR COVERAGE: every mounted route must be reachable from the left sidebar
+# (navigation.registry.ts) or be legitimately off-sidebar (detail / create /
+# redirect-stub / allowlisted); and no nav entry may be a dead link or a
+# create/edit page in the drawer. Third nav guard (sidebar + tabs +
+# redirect-targets). Pure-logic fixtures first, then the live scan.
+run_step "check:sidebar-coverage:tests" node scripts/src/check-sidebar-coverage.test.mjs
+run_step "check:sidebar-coverage" node scripts/src/check-sidebar-coverage.mjs --strict
 # RAWQUERY-PARAM-ARITY: a Postgres parameterized statement must be bound with
 # exactly max($N) values. Catches the 08P01 "bind message supplies N parameters,
 # but prepared statement requires M" class statically — e.g. the umrah
