@@ -14,6 +14,8 @@
     "audit:route-doubling": "node scripts/src/audit-route-doubling.mjs",
     "audit:sidebar": "node scripts/src/check-sidebar-coverage.mjs",
     "gate:nav": "node scripts/src/check-sidebar-coverage.mjs --strict",
+    "audit:tabs": "node scripts/src/check-tabs-coverage.mjs",
+    "gate:tabs": "node scripts/src/check-tabs-coverage.mjs --strict",
     "audit:wiring": "node scripts/src/check-frontend-backend-wiring.mjs",
     "audit:runtime": "ALL=1 node scripts/src/runtime-audit.cjs",
     "audit:schema": "node scripts/src/audit-schema-drift.mjs",
