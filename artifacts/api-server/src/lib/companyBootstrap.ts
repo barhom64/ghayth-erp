@@ -37,6 +37,15 @@ export async function bootstrapCompany(
     await createDefaultChartOfAccounts(client, companyId);
     await createDefaultRoles(client, companyId);
     await createDefaultNumberingPrefixes(client, companyId);
+    // 2026-06-16 — every new tenant needs the per-module numbering_schemes
+    // rows + the canonical default department, or the first invoice /
+    // employee / ticket POST 404s. The migrations seed these only for
+    // companies that existed AT migration time; companies created later
+    // (incl. via this bootstrap) used to miss them. Clone from a known
+    // template tenant (the lowest-id company that already has schemes)
+    // and stamp the canonical default department.
+    await createDefaultNumberingSchemes(client, companyId);
+    await createDefaultDepartment(client, companyId, branchId);
     await createDefaultPenaltyLadder(client, companyId);
     await createDefaultSettings(client, companyId, companyName);
 
@@ -490,6 +499,67 @@ async function createDefaultNumberingPrefixes(client: pg.PoolClient, companyId: 
       [p.key, p.value, companyId]
     );
   }
+}
+
+/**
+ * Clone every numbering_schemes row that exists for the template
+ * tenant (the lowest-id company that has rows) into the new company.
+ * The migrations under `SEED_REPLAY_ALLOWLIST` seed schemes for
+ * companies that existed at migration time; companies created via
+ * this bootstrap need their own copy or every numbered write
+ * (sales_invoice, journal_entry, support_ticket, umrah_group, ...)
+ * returns 404 "لا توجد سياسة ترقيم لـ <module>.<entity> في الشركة #N".
+ *
+ * Idempotent: ON CONFLICT DO NOTHING on (companyId, moduleKey, entityKey).
+ */
+async function createDefaultNumberingSchemes(client: pg.PoolClient, companyId: number) {
+  // Pick the lowest-id company that actually has schemes as the
+  // template. We avoid hard-coding company 1 because in test setups
+  // the seeded tenant may live at a different id.
+  const tplResult = await client.query<{ companyId: number }>(
+    `SELECT MIN("companyId") AS "companyId"
+       FROM numbering_schemes
+      WHERE "companyId" <> $1`,
+    [companyId],
+  );
+  const templateCompanyId = tplResult.rows[0]?.companyId;
+  if (!templateCompanyId) {
+    // No template at all (very fresh DB). Skip — the migration replay
+    // will fill schemes for the seeded companies; this bootstrap is
+    // for SUBSEQUENT companies that need an existing template.
+    return;
+  }
+  await client.query(
+    `INSERT INTO numbering_schemes
+       ("companyId", "moduleKey", "entityKey", "displayNameAr", "displayNameEn",
+        prefix, pattern, "padLength", "resetPolicy", "scopePolicy",
+        "issueTiming", "manualEditPolicy", "requiresReasonOnManualEdit",
+        "lockAfterStatuses")
+     SELECT $1, "moduleKey", "entityKey", "displayNameAr", "displayNameEn",
+            prefix, pattern, "padLength", "resetPolicy", "scopePolicy",
+            "issueTiming", "manualEditPolicy", "requiresReasonOnManualEdit",
+            "lockAfterStatuses"
+       FROM numbering_schemes
+      WHERE "companyId" = $2
+     ON CONFLICT ("companyId", "moduleKey", "entityKey") DO NOTHING`,
+    [companyId, templateCompanyId],
+  );
+}
+
+/**
+ * Stamp the canonical default department on a fresh tenant. The
+ * employee creation flow accepts a `department` string and resolves
+ * it against this table; without the default row, every first POST
+ * 422s with "القسم 'الإدارة العامة' غير موجود".
+ */
+async function createDefaultDepartment(client: pg.PoolClient, companyId: number, branchId: number) {
+  await exec(
+    client,
+    `INSERT INTO departments ("companyId", "branchId", name, slug, status)
+     VALUES ($1, $2, 'الإدارة العامة', 'general-management', 'active')
+     ON CONFLICT DO NOTHING`,
+    [companyId, branchId],
+  );
 }
 
 async function createDefaultPenaltyLadder(client: pg.PoolClient, companyId: number) {
