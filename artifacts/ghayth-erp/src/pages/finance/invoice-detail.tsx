@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useIdempotencyKey } from "@/lib/idempotency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -46,10 +47,7 @@ import {
 import { CreditMemoDialog } from "@/components/shared/credit-memo-dialog";
 import { InvoiceAmendDialog } from "@/components/shared/invoice-amend-dialog";
 import { DebitMemoDialog } from "@/components/shared/debit-memo-dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 /**
  * Invoice detail page — migrated to DetailPageLayout which provides
@@ -148,6 +146,7 @@ export default function InvoiceDetailPage() {
   // FORBIDDEN with requiredRoles) surface through R.1.2's toast
   // pipeline automatically. The old handlers swallowed the server's
   // structured detail into a generic "حدث خطأ" toast.
+  const paymentIdem = useIdempotencyKey();
   const paymentMut = useApiMutation<unknown, { amount: number; method: string }>(
     () => `/finance/invoices/${id}/payment`,
     "POST",
@@ -158,7 +157,11 @@ export default function InvoiceDetailPage() {
     ],
     {
       successMessage: "تم تسجيل الدفعة",
-      onSuccess: () => setShowPayment(false),
+      headers: () => paymentIdem.headers,
+      onSuccess: () => {
+        paymentIdem.reset();
+        setShowPayment(false);
+      },
     },
   );
 
@@ -223,12 +226,10 @@ export default function InvoiceDetailPage() {
   const actions = (
     <div className="flex items-center gap-2">
       <DetailActionButtons hook={editDelete} editPerm="finance:update" deletePerm="finance:delete" />
-      <Link href={`/finance/invoices/create?copyFrom=${id}`}>
-        <Button variant="outline" size="sm" className="gap-1">
+      <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/invoices/create?copyFrom=${id}`}>
           <Copy className="h-4 w-4" />
           نسخ
-        </Button>
-      </Link>
+        </Link></Button>
       {invoice && remaining > 0 && (
         <GuardedButton perm="finance:create" variant="outline" size="sm" onClick={() => setShowPayment(!showPayment)}>
           <Banknote className="h-4 w-4 me-1" />
@@ -744,22 +745,17 @@ export default function InvoiceDetailPage() {
           />
         </>
       )}
-      <AlertDialog open={confirmPost} onOpenChange={(o) => !o && setConfirmPost(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد ترحيل الفاتورة</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة الذي يُرحَّل إلى دفتر الأستاذ العام. هذا الإجراء غير قابل للتراجع. متابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setConfirmPost(false); postMut.mutate({}); }}>
-              تأكيد الترحيل
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={confirmPost}
+        onOpenChange={(o) => { if (!o) setConfirmPost(false); }}
+        variant="destructive"
+        title="تأكيد ترحيل الفاتورة"
+        description="سيتم ترحيل الفاتورة وإنشاء قيد المحاسبة الذي يُرحَّل إلى دفتر الأستاذ العام. هذا الإجراء غير قابل للتراجع. متابعة؟"
+        confirmLabel="تأكيد الترحيل"
+        pending={postMut.isPending}
+        onConfirm={() => { setConfirmPost(false); postMut.mutate({}); }}
+      />
     </>
   );
 }

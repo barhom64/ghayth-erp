@@ -83,6 +83,17 @@ describe("Org Model — backend routes", () => {
     expect(ORG_SRC).toMatch(/ON CONFLICT \("assignmentId", "featureKey", action, currency\) DO UPDATE/);
   });
 
+  it("supervision-lines + approval-authorities are gated on hr.organization, NOT generic admin (HR-REV-1 #4)", () => {
+    // The org model belongs to the HR Manager domain; gating it on the
+    // generic `admin` feature locked everyone but the owner out. Pin the
+    // domain-correct feature so a refactor can't silently regress to admin.
+    const supBlock = ORG_SRC.slice(ORG_SRC.indexOf('router.get("/supervision-lines"'), ORG_SRC.indexOf('router.get("/supervision-lines"') + 200);
+    const authBlock = ORG_SRC.slice(ORG_SRC.indexOf('router.get("/approval-authorities"'), ORG_SRC.indexOf('router.get("/approval-authorities"') + 200);
+    expect(supBlock).toContain("authorize(ORG_READ)");
+    expect(authBlock).toContain("authorize(ORG_READ)");
+    expect(ORG_SRC).toMatch(/const ORG_READ = \{ feature: "hr\.organization", action: "list" \}/);
+  });
+
   it("supervision_lines POST rejects self-supervision before INSERT", () => {
     expect(ORG_SRC).toMatch(/supervisorAssignmentId === body\.superviseeAssignmentId/);
     expect(ORG_SRC).toMatch(/لا يمكن للموظف أن يشرف على نفسه/);

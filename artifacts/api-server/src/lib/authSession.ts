@@ -29,6 +29,7 @@ import { signToken, signRefreshToken, verifyPassword } from "./auth.js";
 import { ForbiddenError, TooManyRequestsError } from "./errorHandler.js";
 import { createAuditLog } from "./businessHelpers.js";
 import { logger } from "./logger.js";
+import { canonicalizeModules } from "./rbac/roleModulesCatalog.js";
 
 export const REFRESH_TOKEN_TTL_DAYS = 7;
 /** Access-token lifetime in seconds — mirrors the `"15m"` passed to signToken. */
@@ -225,7 +226,7 @@ export async function authenticateUserByPassword(
 
   // Role-switcher source: RBAC v2 (rbac_user_roles → rbac_roles) ONLY.
   // (#1791 — legacy user_roles removed.)
-  const userRoles = await rawQuery<UserRoleRow>(
+  const userRolesRaw = await rawQuery<UserRoleRow>(
     `SELECT
        r.id AS id,
        r.role_key AS "roleKey",
@@ -246,6 +247,19 @@ export async function authenticateUserByPassword(
      ORDER BY is_primary DESC, level DESC`,
     [user.id, primary.companyId],
   );
+
+  // PR-2 / #2163 — canonicalise the projection. split_part above emits
+  // feature-key first-segment names (dashboard/properties/projects/
+  // communications); the nav registry + requireModule consume the
+  // canonical vocab (home/property/operations/comms). Collapsing here
+  // means the role switcher payload agrees with both sinks. PR-0 §8
+  // caught the live drift.
+  const userRoles = userRolesRaw.map((r) => ({
+    ...r,
+    modules: Array.isArray((r as any).modules)
+      ? canonicalizeModules((r as any).modules as string[])
+      : (r as any).modules,
+  }));
 
   return {
     userId: user.id,

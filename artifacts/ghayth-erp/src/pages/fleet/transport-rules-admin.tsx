@@ -492,7 +492,7 @@ function ExpenseRulesPanel() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
             <Button onClick={save} disabled={submitting} rateLimitAware>
-              {submitting ? "جارٍ الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
+              {submitting ? "جاري الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -861,7 +861,7 @@ function IntakeRulesPanel() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>إلغاء</Button>
             <Button onClick={save} disabled={submitting} rateLimitAware>
-              {submitting ? "جارٍ الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
+              {submitting ? "جاري الحفظ…" : form.id != null ? "حفظ التعديلات" : "إنشاء"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -870,10 +870,286 @@ function IntakeRulesPanel() {
   );
 }
 
+// ────────────────────────────── Planning settings ─────────────────────
+
+// #1812 Maps Provider Adapter (owner brief 2026-06-15) — the UI lists
+// only the three providers the backend accepts end-to-end. `mapbox` +
+// `here_maps` were removed because they fall through to manual on the
+// server, so picking them silently produced manual estimates while
+// the operator thought they'd activated a real provider. `auto` is
+// the operator-friendly default: Google if a key is configured, else
+// internal estimate.
+const MAP_PROVIDERS_UI = [
+  { value: "auto",        label: "تلقائي — Google إذا توفّر المفتاح، وإلا تقدير داخلي" },
+  { value: "google_maps", label: "Google Maps فقط" },
+  { value: "manual_only", label: "تقدير داخلي فقط (بدون Google)" },
+];
+
+function PlanningSettingsPanel() {
+  const { toast } = useToast();
+  const { data, isLoading, refetch } = useApiQuery<any>(["transport-planning-settings"], "/transport/planning-settings");
+  const s = data?.data || data || {};
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [enableExternalNav, setEnableExternalNav] = useState<boolean>(true);
+  const [newApiKey, setNewApiKey] = useState<string>("");
+  const [loaded, setLoaded] = useState(false);
+
+  if (!isLoading && !loaded) {
+    setForm({
+      mapProvider: s.mapProvider || "auto",
+      defaultRestHoursRequired: String(s.defaultRestHoursRequired ?? ""),
+      defaultLoadingMinutes: String(s.defaultLoadingMinutes ?? ""),
+      defaultUnloadingMinutes: String(s.defaultUnloadingMinutes ?? ""),
+      defaultBufferMinutes: String(s.defaultBufferMinutes ?? ""),
+      defaultDeadheadKmh: String(s.defaultDeadheadKmh ?? ""),
+      estimateCacheTtlMinutes: String(s.estimateCacheTtlMinutes ?? ""),
+    });
+    setEnableExternalNav(s.enableExternalNavigationUrls !== false);
+    setLoaded(true);
+  }
+
+  const save = async () => {
+    try {
+      const payload: Record<string, unknown> = {
+        mapProvider: form.mapProvider || undefined,
+        defaultRestHoursRequired: form.defaultRestHoursRequired ? Number(form.defaultRestHoursRequired) : undefined,
+        defaultLoadingMinutes: form.defaultLoadingMinutes ? Number(form.defaultLoadingMinutes) : undefined,
+        defaultUnloadingMinutes: form.defaultUnloadingMinutes ? Number(form.defaultUnloadingMinutes) : undefined,
+        defaultBufferMinutes: form.defaultBufferMinutes ? Number(form.defaultBufferMinutes) : undefined,
+        defaultDeadheadKmh: form.defaultDeadheadKmh ? Number(form.defaultDeadheadKmh) : undefined,
+        estimateCacheTtlMinutes: form.estimateCacheTtlMinutes ? Number(form.estimateCacheTtlMinutes) : undefined,
+        enableExternalNavigationUrls: enableExternalNav,
+      };
+      // Only send the API key when the operator typed a new one. An
+      // empty input means "leave the saved value alone"; the special
+      // sentinel `__clear__` is the explicit "remove the saved key".
+      if (newApiKey === "__clear__") payload.mapProviderApiKey = null;
+      else if (newApiKey.trim().length > 0) payload.mapProviderApiKey = newApiKey.trim();
+
+      await apiFetch("/transport/planning-settings", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      toast({ title: "تم حفظ الإعدادات" });
+      setNewApiKey("");
+      setLoaded(false);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الحفظ", description: err?.message });
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+
+  const usingFallback = Boolean(s.usingFallback);
+  const fallbackNotice = s.fallbackNoticeAr as string | null;
+  const keyConfigured = Boolean(s.mapProviderApiKeyConfigured);
+  const maskedKey = s.mapProviderApiKey as string | null;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">إعدادات تخطيط النقل</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        {usingFallback && fallbackNotice && (
+          <div
+            data-testid="maps-fallback-notice"
+            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          >
+            <span className="inline-block ms-1 align-middle">⚠️</span>
+            {fallbackNotice}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <Label>مزوّد الخريطة</Label>
+            <select className="w-full h-10 border rounded-md px-2 mt-1" value={form.mapProvider || "auto"}
+              onChange={(e) => setForm((f) => ({ ...f, mapProvider: e.target.value }))}>
+              {MAP_PROVIDERS_UI.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            <div className="text-xs text-muted-foreground mt-1">
+              المزوّد الفعّال حالياً: <span className="font-mono">{s.effectiveProvider || "manual_only"}</span>
+              {" · "}دقة التقدير: <span className="font-mono">{s.routingPrecision || "estimated"}</span>
+            </div>
+          </div>
+
+          <div className="col-span-2">
+            <Label>مفتاح Google Maps API</Label>
+            <Input
+              type="password"
+              autoComplete="off"
+              className="mt-1"
+              placeholder={keyConfigured && maskedKey ? `محفوظ — ${maskedKey}` : "ألصق المفتاح هنا لتفعيل Google Maps"}
+              value={newApiKey === "__clear__" ? "" : newApiKey}
+              onChange={(e) => setNewApiKey(e.target.value)}
+            />
+            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
+              <span>
+                {keyConfigured
+                  ? "مفتاح محفوظ على الخادم — لن يُعرض النص الكامل أبداً."
+                  : "لا يوجد مفتاح. النظام يعمل بوضع التقدير الداخلي."}
+              </span>
+              {keyConfigured && (
+                <button
+                  type="button"
+                  className="text-red-600 hover:underline"
+                  onClick={() => setNewApiKey("__clear__")}
+                >
+                  حذف المفتاح المحفوظ
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="col-span-2 flex items-center justify-between border rounded-md p-3">
+            <div>
+              <Label className="block">السماح بفتح خرائط Google خارج التطبيق للملاحة</Label>
+              <div className="text-xs text-muted-foreground mt-1">
+                زر «ابدأ الملاحة» على شاشة السائق يفتح خرائط Google بدون الحاجة لمفتاح API.
+              </div>
+            </div>
+            <Switch checked={enableExternalNav} onCheckedChange={setEnableExternalNav} />
+          </div>
+
+          <div>
+            <Label>ساعات الراحة المطلوبة (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultRestHoursRequired || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultRestHoursRequired: e.target.value }))} />
+          </div>
+          <div>
+            <Label>دقائق الشحن (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultLoadingMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultLoadingMinutes: e.target.value }))} />
+          </div>
+          <div>
+            <Label>دقائق التفريغ (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultUnloadingMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultUnloadingMinutes: e.target.value }))} />
+          </div>
+          <div>
+            <Label>دقائق الاحتياطي (افتراضي)</Label>
+            <Input type="number" className="mt-1" value={form.defaultBufferMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultBufferMinutes: e.target.value }))} />
+          </div>
+          <div>
+            <Label>سرعة العودة الفارغة (كم/ساعة)</Label>
+            <Input type="number" className="mt-1" value={form.defaultDeadheadKmh || ""}
+              onChange={(e) => setForm((f) => ({ ...f, defaultDeadheadKmh: e.target.value }))} />
+          </div>
+          <div>
+            <Label>صلاحية كاش التقدير (دقائق)</Label>
+            <Input type="number" className="mt-1" value={form.estimateCacheTtlMinutes || ""}
+              onChange={(e) => setForm((f) => ({ ...f, estimateCacheTtlMinutes: e.target.value }))} />
+          </div>
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={save}>حفظ الإعدادات</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ────────────────────────────── Transport locations ─────────────────────
+
+const EMPTY_LOC = { name: "", code: "", locationType: "", city: "", address: "", notes: "" };
+
+function LocationsPanel() {
+  const { toast } = useToast();
+  const { data, isLoading, refetch } = useApiQuery<any>(["transport-locations-admin"], "/transport/locations");
+  const locations: any[] = data?.data || [];
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY_LOC);
+
+  const create = async () => {
+    try {
+      await apiFetch("/transport/locations", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.name,
+          code: form.code || undefined,
+          locationType: form.locationType || undefined,
+          city: form.city || undefined,
+          address: form.address || undefined,
+          notes: form.notes || undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء الموقع" });
+      setShowForm(false);
+      setForm(EMPTY_LOC);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الإنشاء", description: err?.message });
+    }
+  };
+
+  if (isLoading) return <LoadingSpinner />;
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base">مواقع النقل ({locations.length})</CardTitle>
+        <Button size="sm" variant="outline" onClick={() => setShowForm((v) => !v)}>
+          <Plus className="h-4 w-4 me-1" />{showForm ? "إلغاء" : "موقع جديد"}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {showForm && (
+          <div className="rounded-lg border bg-surface-subtle p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>الاسم *</Label>
+                <Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <Label>الرمز</Label>
+                <Input className="mt-1" value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} />
+              </div>
+              <div>
+                <Label>النوع</Label>
+                <Input className="mt-1" placeholder="warehouse / port / customer..." value={form.locationType} onChange={(e) => setForm((f) => ({ ...f, locationType: e.target.value }))} />
+              </div>
+              <div>
+                <Label>المدينة</Label>
+                <Input className="mt-1" value={form.city} onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>العنوان</Label>
+                <Input className="mt-1" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+              </div>
+              <div className="col-span-2">
+                <Label>ملاحظات</Label>
+                <Input className="mt-1" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>إلغاء</Button>
+              <Button size="sm" disabled={!form.name} onClick={create}>إنشاء</Button>
+            </div>
+          </div>
+        )}
+        {locations.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8 text-sm">لا توجد مواقع مسجلة</p>
+        ) : (
+          <div className="divide-y text-sm">
+            {locations.map((loc: any) => (
+              <div key={loc.id} className="py-2 flex items-center gap-3">
+                <span className="font-medium">{loc.name}</span>
+                {loc.code && <Badge variant="outline" className="text-xs font-mono">{loc.code}</Badge>}
+                {loc.locationType && <Badge variant="secondary" className="text-xs">{loc.locationType}</Badge>}
+                {loc.city && <span className="text-muted-foreground text-xs">{loc.city}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ────────────────────────────── Page shell ───────────────────────────
 
 export default function TransportRulesAdmin() {
-  const [tab, setTab] = useState<"expense" | "intake">("expense");
+  const [tab, setTab] = useState<"expense" | "intake" | "planning" | "locations">("expense");
   return (
     <PageShell
       title="قواعد العمليات والنفقات"
@@ -884,16 +1160,14 @@ export default function TransportRulesAdmin() {
         { label: "قواعد العمليات والنفقات" },
       ]}
       actions={
-        <Link href="/fleet/transport/bookings">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
             <ArrowLeft className="h-4 w-4 me-1" />العودة
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <FleetTabsNav />
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "expense" | "intake")} className="mt-4">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "expense" | "intake" | "planning" | "locations")} className="mt-4">
         <TabsList>
           <TabsTrigger value="expense">
             <Wrench className="h-4 w-4 me-1" />تصنيف النفقات
@@ -901,12 +1175,24 @@ export default function TransportRulesAdmin() {
           <TabsTrigger value="intake">
             <Clipboard className="h-4 w-4 me-1" />استقبال العمليات
           </TabsTrigger>
+          <TabsTrigger value="planning">
+            إعدادات التخطيط
+          </TabsTrigger>
+          <TabsTrigger value="locations">
+            المواقع
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="expense" className="mt-3">
           <ExpenseRulesPanel />
         </TabsContent>
         <TabsContent value="intake" className="mt-3">
           <IntakeRulesPanel />
+        </TabsContent>
+        <TabsContent value="planning" className="mt-3">
+          <PlanningSettingsPanel />
+        </TabsContent>
+        <TabsContent value="locations" className="mt-3">
+          <LocationsPanel />
         </TabsContent>
       </Tabs>
     </PageShell>

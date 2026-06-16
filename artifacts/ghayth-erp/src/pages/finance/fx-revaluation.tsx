@@ -169,11 +169,9 @@ export default function FxRevaluationPage() {
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث المعاينة</Button>
         <div className="flex-1" />
-        <Link href="/finance/fx-rates">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/finance/fx-rates">
             <Globe className="h-3.5 w-3.5 me-1" /> أسعار الصرف
-          </Button>
-        </Link>
+          </Link></Button>
         <GuardedButton
           perm="finance:create"
           disabled={postMut.isPending || data.lineCount === 0 || data.netImpact === 0}
@@ -241,8 +239,8 @@ export default function FxRevaluationPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <Badge variant="outline">AR</Badge>
-                الفواتير (Accounts Receivable)
+                <Badge variant="outline">مدينة</Badge>
+                الفواتير (ذمم مدينة)
               </span>
               <Badge>{arRows.length}</Badge>
             </CardTitle>
@@ -258,8 +256,8 @@ export default function FxRevaluationPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <Badge variant="outline">AP</Badge>
-                أوامر الشراء (Accounts Payable)
+                <Badge variant="outline">دائنة</Badge>
+                أوامر الشراء (ذمم دائنة)
               </span>
               <Badge>{apRows.length}</Badge>
             </CardTitle>

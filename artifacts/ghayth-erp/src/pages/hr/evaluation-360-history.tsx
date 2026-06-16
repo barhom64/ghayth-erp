@@ -56,9 +56,7 @@ export default function Evaluation360HistoryPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/hr/evaluation-360">
-            <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
-          </Link>
+          <Button asChild variant="ghost" size="sm"><Link href="/hr/evaluation-360"><ArrowRight className="w-4 h-4 me-1" />عودة</Link></Button>
           <PrintButton
             entityType="report_hr_evaluation_360_history"
             entityId={employeeId || "list"}
@@ -127,9 +125,7 @@ export default function Evaluation360HistoryPage() {
           { key: "peerScore", header: "الزملاء", sortable: true, render: (v) => <ScoreDot score={v.peerScore} /> },
           { key: "finalScore", header: "360° النهائي", sortable: true, render: (v) => <ScoreDot score={v.finalScore} /> },
           { key: "id", header: "", render: (v) => (
-            <Link href={`/hr/evaluation-360/${v.id}`}>
-              <Button variant="ghost" size="sm" className="text-xs">عرض</Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs"><Link href={`/hr/evaluation-360/${v.id}`}>عرض</Link></Button>
           ) },
         ] as DataTableColumn<any>[]}
         onSortedDataChange={setPrintRows}

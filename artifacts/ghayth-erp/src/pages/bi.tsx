@@ -1,3 +1,8 @@
+/**
+ * GAP_MATRIX P2 — BI hub with tabs. The hub itself makes no direct API calls;
+ * each tab component fetches its own data. Intentional hub/landing page for
+ * the BI module — documented so auditors don't flag it as a broken page.
+ */
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageShell } from "@workspace/ui-core";
 import { CEODashboardTab } from "./bi/ceo-dashboard-tab";

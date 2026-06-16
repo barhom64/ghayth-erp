@@ -39,8 +39,15 @@ import { config } from "../config.js";
 import {
   googleEstimateRoute, googleGeocode, googleReverseGeocode, googleHealthCheck,
 } from "./mapsGoogleProvider.js";
+import { recordMapsCall } from "./mapsUsageCounter.js";
 
-export type MapProvider = "manual_only" | "google_maps" | "mapbox" | "here_maps";
+// #1812 Maps Provider Adapter (owner brief 2026-06-15) — `auto` is the
+// operator-friendly setting: "use Google if a key is configured, fall
+// back to internal estimate otherwise." `manual_only` and `google_maps`
+// remain explicit pins for operators who want zero ambiguity. The
+// `mapbox`/`here_maps` literals stay in the type so historical rows
+// keep loading, but mapsService treats them as fallback today.
+export type MapProvider = "manual_only" | "google_maps" | "mapbox" | "here_maps" | "auto";
 
 export interface PlanningSettings {
   companyId: number;
@@ -52,6 +59,8 @@ export interface PlanningSettings {
   defaultBufferMinutes: number;
   defaultDeadheadKmh: number;
   estimateCacheTtlMinutes: number;
+  enableExternalNavigationUrls: boolean;
+  routingPrecision: "google" | "estimated";
 }
 
 export interface RouteEstimate {
@@ -84,6 +93,8 @@ const DEFAULT_SETTINGS: Omit<PlanningSettings, "companyId"> = {
   defaultBufferMinutes: 15,
   defaultDeadheadKmh: 60,
   estimateCacheTtlMinutes: 1440,
+  enableExternalNavigationUrls: true,
+  routingPrecision: "estimated",
 };
 
 export async function loadPlanningSettings(companyId: number): Promise<PlanningSettings> {
@@ -92,7 +103,8 @@ export async function loadPlanningSettings(companyId: number): Promise<PlanningS
             "defaultRestHoursRequired"::float AS "defaultRestHoursRequired",
             "defaultLoadingMinutes", "defaultUnloadingMinutes",
             "defaultBufferMinutes", "defaultDeadheadKmh",
-            "estimateCacheTtlMinutes"
+            "estimateCacheTtlMinutes",
+            "enableExternalNavigationUrls", "routingPrecision"
        FROM transport_planning_settings
       WHERE "companyId" = $1`,
     [companyId],
@@ -100,7 +112,15 @@ export async function loadPlanningSettings(companyId: number): Promise<PlanningS
   if (rows[0]) return rows[0];
 
   // Lazy-create the defaults row.
-  await rawExecute(
+  // #2079 follow-up — `transport_planning_settings` has NO `id` column
+  // (PK is `companyId`). `rawExecute` auto-appends `RETURNING id` to
+  // any non-RETURNING DML, so this used to crash with 42703
+  // "column id does not exist" on the very first suggest-assignment
+  // call against any freshly-bootstrapped company. Switch to
+  // `rawQuery` (which doesn't auto-append) — the ON CONFLICT DO
+  // NOTHING gives us the same fire-and-forget upsert without needing
+  // an insertId.
+  await rawQuery(
     `INSERT INTO transport_planning_settings ("companyId")
      VALUES ($1) ON CONFLICT ("companyId") DO NOTHING`,
     [companyId],
@@ -125,6 +145,8 @@ export async function updatePlanningSettings(
     defaultBufferMinutes: '"defaultBufferMinutes"',
     defaultDeadheadKmh: '"defaultDeadheadKmh"',
     estimateCacheTtlMinutes: '"estimateCacheTtlMinutes"',
+    enableExternalNavigationUrls: '"enableExternalNavigationUrls"',
+    routingPrecision: '"routingPrecision"',
   };
   for (const [k, v] of Object.entries(patch)) {
     if (v !== undefined && colMap[k]) {
@@ -246,6 +268,55 @@ function manualEstimate(
   return { distanceMeters: roadDistance, durationSeconds, encodedPolyline: null };
 }
 
+// ── Provider resolution + key masking (Maps Provider Adapter) ────────
+
+/**
+ * Resolves which provider actually runs the request.
+ *
+ *   • `auto`        → google_maps when a key is configured, else
+ *                     manual_only. This is the operator-friendly
+ *                     default — they don't have to know whether the
+ *                     key was pasted yet.
+ *   • `google_maps` → google_maps when a key is configured, else
+ *                     manual_only (the existing fall-through path).
+ *   • everything else → manual_only.
+ *
+ * Returns BOTH the effective provider AND whether the call is going
+ * to be approximate, so the caller doesn't have to re-derive that.
+ */
+export function resolveEffectiveProvider(
+  configured: MapProvider, apiKey: string | null,
+): { provider: MapProvider; isApproximate: boolean } {
+  if ((configured === "google_maps" || configured === "auto") && apiKey) {
+    return { provider: "google_maps", isApproximate: false };
+  }
+  return { provider: "manual_only", isApproximate: true };
+}
+
+/**
+ * Mask the API key for client-side display. NEVER returns the raw key.
+ * Pattern is `XXXX…YYYY` for keys ≥ 8 chars, `****` for shorter keys,
+ * and `null` when no key is set.
+ *
+ * Owner brief: «لا تعرضه في الواجهة». This is the single chokepoint
+ * — every route that returns a PlanningSettings to the client routes
+ * through `MapsService.toClientSettings()` and gets the masked form.
+ */
+export function maskApiKey(key: string | null | undefined): string | null {
+  if (key == null || key === "") return null;
+  const s = String(key);
+  if (s.length < 8) return "****";
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
+
+/**
+ * The Arabic notice shown on the SPA whenever the system is running
+ * in approximate (haversine) mode. Centralised here so the static
+ * test can pin the exact wording the owner approved.
+ */
+export const FALLBACK_NOTICE_AR =
+  "الخرائط تعمل بوضع تقديري حتى ربط مفتاح Google Maps التجاري";
+
 // ── Public API ───────────────────────────────────────────────────────
 
 export const MapsService = {
@@ -260,27 +331,41 @@ export const MapsService = {
    */
   async estimateRoute(req: RouteRequest): Promise<RouteEstimate> {
     const settings = await loadPlanningSettings(req.companyId);
-    const provider = settings.mapProvider;
-
-    // Cache hit?
-    const cached = await readCache(req, provider);
-    if (cached) return cached;
 
     // Resolve the effective API key — prefer per-company setting,
     // fall back to env var for single-tenant deployments.
     const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
 
-    // #1812 — try the real provider when configured. If it returns
-    // null (timeout, bad key, quota) fall back to manual_only and
-    // flag the result `isApproximate: true` so the SPA can show
-    // "تقدير تقريبي" instead of misleading exact numbers.
-    if (provider === "google_maps" && apiKey) {
+    // Adapter resolver — handles `auto` + missing-key fall-through in
+    // one place, so the cache key + the dispatch decision stay aligned.
+    const { provider: targetProvider } = resolveEffectiveProvider(
+      settings.mapProvider, apiKey,
+    );
+
+    // Cache hit?
+    const cached = await readCache(req, targetProvider);
+    if (cached) return cached;
+
+    // #1812 — try Google when both the resolver picked it AND we have
+    // a key. If Google returns null (timeout, bad key, quota) fall
+    // back to manual_only and flag the result `isApproximate: true`
+    // so the SPA can show "تقدير تقريبي" instead of misleading exact
+    // numbers. The booking flow MUST NOT break on a Google outage.
+    if (targetProvider === "google_maps" && apiKey) {
       const real = await googleEstimateRoute({
         apiKey,
         originLat: req.originLat,
         originLng: req.originLng,
         destinationLat: req.destinationLat,
         destinationLng: req.destinationLng,
+      });
+      // TA-GAP-09 Phase 1 — count every Google call (success + failure
+      // is `errored: true`). Best-effort: the counter never throws.
+      await recordMapsCall({
+        companyId: req.companyId,
+        provider: "google_maps",
+        apiSurface: "estimateRoute",
+        errored: real === null,
       });
       if (real) {
         await writeCache(req, "google_maps", real, settings.estimateCacheTtlMinutes);
@@ -294,20 +379,13 @@ export const MapsService = {
       // Fall-through to manual on Google failure (already logged in provider).
     }
 
-    // mapbox + here_maps still stubbed — fall back to manual.
-    const effectiveProvider: MapProvider =
-      provider === "manual_only" || !apiKey || provider === "mapbox" || provider === "here_maps"
-        ? "manual_only"
-        : provider;
-    const isApproximate = effectiveProvider === "manual_only";
-
     const calc = manualEstimate(req, settings);
-    await writeCache(req, effectiveProvider, calc, settings.estimateCacheTtlMinutes);
+    await writeCache(req, "manual_only", calc, settings.estimateCacheTtlMinutes);
     return {
       ...calc,
-      provider: effectiveProvider,
+      provider: "manual_only",
       isCached: false,
-      isApproximate,
+      isApproximate: true,
     };
   },
 
@@ -346,7 +424,8 @@ export const MapsService = {
   ): Promise<{ lat: number; lng: number; formattedAddress?: string; placeId?: string } | null> {
     const settings = await loadPlanningSettings(companyId);
     const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
-    if (settings.mapProvider === "google_maps" && apiKey) {
+    const { provider } = resolveEffectiveProvider(settings.mapProvider, apiKey);
+    if (provider === "google_maps" && apiKey) {
       return googleGeocode({ apiKey, address });
     }
     return null;
@@ -355,7 +434,8 @@ export const MapsService = {
   async reverseGeocode(companyId: number, lat: number, lng: number): Promise<string | null> {
     const settings = await loadPlanningSettings(companyId);
     const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
-    if (settings.mapProvider === "google_maps" && apiKey) {
+    const { provider } = resolveEffectiveProvider(settings.mapProvider, apiKey);
+    if (provider === "google_maps" && apiKey) {
       return googleReverseGeocode({ apiKey, lat, lng });
     }
     return null;
@@ -379,9 +459,44 @@ export const MapsService = {
     const settings = await loadPlanningSettings(companyId);
     const apiKey = settings.mapProviderApiKey || config.googleMapsApiKey;
     if (settings.mapProvider === "manual_only") return "not_supported";
-    if (settings.mapProvider === "google_maps") {
+    if (settings.mapProvider === "google_maps" || settings.mapProvider === "auto") {
       return googleHealthCheck(apiKey);
     }
     return "not_supported";
+  },
+
+  /**
+   * Build the client-safe shape of PlanningSettings.
+   *
+   *   • `mapProviderApiKey` → masked (XXXX…YYYY) or null
+   *   • `mapProviderApiKeyConfigured` → boolean, so the SPA can show
+   *     "مفتاح محفوظ ✓" without ever needing the raw value
+   *   • `routingPrecision` → recomputed against the LIVE key + provider
+   *     so a saved-but-stale value can't deceive the operator
+   *   • `usingFallback` + `fallbackNoticeAr` → ready-to-render UX
+   *     payload for the alert the owner asked for
+   *
+   * Owner brief: «لا تطبعه في logs. لا تعرضه في الواجهة.» Every route
+   * that returns settings to the client routes through here.
+   */
+  toClientSettings(settings: PlanningSettings): PlanningSettings & {
+    mapProviderApiKey: string | null;
+    mapProviderApiKeyConfigured: boolean;
+    effectiveProvider: MapProvider;
+    usingFallback: boolean;
+    fallbackNoticeAr: string | null;
+  } {
+    const liveKey = settings.mapProviderApiKey || config.googleMapsApiKey;
+    const { provider: effectiveProvider, isApproximate } =
+      resolveEffectiveProvider(settings.mapProvider, liveKey);
+    return {
+      ...settings,
+      mapProviderApiKey: maskApiKey(settings.mapProviderApiKey),
+      mapProviderApiKeyConfigured: Boolean(settings.mapProviderApiKey),
+      effectiveProvider,
+      routingPrecision: isApproximate ? "estimated" : "google",
+      usingFallback: isApproximate,
+      fallbackNoticeAr: isApproximate ? FALLBACK_NOTICE_AR : null,
+    };
   },
 };

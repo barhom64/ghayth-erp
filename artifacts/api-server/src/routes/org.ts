@@ -17,13 +17,46 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, NotFoundError, ValidationError, parseId, zodParse } from "../lib/errorHandler.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
+import { auditFromRequest, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
 
 const ADMIN = { feature: "admin", action: "list" } as const;
 const ADMIN_WRITE = { feature: "admin", action: "update" } as const;
+// PR-3 (#2077) — domain-correct guards for the HR-side org surfaces.
+// The previous ADMIN gate was too tight: an HR Manager who can edit
+// the company-wide attendance policy (/hr/attendance-policy) couldn't
+// open the per-category override page (/org/attendance-policies-per-
+// category) — the page was technically built but the API 403'd. The
+// employee-categories catalog has the same coupling: PR-1's wizard
+// reads it for the category dropdown, but a non-owner caller hit a
+// 403 and saw an empty list.
+//
+// Splitting the gates: the CATALOG read is shared with every HR
+// operator who manages employees (hr.employees:list — the basic
+// «can see employee list» permission). The per-category policy
+// surface is gated on hr.attendance — the same module that owns the
+// company-wide policy editor, so the two pages stay in the same
+// permission lane.
+const HR_EMPLOYEES_READ = { feature: "hr.employees", action: "list" } as const;
+const HR_ATTENDANCE_READ = { feature: "hr.attendance", action: "list" } as const;
+const HR_ATTENDANCE_WRITE = { feature: "hr.attendance", action: "update" } as const;
+
+// HR-REV-1 §6 decision #4 — supervision_lines + approval_authorities are
+// part of the ORGANIZATION model (who reports to whom; who may approve
+// what), so they belong on the domain-correct `hr.organization` feature —
+// NOT the generic `admin` gate. `admin` is too tight here: it is held only
+// by the owner (no seeded role grants it, and `hr:*`/`governance:*` do not
+// expand to it), so the HR Manager this file is explicitly built for
+// («تُمكِّن مدير الموارد البشرية من إدارة supervision_lines/approval_authorities»)
+// was locked out. `hr.organization` is already held by owner (*) and by
+// general_manager/hr_manager (hr:*), so this LETS THE RIGHT OPERATORS IN
+// with zero migration and no lockout — same split rationale as the
+// HR_ATTENDANCE gates above (PR-3 #2077).
+const ORG_READ = { feature: "hr.organization", action: "list" } as const;
+const ORG_CREATE = { feature: "hr.organization", action: "create" } as const;
+const ORG_DELETE = { feature: "hr.organization", action: "delete" } as const;
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function requireScope(req: any): { companyId: number; userId: number } {
@@ -44,13 +77,13 @@ async function audit(
   req: any, action: string, entity: string, entityId: number, after: Record<string, any> = {}
 ): Promise<void> {
   const scope = req.scope!;
-  try {
-    await createAuditLog({
-      userId: scope.userId, companyId: scope.companyId,
-      action, entity, entityId, after,
-      activeRoleKey: scope.selectedRoleKey ?? null,
-    });
-  } catch (e) { logger.warn({ err: e }, "[org] audit failed"); }
+  // Delegate to the canonical helper so the full IGOC context lands
+  // on EVERY org-bridge write (activeRoleKey + activeDepartmentId +
+  // resolvedScope + impersonationSourceUser + branchId). The previous
+  // local copy was passing only activeRoleKey — left department/scope/
+  // impersonation columns NULL on every audit row, which the HR-019
+  // live probe surfaced. See lib/businessHelpers.ts:auditFromRequest.
+  await auditFromRequest(req, action, entity, entityId, { after });
   try {
     await emitEvent({
       companyId: scope.companyId, userId: scope.userId,
@@ -427,7 +460,7 @@ const supervisionLineSchema = z.object({
   isPrimary: z.boolean().optional(),
 });
 
-router.get("/supervision-lines", authorize(ADMIN), async (req, res) => {
+router.get("/supervision-lines", authorize(ORG_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const where: string[] = [`sl."companyId" = $1`];
@@ -463,7 +496,7 @@ router.get("/supervision-lines", authorize(ADMIN), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر جلب خطوط الإشراف"); }
 });
 
-router.post("/supervision-lines", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/supervision-lines", authorize(ORG_CREATE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const body = zodParse(supervisionLineSchema.safeParse(req.body));
@@ -488,7 +521,7 @@ router.post("/supervision-lines", authorize(ADMIN_WRITE), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر إنشاء خط الإشراف"); }
 });
 
-router.delete("/supervision-lines/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/supervision-lines/:id", authorize(ORG_DELETE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);
@@ -517,7 +550,7 @@ const approvalAuthoritySchema = z.object({
   expiresAt: z.string().optional().nullable(),
 });
 
-router.get("/approval-authorities", authorize(ADMIN), async (req, res) => {
+router.get("/approval-authorities", authorize(ORG_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const where: string[] = [`aa."companyId" = $1`];
@@ -549,7 +582,7 @@ router.get("/approval-authorities", authorize(ADMIN), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر جلب صلاحيات الاعتماد"); }
 });
 
-router.post("/approval-authorities", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/approval-authorities", authorize(ORG_CREATE), async (req, res) => {
   try {
     const { companyId, userId } = requireScope(req);
     const body = zodParse(approvalAuthoritySchema.safeParse(req.body));
@@ -577,7 +610,7 @@ router.post("/approval-authorities", authorize(ADMIN_WRITE), async (req, res) =>
   } catch (e) { handleRouteError(e, res, "تعذّر منح صلاحية الاعتماد"); }
 });
 
-router.delete("/approval-authorities/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/approval-authorities/:id", authorize(ORG_DELETE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);
@@ -597,7 +630,12 @@ router.delete("/approval-authorities/:id", authorize(ADMIN_WRITE), async (req, r
 //    270). Companies can NOT edit system categories from this UI — only
 //    add per-company overrides in attendance_policies_per_category.
 // ════════════════════════════════════════════════════════════════════════════
-router.get("/employee-categories", authorize(ADMIN), async (req, res) => {
+// PR-3 (#2077) — the categories catalog is a lookup table used by
+// every employee-create form (the wizard's EmployeeCategorySelect)
+// and by the per-category attendance settings page. Gated on
+// hr.employees:list so any HR operator can render the dropdown;
+// the system rows are read-only here regardless of the guard.
+router.get("/employee-categories", authorize(HR_EMPLOYEES_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const rows = await rawQuery(
@@ -628,7 +666,13 @@ const attendancePolicyPerCategorySchema = z.object({
   trackingFrequencySeconds: z.number().int().min(0).max(3600).optional().nullable(),
 });
 
-router.get("/attendance-policies-per-category", authorize(ADMIN), async (req, res) => {
+// PR-3 (#2077) — the per-category policy is a sibling of the
+// company-wide /hr/attendance-policy (which uses hr.attendance:list).
+// Gating both with the same key keeps the HR Manager flow coherent:
+// you can edit the default policy AND its per-category overrides
+// from the same permission level (the override page lives under the
+// /hr/attendance-categories navigation, not /admin/*).
+router.get("/attendance-policies-per-category", authorize(HR_ATTENDANCE_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const rows = await rawQuery(
@@ -645,7 +689,7 @@ router.get("/attendance-policies-per-category", authorize(ADMIN), async (req, re
   } catch (e) { handleRouteError(e, res, "تعذّر جلب overrides سياسة الحضور"); }
 });
 
-router.post("/attendance-policies-per-category", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/attendance-policies-per-category", authorize(HR_ATTENDANCE_WRITE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const body = zodParse(attendancePolicyPerCategorySchema.safeParse(req.body));
@@ -682,7 +726,7 @@ router.post("/attendance-policies-per-category", authorize(ADMIN_WRITE), async (
   } catch (e) { handleRouteError(e, res, "تعذّر حفظ override سياسة الحضور"); }
 });
 
-router.delete("/attendance-policies-per-category/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/attendance-policies-per-category/:id", authorize(HR_ATTENDANCE_WRITE), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);
@@ -971,7 +1015,14 @@ const scoringWeightsSchema = z.object({
   developmentWeight: z.number().min(0).max(1),
 });
 
-router.get("/scoring-weights", authorize(ADMIN), async (req, res) => {
+// PR-4 (#2077) — same logic as the attendance-policy gates in PR-3:
+// the score-weights table is per-company HR settings (drives the
+// 6-dimension composite computed by employeeScoringEngine), so it
+// belongs in the hr.employees lane, not under admin:*. Reads use
+// hr.employees:list so the score detail page can render weight
+// callouts; writes use hr.employees:update because they reshape how
+// every score in the company is computed.
+router.get("/scoring-weights", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const rows = await rawQuery(
@@ -984,7 +1035,7 @@ router.get("/scoring-weights", authorize(ADMIN), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر جلب أوزان التقييم"); }
 });
 
-router.post("/scoring-weights", authorize(ADMIN_WRITE), async (req, res) => {
+router.post("/scoring-weights", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const body = zodParse(scoringWeightsSchema.safeParse(req.body));
@@ -1022,7 +1073,7 @@ router.post("/scoring-weights", authorize(ADMIN_WRITE), async (req, res) => {
   } catch (e) { handleRouteError(e, res, "تعذّر حفظ أوزان التقييم"); }
 });
 
-router.delete("/scoring-weights/:id", authorize(ADMIN_WRITE), async (req, res) => {
+router.delete("/scoring-weights/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const id = parseId(req.params.id);
@@ -1037,7 +1088,7 @@ router.delete("/scoring-weights/:id", authorize(ADMIN_WRITE), async (req, res) =
 });
 
 // Company-wide ranking — top N employees by composite for a given period.
-router.get("/scoring-ranking", authorize(ADMIN), async (req, res) => {
+router.get("/scoring-ranking", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const scope = (String(req.query.scope || "monthly")) as "weekly" | "monthly" | "quarterly";

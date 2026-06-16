@@ -52,9 +52,9 @@ describe("voucher JE includes WHT", () => {
   it("netCashOut = totalWithVat − totalWht", () => {
     expect(HANDLER).toMatch(/netCashOut\s*=\s*roundTo2\(totalWithVat - totalWht\)/);
   });
-  it("buckets WHT credits by payable account (default fallback 2330)", () => {
+  it("buckets WHT credits by payable account (default fallback 2132)", () => {
     expect(HANDLER).toContain("whtCreditByAccount");
-    expect(HANDLER).toMatch(/"wht_payable",\s*"credit",\s*"2330"/);
+    expect(HANDLER).toMatch(/"wht_payable",\s*"credit",\s*"2132"/);
   });
   it("payment lines splice in whtCreditLines before the cash credit", () => {
     // The voucher legs now spread `...voucherDims` so per-supplier /

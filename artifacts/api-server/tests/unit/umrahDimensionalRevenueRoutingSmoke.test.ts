@@ -146,18 +146,23 @@ describe("umrahInvoicingEngine — dimensional override wired into line generati
     expect(ENGINE).toMatch(/await resolveRevenueAccount\(\s*scope\.companyId,\s*\{\s*subAgentId,\s*agentId: \(subAgent\.agentId as number \| null\) \?\? null,\s*seasonId,\s*\}/);
   });
 
-  it("treats the resolved override as most-specific — it ?? overrides the product default", () => {
-    // Verify each of the 4 line-emission sites prefers the override.
-    // 3 split-path sites (visa / transport / services) + 1 bundled fallback.
+  it("treats the resolved override as most-specific — it ?? overrides the product default on every line-emission site", () => {
+    // §6 of #1870 collapsed the legacy 3-line split (visa + transport
+    // + services) into 2 lines (visa + ground-service). So the
+    // override now applies on 3 sites total: 2 split-path lines
+    // (visa + ground-service) + 1 bundled fallback. The fewer line
+    // count is the operator's preference, not a regression.
     const overrides = ENGINE.match(/accountCode: overrideAccountCode \?\? /g);
-    expect(overrides?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(overrides?.length ?? 0).toBeGreaterThanOrEqual(3);
   });
 
   it("falls through to product-default accountCode when override is null (additive change, no regression)", () => {
     // The null-coalesce keeps the existing behaviour byte-identical
     // for companies that haven't configured any dimensional override.
+    // §6 folded transport into ground-service so the transport-line
+    // site is gone; the resolver still covers it via canSplit's
+    // transport-mapping gate.
     expect(ENGINE).toMatch(/overrideAccountCode \?\? productMap!\.visaAccountCode/);
-    expect(ENGINE).toMatch(/overrideAccountCode \?\? productMap!\.transportAccountCode/);
     expect(ENGINE).toMatch(/overrideAccountCode \?\? productMap!\.servicesAccountCode/);
     expect(ENGINE).toMatch(/overrideAccountCode \?\? servicesAccountCode/);
   });

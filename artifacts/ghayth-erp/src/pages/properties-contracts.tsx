@@ -110,11 +110,9 @@ function PaymentSchedulePanel({ contractId }: { contractId: number }) {
               const isPaid = inst.status === "paid";
               if (!isPaid) {
                 return (
-                  <Link href={`/properties/contracts/${contractId}/pay/${inst.id}`}>
-                    <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1">
+                  <Button asChild size="sm" variant="outline" className="h-6 text-[10px] gap-1"><Link href={`/properties/contracts/${contractId}/pay/${inst.id}`}>
                       <CreditCard className="h-3 w-3" /> تسجيل دفع
-                    </Button>
-                  </Link>
+                    </Link></Button>
                 );
               }
               if (inst.receiptNumber) {

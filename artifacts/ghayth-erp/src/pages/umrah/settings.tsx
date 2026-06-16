@@ -8,6 +8,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PoliciesTab } from "@/components/umrah/policies-tab";
 import { Settings as SettingsIcon, Save, AlertTriangle, Wallet, Package, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/formatters";
@@ -30,6 +31,18 @@ interface UmrahSettings {
   umrahOverstayDailyPenalty: number | null;
   umrahOverstayTierDays: number | null;
   umrahOverstayTierAmount: number | null;
+  // §8 of #1870 — finance hygiene knobs from §6 and §5.
+  //   umrahVatRate    — standard VAT rate the engine multiplies the margin by.
+  //   umrahVatMode    — 'inclusive' extracts VAT from the margin-inclusive
+  //                     ground-service line (KSA default per the operator);
+  //                     'exclusive' adds VAT on top of the margin (legacy).
+  //   commissionViaHr — when true, marketer commission accrual credits
+  //                     salary_payable (HR's account) so payroll clears it
+  //                     in one shot. When false, keeps the legacy
+  //                     commission_payable (separate liability).
+  umrahVatRate: number | null;
+  umrahVatMode: "inclusive" | "exclusive" | null;
+  commissionViaHr: boolean | null;
 }
 
 interface Product {
@@ -101,6 +114,12 @@ export default function UmrahSettings() {
   const [penaltyDailyAmount, setPenaltyDailyAmount] = useState<string>("");
   const [penaltyTierDays, setPenaltyTierDays] = useState<string>("");
   const [penaltyTierAmount, setPenaltyTierAmount] = useState<string>("");
+  // §8 of #1870 — finance-hygiene knobs.
+  const [vatRate, setVatRate] = useState<string>("");
+  const [vatMode, setVatMode] = useState<"" | "inclusive" | "exclusive">("");
+  // commissionViaHr stays a tri-state ("" = inherit engine default, "true",
+  // "false") so the operator's "leave at default" choice survives a reload.
+  const [commissionViaHr, setCommissionViaHr] = useState<"" | "true" | "false">("");
   const [saving, setSaving] = useState(false);
 
   // Sync local state when the settings load — keeps the dropdowns'
@@ -136,6 +155,24 @@ export default function UmrahSettings() {
     if (settings == null) return;
     setPenaltyTierAmount(settings.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "");
   }, [settings?.umrahOverstayTierAmount]);
+  useEffect(() => {
+    if (settings == null) return;
+    setVatRate(settings.umrahVatRate != null ? String(settings.umrahVatRate) : "");
+  }, [settings?.umrahVatRate]);
+  useEffect(() => {
+    if (settings == null) return;
+    setVatMode(settings.umrahVatMode ?? "");
+  }, [settings?.umrahVatMode]);
+  useEffect(() => {
+    if (settings == null) return;
+    setCommissionViaHr(
+      settings.commissionViaHr == null
+        ? ""
+        : settings.commissionViaHr
+        ? "true"
+        : "false"
+    );
+  }, [settings?.commissionViaHr]);
 
   // Helper: convert a SearchableSelect value ("" / "<number>") to the
   // wire format the PR #1469 PATCH expects ("" → null, value → Number).
@@ -157,6 +194,11 @@ export default function UmrahSettings() {
           umrahOverstayDailyPenalty: toPatchValue(penaltyDailyAmount),
           umrahOverstayTierDays: toPatchValue(penaltyTierDays),
           umrahOverstayTierAmount: toPatchValue(penaltyTierAmount),
+          // §8 — finance-hygiene knobs. "" → null (revert to engine default);
+          // explicit value → company-scoped override.
+          umrahVatRate: toPatchValue(vatRate),
+          umrahVatMode: vatMode === "" ? null : vatMode,
+          commissionViaHr: commissionViaHr === "" ? null : commissionViaHr === "true",
         }),
       });
       toast({ title: "تم حفظ إعدادات العمرة" });
@@ -186,12 +228,34 @@ export default function UmrahSettings() {
     selectedTransportProductId !== (settings?.umrahTransportProductId != null ? String(settings.umrahTransportProductId) : "") ||
     penaltyDailyAmount !== (settings?.umrahOverstayDailyPenalty != null ? String(settings.umrahOverstayDailyPenalty) : "") ||
     penaltyTierDays !== (settings?.umrahOverstayTierDays != null ? String(settings.umrahOverstayTierDays) : "") ||
-    penaltyTierAmount !== (settings?.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "");
+    penaltyTierAmount !== (settings?.umrahOverstayTierAmount != null ? String(settings.umrahOverstayTierAmount) : "") ||
+    vatRate !== (settings?.umrahVatRate != null ? String(settings.umrahVatRate) : "") ||
+    vatMode !== (settings?.umrahVatMode ?? "") ||
+    commissionViaHr !== (
+      settings?.commissionViaHr == null ? "" : settings.commissionViaHr ? "true" : "false"
+    );
 
   return (
     <PageShell title="إعدادات العمرة" subtitle="ضبط ربط وحدة العمرة بالنظام المالي" breadcrumbs={[{ href: "/dashboard", label: "لوحة التحكم" }, { href: "/umrah", label: "العمرة" }, { label: "الإعدادات" }]}>
       <UmrahTabsNav />
       <div className="space-y-6 max-w-3xl">
+        {/* §8 Phase 2 of #1870 — Policies catalog. The existing
+            cards below (NUSK link, product mapping, overstay penalty)
+            stay as-is; this section adds the 11 missing categories
+            (Season / Visa / Overstay Grace / Violations / Import /
+            Auto-link / Pricing / Commission / Financial / Calendar /
+            Notifications) all wired to /umrah/settings/policies. */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <SettingsIcon className="h-4 w-4" />
+              سياسات العمرة (11 فئة)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PoliciesTab />
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -447,6 +511,86 @@ export default function UmrahSettings() {
           </CardContent>
         </Card>
 
+        {/* §8 of #1870 — finance hygiene knobs (VAT direction + commission
+            routing). Both ship with safe defaults that match the operator's
+            stated rules (inclusive VAT extraction; commission via HR). The
+            empty/"" state means "inherit engine default" so the operator
+            can revert without remembering the actual default value. */}
+        <Card data-testid="umrah-finance-hygiene-card">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <SettingsIcon className="h-4 w-4" />
+              ضريبة القيمة المضافة + توجيه العمولة
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-2" data-testid="umrah-vat-rate-input">
+              <Label htmlFor="umrah-vat-rate">نسبة ضريبة القيمة المضافة (%)</Label>
+              <Input
+                id="umrah-vat-rate"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                max="100"
+                step="0.01"
+                placeholder="افتراضي 15"
+                value={vatRate}
+                onChange={(e) => setVatRate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                القاعدة المضروبة بالنسبة = الهامش = البيع − التكلفة (وليست المبيعات الإجمالية).
+              </p>
+            </div>
+
+            <div className="space-y-2" data-testid="umrah-vat-mode-select">
+              <Label htmlFor="umrah-vat-mode">اتجاه الضريبة</Label>
+              <select
+                id="umrah-vat-mode"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={vatMode}
+                onChange={(e) => setVatMode(e.target.value as "" | "inclusive" | "exclusive")}
+              >
+                <option value="">— استخدام الافتراضي (شامل) —</option>
+                <option value="inclusive">شامل — الضريبة مستخرَجة من الهامش (× 15/115)</option>
+                <option value="exclusive">حصري — الضريبة تُضاف فوق الهامش (× 15/100)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                <strong>«شامل»</strong> هو نظام هامش وكلاء السفر السعودي — السعر المعروض على العميل لا يتغيّر عند تغيّر النسبة.
+              </p>
+            </div>
+
+            <div className="space-y-2" data-testid="commission-via-hr-select">
+              <Label htmlFor="commission-via-hr">توجيه استحقاق العمولة</Label>
+              <select
+                id="commission-via-hr"
+                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                value={commissionViaHr}
+                onChange={(e) => setCommissionViaHr(e.target.value as "" | "true" | "false")}
+              >
+                <option value="">— استخدام الافتراضي (عبر HR) —</option>
+                <option value="true">عبر HR — استحقاق العمولة يدخل دفتر الرواتب (دائن واحد للموظف)</option>
+                <option value="false">منفصل (قديم) — حساب مستقلّ لعمولات مستحقة</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                «عبر HR» يوحّد «راتب مستحق» + «عمولة مستحقة» في حساب واحد فتُسوّى دفعة واحدة عند مسير الرواتب.
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <GuardedButton
+                perm="umrah:update"
+                onClick={save}
+                disabled={!dirty || saving}
+                data-testid="umrah-finance-hygiene-save"
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? "جاري الحفظ..." : "حفظ"}
+              </GuardedButton>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* NUSK wallet card — derived view of the operator's prepayment
             balance with NUSK. NOT a separate wallet system; it's the
             running balance of the NUSK supplier in the standard AP
@@ -686,7 +830,7 @@ function UmrahNotificationsCard() {
             size="sm"
             data-testid="notify-test-send"
           >
-            {testSending ? "جارٍ..." : "إرسال إشعار تجريبي"}
+            {testSending ? "جاري..." : "إرسال إشعار تجريبي"}
           </GuardedButton>
         </div>
       </CardContent>

@@ -190,16 +190,12 @@ export default function MonthlyClosePackPage() {
             </select>
           </div>
           <div className="flex-1" />
-          <Link href="/finance/daily-close-checklist">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/daily-close-checklist">
               فحص اليوم
-            </Button>
-          </Link>
-          <Link href="/finance/period-close-preflight">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/period-close-preflight">
               فحص الإقفال
-            </Button>
-          </Link>
+            </Link></Button>
         </CardContent>
       </Card>
 

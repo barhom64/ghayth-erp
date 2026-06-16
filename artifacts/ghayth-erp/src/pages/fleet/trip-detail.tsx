@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import {
   useDetailEditDelete,
   DetailActionButtons,
@@ -344,7 +344,7 @@ export default function TripDetailPage() {
       >
         + نقطة
       </GuardedButton>
-      <EntityPrintButton entityType="fleet_trip" entityId={id ?? ""} />
+      <PrintButton entityType="fleet_trip" entityId={id ?? ""} />
       <DetailActionButtons hook={editDelete} editPerm="fleet:create" deletePerm="fleet:delete" />
     </div>
   );

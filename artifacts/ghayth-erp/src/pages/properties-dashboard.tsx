@@ -277,11 +277,9 @@ export default function PropertiesDashboard() {
                 <p className="text-[10px] text-muted-foreground">خلال 90 يوم</p>
               </div>
             </div>
-            <Link href="/properties/contracts">
-              <Button variant="outline" size="sm" className="w-full mt-3 gap-1 text-xs">
+            <Button asChild variant="outline" size="sm" className="w-full mt-3 gap-1 text-xs"><Link href="/properties/contracts">
                 <FileText className="h-3 w-3" /> عرض العقود
-              </Button>
-            </Link>
+              </Link></Button>
           </CardContent>
         </Card>
       </div>
@@ -349,9 +347,7 @@ export default function PropertiesDashboard() {
               <p className="font-semibold text-sm flex items-center gap-2">
                 <Wrench className="h-4 w-4 text-status-warning" /> طلبات الصيانة
               </p>
-              <Link href="/properties/maintenance">
-                <Button variant="ghost" size="sm" className="text-xs text-status-info-foreground h-6">عرض الكل</Button>
-              </Link>
+              <Button asChild variant="ghost" size="sm" className="text-xs text-status-info-foreground h-6"><Link href="/properties/maintenance">عرض الكل</Link></Button>
             </div>
             <div className="flex items-center gap-3">
               <div className="text-3xl font-bold text-status-warning-foreground">{openMaintenanceTickets}</div>
@@ -364,11 +360,9 @@ export default function PropertiesDashboard() {
                 )}
               </div>
             </div>
-            <Link href="/properties/maintenance/create">
-              <Button variant="outline" size="sm" className="w-full mt-3 gap-1 text-xs">
+            <Button asChild variant="outline" size="sm" className="w-full mt-3 gap-1 text-xs"><Link href="/properties/maintenance/create">
                 <Plus className="h-3 w-3" /> طلب صيانة جديد
-              </Button>
-            </Link>
+              </Link></Button>
           </CardContent>
         </Card>
 
@@ -409,11 +403,9 @@ export default function PropertiesDashboard() {
                 { href: "/properties/contracts/create", label: "إنشاء عقد إيجار", icon: FileText },
                 { href: "/properties/payments", label: "تسجيل دفعة", icon: Banknote },
               ].map(item => (
-                <Link key={item.href} href={item.href}>
-                  <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-xs h-8">
+                <Button asChild variant="ghost" size="sm" className="w-full justify-start gap-2 text-xs h-8"><Link key={item.href} href={item.href}>
                     <item.icon className="h-3.5 w-3.5" /> {item.label}
-                  </Button>
-                </Link>
+                  </Link></Button>
               ))}
             </div>
           </CardContent>
@@ -427,9 +419,7 @@ export default function PropertiesDashboard() {
               <CardTitle className="text-base flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-status-warning" /> أداء المباني (مرتبة حسب الإيراد)
               </CardTitle>
-              <Link href="/properties/buildings">
-                <Button variant="ghost" size="sm" className="text-xs text-status-info-foreground">عرض الكل</Button>
-              </Link>
+              <Button asChild variant="ghost" size="sm" className="text-xs text-status-info-foreground"><Link href="/properties/buildings">عرض الكل</Link></Button>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -461,6 +451,8 @@ export default function PropertiesDashboard() {
           { href: "/properties/contracts", icon: FileText, label: "عقود الإيجار", color: "text-status-warning-foreground bg-status-warning-surface" },
           { href: "/properties/payments", icon: Banknote, label: "المدفوعات", color: "text-indigo-600 bg-indigo-50" },
           { href: "/properties/maintenance", icon: Wrench, label: "طلبات الصيانة", color: "text-orange-600 bg-orange-50" },
+          { href: "/properties/sales", icon: TrendingUp, label: "بيع العقارات", color: "text-emerald-600 bg-emerald-50" },
+          { href: "/properties/owners/statement", icon: TrendingDown, label: "مستحقات الملاك", color: "text-purple-600 bg-purple-50" },
         ].map(item => (
           <Link key={item.href} href={item.href}>
             <Card className="border-0 shadow-sm hover:shadow-md transition-shadow cursor-pointer group">

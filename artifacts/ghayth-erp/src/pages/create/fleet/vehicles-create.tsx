@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
@@ -18,7 +19,24 @@ const INITIAL = {
   insuranceExpiry: "", registrationExpiry: "", notes: "",
   registrationNumber: "", plateType: "", sequenceNumber: "", inspectionDate: "", nextInspectionDate: "",
   purchasePrice: "", purchaseDate: "",
+  // #1812 Wave 0.3 — Vehicle Master technical profile (migration 262 + 284).
+  vehicleType: "", requiredLicenseClass: "",
+  validForPassengers: true, validForCargo: false,
+  operationalPayloadKg: "", payloadKg: "", seatCount: "",
+  boxLengthCm: "", boxWidthCm: "", boxHeightCm: "",
+  axleCount: "", tireCount: "", tireSize: "",
+  engineDisplacementCc: "", transmissionType: "",
+  hasAc: true, screenCount: "", doorCount: "", upholsteryType: "",
+  safetyFeatures: "", equipmentAttachments: "",
+  operatingHours: "",
 };
+
+// Comma-separated free text → trimmed string array (safety features /
+// equipment attachments are jsonb arrays in the DB).
+function splitChips(s: string): string[] | undefined {
+  const arr = s.split(",").map((x) => x.trim()).filter(Boolean);
+  return arr.length ? arr : undefined;
+}
 
 export default function VehiclesCreate() {
   const [, setLocation] = useLocation();
@@ -60,6 +78,32 @@ export default function VehiclesCreate() {
         purchasePrice: form.purchasePrice ? Number(form.purchasePrice) : undefined,
         purchaseDate: form.purchaseDate || undefined,
         notes: form.notes || undefined,
+        // #1812 Wave 0.3 — Vehicle Master technical profile + assignment-
+        // decision fields. All optional; the assignment engine treats
+        // NULL as "unknown — soft warning, no hard block" (see
+        // assignmentSuggestionEngine + vehicleCapacity comments).
+        vehicleType: form.vehicleType || undefined,
+        requiredLicenseClass: form.requiredLicenseClass || undefined,
+        validForPassengers: form.validForPassengers,
+        validForCargo: form.validForCargo,
+        operationalPayloadKg: form.operationalPayloadKg ? Number(form.operationalPayloadKg) : undefined,
+        payloadKg: form.payloadKg ? Number(form.payloadKg) : undefined,
+        seatCount: form.seatCount ? Number(form.seatCount) : undefined,
+        boxLengthCm: form.boxLengthCm ? Number(form.boxLengthCm) : undefined,
+        boxWidthCm:  form.boxWidthCm  ? Number(form.boxWidthCm)  : undefined,
+        boxHeightCm: form.boxHeightCm ? Number(form.boxHeightCm) : undefined,
+        axleCount: form.axleCount ? Number(form.axleCount) : undefined,
+        tireCount: form.tireCount ? Number(form.tireCount) : undefined,
+        tireSize: form.tireSize || undefined,
+        engineDisplacementCc: form.engineDisplacementCc ? Number(form.engineDisplacementCc) : undefined,
+        transmissionType: form.transmissionType || undefined,
+        hasAc: form.hasAc,
+        screenCount: form.screenCount ? Number(form.screenCount) : undefined,
+        doorCount: form.doorCount ? Number(form.doorCount) : undefined,
+        upholsteryType: form.upholsteryType || undefined,
+        safetyFeatures: splitChips(form.safetyFeatures),
+        equipmentAttachments: splitChips(form.equipmentAttachments),
+        operatingHours: form.operatingHours ? Number(form.operatingHours) : undefined,
       });
       clearDraft();
       toast({ title: "تمت إضافة المركبة بنجاح" });
@@ -159,6 +203,126 @@ export default function VehiclesCreate() {
             <FormFieldWrapper label="تاريخ الشراء">
               <DatePicker value={form.purchaseDate} onChange={(v) => setForm((f) => ({ ...f, purchaseDate: v }))} />
             </FormFieldWrapper>
+          </div>
+        </div>
+
+        {/* #1812 Wave 0.3 — Vehicle Master: assignment-decision fields.
+            The engine reads these to filter candidates per booking
+            kind. validForPassengers + validForCargo + operationalPayloadKg
+            + seatCount are the four columns the suggest dialog
+            actually uses today. */}
+        <div className="border-t pt-4 mt-2">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block" />
+            التخصص التشغيلي والسعة — يستخدمها محرّك الاقتراح لاختيار المركبة المناسبة
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormFieldWrapper label="نوع المركبة">
+              <Select value={form.vehicleType || "none"} onValueChange={(v) => setForm((f) => ({ ...f, vehicleType: v === "none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— غير محدد —</SelectItem>
+                  <SelectItem value="truck">شاحنة</SelectItem>
+                  <SelectItem value="bus">حافلة</SelectItem>
+                  <SelectItem value="van">فان</SelectItem>
+                  <SelectItem value="pickup">بيك‑أب</SelectItem>
+                  <SelectItem value="sedan">سيدان</SelectItem>
+                  <SelectItem value="trailer">مقطورة</SelectItem>
+                  <SelectItem value="equipment">معدّة</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="رخصة القيادة المطلوبة">
+              <Select value={form.requiredLicenseClass || "none"} onValueChange={(v) => setForm((f) => ({ ...f, requiredLicenseClass: v === "none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— غير محدد —</SelectItem>
+                  <SelectItem value="light">خفيفة</SelectItem>
+                  <SelectItem value="private">خاصة</SelectItem>
+                  <SelectItem value="public">عمومية</SelectItem>
+                  <SelectItem value="heavy">نقل ثقيل</SelectItem>
+                  <SelectItem value="motorcycle">دراجة نارية</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <NumberField label="عدد المقاعد (إن كانت للركاب)" value={form.seatCount} onChange={(v) => setForm((f) => ({ ...f, seatCount: v }))} placeholder="٠" />
+            <FormFieldWrapper label="صالحة لنقل الركاب">
+              <div className="flex items-center gap-2 mt-2">
+                <Switch checked={form.validForPassengers} onCheckedChange={(v) => setForm((f) => ({ ...f, validForPassengers: v }))} />
+                <span className="text-sm">{form.validForPassengers ? "نعم" : "لا"}</span>
+              </div>
+            </FormFieldWrapper>
+            <FormFieldWrapper label="صالحة لنقل الحمولات">
+              <div className="flex items-center gap-2 mt-2">
+                <Switch checked={form.validForCargo} onCheckedChange={(v) => setForm((f) => ({ ...f, validForCargo: v }))} />
+                <span className="text-sm">{form.validForCargo ? "نعم" : "لا"}</span>
+              </div>
+            </FormFieldWrapper>
+            <NumberField label="الحمولة التشغيلية الآمنة (كغ)" value={form.operationalPayloadKg} onChange={(v) => setForm((f) => ({ ...f, operationalPayloadKg: v }))} placeholder="الحمولة الموصى بها في التشغيل" />
+            <NumberField label="الحمولة القصوى الفنية (كغ)" value={form.payloadKg} onChange={(v) => setForm((f) => ({ ...f, payloadKg: v }))} placeholder="حسب البطاقة الفنية" />
+            <NumberField label="ساعات تشغيل (للمعدّات الثقيلة)" value={form.operatingHours} onChange={(v) => setForm((f) => ({ ...f, operatingHours: v }))} placeholder="٠" />
+          </div>
+        </div>
+
+        <div className="border-t pt-4 mt-2">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block" />
+            الأبعاد والميكانيكا — أبعاد الصندوق وخصائص الجر
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <NumberField label="طول الصندوق (سم)" value={form.boxLengthCm} onChange={(v) => setForm((f) => ({ ...f, boxLengthCm: v }))} placeholder="٠" />
+            <NumberField label="عرض الصندوق (سم)" value={form.boxWidthCm}  onChange={(v) => setForm((f) => ({ ...f, boxWidthCm: v }))}  placeholder="٠" />
+            <NumberField label="ارتفاع الصندوق (سم)" value={form.boxHeightCm} onChange={(v) => setForm((f) => ({ ...f, boxHeightCm: v }))} placeholder="٠" />
+            <NumberField label="عدد المحاور" value={form.axleCount} onChange={(v) => setForm((f) => ({ ...f, axleCount: v }))} placeholder="٠" />
+            <NumberField label="عدد الإطارات" value={form.tireCount} onChange={(v) => setForm((f) => ({ ...f, tireCount: v }))} placeholder="٠" />
+            <TextField label="مقاس الإطار" dir="ltr" value={form.tireSize} onChange={(v) => setForm((f) => ({ ...f, tireSize: v }))} placeholder="مثال: 295/80R22.5" />
+            <NumberField label="سعة المحرك (سي‑سي)" value={form.engineDisplacementCc} onChange={(v) => setForm((f) => ({ ...f, engineDisplacementCc: v }))} placeholder="٠" />
+            <FormFieldWrapper label="نوع ناقل الحركة">
+              <Select value={form.transmissionType || "none"} onValueChange={(v) => setForm((f) => ({ ...f, transmissionType: v === "none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— غير محدد —</SelectItem>
+                  <SelectItem value="manual">يدوي</SelectItem>
+                  <SelectItem value="automatic">أوتوماتيك</SelectItem>
+                  <SelectItem value="amt">AMT</SelectItem>
+                  <SelectItem value="cvt">CVT</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          </div>
+        </div>
+
+        <div className="border-t pt-4 mt-2">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-status-info-surface0 inline-block" />
+            الراحة والسلامة — يظهر للعميل في عرض المركبة المقترحة
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormFieldWrapper label="مكيّفة">
+              <div className="flex items-center gap-2 mt-2">
+                <Switch checked={form.hasAc} onCheckedChange={(v) => setForm((f) => ({ ...f, hasAc: v }))} />
+                <span className="text-sm">{form.hasAc ? "نعم" : "لا"}</span>
+              </div>
+            </FormFieldWrapper>
+            <NumberField label="عدد الشاشات الترفيهية" value={form.screenCount} onChange={(v) => setForm((f) => ({ ...f, screenCount: v }))} placeholder="٠" />
+            <NumberField label="عدد الأبواب" value={form.doorCount} onChange={(v) => setForm((f) => ({ ...f, doorCount: v }))} placeholder="٠" />
+            <FormFieldWrapper label="نوع التنجيد">
+              <Select value={form.upholsteryType || "none"} onValueChange={(v) => setForm((f) => ({ ...f, upholsteryType: v === "none" ? "" : v }))}>
+                <SelectTrigger><SelectValue placeholder="— اختياري —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— غير محدد —</SelectItem>
+                  <SelectItem value="fabric">قماش</SelectItem>
+                  <SelectItem value="leather">جلد</SelectItem>
+                  <SelectItem value="premium">فاخر</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+            <div className="md:col-span-3">
+              <TextField label="ميزات السلامة (افصلها بفواصل)" value={form.safetyFeatures} onChange={(v) => setForm((f) => ({ ...f, safetyFeatures: v }))} placeholder="ABS, ESP, وسائد هوائية، حساس مسافة" />
+            </div>
+            <div className="md:col-span-3">
+              <TextField label="ملحقات / تجهيزات إضافية (افصلها بفواصل)" value={form.equipmentAttachments} onChange={(v) => setForm((f) => ({ ...f, equipmentAttachments: v }))} placeholder="رافعة خلفية، شاحن سريع، صندوق مبرد" />
+            </div>
           </div>
         </div>
 

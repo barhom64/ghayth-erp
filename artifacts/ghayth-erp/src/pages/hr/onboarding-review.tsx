@@ -35,6 +35,19 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "completed",  label: "مكتمل"        },
 ];
 
+// HR-REV-3 (#2222) — الجهة المالكة لكل مهمة تأهيل (من يُكملها). يُولّدها الخادم
+// مع كل تفعيل سريع؛ تُعرض هنا ليرى HR توزيع المسؤولية بدل تكدّسها عليه.
+const TASK_OWNER_LABELS: Record<string, { label: string; color: string }> = {
+  it:         { label: "تقنية المعلومات", color: "bg-status-info-surface text-status-info-foreground" },
+  documents:  { label: "الوثائق",          color: "bg-purple-100 text-purple-700" },
+  department: { label: "مدير القسم",        color: "bg-status-warning-surface text-status-warning-foreground" },
+  payroll:    { label: "الرواتب",           color: "bg-emerald-100 text-emerald-700" },
+  hr:         { label: "الموارد البشرية",   color: "bg-status-neutral-surface text-status-neutral-foreground" },
+  fleet:      { label: "الأسطول",           color: "bg-orange-100 text-orange-700" },
+  warehouse:  { label: "المستودع",          color: "bg-amber-100 text-amber-700" },
+  access:     { label: "الصلاحيات",         color: "bg-rose-100 text-rose-700" },
+};
+
 export default function OnboardingReviewPage() {
   const [filters, setFilters] = useFilters();
   const { toast } = useToast();
@@ -250,16 +263,27 @@ export default function OnboardingReviewPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {pendingTasks.slice(0, 10).map((t: any) => (
-                <div key={t.id} className="flex items-center justify-between text-xs border rounded px-2 py-2">
-                  <div className="flex items-center gap-2 min-w-0">
+              {pendingTasks.slice(0, 10).map((t: any) => {
+                const owner = t.ownerRole ? TASK_OWNER_LABELS[t.ownerRole] : null;
+                const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now();
+                return (
+                <div key={t.id} className="flex items-center justify-between text-xs border rounded px-2 py-2" title={t.reason || undefined}>
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <Badge variant="outline" className="text-[10px]">#{t.id}</Badge>
                     <span className="font-medium">{t.title ?? t.taskName ?? t.description ?? "—"}</span>
+                    {owner && (
+                      <Badge className={`text-[10px] ${owner.color}`}>{owner.label}</Badge>
+                    )}
+                    {t.mandatory === false && (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">اختياري</Badge>
+                    )}
                     {t.employeeName && (
                       <span className="text-muted-foreground">— {t.employeeName}</span>
                     )}
                     {t.dueDate && (
-                      <Badge variant="outline" className="text-[10px]">{formatDateAr(t.dueDate)}</Badge>
+                      <Badge variant="outline" className={`text-[10px] ${overdue ? "border-status-error-surface text-status-error-foreground" : ""}`}>
+                        {overdue ? "متأخّر · " : ""}{formatDateAr(t.dueDate)}
+                      </Badge>
                     )}
                   </div>
                   <GuardedButton
@@ -273,7 +297,8 @@ export default function OnboardingReviewPage() {
                     <Check className="h-3 w-3 me-1" /> إكمال
                   </GuardedButton>
                 </div>
-              ))}
+                );
+              })}
               {pendingTasks.length > 10 && (
                 <p className="text-[10px] text-muted-foreground text-center">+ {pendingTasks.length - 10} مهام إضافية</p>
               )}

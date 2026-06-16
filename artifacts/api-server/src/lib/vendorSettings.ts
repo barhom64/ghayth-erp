@@ -21,7 +21,7 @@
  * pollute the platform-wide read; a future per-tenant variant adds
  * `companyId` to the key.
  */
-import { rawQuery } from "./rawdb.js";
+import { rawQuery, rawExecute } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { decryptSecret, isEncrypted } from "./secrets.js";
 import { config as appConfig } from "./config.js";
@@ -194,6 +194,46 @@ export function getCachedVendorConfigSync(slug: VendorSlug): VendorConfig {
   return hasAnyEnv
     ? { active: true, config: env, source: "env" }
     : { active: false, config: {}, source: "none" };
+}
+
+/**
+ * Boot-time guarantee that the operator-facing vendor cards exist.
+ *
+ * WHY (belt-and-suspenders over migration 219/340): the six rows are
+ * seeded by migration 219, but on installs whose schema dump predates
+ * the seed AND whose baseline-cutoff marks 219 as "applied" without
+ * running its INSERT, the rows are orphaned — /admin/vendor-settings
+ * renders empty ("طبّق migration 219 أولاً"). Migration 340 backfills
+ * them, but a single migration only runs once and only if the
+ * migration-runner reaches it. This ensure-step runs on EVERY boot, so
+ * the cards are guaranteed regardless of migration-runner / deploy
+ * timing edge cases.
+ *
+ * SAFETY: writes ONLY to vendor_secrets (canonical table, no bypass),
+ * idempotent via ON CONFLICT (slug) DO NOTHING, contains ZERO secrets
+ * (every credential field is ""). A row the operator has already
+ * configured (e.g. an active smtp with a real password) is left
+ * completely untouched — only MISSING slugs are inserted. Non-fatal:
+ * the caller wraps this in try/catch like the other boot seeds.
+ */
+export async function ensureVendorSecretsSeed(): Promise<void> {
+  await rawExecute(
+    `INSERT INTO public.vendor_secrets (slug, name, description, status, config)
+     VALUES
+       ('pbx-webhook', 'PBX Webhook Signing', 'HMAC secret used to verify inbound PBX webhooks (/api/communications/pbx/*).',
+        'disabled', '{"webhookSecret":""}'::jsonb),
+       ('whatsapp', 'WhatsApp Business Cloud API', 'Meta Cloud API credentials for sending + receiving messages.',
+        'disabled', '{"accessToken":"","verifyToken":"","phoneId":"","appSecret":""}'::jsonb),
+       ('smtp', 'Email (SMTP)', 'SMTP relay used by notificationEngine for outbound email.',
+        'disabled', '{"host":"","port":"587","user":"","password":"","from":"","secure":"false"}'::jsonb),
+       ('vapid', 'Web Push (VAPID)', 'VAPID keys used by lib/notificationService for browser push notifications.',
+        'disabled', '{"publicKey":"","privateKey":"","subject":"mailto:admin@ghayth.app"}'::jsonb),
+       ('siem', 'SIEM forwarder', 'Optional webhook RBAC violations get mirrored to.',
+        'disabled', '{"webhookUrl":"","authHeader":""}'::jsonb),
+       ('zatca', 'ZATCA Fatoora', 'Saudi e-invoice clearance endpoints + provider.',
+        'disabled', '{"defaultProvider":"","prodUrl":"","sandboxUrl":""}'::jsonb)
+     ON CONFLICT (slug) DO NOTHING`,
+  );
 }
 
 /**

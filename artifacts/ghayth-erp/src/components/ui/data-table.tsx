@@ -162,6 +162,23 @@ interface DataTableProps<T> {
   /** Optional caption above the table (e.g. small helper text). */
   caption?: ReactNode;
 
+  /**
+   * Group rows by this field key. When set, pagination is bypassed (all rows
+   * are shown) and rows are rendered in named groups. Use with
+   * `renderGroupHeader` / `renderGroupSubtotal` to add section headers and
+   * aggregate rows between groups, and `renderGrandTotal` for a bottom total.
+   *
+   * GAP_MATRIX P1 — enables finance/reports pages to adopt DataTable instead
+   * of hand-rolling raw <table> with subtotals.
+   */
+  groupBy?: string;
+  /** Renders a header row before each group. Receives group value + rows. */
+  renderGroupHeader?: (groupValue: string, groupRows: T[]) => ReactNode;
+  /** Renders a subtotal row after each group. Receives group value + rows. */
+  renderGroupSubtotal?: (groupValue: string, groupRows: T[]) => ReactNode;
+  /** Renders a grand-total row at the bottom of the table body. */
+  renderGrandTotal?: (allRows: T[]) => ReactNode;
+
   className?: string;
 }
 
@@ -201,6 +218,10 @@ export function DataTable<T>({
   noToolbar = false,
   renderRowExtras,
   caption,
+  groupBy,
+  renderGroupHeader,
+  renderGroupSubtotal,
+  renderGrandTotal,
   className,
 }: DataTableProps<T>) {
   const visibleColumns = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
@@ -459,64 +480,124 @@ export function DataTable<T>({
             isError={isError}
             error={error}
             onRetry={onRetry}
-            data={pagedData}
+            data={groupBy ? sortedData : pagedData}
             colCount={colCount}
             emptyMessage={emptyMessage}
             emptyIcon={emptyIcon}
             emptyAction={emptyAction}
           >
-            {(pagedData ?? []).map((row, rowIndex) => {
-              const rowId = (row as any)?.id as number | undefined;
-              const selected = rowId != null && selectedIds.has(rowId);
-              const extraClass = rowClassName?.(row);
-              const extras = renderRowExtras?.(row);
-              const key = getRowKey(row, rowIndex);
-              return (
-                <Fragment key={key}>
-                  <TableRow
-                    data-state={selected ? "selected" : undefined}
-                    className={cn(
-                      onRowClick && "cursor-pointer",
-                      extraClass
-                    )}
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {selectable && (
-                      <TableCell
-                        className="w-[44px]"
-                        onClick={(e) => e.stopPropagation()}
+            {groupBy
+              ? (() => {
+                  // Build ordered groups preserving first-seen order.
+                  const groupMap = new Map<string, T[]>();
+                  for (const row of sortedData ?? []) {
+                    const gv = String((row as any)[groupBy] ?? "");
+                    if (!groupMap.has(gv)) groupMap.set(gv, []);
+                    groupMap.get(gv)!.push(row);
+                  }
+                  const allGrouped = Array.from(groupMap.entries());
+                  return (
+                    <>
+                      {allGrouped.map(([groupValue, groupRows]) => (
+                        <Fragment key={`group-${groupValue}`}>
+                          {renderGroupHeader && (
+                            <TableRow className="bg-surface-subtle">
+                              <TableCell colSpan={colCount} className="py-1.5 px-3 font-semibold text-sm">
+                                {renderGroupHeader(groupValue, groupRows)}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {groupRows.map((row, rowIndex) => {
+                            const rowId = (row as any)?.id as number | undefined;
+                            const selected = rowId != null && selectedIds.has(rowId);
+                            const extraClass = rowClassName?.(row);
+                            const extras = renderRowExtras?.(row);
+                            const key = getRowKey(row, rowIndex);
+                            return (
+                              <Fragment key={key}>
+                                <TableRow
+                                  data-state={selected ? "selected" : undefined}
+                                  className={cn(onRowClick && "cursor-pointer", extraClass)}
+                                  onClick={() => onRowClick?.(row)}
+                                >
+                                  {selectable && (
+                                    <TableCell className="w-[44px]" onClick={(e) => e.stopPropagation()}>
+                                      <BulkCheckbox checked={selected} onChange={() => rowId != null && handleToggleRow(rowId)} />
+                                    </TableCell>
+                                  )}
+                                  {visibleColumns.map((col) => {
+                                    const content = col.render ? col.render(row, rowIndex) : ((row as any)[col.key] ?? "-");
+                                    return (
+                                      <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                                        {content}
+                                      </TableCell>
+                                    );
+                                  })}
+                                </TableRow>
+                                {extras && (
+                                  <TableRow>
+                                    <TableCell colSpan={colCount} className="p-0">{extras}</TableCell>
+                                  </TableRow>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                          {renderGroupSubtotal && (
+                            <TableRow className="border-t-2 bg-surface-subtle font-medium">
+                              <TableCell colSpan={colCount} className="py-1.5 px-3">
+                                {renderGroupSubtotal(groupValue, groupRows)}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      ))}
+                      {renderGrandTotal && sortedData && sortedData.length > 0 && (
+                        <TableRow className="border-t-4 bg-muted font-bold">
+                          <TableCell colSpan={colCount} className="py-2 px-3">
+                            {renderGrandTotal(sortedData)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  );
+                })()
+              : (pagedData ?? []).map((row, rowIndex) => {
+                  const rowId = (row as any)?.id as number | undefined;
+                  const selected = rowId != null && selectedIds.has(rowId);
+                  const extraClass = rowClassName?.(row);
+                  const extras = renderRowExtras?.(row);
+                  const key = getRowKey(row, rowIndex);
+                  return (
+                    <Fragment key={key}>
+                      <TableRow
+                        data-state={selected ? "selected" : undefined}
+                        className={cn(onRowClick && "cursor-pointer", extraClass)}
+                        onClick={() => onRowClick?.(row)}
                       >
-                        <BulkCheckbox
-                          checked={selected}
-                          onChange={() => rowId != null && handleToggleRow(rowId)}
-                        />
-                      </TableCell>
-                    )}
-                    {visibleColumns.map((col) => {
-                      const content = col.render
-                        ? col.render(row, rowIndex)
-                        : ((row as any)[col.key] ?? "-");
-                      return (
-                        <TableCell
-                          key={col.key}
-                          className={cn(alignClass(col.align), col.className)}
-                          dir={col.ltr ? "ltr" : undefined}
-                        >
-                          {content}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                  {extras && (
-                    <TableRow>
-                      <TableCell colSpan={colCount} className="p-0">
-                        {extras}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              );
-            })}
+                        {selectable && (
+                          <TableCell className="w-[44px]" onClick={(e) => e.stopPropagation()}>
+                            <BulkCheckbox checked={selected} onChange={() => rowId != null && handleToggleRow(rowId)} />
+                          </TableCell>
+                        )}
+                        {visibleColumns.map((col) => {
+                          const content = col.render
+                            ? col.render(row, rowIndex)
+                            : ((row as any)[col.key] ?? "-");
+                          return (
+                            <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                              {content}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                      {extras && (
+                        <TableRow>
+                          <TableCell colSpan={colCount} className="p-0">{extras}</TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
           </DataTableWrapper>
         </Table>
         {pageSize > 0 && (

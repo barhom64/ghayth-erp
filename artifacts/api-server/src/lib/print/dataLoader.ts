@@ -232,6 +232,16 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
     case "cargo_manifest":
     case "manifest":
       return await loadCargoManifest(companyId, entityId);
+    // #2079 TA-T18-11 (TPL-02) — fleet rental delivery/return docket.
+    // One loader, one preset; the template renders the handover or
+    // return block conditionally based on whether the row has the
+    // corresponding timestamp filled. entityType is
+    // `fleet_rental_contract` (not `rental_contract`, which is the
+    // pre-existing property rental contract — different schema).
+    case "fleet_rental_contract":
+    case "fleet_rental_handover":
+    case "fleet_rental_return":
+      return await loadRentalContract(companyId, entityId);
     case "fuel_log":
       return await loadFuelLog(companyId, entityId);
     case "traffic_violation":
@@ -246,6 +256,8 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadBuildingCard(companyId, entityId);
     case "project":
       return await loadProjectCard(companyId, entityId);
+    case "project_statement":
+      return await loadProjectStatement(companyId, entityId);
     case "store_order":
       return await loadStoreOrder(companyId, entityId);
     case "crm_opportunity":
@@ -265,6 +277,12 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadUmrahSalesInvoice(companyId, entityId);
     case "umrah_agent_invoice":
       return await loadUmrahAgentInvoice(companyId, entityId);
+    case "umrah_nusk_invoice":
+      return await loadUmrahNuskInvoice(companyId, entityId);
+    case "umrah_commission_plan":
+      return await loadUmrahCommissionPlan(companyId, entityId);
+    case "umrah_commission_calculation":
+      return await loadUmrahCommissionCalculation(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
     case "umrah_violation":
@@ -580,7 +598,7 @@ async function loadPurchaseOrder(companyId: number, id: string) {
   // around migration 202 (#1418 GAP_MATRIX item #4). The loader was still
   // SELECTing from the old name, so PO prints rendered with an empty items
   // array and the universal template showed "بلا بنود".
-  const items = await rawQuery(`SELECT * FROM purchase_order_items WHERE "purchaseOrderId" = $1`, [id]).catch(() => []);
+  const items = await rawQuery(`SELECT * FROM purchase_order_items WHERE "orderId" = $1`, [id]).catch(() => []);
   // The column on purchase_orders is "supplierId" (it was renamed from
   // "vendorId" before #1084 but the loader never caught up). Reading
   // `po.vendorId` returned undefined so the supplier name never loaded.
@@ -1179,12 +1197,17 @@ async function loadVehicle(companyId: number, id: string) {
 // preset (templateResolver.ts) renders the corresponding template.
 async function loadTransportBookingConfirmation(companyId: number, id: string) {
   const [booking] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM transport_bookings
-       WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
-       LIMIT 1`,
+    `SELECT b.*, c.name AS "linkedCustomerName"
+       FROM transport_bookings b
+       LEFT JOIN clients c ON c.id = b."customerId" AND c."companyId" = b."companyId" AND c."deletedAt" IS NULL
+      WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL
+      LIMIT 1`,
     [id, companyId],
   ).catch(() => [null]);
   if (!booking) return { entity: { id } };
+  // #TA-T18 — the printed confirmation shows the LINKED customer (master
+  // data), not the free-text snapshot, matching the on-screen confirmation.
+  if (booking.linkedCustomerName) booking.customerName = booking.linkedCustomerName;
   const lines = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM transport_booking_lines
        WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
@@ -1311,6 +1334,47 @@ async function loadCargoManifest(companyId: number, id: string) {
 // Note: removed my earlier loadFleetMaintenance — main's version above
 // has the print-template-friendly aliases (serviceType, totalCost,
 // workshopName, odometer) that the maintenance templates depend on.
+
+// #2079 TA-T18-11 — rental contract for the handover/return docket.
+// The fields from migration 293 (handoverOdometer / handoverFuelLevel /
+// handoverNotes / handoverAt + the return-side counterparts) are
+// pulled here so the print template stays declarative — no inline
+// conditional SQL inside the preset.
+async function loadRentalContract(companyId: number, id: string) {
+  const [contract] = await rawQuery<Record<string, unknown>>(
+    `SELECT rc.*,
+            v."plateNumber", v.make AS "vehicleMake", v.model AS "vehicleModel",
+            v.year AS "vehicleYear", v.color AS "vehicleColor",
+            v."vinNumber",
+            c.name AS "clientName", c.phone AS "clientPhone",
+            d.name AS "driverName", d.phone AS "driverPhone",
+            d."licenseNumber" AS "driverLicense"
+       FROM fleet_rental_contracts rc
+       LEFT JOIN fleet_vehicles v ON v.id = rc."vehicleId" AND v."companyId" = $2
+       LEFT JOIN clients c ON c.id = rc."clientId" AND c."companyId" = $2
+       LEFT JOIN fleet_drivers d ON d.id = rc."driverId" AND d."companyId" = $2
+      WHERE rc.id = $1 AND rc."companyId" = $2 AND rc."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!contract) return { entity: { id } };
+  // Pre-render simple flags the template needs for its conditional
+  // blocks (Mustache-style `{{#if}}` over a bool is more reliable
+  // than templating against a SQL timestamp directly).
+  return {
+    entity: {
+      ...contract,
+      hasHandover: !!contract.handoverAt,
+      hasReturn: !!contract.returnedAt,
+      fuelLevelPct: contract.handoverFuelLevel != null
+        ? Math.round(Number(contract.handoverFuelLevel) * 100)
+        : null,
+      returnFuelLevelPct: contract.returnFuelLevel != null
+        ? Math.round(Number(contract.returnFuelLevel) * 100)
+        : null,
+    },
+  };
+}
 
 async function loadFuelLog(companyId: number, id: string) {
   const [f] = await rawQuery<Record<string, unknown>>(
@@ -1441,6 +1505,90 @@ async function loadUmrahAgentInvoice(companyId: number, id: string) {
   return { entity: invoice ?? { id } };
 }
 
+// U-14-P3 — Nusk invoice loader. The Nusk invoice is the
+// PURCHASE-side document (what the Nusk system charges the agency
+// for one group's services) — distinct from sales invoice (charged
+// to the sub-agent) and agent invoice (charged to the main agent).
+// Joins agent / sub-agent / group / season for the meta block.
+async function loadUmrahNuskInvoice(companyId: number, id: string) {
+  const [invoice] = await rawQuery<Record<string, unknown>>(
+    `SELECT ni.*,
+            a.name AS "agentName",
+            sa.name AS "subAgentName",
+            g.name AS "groupName",
+            s.name AS "seasonName"
+       FROM umrah_nusk_invoices ni
+       LEFT JOIN umrah_agents a
+         ON a.id = ni."agentId" AND a."companyId" = $2 AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa
+         ON sa.id = ni."subAgentId" AND sa."companyId" = $2 AND sa."deletedAt" IS NULL
+       LEFT JOIN umrah_groups g
+         ON g.id = ni."groupId" AND g."companyId" = $2 AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = g."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE ni.id = $1 AND ni."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: invoice ?? { id } };
+}
+
+// U-14-P3 — umrah commission plan loader. Reads the plan + its
+// tiers list + joined employee + season for the printed contract /
+// signature copy. Pure SELECT; tenant-scoped.
+async function loadUmrahCommissionPlan(companyId: number, id: string) {
+  const [plan] = await rawQuery<Record<string, unknown>>(
+    `SELECT cp.*,
+            e.name AS "employeeName",
+            s.name AS "seasonName"
+       FROM employee_commission_plans cp
+       LEFT JOIN employees e
+         ON e.id = cp."employeeId" AND e."companyId" = $2 AND e."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = cp."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!plan) return { entity: { id } };
+  const tiers = await rawQuery<Record<string, unknown>>(
+    `SELECT "tierOrder", "fromCount", "toCount", "bonusPerUnit", "isCumulative"
+       FROM employee_commission_tiers
+      WHERE "planId" = $1 AND "deletedAt" IS NULL
+      ORDER BY "tierOrder" ASC`,
+    [id],
+  ).catch(() => []);
+  return { entity: plan, tiers };
+}
+
+// U-14-P3 — umrah commission calculation (monthly slip).
+// Joins the plan + employee + season so the receipt carries the
+// human-readable context for one month's calculation result. Pure
+// SELECT; tenant-scoped.
+async function loadUmrahCommissionCalculation(companyId: number, id: string) {
+  const [calc] = await rawQuery<Record<string, unknown>>(
+    `SELECT cc.*,
+            cp."planName",
+            cp."commissionType",
+            cp."percentageRate",
+            cp."fixedAmount",
+            cp."baseSalary",
+            e.name AS "employeeName",
+            s.name AS "seasonName"
+       FROM employee_commission_calculations cc
+       LEFT JOIN employee_commission_plans cp
+         ON cp.id = cc."planId" AND cp."companyId" = $2 AND cp."deletedAt" IS NULL
+       LEFT JOIN employees e
+         ON e.id = cc."employeeId" AND e."companyId" = $2 AND e."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = cp."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE cc.id = $1 AND cc."companyId" = $2 AND cc."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: calc ?? { id } };
+}
+
 async function loadUmrahPenalty(companyId: number, id: string) {
   const [penalty] = await rawQuery<Record<string, unknown>>(
     `SELECT pn.*,
@@ -1559,6 +1707,52 @@ async function loadProjectCard(companyId: number, id: string) {
     [id, companyId],
   );
   return { entity: row ?? { id } };
+}
+
+/** Project statement / مستخلص المشروع — the project header plus its financial
+ *  position (budget vs. actual cost vs. billed-to-client vs. remaining) and a
+ *  line-by-line cost breakdown. Read-only over existing projects tables — no
+ *  finance writes; this is a print view of what the project routes already
+ *  recorded (project_costs, project_boq_items). Powers the `project_statement`
+ *  bespoke print preset (templateResolver.ts). */
+async function loadProjectStatement(companyId: number, id: string) {
+  const [project] = await rawQuery<Record<string, unknown>>(
+    `SELECT p.*, c.name AS "clientName", e.name AS "managerName",
+            br.name AS "branchName"
+     FROM projects p
+     LEFT JOIN clients c ON c.id = p."clientId"
+     LEFT JOIN employees e ON e.id = p."managerId"
+     LEFT JOIN branches br ON br.id = p."branchId"
+     WHERE p.id = $1 AND p."companyId" = $2 LIMIT 1`,
+    [id, companyId],
+  );
+  if (!project) return { entity: { id } };
+
+  const costs = await rawQuery<Record<string, unknown>>(
+    `SELECT "costDate", category, description, amount
+       FROM project_costs
+      WHERE "projectId" = $1 AND "companyId" = $2
+      ORDER BY "costDate" ASC, id ASC`,
+    [id, companyId],
+  );
+  const [agg] = await rawQuery<Record<string, unknown>>(
+    `SELECT
+        COALESCE((SELECT SUM(amount) FROM project_costs
+                   WHERE "projectId" = $1 AND "companyId" = $2), 0)  AS "totalCosts",
+        COALESCE((SELECT SUM("lineTotal") FROM project_boq_items
+                   WHERE "projectId" = $1 AND "companyId" = $2
+                     AND status = 'billed'), 0)                      AS "totalBilled"`,
+    [id, companyId],
+  );
+  const budget = Number(project.budget || 0);
+  const totalCosts = Number(agg?.totalCosts || 0);
+  const totalBilled = Number(agg?.totalBilled || 0);
+  const remaining = Math.round((budget - totalCosts) * 100) / 100;
+
+  return {
+    entity: { ...project, budget, totalCosts, totalBilled, remaining },
+    costs,
+  };
 }
 
 async function loadStoreOrder(companyId: number, id: string) {

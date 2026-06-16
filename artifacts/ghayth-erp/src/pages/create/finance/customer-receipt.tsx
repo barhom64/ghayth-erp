@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { CreatePageLayout } from "@workspace/ui-core";
+import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { ClientSelect, AccountSelect } from "@/components/shared/entity-selects";
+import { ClientSelect } from "@/components/shared/entity-selects";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { FinanceOperationContextPanel } from "@/components/shared/finance-operation-context-panel";
@@ -30,12 +31,10 @@ import {
  *  2. Enter amount + payment method (cash/bank/transfer)
  *  3. System auto-fetches that customer's open invoices (oldest first)
  *  4. Clerk checks which to apply OR uses "auto-apply oldest first"
- *  5. Wizard builds balanced JE:
- *       DR cash/bank (debit side = total received)
- *       CR AR per invoice (multiple credit lines)
- *     + writes customer_advances row if there's leftover
- *
- * Currently this requires manually building a voucher + N allocations.
+ *  5. Submit sends the receipt SEMANTICS to POST /finance/customer-receipts;
+ *     the backend resolves the GL accounts through the accounting engine,
+ *     advances each invoice's paidAmount/status, records any leftover as a
+ *     customer advance, and posts ONE balanced JE (#1945 FIN-03).
  */
 
 interface OpenInvoice {
@@ -71,11 +70,13 @@ export default function CustomerReceiptWizardPage() {
     clientId: "",
     date: todayLocal(),
     paymentMethod: "bank" as "cash" | "bank" | "check" | "transfer",
-    receiptAccountCode: "1200",
     amount: "" as number | string,
     reference: "",
     notes: "",
   });
+  // #1945 FIN-03 — stable idempotency key for this wizard session: a network
+  // retry of the same submit must not double-apply the invoice payments.
+  const [receiptKey] = useState(() => crypto.randomUUID());
 
   const [applyMode, setApplyMode] = useState<"manual" | "fifo">("fifo");
   const [rows, setRows] = useState<ApplyRow[]>([]);
@@ -124,7 +125,11 @@ export default function CustomerReceiptWizardPage() {
   const totalAmount = Number(header.amount) || 0;
   const totalApplied = rows.reduce((s, r) => s + (r.selected ? r.applyAmount : 0), 0);
   const leftover = totalAmount - totalApplied;
-  const balanced = Math.abs(leftover) <= 0.005;
+  // #1945 FIN-03 — a POSITIVE leftover is legitimate (recorded server-side as
+  // a customer advance, the FIN-08 flow). Only over-application blocks. The
+  // old gate demanded leftover==0, which made the advance path unreachable
+  // despite the page promising it.
+  const balanced = leftover >= -0.005;
 
   // Auto-apply FIFO
   const runFifo = () => {
@@ -155,53 +160,35 @@ export default function CustomerReceiptWizardPage() {
     setRows((prev) => prev.map((r) => r.invoiceId === id ? { ...r, applyAmount: amt, selected: amt > 0 } : r));
   };
 
-  // ── Build JE
-  const buildJournalLines = () => {
-    const lines: any[] = [];
-    // Operation-context dims (project / cost-center / …) ride on the cash line.
-    const contextDims = allocTarget.target !== "none" ? buildAllocationPayload(allocTarget.allocation) : {};
-    lines.push({
-      accountCode: header.receiptAccountCode,
+  // ── Semantic JE preview (#1945 FIN-03) — what the receipt MEANS, not GL
+  // codes. The actual accounts are resolved by the accounting engine at save
+  // (resolveAccountCode); hardcoded codes here used to point at a
+  // non-postable header (1200), the furniture account (1220) and the vendors
+  // header (2110) on a SOCPA tree.
+  const previewLegs = () => {
+    const legs: Array<{ label: string; description: string; debit: number; credit: number }> = [];
+    legs.push({
+      label: "النقدية / البنك",
+      description: `حسب طريقة الاستلام — ${header.reference || todayLocal()}`,
       debit: totalAmount,
       credit: 0,
-      description: `استلام من العميل ${header.clientId} — ${header.reference || todayLocal()}`,
-      clientId: Number(header.clientId),
-      ...contextDims,
     });
-
-    // CR AR per applied invoice
-    const arAccountCode = "1220"; // ذمم العملاء default
     for (const r of rows) {
       if (!r.selected || r.applyAmount <= 0) continue;
-      lines.push({
-        accountCode: arAccountCode,
-        debit: 0,
-        credit: r.applyAmount,
-        description: `تسوية فاتورة ${r.ref}`,
-        clientId: Number(header.clientId),
-      });
+      legs.push({ label: "ذمم العملاء", description: `تسوية فاتورة ${r.ref}`, debit: 0, credit: r.applyAmount });
     }
-
-    // Leftover → customer advance liability
     if (leftover > 0.005) {
-      lines.push({
-        accountCode: "2110", // customer advances liability
-        debit: 0,
-        credit: Number(leftover.toFixed(2)),
-        description: `دفعة مقدّمة بدون تطبيق فوراً`,
-        clientId: Number(header.clientId),
-      });
+      legs.push({ label: "التزام دفعة مقدمة", description: "متبقي بدون تطبيق فوراً", debit: 0, credit: Number(leftover.toFixed(2)) });
     }
-
-    return lines;
+    return legs;
   };
 
-  const journalMut = useApiMutation("/finance/journal", "POST", [["journal"]]);
+  const receiptMut = useApiMutation("/finance/customer-receipts", "POST", [["journal"], ["customer-open-invoices"], ["invoices"]]);
 
   const validate = (): string | null => {
     if (!header.clientId) return "اختر العميل";
     if (totalAmount <= 0) return "أدخل المبلغ المستلم";
-    if (!balanced) return `الفرق ${formatCurrency(leftover)} — اضبط المبالغ أو فعّل FIFO`;
+    if (!balanced) return `التطبيق يتجاوز المستلم بـ ${formatCurrency(-leftover)} — قلّل مبالغ التطبيق`;
     if (totalApplied === 0 && leftover === 0) return "اختر فواتير للتطبيق أو ضع المبلغ";
     return null;
   };
@@ -210,11 +197,20 @@ export default function CustomerReceiptWizardPage() {
     const err = validate();
     if (err) { toast({ variant: "destructive", title: err }); return; }
     try {
-      await journalMut.mutateAsync({
-        ref: header.reference || `REC-${header.date}-${Date.now().toString(36).slice(-4)}`,
+      // Receipt SEMANTICS only — the backend resolves the GL accounts
+      // through the accounting engine and updates the invoices atomically.
+      await receiptMut.mutateAsync({
+        clientId: Number(header.clientId),
+        amount: totalAmount,
+        method: header.paymentMethod,
+        receiptKey,
         date: header.date,
-        description: header.notes || `استلام من عميل — ${header.amount} ر.س`,
-        lines: buildJournalLines(),
+        reference: header.reference || undefined,
+        notes: header.notes || undefined,
+        applications: rows
+          .filter((r) => r.selected && r.applyAmount > 0)
+          .map((r) => ({ invoiceId: r.invoiceId, amount: r.applyAmount })),
+        lineAllocation: allocTarget.target !== "none" ? buildAllocationPayload(allocTarget.allocation) : undefined,
       });
       toast({
         title: "تم تسجيل الاستلام",
@@ -226,8 +222,11 @@ export default function CustomerReceiptWizardPage() {
     }
   };
 
+  const activeCtx = useActiveFinanceContext();
+
   return (
     <CreatePageLayout title="معالج استلام دفعة من عميل" backPath="/finance/receivables">
+      <ActiveContextNotice ctx={activeCtx} />
       <Card className="mb-4 border-status-info-surface bg-status-info-surface/30">
         <CardContent className="p-4 text-sm">
           <p className="font-semibold mb-1 flex items-center gap-2">
@@ -257,8 +256,9 @@ export default function CustomerReceiptWizardPage() {
           <div>
             <Label className="text-xs">طريقة الاستلام</Label>
             <Select value={header.paymentMethod} onValueChange={(v) => {
-              const code = v === "cash" ? "1100" : v === "bank" || v === "transfer" ? "1200" : "1200";
-              setHeader({ ...header, paymentMethod: v as any, receiptAccountCode: code });
+              // #1945 FIN-03 — the cash/bank ACCOUNT is resolved by the
+              // accounting engine at save; the method is pure semantics here.
+              setHeader({ ...header, paymentMethod: v as any });
             }}>
               <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -268,13 +268,6 @@ export default function CustomerReceiptWizardPage() {
                 <SelectItem value="check">شيك</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="md:col-span-2">
-            <AccountSelect
-              value={header.receiptAccountCode}
-              onChange={(v) => setHeader({ ...header, receiptAccountCode: String(v ?? "") })}
-              label="حساب الاستلام *"
-            />
           </div>
           <div>
             <Label className="text-xs">المبلغ المستلم *</Label>
@@ -423,16 +416,16 @@ export default function CustomerReceiptWizardPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-muted-foreground border-b">
-                  <th className="text-end p-1">الحساب</th>
+                  <th className="text-end p-1">البند</th>
                   <th className="text-end p-1">الوصف</th>
                   <th className="text-end p-1">مدين</th>
                   <th className="text-end p-1">دائن</th>
                 </tr>
               </thead>
               <tbody>
-                {buildJournalLines().map((jl, i) => (
+                {previewLegs().map((jl, i) => (
                   <tr key={i} className="border-b border-dashed">
-                    <td className="p-1 font-mono">{jl.accountCode}</td>
+                    <td className="p-1">{jl.label}</td>
                     <td className="p-1 text-muted-foreground">{jl.description}</td>
                     <td className="p-1 font-mono text-end text-emerald-700">
                       {Number(jl.debit) > 0 ? formatCurrency(Number(jl.debit)) : "—"}
@@ -449,6 +442,13 @@ export default function CustomerReceiptWizardPage() {
                 </tr>
               </tbody>
             </table>
+            {/* #1945 (FIN-03) — الحسابات الفعلية يحدّدها محرك الترحيل
+                (resolveAccountCode) عند الحفظ؛ لا نعرض أكوادًا ثابتة قد تخالف
+                ما يُرحَّل فعليًا (كانت 1200/1220/2110 وهي رأس غير قابل للترحيل /
+                حساب الأثاث / رأس الموردين على شجرة SOCPA). */}
+            <p className="text-[10px] text-muted-foreground mt-2">
+              الحسابات الفعلية يحدّدها محرك الترحيل عند الحفظ حسب إعداد الشركة.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -458,11 +458,11 @@ export default function CustomerReceiptWizardPage() {
         <GuardedButton
           perm="finance:create"
           onClick={handleSubmit}
-          disabled={journalMut.isPending || !header.clientId || totalAmount <= 0 || !balanced}
+          disabled={receiptMut.isPending || !header.clientId || totalAmount <= 0 || !balanced || !activeCtx.ready}
           rateLimitAware
           className="bg-emerald-600 hover:bg-emerald-700"
         >
-          {journalMut.isPending
+          {receiptMut.isPending
             ? "جاري التسجيل..."
             : <><CheckCircle2 className="h-4 w-4 me-1" /> تسجيل الاستلام</>}
         </GuardedButton>

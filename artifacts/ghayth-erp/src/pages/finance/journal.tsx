@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Plus, ScrollText, ArrowLeftRight, Undo2, Calendar, FileEdit, Repeat, FileText, Activity } from "lucide-react";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
+import { POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
 import {
   AdvancedFilters,
   useFilters,
@@ -17,16 +18,7 @@ import {
   PageStatusBadge,
 } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
@@ -148,6 +140,15 @@ export default function JournalPage() {
             <PageStatusBadge status={isBalanced ? "active" : "rejected"}>
               {isBalanced ? "متوازن" : "غير متوازن"}
             </PageStatusBadge>
+            {/* FIN-CORRECTION (A5): surface the truthful posting axis
+                (postingStatus from /finance/journal, migration-311 trigger,
+                #2133) so a directly-posted entry (status='draft' +
+                balancesApplied=true) reads «مرحّل» in the list. */}
+            {j.postingStatus && (
+              <span className={`text-[10px] ${j.postingStatus === "posted" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+                {POSTING_STATUS_LABELS[j.postingStatus as keyof typeof POSTING_STATUS_LABELS]}
+              </span>
+            )}
             {j.reversedById && <PageStatusBadge status="reversed" />}
             {j.reversalOfId && (
               <PageStatusBadge status="active">قيد عاكس</PageStatusBadge>
@@ -192,21 +193,15 @@ export default function JournalPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/recurring-journals">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/recurring-journals">
               <Repeat className="h-4 w-4 me-2" />القيود الدورية
-            </Button>
-          </Link>
-          <Link href="/finance/journal-templates">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/journal-templates">
               <FileText className="h-4 w-4 me-2" />القوالب
-            </Button>
-          </Link>
-          <Link href="/finance/journal/activity">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/journal/activity">
               <Activity className="h-4 w-4 me-2" />نشاط الترحيل
-            </Button>
-          </Link>
+            </Link></Button>
           <GuardedButton perm="finance:create" size="sm" asChild>
             <Link href="/finance/journal/create">
               <Plus className="h-4 w-4 me-1" />
@@ -323,56 +318,36 @@ export default function JournalPage() {
         }}
       />
 
-      <AlertDialog
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
         open={!!reversalTarget}
         onOpenChange={(open) => {
-          if (!open) {
-            setReversalTarget(null);
-            setReversalReason("");
+          if (!open) { setReversalTarget(null); setReversalReason(""); }
+        }}
+        variant="caution"
+        title={`عكس القيد ${reversalTarget?.ref || `JE-${reversalTarget?.id}`}`}
+        description="سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء لا يمكن التراجع عنه."
+        confirmLabel="تأكيد العكس"
+        pending={reverseMut.isPending}
+        disabled={!reversalReason.trim()}
+        onConfirm={() => {
+          if (!reversalReason.trim()) {
+            toast({ variant: "destructive", title: "السبب مطلوب" });
+            return;
           }
+          reverseMut.mutate({ id: reversalTarget!.id, reason: reversalReason });
         }}
       >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              عكس القيد {reversalTarget?.ref || `JE-${reversalTarget?.id}`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إنشاء قيد جديد بنفس البنود مع عكس المدين والدائن. هذا الإجراء
-              لا يمكن التراجع عنه.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2">
-            <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
-            <Textarea
-              value={reversalReason}
-              onChange={(e) => setReversalReason(e.target.value)}
-              placeholder="أدخل سبب عكس القيد..."
-              rows={3}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-amber-600 hover:bg-amber-700"
-              onClick={(e) => {
-                e.preventDefault();
-                if (!reversalReason.trim()) {
-                  toast({ variant: "destructive", title: "السبب مطلوب" });
-                  return;
-                }
-                reverseMut.mutate({
-                  id: reversalTarget.id,
-                  reason: reversalReason,
-                });
-              }}
-              disabled={reverseMut.isPending}
-            >
-              {reverseMut.isPending ? "جاري العكس..." : "تأكيد العكس"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <div className="py-2">
+          <label className="text-sm font-medium mb-1 block">سبب عكس القيد *</label>
+          <Textarea
+            value={reversalReason}
+            onChange={(e) => setReversalReason(e.target.value)}
+            placeholder="أدخل سبب عكس القيد..."
+            rows={3}
+          />
+        </div>
+      </ConfirmActionDialog>
     </PageShell>
   );
 }

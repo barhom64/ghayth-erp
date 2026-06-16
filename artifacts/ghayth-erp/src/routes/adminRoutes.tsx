@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { redirectTo } from "@/components/shared/redirect-to";
 
 const Admin = lazy(() => import("@/pages/admin"));
 const AdminUsers = lazy(() => import("@/pages/admin/users"));
@@ -43,12 +44,21 @@ const AdminIntegrationsDiagnostics = lazy(() => import("@/pages/admin-integratio
 const AdminExpiringDocs = lazy(() => import("@/pages/admin/expiring-docs")); // originally PR #1128
 const AdminOrgModel = lazy(() => import("@/pages/admin/org-model"));
 const AdminEffectivePermissions = lazy(() => import("@/pages/admin/effective-permissions"));
-const AdminAttendanceCategories = lazy(() => import("@/pages/admin/attendance-categories"));
+// PR-3 (#2163) — was: dual-owner of /admin/attendance-categories and
+// /admin/scoring-weights with the same component as the HR routes.
+// Canonical-ownership decision: both are HR business policy (workforce
+// categories driving attendance; weights driving evaluation /
+// promotion / penalties), not platform admin setup. The admin paths
+// stay reachable for bookmarks but redirect to the HR canonical so
+// nobody can re-establish two equal owners.
 const AdminOrgMemberships = lazy(() => import("@/pages/admin/org-memberships"));
-const AdminScoringWeights = lazy(() => import("@/pages/admin/scoring-weights"));
+const AdminSubscription = lazy(() => import("@/pages/admin/subscription"));
+const RedirectToHrAttendanceCategories = redirectTo("/hr/attendance-categories");
+const RedirectToHrScoringWeights      = redirectTo("/hr/scoring-weights");
 
 export const adminRoutes = [
   { path: "/admin/expiring-docs", component: AdminExpiringDocs },
+  { path: "/admin/subscription", component: AdminSubscription },
   { path: "/admin", component: Admin },
   { path: "/admin/users", component: AdminUsers },
   { path: "/admin/user-onboarding", component: AdminUserOnboarding },
@@ -90,7 +100,9 @@ export const adminRoutes = [
   { path: "/admin/integrations-diagnostics", component: AdminIntegrationsDiagnostics },
   { path: "/admin/org-model", component: AdminOrgModel },
   { path: "/admin/effective-permissions", component: AdminEffectivePermissions },
-  { path: "/admin/attendance-categories", component: AdminAttendanceCategories },
+  // PR-3 (#2163) — these two were dual-owner with /hr/*. Now legacy
+  // redirects only; the canonical owner is HR.
+  { path: "/admin/attendance-categories", component: RedirectToHrAttendanceCategories },
   { path: "/admin/org-memberships", component: AdminOrgMemberships },
-  { path: "/admin/scoring-weights", component: AdminScoringWeights },
+  { path: "/admin/scoring-weights",      component: RedirectToHrScoringWeights },
 ];

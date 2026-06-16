@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -163,7 +163,7 @@ export default function AllocationCoveragePage() {
   }, [rows]);
 
   if (isLoading) return <LoadingSpinner />;
-  if (isError) return <div>Error</div>;
+  if (isError) return <ErrorState />;
 
   const total = rows.length;
   const overallCoverage = statusBuckets.find((s) => s.status === "resolved")?.pct ?? 0;
@@ -377,36 +377,26 @@ export default function AllocationCoveragePage() {
             <CardTitle className="text-sm">إجراءات لتحسين التغطية</CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-2">
-            <Link href="/finance/reports/unmapped-lines">
-              <Button variant="outline" size="sm" className="w-full justify-between">
+            <Button asChild variant="outline" size="sm" className="w-full justify-between"><Link href="/finance/reports/unmapped-lines">
                 <span className="text-xs">معالجة البنود غير الموجَّهة</span>
                 <ChevronRight className="h-3 w-3" />
-              </Button>
-            </Link>
-            <Link href="/finance/allocation-rules">
-              <Button variant="outline" size="sm" className="w-full justify-between">
+              </Link></Button>
+            <Button asChild variant="outline" size="sm" className="w-full justify-between"><Link href="/finance/allocation-rules">
                 <span className="text-xs">إدارة قواعد التوجيه</span>
                 <ChevronRight className="h-3 w-3" />
-              </Button>
-            </Link>
-            <Link href="/finance/product-catalog">
-              <Button variant="outline" size="sm" className="w-full justify-between">
+              </Link></Button>
+            <Button asChild variant="outline" size="sm" className="w-full justify-between"><Link href="/finance/product-catalog">
                 <span className="text-xs">إعدادات المنتجات الافتراضية</span>
                 <ChevronRight className="h-3 w-3" />
-              </Button>
-            </Link>
-            <Link href="/finance/overrides-report">
-              <Button variant="outline" size="sm" className="w-full justify-between">
+              </Link></Button>
+            <Button asChild variant="outline" size="sm" className="w-full justify-between"><Link href="/finance/overrides-report">
                 <span className="text-xs">مراجعة الـ manual overrides</span>
                 <ChevronRight className="h-3 w-3" />
-              </Button>
-            </Link>
-            <Link href="/finance/allocation-results">
-              <Button variant="outline" size="sm" className="w-full justify-between">
+              </Link></Button>
+            <Button asChild variant="outline" size="sm" className="w-full justify-between"><Link href="/finance/allocation-results">
                 <span className="text-xs">سجل القرارات الكامل</span>
                 <ChevronRight className="h-3 w-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           </CardContent>
         </Card>
       </div>

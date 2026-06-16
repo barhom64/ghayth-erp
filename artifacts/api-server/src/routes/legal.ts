@@ -520,7 +520,7 @@ router.post("/contracts/:id/renew", authorize({ feature: "legal.contracts", acti
     const setExtras: Record<string, any> = {
       endDate: newEndDate,
       renewedAt: { raw: "NOW()" },
-      renewalCount: { raw: `COALESCE("renewalCount", 0) + 1` },
+      renewalCount: (Number(current.renewalCount) || 0) + 1,
     };
     if (newValue !== undefined && newValue !== null) {
       setExtras.value = newValue;
@@ -977,7 +977,7 @@ router.post("/cases/:caseId/sessions", authorize({ feature: "legal.cases", actio
         const [lawyerEmp] = await rawQuery<Record<string, unknown>>(
           `SELECT ea.id AS "assignmentId" FROM employees e
            JOIN employee_assignments ea ON ea."employeeId"=e.id AND ea.status='active'
-           WHERE ea."companyId"=$1 AND e.name ILIKE $2 LIMIT 1`,
+           WHERE ea."companyId"=$1 AND e.name ILIKE $2 AND e."deletedAt" IS NULL LIMIT 1`,
           [scope.companyId, `%${legalCase.lawyerName}%`]
         );
         if (lawyerEmp?.assignmentId) {
@@ -1163,7 +1163,7 @@ router.get("/cases/:caseId/correspondence", authorize({ feature: "legal.cases", 
     const caseId = parseId(req.params.caseId, "caseId");
     const [lc] = await rawQuery<Record<string, unknown>>(`SELECT id FROM legal_cases WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [caseId, scope.companyId]);
     if (!lc) throw new NotFoundError("القضية غير موجودة");
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId]);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_correspondence WHERE "caseId"=$1 AND "companyId"=$2 ORDER BY "correspondenceDate" DESC LIMIT 500`, [caseId, scope.companyId]);
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Legal correspondence error:"); }
 });

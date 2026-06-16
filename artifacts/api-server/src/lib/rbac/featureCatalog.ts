@@ -301,9 +301,31 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
   // and umrah trips — operators take customer requests, create bookings,
   // dispatch driver/vehicle pairs. Two features so dispatchers can be
   // gated separately from the broader fleet-coordinator role.
+  // #2079 TA-T18-08 — `approvableActions: ["approve"]` flags the approve
+  // action so the role editor surfaces it as a distinct grant. The
+  // SPA + the server now treat `fleet.bookings:approve` as the gate
+  // for moving a booking to `approved`/`rejected` — separating the
+  // approval decision from the broader `update` grant fulfils the
+  // segregation-of-duties rule the audit raised (a creator can no
+  // longer self-approve their own booking unless their role explicitly
+  // carries `approve` on top of `update`).
   { key: "fleet.bookings", parentKey: "fleet", moduleKey: "fleet", labelAr: "حجوزات النقل",
     icon: "ClipboardList",
-    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"], displayOrder: 332 },
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 332 },
+  // #2079 TA-T18-09 — `fleet.rentals` as a dedicated feature. Before
+  // this, equipment-rental endpoints lived under `fleet.vehicles`,
+  // which meant any holder of `fleet.vehicles:update` could activate,
+  // hand-over or return a rental contract — the same grant unlocked
+  // vehicle CRUD AND the rental lifecycle. The audit (PERM-02)
+  // flagged this as a SoD/least-privilege break: a rental clerk
+  // should be grantable independently of full vehicle CRUD, and the
+  // rental approve actions (handover / return) should require the
+  // dedicated `approve` action just like `fleet.bookings:approve`.
+  { key: "fleet.rentals", parentKey: "fleet", moduleKey: "fleet", labelAr: "تأجير المركبات",
+    icon: "FileSignature",
+    availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],
+    approvableActions: ["approve"], displayOrder: 333 },
   { key: "fleet.dispatch", parentKey: "fleet", moduleKey: "fleet", labelAr: "توزيع وجدولة الرحلات",
     icon: "Calendar",
     availableActions: ALL_ACTIONS, availableScopes: ["branch", "company"],

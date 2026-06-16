@@ -54,9 +54,9 @@ describe("payment-run JE reduces cash by the WHT total", () => {
   it("computes netCashOut = totalPayment − totalWht", () => {
     expect(HANDLER).toMatch(/netCashOut\s*=\s*roundTo2\(totalPayment - totalWht\)/);
   });
-  it("buckets WHT-payable credits by account code (default fallback 2330)", () => {
+  it("buckets WHT-payable credits by account code (default fallback 2132)", () => {
     expect(HANDLER).toContain("whtCreditByAccount");
-    expect(HANDLER).toMatch(/"wht_payable",\s*"credit",\s*"2330"/);
+    expect(HANDLER).toMatch(/"wht_payable",\s*"credit",\s*"2132"/);
   });
   it("CR Cash line uses netCashOut, not totalPayment", () => {
     expect(HANDLER).toMatch(/accountCode: cashAccount, debit: 0, credit: netCashOut/);

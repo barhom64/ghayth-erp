@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { todayLocal } from "@/lib/formatters";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, ApiError, buildErrorToast } from "@/lib/api";
@@ -14,12 +14,20 @@ import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { ROLES } from "@/lib/constants";
 import { NATIONALITIES } from "@/lib/nationalities";
-import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight } from "lucide-react";
+import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight, Network } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAppContext } from "@/contexts/app-context";
 import { fieldErrorClass, TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
+import {
+  PositionSelect,
+  TeamSelect,
+  CommitteeSelect,
+  EmployeeCategorySelect,
+  ProjectSelect,
+  CostCenterMasterSelect,
+} from "@/components/shared/entity-selects";
 
 const OPERATIONS = [
   { key: "employee", label: "إنشاء سجل الموظف", icon: User },
@@ -34,6 +42,148 @@ const OPERATIONS = [
   { key: "onboarding_tasks", label: "إنشاء مهام التأهيل", icon: Briefcase },
   { key: "notification", label: "إرسال إشعار للإدارة", icon: AlertCircle },
 ];
+
+// IGOC-003 — wizard step navigation overlay for the (intentionally one-form)
+// employee creation flow. The server-side transaction is atomic and creates
+// 18 things in one call; we keep that as-is and add a guided step indicator
+// so the admin sees logical phases (personal data → job/contract → accounts
+// → attachments) + per-step completion status. Click a step to scroll to it.
+// IntersectionObserver auto-highlights the active step as the user scrolls.
+interface WizardStep {
+  key: string;
+  label: string;
+  icon: typeof User;
+  // Predicate returns true when the step's REQUIRED fields are filled.
+  // Used to render a checkmark (✓) on the step indicator. Optional fields
+  // never affect completion — only required fields do.
+  isComplete: (f: Record<string, string>, fieldErrors: Record<string, string | null>) => boolean;
+}
+
+const WIZARD_STEPS: WizardStep[] = [
+  {
+    key: "personal",
+    label: "البيانات الشخصية",
+    icon: User,
+    isComplete: (f) => Boolean(f.name && f.nationalId && f.nationality && f.phone),
+  },
+  {
+    key: "job",
+    label: "الوظيفة والعقد",
+    icon: Briefcase,
+    isComplete: (f) => Boolean(f.contractType && f.salary && Number(f.salary) > 0),
+  },
+  {
+    // PR-1 (#2077) — institutional binding step. The five mandatory
+    // fields close «الموظف ككيان تشغيلي مؤسسي» at create time so the
+    // engineer never has to remember a follow-up step.
+    key: "institutional",
+    label: "الربط المؤسسي",
+    icon: Network,
+    isComplete: (f) => Boolean(
+      f.positionId && f.categoryKey && f.teamId && f.projectId && f.costCenterId && f.managerId,
+    ),
+  },
+  {
+    key: "accounts",
+    label: "الحسابات والربط المالي",
+    icon: CreditCard,
+    isComplete: (_f) => true, // optional section — show ✓ always
+  },
+  {
+    key: "attachments",
+    label: "المرفقات والإقامة",
+    icon: FileText,
+    isComplete: (_f) => true, // optional section — show ✓ always
+  },
+];
+
+function WizardStepNav({
+  form,
+  fieldErrors,
+}: {
+  form: Record<string, string>;
+  fieldErrors: Record<string, string | null>;
+}) {
+  const [activeKey, setActiveKey] = useState<string>("personal");
+
+  // Track which step is in view via IntersectionObserver. Highlight the
+  // FIRST visible one so scrolling top-down lights up steps in order.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveKey(visible[0].target.id.replace(/^wizard-step-/, ""));
+      },
+      { rootMargin: "-20% 0px -60% 0px", threshold: 0 },
+    );
+    for (const s of WIZARD_STEPS) {
+      const el = document.getElementById(`wizard-step-${s.key}`);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const scrollTo = (key: string) => {
+    const el = document.getElementById(`wizard-step-${key}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Optimistic — IntersectionObserver will confirm shortly.
+      setActiveKey(key);
+    }
+  };
+
+  const completedCount = useMemo(
+    () => WIZARD_STEPS.filter((s) => s.isComplete(form, fieldErrors)).length,
+    [form, fieldErrors],
+  );
+
+  return (
+    <Card className="mb-4 sticky top-0 z-10 shadow-sm">
+      <CardContent className="p-3">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-muted-foreground">
+            خطوة {WIZARD_STEPS.findIndex((s) => s.key === activeKey) + 1} من {WIZARD_STEPS.length}
+            {" — "}
+            <span className="font-medium">{completedCount}/{WIZARD_STEPS.length} مكتمل</span>
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {WIZARD_STEPS.map((step, idx) => {
+            const Icon = step.icon;
+            const isActive = step.key === activeKey;
+            const isDone = step.isComplete(form, fieldErrors);
+            return (
+              <button
+                key={step.key}
+                type="button"
+                onClick={() => scrollTo(step.key)}
+                className={`text-right p-2 rounded border transition-colors ${
+                  isActive
+                    ? "bg-primary/10 border-primary text-primary"
+                    : isDone
+                    ? "bg-status-success-surface border-status-success-surface text-status-success-foreground"
+                    : "bg-surface-subtle border-transparent text-muted-foreground hover:bg-surface-subtle/70"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-xs">
+                  <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${
+                    isActive ? "bg-primary text-white" : isDone ? "bg-status-success-foreground text-white" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {isDone && !isActive ? "✓" : idx + 1}
+                  </span>
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="truncate font-medium">{step.label}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function EmployeesCreate() {
   const [, setLocation] = useLocation();
@@ -73,6 +223,12 @@ export default function EmployeesCreate() {
     // bind (existing id or a freshly minted number).
     emailDomain: "", emailLocalPart: "",
     pbxExtensionId: "", pbxExtensionNew: "",
+    // PR-1 (#2077) — institutional binding. Five fields are required
+    // by the wizard; committeeId is optional (cross-department council
+    // bindings are not always relevant at hire time).
+    positionId: "", categoryKey: "",
+    teamId: "", projectId: "", costCenterId: "",
+    committeeId: "",
   });
 
   // Fleet vehicles — only fetched when role implies driver, but the
@@ -181,6 +337,16 @@ export default function EmployeesCreate() {
       jobTitle: form.jobTitle ? null : "يرجى اختيار المسمى الوظيفي",
       contractType: form.contractType ? null : "يرجى اختيار نوع العقد",
       salary: !form.salary || Number(form.salary) <= 0 ? "يرجى إدخال الراتب الأساسي" : null,
+      // PR-1 (#2077) — institutional mandatoriness. The backend has a
+      // bootstrap carve-out for the first employee in a company; the
+      // UI doesn't, because once the company has any employees, every
+      // new hire must be bound to the institutional matrix.
+      managerId: form.managerId ? null : "يرجى اختيار المدير المباشر",
+      positionId: form.positionId ? null : "يرجى اختيار المنصب الإداري",
+      categoryKey: form.categoryKey ? null : "يرجى اختيار فئة الموظف",
+      teamId: form.teamId ? null : "يرجى اختيار الفريق",
+      projectId: form.projectId ? null : "يرجى اختيار المشروع",
+      costCenterId: form.costCenterId ? null : "يرجى اختيار مركز التكلفة",
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
@@ -200,6 +366,15 @@ export default function EmployeesCreate() {
         vehicleId: form.vehicleId ? Number(form.vehicleId) : undefined,
         pbxExtensionId: form.pbxExtensionId ? Number(form.pbxExtensionId) : undefined,
         pbxExtensionNew: form.pbxExtensionNew || undefined,
+        // PR-1 (#2077) — institutional binding payload. Backend
+        // validates each id belongs to the company and inserts the
+        // bridge rows inside the create transaction.
+        positionId: form.positionId ? Number(form.positionId) : undefined,
+        categoryKey: form.categoryKey || undefined,
+        teamId: form.teamId ? Number(form.teamId) : undefined,
+        projectId: form.projectId ? Number(form.projectId) : undefined,
+        costCenterId: form.costCenterId ? Number(form.costCenterId) : undefined,
+        committeeId: form.committeeId ? Number(form.committeeId) : undefined,
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
       });
@@ -301,6 +476,10 @@ export default function EmployeesCreate() {
               vehicleId: "",
               emailDomain: "", emailLocalPart: "",
               pbxExtensionId: "", pbxExtensionNew: "",
+              // PR-1 (#2077) — institutional binding reset.
+              positionId: "", categoryKey: "",
+              teamId: "", projectId: "", costCenterId: "",
+              committeeId: "",
             });
           }}>
             إضافة موظف آخر
@@ -327,10 +506,14 @@ export default function EmployeesCreate() {
           <span>يتم إنشاء هذا الموظف من طلب التوظيف رقم #{sourceApplicationId} — أكمل البيانات المطلوبة ثم احفظ.</span>
         </div>
       )}
+      {/* IGOC-003 — wizard step nav. Sticky overlay; doesn't change the
+          underlying form structure (the server-side transaction stays
+          atomic). Clicks scroll to the section; scroll auto-highlights. */}
+      <WizardStepNav form={form as unknown as Record<string, string>} fieldErrors={fieldErrors} />
       <div className="mb-4">
         <CreationDateField />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div id="wizard-step-personal" className="grid grid-cols-1 md:grid-cols-2 gap-4 scroll-mt-24">
         <TextField label="الاسم الرباعي" required value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} error={fieldErrors.name} className="md:col-span-2" />
         <TextField label="رقم الهوية / الإقامة" required dir="ltr" value={form.nationalId} onChange={(v) => setForm((f) => ({ ...f, nationalId: v }))} placeholder="مثال: 1234567890" error={fieldErrors.nationalId} />
         <FormFieldWrapper label="الجنسية" required error={fieldErrors.nationality}>
@@ -505,6 +688,7 @@ export default function EmployeesCreate() {
             </SelectContent>
           </Select>
         </FormFieldWrapper>
+        <div id="wizard-step-job" className="md:col-span-2 scroll-mt-24" />
         <FormFieldWrapper label="نوع العقد" error={fieldErrors.contractType}>
           <Select value={form.contractType} onValueChange={(v) => setForm((f) => ({ ...f, contractType: v }))}>
             <SelectTrigger className={fieldErrorClass(fieldErrors.contractType)}><SelectValue /></SelectTrigger>
@@ -519,8 +703,66 @@ export default function EmployeesCreate() {
         <NumberField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} error={fieldErrors.salary} />
         <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
 
+        {/* PR-1 (#2077) — institutional binding. Five mandatory bindings
+            + 1 optional. The wizard step indicator (above) tracks
+            completion via WIZARD_STEPS[institutional].isComplete. */}
+        <div id="wizard-step-institutional" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-1 flex items-center gap-2">
+            <Network className="w-4 h-4" />
+            الربط المؤسسي
+          </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            هذه الحقول تربط الموظف بهيكل المؤسسة (المنصب الإداري، فريق العمل، المشروع، مركز التكلفة، فئة القوى العاملة).
+            بدونها لا تظهر تقاريرك مكتملة ولا تتفعّل سياسة الحضور بالفئة.
+          </p>
+        </div>
+        <FormFieldWrapper label="المنصب الإداري" required error={fieldErrors.positionId}>
+          <PositionSelect
+            value={form.positionId}
+            onChange={(v) => setForm((f) => ({ ...f, positionId: v }))}
+            error={fieldErrors.positionId}
+            allowCreate={false}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="فئة الموظف (سياسة الحضور)" required error={fieldErrors.categoryKey}>
+          <EmployeeCategorySelect
+            value={form.categoryKey}
+            onChange={(v) => setForm((f) => ({ ...f, categoryKey: v }))}
+            error={fieldErrors.categoryKey}
+            allowCreate={false}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="الفريق" required error={fieldErrors.teamId}>
+          <TeamSelect
+            value={form.teamId}
+            onChange={(v) => setForm((f) => ({ ...f, teamId: v }))}
+            error={fieldErrors.teamId}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="المشروع" required error={fieldErrors.projectId}>
+          <ProjectSelect
+            value={form.projectId}
+            onChange={(v) => setForm((f) => ({ ...f, projectId: v }))}
+            error={fieldErrors.projectId}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="مركز التكلفة" required error={fieldErrors.costCenterId}>
+          <CostCenterMasterSelect
+            value={form.costCenterId}
+            onChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
+            error={fieldErrors.costCenterId}
+          />
+        </FormFieldWrapper>
+        <FormFieldWrapper label="اللجنة (اختياري)" error={fieldErrors.committeeId}>
+          <CommitteeSelect
+            value={form.committeeId}
+            onChange={(v) => setForm((f) => ({ ...f, committeeId: v }))}
+            error={fieldErrors.committeeId}
+          />
+        </FormFieldWrapper>
+
         {/* Integrated HR — accounts + finance binding section. */}
-        <div className="md:col-span-2 border-t pt-4 mt-2">
+        <div id="wizard-step-accounts" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">
           <h3 className="text-sm font-semibold text-muted-foreground mb-1">حسابات الموظف والربط المالي</h3>
           <p className="text-xs text-muted-foreground mb-3">
             أدخل بريد المستخدم الداخلي لتسجيل الدخول. البريد الشخصي للتواصل فقط ولا يُستخدم لتسجيل الدخول.
@@ -635,7 +877,7 @@ export default function EmployeesCreate() {
           </FormFieldWrapper>
         )}
 
-        <div className="md:col-span-2 border-t pt-4 mt-2">
+        <div id="wizard-step-attachments" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">
           <h3 className="text-sm font-semibold text-muted-foreground mb-3">بيانات الإقامة والجواز</h3>
         </div>
         <TextField label="رقم الإقامة" dir="ltr" value={form.iqamaNumber} onChange={(v) => setForm((f) => ({ ...f, iqamaNumber: v }))} />

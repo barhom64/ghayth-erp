@@ -211,10 +211,10 @@ function OverviewTab() {
         <CardContent>
           <div className="flex flex-wrap gap-2">
             <Link href="/projects/create"><GuardedButton perm="projects:create" size="sm" className="gap-1"><Plus className="h-3 w-3" /> مشروع جديد</GuardedButton></Link>
-            <Link href="/projects/gantt"><Button variant="outline" size="sm" className="gap-1"><BarChart2 className="h-3 w-3" /> مخطط غانت</Button></Link>
-            <Link href="/projects/risks"><Button variant="outline" size="sm" className="gap-1"><ShieldAlert className="h-3 w-3" /> إدارة المخاطر</Button></Link>
-            <Link href="/finance/project-costing"><Button variant="outline" size="sm" className="gap-1"><DollarSign className="h-3 w-3" /> تكاليف المشاريع</Button></Link>
-            <Link href="/tasks"><Button variant="outline" size="sm" className="gap-1"><ListTodo className="h-3 w-3" /> المهام</Button></Link>
+            <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/projects/gantt"><BarChart2 className="h-3 w-3" /> مخطط غانت</Link></Button>
+            <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/projects/risks"><ShieldAlert className="h-3 w-3" /> إدارة المخاطر</Link></Button>
+            <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/finance/project-costing"><DollarSign className="h-3 w-3" /> تكاليف المشاريع</Link></Button>
+            <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/tasks"><ListTodo className="h-3 w-3" /> المهام</Link></Button>
           </div>
         </CardContent>
       </Card>
@@ -282,7 +282,7 @@ function ProjectListTab() {
       key: "actions", header: "الإجراءات",
       render: (p) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Link href={`/projects/${p.id}`}><Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button></Link>
+          <Button asChild variant="ghost" size="sm" title="عرض"><Link href={`/projects/${p.id}`}><Eye className="h-4 w-4" /></Link></Button>
           <RowActions
             canEdit={canManage}
             onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}

@@ -22,7 +22,7 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
-const MIG_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/migrations/284_audit_context_completeness.sql"), "utf8");
+const MIG_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/migrations/294_audit_context_completeness.sql"), "utf8");
 const HELPERS_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/businessHelpers.ts"), "utf8");
 const LISTENERS_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/eventListeners.ts"), "utf8");
 const AUTHMW_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/middlewares/authMiddleware.ts"), "utf8");
@@ -125,7 +125,10 @@ describe("IGOC-001 — authMiddleware populates new scope fields", () => {
   });
 
   it("return value includes impersonationSourceUser", () => {
-    expect(AUTHMW_SRC).toMatch(/return \{[\s\S]*?impersonationSourceUser,/);
+    // buildScope now builds the object into `const scope: RequestScope = {…}`
+    // (so HR-REV-1 #1 can attach scope.fineGrants before returning) — the
+    // field is still part of the returned scope literal.
+    expect(AUTHMW_SRC).toMatch(/const scope: RequestScope = \{[\s\S]*?impersonationSourceUser,/);
   });
 });
 

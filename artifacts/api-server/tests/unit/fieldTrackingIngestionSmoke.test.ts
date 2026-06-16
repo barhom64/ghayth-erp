@@ -22,6 +22,14 @@ const HR_SRC = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/routes/hr.ts"),
   "utf8",
 );
+// PR-9 (#2077) — the ping schema + policy gate + throttle + insert moved
+// into the shared lib/fieldTrackingService.ts so the SAME logic serves
+// both the module-gated /hr mount and the /my/field self-service mount.
+const SERVICE_SRC = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/lib/fieldTrackingService.ts"),
+  "utf8",
+);
+
 
 describe("Migration 271 — field_tracking_points schema", () => {
   it("creates the field_tracking_points table", () => {
@@ -67,8 +75,8 @@ describe("Field ingestion route — POST /hr/attendance/field-ping", () => {
   });
 
   it("validates lat/lng bounds via zod", () => {
-    expect(HR_SRC).toMatch(/lat:\s*z\.coerce\.number\(\)\.min\(-90\)\.max\(90\)/);
-    expect(HR_SRC).toMatch(/lng:\s*z\.coerce\.number\(\)\.min\(-180\)\.max\(180\)/);
+    expect(SERVICE_SRC).toMatch(/lat:\s*z\.coerce\.number\(\)\.min\(-90\)\.max\(90\)/);
+    expect(SERVICE_SRC).toMatch(/lng:\s*z\.coerce\.number\(\)\.min\(-180\)\.max\(180\)/);
   });
 
   it("resolves the per-category policy to gate tracking", () => {
@@ -76,18 +84,21 @@ describe("Field ingestion route — POST /hr/attendance/field-ping", () => {
   });
 
   it("rejects categories with trackingFrequencySeconds <= 0 (office/manager/executive)", () => {
-    expect(HR_SRC).toMatch(/const freq = policy\?\.trackingFrequencySeconds \?\? 0/);
-    expect(HR_SRC).toMatch(/if \(freq <= 0\) \{[\s\S]*?ForbiddenError/);
+    // Policy gate moved to the shared service; the route maps the
+    // "forbidden" result to ForbiddenError (same Arabic copy).
+    expect(SERVICE_SRC).toMatch(/const freq = policy\?\.trackingFrequencySeconds \?\? 0/);
+    expect(SERVICE_SRC).toMatch(/if \(freq <= 0\)/);
+    expect(HR_SRC).toMatch(/case "forbidden":[\s\S]{0,200}ForbiddenError/);
   });
 
   it("throttles pings arriving faster than the category frequency (with tolerance)", () => {
-    expect(HR_SRC).toMatch(/gapSeconds < freq \* 0\.8/);
+    expect(SERVICE_SRC).toMatch(/gapSeconds < freq \* 0\.8/);
     // Throttled pings are an accepted no-op (202), not an error.
     expect(HR_SRC).toMatch(/status\(202\)\.json\(\{ accepted: false, reason: "throttled"/);
   });
 
   it("persists the ping into field_tracking_points on accept", () => {
-    expect(HR_SRC).toMatch(/INSERT INTO field_tracking_points/);
+    expect(SERVICE_SRC).toMatch(/INSERT INTO field_tracking_points/);
     expect(HR_SRC).toMatch(/status\(201\)\.json\(\{ accepted: true/);
   });
 });

@@ -10,6 +10,8 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { bumpCacheVersion } from "../lib/rbac/authzEngine.js";
+import { invalidateRoleCache } from "../middlewares/roleGuard.js";
 import { issueNumber } from "../lib/numberingService.js";
 import {
   createNotification,
@@ -26,6 +28,23 @@ import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
+// PR-4 (#2077) — on-demand recompute + history wraps the existing
+// employeeScoringEngine library. The library + the weekly/monthly
+// cron handlers already exist (see lib/employeeScoringEngine.ts +
+// lib/cronScheduler.ts `weeklyEmployeeScoring` / `monthlyEmployeeScoring`).
+// PR-4 just adds two HTTP entry points so HR Manager can:
+//   - re-score one employee immediately after a policy/weight change
+//     (instead of waiting until Monday 3am for the weekly cron), and
+//   - read the full breakdown + history with rationale text.
+import {
+  scoreEmployee, currentPeriodKey, type ScoreScope,
+} from "../lib/employeeScoringEngine.js";
+// PR-8 (#2077) — lifecycle engine: state machine + guards.
+import {
+  ALLOWED_TRANSITIONS, EVENT_TO_STATE_AFTER, STATE_LABEL_AR, EVENT_LABEL_AR,
+  resolveCurrentState, checkGuards, nextTransitions,
+  type LifecycleState, type LifecycleEventType,
+} from "../lib/employeeLifecycleEngine.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 import type { EmployeeRow, EmployeeAssignmentRow } from "../lib/dbTypes.js";
@@ -139,6 +158,55 @@ const createEmployeeSchema = z.object({
   // Both are optional and silently skipped if no PBX / table is present.
   pbxExtensionId: z.coerce.number().int().positive().optional().nullable(),
   pbxExtensionNew: z.string().trim().max(20).optional().nullable(),
+  // PR-1 (#2077) — institutional binding fields. The wizard makes the
+  // first five mandatory in the UI; the schema accepts them as optional
+  // so legacy importers + the first bootstrap employee still work, and
+  // the route handler rejects when they're missing in a non-bootstrap
+  // company so the API contract is the second line of defence.
+  //
+  //   MANDATORY (5):
+  //   - positionId   → employee_assignments.positionId. The administrative
+  //                    role (مدير قسم / نائب / مشرف). Distinct from
+  //                    jobTitle (functional role). Required because the
+  //                    org-chart, approval-chain, and supervision-line
+  //                    derivations all key on position level.
+  //   - categoryKey  → employee_assignments.categoryKey. Workforce type
+  //                    (worker / driver / manager / …). Required because
+  //                    attendance_policies_per_category (migration 270)
+  //                    has no fallback row — without categoryKey the
+  //                    daily check-in / late-deduction engine has no
+  //                    policy to apply to this employee.
+  //   - teamId       → employee_team_memberships bridge. Required because
+  //                    workInbox + tasks routing + workload-balance all
+  //                    fan-out by team — an employee with no team is
+  //                    invisible to every fan-out endpoint.
+  //   - projectId    → employee_project_assignments bridge. Required
+  //                    because the cost-center anchor lives on this row;
+  //                    payroll cost attribution needs the project link.
+  //   - costCenterId → carried on the project_assignments bridge (NOT a
+  //                    separate row). Required because every salary
+  //                    journal line debits a cost-centered expense
+  //                    account; without it payroll posts to the
+  //                    "general" cost center, distorting P&L by branch.
+  //
+  //   OPTIONAL (1):
+  //   - committeeId  → employee_committee_memberships bridge. Optional
+  //                    by design: committees are CROSS-DEPARTMENT and
+  //                    TIME-BOUNDED ad-hoc councils (audit committee,
+  //                    safety committee, recruitment panel…). They are
+  //                    NOT a baseline binding every employee needs at
+  //                    hire time, and making them mandatory would force
+  //                    HR to invent a "no committee" placeholder for
+  //                    the 80%+ of employees who never sit on one.
+  //                    Joining a committee is a later membership
+  //                    transaction (PATCH /org/committee-memberships)
+  //                    that the wizard correctly stays out of.
+  positionId: z.coerce.number().int().positive().optional().nullable(),
+  categoryKey: z.string().trim().min(1).max(40).optional().nullable(),
+  teamId: z.coerce.number().int().positive().optional().nullable(),
+  projectId: z.coerce.number().int().positive().optional().nullable(),
+  costCenterId: z.coerce.number().int().positive().optional().nullable(),
+  committeeId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -294,6 +362,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
               COALESCE(gc."govLinkCount", 0)::int AS "govLinkCount"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                   AND ea."isAccessGrant" = FALSE
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        LEFT JOIN gov_counts gc ON gc."entityId" = e.id
@@ -310,6 +379,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       `SELECT COUNT(*) AS total
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                   AND ea."isAccessGrant" = FALSE
        WHERE ${where} AND e."deletedAt" IS NULL`,
       countParams
     );
@@ -317,6 +387,244 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
     res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
   } catch (err) {
     handleRouteError(err, res, "List employees error:");
+  }
+});
+
+// ── HR-REV-3 (#2222) — fast minimal employee creation ──
+// A lightweight alternative to the 46-field full-create above. It lands
+// the employee in a PENDING (inactive) state with an active assignment +
+// a distributed onboarding task plan, so HR can register a hire in
+// seconds and complete the heavy profile later. The later PATCH /:id
+// activation flow (whose before-query filters ea.status IN
+// ('active','suspended','terminated')) finds the active assignment and
+// flips the employee to active. This path deliberately does NOT create
+// PBX/vehicle/custody/contract/leave-balance/salary-component rows — those
+// belong to the heavy create.
+const quickActivateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  nationality: z.string().optional().nullable(),
+  departmentId: z.coerce.number().optional().nullable(),
+  jobTitle: z.string().optional().nullable(),
+  hireDate: z.string().optional().nullable(),
+});
+
+// HR-REV-4 (#2223) §2/§4 — the activation plan is generated from the job
+// title's professional category, so a سائق, a محاسب and an إداري get materially
+// different distributed task sets (each task routed to its owning role, with a
+// serviceType for the ones that are a service request — vehicle/custody/access
+// — never a manual HR checkbox). This is the in-code profile until the
+// DB-driven job_activation_profiles tables land (HR-REV-4 full). Both the
+// quick-activate and the full-create paths call this with the resolved
+// job_titles.category (null → the general/admin default).
+type ActivationTask = {
+  title: string;
+  ownerRole: string;
+  reason: string;
+  mandatory: boolean;
+  serviceType?: string;
+};
+
+function buildActivationPlan(category: string | null): ReadonlyArray<ActivationTask> {
+  const c = (category || "").toLowerCase();
+  const contract: ActivationTask = { title: "توقيع عقد العمل والتأمينات", ownerRole: "documents", reason: "العقد والتأمينات والتحقق من الوثائق", mandatory: true };
+  const manager: ActivationTask = { title: "تعريف المدير المباشر والفريق", ownerRole: "department", reason: "تأكيد المباشرة وتعريف الفريق وموقع العمل", mandatory: true };
+
+  // Driver — field/GPS attendance + vehicle + device custody + cost center.
+  if (c.includes("driver") || c.includes("سائق") || c.includes("field") || c.includes("ميدان")) {
+    return [
+      { title: "التحقق من رخصة القيادة", ownerRole: "documents", reason: "رخصة قيادة سارية شرط للقيادة", mandatory: true },
+      contract,
+      manager,
+      { title: "تطبيق سياسة حضور ميدانية (GPS)", ownerRole: "hr", reason: "فئة السائق تتطلب تتبّع GPS", mandatory: true },
+      { title: "طلب تخصيص مركبة", ownerRole: "fleet", reason: "تخصيص مركبة من الأسطول (طلب خدمة لا إنشاء)", mandatory: true, serviceType: "vehicle" },
+      { title: "صرف عهدة جهاز/شريحة", ownerRole: "warehouse", reason: "عهدة تشغيلية بوثيقة استلام", mandatory: false, serviceType: "custody" },
+      { title: "ربط مركز التكلفة/المشروع", ownerRole: "payroll", reason: "تحميل التكلفة على المركز الصحيح", mandatory: true },
+    ];
+  }
+
+  // Accountant / finance — restricted financial access, no vehicle, no GPS.
+  if (c.includes("account") || c.includes("finance") || c.includes("محاسب") || c.includes("مالي")) {
+    return [
+      contract,
+      manager,
+      { title: "منح صلاحية مالية مقيّدة", ownerRole: "access", reason: "وصول مالي محدود حسب الدور (لا رؤية تحقيقات إلا بمنح صريح)", mandatory: true, serviceType: "access" },
+      { title: "ربط مركز التكلفة", ownerRole: "payroll", reason: "ربط محاسبي لمركز التكلفة", mandatory: false },
+      { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    ];
+  }
+
+  // General / admin default.
+  return [
+    { title: "تسليم أجهزة IT وإعداد الحسابات", ownerRole: "it", reason: "تجهيز الحساب والبريد وصرف عهدة الأجهزة", mandatory: true, serviceType: "access" },
+    contract,
+    manager,
+    { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    { title: "دورة التعريف بالشركة وسياساتها", ownerRole: "hr", reason: "التعريف بالسياسات واللوائح", mandatory: false },
+  ];
+}
+
+router.post("/quick-activate", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
+  try {
+    const body = zodParse(quickActivateSchema.safeParse(req.body));
+    const scope = req.scope!;
+    const { name, phone, nationalId, nationality, departmentId, jobTitle } = body;
+
+    if (!name) {
+      throw new ValidationError("لا يمكن إنشاء موظف بدون اسم", {
+        field: "name",
+        fix: "أدخل الاسم الكامل للموظف",
+      });
+    }
+
+    const effectiveCompanyId = scope.companyId;
+    const targetBranchId = scope.branchId;
+    const resolvedDepartmentId = departmentId ?? null;
+    const effectiveHireDate = body.hireDate || todayISO();
+    const effectiveJobTitle = jobTitle || "موظف";
+
+    // Numbering center (Issue #1141) — employee code via central authority
+    // (`hr.employee_code`). Issued OUTSIDE the transaction (exact same call
+    // as POST /) so the audit:numbering-coverage check stays satisfied: the
+    // INSERT into employees gets its number from the numbering service.
+    const preIssued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "employee_code",
+      entityTable: "employees",
+      actorId: scope.userId,
+      expectedTiming: "on_draft",
+    });
+    const finalEmpNumber = preIssued.number;
+
+    const result = await withTransaction(async (client) => {
+      // ── Create the employee in PENDING (inactive) state ──
+      // 'inactive' is the only CHECK-allowed pending-ish status (migration
+      // 084); it gates the employee until the activation flow flips it.
+      const empRes = await client.query(
+        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status)
+         VALUES ($1, $2, $3, $4, $5, 'inactive')
+         RETURNING id`,
+        [name, phone || null, finalEmpNumber, nationalId || null, nationality || null]
+      );
+      const empId = empRes.rows[0].id;
+
+      // Link the numbering assignment to the employee row.
+      await client.query(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [empId, preIssued.assignmentId]
+      );
+
+      // ── Resolve jobTitleId + category from the jobTitle text (company-scoped) ──
+      // category drives the activation plan (HR-REV-4 §1): سائق ≠ محاسب ≠ إداري.
+      let resolvedJobTitleId: number | null = null;
+      let resolvedCategory: string | null = null;
+      if (effectiveJobTitle && effectiveJobTitle !== "موظف") {
+        const jtRes = await client.query(
+          `SELECT id, category FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+          [effectiveJobTitle, effectiveCompanyId]
+        );
+        if (jtRes.rows.length > 0) {
+          resolvedJobTitleId = jtRes.rows[0].id;
+          resolvedCategory = jtRes.rows[0].category ?? null;
+        }
+      }
+
+      // ── Create the first assignment in ACTIVE state ──
+      // The assignment is 'active' so the PATCH /:id activation flow (which
+      // filters ea.status IN ('active','suspended','terminated')) can later
+      // find it and flip the employee to active.
+      const assignRes = await client.query(
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status)
+         VALUES ($1,$2,$3,$4,$5,$6,'employee',0,$7,true,'active')
+         RETURNING id`,
+        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, effectiveJobTitle, resolvedJobTitleId, effectiveHireDate]
+      );
+      const assignmentId = assignRes.rows[0].id;
+
+      // ── Create the onboarding tasks from the job-category profile ──
+      const dueDateOnboarding = new Date();
+      dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
+      for (const task of buildActivationPlan(resolvedCategory)) {
+        await client.query(
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
+        );
+      }
+
+      // ── Record the lifecycle event (state → onboarding) ──
+      // offer_accepted is the event that maps to the onboarding state
+      // (EVENT_TO_STATE_AFTER). The new hire has no prior state, so
+      // stateBefore is null.
+      await client.query(
+        `INSERT INTO employee_lifecycle_events
+          ("companyId", "branchId", "employeeId", "assignmentId",
+           "eventType", "stateBefore", "stateAfter",
+           reason, "effectiveDate",
+           "actorUserId", "activeRoleKey", "activeDepartmentId", "resolvedScope", "impersonationSourceUser",
+           metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [
+          scope.companyId, targetBranchId ?? null, empId, assignmentId,
+          "offer_accepted", null, "onboarding",
+          "إنشاء سريع للموظف (تفعيل معلّق)", effectiveHireDate,
+          scope.userId,
+          scope.selectedRoleKey ?? null,
+          scope.activeDepartmentId ?? null,
+          scope.resolvedScope ?? null,
+          scope.impersonationSourceUser ?? null,
+          JSON.stringify({ quickActivate: true }),
+        ]
+      );
+
+      return { empId, assignmentId };
+    });
+
+    const { empId, assignmentId } = result;
+
+    // ── Event log ──
+    await emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+      action: "employee.quick_activated", entity: "employees", entityId: empId,
+      details: JSON.stringify({
+        empNumber: finalEmpNumber, assignmentId, jobTitle: effectiveJobTitle,
+        status: "inactive", onboardingTasks: 4,
+        context: {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          userId: scope.userId,
+          activeRoleKey: scope.selectedRoleKey ?? null,
+          resolvedScope: scope.resolvedScope ?? null,
+        },
+      }),
+    });
+
+    // ── Audit log ──
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.quick_activated", entity: "employees", entityId: empId,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      activeDepartmentId: scope.activeDepartmentId ?? null,
+      resolvedScope: scope.resolvedScope ?? null,
+      impersonationSourceUser: scope.impersonationSourceUser ?? null,
+      after: {
+        name, empNumber: finalEmpNumber, jobTitle: effectiveJobTitle,
+        status: "inactive", assignmentId, onboardingTasksCreated: 4,
+      },
+    });
+
+    res.status(201).json({
+      id: empId,
+      empNumber: finalEmpNumber,
+      assignmentId,
+      status: "inactive",
+      onboardingTasksCreated: 4,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Quick-activate employee error:");
   }
 });
 
@@ -349,6 +657,8 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       sponsorNumber, workPermitNumber, workPermitExpiry, iqamaStatus,
       bankName, bankAccount, iban, emergencyContact, emergencyPhone,
       sourceApplicationId,
+      // PR-1 institutional binding (#2077).
+      positionId, categoryKey, teamId, projectId, costCenterId, committeeId,
       // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -520,6 +830,161 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       }
     }
 
+    // PR-1 (#2077) — institutional binding pre-checks. The wizard forces
+    // these in the UI; the API rejects them when missing in a non-empty
+    // company so a future caller (script, CSV import, integration) can't
+    // skip the institutional anchor that downstream HR engines depend
+    // on. Skipped for the very first employee in the company (bootstrap),
+    // where the catalog is necessarily empty.
+    //
+    // Bootstrap discipline (concern #2 from review): the carve-out
+    // applies ONLY when the company has zero active assignments. After
+    // the first employee lands, activeEmpCount > 0 forever — the
+    // carve-out closes, the route enforces all 5 mandatories on every
+    // subsequent caller. To make the carve-out auditable (and detect
+    // any attempt to abuse it by deleting all employees just to
+    // re-open it), we log a structured WARN at info-impact priority
+    // with the caller's userId/role when it fires.
+    const [{ count: activeEmpCount }] = await rawQuery<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM employee_assignments
+        WHERE "companyId" = $1 AND status = 'active'`,
+      [effectiveCompanyId]
+    );
+    const isBootstrapEmployee = Number(activeEmpCount ?? 0) === 0;
+    if (isBootstrapEmployee) {
+      logger.warn(
+        {
+          companyId: effectiveCompanyId,
+          userId: scope.userId,
+          activeRoleKey: scope.selectedRoleKey ?? null,
+          name,
+        },
+        "[employees] bootstrap carve-out fired — first employee in company, institutional mandatoriness skipped. " +
+          "This path can only run once per company; subsequent employees MUST supply position/category/team/project/costCenter/manager.",
+      );
+    }
+
+    if (!isBootstrapEmployee) {
+      if (!positionId) {
+        throw new ValidationError("المنصب الإداري مطلوب", {
+          field: "positionId",
+          fix: "اختر منصب الموظف (مدير قسم/نائب/مشرف/…) من القائمة.",
+        });
+      }
+      if (!categoryKey) {
+        throw new ValidationError("فئة الموظف مطلوبة", {
+          field: "categoryKey",
+          fix: "اختر فئة القوى العاملة (موظف/سائق/مدير/…) لتطبيق سياسة الحضور المناسبة.",
+        });
+      }
+      if (!teamId) {
+        throw new ValidationError("الفريق مطلوب", {
+          field: "teamId",
+          fix: "اختر الفريق الذي ينضم إليه الموظف من الإعدادات → الفِرَق.",
+        });
+      }
+      if (!projectId) {
+        throw new ValidationError("المشروع مطلوب", {
+          field: "projectId",
+          fix: "اختر المشروع/المنتج التشغيلي الذي يساهم فيه الموظف.",
+        });
+      }
+      if (!costCenterId) {
+        throw new ValidationError("مركز التكلفة مطلوب", {
+          field: "costCenterId",
+          fix: "اختر مركز التكلفة الذي يُحاسب عليه راتب الموظف.",
+        });
+      }
+      if (!managerId) {
+        throw new ValidationError("المدير المباشر مطلوب", {
+          field: "managerId",
+          fix: "اختر مديراً مباشراً من قائمة الموظفين.",
+        });
+      }
+    }
+
+    if (positionId) {
+      const posRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM positions
+          WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "isActive" = TRUE
+          LIMIT 1`,
+        [Number(positionId), effectiveCompanyId]
+      );
+      if (posRows.length === 0) {
+        throw new ValidationError(`المنصب رقم ${positionId} غير موجود أو غير مفعّل`, {
+          field: "positionId",
+          fix: "اختر منصبًا من القائمة (المناصب المُعطَّلة لا تظهر).",
+        });
+      }
+    }
+
+    if (categoryKey) {
+      const catRows = await rawQuery<{ categoryKey: string }>(
+        `SELECT "categoryKey" FROM employee_categories
+          WHERE "categoryKey" = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "isActive" = TRUE
+          LIMIT 1`,
+        [String(categoryKey), effectiveCompanyId]
+      );
+      if (catRows.length === 0) {
+        throw new ValidationError(`فئة الموظف "${categoryKey}" غير موجودة`, {
+          field: "categoryKey",
+          fix: "اختر فئة من القائمة المعرَّفة (موظف، سائق، مدير، …).",
+        });
+      }
+    }
+
+    if (teamId) {
+      const teamRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM teams WHERE id = $1 AND "companyId" = $2 AND "isActive" = TRUE LIMIT 1`,
+        [Number(teamId), effectiveCompanyId]
+      );
+      if (teamRows.length === 0) {
+        throw new ValidationError(`الفريق رقم ${teamId} غير موجود`, {
+          field: "teamId",
+          fix: "اختر فريقًا تابعًا لشركتك من الإعدادات → الفِرَق.",
+        });
+      }
+    }
+
+    if (projectId) {
+      const projRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM projects WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(projectId), effectiveCompanyId]
+      );
+      if (projRows.length === 0) {
+        throw new ValidationError(`المشروع رقم ${projectId} غير موجود`, {
+          field: "projectId",
+          fix: "اختر مشروعًا تابعًا لشركتك من قائمة المشاريع.",
+        });
+      }
+    }
+
+    if (costCenterId) {
+      const ccRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM cost_centers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [Number(costCenterId), effectiveCompanyId]
+      );
+      if (ccRows.length === 0) {
+        throw new ValidationError(`مركز التكلفة رقم ${costCenterId} غير موجود`, {
+          field: "costCenterId",
+          fix: "اختر مركز تكلفة تابعًا لشركتك من المالية → مراكز التكلفة.",
+        });
+      }
+    }
+
+    if (committeeId) {
+      const comRows = await rawQuery<{ id: number }>(
+        `SELECT id FROM committees WHERE id = $1 AND "companyId" = $2 AND "isActive" = TRUE LIMIT 1`,
+        [Number(committeeId), effectiveCompanyId]
+      );
+      if (comRows.length === 0) {
+        throw new ValidationError(`اللجنة رقم ${committeeId} غير موجودة`, {
+          field: "committeeId",
+          fix: "اختر لجنة مفعّلة تابعة لشركتك أو اترك الحقل فارغًا.",
+        });
+      }
+    }
+
     // Numbering center (Issue #1141) — employee code via central
     // authority (`hr.employee_code`). Issued OUTSIDE the transaction
     // so the numbering counter advances even if the employee insert
@@ -614,14 +1079,55 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         );
         if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
       }
+      // Resolve the job category for the activation plan (HR-REV-4 §1). Falls
+      // back to categoryKey (attendance category) when the title has none.
+      let resolvedCategory: string | null = null;
+      if (resolvedJobTitleId) {
+        const catRes = await client.query(`SELECT category FROM job_titles WHERE id = $1 LIMIT 1`, [resolvedJobTitleId]);
+        resolvedCategory = catRes.rows[0]?.category ?? null;
+      }
+      if (!resolvedCategory && categoryKey) resolvedCategory = String(categoryKey);
 
       const assignRes = await client.query(
-        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active',$10)
+        `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId","positionId","categoryKey")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,'active',$10,$11,$12)
          RETURNING id`,
-        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, jobTitle, resolvedJobTitleId, role, Number(salary), effectiveHireDate, managerId ? Number(managerId) : null]
+        [empId, effectiveCompanyId, targetBranchId, resolvedDepartmentId, jobTitle, resolvedJobTitleId, role, Number(salary), effectiveHireDate, managerId ? Number(managerId) : null,
+         positionId ? Number(positionId) : null, categoryKey || null]
       );
       const assignmentId = assignRes.rows[0].id;
+
+      // ── PR-1 (#2077) Step 3b — institutional bridges (team/project/committee) ──
+      // These rows close the «الموظف ككيان تشغيلي مؤسسي» chain at create
+      // time so the engineer never has to remember a follow-up step:
+      //   - team_membership: which sub-unit inside the department.
+      //   - project_assignment: which operational project + cost-center.
+      //   - committee_membership: optional. Cross-department council.
+      // All three carry endDate=NULL so they auto-end when an admin
+      // closes them (the existing DELETE handlers set endDate=today).
+      if (teamId) {
+        await client.query(
+          `INSERT INTO employee_team_memberships ("assignmentId","teamId",role,"startDate")
+           VALUES ($1,$2,'member',$3)
+           ON CONFLICT ("assignmentId","teamId") DO NOTHING`,
+          [assignmentId, Number(teamId), effectiveHireDate]
+        );
+      }
+      if (projectId) {
+        await client.query(
+          `INSERT INTO employee_project_assignments ("assignmentId","projectId",role,"allocationPercent","startDate","costCenterId")
+           VALUES ($1,$2,'contributor',100,$3,$4)`,
+          [assignmentId, Number(projectId), effectiveHireDate, costCenterId ? Number(costCenterId) : null]
+        );
+      }
+      if (committeeId) {
+        await client.query(
+          `INSERT INTO employee_committee_memberships ("assignmentId","committeeId",role,"isVoting","startDate")
+           VALUES ($1,$2,'member',TRUE,$3)
+           ON CONFLICT ("assignmentId","committeeId") DO NOTHING`,
+          [assignmentId, Number(committeeId), effectiveHireDate]
+        );
+      }
 
       // ── Step 4: Initialize leave balances (10 types) ──
       const leaveTypesRes = await client.query(
@@ -698,20 +1204,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         [contractRes.rows[0].id, issuedContract.assignmentId]
       );
 
-      // ── Step 7: Create 4 onboarding tasks ──
-      const onboardingTasks = [
-        "تسليم أجهزة IT وإعداد الحسابات",
-        "توقيع عقد العمل والتأمينات",
-        "تعريف المدير المباشر والفريق",
-        "دورة التعريف بالشركة وسياساتها",
-      ];
+      // ── Step 7: Create the onboarding tasks from the job-category profile ──
       const dueDateOnboarding = new Date();
       dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const taskTitle of onboardingTasks) {
+      for (const task of buildActivationPlan(resolvedCategory)) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
-           VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
 
@@ -778,7 +1278,13 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       // rbac_roles row and bind it in rbac_user_roles — exactly what
       // /admin/onboard does. Soft-skip (warn) when the key has no rbac role
       // so employee creation never fails just because a role is unmapped.
-      if (createdNewUser && userId) {
+      // Bind the RBAC role for EVERY employee that has a login user — not
+      // only freshly-created ones. The old `createdNewUser && userId` gate
+      // meant linking an employee to a pre-existing user account skipped
+      // the role bind entirely, leaving that employee with zero grants
+      // (only the self-service floor) — "موظف جديد بلا صلاحيات". RBAC is
+      // user-scoped, so when there is no userId there is nothing to bind.
+      if (userId) {
         const effectiveRoleKey =
           (defaultRoleKeyFromJob && (!role || role === "employee"))
             ? defaultRoleKeyFromJob
@@ -796,6 +1302,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
              ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
             [userId, effectiveCompanyId, roleRow[0].id, targetBranchId, resolvedDepartmentId, scope.userId]
           );
+          // Drop stale permission caches so the new grant is effective on
+          // the employee's very first request instead of after the 30s TTL.
+          // Both layers: the engine's grant cache (rbac_cache_version) and
+          // roleGuard's separate module cache. Best-effort, post-commit
+          // semantics don't matter here — a redundant bump is harmless.
+          bumpCacheVersion(effectiveCompanyId).catch((e) =>
+            logger.warn(e, "[employees] bumpCacheVersion after role bind failed"));
+          invalidateRoleCache(userId);
         } else {
           logger.warn(
             { roleKey: effectiveRoleKey, companyId: effectiveCompanyId, userId },
@@ -984,10 +1498,38 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     }
 
     // ── Step 10: Event log ──
+    // PR-1 (#2077) — event_logs has no columns for branchId / activeRole,
+    // so the IGOC context rides on `details.context` alongside the
+    // institutional binding. Critical-event listeners + the inbox can
+    // then key on either.
     await emitEvent({
-      companyId: scope.companyId, userId: scope.userId,
+      companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
       action: "employee.created", entity: "employees", entityId: empId,
-      details: JSON.stringify({ empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary, onboardingTasks: 4, probationDays: Number(probationDays) }),
+      details: JSON.stringify({
+        empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary,
+        onboardingTasks: 4, probationDays: Number(probationDays),
+        // PR-1 (#2077) — institutional binding in the event so audit
+        // dashboards can answer «who got bound to project X this month?»
+        positionId: positionId ? Number(positionId) : null,
+        categoryKey: categoryKey || null,
+        teamId: teamId ? Number(teamId) : null,
+        projectId: projectId ? Number(projectId) : null,
+        costCenterId: costCenterId ? Number(costCenterId) : null,
+        committeeId: committeeId ? Number(committeeId) : null,
+        // PR-1 (#2077) — actor context (الشركة/الفرع/الدور النشط/المستخدم).
+        // event_logs.companyId+userId already carry two of them; we
+        // bundle the remaining two (branch + active role) into details
+        // so the row is self-describing.
+        context: {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          userId: scope.userId,
+          activeRoleKey: scope.selectedRoleKey ?? null,
+          activeDepartmentId: scope.activeDepartmentId ?? null,
+          resolvedScope: scope.resolvedScope ?? null,
+          impersonationSourceUser: scope.impersonationSourceUser ?? null,
+        },
+      }),
     });
 
     // ── Step 10b: Register expiry obligations (iqama/passport/work permit/visa) ──
@@ -1000,10 +1542,30 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     );
 
     // ── Step 11: Audit log ──
+    // PR-1 (#2077) — IGOC quartet: persist the four context fields
+    // (active role, active department, resolved scope, impersonation
+    // source) alongside the institutional binding so a forensic
+    // question («who, under which role, in which scope, on behalf of
+    // whom, bound this employee to project X?») is answerable from
+    // one row of audit_logs.
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "create", entity: "employees", entityId: empId,
-      after: { name, empNumber: finalEmpNumber, jobTitle, role, salary, contractType, probationDays: Number(probationDays) },
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      activeDepartmentId: scope.activeDepartmentId ?? null,
+      resolvedScope: scope.resolvedScope ?? null,
+      impersonationSourceUser: scope.impersonationSourceUser ?? null,
+      after: {
+        name, empNumber: finalEmpNumber, jobTitle, role, salary,
+        contractType, probationDays: Number(probationDays),
+        positionId: positionId ? Number(positionId) : null,
+        categoryKey: categoryKey || null,
+        teamId: teamId ? Number(teamId) : null,
+        projectId: projectId ? Number(projectId) : null,
+        costCenterId: costCenterId ? Number(costCenterId) : null,
+        committeeId: committeeId ? Number(committeeId) : null,
+        managerId: managerId ? Number(managerId) : null,
+      },
     });
 
     // ── Step 11b: HR-005 — recruitment conversion event + audit ──
@@ -1022,7 +1584,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     }
 
     // ── Step 12: Auto-create subsidiary accounting accounts ──
-    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name).catch((e) => logger.error(e, "employees background task failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "employee", empId, name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "employees background task failed"));
 
     const [employee] = await rawQuery<EmployeeListRow>(
       `SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
@@ -1039,6 +1601,16 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       ...employee,
       assignmentId,
       onboardingTasksCreated: 4,
+      // PR-1 (#2077) — surface the institutional binding so the
+      // post-create success card can render «الموظف مرتبط بـ …».
+      institutional: {
+        positionId: positionId ? Number(positionId) : null,
+        categoryKey: categoryKey || null,
+        teamId: teamId ? Number(teamId) : null,
+        projectId: projectId ? Number(projectId) : null,
+        costCenterId: costCenterId ? Number(costCenterId) : null,
+        committeeId: committeeId ? Number(committeeId) : null,
+      },
       probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return toDateISO(d); })(),
       userAccount: userId ? {
         userId,
@@ -1366,11 +1938,18 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
               ea."companyId", ea."branchId", ea."departmentId",
               ea."managerId",
               b.name AS "branchName", d.name AS "departmentName",
+              -- PR-7 (#2077) — surface the full org chain on the
+              -- employee detail (Administration row in 360 view).
+              -- The LEFT JOIN keeps departments without an
+              -- administrationId returning NULL, which the UI shows
+              -- as «—» (no break).
+              d."administrationId", adm.name AS "administrationName",
               mgr.name AS "managerName"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
        LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
        LEFT JOIN departments d ON d.id = ea."departmentId"
+       LEFT JOIN administrations adm ON adm.id = d."administrationId"
        LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
        LEFT JOIN employees mgr ON mgr.id = ea."managerId"
        WHERE e.id = $1 AND ea."companyId" = $2 AND e."deletedAt" IS NULL${extraCondition}`,
@@ -1496,6 +2075,7 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
            FROM employee_contracts c
           WHERE c."employeeId" = $1 AND c."companyId" = $2
             AND (c.status = 'active' OR c.status IS NULL)
+            AND c."deletedAt" IS NULL
           ORDER BY c."startDate" DESC NULLS LAST, c.id DESC LIMIT 1`,
         [id, scope.companyId]
       ).catch((e) => { logger.error(e, "employees contract query failed"); return []; }),
@@ -1756,11 +2336,18 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
           `UPDATE employee_assignments SET status = 'active' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
           [employee.assignmentId, scope.companyId, before.status]
         );
+        // HR-REV-1/8 (#2220 #2227) — إعادة تفعيل: استعادة تسجيل الدخول عند
+        // إرجاع الموظف من الإيقاف (يقابل تعطيل الحساب في فرع suspended أدناه).
+        await client.query(`UPDATE users SET "isActive" = true WHERE "employeeId" = $1`, [id]);
       } else if (status === "suspended" && before.status !== "suspended") {
         await client.query(
           `UPDATE employee_assignments SET status = 'suspended' WHERE id = $1 AND "companyId" = $2 AND status = $3`,
           [employee.assignmentId, scope.companyId, before.status]
         );
+        // HR-REV-1/8 (#2220 #2227) — سدّ ثغرة: الإيقاف كان يضبط حالة التعيين
+        // فقط ويُبقي حساب المستخدم حيًّا، فيستطيع الموقوف الدخول والتصرّف
+        // بصلاحياته. نعطّل الحساب كما يفعل terminate؛ تُستعاد عند العودة active.
+        await client.query(`UPDATE users SET "isActive" = false WHERE "employeeId" = $1`, [id]);
       }
 
       // If any expiry field was changed, refresh obligations. Old obligations with
@@ -2070,5 +2657,441 @@ router.post("/obligations/seed", authorize({ feature: "hr.employees", action: "u
 
 // Quiet unused import warnings for helpers referenced conditionally
 void cancelObligation;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PR-4 (#2077) — Institutional scoring: on-demand recompute + history.
+//
+// The engine is already wired into the cron scheduler (weekly Monday 3am
+// + monthly first-of-month 4am). These two routes give the HR Manager
+// an interactive lane:
+//   1. POST /employees/:id/scoring/recompute — re-score on demand for
+//      every scope (weekly + monthly + quarterly), idempotent UPSERT.
+//      Used by the score detail page's «إعادة الحساب» button + by the
+//      «أوزان جديدة» flow on the scoring-weights page.
+//   2. GET  /employees/:id/scoring/history — full history with the
+//      stored rationale text + raw counters, so HR can answer
+//      «لماذا 65 هذا الشهر؟» from a single page without joining
+//      audit_logs by hand.
+//
+// Both routes are scoped on the employee's company via the same JOIN
+// pattern used elsewhere; the recompute action is audit-logged with the
+// IGOC quartet (same shape PR-1's wizard uses).
+// ════════════════════════════════════════════════════════════════════════════
+
+const scoringRecomputeSchema = z.object({
+  // Optional: caller can target a specific scope/period. Default re-
+  // scores the CURRENT weekly + monthly + quarterly windows so an HR
+  // Manager who just changed weights sees the effect immediately.
+  scopes: z.array(z.enum(["weekly", "monthly", "quarterly"])).optional(),
+  periodKey: z.string().optional(),
+});
+
+router.post(
+  "/:id/scoring/recompute",
+  authorize({ feature: "hr.employees", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const body = zodParse(scoringRecomputeSchema.safeParse(req.body ?? {}));
+
+      const [emp] = await rawQuery<{
+        id: number; assignmentId: number; companyId: number; branchId: number | null;
+      }>(
+        `SELECT e.id, ea.id AS "assignmentId", ea."companyId", ea."branchId"
+           FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                       AND ea.status = 'active'
+                                       AND ea."companyId" = $2
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود في هذه الشركة");
+
+      const scopes: ScoreScope[] = body.scopes && body.scopes.length > 0
+        ? body.scopes
+        : ["weekly", "monthly", "quarterly"];
+
+      const results: Array<{ scope: ScoreScope; periodKey: string; composite: number; breakdown: Record<string, number> }> = [];
+      for (const s of scopes) {
+        const periodKey = body.periodKey ?? currentPeriodKey(s);
+        const result = await scoreEmployee({
+          companyId: scope.companyId,
+          assignmentId: emp.assignmentId,
+          employeeId: emp.id,
+          branchId: emp.branchId,
+          scope: s,
+          periodKey,
+        });
+        results.push({
+          scope: s,
+          periodKey,
+          composite: result.composite,
+          breakdown: {
+            discipline: result.discipline,
+            activity: result.activity,
+            productivity: result.productivity,
+            quality: result.quality,
+            manager: result.manager,
+            development: result.development,
+          },
+        });
+      }
+
+      await emitEvent({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? undefined,
+        userId: scope.userId,
+        action: "employee.scored",
+        entity: "employees",
+        entityId: emp.id,
+        details: JSON.stringify({
+          assignmentId: emp.assignmentId,
+          trigger: "manual_recompute",
+          scopes: scopes,
+          results: results.map((r) => ({ scope: r.scope, periodKey: r.periodKey, composite: r.composite })),
+          context: {
+            companyId: scope.companyId,
+            branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            activeRoleKey: scope.selectedRoleKey ?? null,
+          },
+        }),
+      }).catch((e) => logger.warn(e, "[scoring/recompute] event emit failed"));
+
+      await createAuditLog({
+        companyId: scope.companyId,
+        branchId: scope.branchId,
+        userId: scope.userId,
+        action: "recompute",
+        entity: "employee_scores",
+        entityId: emp.id,
+        activeRoleKey: scope.selectedRoleKey ?? null,
+        activeDepartmentId: scope.activeDepartmentId ?? null,
+        resolvedScope: scope.resolvedScope ?? null,
+        impersonationSourceUser: scope.impersonationSourceUser ?? null,
+        after: {
+          assignmentId: emp.assignmentId,
+          trigger: "manual_recompute",
+          scopes,
+          composites: Object.fromEntries(results.map((r) => [`${r.scope}:${r.periodKey}`, r.composite])),
+        },
+      });
+
+      res.status(200).json({
+        data: results,
+        message: `تم إعادة حساب ${results.length} نطاقات (${scopes.join(", ")})`,
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Score recompute error:");
+    }
+  }
+);
+
+router.get(
+  "/:id/scoring/history",
+  authorize({ feature: "hr.employees", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const wantScope = String(req.query.scope || "monthly") as ScoreScope;
+      if (!["weekly", "monthly", "quarterly"].includes(wantScope)) {
+        throw new ValidationError("scope must be weekly | monthly | quarterly");
+      }
+      const limit = Math.min(Number(req.query.limit) || 24, 100);
+
+      const [emp] = await rawQuery<{ id: number; assignmentId: number }>(
+        `SELECT e.id, ea.id AS "assignmentId"
+           FROM employees e
+           JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                       AND ea.status = 'active'
+                                       AND ea."companyId" = $2
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود في هذه الشركة");
+
+      // Read scores ordered newest first. The rationale + rawCounters
+      // columns are JSONB; pg returns them as parsed objects, so the
+      // SPA can render «لماذا 65؟» directly from the row.
+      const rows = await rawQuery<{
+        scope: string; periodKey: string;
+        compositeScore: string; trend: number;
+        disciplineScore: string; activityScore: string;
+        productivityScore: string; qualityScore: string;
+        managerScore: string; developmentScore: string;
+        rationale: Record<string, string>;
+        weightsUsed: Record<string, number>;
+        rawCounters: Record<string, number>;
+        computedAt: string;
+      }>(
+        `SELECT scope, "periodKey",
+                "compositeScore", trend,
+                "disciplineScore", "activityScore", "productivityScore",
+                "qualityScore", "managerScore", "developmentScore",
+                rationale, "weightsUsed", "rawCounters", "computedAt"
+           FROM employee_scores
+          WHERE "assignmentId" = $1 AND scope = $2 AND "companyId" = $3
+          ORDER BY "periodKey" DESC
+          LIMIT $4`,
+        [emp.assignmentId, wantScope, scope.companyId, limit]
+      );
+
+      res.json({ data: rows, total: rows.length, scope: wantScope, assignmentId: emp.assignmentId });
+    } catch (err) {
+      handleRouteError(err, res, "Score history error:");
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════
+// PR-8 (#2077) — Employee lifecycle: status resolver + history + transitions.
+//
+// Three HR-side endpoints wrap the existing lifecycleEngine library:
+//
+//   GET  /employees/:id/lifecycle/status      — current state + next allowed
+//                                              transitions + guard checks.
+//                                              The UI uses this to render the
+//                                              «الإجراءات المتاحة» buttons.
+//   GET  /employees/:id/lifecycle/history     — ordered event list with the
+//                                              4 dates + actor + reason +
+//                                              overrideReason. Used by the
+//                                              «دورة الحياة» tab on the 360.
+//   POST /employees/:id/lifecycle/transitions — fire a transition. Validates
+//                                              the state machine + guards
+//                                              first; persists ONE row to
+//                                              employee_lifecycle_events with
+//                                              the IGOC quartet; emits the
+//                                              employee.lifecycle.transitioned
+//                                              event for downstream listeners.
+//
+// The doctrine: «HR يقرر الحالة والسبب، والمالية خادم». This module ONLY
+// writes the event + emits the event. It does NOT update employees.status
+// or employee_assignments.status — the canonical screens for those
+// (hr-exit.ts, employees.ts PATCH, transfers) own that side-effect. The
+// lifecycle ledger is the system of record for «من قرر، متى، ولماذا».
+// ════════════════════════════════════════════════════════════════════════════
+
+const lifecycleTransitionSchema = z.object({
+  eventType: z.enum([
+    "candidate_created", "offer_extended", "offer_accepted", "onboarded",
+    "probation_started", "probation_passed", "suspended", "reinstated",
+    "resigned", "terminated", "clearance_started", "clearance_completed",
+    "transferred", "assigned", "reactivated",
+  ]),
+  reason: z.string().min(1, "السبب مطلوب"),
+  decisionDate: z.string().optional().nullable(),
+  effectiveDate: z.string().optional().nullable(),
+  documentDate: z.string().optional().nullable(),
+  documentRef: z.string().max(80).optional().nullable(),
+  overrideReason: z.string().optional().nullable(),
+  metadata: z.record(z.any()).optional(),
+});
+
+router.get(
+  "/:id/lifecycle/status",
+  authorize({ feature: "hr.employees", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const [emp] = await rawQuery<{ id: number; assignmentId: number | null; branchId: number | null }>(
+        `SELECT e.id, ea.id AS "assignmentId", ea."branchId"
+           FROM employees e
+           LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                            AND ea."companyId" = $2
+                                            AND (ea.status = 'active' OR ea.status = 'terminated')
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          ORDER BY ea."isPrimary" DESC NULLS LAST, ea.id DESC LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود");
+
+      const current = await resolveCurrentState(id, scope.companyId);
+      const nexts = nextTransitions(current);
+      res.json({
+        currentState: current,
+        currentStateLabel: current ? STATE_LABEL_AR[current] : null,
+        nextTransitions: nexts.map((s) => ({ state: s, label: STATE_LABEL_AR[s] })),
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Lifecycle status error:");
+    }
+  }
+);
+
+router.get(
+  "/:id/lifecycle/history",
+  authorize({ feature: "hr.employees", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+
+      const rows = await rawQuery<{
+        id: number; eventType: string; stateBefore: string | null; stateAfter: string | null;
+        reason: string | null; decisionDate: string | null; effectiveDate: string | null;
+        documentDate: string | null; documentRef: string | null;
+        actorUserId: number; actorName: string | null; activeRoleKey: string | null;
+        overrideReason: string | null; metadata: Record<string, unknown>;
+        createdAt: string;
+      }>(
+        `SELECT le.id, le."eventType", le."stateBefore", le."stateAfter",
+                le.reason, le."decisionDate", le."effectiveDate",
+                le."documentDate", le."documentRef",
+                le."actorUserId", e.name AS "actorName", le."activeRoleKey",
+                le."overrideReason", le.metadata, le."createdAt"
+           FROM employee_lifecycle_events le
+           LEFT JOIN users u ON u.id = le."actorUserId"
+           LEFT JOIN employees e ON e.id = u."employeeId"
+          WHERE le."employeeId" = $1 AND le."companyId" = $2
+          ORDER BY le."createdAt" DESC, le.id DESC
+          LIMIT $3`,
+        [id, scope.companyId, limit]
+      );
+
+      // Decorate each row with the Arabic label for event + state, so
+      // the UI doesn't re-implement the i18n map.
+      const data = rows.map((r) => ({
+        ...r,
+        eventLabel: EVENT_LABEL_AR[r.eventType as LifecycleEventType] ?? r.eventType,
+        stateBeforeLabel: r.stateBefore ? STATE_LABEL_AR[r.stateBefore as LifecycleState] : null,
+        stateAfterLabel: r.stateAfter ? STATE_LABEL_AR[r.stateAfter as LifecycleState] : null,
+      }));
+      res.json({ data, total: data.length });
+    } catch (err) {
+      handleRouteError(err, res, "Lifecycle history error:");
+    }
+  }
+);
+
+router.post(
+  "/:id/lifecycle/transitions",
+  authorize({ feature: "hr.employees", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const body = zodParse(lifecycleTransitionSchema.safeParse(req.body));
+
+      const [emp] = await rawQuery<{ id: number; assignmentId: number | null; branchId: number | null }>(
+        `SELECT e.id, ea.id AS "assignmentId", ea."branchId"
+           FROM employees e
+           LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id
+                                            AND ea."companyId" = $2
+                                            AND ea."isPrimary" = true
+          WHERE e.id = $1 AND e."deletedAt" IS NULL
+          LIMIT 1`,
+        [id, scope.companyId]
+      );
+      if (!emp) throw new NotFoundError("الموظف غير موجود");
+
+      const current = await resolveCurrentState(id, scope.companyId);
+      const stateAfter = EVENT_TO_STATE_AFTER[body.eventType as LifecycleEventType] ?? null;
+
+      // Validate the state machine — operational events (transferred,
+      // assigned) skip the transitions check since they don't change
+      // state.
+      if (stateAfter && current) {
+        const allowed = ALLOWED_TRANSITIONS[current] ?? [];
+        if (!allowed.includes(stateAfter)) {
+          throw new ValidationError(
+            `الانتقال غير مسموح: من «${STATE_LABEL_AR[current]}» إلى «${STATE_LABEL_AR[stateAfter]}»`,
+            { field: "eventType", fix: "اختر حدثًا متوافقًا مع الحالة الحالية" }
+          );
+        }
+      }
+
+      // Run guards. Failures BLOCK the transition unless the operator
+      // supplies overrideReason — in which case the row records the
+      // bypass for the audit trail.
+      const guards = await checkGuards({
+        employeeId: id, companyId: scope.companyId,
+        from: current, to: stateAfter, eventType: body.eventType as LifecycleEventType,
+      });
+      if (guards.length > 0 && !body.overrideReason) {
+        throw new ValidationError(
+          `الانتقال محجوب: ${guards.map((g) => g.allowed === false ? g.reason : "").filter(Boolean).join(" · ")}`,
+          { field: "overrideReason", fix: "وثّق سبب التجاوز إذا أردت المتابعة" }
+        );
+      }
+
+      const [row] = await rawQuery<{ id: number }>(
+        `INSERT INTO employee_lifecycle_events
+          ("companyId", "branchId", "employeeId", "assignmentId",
+           "eventType", "stateBefore", "stateAfter",
+           reason, "decisionDate", "effectiveDate", "documentDate", "documentRef",
+           "actorUserId", "activeRoleKey", "activeDepartmentId", "resolvedScope", "impersonationSourceUser",
+           "overrideReason", metadata)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+         RETURNING id`,
+        [
+          scope.companyId, emp.branchId, id, emp.assignmentId,
+          body.eventType, current, stateAfter,
+          body.reason,
+          body.decisionDate || null,
+          body.effectiveDate || null,
+          body.documentDate || null,
+          body.documentRef || null,
+          scope.userId,
+          scope.selectedRoleKey ?? null,
+          scope.activeDepartmentId ?? null,
+          scope.resolvedScope ?? null,
+          scope.impersonationSourceUser ?? null,
+          body.overrideReason || null,
+          JSON.stringify(body.metadata ?? {}),
+        ]
+      );
+
+      await createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "transition", entity: "employee_lifecycle", entityId: id,
+        activeRoleKey: scope.selectedRoleKey ?? null,
+        activeDepartmentId: scope.activeDepartmentId ?? null,
+        resolvedScope: scope.resolvedScope ?? null,
+        impersonationSourceUser: scope.impersonationSourceUser ?? null,
+        after: {
+          eventType: body.eventType, stateBefore: current, stateAfter,
+          reason: body.reason, override: !!body.overrideReason,
+        },
+      });
+
+      await emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "employee.lifecycle.transitioned",
+        entity: "employees", entityId: id,
+        details: JSON.stringify({
+          eventId: row.id, eventType: body.eventType,
+          stateBefore: current, stateAfter,
+          assignmentId: emp.assignmentId,
+          context: {
+            companyId: scope.companyId, branchId: scope.branchId ?? null,
+            userId: scope.userId,
+            activeRoleKey: scope.selectedRoleKey ?? null,
+            resolvedScope: scope.resolvedScope ?? null,
+          },
+        }),
+      }).catch((e) => logger.warn(e, "[lifecycle] event emit failed"));
+
+      res.status(201).json({
+        data: {
+          id: row.id,
+          eventType: body.eventType,
+          eventLabel: EVENT_LABEL_AR[body.eventType as LifecycleEventType],
+          stateBefore: current,
+          stateAfter,
+          stateAfterLabel: stateAfter ? STATE_LABEL_AR[stateAfter] : null,
+          guardsBypassed: guards.length,
+        },
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Lifecycle transition error:");
+    }
+  }
+);
 
 export default router;

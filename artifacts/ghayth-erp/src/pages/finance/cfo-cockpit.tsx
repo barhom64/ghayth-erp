@@ -163,26 +163,18 @@ export default function CfoCockpitPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/finance/daily-close-checklist">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/daily-close-checklist">
               فحص اليوم
-            </Button>
-          </Link>
-          <Link href="/finance/monthly-close-pack">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/monthly-close-pack">
               إقفال الشهر
-            </Button>
-          </Link>
-          <Link href="/finance/workflows-hub">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/workflows-hub">
               كل سير العمل
-            </Button>
-          </Link>
-          <Link href="/finance/reports">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/reports">
               <FileText className="h-4 w-4 me-1" /> التقارير الكاملة
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_cfo_cockpit"
             entityId="summary"
@@ -358,9 +350,7 @@ export default function CfoCockpitPage() {
               <span className="flex items-center gap-2">
                 <ReceiptText className="h-4 w-4" /> أعمار الذمم المدينة
               </span>
-              <Link href="/finance/ar-aging">
-                <Button variant="ghost" size="sm" className="text-xs h-6">تفاصيل <ArrowRight className="h-3 w-3 ms-1" /></Button>
-              </Link>
+              <Button asChild variant="ghost" size="sm" className="text-xs h-6"><Link href="/finance/ar-aging">تفاصيل <ArrowRight className="h-3 w-3 ms-1" /></Link></Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
@@ -401,9 +391,7 @@ export default function CfoCockpitPage() {
               <span className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" /> مدفوعات مستحقة هذا الأسبوع ({apThisWeek.length})
               </span>
-              <Link href="/finance/payment-run">
-                <Button variant="ghost" size="sm" className="text-xs h-6">دفعة جماعية <ArrowRight className="h-3 w-3 ms-1" /></Button>
-              </Link>
+              <Button asChild variant="ghost" size="sm" className="text-xs h-6"><Link href="/finance/payment-run">دفعة جماعية <ArrowRight className="h-3 w-3 ms-1" /></Link></Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-1.5 max-h-80 overflow-y-auto">
@@ -443,9 +431,7 @@ export default function CfoCockpitPage() {
               <span className="flex items-center gap-2">
                 <Clock className="h-4 w-4" /> اعتمادات بانتظارك
               </span>
-              <Link href="/action-center">
-                <Button variant="ghost" size="sm" className="text-xs h-6">مركز الإجراءات <ArrowRight className="h-3 w-3 ms-1" /></Button>
-              </Link>
+              <Button asChild variant="ghost" size="sm" className="text-xs h-6"><Link href="/action-center">مركز الإجراءات <ArrowRight className="h-3 w-3 ms-1" /></Link></Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 space-y-1.5">
@@ -488,24 +474,12 @@ export default function CfoCockpitPage() {
         <CardContent className="p-3">
           <p className="text-xs font-semibold mb-2">روابط سريعة</p>
           <div className="flex flex-wrap gap-2">
-            <Link href="/finance/period-close-preflight">
-              <Button variant="outline" size="sm" className="text-xs h-7">إقفال الفترة</Button>
-            </Link>
-            <Link href="/finance/budget-variance">
-              <Button variant="outline" size="sm" className="text-xs h-7">انحراف الميزانية</Button>
-            </Link>
-            <Link href="/finance/fx-revaluation">
-              <Button variant="outline" size="sm" className="text-xs h-7">إعادة تقييم العملات</Button>
-            </Link>
-            <Link href="/finance/cash-flow-forecast">
-              <Button variant="outline" size="sm" className="text-xs h-7">توقع التدفق النقدي</Button>
-            </Link>
-            <Link href="/finance/reports/vat-reconciliation">
-              <Button variant="outline" size="sm" className="text-xs h-7">تطابق VAT</Button>
-            </Link>
-            <Link href="/finance/settings">
-              <Button variant="outline" size="sm" className="text-xs h-7">إعدادات المالي</Button>
-            </Link>
+            <Button asChild variant="outline" size="sm" className="text-xs h-7"><Link href="/finance/period-close-preflight">إقفال الفترة</Link></Button>
+            <Button asChild variant="outline" size="sm" className="text-xs h-7"><Link href="/finance/budget-variance">انحراف الميزانية</Link></Button>
+            <Button asChild variant="outline" size="sm" className="text-xs h-7"><Link href="/finance/fx-revaluation">إعادة تقييم العملات</Link></Button>
+            <Button asChild variant="outline" size="sm" className="text-xs h-7"><Link href="/finance/cash-flow-forecast">توقع التدفق النقدي</Link></Button>
+            <Button asChild variant="outline" size="sm" className="text-xs h-7"><Link href="/finance/reports/vat-reconciliation">تطابق VAT</Link></Button>
+            <Button asChild variant="outline" size="sm" className="text-xs h-7"><Link href="/finance/settings">إعدادات المالي</Link></Button>
           </div>
         </CardContent>
       </Card>

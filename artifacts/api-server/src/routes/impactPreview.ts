@@ -238,7 +238,7 @@ router.post("/", authorize({ feature: "admin", action: "update" }), async (req, 
       if (proj) {
         const [[taskCount], [phaseCount]] = await Promise.all([
           rawQuery<CountAliasRow>(`SELECT COUNT(*) AS c FROM project_tasks WHERE "projectId" = $1 AND "deletedAt" IS NULL`, [entityId]),
-          rawQuery<CountAliasRow>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1`, [entityId]),
+          rawQuery<CountAliasRow>(`SELECT COUNT(*) AS c FROM project_phases WHERE "projectId" = $1 AND "companyId" = $2`, [entityId, scope.companyId]),
         ]);
         const tasks = Number(taskCount?.c || 0);
         const phases = Number(phaseCount?.c || 0);

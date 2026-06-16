@@ -935,7 +935,7 @@ router.post("/templates/:id/generate", authorize({ feature: "documents", action:
         LEFT JOIN employee_contracts ec ON ec."assignmentId" = ea.id AND ec."deletedAt" IS NULL AND ec.status = 'active'
         LEFT JOIN departments d ON d.id = ea."departmentId"
         LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
-        WHERE e.id=$1
+        WHERE e.id=$1 AND e."deletedAt" IS NULL
         ORDER BY ea."hireDate" DESC LIMIT 1
       `, [Number(entityId), scope.companyId]);
       if (emp) {

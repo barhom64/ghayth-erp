@@ -203,7 +203,9 @@ describe("#1812 — planning routes", () => {
   it("router file exists + is mounted under requireModule(fleet)", () => {
     expect(existsSync(join(apiSrc, "routes/transport-planning.ts"))).toBe(true);
     expect(ROUTES_INDEX).toContain("transportPlanningRouter");
-    expect(ROUTES_INDEX).toMatch(/requireModule\("fleet"\)[\s\S]{0,100}transportPlanningRouter/);
+    // #1959: gated by the path-conditional fleet+financial transportPathGate.
+    expect(ROUTES_INDEX).toContain('const fleetModuleGate = requireModule("fleet")');
+    expect(ROUTES_INDEX).toMatch(/router\.use\(transportPathGate\)/);
   });
 
   it("exposes the 5 planning endpoints", () => {
@@ -294,9 +296,15 @@ describe("#1812 — driver in-app navigation SPA", () => {
     expect(DRIVER_NAV).not.toMatch(/(السعر|التكلفة|الفاتورة|القيد|الإيراد)/);
   });
 
-  it("offers the external-maps fallback link", () => {
+  it("offers the prominent 'ابدأ الملاحة' button bound to a keyless Google Maps deep link", () => {
+    // Maps Provider Adapter (owner brief 2026-06-15) promoted the
+    // small "(احتياطي)" link into a primary action button so the
+    // driver never has to leave-and-search. The link itself is the
+    // same keyless `api=1` form, so it works whether or not a
+    // Google API key is configured on the server.
     expect(DRIVER_NAV).toContain("www.google.com/maps");
-    expect(DRIVER_NAV).toMatch(/احتياطي/);
+    expect(DRIVER_NAV).toMatch(/ابدأ الملاحة/);
+    expect(DRIVER_NAV).toMatch(/data-testid="start-navigation-button"/);
   });
 
   it("registered in fleetRoutes at /me/driver/navigation", () => {

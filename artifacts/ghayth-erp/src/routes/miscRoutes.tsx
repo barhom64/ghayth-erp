@@ -19,11 +19,16 @@ const Warehouse = lazy(() => import("@/pages/warehouse"));
 const WarehouseCreate = lazy(() => import("@/pages/create/warehouse-create"));
 const WarehouseMovementsCreate = lazy(() => import("@/pages/create/warehouse/movements-create"));
 const WarehouseCategoriesCreate = lazy(() => import("@/pages/create/warehouse/categories-create"));
-// Warehouse supplier form deleted — the warehouse/suppliers + finance/
-// vendors UI duplication wrote to the same `suppliers` table. The
-// /warehouse/suppliers/create route below now lazy-loads the unified
-// finance/vendors-create form (same table, fuller field set).
-const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/finance/vendors-create"));
+// PR-3 (#2163) — Canonical Ownership wrapper-split. The previous
+// arrangement bound /warehouse/suppliers/create to the finance vendor
+// page (same WHT-aware form, POSTing to /finance/vendors); a warehouse
+// operator was answering finance questions and the audit lane lied
+// about who made the change. After PR-3 each path has its own wrapper
+// over a shared form body (`components/shared/vendor-party-form.tsx`).
+// The finance and warehouse wrappers carry their own POST URL, intent
+// fields, draft slot, and toast copy. The Party-master row is the
+// same; the path that issues it is not.
+const WarehouseSuppliersCreate = lazy(() => import("@/pages/create/warehouse/suppliers-create"));
 const WarehouseProductDetail = lazy(() => import("@/pages/details/warehouse-product-detail"));
 const WarehouseMovementDetail = lazy(() => import("@/pages/details/warehouse-movement-detail"));
 const WarehouseCategoryDetail = lazy(() => import("@/pages/details/warehouse-category-detail"));
@@ -56,6 +61,14 @@ const ManagerBoard = lazy(() => import("@/pages/manager-board"));
 const Workspace = lazy(() => import("@/pages/workspace"));
 const ManagerWorkspace = lazy(() => import("@/pages/manager-workspace"));
 const WorkQueue = lazy(() => import("@/pages/my/work-queue"));
+// PR-5 (#2077) — صندوق الأعمال الموحّد. New canonical inbox replaces
+// the experimental /my/work-queue with a 4-section page (actions /
+// tasks / important notifications / follow-ups) that matches the
+// product owner's exact spec. The /my/work-queue route stays as a
+// back-compat alias.
+const WorkInbox = lazy(() => import("@/pages/work-inbox"));
+// PR-9 (#2077) — رفيق الميدان: mobile-first field-ping companion.
+const FieldCompanion = lazy(() => import("@/pages/my/field-companion"));
 const ReprintApprovals = lazy(() => import("@/pages/manager-board/reprint-approvals"));
 const ModuleDashboards = lazy(() => import("@/pages/module-dashboards"));
 const OperationsCenter = lazy(() => import("@/pages/operations-center"));
@@ -81,19 +94,23 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/my-documents", component: MyDocuments },
   { path: "/my-loans", component: MyLoans },
   { path: "/my-overtime", component: MyOvertime },
-  { path: "/action-center", component: ActionCenter },
+  // GAP_MATRIX P1 — role ladder: 20/30/40 don't exist; nearest real level above employee is 50.
+  { path: "/action-center", component: ActionCenter, minRoleLevel: 50 },
   { path: "/workspace", component: Workspace },
-  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 40 },
+  { path: "/manager-workspace", component: ManagerWorkspace, minRoleLevel: 50 },
   { path: "/my/work-queue", component: WorkQueue },
+  // PR-5 (#2077) — صندوق الأعمال الموحّد (canonical).
+  { path: "/work-inbox", component: WorkInbox },
+  { path: "/my/field-companion", component: FieldCompanion },
   { path: "/obligations", component: Obligations, module: "operations" },
   { path: "/calendar", component: CalendarPage },
   // Agent-5 (route↔backend consistency): /api/exec-dashboard mounts with
   // requireMinLevel(70). Route gate raised from 60 → 70 to match.
   { path: "/exec-dashboard", component: ExecDashboard, minRoleLevel: 70 },
-  { path: "/manager-board", component: ManagerBoard, minRoleLevel: 40 },
-  { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 40 },
-  { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 40 },
-  { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 40 },
+  { path: "/manager-board", component: ManagerBoard, minRoleLevel: 50 },
+  { path: "/manager-board/reprint-approvals", component: ReprintApprovals, minRoleLevel: 50 },
+  { path: "/operations-center", component: OperationsCenter, module: "operations", minRoleLevel: 50 },
+  { path: "/daily-close", component: DailyClose, module: "operations", minRoleLevel: 50 },
   { path: "/clients", component: Clients, module: "crm" },
   { path: "/clients/create", component: ClientsCreate, module: "crm" },
   { path: "/clients/:id/statement", component: CustomerStatement, module: "crm" },
@@ -106,7 +123,9 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/crm/:id", component: OpportunityDetail, module: "crm" },
   { path: "/projects", component: Projects, module: "operations" },
   { path: "/projects/create", component: ProjectsCreate, module: "operations" },
-  { path: "/projects/tasks", component: Tasks, module: "operations" },
+  // "/projects/tasks" alias removed — it rendered the general operations Tasks
+  // page under a projects URL (task-ownership blur). The Tasks page stays wired
+  // at "/tasks" (below); per-project tasks live in the project detail page.
   { path: "/projects/gantt", component: ProjectGantt, module: "operations" },
   { path: "/projects/risks", component: ProjectRisks, module: "operations" },
   { path: "/projects/:id", component: ProjectDetail, module: "operations" },
@@ -141,5 +160,5 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/automation", component: Automation, module: "admin" },
   { path: "/activity-log", component: ActivityLog },
   { path: "/module-dashboards", component: ModuleDashboards, module: "bi" },
-  { path: "/reports/scheduled", component: ScheduledReports, module: "bi" },
+  { path: "/reports/scheduled", component: ScheduledReports, module: "bi", minRoleLevel: 50 },
 ];

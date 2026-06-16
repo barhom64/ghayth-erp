@@ -4,6 +4,9 @@
 
 import { financialEngine } from "./financialEngine.js";
 import type { DomainEngine } from "./domainEngineBase.js";
+import { withTransaction, rawExecute } from "../rawdb.js";
+import { checkFinancialPeriodOpen, todayISO, roundTo2 } from "../businessHelpers.js";
+import { logger } from "../logger.js";
 
 interface WarehouseGLContext {
   companyId: number;
@@ -124,6 +127,135 @@ class WarehouseEngineImpl implements DomainEngine {
         { accountCode: crCode, debit: 0, credit: movement.totalValue, productId: movement.productId },
       ],
     });
+  }
+
+  /**
+   * Issue stock for internal consumption (e.g. fleet/maintenance parts) as a
+   * REAL movement with full accounting: FIFO batch depletion + an `out`
+   * movement row + COGS GL posting (DR COGS / CR inventory) via
+   * `postMovementGL`. The cross-domain consumer (eventListeners.ts) used to
+   * write a raw stock UPDATE + movement INSERT that skipped FIFO and GL —
+   * leaving maintenance parts cost out of COGS. This keeps "كل إجراء له أثر"
+   * true for consumption-side issues.
+   *
+   * Cost = explicit `unitCost` when given, else the product's weighted-average
+   * cost (`costPrice`, falling back to `lastWaCost`). Stock mutation runs in a
+   * transaction; the GL leg is posted afterwards in try/catch so a journal
+   * failure never rolls back the committed physical movement (mirrors the
+   * `/warehouse/movements` route).
+   */
+  async issueStock(
+    ctx: WarehouseGLContext,
+    params: {
+      productId: number;
+      quantity: number;
+      unitCost?: number;
+      /** Required movement reference — the CALLER owns numbering/correlation
+       *  (e.g. the fleet maintenance handler passes `MAINT-{id}`). Same
+       *  contract as financialEngine.createPurchaseOrder's required `ref`. */
+      reference: string;
+      notes?: string | null;
+    }
+  ): Promise<{ movementId: number | null; journalId: number | null }> {
+    const qty = Math.abs(Number(params.quantity));
+    if (!(qty > 0)) return { movementId: null, journalId: null };
+
+    let movementId = 0;
+    let issueCost = 0;
+    let productName: string | undefined;
+
+    await withTransaction(async (client) => {
+      const prodRes = await client.query(
+        `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
+        [params.productId, ctx.companyId]
+      );
+      const product = prodRes.rows[0];
+      if (!product) {
+        logger.warn(`[warehouse.issueStock] product ${params.productId} not found for company ${ctx.companyId} — skipped`);
+        return;
+      }
+      productName = product.name ?? undefined;
+
+      // Valuation: explicit unit cost, else weighted-average (costPrice → lastWaCost).
+      const waCost = Number(product.costPrice ?? 0) > 0 ? Number(product.costPrice) : Number(product.lastWaCost ?? 0);
+      issueCost = Number(params.unitCost) > 0 ? Number(params.unitCost) : waCost;
+
+      // FIFO batch depletion — oldest received first.
+      const batchRes = await client.query(
+        `SELECT id, quantity FROM warehouse_stock_batches WHERE "productId"=$1 AND quantity > 0 ORDER BY "receivedDate" ASC`,
+        [params.productId]
+      );
+      let remaining = qty;
+      const updates: { id: number; newQty: number }[] = [];
+      for (const batch of batchRes.rows) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, Number(batch.quantity));
+        remaining -= take;
+        updates.push({ id: batch.id, newQty: Math.max(Number(batch.quantity) - take, 0) });
+      }
+      if (updates.length > 0) {
+        const valuesSql: string[] = [];
+        const p: unknown[] = [];
+        for (const u of updates) {
+          const base = p.length;
+          valuesSql.push(`($${base + 1}::int, $${base + 2}::numeric)`);
+          p.push(u.id, u.newQty);
+        }
+        await client.query(
+          `UPDATE warehouse_stock_batches AS wsb SET quantity = v.new_qty
+             FROM (VALUES ${valuesSql.join(",")}) AS v(id, new_qty) WHERE wsb.id = v.id`,
+          p
+        );
+      }
+
+      // On-hand decrement + the physical `out` movement.
+      await client.query(
+        `UPDATE warehouse_products SET "currentStock" = "currentStock" - $1, "updatedAt" = NOW()
+           WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+        [qty, params.productId, ctx.companyId]
+      );
+      const movRes = await client.query(
+        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId")
+         VALUES ($1,$2,'out',$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [ctx.companyId, params.productId, qty, issueCost, params.reference, params.notes ?? null, ctx.createdBy, ctx.branchId]
+      );
+      movementId = movRes.rows[0]?.id ?? 0;
+    });
+
+    if (!movementId) return { movementId: null, journalId: null };
+
+    // COGS GL — guarded by an open financial period; a GL failure must never
+    // undo the committed physical movement.
+    let journalId: number | null = null;
+    const totalValue = roundTo2(qty * Math.abs(issueCost));
+    if (totalValue > 0) {
+      try {
+        const today = todayISO().toString().slice(0, 10);
+        const period = await checkFinancialPeriodOpen(ctx.companyId, today);
+        if (period.open) {
+          const ref = params.reference && params.reference.length > 0
+            ? `${params.reference}-JE-${movementId}`
+            : `INV-MV-${movementId}`;
+          const gl = await this.postMovementGL(ctx, {
+            id: movementId,
+            trigger: "issue",
+            totalValue,
+            productName,
+            productId: params.productId,
+            ref,
+          });
+          journalId = gl.journalId;
+        } else {
+          await rawExecute(
+            `UPDATE warehouse_movements SET notes = COALESCE(notes,'') || $1 WHERE id=$2`,
+            [` [GL skipped: الفترة المالية "${period.periodName ?? ""}" مغلقة]`, movementId]
+          );
+        }
+      } catch (glErr) {
+        logger.error(glErr, `[warehouse.issueStock] COGS GL posting failed for movement ${movementId}`);
+      }
+    }
+    return { movementId, journalId };
   }
 }
 

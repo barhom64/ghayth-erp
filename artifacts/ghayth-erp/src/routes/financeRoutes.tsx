@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { redirectTo } from "@/components/shared/redirect-to";
 
 // R.1.5 — Finance Dashboard is the new landing page for /finance. The
 // chart of accounts stays at /finance/accounts (see the separate route
@@ -37,6 +38,7 @@ const TaxCodesEdit = lazy(() => import("@/pages/create/finance/tax-codes-edit"))
 const WhtCategoriesEdit = lazy(() => import("@/pages/create/finance/wht-categories-edit"));
 const LotExpiryAlerts = lazy(() => import("@/pages/finance/lot-expiry-alerts"));
 const CogsSummary = lazy(() => import("@/pages/finance/cogs-summary"));
+const LedgerTruth = lazy(() => import("@/pages/finance/ledger-truth"));
 const InventoryValuation = lazy(() => import("@/pages/finance/inventory-valuation"));
 const NegativeStock = lazy(() => import("@/pages/finance/negative-stock"));
 const InventoryTurnover = lazy(() => import("@/pages/finance/inventory-turnover"));
@@ -65,6 +67,7 @@ const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
+const VendorInvoiceCreate = lazy(() => import("@/pages/create/finance/vendor-invoice-create"));
 // Duplicate multi-line form removed — the unified expenses-create
 // page now handles multi-line via "حفظ وإضافة آخر" button.
 // The /finance/expenses/multi-line route below redirects there.
@@ -92,6 +95,7 @@ const VendorStatementPrint = lazy(() => import("@/pages/finance/vendor-statement
 const Vendor360Sheet = lazy(() => import("@/pages/finance/vendor-360-sheet"));
 const VendorContracts = lazy(() => import("@/pages/finance/vendor-contracts"));
 const VendorContractsTracker = lazy(() => import("@/pages/finance/vendor-contracts-tracker"));
+const VendorDocuments = lazy(() => import("@/pages/finance/vendor-documents"));
 const VendorSpend = lazy(() => import("@/pages/finance/vendor-spend"));
 const VendorSettlementWorkbench = lazy(() => import("@/pages/finance/vendor-settlement-workbench"));
 const PurchaseRequests = lazy(() => import("@/pages/finance/purchase-requests"));
@@ -123,7 +127,9 @@ const Custodies = lazy(() => import("@/pages/finance/custodies"));
 const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
 const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
 const CustodyWorkbench = lazy(() => import("@/pages/finance/custody-workbench"));
-const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
+// (FiscalPeriods v1 أُزيل — كان عرض إحصاءات مشتقّة بلا إنشاء فترة، وكل قدراته
+// (الإقفال/إعادة الفتح) تستدعي endpoints v2 أصلًا؛ v2 هي superset كامل (إنشاء +
+// إقفال + قفل نهائي + السجل). /finance/fiscal-periods يبقى redirect إلى v2.)
 const FiscalPeriodsV2 = lazy(() => import("@/pages/finance/fiscal-periods-v2"));
 const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-preflight"));
 const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
@@ -202,6 +208,11 @@ const UmrahAgentPortfolio = lazy(() => import("@/pages/finance/umrah-agent-portf
 const ExpenseMixAnalyzer = lazy(() => import("@/pages/finance/expense-mix-analyzer"));
 const RevenueMixAnalyzer = lazy(() => import("@/pages/finance/revenue-mix-analyzer"));
 const DsoTrend = lazy(() => import("@/pages/finance/dso-trend"));
+// Phase 2 wiring — orphan pages with existing backends.
+const CustomerAdvanceQuickCreate = lazy(() => import("@/pages/create/finance/customer-advance-create"));
+const PricingRulesCreate = lazy(() => import("@/pages/create/finance/pricing-rules-create"));
+const ZatcaMisrouted = lazy(() => import("@/pages/finance/zatca-misrouted"));
+const ZatcaMissingTax = lazy(() => import("@/pages/finance/zatca-missing-tax"));
 
 export const financeRoutes = [
   { path: "/finance/project-portfolio", component: ProjectPortfolioDashboard },
@@ -230,6 +241,7 @@ export const financeRoutes = [
   // as accounts.tsx; create pages mirror accounts-create.tsx.
   { path: "/finance/tax-codes", component: TaxCodes },
   { path: "/finance/pricing-rules", component: PricingRules },
+  { path: "/finance/pricing-rules/create", component: PricingRulesCreate },
   { path: "/finance/tax-codes/create", component: TaxCodesCreate },
   { path: "/finance/tax-codes/:id/edit", component: TaxCodesEdit },
   { path: "/finance/wht-categories", component: WhtCategories },
@@ -244,6 +256,8 @@ export const financeRoutes = [
   { path: "/finance/wht-filing-workbench", component: WhtFilingWorkbench },
   // ZATCA & inventory reports hub — landing page (#1059).
   { path: "/finance/reports/zatca", component: ZatcaReportsHub },
+  { path: "/finance/zatca/misrouted", component: ZatcaMisrouted },
+  { path: "/finance/zatca/missing-tax", component: ZatcaMissingTax },
   { path: "/finance/vat-filing-readiness", component: VatFilingReadiness },
   // Lot expiry alerts — consumes /reports/lot-expiry-alerts (#1042).
   { path: "/finance/reports/lot-expiry-alerts", component: LotExpiryAlerts },
@@ -255,6 +269,8 @@ export const financeRoutes = [
   { path: "/finance/reports/inventory-turnover", component: InventoryTurnover },
   // COGS / margin summary — consumes /reports/cogs-summary (#1034).
   { path: "/finance/reports/cogs-summary", component: CogsSummary },
+  // Ledger-truth measurement — consumes /reports/ledger-truth (#2246, read-only).
+  { path: "/finance/reports/ledger-truth", component: LedgerTruth },
   // VAT reconciliation report — pre-filing sanity check (#1037 backend).
   { path: "/finance/reports/vat-reconciliation", component: VatReconciliation },
   { path: "/finance/vouchers", component: Vouchers },
@@ -272,6 +288,10 @@ export const financeRoutes = [
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
+  // FIN-P11 (#2241) — vendor invoice (supplier bill): a SEPARATE multi-line
+  // entry path from the expense/fuel path; credit leg = supplier payable (آجل)
+  // or money source (paid).
+  { path: "/finance/vendor-invoices/create", component: VendorInvoiceCreate },
   // Legacy multi-line route now redirects to the unified expenses-create
   // form, which supports multi-line via the "حفظ وإضافة آخر" button.
   { path: "/finance/expenses/multi-line", component: ExpensesCreate },
@@ -291,6 +311,7 @@ export const financeRoutes = [
   { path: "/finance/vendor-360-sheet", component: Vendor360Sheet },
   { path: "/finance/contracts", component: VendorContracts },
   { path: "/finance/vendor-contracts-tracker", component: VendorContractsTracker },
+  { path: "/finance/vendor-documents", component: VendorDocuments },
   { path: "/finance/vendor-spend", component: VendorSpend },
   { path: "/finance/vendor-settlement-workbench", component: VendorSettlementWorkbench },
   { path: "/finance/vendors/:id", component: VendorDetail, subKey: "vendors" },
@@ -308,6 +329,11 @@ export const financeRoutes = [
   { path: "/finance/customer-advances", component: CustomerAdvances },
   { path: "/finance/customer-advances-workbench", component: CustomerAdvancesWorkbench },
   { path: "/finance/customer-advances/create", component: CustomerAdvancesCreate },
+  // Lightweight single-line advance intake (distinct from the full
+  // create form above which carries allocation + branch context). The
+  // canonical /create path stays bound to CustomerAdvancesCreate; this
+  // quick form gets its own path to avoid a route collision.
+  { path: "/finance/customer-advances/quick-create", component: CustomerAdvanceQuickCreate },
   { path: "/finance/customer-advances/:id/apply", component: CustomerAdvancesApply },
   { path: "/finance/dunning", component: Dunning },
   { path: "/finance/collection", component: CollectionStages },
@@ -355,8 +381,10 @@ export const financeRoutes = [
   { path: "/finance/custody-workbench", component: CustodyWorkbench },
   { path: "/finance/custodies/report", component: CustodyAgingReport },
   { path: "/finance/custodies/:id", component: CustodyDetail },
-  { path: "/finance/fiscal-periods", component: FiscalPeriods },
-  { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2 },
+  // GAP_MATRIX P1 — v1 is a duplicate of v2; redirect so only one URL is canonical.
+  { path: "/finance/fiscal-periods", component: redirectTo("/finance/fiscal-periods-v2") },
+  // GAP_MATRIX P0 — fiscal period management changes financial reporting boundaries; gate at 70.
+  { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2, minRoleLevel: 70 },
   { path: "/finance/period-close-preflight", component: PeriodClosePreflight },
   { path: "/finance/salary-advances", component: SalaryAdvances },
   { path: "/finance/salary-advances/:id", component: SalaryAdvanceDetail },
@@ -378,11 +406,12 @@ export const financeRoutes = [
   { path: "/finance/fixed-assets/:id", component: FixedAssetDetail },
   { path: "/finance/inventory-costing", component: InventoryCosting },
   { path: "/finance/bank-guarantees", component: BankGuarantees },
-  { path: "/finance/journal-manual", component: JournalManual },
-  { path: "/finance/journal-manual/create", component: JournalManualCreate },
-  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates },
-  { path: "/finance/journal/reverse", component: JournalReversal },
-  { path: "/finance/journal-manual/:id", component: JournalManualDetail },
+  // GAP_MATRIX P0 — manual journals touch the GL directly; gate at 70 (managers).
+  { path: "/finance/journal-manual", component: JournalManual, minRoleLevel: 70 },
+  { path: "/finance/journal-manual/create", component: JournalManualCreate, minRoleLevel: 70 },
+  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates, minRoleLevel: 70 },
+  { path: "/finance/journal/reverse", component: JournalReversal, minRoleLevel: 70 },
+  { path: "/finance/journal-manual/:id", component: JournalManualDetail, minRoleLevel: 70 },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
   { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
@@ -396,13 +425,15 @@ export const financeRoutes = [
   { path: "/finance/umrah-season-portfolio", component: UmrahSeasonPortfolio },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
-  { path: "/finance/opening-balances", component: OpeningBalances },
-  { path: "/finance/opening-balances/create", component: OpeningBalancesCreate },
+  // GAP_MATRIX P0 — opening balances are a one-time GL adjustment; gate at 70.
+  { path: "/finance/opening-balances", component: OpeningBalances, minRoleLevel: 70 },
+  { path: "/finance/opening-balances/create", component: OpeningBalancesCreate, minRoleLevel: 70 },
   { path: "/finance/recurring-journals", component: RecurringJournals },
   { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
-  { path: "/finance/year-end-close", component: YearEndClose },
+  // GAP_MATRIX P0 — year-end close is irreversible; gate at 70.
+  { path: "/finance/year-end-close", component: YearEndClose, minRoleLevel: 70 },
   { path: "/finance/treasury", component: Treasury },
   { path: "/finance/treasury/transfer", component: AccountTransfer },
   // Phase D — non-colliding routes from the enterprise-hardening branch

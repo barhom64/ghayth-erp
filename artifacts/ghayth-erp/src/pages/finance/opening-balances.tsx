@@ -13,6 +13,7 @@ import {
   type DataTableColumn,
   PageShell,
 } from "@workspace/ui-core";
+import { POSTING_STATUS_LABELS } from "@/lib/finance/status-model";
 import { useAppContext } from "@/contexts/app-context";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
@@ -23,6 +24,7 @@ interface OpeningBalance {
   description: string;
   createdAt: string;
   status?: string;
+  postingStatus?: string;
   totalDebit: number;
   totalCredit: number;
   lines: Array<{ accountCode: string; accountName?: string; debit: number; credit: number }>;
@@ -80,12 +82,26 @@ export default function OpeningBalancesPage() {
     {
       key: "status",
       header: "الحالة",
+      // FIN-CORRECTION (A6): the balance badge is an INDEPENDENT computed signal
+      // (DR=CR), kept as-is — it is not a posting state. Alongside it, surface
+      // the truthful posting axis from the API (postingStatus, migration-311
+      // trigger, #2118 slice 7) so a directly-posted opening balance
+      // (status='draft' + balancesApplied=true) reads «مرحّل». The payment axis
+      // is N/A for opening balances, and documentStatus is not surfaced here
+      // (this list is balance + posting focused) — see PR notes.
       render: (r) => {
         const balanced = Math.abs(Number(r.totalDebit) - Number(r.totalCredit)) < 0.01;
         return (
-          <Badge className={balanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
-            {balanced ? "متوازن" : "غير متوازن"}
-          </Badge>
+          <span className="inline-flex items-center gap-1">
+            <Badge className={balanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
+              {balanced ? "متوازن" : "غير متوازن"}
+            </Badge>
+            {r.postingStatus && (
+              <span className={`text-[10px] ${r.postingStatus === "posted" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+                {POSTING_STATUS_LABELS[r.postingStatus as keyof typeof POSTING_STATUS_LABELS]}
+              </span>
+            )}
+          </span>
         );
       },
     },
@@ -106,16 +122,12 @@ export default function OpeningBalancesPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/trial-balance-drilldown">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/trial-balance-drilldown">
               <Scale className="h-4 w-4 me-2" />ميزان المراجعة
-            </Button>
-          </Link>
-          <Link href="/finance/accounts">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/accounts">
               <BookOpen className="h-4 w-4 me-2" />دليل الحسابات
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/finance/opening-balances/create">
             <GuardedButton perm="finance:create" size="sm">
               <Plus className="h-4 w-4 me-1" />

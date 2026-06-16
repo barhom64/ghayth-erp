@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery } from "@/lib/api";
-import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField } from "@workspace/ui-core";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, FormNumberField, FormShell, FormDateField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
   DetailPageLayout,
@@ -10,11 +10,12 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { Edit, Box, TrendingDown } from "lucide-react";
+import { Edit, Box, TrendingDown, ArrowLeftRight, CheckCircle2, Trash2, AlertTriangle, RefreshCw } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -58,6 +59,10 @@ export default function FixedAssetDetail() {
   const [, params] = useRoute("/finance/fixed-assets/:id");
   const id = params?.id ? Number(params.id) : null;
   const [editOpen, setEditOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [disposeOpen, setDisposeOpen] = useState(false);
+  const [impairOpen, setImpairOpen] = useState(false);
+  const [revalueOpen, setRevalueOpen] = useState(false);
   const { extraTabs, hideTabs } = useRegistryTabs("fixed-asset", id ?? 0);
 
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -260,10 +265,54 @@ export default function FixedAssetDetail() {
       hideTabs={hideTabs}
       actions={
         <>
-          <EntityPrintButton
+          <PrintButton
             entityType="fixed_asset"
             entityId={id ?? 0}
            />
+          {item?.status === "active" && (
+            <GuardedButton
+              perm="finance:create"
+              variant="outline"
+              size="sm"
+              onClick={() => setRevalueOpen(true)}
+            >
+              <RefreshCw className="h-4 w-4 ms-1" />
+              إعادة تقييم
+            </GuardedButton>
+          )}
+          {item?.status === "active" && (
+            <GuardedButton
+              perm="finance:create"
+              variant="outline"
+              size="sm"
+              onClick={() => setImpairOpen(true)}
+            >
+              <AlertTriangle className="h-4 w-4 ms-1" />
+              هبوط قيمة
+            </GuardedButton>
+          )}
+          {item?.status === "active" && (
+            <GuardedButton
+              perm="finance:create"
+              variant="outline"
+              size="sm"
+              onClick={() => setDisposeOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 ms-1" />
+              استبعاد
+            </GuardedButton>
+          )}
+          {item?.status === "active" && (
+            <GuardedButton
+              perm="finance:create"
+              variant="outline"
+              size="sm"
+              onClick={() => setTransferOpen(true)}
+            >
+              <ArrowLeftRight className="h-4 w-4 ms-1" />
+              نقل
+            </GuardedButton>
+          )}
           <GuardedButton
             perm="finance:update"
             variant="outline"
@@ -277,6 +326,44 @@ export default function FixedAssetDetail() {
         </>
       }
     />
+    {item && id && transferOpen && (
+      <TransferAssetDialog
+        assetId={id}
+        assetName={item.name}
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        onSuccess={() => { setTransferOpen(false); refetch(); }}
+      />
+    )}
+    {item && id && disposeOpen && (
+      <DisposeAssetDialog
+        assetId={id}
+        assetName={item.name}
+        open={disposeOpen}
+        onClose={() => setDisposeOpen(false)}
+        onSuccess={() => { setDisposeOpen(false); refetch(); }}
+      />
+    )}
+    {item && id && impairOpen && (
+      <ImpairAssetDialog
+        assetId={id}
+        assetName={item.name}
+        netBookValue={netBook}
+        open={impairOpen}
+        onClose={() => setImpairOpen(false)}
+        onSuccess={() => { setImpairOpen(false); refetch(); }}
+      />
+    )}
+    {item && id && revalueOpen && (
+      <RevalueAssetDialog
+        assetId={id}
+        assetName={item.name}
+        netBookValue={netBook}
+        open={revalueOpen}
+        onClose={() => setRevalueOpen(false)}
+        onSuccess={() => { setRevalueOpen(false); refetch(); }}
+      />
+    )}
     {item && id && (
       <EntityEditDialog<FixedAssetEditForm>
         open={editOpen}
@@ -416,5 +503,444 @@ function DepreciationScheduleCard({ assetId }: { assetId: number }) {
         />
       </CardContent>
     </Card>
+  );
+}
+
+// ── Dispose Asset Dialog ─────────────────────────────────────────────────────
+
+const disposeFormSchema = z.object({
+  disposalDate: z.string().min(1, "تاريخ الاستبعاد مطلوب"),
+  disposalType: z.enum(["sale", "scrap", "donation"]).default("sale"),
+  disposalProceeds: z.coerce.number().min(0).default(0),
+  reason: z.string().min(3, "سبب الاستبعاد مطلوب (3 أحرف على الأقل)"),
+});
+type DisposeForm = z.infer<typeof disposeFormSchema>;
+
+function DisposeAssetDialog({
+  assetId,
+  assetName,
+  open,
+  onClose,
+  onSuccess,
+}: {
+  assetId: number;
+  assetName: string;
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [result, setResult] = useState<{ journalEntryId: number | null; gainLoss: number } | null>(null);
+
+  const disposeMutation = useApiMutation<any, Record<string, unknown>>(
+    `/finance/fixed-assets/${assetId}/dispose`,
+    "POST",
+    [[`fixed-asset`, String(assetId)], ["fixed-assets"]],
+    { successMessage: "تم استبعاد الأصل بنجاح" },
+  );
+
+  if (!open) return null;
+
+  async function handleSubmit(values: DisposeForm) {
+    const res = await disposeMutation.mutateAsync({
+      disposalDate: values.disposalDate,
+      disposalType: values.disposalType,
+      disposalProceeds: values.disposalProceeds,
+      reason: values.reason,
+    });
+    setResult({ journalEntryId: res?.journalEntryId ?? null, gainLoss: res?.gainLoss ?? 0 });
+    onSuccess();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Trash2 className="h-4 w-4 text-destructive" />
+            استبعاد الأصل: {assetName}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {result ? (
+            <div className="space-y-4">
+              <div className="bg-status-success-surface border border-status-success-surface rounded p-3 text-sm space-y-1">
+                <p className="font-semibold text-status-success-foreground flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> تم استبعاد الأصل بنجاح
+                </p>
+                {result.journalEntryId && (
+                  <p className="text-xs text-muted-foreground">رقم القيد: {result.journalEntryId}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {result.gainLoss >= 0
+                    ? `ربح الاستبعاد: ${formatCurrency(result.gainLoss)}`
+                    : `خسارة الاستبعاد: ${formatCurrency(Math.abs(result.gainLoss))}`}
+                </p>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={onClose}>إغلاق</Button>
+              </div>
+            </div>
+          ) : (
+            <FormShell
+              schema={disposeFormSchema}
+              defaultValues={{ disposalDate: "", disposalType: "sale", disposalProceeds: 0, reason: "" }}
+              submitLabel={disposeMutation.isPending ? "جاري الاستبعاد..." : "تأكيد الاستبعاد"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={onClose} disabled={disposeMutation.isPending}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={handleSubmit}
+            >
+              <FormGrid cols={1}>
+                <FormDateField name="disposalDate" label="تاريخ الاستبعاد" required />
+                <FormSelectField
+                  name="disposalType"
+                  label="نوع الاستبعاد"
+                  options={[
+                    { value: "sale", label: "بيع" },
+                    { value: "scrap", label: "خردة" },
+                    { value: "donation", label: "تبرع" },
+                  ]}
+                />
+                <FormNumberField name="disposalProceeds" label="عائد البيع (إن وجد)" />
+                <FormTextareaField name="reason" label="سبب الاستبعاد" required rows={2} />
+              </FormGrid>
+            </FormShell>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Impair Asset Dialog ──────────────────────────────────────────────────────
+
+const impairFormSchema = z.object({
+  impairmentDate: z.string().min(1, "تاريخ الهبوط مطلوب"),
+  impairmentAmount: z.coerce.number().positive("قيمة الانخفاض يجب أن تكون أكبر من صفر"),
+  reason: z.string().min(3, "سبب الانخفاض مطلوب (3 أحرف على الأقل)"),
+});
+type ImpairForm = z.infer<typeof impairFormSchema>;
+
+function ImpairAssetDialog({
+  assetId,
+  assetName,
+  netBookValue,
+  open,
+  onClose,
+  onSuccess,
+}: {
+  assetId: number;
+  assetName: string;
+  netBookValue: number;
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [result, setResult] = useState<{ journalEntryId: number | null; newBookValue: number } | null>(null);
+
+  const impairMutation = useApiMutation<any, Record<string, unknown>>(
+    `/finance/fixed-assets/${assetId}/impair`,
+    "POST",
+    [[`fixed-asset`, String(assetId)], ["fixed-assets"]],
+    { successMessage: "تم تسجيل انخفاض قيمة الأصل" },
+  );
+
+  if (!open) return null;
+
+  async function handleSubmit(values: ImpairForm) {
+    const res = await impairMutation.mutateAsync({
+      impairmentDate: values.impairmentDate,
+      impairmentAmount: values.impairmentAmount,
+      reason: values.reason,
+    });
+    setResult({ journalEntryId: res?.journalEntryId ?? null, newBookValue: res?.newBookValue ?? 0 });
+    onSuccess();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+            هبوط قيمة الأصل: {assetName}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {result ? (
+            <div className="space-y-4">
+              <div className="bg-status-success-surface border border-status-success-surface rounded p-3 text-sm space-y-1">
+                <p className="font-semibold text-status-success-foreground flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> تم تسجيل انخفاض القيمة
+                </p>
+                {result.journalEntryId && (
+                  <p className="text-xs text-muted-foreground">رقم القيد: {result.journalEntryId}</p>
+                )}
+                <p className="text-xs text-muted-foreground">القيمة الدفترية الجديدة: {formatCurrency(result.newBookValue)}</p>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={onClose}>إغلاق</Button>
+              </div>
+            </div>
+          ) : (
+            <FormShell
+              schema={impairFormSchema}
+              defaultValues={{ impairmentDate: "", impairmentAmount: 0, reason: "" }}
+              submitLabel={impairMutation.isPending ? "جاري التسجيل..." : "تأكيد الانخفاض"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={onClose} disabled={impairMutation.isPending}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={handleSubmit}
+            >
+              <FormGrid cols={1}>
+                <FormDateField name="impairmentDate" label="تاريخ الانخفاض" required />
+                <FormNumberField
+                  name="impairmentAmount"
+                  label={`قيمة الانخفاض (الحد الأقصى: ${formatCurrency(netBookValue)})`}
+                />
+                <FormTextareaField name="reason" label="سبب الانخفاض" required rows={2} />
+              </FormGrid>
+            </FormShell>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Revalue Asset Dialog ─────────────────────────────────────────────────────
+
+const revalueFormSchema = z.object({
+  revaluationDate: z.string().min(1, "تاريخ إعادة التقييم مطلوب"),
+  revaluationDelta: z.coerce.number().refine((v) => v !== 0, "قيمة إعادة التقييم لا يمكن أن تكون صفراً"),
+  reason: z.string().min(3, "سبب إعادة التقييم مطلوب (3 أحرف على الأقل)"),
+});
+type RevalueForm = z.infer<typeof revalueFormSchema>;
+
+function RevalueAssetDialog({
+  assetId,
+  assetName,
+  netBookValue,
+  open,
+  onClose,
+  onSuccess,
+}: {
+  assetId: number;
+  assetName: string;
+  netBookValue: number;
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [result, setResult] = useState<{ journalEntryId: number | null; newBookValue: number; direction: "up" | "down" } | null>(null);
+
+  const revalueMutation = useApiMutation<any, Record<string, unknown>>(
+    `/finance/fixed-assets/${assetId}/revalue`,
+    "POST",
+    [[`fixed-asset`, String(assetId)], ["fixed-assets"]],
+    { successMessage: "تم تسجيل إعادة تقييم الأصل" },
+  );
+
+  if (!open) return null;
+
+  async function handleSubmit(values: RevalueForm) {
+    const res = await revalueMutation.mutateAsync({
+      revaluationDate: values.revaluationDate,
+      revaluationDelta: values.revaluationDelta,
+      reason: values.reason,
+    });
+    setResult({
+      journalEntryId: res?.journalEntryId ?? null,
+      newBookValue: res?.newBookValue ?? 0,
+      direction: values.revaluationDelta > 0 ? "up" : "down",
+    });
+    onSuccess();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            إعادة تقييم الأصل: {assetName}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {result ? (
+            <div className="space-y-4">
+              <div className="bg-status-success-surface border border-status-success-surface rounded p-3 text-sm space-y-1">
+                <p className="font-semibold text-status-success-foreground flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" />
+                  {result.direction === "up" ? "تمت الزيادة في القيمة" : "تم تسجيل انخفاض التقييم"}
+                </p>
+                {result.journalEntryId && (
+                  <p className="text-xs text-muted-foreground">رقم القيد: {result.journalEntryId}</p>
+                )}
+                <p className="text-xs text-muted-foreground">القيمة الدفترية الجديدة: {formatCurrency(result.newBookValue)}</p>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={onClose}>إغلاق</Button>
+              </div>
+            </div>
+          ) : (
+            <FormShell
+              schema={revalueFormSchema}
+              defaultValues={{ revaluationDate: "", revaluationDelta: 0, reason: "" }}
+              submitLabel={revalueMutation.isPending ? "جاري التسجيل..." : "تأكيد إعادة التقييم"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={onClose} disabled={revalueMutation.isPending}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={handleSubmit}
+            >
+              <FormGrid cols={1}>
+                <FormDateField name="revaluationDate" label="تاريخ إعادة التقييم" required />
+                <div className="text-xs text-muted-foreground -mb-1">
+                  القيمة الدفترية الحالية: <span className="font-mono font-bold">{formatCurrency(netBookValue)}</span>
+                  {" — "}أدخل قيمة موجبة للزيادة أو سالبة للنقص
+                </div>
+                <FormNumberField name="revaluationDelta" label="مقدار التغيير في القيمة (+ زيادة / − نقص)" />
+                <FormTextareaField name="reason" label="سبب إعادة التقييم" required rows={2} />
+              </FormGrid>
+            </FormShell>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── Transfer Asset Dialog ────────────────────────────────────────────────────
+
+const transferFormSchema = z.object({
+  toBranchId: z.string().optional().default(""),
+  toDepartmentId: z.string().optional().default(""),
+  toCostCenterId: z.string().optional().default(""),
+  transferDate: z.string().optional().default(""),
+  reason: z.string().min(3, "سبب النقل مطلوب (3 أحرف على الأقل)"),
+});
+type TransferForm = z.infer<typeof transferFormSchema>;
+
+function TransferAssetDialog({
+  assetId,
+  assetName,
+  open,
+  onClose,
+  onSuccess,
+}: {
+  assetId: number;
+  assetName: string;
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [result, setResult] = useState<{ journalEntryId: number | null; transferDate: string } | null>(null);
+
+  const { data: branchesData } = useApiQuery<any>(["branches-list"], "/settings/branches", open);
+  const { data: deptsData } = useApiQuery<any>(["departments-list"], "/settings/departments", open);
+  const { data: ccData } = useApiQuery<any>(["cost-centers-list"], "/finance/cost-centers", open);
+
+  const branches = (branchesData?.data ?? branchesData ?? []) as any[];
+  const departments = (deptsData?.data ?? deptsData ?? []) as any[];
+  const costCenters = (ccData?.data ?? ccData ?? []) as any[];
+
+  const transferMutation = useApiMutation<any, Record<string, unknown>>(
+    `/finance/fixed-assets/${assetId}/transfer`,
+    "POST",
+    [[`fixed-asset`, String(assetId)], ["fixed-assets"]],
+    { successMessage: "تم نقل الأصل بنجاح" },
+  );
+
+  if (!open) return null;
+
+  async function handleSubmit(values: TransferForm) {
+    const payload: Record<string, unknown> = { reason: values.reason };
+    if (values.toBranchId) payload.toBranchId = Number(values.toBranchId);
+    if (values.toDepartmentId) payload.toDepartmentId = Number(values.toDepartmentId);
+    if (values.toCostCenterId) payload.toCostCenterId = Number(values.toCostCenterId);
+    if (values.transferDate) payload.transferDate = values.transferDate;
+    const res = await transferMutation.mutateAsync(payload);
+    setResult({ journalEntryId: res?.journalEntryId ?? null, transferDate: res?.transferDate ?? "" });
+    onSuccess();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ArrowLeftRight className="h-4 w-4" />
+            نقل الأصل: {assetName}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {result ? (
+            <div className="space-y-4">
+              <div className="bg-status-success-surface border border-status-success-surface rounded p-3 text-sm space-y-1">
+                <p className="font-semibold text-status-success-foreground flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> تم نقل الأصل بنجاح
+                </p>
+                {result.journalEntryId && (
+                  <p className="text-xs text-muted-foreground">رقم القيد: {result.journalEntryId}</p>
+                )}
+                {result.transferDate && (
+                  <p className="text-xs text-muted-foreground">تاريخ النقل: {formatDateAr(result.transferDate)}</p>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={onClose}>إغلاق</Button>
+              </div>
+            </div>
+          ) : (
+            <FormShell
+              schema={transferFormSchema}
+              defaultValues={{ toBranchId: "", toDepartmentId: "", toCostCenterId: "", transferDate: "", reason: "" }}
+              submitLabel={transferMutation.isPending ? "جاري النقل..." : "تأكيد النقل"}
+              secondaryActions={
+                <Button type="button" variant="outline" onClick={onClose} disabled={transferMutation.isPending}>
+                  إلغاء
+                </Button>
+              }
+              onSubmit={handleSubmit}
+            >
+              <FormGrid cols={1}>
+                <FormSelectField
+                  name="toBranchId"
+                  label="الفرع المستقبِل"
+                  options={[
+                    { value: "", label: "— لا تغيير —" },
+                    ...branches.map((b: any) => ({ value: String(b.id), label: b.name })),
+                  ]}
+                />
+                <FormSelectField
+                  name="toDepartmentId"
+                  label="القسم (اختياري)"
+                  options={[
+                    { value: "", label: "— لا تغيير —" },
+                    ...departments.map((d: any) => ({ value: String(d.id), label: d.name })),
+                  ]}
+                />
+                <FormSelectField
+                  name="toCostCenterId"
+                  label="مركز التكلفة (اختياري)"
+                  options={[
+                    { value: "", label: "— لا تغيير —" },
+                    ...costCenters.map((c: any) => ({ value: String(c.id), label: c.name })),
+                  ]}
+                />
+                <FormDateField name="transferDate" label="تاريخ النقل (اختياري)" />
+                <FormTextareaField name="reason" label="سبب النقل" required rows={2} />
+              </FormGrid>
+            </FormShell>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

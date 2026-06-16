@@ -18,6 +18,7 @@ import { Users, Plane, AlertTriangle, UserPlus, Play, Zap, TrendingUp, TrendingD
 import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { UmrahFinanceHygieneCard } from "@/components/shared/umrah-finance-hygiene-card";
 
 export default function UmrahDashboard() {
   const { data: seasons, isLoading: seasonsLoading, isError: seasonsError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -118,6 +119,11 @@ export default function UmrahDashboard() {
           dashboard. Renders nothing when zero suggestions, so the
           quick-actions row sits at the top on a clean tenant. */}
       <AssistantHints />
+
+      {/* §6 Finance Hygiene — كرت "نظافة المالية". إذا كان الحقل = 0
+          البطاقة خضراء، وإلا توضح للمدير كم بند يحتاج اعتماد/ترحيل
+          محاسبي + المبلغ المتأثر. روابط مباشرة للتقارير. */}
+      <UmrahFinanceHygieneCard />
 
       {/* Quick Actions — أهم 4 إجراءات يومية للعامل، ظاهرة مباشرة
           بدون ما يضطر يفتح tab. كانت كل وحدة مدفونة في مكان مختلف:

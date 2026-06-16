@@ -20,6 +20,7 @@ import {
   createAuditLog,
   initiateApprovalChain,
   updateBudgetUsed,
+  validateBudget,
   checkFinancialPeriodOpen,
   computeVat,
   getCompanyVatRate,
@@ -50,6 +51,131 @@ const PURCHASE_LINE_TREATMENTS = [
   "inventory", "expense", "fixed_asset", "project_cost", "vehicle_cost",
   "property_maintenance", "custody", "prepayment", "service",
 ] as const;
+
+// #1945 FIN-SUB-01 (#2097) — GRN per-line treatment → default DR account
+// purpose. Two literals were wrong on the real SOCPA chart (and the default
+// seed, which is identical): `inventory`→1250 is *leasehold improvements* (a
+// fixed asset, NOT inventory) and `custody`→1130 is the AR control header.
+// Corrected to the real control accounts; the `*_receipt`/`employee_custody`
+// intents (in MAPPING_INTENT) resolve the postable leaf on any tenant chart,
+// so the literal is only a last-resort fallback. Module scope so the
+// pre-flight enforcement and the posting path share ONE source of truth.
+const GRN_TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
+  inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1150" },
+  expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
+  fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
+  project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
+  vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
+  property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
+  custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1142" },
+  prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1170" },
+  service:              { purpose: "service_expense",              side: "debit", defaultCode: "6920" },
+};
+
+// Required chart nature per treatment. Asset-bearing treatments must hit the
+// balance sheet; cost treatments the P&L; project_cost may be either (direct
+// expense or WIP/CIP capitalisation).
+const GRN_TREATMENT_ACCOUNT_NATURE: Record<string, string[]> = {
+  inventory:            ["asset"],
+  fixed_asset:          ["asset"],
+  prepayment:           ["asset"],
+  custody:              ["asset"],
+  expense:              ["expense"],
+  service:              ["expense"],
+  vehicle_cost:         ["expense"],
+  property_maintenance: ["expense"],
+  project_cost:         ["expense", "asset"],
+};
+
+/** Resolve the DR account a GRN line will post to — the SAME chain the posting
+ *  path uses: allocation rule/manual pin → treatment-purpose map → default
+ *  inventory account. Shared so the pre-flight gate can never diverge from the
+ *  actual posting. */
+async function resolveGrnDrAccount(
+  companyId: number,
+  line: { lineTreatment: string | null; accountCode: string | null; costCenterId: number | null; dims: Record<string, number | null>; sourceTable: string; sourceLineId: number },
+  vendorId: number | null,
+  fe: { resolveAccountCode: (c: number, op: string, side: "debit" | "credit", fb: string) => Promise<string> },
+  resolveLineAllocation: (typeof import("../lib/accountingAllocation.js"))["resolveLineAllocation"],
+  defaultInvAccount: string,
+): Promise<string> {
+  const res = await resolveLineAllocation({
+    companyId, documentType: "grn", lineType: line.lineTreatment ?? undefined, entityType: "vendor",
+    accountCode: line.accountCode, costCenterId: line.costCenterId,
+    dimensions: { ...line.dims, vendorId } as any,
+    sourceTable: line.sourceTable, sourceLineId: line.sourceLineId,
+  } as any);
+  let acct = res.resolvedAccountCode;
+  if (!acct && line.lineTreatment) {
+    const map = GRN_TREATMENT_PURPOSE[line.lineTreatment];
+    if (map) acct = await fe.resolveAccountCode(companyId, map.purpose, map.side, map.defaultCode);
+  }
+  return acct ?? defaultInvAccount;
+}
+
+/**
+ * #1945 FIN-SUB-01 (#2097) — ENFORCE treatment ↔ account nature, BEFORE any
+ * write. Each received line's treatment (and the preview the operator saw)
+ * must match the chart nature of the account it actually posts to:
+ *   inventory / fixed_asset / prepayment / custody → asset (balance sheet)
+ *   expense / service / vehicle_cost / property_maintenance → expense (P&L)
+ *   project_cost → expense OR asset (expensed or capitalised to WIP/CIP)
+ * A mismatch (e.g. a fixed-asset line on an expense account via a stale pin or
+ * a misconfigured rule) throws 422 — run as a PRE-FLIGHT before the GRN row,
+ * its items, or receivedQty are touched, so a rejection leaves ZERO trace
+ * (full success or full rejection). Reads live chart types — no hardcoded codes.
+ */
+async function assertGrnTreatmentNature(
+  companyId: number,
+  vendorId: number | null,
+  lines: Array<{ label: string; lineTreatment: string | null; accountCode: string | null; costCenterId: number | null; dims: Record<string, number | null>; sourceTable: string; sourceLineId: number }>,
+): Promise<void> {
+  const constrained = lines.filter((l) => l.lineTreatment && GRN_TREATMENT_ACCOUNT_NATURE[l.lineTreatment]);
+  if (constrained.length === 0) return;
+
+  const { financialEngine } = await import("../lib/engines/index.js");
+  const { resolveLineAllocation } = await import("../lib/accountingAllocation.js");
+  const defaultInvAccount = await financialEngine.resolveAccountCode(companyId, "inventory_receipt", "debit", "1151");
+
+  const resolved = await Promise.all(
+    constrained.map(async (l) => ({ line: l, acct: await resolveGrnDrAccount(companyId, l, vendorId, financialEngine, resolveLineAllocation, defaultInvAccount) })),
+  );
+  const distinctCodes = [...new Set(resolved.map((r) => r.acct))];
+  const typeRows = await rawQuery<{ code: string; type: string; name: string }>(
+    `SELECT code, type, name FROM chart_of_accounts
+      WHERE "companyId" = $1 AND code = ANY($2::text[]) AND "deletedAt" IS NULL`,
+    [companyId, distinctCodes],
+  );
+  const accByCode = new Map(typeRows.map((r) => [r.code, { type: r.type, name: r.name }]));
+
+  const violations = resolved
+    .map((r) => {
+      const allowed = GRN_TREATMENT_ACCOUNT_NATURE[r.line.lineTreatment!];
+      const acc = accByCode.get(r.acct);
+      if (!acc) return null; // missing account → createJournalEntry rejects it later with its own message
+      if (allowed.includes(acc.type)) return null;
+      return { label: r.line.label, treatment: r.line.lineTreatment!, acct: r.acct, accName: acc.name, accType: acc.type, allowed };
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null);
+
+  if (violations.length > 0) {
+    const v = violations[0];
+    const natureAr: Record<string, string> = { asset: "أصل/ميزانية", liability: "التزام", equity: "حقوق ملكية", revenue: "إيراد", expense: "مصروف" };
+    const treatmentAr: Record<string, string> = {
+      inventory: "مخزون", fixed_asset: "أصل ثابت", prepayment: "مدفوع مقدماً", custody: "عهدة",
+      expense: "مصروف", service: "خدمة", vehicle_cost: "تكلفة مركبة", property_maintenance: "صيانة عقار", project_cost: "تكلفة مشروع",
+    };
+    throw new ValidationError(
+      `معالجة «${treatmentAr[v.treatment] ?? v.treatment}» للبند «${v.label}» لا يجوز ترحيلها على حساب ${natureAr[v.accType] ?? v.accType} «${v.acct} ${v.accName}» — ` +
+      `المتوقَّع حساب ${v.allowed.map((t) => natureAr[t] ?? t).join(" أو ")}.`,
+      {
+        field: "items",
+        fix: "اختر للبند حسابًا من النوع المطابق لمعالجته (مخزون→حساب مخزون، أصل→حساب أصول/ميزانية، مصروف→حساب مصروف) أو صحّح معالجة البند.",
+        meta: { violations },
+      } as any,
+    );
+  }
+}
 
 const purchaseLineDimsSchema = {
   accountId: z.coerce.number().optional(),
@@ -870,6 +996,41 @@ async function poApprovalAction(req: any, res: any, newStatus: "approved" | "rej
       );
     }
 
+    // #2296 — budget enforcement at PO approval (the commitment point).
+    // A purchase order is a spend commitment; approving it is where the
+    // money is effectively earmarked, so this is where the same role-aware
+    // 80/100/110% gate the vendor-invoice path applies belongs. Without it
+    // an over-budget PO sails through approval and only trips the gate
+    // later at invoice time — after the supplier commitment already exists.
+    // Lines are aggregated per expense account so the check matches the
+    // budget grain (one budgets row per accountCode+period). The PO's own
+    // creation month is the budget period; validateBudget falls back to the
+    // current period when createdAt is unexpectedly empty.
+    if (newStatus === "approved") {
+      const poPeriod = String((po as Record<string, unknown>).createdAt ?? "").slice(0, 7) || undefined;
+      const poLines = await rawQuery<{ accountCode: string; amt: string }>(
+        `SELECT "accountCode", SUM("lineTotal")::text AS amt
+           FROM purchase_order_items
+          WHERE "orderId" = $1 AND "accountCode" IS NOT NULL
+          GROUP BY "accountCode"`,
+        [id],
+      );
+      for (const ln of poLines) {
+        const amt = Number(ln.amt);
+        if (!(amt > 0)) continue;
+        const budgetCheck = await validateBudget({
+          companyId: scope.companyId, accountCode: String(ln.accountCode), amount: amt, period: poPeriod, role: scope.role,
+        });
+        if (!budgetCheck.canProceed) {
+          const meta = { utilization: budgetCheck.utilization, status: budgetCheck.status, accountCode: ln.accountCode };
+          if (budgetCheck.status === "rejected") {
+            throw new ConflictError(budgetCheck.message, { field: "amount", fix: "أعد تقييم الميزانية أو قلّل المبلغ", meta });
+          }
+          throw new ForbiddenError(budgetCheck.message, { fix: `يلزم موافقة ${budgetCheck.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`, meta });
+        }
+      }
+    }
+
     await applyTransition({
       entity: "purchase_orders",
       id,
@@ -981,6 +1142,34 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     if (inputLines.length === 0) {
       throw new ValidationError("لا توجد كميات للاستلام");
     }
+
+    // #1945 FIN-SUB-01 (#2097) — PRE-FLIGHT treatment↔nature gate. Runs BEFORE
+    // any permanent write (the GRN row, its items, receivedQty, PO status), so
+    // a rejected receipt leaves ZERO operational trace — full success or full
+    // rejection. Resolves each line's DR account from the PO item (identical
+    // inputs to the post-creation resolution, which copies these verbatim onto
+    // the GRN items) and rejects 422 if a treatment lands on a wrong-nature
+    // account (e.g. a fixed-asset line on an expense account → asset in P&L).
+    await assertGrnTreatmentNature(
+      scope.companyId,
+      (po.supplierId as number | null) ?? null,
+      inputLines.map((l) => {
+        const it = poItemMap.get(l.poItemId)!;
+        return {
+          label: String(it.itemName ?? l.poItemId),
+          lineTreatment: it.lineTreatment ?? null,
+          accountCode: it.accountCode ?? null,
+          costCenterId: it.costCenterId ?? null,
+          dims: {
+            projectId: it.projectId ?? null, vehicleId: it.vehicleId ?? null, propertyId: it.propertyId ?? null,
+            unitId: it.unitId ?? null, assetId: it.assetId ?? null, employeeId: it.employeeId ?? null,
+            driverId: it.driverId ?? null, contractId: it.contractId ?? null, productId: it.productId ?? null,
+          },
+          sourceTable: "purchase_order_items",
+          sourceLineId: l.poItemId,
+        };
+      }),
+    );
 
     // Compute totals for this GRN
     let subtotal = 0;
@@ -1136,25 +1325,11 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     const { financialEngine } = await import("../lib/engines/index.js");
     const [vatAccount, grniAccount] = await Promise.all([
       financialEngine.resolveAccountCode(scope.companyId, "purchase_grn_vat", "debit", "1180"),
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2115"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "credit", "2150"),
     ]);
 
-    // Resolve a default account code per lineTreatment. Tenants that
-    // haven't mapped these purposes yet inherit the seed defaults
-    // (1250 inventory etc) — same fallback shape as
-    // resolveAccountCode uses elsewhere.
-    const TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
-      inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1250" },
-      expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
-      fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
-      project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
-      vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
-      property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
-      custody:              { purpose: "employee_custody",             side: "debit", defaultCode: "1130" },
-      prepayment:           { purpose: "supplier_prepayment",          side: "debit", defaultCode: "1340" },
-      service:              { purpose: "service_expense",              side: "debit", defaultCode: "6920" },
-    };
-
+    // Per-line DR routing uses the module-scope GRN_TREATMENT_PURPOSE map
+    // (shared with the pre-flight gate above so they can never diverge).
     // Read the dimensional payload from the receipt lines we just
     // inserted. `unitPrice` × `receivedQty` per line is the per-line
     // subtotal; sum to verify against the header `subtotal` for
@@ -1191,7 +1366,7 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
     // a safety net so unclassified receipts still post somewhere
     // sensible until Phase 6 forces every line to carry a treatment.
     const defaultInvAccount = await financialEngine.resolveAccountCode(
-      scope.companyId, "inventory_receipt", "debit", "1250"
+      scope.companyId, "inventory_receipt", "debit", "1151"
     );
 
     // Phase 5.4 — run the allocation resolver on every receipt line.
@@ -1299,18 +1474,27 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
       umrahAgentId: number | null;
     };
     const buckets = new Map<string, DrBucket>();
+    // #1945 FIN-SUB-01 (#2097) — collect (treatment → resolved account) per
+    // line so we can ENFORCE, before posting, that the actual DR account's
+    // nature matches the line's treatment. Without this the GRN routed by
+    // treatment but never verified the account, so a `fixed_asset` line whose
+    // pinned/rule account was an expense posted an asset straight to P&L
+    // (R-005). That nature gate now runs as a PRE-FLIGHT before any write (see
+    // assertGrnTreatmentNature above) — the account resolution here is identical
+    // (same inputs, copied verbatim onto the GRN items), so the posted account
+    // is guaranteed nature-correct.
     let postedNet = 0;
     for (let i = 0; i < receiptLineRows.length; i++) {
       const ln = receiptLineRows[i];
       const res = lineResolutions[i];
 
-      // Account resolution chain:
+      // Account resolution chain (mirrors resolveGrnDrAccount):
       //   1. Resolver picked an account (rule match or manual override)
-      //   2. Fall back to TREATMENT_PURPOSE map (Phase 4.2)
+      //   2. Fall back to GRN_TREATMENT_PURPOSE map (Phase 4.2)
       //   3. Fall back to defaultInvAccount (legacy)
       let acct = res.resolvedAccountCode;
       if (!acct) {
-        const map = ln.lineTreatment ? TREATMENT_PURPOSE[ln.lineTreatment] : null;
+        const map = ln.lineTreatment ? GRN_TREATMENT_PURPOSE[ln.lineTreatment] : null;
         if (map) {
           acct = await financialEngine.resolveAccountCode(
             scope.companyId, map.purpose, map.side, map.defaultCode
@@ -1386,6 +1570,8 @@ purchaseRouter.patch("/purchase-orders/:id/receive", authorize({ feature: "finan
         umrahSeasonId: null, umrahAgentId: null,
       });
     }
+    // (treatment↔nature is enforced as a pre-flight before any write — see
+    // assertGrnTreatmentNature near the top of the receive handler.)
 
     const drLines = Array.from(buckets.values())
       .filter((b) => Math.abs(b.amount) >= 0.005)
@@ -1696,8 +1882,8 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apAccount, cashAccount] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
+      financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1124"),
     ]);
 
     // ── WHT computation ─────────────────────────────────────────────────
@@ -1742,7 +1928,7 @@ purchaseRouter.post("/payment-run/execute", authorize({ feature: "finance.purcha
     // paying 50 POs to 30 different non-residents still produces one
     // CR line per ZATCA-payable account (typically just '2330').
     const whtPayableFallback = await financialEngine.resolveAccountCode(
-      scope.companyId, "wht_payable", "credit", "2330",
+      scope.companyId, "wht_payable", "credit", "2132",
     );
     const whtCreditByAccount = new Map<string, number>();
     for (const w of whtByPo) {
@@ -2355,8 +2541,8 @@ purchaseRouter.post("/purchase-orders/:id/match-invoice", authorize({ feature: "
     await withTransaction(async (client: any) => {
       if (isMatched) {
         const [matchGrniCode, matchApCode] = await Promise.all([
-          financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "debit", "2115"),
-          financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+          financialEngine.resolveAccountCode(scope.companyId, "purchase_grni", "debit", "2150"),
+          financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
         ]);
         const grniRowRes = await client.query(
           `SELECT COALESCE(SUM(jl.credit), 0) AS grni
@@ -2473,8 +2659,8 @@ purchaseRouter.post("/purchase-orders/:id/schedule-payment", authorize({ feature
     // also carries guardTable/guardId now, so the engine's idempotency
     // anchor kicks in on retry.
     const { financialEngine } = await import("../lib/engines/index.js");
-    const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100");
-    const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1100");
+    const schedApCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111");
+    const schedCashCode = await financialEngine.resolveAccountCode(scope.companyId, "payroll_bank_payout", "credit", "1124");
 
     let schedAlreadyExists = false;
     await withTransaction(async (client: any) => {
@@ -2592,8 +2778,8 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
     // withTransaction. Same shape as customer-advances fix.
     const { financialEngine } = await import("../lib/engines/index.js");
     const [advReceivableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1420"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1100"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "debit", "1190"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_cash", "credit", "1111"),
     ]);
 
     let advanceId: number | null = null;
@@ -2699,8 +2885,8 @@ purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, advReceivableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "credit", "1420"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_advance_receivable", "credit", "1190"),
     ]);
 
     let advance: any;
@@ -2817,9 +3003,9 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     // withTransaction. Same shape as customer-advances fix.
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, returnsCode, vatInputCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5550"),
-      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1400"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_return_revenue", "credit", "5110"),
+      financialEngine.resolveAccountCode(scope.companyId, "vat_input_reversal", "credit", "1180"),
     ]);
 
     let memoId: number | null = null;
@@ -2926,8 +3112,8 @@ purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.p
 
     const { financialEngine } = await import("../lib/engines/index.js");
     const [apCode, creditClearingCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2100"),
-      financialEngine.resolveAccountCode(scope.companyId, "vendor_credit_clearing", "credit", "2110"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "debit", "2111"),
+      financialEngine.resolveAccountCode(scope.companyId, "vendor_credit_clearing", "credit", "2111"),
     ]);
 
     let memo: any;
@@ -3120,10 +3306,10 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     // overruns stay accurate.
     const { financialEngine } = await import("../lib/engines/index.js");
     const expenseCode = b.expenseAccountCode
-      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5400");
+      ?? await financialEngine.resolveAccountCode(scope.companyId, "vendor_invoice_expense", "debit", "5340");
     const [vatInputCode, apCode] = await Promise.all([
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1400"),
-      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2100"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vat_input", "debit", "1180"),
+      financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111"),
     ]);
 
     let invoiceId: number | null = null;
@@ -3197,6 +3383,22 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
       // on the sales side.
       if (subtotal > 0) {
         const period = String(b.invoiceDate).slice(0, 7);
+        // #2296 — enforce the expense budget on the procurement channel with
+        // the same role-aware 80/100/110% gates the manual-expense path applies
+        // (finance-journal). validateBudget returns canProceed=false when the
+        // caller's role can't authorise the tier, so over-budget vendor bills
+        // are blocked (rejected) or require GM/CFO sign-off — instead of being
+        // silently consumed and only flagged in a report afterwards.
+        const budgetCheck = await validateBudget({
+          companyId: scope.companyId, accountCode: expenseCode, amount: subtotal, period, role: scope.role,
+        });
+        if (!budgetCheck.canProceed) {
+          const meta = { utilization: budgetCheck.utilization, status: budgetCheck.status, accountCode: expenseCode };
+          if (budgetCheck.status === "rejected") {
+            throw new ConflictError(budgetCheck.message, { field: "amount", fix: "أعد تقييم الميزانية أو قلّل المبلغ", meta });
+          }
+          throw new ForbiddenError(budgetCheck.message, { fix: `يلزم موافقة ${budgetCheck.approvalLevel === "cfo" ? "المدير المالي" : "المدير العام"}`, meta });
+        }
         await client.query(
           `UPDATE budgets SET used = COALESCE(used, 0) + $1
            WHERE "companyId" = $2 AND "accountCode" = $3 AND period = $4 AND "deletedAt" IS NULL`,

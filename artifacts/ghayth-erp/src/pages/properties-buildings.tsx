@@ -46,13 +46,13 @@ export default function PropertiesBuildings() {
   );
   const buildings = asList(buildingsResp);
 
-  if (isError) return <ErrorState />;
-
   const filtered = applyFilters(buildings, filters, {
     searchFields: ["name", "address", "city"],
     statusField: "type",
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
+
+  if (isError) return <ErrorState />;
 
   const totalUnits = buildings.reduce((sum: number, b: any) => sum + (b.totalUnits || 0), 0);
   const totalRented = buildings.reduce((sum: number, b: any) => sum + (b.rentedUnits || 0), 0);
@@ -184,17 +184,13 @@ export default function PropertiesBuildings() {
       header: "إجراءات",
       render: (b) => (
         <div className="flex items-center gap-1">
-          <Link href={`/properties/buildings/${b.id}`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs">
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs"><Link href={`/properties/buildings/${b.id}`}>
               <Eye className="h-3 w-3" /> عرض
-            </Button>
-          </Link>
+            </Link></Button>
           {canManage && (
-            <Link href={`/properties/buildings/${b.id}`}>
-              <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs" title="تعديل">
+            <Button asChild variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs" title="تعديل"><Link href={`/properties/buildings/${b.id}`}>
                 <Pencil className="h-3 w-3" />
-              </Button>
-            </Link>
+              </Link></Button>
           )}
         </div>
       ),

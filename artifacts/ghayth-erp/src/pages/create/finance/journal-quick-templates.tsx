@@ -403,15 +403,15 @@ export default function JournalQuickTemplatesPage() {
                       size="lg"
                     >
                       <FileSignature className="w-4 h-4 ml-2" />
-                      ترحيل القيد
+                      حفظ القيد (مسودة)
                     </GuardedButton>
                   ) : (
                     <div className="border-2 border-status-warning-foreground rounded p-4 bg-status-warning-surface">
                       <div className="flex items-start gap-2 mb-3">
                         <Lock className="w-5 h-5 text-status-warning-foreground" />
                         <div className="text-sm">
-                          سيتم ترحيل قيد <strong>{selected.name}</strong> بمبلغ{" "}
-                          <strong>{formatCurrency(numAmount)}</strong> بتاريخ {date}.
+                          سيُحفظ قيد <strong>{selected.name}</strong> بمبلغ{" "}
+                          <strong>{formatCurrency(numAmount)}</strong> بتاريخ {date} <strong>كمسودة</strong> (يُرحَّل بعد الاعتماد).
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -421,7 +421,7 @@ export default function JournalQuickTemplatesPage() {
                           className="flex-1"
                           rateLimitAware
                         >
-                          {postMutation.isPending ? "جاري الترحيل..." : "تأكيد"}
+                          {postMutation.isPending ? "جاري الحفظ..." : "تأكيد الحفظ كمسودة"}
                         </Button>
                         <Button
                           variant="outline"
@@ -437,7 +437,7 @@ export default function JournalQuickTemplatesPage() {
                   {postMutation.isSuccess && postMutation.data?.id && (
                     <div className="mt-3 bg-status-success-surface text-status-success-foreground p-3 rounded flex items-center gap-2 text-sm">
                       <CheckCircle2 className="w-5 h-5" />
-                      تم ترحيل القيد #{postMutation.data.id}. جاري التحويل...
+                      تم حفظ القيد #{postMutation.data.id} كمسودة (بانتظار الاعتماد والترحيل). جاري التحويل...
                     </div>
                   )}
                   {postMutation.isError && (

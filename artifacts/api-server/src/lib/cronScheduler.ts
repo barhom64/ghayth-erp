@@ -23,11 +23,24 @@ import {
   currentYear,
   currentPeriod,
   roundTo2,
+  currentDateInTz,
 } from "./businessHelpers.js";
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
+import {
+  TASK_SLA_REMINDER_SETTING_KEY,
+  resolveTaskSlaReminderConfig,
+  shouldFireSlaReminder,
+} from "./inboxClassifier.js";
 import { processFallbackChains } from "./notificationEngine.js";
+import {
+  resolveSystemSmtpConfig,
+  formatFromHeader,
+  scrubSmtpSecrets,
+  smtpTransportOptions,
+  type SystemSmtpConfig,
+} from "./systemSmtp.js";
 import { runPendingTranscription } from "./pbxControl.js";
 import { aiEngine } from "./aiEngine.js";
 import { rawQuery as rawQueryShared, rawExecute as rawExecuteShared } from "./rawdb.js";
@@ -37,6 +50,8 @@ import { runAllProactiveChecks, registerProactiveEventListeners } from "./proact
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
+import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
+import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
 import {
   fleetTelematicsRetention,
   fleetTelematicsHeartbeat,
@@ -479,6 +494,17 @@ export async function scanVehicleMaintenanceSchedules(): Promise<string> {
     }
   }
   return `vehicle_maintenance_schedule_scan: ${dueCount} due schedule(s) processed`;
+}
+
+/**
+ * TA-GAP-09 Phase 3 — sweep every active maps-usage threshold and
+ * fire warning/critical events when the operator's cap is crossed.
+ * Dedupe is enforced inside the lib via the alerts table UNIQUE.
+ */
+async function mapsUsageThresholdAlerts(): Promise<string> {
+  const { runThresholdAlertCheck } = await import("./fleet/mapsUsageThresholdAlerts.js");
+  const result = await runThresholdAlertCheck(new Date());
+  return `[mapsUsageThresholdAlerts] checked=${result.thresholdsChecked} emitted=${result.alertsEmitted}`;
 }
 
 async function fleetStatusCheck(): Promise<string> {
@@ -943,6 +969,10 @@ async function reconcileAttendance(): Promise<string> {
        SELECT ea.id, ea."companyId", ea."branchId", CURRENT_DATE, 'absent', NOW()
        FROM employee_assignments ea
        WHERE ea."companyId"=$1 AND ea.status='active'
+         -- PR-8a (#2077): access-grant assignments are not employment;
+         -- never mark them absent (the admin was getting one absence
+         -- row PER BRANCH per day).
+         AND ea."isAccessGrant" = FALSE
          AND NOT EXISTS (
            SELECT 1 FROM attendance a WHERE a."assignmentId"=ea.id AND a.date=CURRENT_DATE
          )
@@ -1960,7 +1990,11 @@ async function runEmployeeScoringPeriod(scope: "weekly" | "monthly" | "quarterly
   }>(
     `SELECT id, "employeeId", "companyId", "branchId"
        FROM employee_assignments
-      WHERE status = 'active'`,
+      WHERE status = 'active'
+        -- PR-8a (#2077): one person = one score. Access-grant rows
+        -- (the admin's per-branch entries) were producing 8 composite
+        -- scores for one human.
+        AND "isAccessGrant" = FALSE`,
   );
   for (const a of assignments) {
     try {
@@ -2151,26 +2185,21 @@ async function retryStuckOfficialLetters(): Promise<string> {
 
 
 
-async function processEmailQueue(): Promise<string> {
+// Exported (like the other workers above) so the #2137 integration
+// suite can drive a real queue → SMTP lifecycle without the cron loop.
+export async function processEmailQueue(): Promise<string> {
   // Phase 4 contract slice 6: read directly from outbound_queue
-  // (channel='email'). All writers landed there via messageSender's
-  // dual-write since slice 3 (#1292), and slice 4 (#1293) mirrored
-  // legacy status updates into outbound_queue so backfilled rows
-  // are in sync. Slice 5 (#1294) migrated every reader off the
-  // legacy queue tables. The legacy email_queue is now status-mirror
-  // only (see updateBothEmail below) for the soak window before the
-  // final DROP.
+  // (channel='email').
+  //
+  // #2137 slice 1: SMTP config no longer comes from a per-row LATERAL
+  // join on integrations.config (which the UI never wrote, and whose
+  // password was read still-encrypted). Every send resolves through
+  // resolveSystemSmtpConfig(companyId) — the SAME single source the
+  // /admin/vendor-settings UI saves to and its test endpoints read.
   const pending = await rawQuery<Record<string, unknown>>(
     `SELECT oq.id, oq."companyId", oq.recipient AS "toEmail",
-            oq."recipientName", oq.subject, oq.body,
-            oq.metadata, oq."legacyId", oq."legacySource",
-            i.config AS "smtpSettings"
+            oq."recipientName", oq.subject, oq.body, oq.metadata
      FROM outbound_queue oq
-     LEFT JOIN LATERAL (
-       SELECT config FROM integrations
-       WHERE "companyId" = oq."companyId" AND type IN ('smtp', 'email') AND status = 'active'
-       ORDER BY id DESC LIMIT 1
-     ) i ON true
      WHERE oq.status = 'pending' AND oq.channel = 'email'
        AND (oq."scheduledAt" IS NULL OR oq."scheduledAt" <= NOW())
      ORDER BY oq."createdAt" ASC
@@ -2181,9 +2210,6 @@ async function processEmailQueue(): Promise<string> {
 
   let sent = 0, failed = 0;
 
-  // Phase 4 final contract: outbound_queue is the only store. The
-  // reverse-mirror to email_queue (slice 6 leftover) is gone with the
-  // table itself.
   const updateBothEmail = async (
     row: Record<string, unknown>,
     status: "sent" | "failed",
@@ -2201,30 +2227,44 @@ async function processEmailQueue(): Promise<string> {
     );
   };
 
-  for (const email of pending) {
-    try {
-      const smtp = (email.smtpSettings as { host?: string; port?: number; secure?: boolean; user?: string; password?: string; from?: string } | null) ?? null;
+  // One resolver call per company per run — not per row.
+  const smtpByCompany = new Map<number, SystemSmtpConfig | null>();
+  const resolveFor = async (companyId: number): Promise<SystemSmtpConfig | null> => {
+    if (!smtpByCompany.has(companyId)) {
+      smtpByCompany.set(companyId, await resolveSystemSmtpConfig(companyId));
+    }
+    return smtpByCompany.get(companyId) ?? null;
+  };
 
-      if (!smtp || !smtp.host) {
-        await updateBothEmail(email, "failed", "No active SMTP integration configured for this company");
+  for (const email of pending) {
+    const smtp = await resolveFor(Number(email.companyId));
+    try {
+      if (!smtp) {
+        await updateBothEmail(
+          email,
+          "failed",
+          "لا يوجد إعداد SMTP صالح — اضبط بريد النظام من /admin/vendor-settings (أو متغيّرات البيئة)",
+        );
         failed++;
         continue;
       }
 
-      const { createTransport } = await import("nodemailer");
-      const transporter = createTransport({
-        host: smtp.host,
-        port: Number(smtp.port ?? 587),
-        secure: smtp.secure === true || smtp.port === 465,
-        auth: smtp.user && smtp.password ? { user: smtp.user, pass: smtp.password } : undefined,
-      });
+      // Visible lifecycle: pending → sending → sent/failed. A crash
+      // mid-send leaves the row in 'sending' for the operator to spot
+      // instead of silently re-pending forever.
+      await rawExecute(
+        `UPDATE outbound_queue SET status = 'sending', "updatedAt" = NOW() WHERE id = $1`,
+        [email.id],
+      );
 
+      const { createTransport } = await import("nodemailer");
       const mailOptions: Record<string, unknown> = {
-        from: smtp.from ?? smtp.user ?? "noreply@ghayth.app",
+        from: formatFromHeader(smtp),
         to: email.toEmail,
         subject: email.subject,
         html: email.body ?? email.text,
       };
+      if (smtp.replyTo) mailOptions.replyTo = smtp.replyTo;
       const meta = (email.metadata as { attachments?: Array<{ filename: string; content: string; contentType: string; encoding?: string }> } | null) ?? null;
       if (meta?.attachments && Array.isArray(meta.attachments) && meta.attachments.length > 0) {
         mailOptions.attachments = meta.attachments.map((a) => ({
@@ -2233,12 +2273,24 @@ async function processEmailQueue(): Promise<string> {
           contentType: a.contentType,
         }));
       }
-      await transporter.sendMail(mailOptions);
+
+      try {
+        await createTransport(smtpTransportOptions(smtp)).sendMail(mailOptions);
+      } catch (primaryErr) {
+        // Hostinger-style fallback: 465 SSL refused → one retry on the
+        // configured fallback port (587 STARTTLS). Only when configured.
+        if (smtp.fallbackPort && smtp.fallbackPort !== smtp.port) {
+          await createTransport(smtpTransportOptions(smtp, smtp.fallbackPort)).sendMail(mailOptions);
+        } else {
+          throw primaryErr;
+        }
+      }
 
       await updateBothEmail(email, "sent", null);
       sent++;
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const raw = err instanceof Error ? err.message : String(err);
+      const errMsg = scrubSmtpSecrets(raw, smtp);
       await updateBothEmail(email, "failed", errMsg).catch((e) =>
         logger.error(e, "[cronScheduler] background task failed"),
       );
@@ -3612,7 +3664,58 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
     const enabledRaw = await resolveSettings("umrah.notify.visa_expiry", c.id);
     const enabled = enabledRaw === true || enabledRaw === "true" || enabledRaw === 1;
     if (!enabled) continue;
-    const { notifyInternalVisaExpiring } = await import("./umrahInternalNotifications.js");
+    const { notifyInternalVisaExpiring, resolveInternalRecipients } = await import("./umrahInternalNotifications.js");
+    // U-17-P4 — digest mode. The U-17-P1 catalog exposes
+    // `umrah.notifications.digestMode` with values "per_event"
+    // (default — one notification per expiring pilgrim, the legacy
+    // behaviour preserved below) or "daily_digest" (one aggregated
+    // notification per recipient summarising every expiring pilgrim).
+    // Reading the setting once per company keeps the inner loop cheap.
+    const digestModeRaw = await resolveSettings("umrah.notifications.digestMode", c.id);
+    const digestMode = String(digestModeRaw ?? "per_event");
+    if (digestMode === "daily_digest") {
+      // Daily digest path — emit a single notification per recipient
+      // with a compact summary of every expiring row instead of N
+      // per-event dispatches.
+      const recipients = await resolveInternalRecipients({
+        companyId: c.id,
+        branchId: null,
+        pilgrimId: 0,
+        pilgrimName: null,
+        agentId: null,
+      });
+      if (recipients.length > 0) {
+        const lines = expiring
+          .slice(0, 50)
+          .map(
+            (p, i) =>
+              `${i + 1}. ${(p.fullName as string) ?? "معتمر #" + p.id} — تنتهي خلال ${p.daysRemaining ?? 0} يوم`,
+          )
+          .join("\n");
+        const overflow = expiring.length > 50 ? `\n…و ${expiring.length - 50} حالة أخرى` : "";
+        const title = `🔔 تنبيه يومي مُجمَّع — ${expiring.length} تأشيرة قاربت على الانتهاء`;
+        const body = `إجمالي ${expiring.length} معتمر بحاجة لمتابعة:\n${lines}${overflow}\n\nراجع القائمة الكاملة من شاشة المعتمرين.`;
+        for (const assignmentId of recipients) {
+          try {
+            await createNotification({
+              companyId: c.id,
+              assignmentId,
+              type: "umrah",
+              title,
+              body,
+              priority: "high",
+              refType: "umrah_pilgrims",
+              refId: 0,
+              actionUrl: "/umrah/pilgrims?visaExpiring=1",
+            });
+            notifSent++;
+          } catch (e) {
+            logger.error(e, "[cronScheduler] umrah visa digest notify failed");
+          }
+        }
+      }
+      continue;
+    }
     for (const row of expiring) {
       try {
         const recipients = await notifyInternalVisaExpiring(
@@ -4114,6 +4217,147 @@ async function getRateLimitAlertRecipients(): Promise<RateLimitAdminRecipient[]>
   }
 }
 
+/**
+ * #2079 TA-T18-02 — materialise tomorrow's due route patterns for
+ * companies that opted into autoMaterialiseEnabled. Runs once a day
+ * at 06:30 Riyadh so the dispatcher walks into a day-+1 board already
+ * populated with draft bookings (one per pattern whose mask matches
+ * tomorrow's Riyadh weekday and whose activeFrom..activeUntil window
+ * contains tomorrow).
+ *
+ * Targets TOMORROW (not today) so an op who reviews the cron output
+ * still has business hours to reschedule, override, or cancel before
+ * the materialised bookings flip into dispatch the next morning.
+ *
+ * Idempotency: bookingNumber = `RP-{patternCode}-{YYYYMMDD}` and the
+ * (companyId, bookingNumber) UNIQUE constraint (migration 266) is the
+ * natural key. ON CONFLICT DO NOTHING. Re-running the cron the same
+ * day (manual trigger via /admin/cron/trigger) is a no-op.
+ *
+ * Boundary: NO JE / GL contact (transport rule). The created
+ * bookings are draft + bookingSource='recurring_schedule' just like
+ * the manual /materialise endpoint emits, so downstream behaviour is
+ * identical to the human-fired path.
+ */
+export async function materialiseDueRoutePatterns(): Promise<string> {
+  // Tomorrow in Riyadh — the cron's whole point. UTC math would fire
+  // for the wrong day for any company crossing midnight Asia/Riyadh.
+  const tomorrow = new Date(Date.now() + 86400000);
+  const tomorrowIso = currentDateInTz("Asia/Riyadh", tomorrow);
+  // Day-of-week (0=Sun..6=Sat) computed in Asia/Riyadh — matches the
+  // mask convention pinned in transport-route-patterns.ts.
+  const tomorrowDow = new Date(`${tomorrowIso}T12:00:00+03:00`).getUTCDay();
+
+  // Only patterns belonging to companies that explicitly opted in.
+  // The JOIN against transport_planning_settings is the gate — a
+  // company without a settings row OR with FALSE simply does not appear.
+  const patterns = await rawQueryShared<{
+    id: number;
+    companyId: number;
+    branchId: number | null;
+    patternCode: string;
+    daysOfWeekMask: number;
+    activeFrom: string | null;
+    activeUntil: string | null;
+    defaultCustomerId: number | null;
+    defaultContractId: number | null;
+    fromLocationId: number | null;
+    toLocationId: number | null;
+    fromLocationText: string | null;
+    toLocationText: string | null;
+    fromLocationKind: string | null;
+    toLocationKind: string | null;
+    fromLat: number | null;
+    fromLng: number | null;
+    toLat: number | null;
+    toLng: number | null;
+    defaultCargoWeight: number | null;
+    defaultCargoUnit: string | null;
+  }>(
+    `SELECT rp.id, rp."companyId", rp."branchId",
+            rp."patternCode", rp."daysOfWeekMask",
+            rp."activeFrom", rp."activeUntil",
+            rp."defaultCustomerId", rp."defaultContractId",
+            rp."fromLocationId", rp."toLocationId",
+            rp."fromLocationText", rp."toLocationText",
+            rp."fromLocationKind", rp."toLocationKind",
+            rp."fromLat", rp."fromLng", rp."toLat", rp."toLng",
+            rp."defaultCargoWeight", rp."defaultCargoUnit"
+       FROM transport_route_patterns rp
+       JOIN transport_planning_settings tps
+         ON tps."companyId" = rp."companyId"
+        AND tps."autoMaterialiseEnabled" = TRUE
+      WHERE rp."deletedAt" IS NULL
+        AND rp.status = 'active'
+        AND ((rp."daysOfWeekMask" >> $1) & 1) = 1
+        AND (rp."activeFrom"  IS NULL OR rp."activeFrom"  <= $2::date)
+        AND (rp."activeUntil" IS NULL OR rp."activeUntil" >= $2::date)`,
+    [tomorrowDow, tomorrowIso],
+  );
+
+  let created = 0;
+  let existed = 0;
+  let errors = 0;
+  const target = tomorrowIso;
+
+  for (const pattern of patterns) {
+    const bookingNumber = `RP-${pattern.patternCode}-${target.replace(/-/g, "")}`;
+    try {
+      const rows = await rawQueryShared<{ id: number; existed: boolean }>(
+        `WITH ins AS (
+           INSERT INTO transport_bookings
+             ("companyId", "branchId", "bookingNumber", "bookingSource", "transportServiceType",
+              "routePatternId", "tripFamily",
+              "customerId", "contractId",
+              "fromLocationId", "toLocationId",
+              "fromLocationText", "toLocationText",
+              "fromLocationKind", "toLocationKind",
+              "fromLat", "fromLng", "toLat", "toLng",
+              "requestedPickupDate",
+              "cargoWeight", "cargoUnit",
+              status, "createdBy")
+           VALUES ($1, $2, $3, 'recurring_schedule', 'cargo_load',
+                   $4, 'cargo',
+                   $5, $6,
+                   $7, $8, $9, $10,
+                   $11, $12,
+                   $13, $14, $15, $16,
+                   $17, $18, $19,
+                   'draft', NULL)
+           ON CONFLICT ("companyId", "bookingNumber") DO NOTHING
+           RETURNING id, FALSE AS existed
+         )
+         SELECT id, existed FROM ins
+         UNION ALL
+         SELECT id, TRUE AS existed
+           FROM transport_bookings
+          WHERE "companyId" = $1 AND "bookingNumber" = $3
+            AND NOT EXISTS (SELECT 1 FROM ins)
+         LIMIT 1`,
+        [
+          pattern.companyId, pattern.branchId, bookingNumber,
+          pattern.id, pattern.defaultCustomerId, pattern.defaultContractId,
+          pattern.fromLocationId, pattern.toLocationId,
+          pattern.fromLocationText, pattern.toLocationText,
+          pattern.fromLocationKind, pattern.toLocationKind,
+          pattern.fromLat, pattern.fromLng,
+          pattern.toLat, pattern.toLng,
+          target, pattern.defaultCargoWeight, pattern.defaultCargoUnit,
+        ],
+      );
+      const row = rows[0];
+      if (!row) continue;
+      if (row.existed) existed++;
+      else created++;
+    } catch (err) {
+      errors++;
+      logger.error({ err, patternId: pattern.id, bookingNumber }, "auto-materialise route pattern failed");
+    }
+  }
+
+  return `materialise_due_route_patterns: ${patterns.length} patterns scanned for ${tomorrowIso}, ${created} created, ${existed} existed, ${errors} errors`;
+}
+
 export async function rateLimitFallbackAlertCheck(): Promise<string> {
   const current = getRedisRateLimitStatus();
   const state = await loadRateLimitAlerterState();
@@ -4255,12 +4499,222 @@ async function partyRegistrySync(): Promise<string> {
   return `synced ${companies.length} companies · ${linked} new party link(s)`;
 }
 
+/** Lot expiry alerts (migration 173): for every active lot whose expiry
+ *  falls inside one of the warehouse's expiryAlertDays thresholds, insert one
+ *  lot_expiry_alerts row per (lot, threshold) — the UNIQUE constraint is the
+ *  idempotency gate — and notify the company manager. */
+export async function warehouseLotExpiryAlerts(): Promise<string> {
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let alerted = 0;
+  for (const company of companies) {
+    const due = await rawQuery<Record<string, any>>(
+      `SELECT l.id AS "lotId", l."lotNumber", l."expiryDate", p.name AS "productName",
+              t.threshold::int AS "thresholdDays",
+              (l."expiryDate" - CURRENT_DATE)::int AS "daysLeft"
+       FROM warehouse_stock_lots l
+       JOIN warehouse_products p ON p.id = l."productId"
+       JOIN warehouses w ON w.id = l."warehouseId" AND w."deletedAt" IS NULL
+       CROSS JOIN LATERAL jsonb_array_elements_text(w."expiryAlertDays") AS t(threshold)
+       WHERE l."companyId" = $1 AND l."deletedAt" IS NULL AND l.status = 'active'
+         AND l."expiryDate" IS NOT NULL
+         AND l."expiryDate" <= CURRENT_DATE + (t.threshold || ' days')::interval
+         AND l."expiryDate" >= CURRENT_DATE
+         AND NOT EXISTS (
+           SELECT 1 FROM lot_expiry_alerts a
+           WHERE a."lotId" = l.id AND a."thresholdDays" = t.threshold::int
+         )`,
+      [company.id]
+    );
+    const [mainBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId"=$1 AND status='active' ORDER BY id ASC LIMIT 1`,
+      [company.id]
+    );
+    for (const d of due) {
+      await rawExecute(
+        `INSERT INTO lot_expiry_alerts ("companyId","lotId","thresholdDays","expiryDate")
+         VALUES ($1,$2,$3,$4) ON CONFLICT ("lotId","thresholdDays") DO NOTHING`,
+        [company.id, d.lotId, d.thresholdDays, d.expiryDate]
+      );
+      const mgr = mainBranch
+        ? await getManagerAssignmentId(company.id, mainBranch.id).catch(() => null)
+        : null;
+      if (mgr) {
+        await createNotification({
+          companyId: company.id, assignmentId: mgr,
+          type: "warehouse", title: "دفعة تقترب من انتهاء الصلاحية",
+          body: `${d.productName} — دفعة ${d.lotNumber}: تنتهي خلال ${d.daysLeft} يوم`,
+          priority: Number(d.daysLeft) <= 30 ? "high" : "normal",
+          refType: "warehouse_stock_lots", refId: d.lotId,
+          actionUrl: "/warehouse/advanced",
+        }).catch((e) => logger.error(e, "[cron] lot expiry notification failed"));
+      }
+      alerted++;
+    }
+  }
+  return `lot expiry: ${alerted} alert(s) fired`;
+}
+
+/** Cycle-count plan scan: open a pending cycle count per plan once per
+ *  period window (weekly = ISO week, monthly = month, quarterly = quarter).
+ *  An existing count for the plan's warehouse inside the current window
+ *  means the plan already ran. */
+export async function warehouseCycleCountPlanScan(): Promise<string> {
+  const plans = await rawQuery<Record<string, any>>(
+    `SELECT pl.id, pl."companyId", pl."warehouseId", pl.period, pl."planType"
+     FROM warehouse_cycle_count_plans pl
+     JOIN warehouses w ON w.id = pl."warehouseId" AND w."deletedAt" IS NULL`,
+    []
+  );
+  let opened = 0;
+  for (const plan of plans) {
+    const trunc = plan.period === "weekly" ? "week" : plan.period === "quarterly" ? "quarter" : "month";
+    const [existing] = await rawQuery<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM warehouse_cycle_counts
+       WHERE "companyId"=$1 AND "warehouseId"=$2
+         AND date_trunc($3, "scheduledDate") = date_trunc($3, CURRENT_DATE)`,
+      [plan.companyId, plan.warehouseId, trunc]
+    );
+    if (Number(existing?.n ?? 0) > 0) continue;
+    const { createCycleCountWithSnapshot } = await import("../routes/warehouse-cycle-counts.js");
+    const countId = await createCycleCountWithSnapshot(
+      plan.companyId, plan.warehouseId, `فُتح تلقائياً من خطة الجرد #${plan.id} (${plan.period})`
+    );
+    const [mainBranch] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId"=$1 AND status='active' ORDER BY id ASC LIMIT 1`,
+      [plan.companyId]
+    );
+    const mgr = mainBranch
+      ? await getManagerAssignmentId(plan.companyId, mainBranch.id).catch(() => null)
+      : null;
+    if (mgr) {
+      await createNotification({
+        companyId: plan.companyId, assignmentId: mgr,
+        type: "warehouse", title: "جرد دوري مجدول فُتح",
+        body: `فُتح الجرد الدوري #${countId} وفق خطة ${plan.period}`,
+        priority: "normal",
+        refType: "warehouse_cycle_counts", refId: countId,
+        actionUrl: "/warehouse/advanced",
+      }).catch((e) => logger.error(e, "[cron] cycle count plan notification failed"));
+    }
+    opened++;
+  }
+  return `cycle-count plans: ${opened} count(s) opened from ${plans.length} plan(s)`;
+}
+
+/**
+ * inbox_task_sla_reminder_scan — nudge the assignee of each open inbox task
+ * before its slaDeadline. Per company: load the (per-company-tunable) reminder
+ * config, scan pending, not-yet-breached tasks that carry an slaDeadline, and
+ * fire the first reminder once the remaining window crosses the lead threshold
+ * (stamping slaReminderSentAt for idempotency); optionally fire a second
+ * reminder closer to the deadline (stamping slaFinalReminderSentAt). The
+ * pre-breach + per-task *SentAt stamps make repeated runs idempotent.
+ * Unassigned tasks are skipped. The decision itself lives in the pure
+ * shouldFireSlaReminder so it is unit-tested without a DB.
+ */
+async function inboxTaskSlaReminderScan(): Promise<string> {
+  const { resolveSettings } = await import("./settings.js");
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  const now = new Date();
+  let first = 0;
+  let final = 0;
+  for (const company of companies) {
+    const stored = await resolveSettings(TASK_SLA_REMINDER_SETTING_KEY, company.id).catch(() => undefined);
+    const cfg = resolveTaskSlaReminderConfig(stored);
+
+    const tasks = await rawQuery<{
+      id: number;
+      assignmentId: number | null;
+      title: string;
+      createdAt: string | Date;
+      slaDeadline: string | Date;
+      slaReminderSentAt: string | Date | null;
+      slaFinalReminderSentAt: string | Date | null;
+    }>(
+      `SELECT id,
+              COALESCE("assignmentId", "assignedTo") AS "assignmentId",
+              title, "createdAt", "slaDeadline",
+              "slaReminderSentAt", "slaFinalReminderSentAt"
+         FROM tasks
+        WHERE "companyId" = $1
+          AND status = 'pending'
+          AND "deletedAt" IS NULL
+          AND "slaDeadline" IS NOT NULL
+          AND "slaDeadline" > NOW()
+          AND ("slaReminderSentAt" IS NULL OR "slaFinalReminderSentAt" IS NULL)`,
+      [company.id]
+      // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
+    ).catch((e) => { logger.error(e, "[cron] inbox SLA reminder scan query failed"); return [] as any[]; });
+
+    for (const t of tasks) {
+      if (!t.assignmentId) continue;
+      const { firstReminder, finalReminder } = shouldFireSlaReminder({
+        now,
+        createdAt: new Date(t.createdAt),
+        slaDeadline: new Date(t.slaDeadline),
+        config: cfg,
+        reminderSentAt: t.slaReminderSentAt ? new Date(t.slaReminderSentAt) : null,
+        finalReminderSentAt: t.slaFinalReminderSentAt ? new Date(t.slaFinalReminderSentAt) : null,
+      });
+      const deadlineLabel = new Date(t.slaDeadline).toISOString().slice(0, 16).replace("T", " ");
+      // Stamp FIRST as an atomic compare-and-set (WHERE …SentAt IS NULL): the
+      // row that wins the stamp owns the send. This prevents a duplicate
+      // reminder when two runs overlap or a previous run already stamped — at
+      // the cost of dropping a reminder if the notify fails after the stamp
+      // (preferring an occasional miss over spamming the assignee).
+      if (firstReminder) {
+        const won = await rawExecute(
+          `UPDATE tasks SET "slaReminderSentAt" = NOW() WHERE id = $1 AND "slaReminderSentAt" IS NULL`,
+          [t.id],
+        ).then((r) => r.affectedRows === 1).catch((e) => { logger.error(e, "[cron] inbox SLA reminder stamp failed"); return false; });
+        if (won) {
+          await createNotification({
+            companyId: company.id, assignmentId: t.assignmentId,
+            type: "task", title: "تذكير: مهمة تقترب من موعد الاستجابة",
+            body: `المهمة «${t.title}» يقترب موعد استجابتها (${deadlineLabel}).`,
+            priority: "high",
+            refType: "tasks", refId: t.id,
+            actionUrl: "/inbox/tasks",
+          }).catch((e) => logger.error(e, "[cron] inbox SLA reminder notify failed"));
+          first++;
+        }
+      }
+      if (finalReminder) {
+        const won = await rawExecute(
+          `UPDATE tasks SET "slaFinalReminderSentAt" = NOW() WHERE id = $1 AND "slaFinalReminderSentAt" IS NULL`,
+          [t.id],
+        ).then((r) => r.affectedRows === 1).catch((e) => { logger.error(e, "[cron] inbox SLA final reminder stamp failed"); return false; });
+        if (won) {
+          await createNotification({
+            companyId: company.id, assignmentId: t.assignmentId,
+            type: "task", title: "تذكير نهائي: مهمة على وشك تجاوز الموعد",
+            body: `المهمة «${t.title}» على وشك تجاوز موعد الاستجابة (${deadlineLabel}).`,
+            priority: "urgent",
+            refType: "tasks", refId: t.id,
+            actionUrl: "/inbox/tasks",
+          }).catch((e) => logger.error(e, "[cron] inbox SLA final reminder notify failed"));
+          final++;
+        }
+      }
+    }
+  }
+  return `inbox SLA reminders: ${first} first, ${final} final`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
+  { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
+  { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
   { name: "party_registry_sync", description: "مزامنة سجل الأطراف (Party) — ربط الكيانات الجديدة", schedule: "30 3 * * *", handler: partyRegistrySync },
   { name: "gov_expiry_alerts", description: "تنبيهات انتهاء الإقامات والاستمارات (مقيم/تم)", schedule: "0 7 * * *", handler: govExpiryAlerts },
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  // TA-GAP-09 Phase 3 — maps usage threshold alert sweep (kicks at 80%
+  // warning and 100% critical of the operator-set cap). Runs every
+  // 15 minutes so a sudden burst escalates within a quarter-hour;
+  // dedupe is enforced by the unique constraint on the alerts table.
+  { name: "maps_usage_threshold_alerts", description: "تنبيهات تجاوز عتبة استهلاك الخرائط (TA-GAP-09 Phase 3)", schedule: "*/15 * * * *", handler: mapsUsageThresholdAlerts },
   { name: "vehicle_maintenance_schedule_scan", description: "فحص جداول الصيانة الوقائية المستحقّة (بالتاريخ أو العداد) وإطلاق التنبيهات/الالتزامات", schedule: "0 6 * * *", handler: scanVehicleMaintenanceSchedules },
   { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
   { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
@@ -4340,6 +4794,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
   { name: "retry_stuck_official_letters", description: "إعادة محاولة إرسال الخطابات المعتمدة العالقة", schedule: "*/15 * * * *", handler: retryStuckOfficialLetters },
   { name: "daily_recurring_journals", description: "تنفيذ القيود المحاسبية الدورية المستحقة", schedule: "0 1 * * *", handler: processDueRecurringJournals },
+  { name: "monthly_prepaid_amortization", description: "إطفاء المصروفات المدفوعة مقدماً المستحقة شهرياً", schedule: "0 2 1 * *", handler: processDueAmortizations },
+  { name: "monthly_deferred_revenue_recognition", description: "تحقّق الإيرادات المؤجلة المستحقة شهرياً", schedule: "0 2 1 * *", handler: processDueRecognitions },
   { name: "hourly_obligations_scan", description: "فحص الالتزامات — ترقية المتأخرات وتصعيد المهام", schedule: "15 * * * *", handler: hourlyObligationsScan },
   { name: "daily_dunning_auto_send", description: "إرسال تلقائي لخطابات التحصيل حسب المرحلة", schedule: "0 9 * * *", handler: dailyDunningAutoSend },
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },
@@ -4348,6 +4804,10 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "rate_limit_fallback_alert", description: "تنبيه عند انتقال حدود الطلبات إلى الذاكرة المحلية (Redis fallback)", schedule: "*/2 * * * *", handler: rateLimitFallbackAlertCheck },
   { name: "rbac_v2_expired_grants_cleanup", description: "تنظيف منح RBAC v2 منتهية الصلاحية", schedule: "0 3 * * *", handler: rbacV2ExpiredGrantsCleanup },
   { name: "pbx_stt_queue_drain", description: "تفريغ طابور تحويل التسجيلات إلى نصوص + توليد ملخّص AI", schedule: "*/2 * * * *", handler: pbxSttQueueDrain },
+  { name: "thread_snooze_wake", description: "تنبيه المستخدم بإعادة فتح المحادثات المؤجَّلة عند موعدها", schedule: "* * * * *", handler: threadSnoozeWake },
+  // #2079 TA-T18-02 — closes the misleading "by the daily cron" promise
+  // in transport-route-patterns.ts. 06:30 Riyadh = 03:30 UTC.
+  { name: "materialise_due_route_patterns", description: "تجسيد قوالب رحلات الحمولة المتكررة المستحقّة للغد (للشركات المفعّل لديها autoMaterialiseEnabled)", schedule: "30 3 * * *", handler: materialiseDueRoutePatterns },
 ];
 
 /**
@@ -4395,6 +4855,86 @@ async function pbxSttQueueDrain(): Promise<string> {
     }
   }
   return `processed=${processed} summarised=${summarised}`;
+}
+
+/**
+ * Wake due thread snoozes. Each tick picks up snoozes whose wakeAt has
+ * passed, marks them woken, and (when the snooze owner has an active
+ * employee assignment) drops a follow-up task into `tasks` so the
+ * operator gets a real reminder — not just an inbox row that silently
+ * reappears.
+ *
+ * Bounded at 200 rows/tick so a backlog can't blow up a single
+ * heartbeat; the next minute picks up anything left.
+ */
+async function threadSnoozeWake(): Promise<string> {
+  const due = await rawQuery<{
+    id: number; companyId: number; userId: number;
+    channel: string; peerAddress: string; reason: string | null;
+  }>(
+    `SELECT id, "companyId", "userId", channel, "peerAddress", reason
+       FROM thread_snoozes
+      WHERE "wokenAt" IS NULL AND "cancelledAt" IS NULL AND "wakeAt" <= NOW()
+      ORDER BY "wakeAt" ASC
+      LIMIT 200`,
+  );
+  if (due.length === 0) return "no due snoozes";
+
+  let tasksCreated = 0;
+  for (const s of due) {
+    try {
+      // Resolve the user's primary employee + assignment so the task
+      // lands in the right tenant scope. A user without an active
+      // assignment still gets the snooze woken (no orphan rows), the
+      // task just isn't created.
+      const [asn] = await rawQuery<{ employeeId: number; assignmentId: number; branchId: number | null }>(
+        `SELECT ea."employeeId" AS "employeeId", ea.id AS "assignmentId", ea."branchId"
+           FROM users u
+           JOIN employee_assignments ea
+             ON ea."employeeId" = u."employeeId" AND ea."companyId" = $1 AND ea.status = 'active'
+          WHERE u.id = $2
+          LIMIT 1`,
+        [s.companyId, s.userId],
+      );
+
+      if (asn) {
+        const title = `متابعة محادثة مع ${s.peerAddress}`;
+        const body = s.reason
+          ? `تذكير مجدول للمحادثة على قناة ${s.channel} — ${s.reason}`
+          : `تذكير مجدول للمحادثة على قناة ${s.channel}`;
+        await rawExecute(
+          `INSERT INTO tasks
+             ("companyId", "branchId", "assignedTo", "assignmentId",
+              type, "refType", "refId",
+              title, description, priority, status,
+              "autoGenerated", "createdBy", "createdAt", "updatedAt")
+           VALUES ($1, $2, $3, $4,
+                   'comms_followup', 'thread_snooze', $5,
+                   $6, $7, 'normal', 'pending',
+                   true, $3, NOW(), NOW())`,
+          [
+            s.companyId, asn.branchId, asn.employeeId, asn.assignmentId,
+            s.id, title, body,
+          ],
+        );
+        tasksCreated++;
+      }
+
+      await rawExecute(
+        `UPDATE thread_snoozes SET "wokenAt" = NOW() WHERE id = $1`,
+        [s.id],
+      );
+      emitEvent({
+        companyId: s.companyId, userId: s.userId,
+        action: "comms.thread.snooze_woken",
+        entity: "thread_snoozes", entityId: s.id,
+        details: JSON.stringify({ channel: s.channel, peerAddress: s.peerAddress }),
+      }).catch((e) => logger.warn(e, "[event] thread.snooze_woken"));
+    } catch (err) {
+      logger.error(err, `[threadSnoozeWake] failed snooze ${s.id}`);
+    }
+  }
+  return `woken=${due.length} tasksCreated=${tasksCreated}`;
 }
 
 async function rbacV2ExpiredGrantsCleanup(): Promise<string> {

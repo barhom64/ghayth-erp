@@ -36,6 +36,40 @@ const MIGRATIONS_DIR = join(REPO_ROOT, "artifacts/api-server/src/migrations");
 
 const PREFIX_RE = /^(\d+)_(.+\.sql)$/;
 
+// ── #1945 / R-002 — duplicate NUMERIC-prefix ratchet ─────────────────────
+// The runner sorts by full filename, so two files sharing a number still
+// apply in a deterministic order — but a duplicate number means two agents
+// numbered concurrently without rebasing, and reviewers/tools that refer to
+// "migration 287" become ambiguous (the R-002 incident: PR #2017 and #2018
+// both shipped a 287). History up to NUMBER_RATCHET_FLOOR is grandfathered
+// (renumbering applied migrations would change their identity in every
+// environment's tracking table); any duplicate number ABOVE the floor fails
+// CI so no NEW collision can land. Bump the floor only when a grandfathered
+// duplicate is consolidated away, never to admit a new one.
+const NUMBER_RATCHET_FLOOR = 290;
+
+// ── Grandfathered divergent basename pairs ─────────────────────────────────
+// Some pairs were discovered in production AFTER the clean-baseline rule was
+// established. Adding them here is a one-time amnesty; the allowlist must
+// never grow — it exists only to let a critical idempotency-fix PR land
+// without blocking the whole migration chain while the root-cause file is
+// being restored to the repo.
+//
+// Each entry is the shared basename (after stripping the numeric prefix).
+// Rationale per entry:
+//
+//   fleet_rental_inspection_and_driver.sql  (282_ + 293_)
+//     282_ was the original migration but was missing from the repo; 293_ is
+//     a duplicate that ran after it in production environments and 42710'd on
+//     the bare ADD CONSTRAINT calls. Both files are intentionally divergent
+//     (282_ carries the ADD COLUMN block; 293_ is the later twin). Both were
+//     made idempotent by PR #2467. The allowlist entry is removed once the
+//     lower-numbered file is safe to delete from all environments' tracking
+//     tables.
+const BASENAME_DIVERGENT_ALLOWLIST = new Set([
+  "fleet_rental_inspection_and_driver.sql",
+]);
+
 async function main() {
   let entries;
   try {
@@ -50,12 +84,30 @@ async function main() {
 
   /** @type {Map<string, string[]>} basename → [prefixedFile, ...] */
   const groups = new Map();
+  /** @type {Map<number, string[]>} numeric prefix → [prefixedFile, ...] */
+  const numberGroups = new Map();
   for (const entry of entries) {
     const match = PREFIX_RE.exec(entry);
     if (!match) continue;
     const base = match[2];
     if (!groups.has(base)) groups.set(base, []);
     groups.get(base).push(entry);
+    const num = Number(match[1]);
+    if (!numberGroups.has(num)) numberGroups.set(num, []);
+    numberGroups.get(num).push(entry);
+  }
+
+  // Numeric-prefix ratchet (R-002): duplicate numbers above the floor fail.
+  const numberCollisions = [...numberGroups.entries()]
+    .filter(([num, files]) => num > NUMBER_RATCHET_FLOOR && files.length > 1);
+  if (numberCollisions.length > 0) {
+    for (const [num, files] of numberCollisions) {
+      console.error(
+        `[check-duplicate-migrations] FAIL — duplicate migration NUMBER ${num} (> ratchet floor ${NUMBER_RATCHET_FLOOR}): ${files.sort().join(", ")}. ` +
+        `Renumber the newer file to the next free number before merging (R-002).`,
+      );
+    }
+    process.exit(1);
   }
 
   const duplicates = [...groups.entries()].filter(([, files]) => files.length > 1);
@@ -66,6 +118,7 @@ async function main() {
 
   let divergentCount = 0;
   let identicalCount = 0;
+  let allowlistedCount = 0;
   console.log(`[check-duplicate-migrations] found ${duplicates.length} basename collisions:`);
 
   // Normalise contents before diffing: every "divergent" pair in the
@@ -90,6 +143,9 @@ async function main() {
     if (allIdentical) {
       identicalCount++;
       console.log(`  • ${base}: IDENTICAL across ${files.length} files (${sorted.join(", ")})`);
+    } else if (BASENAME_DIVERGENT_ALLOWLIST.has(base)) {
+      allowlistedCount++;
+      console.log(`  • ${base}: DIVERGENT across ${files.length} files (${sorted.join(", ")}) — grandfathered by allowlist (restore + idempotency fix; remove allowlist entry once lower file is safe to delete from all tracking tables)`);
     } else {
       divergentCount++;
       console.log(`  • ${base}: DIVERGENT across ${files.length} files (${sorted.join(", ")}) — review urgently`);
@@ -97,8 +153,13 @@ async function main() {
   }
 
   console.log(
-    `[check-duplicate-migrations] summary: ${identicalCount} identical · ${divergentCount} divergent`,
+    `[check-duplicate-migrations] summary: ${identicalCount} identical · ${divergentCount} divergent · ${allowlistedCount} allowlisted`,
   );
+  if (allowlistedCount > 0) {
+    console.log(
+      `  ${allowlistedCount} allowlisted divergent pair(s) — see BASENAME_DIVERGENT_ALLOWLIST in this file for rationale.`,
+    );
+  }
   console.log(
     "  Identical duplicates are safe to consolidate by deleting the lower-numbered file,",
   );
@@ -112,6 +173,8 @@ async function main() {
   // After the 2026-05-13 cleanup both baselines are at 0. Any *new*
   // collision (identical OR divergent) must fail CI immediately. There
   // is no excuse for shipping one once the baseline is clean.
+  // Allowlisted divergent pairs (grandfathered production incidents) are
+  // exempt from the failure gate; they are logged above for visibility.
   if (identicalCount > 0 || divergentCount > 0) {
     console.error(
       `[check-duplicate-migrations] FAIL — ${identicalCount} identical + ${divergentCount} divergent duplicate(s). ` +
@@ -120,6 +183,10 @@ async function main() {
       `the same logical change while doing different things. Resolve before merging.`,
     );
     process.exit(1);
+  }
+  if (allowlistedCount > 0) {
+    console.log(`[check-duplicate-migrations] OK — 0 non-allowlisted duplicates (${allowlistedCount} grandfathered pair(s) noted above).`);
+    return;
   }
   // unreachable in the no-duplicates path (early-return above), but kept
   // for completeness if a future rule adds a non-failing category.

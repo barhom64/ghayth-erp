@@ -243,9 +243,7 @@ function OrdersTab() {
       key: "actions", header: "إجراءات",
       render: (o) => (
         <div className="flex items-center gap-1">
-          <Link href={`/store/orders/${o.id}`}>
-            <Button variant="ghost" size="sm" title="عرض"><Eye className="h-4 w-4" /></Button>
-          </Link>
+          <Button asChild variant="ghost" size="sm" title="عرض"><Link href={`/store/orders/${o.id}`}><Eye className="h-4 w-4" /></Link></Button>
           <RowActions
             onEdit={() => startEdit(o.id, { customerName: o.customerName || "", totalAmount: Number(o.totalAmount) || 0, status: o.status || "pending", notes: o.notes || "" })}
             onDelete={() => startDelete(o.id)}

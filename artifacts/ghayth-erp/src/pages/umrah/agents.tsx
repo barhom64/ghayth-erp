@@ -120,7 +120,7 @@ export default function UmrahAgents() {
     { key: "country", header: "البلد", sortable: true, searchable: true },
     { key: "phone", header: "الهاتف", searchable: true },
     { key: "email", header: "البريد", searchable: true },
-    { key: "contractRef", header: "مرجع العقد" },
+    { key: "contractRef", header: "رقم العقد" },
     { key: "profitMargin", header: "نسبة الربح", sortable: true, render: (a) => `${a.profitMargin ?? 0}%` },
     { key: "status", header: "الحالة", sortable: true, render: (a) => <PageStatusBadge status={a.status} /> },
     {

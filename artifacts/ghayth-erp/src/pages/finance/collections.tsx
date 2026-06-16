@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { STATUSES } from "@/lib/constants";
 import {
   PageShell,
   DataTable,
@@ -127,24 +128,18 @@ export default function CollectionsPage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/ar-collection-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ar-collection-workbench">
               <Mail className="h-3.5 w-3.5 ml-1" />
               منضدة التحصيل
-            </Button>
-          </Link>
-          <Link href="/finance/dunning">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/dunning">
               <History className="h-3.5 w-3.5 ml-1" />
               متابعة Dunning
-            </Button>
-          </Link>
-          <Link href="/finance/bad-debt-provision">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/bad-debt-provision">
               <FileWarning className="h-3.5 w-3.5 ml-1" />
               الديون المشكوك بها
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_collections"
             entityId="list"
@@ -396,7 +391,7 @@ function DunningHistoryTab() {
       key: "status",
       header: "الحالة",
       render: (r) => (
-        <Badge variant={r.status === "sent" ? "default" : "outline"}>{r.status}</Badge>
+        <Badge variant={r.status === "sent" ? "default" : "outline"}>{STATUSES[r.status] ?? r.status}</Badge>
       ),
     },
   ];

@@ -13,7 +13,7 @@
 // (settings.ts:525+ POST/PUT/DELETE). authorizeAny added in batch5
 // means HR Director can also use this tab, not just SysAdmin.
 import { useState } from "react";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -61,7 +61,7 @@ export function DepartmentsTab() {
   const [showForm, setShowForm] = useState(false);
 
   const createMut = useApiMutation("/settings/departments", "POST");
-  const submitting = createMut.isPending;
+  const [submitting, setSubmitting] = useState(false);
 
   const branchName = (id: number | null) => branches.find((b: any) => b.id === id)?.name ?? "—";
   const parentName = (id: number | null) => departments.find((d) => d.id === id)?.name ?? "—";
@@ -73,7 +73,19 @@ export function DepartmentsTab() {
     setShowForm(false);
   };
 
+  const deleteDept = async (id: number) => {
+    if (!confirm("حذف هذا القسم؟")) return;
+    try {
+      await apiFetch(`/settings/departments/${id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      await refetch();
+    } catch (err: any) {
+      toast({ title: "فشل الحذف", description: err?.message, variant: "destructive" });
+    }
+  };
+
   const submit = async () => {
+    setSubmitting(true);
     try {
       const payload = {
         name: form.name,
@@ -83,7 +95,10 @@ export function DepartmentsTab() {
         status: form.status,
       };
       if (editingId) {
-        await createMut.mutateAsync({ ...payload, _method: "PUT", id: editingId });
+        await apiFetch(`/settings/departments/${editingId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
         toast({ title: "تم تحديث القسم" });
       } else {
         await createMut.mutateAsync(payload);
@@ -93,6 +108,8 @@ export function DepartmentsTab() {
       await refetch();
     } catch (err: any) {
       toast({ title: "فشل الحفظ", description: err?.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -126,9 +143,14 @@ export function DepartmentsTab() {
       key: "actions",
       header: "إجراءات",
       render: (d) => (
-        <Button variant="ghost" size="sm" data-testid={`button-edit-dept-${d.id}`} onClick={() => startEdit(d)}>
-          <Edit2 className="h-3 w-3" />
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" data-testid={`button-edit-dept-${d.id}`} onClick={() => startEdit(d)}>
+            <Edit2 className="h-3 w-3" />
+          </Button>
+          <GuardedButton perm="settings:update" variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => deleteDept(d.id)}>
+            <Trash2 className="h-3 w-3" />
+          </GuardedButton>
+        </div>
       ),
     },
   ];
@@ -236,7 +258,7 @@ export function DepartmentsTab() {
             </div>
             <div className="flex gap-2">
               <Button disabled={!form.name || submitting} onClick={submit} data-testid="button-submit-dept">
-                {submitting ? "جارٍ الحفظ..." : editingId ? "تحديث" : "إنشاء"}
+                {submitting ? "جاري الحفظ..." : editingId ? "تحديث" : "إنشاء"}
               </Button>
               <Button variant="outline" onClick={resetForm}>إلغاء</Button>
             </div>

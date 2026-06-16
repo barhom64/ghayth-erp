@@ -7,6 +7,7 @@ const UmrahAgents = lazy(() => import("@/pages/umrah/agents"));
 const UmrahSeasons = lazy(() => import("@/pages/umrah/seasons"));
 const UmrahAccommodations = lazy(() => import("@/pages/umrah/accommodations"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
+const UmrahRefundRequests = lazy(() => import("@/pages/umrah/refund-requests"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
@@ -16,6 +17,10 @@ const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
 const UmrahPackages = lazy(() => import("@/pages/umrah/packages"));
 const UmrahTransport = lazy(() => import("@/pages/umrah/transport"));
 const UmrahTransportDetail = lazy(() => import("@/pages/details/umrah-transport-detail"));
+// U-02b M4 (#2080) — operational page for the unified Service Contract
+// path (POST /umrah/groups/:id/transport-requests). Not yet linked from
+// the sidebar/tabs/calendar; M5 owns that switchover.
+const UmrahTransportRequests = lazy(() => import("@/pages/umrah/transport-requests"));
 const UmrahAgentDetail = lazy(() => import("@/pages/details/umrah-agent-detail"));
 const UmrahSeasonDetail = lazy(() => import("@/pages/details/umrah-season-detail"));
 const UmrahPackageDetail = lazy(() => import("@/pages/details/umrah-package-detail"));
@@ -69,6 +74,16 @@ const UmrahSubAgentBalancesReport = lazy(() => import("@/pages/umrah/reports/sub
 const UmrahPilgrimMovementsReport = lazy(() => import("@/pages/umrah/reports/pilgrim-movements"));
 const UmrahGroupProfitabilityReport = lazy(() => import("@/pages/umrah/reports/profitability"));
 const UmrahAgentProfitabilityReport = lazy(() => import("@/pages/umrah/reports/agent-profitability"));
+const UmrahViolationsSummaryReport = lazy(() => import("@/pages/umrah/reports/violations-summary"));
+const UmrahCommissionsSummaryReport = lazy(() => import("@/pages/umrah/reports/commissions-summary"));
+// §11 stub → available — تقرير تكاليف العمرة (10 cost categories per dimension).
+const UmrahCostsReport = lazy(() => import("@/pages/umrah/reports/umrah-costs"));
+const UmrahNuskInvoicesSummaryReport = lazy(() => import("@/pages/umrah/reports/nusk-invoices-summary"));
+const UmrahTransportReport = lazy(() => import("@/pages/umrah/reports/transport-requests"));
+// §11 partial → available — تقرير ملخّص فواتير العملاء (KPIs + 3 breakdowns + 100 recent).
+const UmrahSalesInvoicesSummaryReport = lazy(() => import("@/pages/umrah/reports/sales-invoices-summary"));
+// §11 partial → available — ملخّص أخطاء الاستيراد (KPIs + 3 breakdowns + 100 recent batches).
+const UmrahImportErrorsSummaryReport = lazy(() => import("@/pages/umrah/reports/import-errors-summary"));
 
 export const umrahRoutes: { path: string; component: any; module?: ModuleType }[] = [
   { path: "/umrah", component: UmrahDashboard, module: "operations" },
@@ -86,6 +101,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/accommodations", component: UmrahAccommodations, module: "operations" },
   { path: "/umrah/seasons/:id", component: UmrahSeasonDetail, module: "operations" },
   { path: "/umrah/penalties", component: UmrahPenalties, module: "operations" },
+  { path: "/umrah/refund-requests", component: UmrahRefundRequests, module: "operations" },
   { path: "/umrah/penalties/:id", component: UmrahPenaltyDetail, module: "operations" },
   { path: "/umrah/invoices", component: UmrahInvoices, module: "operations" },
   { path: "/umrah/invoices/:id", component: UmrahInvoiceDetail, module: "operations" },
@@ -93,6 +109,9 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/packages/:id", component: UmrahPackageDetail, module: "operations" },
   { path: "/umrah/transport", component: UmrahTransport, module: "operations" },
   { path: "/umrah/transport/:id", component: UmrahTransportDetail, module: "operations" },
+  // U-02b M4 — new operational entry for the unified contract path.
+  // Reachable by URL only at this stage; sidebar/tab integration is M5.
+  { path: "/umrah/transport-requests", component: UmrahTransportRequests, module: "operations" },
   // Wave 5 routes
   { path: "/umrah/sub-agents", component: UmrahSubAgents, module: "operations" },
   { path: "/umrah/sub-agents/:id", component: UmrahSubAgentDetail, module: "operations" },
@@ -117,6 +136,13 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/reports/pilgrim-movements", component: UmrahPilgrimMovementsReport, module: "operations" },
   { path: "/umrah/reports/group-profitability", component: UmrahGroupProfitabilityReport, module: "operations" },
   { path: "/umrah/reports/agent-profitability", component: UmrahAgentProfitabilityReport, module: "operations" },
+  { path: "/umrah/reports/violations-summary", component: UmrahViolationsSummaryReport, module: "operations" },
+  { path: "/umrah/reports/commissions-summary", component: UmrahCommissionsSummaryReport, module: "operations" },
+  { path: "/umrah/reports/umrah-costs", component: UmrahCostsReport, module: "operations" },
+  { path: "/umrah/reports/nusk-invoices-summary", component: UmrahNuskInvoicesSummaryReport, module: "operations" },
+  { path: "/umrah/reports/transport-requests", component: UmrahTransportReport, module: "operations" },
+  { path: "/umrah/reports/sales-invoices-summary", component: UmrahSalesInvoicesSummaryReport, module: "operations" },
+  { path: "/umrah/reports/import-errors-summary", component: UmrahImportErrorsSummaryReport, module: "operations" },
   { path: "/umrah/reconciliation", component: UmrahReconciliation, module: "operations" },
   { path: "/umrah/payments", component: UmrahPayments, module: "operations" },
   { path: "/umrah/groups", component: UmrahGroups, module: "operations" },

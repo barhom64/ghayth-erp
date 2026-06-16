@@ -179,16 +179,12 @@ export default function GlIntegrityGapsPage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/gl-health">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/gl-health">
               <CheckCircle2 className="h-3.5 w-3.5 me-1" />صحة النظام
-            </Button>
-          </Link>
-          <Link href="/finance/gl-anomaly-detector">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/gl-anomaly-detector">
               <AlertTriangle className="h-3.5 w-3.5 me-1" />كاشف الشذوذ
-            </Button>
-          </Link>
+            </Link></Button>
           {nonEmptySections.length > 0 ? (
             <GuardedButton
               perm="finance:export" variant="outline" size="sm"

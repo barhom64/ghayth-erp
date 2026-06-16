@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { Save, Shield, Search, Users, Copy, Info, Eye } from "lucide-react";
@@ -78,6 +79,7 @@ export default function RbacSimpleEditor() {
   const [cloning, setCloning] = useState(false);
   const [cloneKey, setCloneKey] = useState("");
   const [cloneLabel, setCloneLabel] = useState("");
+  const [pendingRoleSwitch, setPendingRoleSwitch] = useState<number | null | false>(false);
 
   const features = featuresData?.features ?? [];
   const levels = catalog?.levels ?? [];
@@ -114,11 +116,15 @@ export default function RbacSimpleEditor() {
   }, [picks, initialPicks]);
   const isDirty = dirtyKeys.length > 0;
 
-  // Switching role with unsaved edits would silently drop them — confirm first.
+  // Switching role with unsaved edits would silently drop them — show dialog first.
   const selectRole = (id: number | null) => {
-    if (isDirty && !window.confirm("لديك تغييرات غير محفوظة على هذا الدور. هل تريد تجاهلها والانتقال؟")) return;
+    if (isDirty) { setPendingRoleSwitch(id ?? null); return; }
     setRoleId(id);
     setSearch("");
+  };
+  const confirmRoleSwitch = () => {
+    if (pendingRoleSwitch !== false) { setRoleId(pendingRoleSwitch); setSearch(""); }
+    setPendingRoleSwitch(false);
   };
 
   const modules = useMemo(() => {
@@ -382,6 +388,17 @@ export default function RbacSimpleEditor() {
           )}
         </div>
       </PageStateWrapper>
+
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={pendingRoleSwitch !== false}
+        onOpenChange={(o) => { if (!o) setPendingRoleSwitch(false); }}
+        variant="caution"
+        title="تغييرات غير محفوظة"
+        description="لديك تغييرات غير محفوظة على هذا الدور. هل تريد تجاهلها والانتقال؟"
+        confirmLabel="تجاهل والانتقال"
+        onConfirm={confirmRoleSwitch}
+      />
     </PageShell>
   );
 }

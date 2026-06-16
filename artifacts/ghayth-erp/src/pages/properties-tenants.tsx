@@ -116,11 +116,9 @@ export default function PropertiesTenants() {
         const key = rowKeyOf(t);
         return (
           <div className="flex items-center gap-1">
-            <Link href={`/properties/tenants/${typeof t.id === "string" && t.id.startsWith("c-") ? encodeURIComponent(t.name) : t.id}`}>
-              <Button variant="ghost" size="sm" className="gap-1 text-xs h-7">
+            <Button asChild variant="ghost" size="sm" className="gap-1 text-xs h-7"><Link href={`/properties/tenants/${typeof t.id === "string" && t.id.startsWith("c-") ? encodeURIComponent(t.name) : t.id}`}>
                 <Eye className="h-3 w-3" /> ملف
-              </Button>
-            </Link>
+              </Link></Button>
             <button
               onClick={(e) => {
                 e.stopPropagation();

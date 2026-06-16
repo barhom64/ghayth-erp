@@ -245,24 +245,18 @@ export default function CashPositionCalculatorPage() {
             </div>
           </div>
           <div className="flex-1" />
-          <Link href="/finance/bank-accounts-watch">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/bank-accounts-watch">
               <Banknote className="w-4 h-4 ml-1" />
               مراقبة البنوك
-            </Button>
-          </Link>
-          <Link href="/finance/ap-payment-calendar">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/ap-payment-calendar">
               <Calendar className="w-4 h-4 ml-1" />
               تقويم الدفعات
-            </Button>
-          </Link>
-          <Link href="/finance/cash-13week">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/cash-13week">
               <TrendingUp className="w-4 h-4 ml-1" />
               توقع 13 أسبوع
-            </Button>
-          </Link>
+            </Link></Button>
         </CardContent>
       </Card>
 

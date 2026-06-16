@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { redirectTo } from "@/components/shared/redirect-to";
 
 const PropertiesGuide = lazy(() => import("@/pages/properties-guide"));
 const Properties = lazy(() => import("@/pages/properties"));
@@ -27,6 +28,7 @@ const TenantDetail = lazy(() => import("@/pages/details/tenant-detail"));
 const PropertyInspections = lazy(() => import("@/pages/properties/inspections"));
 const PropertyDeposits = lazy(() => import("@/pages/properties/deposits"));
 const OccupancyReport = lazy(() => import("@/pages/properties/occupancy-report"));
+const PropertySales = lazy(() => import("@/pages/properties/property-sales"));
 const ContractDetail = lazy(() => import("@/pages/properties/contract-detail"));
 const OwnerDetail = lazy(() => import("@/pages/details/owner-detail"));
 const PropertyPaymentDetail = lazy(() => import("@/pages/details/property-payment-detail"));
@@ -58,8 +60,11 @@ export const propertyRoutes = [
   { path: "/properties/inspections", component: PropertyInspections },
   { path: "/properties/deposits", component: PropertyDeposits },
   { path: "/properties/occupancy-report", component: OccupancyReport },
-  { path: "/guide/properties", component: PropertiesGuide },
+  { path: "/properties/sales", component: PropertySales },
+  // PR-3 (#2163) — canonical owner is /properties/guide. /guide/properties
+  // was a peer dual-owner; now legacy redirect only.
   { path: "/properties/guide", component: PropertiesGuide },
+  { path: "/guide/properties", component: redirectTo("/properties/guide") },
   { path: "/properties/:id/status", component: UnitStatusChange },
   { path: "/properties/:id", component: UnitDetail },
   { path: "/properties", component: Properties },

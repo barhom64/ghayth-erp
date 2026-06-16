@@ -38,12 +38,17 @@ describe("#1733 — booking create form", () => {
     }
   });
 
-  it("offers the 7 umrah route types", () => {
+  it("offers the 7 umrah route types (from the shared ROUTE_TYPES source)", () => {
+    // UX-05 (TA-T18-UX-AUDIT-01) — ROUTE_TYPES وُحِّد في مصدر مشترك؛ النموذج
+    // يستورده بدل تعريفه محليًا، فينتقل ضمان القيم السبع إلى المصدر المشترك.
+    expect(CREATE_PAGE).toMatch(/import \{ ROUTE_TYPES \} from "@\/lib\/transport-constants"/);
+    expect(CREATE_PAGE).toMatch(/ROUTE_TYPES\.map\(/);
+    const ROUTE_SRC = read("lib/transport-constants.ts");
     for (const v of [
       "airport_to_makkah", "makkah_to_madinah", "madinah_to_airport",
       "makkah_local", "madinah_local", "ziyarah", "custom",
     ]) {
-      expect(CREATE_PAGE, `route type ${v} missing`).toContain(`value: "${v}"`);
+      expect(ROUTE_SRC, `route type ${v} missing`).toContain(`value: "${v}"`);
     }
   });
 

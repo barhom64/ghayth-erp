@@ -32,65 +32,79 @@ const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const ORG_SRC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/org.ts"), "utf8");
 const FIELD_TRACK_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/hr/field-tracking.tsx"), "utf8");
 const ATT_CAT_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/admin/attendance-categories.tsx"), "utf8");
-const WORK_QUEUE_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/my/work-queue.tsx"), "utf8");
+// PR-4 (#2163): work-queue.tsx is now a back-compat redirect shell; the
+// canonical unified inbox is work-inbox.tsx (WorkInboxPage).
+const WORK_QUEUE_SRC  = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/my/work-queue.tsx"), "utf8");
+const WORK_INBOX_SRC  = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/work-inbox.tsx"), "utf8");
 const MISC_ROUTES_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/routes/miscRoutes.tsx"), "utf8");
 const ADMIN_ROUTES_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/routes/adminRoutes.tsx"), "utf8");
 const NAV_SRC = readFileSync(join(REPO_ROOT, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"), "utf8");
 
-describe("HR-016 — Unified Work Queue", () => {
-  it("page has default export", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/export default function WorkQueuePage/);
+describe("HR-016 — Unified Work Queue (canonical = /work-inbox after PR-4 #2163)", () => {
+  // PR-4 (#2163) ruling: /my/work-queue is a back-compat redirect shell.
+  // The canonical unified inbox lives at work-inbox.tsx (WorkInboxPage).
+  // Tests below now pin work-inbox.tsx; the redirect-shell behaviour of
+  // work-queue.tsx is pinned separately.
+
+  it("canonical page has default export WorkInboxPage", () => {
+    expect(WORK_INBOX_SRC).toMatch(/export default function WorkInboxPage/);
   });
 
-  it("aggregates from 4 backend sources", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/"\/my-space"/);
-    expect(WORK_QUEUE_SRC).toMatch(/"\/tasks\?[^"]*"/);
-    expect(WORK_QUEUE_SRC).toMatch(/"\/notifications\?[^"]*"/);
-    expect(WORK_QUEUE_SRC).toMatch(/"\/inbox\/threads/);
+  it("aggregates from backend sources: /my-space, /tasks, /notifications", () => {
+    expect(WORK_INBOX_SRC).toMatch(/["'"]\/my-space["'"]/);
+    expect(WORK_INBOX_SRC).toMatch(/["'"]\/tasks\?[^"']*/);
+    expect(WORK_INBOX_SRC).toMatch(/["'"]\/notifications\?[^"']*/);
   });
 
-  it("Tabs: الكل / للاعتماد / مهامي / إشعارات (+ optional محادثات)", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="all"/);
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="approval"/);
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="task"/);
-    expect(WORK_QUEUE_SRC).toMatch(/TabsTrigger value="notification"/);
-    expect(WORK_QUEUE_SRC).toMatch(/value="thread"/);
-    expect(WORK_QUEUE_SRC).toContain("للاعتماد");
-    expect(WORK_QUEUE_SRC).toContain("مهامي");
-    expect(WORK_QUEUE_SRC).toContain("إشعارات");
-  });
-
-  it("each item has consistent shape: source, icon, typeLabel, title, meta, href", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/type QueueItem = \{/);
-    for (const f of ["source:", "icon:", "typeLabel:", "title:", "href:", "createdAt:"]) {
-      expect(WORK_QUEUE_SRC).toContain(f);
-    }
-  });
-
-  it("items sorted by createdAt descending", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/\.sort\(\(a, b\) => \(b\.createdAt[^)]*\)\.localeCompare\(a\.createdAt/);
+  it("Tabs: موافقات (actions) / مهامي (tasks) / إشعارات (notifs) / متابعات (followups)", () => {
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="actions"/);
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="tasks"/);
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="notifs"/);
+    expect(WORK_INBOX_SRC).toMatch(/TabsTrigger value="followups"/);
+    expect(WORK_INBOX_SRC).toContain("مهامي");
+    expect(WORK_INBOX_SRC).toContain("إشعارات");
   });
 
   it("deep-link bar to original screens at bottom", () => {
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/hr\/approvals"/);
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/tasks"/);
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/notifications"/);
-    expect(WORK_QUEUE_SRC).toMatch(/href="\/inbox"/);
+    expect(WORK_INBOX_SRC).toMatch(/href="\/tasks"/);
+    expect(WORK_INBOX_SRC).toMatch(/href="\/notifications"/);
+    expect(WORK_INBOX_SRC).toMatch(/href="\/inbox"/);
   });
 
-  it("route registered at /my/work-queue", () => {
+  it("/my/work-queue is a back-compat redirect shell (PR-4 #2163) — no PageShell", () => {
+    // The route stays mounted (back-compat for old bookmarks/prints)
+    // but the page component is now a wouter redirect shell, not a live page.
+    expect(WORK_QUEUE_SRC).not.toMatch(/export default function WorkQueuePage/);
+    expect(WORK_QUEUE_SRC).not.toMatch(/PageShell/);
+    expect(WORK_QUEUE_SRC).toMatch(/setLocation\("\/work-inbox"\)/);
+  });
+
+  it("route registered at /my/work-queue (back-compat mount stays)", () => {
     expect(MISC_ROUTES_SRC).toMatch(/const WorkQueue = lazy\(\(\) => import\("@\/pages\/my\/work-queue"\)\)/);
     expect(MISC_ROUTES_SRC).toMatch(/\{ path: "\/my\/work-queue", component: WorkQueue \}/);
   });
 
-  it("nav entry under «مساحاتي» at the top of the bucket", () => {
-    expect(NAV_SRC).toMatch(/label: "ما ينتظر إجراءاتي", path: "\/my\/work-queue"/);
+  it("nav entry under «مساحاتي» at the top of the bucket (now points at /work-inbox after PR-5)", () => {
+    // PR-5 (#2077) promoted the canonical inbox to /work-inbox. The
+    // legacy «ما ينتظر إجراءاتي» nav entry under «مساحاتي» now points
+    // at the new page; the experimental /my/work-queue route is kept
+    // mounted (see hrWorkInboxAggregationSmoke) but no longer referenced
+    // from the sidebar.
+    expect(NAV_SRC).toMatch(/label: "ما ينتظر إجراءاتي", path: "\/work-inbox"/);
+    // And a NEW top-level entry «صندوق الأعمال» is added at the top
+    // of «الرئيسية» so the inbox is the first thing every operator sees.
+    expect(NAV_SRC).toMatch(/label: "صندوق الأعمال", path: "\/work-inbox"/);
   });
 });
 
 describe("HR-015 — Attendance Categories admin (backend)", () => {
   it("GET /employee-categories endpoint defined", () => {
-    expect(ORG_SRC).toMatch(/router\.get\("\/employee-categories", authorize\(ADMIN\)/);
+    // PR-3 (#2077) widened the gate from admin:list to hr.employees:list
+    // so the PR-1 wizard's category dropdown actually returns rows for
+    // non-admin operators. The dedicated PR-3 smoke (hrAttendancePerCategoryGatesSmoke)
+    // pins the exact constant; here we just confirm the route is mounted
+    // and authorize() is applied (the gate is no longer admin).
+    expect(ORG_SRC).toMatch(/router\.get\("\/employee-categories", authorize\(HR_EMPLOYEES_READ\)/);
   });
 
   it("returns system templates AND company-scoped rows", () => {
@@ -137,13 +151,31 @@ describe("HR-015 — Attendance Categories admin (frontend)", () => {
     expect(ATT_CAT_SRC).toMatch(/SelectItem value="false"/);
   });
 
-  it("page registered at /admin/attendance-categories", () => {
-    expect(ADMIN_ROUTES_SRC).toMatch(/const AdminAttendanceCategories = lazy/);
-    expect(ADMIN_ROUTES_SRC).toMatch(/\{ path: "\/admin\/attendance-categories", component: AdminAttendanceCategories \}/);
+  it("page registered at /admin/attendance-categories as a wouter <Redirect> (canonical = HR)", () => {
+    // PR-3 (#2077) added a canonical /hr/attendance-categories mount so
+    // HR Managers can reach the page without crossing the admin module
+    // boundary. The /admin route stayed as a back-compat alias (alias =
+    // same component bound twice).
+    //
+    // Wave-2 PR-3 (#2163) — Canonical Ownership ruling: «canonical يتبع
+    // ملكية الأعمال، لا مكان الملف». Attendance categories is HR
+    // business policy; admin had no business owning it. The legacy
+    // path stays reachable (bookmarks/prints) but is bound to a wouter
+    // <Redirect> wrapper now — only ONE route owns the policy.
+    expect(ADMIN_ROUTES_SRC).toMatch(/RedirectToHrAttendanceCategories\s*=\s*redirectTo\("\/hr\/attendance-categories"\)/);
+    expect(ADMIN_ROUTES_SRC).toMatch(
+      /path:\s*"\/admin\/attendance-categories",\s*component:\s*RedirectToHrAttendanceCategories/,
+    );
+    // Regression trap: re-importing AdminAttendanceCategories as a
+    // lazy live page would re-establish dual ownership.
+    expect(ADMIN_ROUTES_SRC).not.toMatch(/const AdminAttendanceCategories = lazy/);
   });
 
-  it("nav entry under «إعدادات الموارد البشرية»", () => {
-    expect(NAV_SRC).toMatch(/label: "فئات الموظفين وسياسات الحضور", path: "\/admin\/attendance-categories"/);
+  it("nav entry under «إعدادات الموارد البشرية» (now points at /hr after PR-3)", () => {
+    // PR-3 moved the navigation entry from /admin/attendance-categories
+    // to /hr/attendance-categories so the link doesn't 403 for the
+    // HR Manager whose role lacks `admin:*`.
+    expect(NAV_SRC).toMatch(/label: "فئات الموظفين وسياسات الحضور", path: "\/hr\/attendance-categories"/);
   });
 });
 

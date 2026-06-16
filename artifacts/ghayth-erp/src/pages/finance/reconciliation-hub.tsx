@@ -412,19 +412,15 @@ export default function ReconciliationHubPage() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-1 shrink-0">
-                    <Link href={cfg.subledgerHref}>
-                      <Button variant="outline" size="sm" className="h-7 text-xs whitespace-nowrap">
+                    <Button asChild variant="outline" size="sm" className="h-7 text-xs whitespace-nowrap"><Link href={cfg.subledgerHref}>
                         {cfg.subledgerLabel}
                         <ChevronRight className="h-3 w-3 ms-1" />
-                      </Button>
-                    </Link>
+                      </Link></Button>
                     {!isBalanced && !loading && available && (
-                      <Link href={`/finance/journal?accountCode=${cfg.glCodePrefix}`}>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs whitespace-nowrap text-red-700">
+                      <Button asChild variant="ghost" size="sm" className="h-7 text-xs whitespace-nowrap text-red-700"><Link href={`/finance/journal?accountCode=${cfg.glCodePrefix}`}>
                           <FileText className="h-3 w-3 me-1" />
                           فحص GL
-                        </Button>
-                      </Link>
+                        </Link></Button>
                     )}
                   </div>
                 </div>

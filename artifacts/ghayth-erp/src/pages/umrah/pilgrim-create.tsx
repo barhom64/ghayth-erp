@@ -86,7 +86,7 @@ export default function PilgrimCreate() {
             defaultValues={EMPTY}
             submitLabel="حفظ"
             secondaryActions={
-              <Link href="/umrah/pilgrims"><Button type="button" variant="outline">إلغاء</Button></Link>
+              <Button asChild type="button" variant="outline"><Link href="/umrah/pilgrims">إلغاء</Link></Button>
             }
             onSubmit={async (values) => {
               try {

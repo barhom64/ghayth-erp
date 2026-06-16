@@ -1,0 +1,11 @@
+# button-nesting-allowlist.txt
+#
+# Pre-existing files containing `<Link><Button>` invalid nesting.
+# These are accepted baseline offenders; the guard only fails on a
+# file NOT listed here. Regenerate with:
+#   node scripts/src/check-button-nesting.mjs --write-allowlist
+# As files are refactored to `<Button asChild><Link/></Button>`,
+# prune their line here.
+#
+# Baseline captured: 0 file(s).
+

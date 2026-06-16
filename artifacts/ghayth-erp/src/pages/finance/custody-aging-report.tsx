@@ -36,9 +36,7 @@ export default function CustodyAgingReportPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/custodies">
-            <Button variant="ghost" size="sm"><ArrowRight className="h-4 w-4 me-1" />العهد</Button>
-          </Link>
+          <Button asChild variant="ghost" size="sm"><Link href="/finance/custodies"><ArrowRight className="h-4 w-4 me-1" />العهد</Link></Button>
           <PrintButton
             entityType="report_finance_custody_aging"
             entityId="list"

@@ -307,8 +307,8 @@ export default function FieldTrackingPage() {
               "الموظف": v.employeeName || "—",
               "التاريخ": v.date || "—",
               "وقت التسجيل": v.checkIn || "—",
-              "خط العرض": v.latitude ?? "—",
-              "خط الطول": v.longitude ?? "—",
+              "خط العرض": v.checkInLat ?? v.lat ?? v.latitude ?? "—",
+              "خط الطول": v.checkInLon ?? v.lng ?? v.lon ?? v.longitude ?? "—",
               "الحالة": v.status || "—",
             })),
           })}
