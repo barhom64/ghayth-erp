@@ -14594,7 +14594,13 @@ CREATE TABLE public.password_reset_requests (
     status character varying(20) DEFAULT 'pending'::character varying,
     "resolvedBy" integer,
     "resolvedAt" timestamp with time zone,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "userId" integer,
+    "tokenHash" character varying(64),
+    purpose character varying(20) DEFAULT 'password_reset'::character varying NOT NULL,
+    "expiresAt" timestamp with time zone,
+    "usedAt" timestamp with time zone,
+    CONSTRAINT password_reset_requests_purpose_check CHECK (((purpose)::text = ANY ((ARRAY['password_reset'::character varying, 'activation'::character varying, 'invitation'::character varying])::text[])))
 );
 
 

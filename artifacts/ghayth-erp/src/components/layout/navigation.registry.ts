@@ -589,6 +589,9 @@ export const allNavSections: NavSection[] = [
           // #2079 TA-T18-04 — قوالب الحجوزات المتكررة (cargo recurring).
           { label: "قوالب المسارات المتكررة", path: "/fleet/transport/route-patterns", icon: CalendarClock, perm: "fleet.bookings:list" },
           { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
+          // Control Tower — audit doc file 22 + #1812. One-shot fleet
+          // snapshot. Same RBAC scope as ops-dashboard.
+          { label: "برج المراقبة", path: "/fleet/transport/control-tower", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
           // كانت orphan: صفحة مركّبة بلا مدخل في القائمة. طابور المحاسب لتسعير
           // وفوترة بنود خدمة النقل — GET /transport/service-lines مبوّب على
           // finance.transport_billing:list (إجراءات التسعير/الفوترة على :approve).
@@ -692,7 +695,8 @@ export const allNavSections: NavSection[] = [
         { label: "التقارير والأدلة", path: "/properties/occupancy-report", icon: BarChart3, children: [
           { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
           { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
-          { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
+          // «دليل إرشادي مصور» (/guide/properties) أُزيل: مسارٌ قديم يعيد التوجيه
+          // إلى /properties/guide أعلاه — بندٌ مكرّر مسدود (نفس الصفحة، نفس المجموعة).
         ]},
       ]},
     ],
@@ -873,9 +877,10 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
         { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
         { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
-        { label: "مؤشرات الأداء", path: "/bi/kpis", icon: TrendingUp },
-        { label: "التقارير التحليلية", path: "/bi/reports", icon: FileBarChart },
-        { label: "لوحات BI", path: "/bi/dashboards", icon: LayoutDashboard },
+        // BI de-dup — «مؤشرات الأداء» (/bi/kpis)، «التقارير التحليلية» (/bi/reports)
+        // و«لوحات BI» (/bi/dashboards) كانت بنوداً مكرّرة: مساراتها الثلاثة تعيد
+        // التوجيه إلى /bi، وهذه العروض أصلاً تبويبات داخل صفحة /bi نفسها. أُزيلت
+        // البنود الخارجية المسدودة (وأُبقيت مسارات إعادة التوجيه للروابط القديمة).
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
         { label: "منصة AI", path: "/intelligence/ai-workbench", icon: Sparkles },

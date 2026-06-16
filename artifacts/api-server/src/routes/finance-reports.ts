@@ -1294,17 +1294,27 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
+    // #2098 FIN-SUB-03 posting-axes — gate on `balancesApplied` (the
+    // true source of "is the balance actually moved", per the owner's
+    // three-axes decision), and surface `postingStatus` alongside the
+    // legacy `status` so the SPA can render the truthful axis. A
+    // directly-posted custody carries status='draft' but
+    // balancesApplied=true → postingStatus='posted'; this report
+    // must include it. An UNPOSTED draft (balancesApplied=false) must
+    // NOT enter the totals — drafts haven't actually moved cash.
     const custodies = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
-              je."createdAt" AS date, je.status,
+              je."createdAt" AS date, je.status, je."postingStatus", je."documentStatus", je."paymentStatus",
               e.name AS "employeeName", 'custody' AS type
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' ${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+         AND je.ref LIKE 'CUSTODY%'
+         AND je."balancesApplied" = true ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."postingStatus", je."documentStatus", je."paymentStatus", e.name
        ORDER BY je."createdAt" DESC
        LIMIT 500`,
       params
@@ -1313,14 +1323,16 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     const advances = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
-              je."createdAt" AS date, je.status,
+              je."createdAt" AS date, je.status, je."postingStatus", je."documentStatus", je."paymentStatus",
               e.name AS "employeeName", 'advance' AS type
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'ADV%' ${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+         AND je.ref LIKE 'ADV%'
+         AND je."balancesApplied" = true ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."postingStatus", je."documentStatus", je."paymentStatus", e.name
        ORDER BY je."createdAt" DESC
        LIMIT 500`,
       params
