@@ -7,7 +7,7 @@ import { handleRouteError, ValidationError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { createAuditLog, emitEvent, todayISO } from "../lib/businessHelpers.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 
@@ -459,7 +459,7 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
     // numbering link, optional institutional links) must be atomic — a partial
     // failure would leave a hired application with no employee, or an employee
     // with no assignment. rawQuery/rawExecute auto-join the ambient transaction.
-    const hireDate = b.hireDate || new Date().toISOString().slice(0, 10);
+    const hireDate = b.hireDate || todayISO();
     const { empId, assignmentId } = await withTransaction(async () => {
       // 1. Mark the application hired.
       await rawExecute(
