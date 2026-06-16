@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout } from "@workspace/ui-core";
+import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
@@ -76,8 +77,11 @@ export default function CustomerAdvancesCreate() {
 
   const amountNum = Number(form.amount) || 0;
 
+  const activeCtx = useActiveFinanceContext();
+
   return (
     <CreatePageLayout title="دفعة مقدمة جديدة" backPath="/finance/customer-advances">
+      <ActiveContextNotice ctx={activeCtx} />
       <div className="bg-status-info-surface/40 border border-status-info-surface rounded-lg p-4 mb-4 text-sm">
         <p className="font-semibold mb-1">ما هي الدفعة المقدمة؟</p>
         <p className="text-xs text-muted-foreground leading-relaxed">
@@ -184,7 +188,7 @@ export default function CustomerAdvancesCreate() {
 
       <div className="flex justify-end gap-3 pt-6">
         <Button variant="outline" onClick={() => setLocation("/finance/customer-advances")}>إلغاء</Button>
-        <Button onClick={handleSubmit} disabled={createMut.isPending} rateLimitAware>
+        <Button onClick={handleSubmit} disabled={createMut.isPending || !activeCtx.ready} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "تسجيل الدفعة المقدمة"}
         </Button>
       </div>

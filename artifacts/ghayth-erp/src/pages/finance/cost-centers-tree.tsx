@@ -203,18 +203,14 @@ export default function CostCentersTreePage() {
             <Sparkles className="h-4 w-4 ms-1" />
             استكمال المفقود
           </GuardedButton>
-          <Link href="/finance/cost-centers">
-            <Button variant="ghost" data-testid="cost-centers-tree-flat-link">
+          <Button asChild variant="ghost" data-testid="cost-centers-tree-flat-link"><Link href="/finance/cost-centers">
               <List className="h-4 w-4 ms-1" />
               العرض الجدولي
-            </Button>
-          </Link>
-          <Link href="/finance/cost-centers/ranking">
-            <Button variant="ghost" data-testid="cost-centers-tree-ranking-link">
+            </Link></Button>
+          <Button asChild variant="ghost" data-testid="cost-centers-tree-ranking-link"><Link href="/finance/cost-centers/ranking">
               <ArrowUpDown className="h-4 w-4 ms-1" />
               التصنيف
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -377,16 +373,14 @@ function TreeRow({
         ))}
       </select>
 
-      <Link href={`/finance/cost-centers/${node.id}/pnl`}>
-        <Button
+      <Button asChild
           size="sm"
           variant="ghost"
           data-testid={`cost-centers-tree-pnl-${node.id}`}
           title="فتح أرباح وخسائر هذا المركز"
-        >
+        ><Link href={`/finance/cost-centers/${node.id}/pnl`}>
           <BarChart3 className="h-3.5 w-3.5" />
-        </Button>
-      </Link>
+        </Link></Button>
 
       <MoveVertical className="h-3 w-3 text-muted-foreground/40 shrink-0" />
     </div>

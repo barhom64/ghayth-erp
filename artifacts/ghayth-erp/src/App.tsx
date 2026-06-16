@@ -26,6 +26,7 @@ import { requestsRoutes } from "@/routes/requestsRoutes";
 import { commsRoutes } from "@/routes/commsRoutes";
 import { miscRoutes } from "@/routes/miscRoutes";
 import { umrahRoutes } from "@/routes/umrahRoutes";
+import { warehouseRoutes } from "@/routes/warehouseRoutes";
 
 import Login from "@/pages/login";
 import Setup from "@/pages/setup";
@@ -69,6 +70,7 @@ const allModuleRoutes: RouteConfig[] = [
   // "umrah", so umrah-granted users carry "umrah" in allowedModules; owners/GM
   // keep ALL_MODULES. See docs/frontend/PAGE_VISIBILITY_INVENTORY.md.
   ...tagRoutes(umrahRoutes, "umrah"),
+  ...tagRoutes(warehouseRoutes, "warehouse"),
   ...miscRoutes,
 ];
 
@@ -112,7 +114,11 @@ function AccessDenied() {
 }
 
 function ModuleRoute({ Component, module, subKey, minRoleLevel }: { Component: React.LazyExoticComponent<any>; module?: ModuleType; subKey?: string; minRoleLevel?: number }) {
-  const { canAccessModule, canAccessSubPage, roleLevel, isFeatureEnabled } = useAppContext();
+  // GAP_MATRIX P1 — use effectiveRoleLevel (highest across all RBAC assignments)
+  // to match the sidebar, which also uses effectiveRoleLevel. Using roleLevel
+  // (assignment-only) caused a divergence where the sidebar hid a link but the
+  // route still rendered (or vice versa) for users with multiple role grants.
+  const { canAccessModule, canAccessSubPage, effectiveRoleLevel, isFeatureEnabled } = useAppContext();
 
   const blocked =
     (module && !canAccessModule(module)) ||
@@ -120,7 +126,7 @@ function ModuleRoute({ Component, module, subKey, minRoleLevel }: { Component: R
     // disabled. Default-ON (empty disabled set) ⇒ no behaviour change.
     (module && !isFeatureEnabled(module)) ||
     (subKey && module && !canAccessSubPage(module, subKey)) ||
-    (minRoleLevel !== undefined && roleLevel < minRoleLevel);
+    (minRoleLevel !== undefined && effectiveRoleLevel < minRoleLevel);
 
   if (blocked) return <AccessDenied />;
   return (

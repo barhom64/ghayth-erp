@@ -25,6 +25,7 @@ interface ConfirmationData {
   bookingSource: string;
   transportServiceType: string;
   customerName: string | null;
+  linkedCustomerName: string | null;
   customerPhone: string | null;
   fromLocationText: string | null;
   toLocationText: string | null;
@@ -108,12 +109,10 @@ export default function TransportBookingConfirmation() {
   return (
     <div dir="rtl" className="bg-surface-subtle min-h-screen">
       <div className="bg-white border-b p-3 flex items-center justify-between max-w-[800px] mx-auto">
-        <Link href={`/fleet/transport/bookings/${id}`}>
-          <Button variant="ghost" size="sm">
+        <Button asChild variant="ghost" size="sm"><Link href={`/fleet/transport/bookings/${id}`}>
             <ArrowLeft className="h-4 w-4 ml-1" />
             عودة للحجز
-          </Button>
-        </Link>
+          </Link></Button>
         {/* Canonical Ghaith Print Platform — produces PDF with branch
             letterhead, audit log entry, watermark, RBAC checks. The
             entityType key resolves to loadTransportBookingConfirmation
@@ -144,7 +143,7 @@ export default function TransportBookingConfirmation() {
 
           <table className="w-full text-sm mb-4" style={{ borderCollapse: "collapse" }}>
             <tbody>
-              <tr><td className="py-1 pl-3 text-muted-foreground w-32">العميل</td><td className="font-medium">{c.customerName || "—"}</td></tr>
+              <tr><td className="py-1 pl-3 text-muted-foreground w-32">العميل</td><td className="font-medium">{c.linkedCustomerName || c.customerName || "—"}</td></tr>
               <tr><td className="py-1 pl-3 text-muted-foreground">رقم الهاتف</td><td className="font-mono" dir="ltr">{c.customerPhone || "—"}</td></tr>
               <tr><td className="py-1 pl-3 text-muted-foreground">نوع الخدمة</td><td>{SERVICE_TYPE_LABEL[c.transportServiceType] || c.transportServiceType}</td></tr>
               {c.umrahGroupId && <tr><td className="py-1 pl-3 text-muted-foreground">مجموعة عمرة</td><td className="font-mono">#{c.umrahGroupId}</td></tr>}

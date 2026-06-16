@@ -11,7 +11,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
-import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
+import { applyTransition, lifecycleErrorResponse, STATE_MACHINES } from "../lib/lifecycleEngine.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { haversineKm, movingAverage, maintenancePriority, maintenanceSlaDeadline } from "../lib/algorithms.js";
 import { createNotification, createAuditLog, emitEvent, getLegalResponsible, todayISO, currentYear, toDateISO, currentMonthPadded, roundTo2, computeVat, getCompanyVatRate } from "../lib/businessHelpers.js";
@@ -21,6 +21,8 @@ import { registerObligation, cancelObligation } from "../lib/obligationsEngine.j
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
+import { registerEntityParty } from "../lib/partyService.js";
+import { getEjarReader, isValidEjarFormat } from "../lib/ejarContractReader.js";
 
 const createUnitSchema = z.object({
   unitNumber: z.string().min(1, "رقم الوحدة مطلوب"),
@@ -117,6 +119,7 @@ const updateContractSchema = z.object({
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
+  contractSource: z.enum(["ejar", "manual", "file_import", "ejar_later", "migrated"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
   totalContractValue: z.coerce.number().optional().nullable(),
@@ -169,6 +172,7 @@ const createContractSchema = z.object({
   contractNumber: z.string().optional().nullable(),
   ejarNumber: z.string().optional().nullable(),
   contractType: z.string().optional().nullable(),
+  contractSource: z.enum(["ejar", "manual", "file_import", "ejar_later", "migrated"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
   totalContractValue: z.coerce.number().optional().nullable(),
@@ -261,6 +265,8 @@ const createMaintenanceRequestSchema = z.object({
   estimatedCost: z.coerce.number().optional().nullable(),
   unitLat: z.coerce.number().optional().nullable(),
   unitLon: z.coerce.number().optional().nullable(),
+  supplierId: z.coerce.number().optional().nullable(),
+  unregisteredSupplierName: z.string().optional().nullable(),
 });
 
 const approveMaintenanceSchema = z.object({
@@ -335,6 +341,8 @@ const createMaintenanceSimpleSchema = z.object({
   category: z.string().optional().nullable(),
   description: z.string().min(1, "وصف الصيانة مطلوب"),
   priority: z.string().optional().nullable(),
+  supplierId: z.coerce.number().optional().nullable(),
+  unregisteredSupplierName: z.string().optional().nullable(),
 });
 
 const updateMaintenanceRequestSchema = z.object({
@@ -443,15 +451,14 @@ const router = Router();
 // Lifecycle transitions to terminal states (terminated/expired/refunded)
 // must go through dedicated endpoints — PATCH refuses them with 409.
 // ─────────────────────────────────────────────────────────────────────────────
-const UNIT_STATUSES = ["available", "rented", "maintenance", "under_maintenance", "out_of_service", "reserved"] as const;
-const UNIT_TRANSITIONS: Record<string, readonly string[]> = {
-  available:         ["rented", "maintenance", "under_maintenance", "out_of_service", "reserved"],
-  rented:            ["available", "maintenance", "under_maintenance"],
-  maintenance:       ["available", "out_of_service"],
-  under_maintenance: ["available", "out_of_service"],
-  reserved:          ["available", "rented"],
-  out_of_service:    ["available", "maintenance", "under_maintenance"],
-};
+// P0-4 — the unit status graph lives in ONE place: lifecycleEngine's
+// STATE_MACHINES (entity "property_units"). This route derives its
+// guard from that machine (SUP-016 pattern, same as support.ts) so
+// the two can never diverge again. The statuses list is the machine's
+// key set — every state that exists as a source in the graph.
+const UNIT_TRANSITIONS: Record<string, readonly string[]> =
+  STATE_MACHINES.find((sm) => sm.entity === "property_units")?.transitions ?? {};
+const UNIT_STATUSES = Object.keys(UNIT_TRANSITIONS);
 
 const CONTRACT_STATUSES = ["draft", "active", "terminated", "expired", "cancelled", "renewed"] as const;
 const CONTRACT_TRANSITIONS: Record<string, readonly string[]> = {
@@ -614,7 +621,7 @@ router.post("/units", authorize({ feature: "properties.units", action: "create" 
     }).catch((e) => logger.error(e, "properties background task failed"));
     createSubsidiaryAccountsForEntity(
       scope.companyId, "property", insertId,
-      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`
+      `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`, { branchId: scope.branchId, actorUserId: scope.userId }
     ).catch((e) => logger.error(e, "properties background task failed"));
     // #1715 (owner feedback) — consistent entity-provisioning policy: every
     // trackable entity gets a cost centre for per-entity P&L. The unit's CC
@@ -883,6 +890,40 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
 
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
+});
+
+// Preview from Ejar — Mock-First read by ejarNumber. The form calls
+// this when the operator chooses contractSource='ejar' and enters an
+// Ejar number; the response pre-fills the contract fields and the UI
+// locks the reference ones (parties, unit, amounts) so they can't be
+// edited locally — the doctrine rule for Ejar-bound contracts.
+//
+// The underlying reader is swappable (mock vs real) via the
+// EJAR_READER_MODE env. Today only mock returns data; flipping to
+// real fails loudly until the platform read endpoint is wired up.
+router.post("/contracts/preview-from-ejar", authorize({ feature: "properties.contracts", action: "list" }), async (req, res) => {
+  try {
+    const ejarNumber = String(req.body?.ejarNumber ?? "").trim();
+    if (!isValidEjarFormat(ejarNumber)) {
+      res.status(400).json({
+        error: "صيغة رقم إيجار غير صحيحة. المتوقع: EJ-XXXX",
+        field: "ejarNumber",
+      });
+      return;
+    }
+    const reader = getEjarReader();
+    const data = await reader.read(ejarNumber);
+    if (!data) {
+      res.status(404).json({
+        error: "لم يُعثر على عقد بهذا الرقم في إيجار",
+        ejarNumber,
+      });
+      return;
+    }
+    res.json({ data, source: "ejar" });
+  } catch (err) {
+    handleRouteError(err, res, "Preview from Ejar error:");
+  }
 });
 
 // Impact preview — shows what will happen when the rental contract is created
@@ -1178,12 +1219,12 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
     const insertId = await withTransaction(async (client) => {
       const contractRes = await client.query(
         `INSERT INTO rental_contracts ("companyId","unitId","tenantId","tenantName","tenantPhone","tenantEmail","tenantIdNumber","startDate","endDate","monthlyRent","depositAmount","paymentDay",notes,status,
-         "contractNumber","ejarNumber","contractType","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
+         "contractNumber","ejarNumber","contractType","contractSource","paymentFrequency","yearlyRent","totalContractValue","latePenaltyType","latePenaltyValue","gracePeriodDays","terminationNoticeDays","earlyTerminationFee","autoRenewal","renewalNoticeDays","renewalPeriodMonths","electricityResponsibility","waterResponsibility","gasResponsibility","maintenanceResponsibility","brokerageFee","brokeragePayor","depositHolder","insuranceRequired","ownerId","numberOfInstallments","specialConditions","ejarStatus","registrationDate")
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
-         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
+         $15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42)
          RETURNING id`,
         [scope.companyId, b.unitId, tenantId, b.tenantName, b.tenantPhone, b.tenantEmail, b.tenantIdNumber, b.startDate, b.endDate, monthlyRent, b.depositAmount || 0, b.paymentDay || 1, b.notes, b.status || "active",
-         contractNumber, b.ejarNumber || null, b.contractType || 'residential', frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
+         contractNumber, b.ejarNumber || null, b.contractType || 'residential_rent', b.contractSource || (b.ejarNumber ? 'ejar' : 'manual'), frequency, yearlyRent, totalContractValue, b.latePenaltyType || 'percentage', b.latePenaltyValue || 0, b.gracePeriodDays || 0, b.terminationNoticeDays || 30, b.earlyTerminationFee || 0, b.autoRenewal || false, b.renewalNoticeDays || 60, b.renewalPeriodMonths || 12, b.electricityResponsibility || 'tenant', b.waterResponsibility || 'tenant', b.gasResponsibility || 'tenant', b.maintenanceResponsibility || 'shared', b.brokerageFee || 0, b.brokeragePayor || 'tenant', b.depositHolder || 'owner', b.insuranceRequired || false, b.ownerId || null, installmentCount, b.specialConditions || null, b.ejarStatus || 'draft', b.registrationDate || null]
       );
       const contractId = contractRes.rows[0].id;
 
@@ -1218,6 +1259,12 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
 
       return contractId;
     });
+
+    // Per-lease cost centre, nested under the unit's cost centre — gives
+    // per-contract P&L drill-down (rent revenue vs maintenance/penalties for
+    // this lease). The legal-contract path already auto-creates one; rental
+    // contracts didn't — closing that asymmetry. Fire-and-forget.
+    createCostCenterForEntity(scope.companyId, "contract", insertId, `عقد إيجار ${contractNumber}`, { parentEntityType: "unit", parentEntityId: Number(b.unitId), actorUserId: scope.userId }).catch((e) => logger.error(e, "rental contract cost-centre auto-create failed"));
 
     await applyTransition({
       entity: "property_units",
@@ -1262,7 +1309,7 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
     } catch (obErr) { logger.error(obErr, "Contract obligation registration failed:"); }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
-    const schedule = await rawQuery<Record<string, unknown>>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`, [insertId]);
+    const schedule = await rawQuery<Record<string, unknown>>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2 ORDER BY "installmentNumber" LIMIT 500`, [insertId, scope.companyId]);
 
     // Lifecycle event: lease.created
     await emitEvent({
@@ -1379,6 +1426,7 @@ router.patch("/contracts/:id", authorize({ feature: "properties.contracts", acti
     addField("contractNumber", b.contractNumber);
     addField("ejarNumber", b.ejarNumber);
     addField("contractType", b.contractType);
+    addField("contractSource", b.contractSource);
     addField("paymentFrequency", b.paymentFrequency);
     addField("yearlyRent", b.yearlyRent);
     addField("totalContractValue", b.totalContractValue);
@@ -1525,8 +1573,8 @@ router.post("/contracts/:id/renew", authorize({ feature: "properties.contracts",
         const installmentCount = Math.ceil(renewalMonths / freqMonths);
         const installmentAmount = roundTo2(newTotal / installmentCount);
         const maxRes = await client.query(
-          `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
-          [id]
+          `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2`,
+          [id, scope.companyId]
         );
         const startNum = Number(maxRes.rows[0]?.max || 0);
         for (let i = 0; i < installmentCount; i++) {
@@ -1689,6 +1737,9 @@ router.post("/contracts/:id/terminate", authorize({ feature: "properties.contrac
       action: "property.contract.terminated",
       entity: "rental_contract",
       entityId: id,
+      contractId: id,
+      reason: b.reason,
+      settlementAmount: earlyFee,
       details: `إنهاء عقد ${contract.contractNumber}: ${b.reason}`,
     });
     await createAuditLog({
@@ -1984,6 +2035,7 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
       // Lock the payment row to prevent concurrent pay requests.
       const lockRes = await client.query(
         `SELECT rp.*, c.status AS "contractStatus", c."tenantName", c."companyId" AS "contractCompanyId",
+                c."contractType" AS "contractType",
                 NULL::int AS "contractBranchId",
                 u."unitNumber", u."buildingName", u.id AS "unitId", u."branchId" AS "unitBranchId"
            FROM rent_payments rp
@@ -2027,9 +2079,38 @@ router.post("/payments/:id/pay", authorize({ feature: "properties.payments", act
         const rentBranchId = (existing.contractBranchId as number | null)
           ?? (existing.unitBranchId as number | null)
           ?? scope.branchId;
+
+        // Commercial rent is a VATable supply under ZATCA; residential
+        // rent is exempt. The `paidAmount` the operator enters is the
+        // GROSS receipt — split it into the net (revenue) and the tax
+        // (output VAT) so the GL reflects the two distinct movements.
+        // The rate itself flows through `getCompanyVatRate` which reads
+        // system_settings, so operators can override it per company
+        // without code changes (FIN-AUD-03).
+        const isCommercial = ["commercial_rent", "commercial"].includes(
+          (existing.contractType as string | null) ?? "",
+        );
+        let netAmount = paidAmount;
+        let vatAmount = 0;
+        if (isCommercial) {
+          const rate = await getCompanyVatRate(scope.companyId);
+          if (rate > 0) {
+            // VAT-inclusive split: gross = net * (1 + rate/100)
+            netAmount = roundTo2(paidAmount / (1 + rate / 100));
+            vatAmount = roundTo2(paidAmount - netAmount);
+          }
+        }
+
         const glResult = await propertiesEngine.postRentRevenueGL(
           { companyId: scope.companyId, branchId: rentBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-          { id: Number(id), contractId: existing.contractId, propertyId: existing.unitId, amount: paidAmount, tenantId: existing.tenantId }
+          {
+            id: Number(id),
+            contractId: existing.contractId,
+            propertyId: existing.unitId,
+            amount: netAmount,
+            vatAmount: vatAmount > 0 ? vatAmount : undefined,
+            tenantId: existing.tenantId,
+          }
         );
         journalEntryId = glResult.journalId;
       } catch (jErr) {
@@ -2302,8 +2383,8 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
     const isEmergency = emergencyKeywords.some(kw => descLower.includes(kw));
 
     const pastRequests = await rawQuery<Record<string, unknown>>(
-      `SELECT EXTRACT(EPOCH FROM ("completedAt"::timestamp - "createdAt"::timestamp))/86400 AS days FROM maintenance_requests WHERE "unitId"=$1 AND status='completed' AND "completedAt" IS NOT NULL ORDER BY id DESC LIMIT 10`,
-      [b.unitId]
+      `SELECT EXTRACT(EPOCH FROM ("completedAt"::timestamp - "createdAt"::timestamp))/86400 AS days FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND status='completed' AND "completedAt" IS NOT NULL ORDER BY id DESC LIMIT 10`,
+      [b.unitId, scope.companyId]
     );
     const responseDays = pastRequests.map((r: Record<string, unknown>) => Number(r.days)).filter((d: number) => d > 0);
     const avgResponseDays = responseDays.length > 0 ? movingAverage(responseDays) : 5;
@@ -2368,8 +2449,8 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
     }
 
     const { insertId } = await rawExecute(
-      `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"assignedTo","estimatedCost") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [scope.companyId, b.unitId, b.contractId || null, b.tenantName || null, b.category || null, b.description, autoPriority, assignedTechnicianId ? 'assigned' : 'pending', assignedTechnicianId, b.estimatedCost || 0]
+      `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"assignedTo","estimatedCost","supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [scope.companyId, b.unitId, b.contractId || null, b.tenantName || null, b.category || null, b.description, autoPriority, assignedTechnicianId ? 'assigned' : 'pending', assignedTechnicianId, b.estimatedCost || 0, b.supplierId ?? null, b.unregisteredSupplierName ?? null]
     );
     assertInsert(insertId, "maintenance_requests");
 
@@ -2781,6 +2862,11 @@ router.post("/tenants", authorize({ feature: "properties.tenants", action: "crea
       action: "tenant.created", entity: "tenants", entityId: insertId,
       details: `مستأجر جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "tenants", insertId, "tenant", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.tenantType === "company" || b.tenantType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] tenants registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create tenant error:"); }
 });
@@ -2954,7 +3040,7 @@ router.post("/buildings", authorize({ feature: "properties.buildings", action: "
     // #1715 (owner feedback) — consistent entity-provisioning policy: a new
     // property building gets BOTH a subsidiary account (per-property ledger)
     // and a cost centre (per-property P&L), mirroring vehicle creation.
-    createSubsidiaryAccountsForEntity(scope.companyId, "property", insertId, b.name)
+    createSubsidiaryAccountsForEntity(scope.companyId, "property", insertId, b.name, { branchId: scope.branchId, actorUserId: scope.userId })
       .catch((e) => logger.error(e, "property subsidiary auto-create failed"));
     createCostCenterForEntity(
       scope.companyId, "property", insertId, b.name,
@@ -3156,8 +3242,8 @@ router.post("/maintenance", authorize({ feature: "properties.maintenance", actio
       throw new ValidationError("الوحدة غير موجودة", { field: "unitId", fix: "اختر وحدة مسجلة" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status) VALUES ($1,$2,$3,$4,$5,$6,'open')`,
-      [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium']
+      `INSERT INTO maintenance_requests ("companyId","unitId","tenantName",category,description,priority,status,"supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8)`,
+      [scope.companyId, b.unitId, b.tenantName, b.category || 'general', b.description, b.priority || 'medium', b.supplierId ?? null, b.unregisteredSupplierName ?? null]
     );
     assertInsert(insertId, "maintenance_requests");
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
@@ -3594,6 +3680,11 @@ router.post("/owners", authorize({ feature: "properties.owners", action: "create
       action: "property.owner.created", entity: "property_owners", entityId: insertId,
       details: `مالك جديد: ${b.name}`,
     }).catch((e) => logger.error(e, "properties background task failed"));
+    registerEntityParty(scope.companyId, "property_owners", insertId, "owner", {
+      displayName: b.name, nationalId: b.nationalId ?? null,
+      phone: b.phone ?? null, email: b.email ?? null,
+      kind: (b.ownerType === "company" || b.ownerType === "organization") ? "organization" : "person",
+    }).catch((e) => logger.error(e, "[partyService] property_owners registration failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create owner error:"); }
 });
@@ -4067,8 +4158,8 @@ router.get("/contracts/:id/schedule", authorize({ feature: "properties.contracts
     const [contract] = await rawQuery<Record<string, unknown>>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [contractId, scope.companyId]);
     if (!contract) throw new NotFoundError("العقد غير موجود");
     const schedule = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`,
-      [contractId]
+      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2 ORDER BY "installmentNumber" LIMIT 500`,
+      [contractId, scope.companyId]
     );
     res.json(maskFields(req, { data: schedule, total: schedule.length }));
   } catch (err) { handleRouteError(err, res, "Payment schedule error:"); }
@@ -4602,6 +4693,108 @@ router.get("/tenants/:id/letters", authorize({ feature: "properties.tenants", ac
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "Tenant letters error:"); }
+});
+
+/* ─── Property Sales ──────────────────────────────────────────────────── */
+
+const createSaleSchema = z.object({
+  buildingId:      z.coerce.number().int().positive().optional(),
+  buyerName:       z.string().min(1),
+  buyerPhone:      z.string().optional(),
+  buyerNationalId: z.string().optional(),
+  salePrice:       z.coerce.number().positive(),
+  bookValue:       z.coerce.number().nonnegative().default(0),
+  vatAmount:       z.coerce.number().nonnegative().default(0),
+  saleDate:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  transferDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes:           z.string().optional(),
+});
+
+// GET /properties/sales
+router.get("/sales", authorize({ feature: "properties.buildings", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT ps.id, ps."buildingId", ps."buyerName", ps."buyerPhone", ps."buyerNationalId",
+              ps."salePrice", ps."bookValue", ps."vatAmount", ps."saleDate", ps."transferDate",
+              ps.status, ps.notes, ps."journalEntryId", ps."createdAt",
+              pb.name AS "buildingName"
+       FROM property_sales ps
+       LEFT JOIN property_buildings pb ON pb.id = ps."buildingId"
+       WHERE ps."companyId" = $1 AND ps."deletedAt" IS NULL
+       ORDER BY ps."saleDate" DESC`,
+      [scope.companyId]
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Property sales list error:"); }
+});
+
+// POST /properties/sales
+router.post("/sales", authorize({ feature: "properties.buildings", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createSaleSchema.safeParse(req.body)) as any;
+
+    // INSERT + GL must succeed together. withTransaction binds a single
+    // connection via AsyncLocalStorage so rawQuery/rawExecute inside the
+    // callback run on the same transaction. If postSaleGL throws, the
+    // transaction rolls back, the INSERT is undone, and the error propagates
+    // to the outer catch → handleRouteError → 4xx/5xx to the client.
+    // We never return 201 without a balanced journal entry.
+    const insertId = await withTransaction(async () => {
+      const { insertId: id } = await rawExecute(
+        `INSERT INTO property_sales ("companyId","buildingId","buyerName","buyerPhone","buyerNationalId","salePrice","bookValue","vatAmount","saleDate","transferDate",status,notes,"createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [scope.companyId, b.buildingId || null, b.buyerName, b.buyerPhone || null, b.buyerNationalId || null,
+         b.salePrice, b.bookValue, b.vatAmount, b.saleDate, b.transferDate || null,
+         b.bookValue > 0 ? 'pending' : 'draft',
+         b.notes || null, scope.userId]
+      );
+      assertInsert(id, "property_sales");
+
+      if (b.bookValue > 0) {
+        // postSaleGL throws on failure → transaction rolls back → INSERT undone.
+        await propertiesEngine.postSaleGL(
+          { companyId: scope.companyId, branchId: scope.branchId ?? null, createdBy: scope.userId },
+          { id, propertyId: b.buildingId || 0, buyerId: null,
+            salePrice: b.salePrice, bookValue: b.bookValue, vatAmount: b.vatAmount, saleDate: b.saleDate }
+        );
+        await rawExecute(
+          `UPDATE property_sales SET status='completed', "updatedAt"=NOW() WHERE id=$1`,
+          [id]
+        );
+      }
+
+      return id;
+    });
+
+    await createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "property_sales", entityId: insertId, after: b });
+    await emitEvent({ companyId: scope.companyId, userId: scope.userId,
+      action: "property.sale.created", entity: "property_sales", entityId: insertId,
+      details: `بيع عقار لـ ${b.buyerName} بمبلغ ${b.salePrice}` });
+
+    const [sale] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM property_sales WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]
+    );
+    res.status(201).json(sale);
+  } catch (err) { handleRouteError(err, res, "Property sale create error:"); }
+});
+
+// GET /properties/sales/:id
+router.get("/sales/:id", authorize({ feature: "properties.buildings", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [sale] = await rawQuery<Record<string, unknown>>(
+      `SELECT ps.*, pb.name AS "buildingName" FROM property_sales ps
+       LEFT JOIN property_buildings pb ON pb.id = ps."buildingId"
+       WHERE ps.id=$1 AND ps."companyId"=$2 AND ps."deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!sale) throw new NotFoundError("عملية البيع غير موجودة");
+    res.json(maskFields(req, sale));
+  } catch (err) { handleRouteError(err, res, "Property sale get error:"); }
 });
 
 export default router;

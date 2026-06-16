@@ -22,6 +22,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  statuses: write
 
 jobs:
   guard:
@@ -57,6 +58,11 @@ jobs:
       # This is a CI-only value, not a secret — it never authenticates a
       # production session.
       JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
+      # secrets.ts (AES-256-GCM at-rest encryption for vendor_secrets)
+      # refuses to derive a key from nothing. CI-only value, same policy
+      # as JWT_SECRET above — required by the #2137 systemSmtp dynamic
+      # suite which round-trips an encrypted SMTP password.
+      SECRETS_ENCRYPTION_KEY: ci-only-secrets-key-thirty-two-chars-aaaaaaaaaaaa
 
     steps:
       - name: Diagnostic — confirm job reached runner
@@ -176,6 +182,35 @@ jobs:
               issue_number: context.issue.number,
               body: `### CI guard failure\n\n<details><summary>Last 200 lines of guard output</summary>\n\n\`\`\`\n${last200}\n\`\`\`\n\n</details>`
             });
+
+      - name: Post commit status for ruleset gate
+        # The repository ruleset requires a commit *status* named "guard"
+        # (not just the check run GitHub Actions posts automatically).
+        # Posts to both context.sha and the PR head SHA so the gate is
+        # satisfied regardless of which commit the ruleset evaluates.
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const outcome = '${{ steps.guard.outcome }}';
+            const state   = outcome === 'success' ? 'success' : 'failure';
+            const desc    = state === 'success' ? 'All guards passed' : 'Guard suite failed — see details';
+            const url     = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const shas = [...new Set([
+              context.sha,
+              context.payload.pull_request?.head?.sha,
+            ].filter(Boolean))];
+            for (const sha of shas) {
+              await github.rest.repos.createCommitStatus({
+                owner:       context.repo.owner,
+                repo:        context.repo.repo,
+                sha,
+                state,
+                context:     'guard',
+                description: desc,
+                target_url:  url,
+              });
+            }
 
       - name: Fail if guard failed
         if: steps.guard.outcome == 'failure'

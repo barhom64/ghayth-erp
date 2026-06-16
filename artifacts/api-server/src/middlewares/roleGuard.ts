@@ -2,43 +2,29 @@ import type { Request, Response, NextFunction } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { logSecurityEvent } from "./permissionMiddleware.js";
 import { logger } from "../lib/logger.js";
+import {
+  ROLE_MODULE_DEFAULTS,
+  canonicalize,
+  canonicalizeModules,
+} from "../lib/rbac/roleModulesCatalog.js";
 
 const roleModuleCache = new Map<string, { modules: string[]; roles: string[]; level: number; expiresAt: number }>();
 const CACHE_TTL = 30_000;
 
-const ROLE_LEVELS: Record<string, number> = {
-  owner: 100,
-  general_manager: 90,
-  hr_manager: 70,
-  finance_manager: 70,
-  fleet_manager: 70,
-  property_manager: 70,
-  projects_manager: 70,
-  warehouse_manager: 70,
-  legal_manager: 70,
-  support_manager: 70,
-  crm_manager: 70,
-  bi_manager: 70,
-  branch_manager: 60,
-  employee: 10,
-};
+// PR-2 / #2163 — both lookup tables now live in lib/rbac/roleModulesCatalog.
+// `ROLE_LEVELS` and `ROLE_DEFAULT_MODULES` used to be inlined here and
+// hand-copied to `PREDEFINED_ROLE_DEFAULTS` in routes/permissions.ts; PR-0
+// caught the inevitable drift (department_manager/payroll_officer made it
+// here but not there). One source now feeds both consumers.
+const ROLE_LEVELS: Record<string, number> = Object.fromEntries(
+  Object.entries(ROLE_MODULE_DEFAULTS).map(([k, v]) => [k, v.level]),
+);
+const ROLE_DEFAULT_MODULES: Record<string, string[]> = Object.fromEntries(
+  Object.entries(ROLE_MODULE_DEFAULTS).map(([k, v]) => [k, v.modules]),
+);
 
-const ROLE_DEFAULT_MODULES: Record<string, string[]> = {
-  owner: ["home","hr","finance","fleet","property","operations","warehouse","governance","bi","requests","documents","reports","admin","comms","legal","crm","marketing","store","support","settings"],
-  general_manager: ["home","hr","finance","fleet","property","operations","warehouse","governance","bi","requests","documents","reports","comms","legal","crm","marketing","store","support","settings"],
-  hr_manager: ["home","hr","requests","documents","comms"],
-  finance_manager: ["home","finance","requests","documents","comms"],
-  fleet_manager: ["home","fleet","requests","documents","comms"],
-  property_manager: ["home","property","requests","documents","comms"],
-  projects_manager: ["home","operations","requests","documents","comms"],
-  warehouse_manager: ["home","warehouse","store","requests","documents","comms"],
-  legal_manager: ["home","legal","governance","requests","documents","comms"],
-  support_manager: ["home","support","requests","documents","comms"],
-  crm_manager: ["home","crm","marketing","requests","documents","comms"],
-  bi_manager: ["home","bi","reports","requests","documents","comms"],
-  branch_manager: ["home","hr","finance","requests","documents","comms","support"],
-  employee: ["home","requests","documents","comms"],
-};
+// (ROLE_LEVELS + ROLE_DEFAULT_MODULES derived above from
+// roleModulesCatalog — single source of truth per PR-2.)
 
 async function getUserModules(userId: number, fallbackRole?: string, companyId?: number): Promise<{ modules: string[]; roles: string[]; level: number }> {
   const cacheKey = `${userId}:${companyId ?? 0}`;
@@ -109,7 +95,12 @@ export function requireModule(...requiredModules: string[]) {
         return;
       }
 
-      const hasAccess = requiredModules.some(m => modules.includes(m));
+      // PR-2 / #2163 — canonicalize both sides so a dynamic projection
+      // emitting feature-key vocab (e.g. "dashboard") matches a
+      // requireModule call that uses the canonical vocab (e.g. "home").
+      // Drops the silent 403 on roles whose modules come from grants.
+      const canonModules = canonicalizeModules(modules);
+      const hasAccess = requiredModules.some((m) => canonModules.includes(canonicalize(m)));
       if (!hasAccess) {
         const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress;
         logSecurityEvent({

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { handleRouteError } from "../lib/errorHandler.js";
 import { todayISO, currentPeriod, currentYear, toDateISO } from "../lib/businessHelpers.js";
@@ -420,7 +420,9 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
           } catch (e) { logger.error(e, "my-space roleEntities cases error:"); }
         }
         let hrSummary: any = null;
-        if (HR_APPROVAL_ROLES.includes(scope.role)) {
+        // HR-REV-1 #1 — show the HR summary widget to anyone who can list
+        // employees (grant-derived), instead of a hardcoded role array.
+        if (scopeCan(scope, "hr.employees", "list")) {
           try {
             const [hs] = await rawQuery<Record<string, unknown>>(
               `SELECT COUNT(*) AS total,

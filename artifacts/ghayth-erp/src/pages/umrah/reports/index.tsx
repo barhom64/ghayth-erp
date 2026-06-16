@@ -143,12 +143,10 @@ export default function UmrahReportsHub() {
                       قيد التطوير
                     </Button>
                   ) : (
-                    <Link href={r.route}>
-                      <Button size="sm" variant="outline" data-testid={`report-open-${r.id}`}>
+                    <Button asChild size="sm" variant="outline" data-testid={`report-open-${r.id}`}><Link href={r.route}>
                         <ArrowLeft className="h-3 w-3 me-1" />
                         افتح التقرير
-                      </Button>
-                    </Link>
+                      </Link></Button>
                   )}
                 </div>
               </CardContent>

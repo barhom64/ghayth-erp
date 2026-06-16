@@ -1,0 +1,120 @@
+# tenant-isolation-allowlist.txt — FND-013 triage baseline.
+# Each line: routes/<file>.ts:<table> — a static read/write of a tenant table
+# that lacks a literal "companyId" predicate in the SAME statement. The guard
+# fails on any NEW offender not listed here.
+#
+# TRIAGE STATUS (2026-06-15, FND-013 review against the live head-of-main DB):
+# every entry below was read end-to-end in its handler. NONE is an exploitable
+# cross-tenant leak. Each is one of:
+#   [GLOBAL]  — legitimately reads across companies (platform/system infra,
+#               anonymous webhook with no session, public portal, or a
+#               deliberately global uniqueness/template lookup). Adding a
+#               companyId predicate would BREAK intended behaviour.
+#   [TIGHTER] — already scoped tighter than companyId, by the caller's own
+#               identity (userId/employeeId/activeAssignmentId) or by a parent
+#               id that the SAME handler validated against scope.companyId
+#               upstream. Cross-tenant leakage is not reachable. A cheap
+#               defense-in-depth companyId predicate could be added per-track
+#               but is not required for correctness.
+# The one genuine HARDEN found (properties.ts maintenance_requests stats query)
+# was fixed in-code (companyId predicate added) and its line removed below.
+# Whole-file exception: routes/<file>.ts (no colon). Comments start with #.
+
+# ── [GLOBAL] platform cron / event-bus infrastructure (cross-company by design)
+routes/admin-observability.ts:cron_logs
+routes/admin.ts:cron_jobs
+routes/admin.ts:cron_logs
+routes/automation.ts:cron_jobs
+routes/health.ts:cron_logs
+routes/health.ts:event_dlq
+routes/events.ts:event_outbox
+
+# ── [GLOBAL] system-level 3-tier settings (system row reads span companies)
+routes/operationsCenter.ts:system_settings
+
+# ── [GLOBAL] anonymous device-ingestion webhook — no company session exists;
+# integration row loaded by id to obtain its HMAC secret + companyId.
+routes/fleet-telematics-webhook.ts:fleet_telematics_integrations
+
+# ── [GLOBAL] driver-portal login keyed by globally-unique email; the bare read
+# is an intentional cross-tenant uniqueness check (companyId would defeat it).
+routes/fleet.ts:driver_portal_accounts
+
+# ── [GLOBAL] public careers portal — own applicant JWT (no req.scope); reads are
+# scoped by the applicant's own account / application id. Applicants cross-company.
+routes/careersPortal.ts:job_postings
+
+# ── [GLOBAL] RBAC global definitions: role templates (is_template, companyId NULL)
+# and global SoD rules (companyId NULL) must be readable across companies. The
+# matching mutating writes ARE companyId-scoped. NOTE: POST /roles/:id/clone now
+# restricts its source read to ("companyId"=scope OR is_template) — in-code.
+routes/rbacV2.ts:rbac_roles
+routes/rbacV2.ts:rbac_sod_rules
+
+# ── [TIGHTER] fleet telematics: device-id-keyed reads/writes; the device/vehicle
+# is company-validated upstream in the same handler (allowedCompanies / vehicleId).
+routes/fleet-telematics.ts:fleet_ai_alerts
+routes/fleet-telematics.ts:fleet_device_events
+routes/fleet-telematics.ts:fleet_device_positions
+routes/fleet-telematics.ts:fleet_sensor_readings
+routes/fleet-telematics.ts:fleet_telematics_devices
+routes/fleet-telematics.ts:fleet_video_channels
+routes/fleet.ts:fleet_gps_tracking
+
+# ── [TIGHTER] finance: cip_costs keyed by a CIP id validated vs companyId upstream.
+routes/finance-algorithms.ts:cip_costs
+
+# ── [TIGHTER] inbox: conversation_links keyed by a conversation validated upstream.
+routes/inboxConversations.ts:conversation_links
+
+# ── [TIGHTER] HR self-service & company-scoped joins (scope.employeeId /
+# activeAssignmentId / userId, or joined through a companyId-scoped driver row).
+routes/hr-wps.ts:employees
+routes/hr-wps.ts:wps_runs
+routes/hr.ts:anonymous_upward_reviews
+routes/hr.ts:attendance
+routes/hr.ts:employee_assignments
+routes/hr.ts:employee_contracts
+routes/hr.ts:employees
+routes/hr.ts:evaluation_participants
+routes/hr.ts:evaluation_summaries
+routes/hr.ts:hr_excuse_requests
+routes/hr.ts:hr_leave_requests
+routes/hr.ts:hr_leave_types
+routes/hr.ts:peer_evaluations
+routes/hr.ts:shifts
+routes/hr.ts:system_evaluations
+
+# ── [TIGHTER] "my data" self-service — every read keyed by the caller's own
+# assignmentId / assignedTo / createdBy (scope.activeAssignmentId).
+routes/mySpace.ts:attendance
+routes/mySpace.ts:attendance_deductions
+routes/mySpace.ts:employee_monthly_attendance
+routes/mySpace.ts:employee_violations
+routes/mySpace.ts:hr_employee_loans
+routes/mySpace.ts:hr_exit_requests
+routes/mySpace.ts:hr_overtime_requests
+routes/mySpace.ts:journal_entries
+routes/mySpace.ts:notifications
+routes/mySpace.ts:payroll_runs
+routes/mySpace.ts:shifts
+routes/mySpace.ts:tasks
+
+# ── [TIGHTER] projects / properties / store: lookup joins keyed on a parent
+# (project / order / unit) validated vs companyId in the same handler.
+routes/projects.ts:employees
+routes/projects.ts:project_resources
+routes/properties.ts:property_units
+routes/properties.ts:rental_contracts
+routes/store.ts:store_products
+
+# ── [TIGHTER] RBAC: dependency/notification reads keyed on an id validated vs
+# companyId in the same handler (role/jit request locked & company-checked).
+routes/rbacV2.ts:rbac_jit_requests
+routes/rbacV2.ts:rbac_user_roles
+
+# ── [TIGHTER] umrah: commission / import reads keyed on a plan or import batch
+# validated vs companyId in the same handler.
+routes/umrah-entities.ts:employee_commission_calculations
+routes/umrah-entities.ts:employee_commission_tiers
+routes/umrah-entities.ts:umrah_import_changes

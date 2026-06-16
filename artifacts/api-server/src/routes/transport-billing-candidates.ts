@@ -172,7 +172,8 @@ transportBillingCandidatesRouter.post(
               : "هذا الترشيح مرفوض ولا يمكن ترحيله",
           );
         }
-        if (candidate.sourceType !== "cargo_manifest") {
+        const SUPPORTED_SOURCE_TYPES = ["cargo_manifest", "maintenance", "fuel", "insurance"];
+        if (!SUPPORTED_SOURCE_TYPES.includes(candidate.sourceType)) {
           throw new ValidationError(
             `نوع المصدر ${candidate.sourceType} غير مدعوم بعد للترحيل التلقائي`,
           );
@@ -181,13 +182,33 @@ transportBillingCandidatesRouter.post(
         const revenue = overrides.freightRevenue ?? Number(candidate.suggestedRevenue ?? 0) ?? 0;
         const cost = overrides.freightCost ?? Number(candidate.suggestedCost ?? 0) ?? 0;
 
-        const journal = await fleetEngine.postCargoDeliveryGL(
-          {
-            companyId: scope.companyId,
-            branchId: scope.branchId ?? candidate.branchId ?? 0,
-            createdBy: scope.userId,
-          },
-          {
+        const glCtx = {
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? candidate.branchId ?? 0,
+          createdBy: scope.userId,
+        };
+        // #TA-T18 finance-boundary — the accountant materialises the
+        // expense/billing candidate; THIS is where transport GL is posted
+        // (never at the operational create/complete step). Each fleet
+        // expense type maps to its own ledger posting.
+        let journal: unknown;
+        if (candidate.sourceType === "maintenance") {
+          journal = await fleetEngine.postMaintenanceGL(glCtx, {
+            id: candidate.sourceId, vehicleId: candidate.vehicleId ?? 0,
+            totalCost: cost, description: candidate.sourceRef ?? undefined,
+          });
+        } else if (candidate.sourceType === "fuel") {
+          journal = await fleetEngine.postFuelExpenseGL(glCtx, {
+            id: candidate.sourceId, vehicleId: candidate.vehicleId ?? 0,
+            amount: cost, description: candidate.sourceRef ?? undefined,
+          });
+        } else if (candidate.sourceType === "insurance") {
+          journal = await fleetEngine.postInsuranceGL(glCtx, {
+            id: candidate.sourceId, vehicleId: candidate.vehicleId ?? 0,
+            premium: cost, description: candidate.sourceRef ?? undefined,
+          });
+        } else {
+          journal = await fleetEngine.postCargoDeliveryGL(glCtx, {
             id: candidate.sourceId,
             manifestNumber: candidate.sourceRef ?? String(candidate.sourceId),
             freightRevenue: revenue,
@@ -195,9 +216,9 @@ transportBillingCandidatesRouter.post(
             customerId: candidate.customerId,
             vehicleId: candidate.vehicleId,
             driverId: candidate.driverId,
-          },
-        );
-        const journalEntryId = (journal as { id?: number } | null)?.id ?? null;
+          });
+        }
+        const journalEntryId = (journal as { journalId?: number } | null)?.journalId ?? null;
 
         await tx.query(
           `UPDATE transport_billing_candidates

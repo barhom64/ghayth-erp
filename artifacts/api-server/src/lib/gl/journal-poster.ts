@@ -54,6 +54,9 @@ export interface JournalLine {
   sourceLineTable?: string | null;
   sourceLineId?: number | null;
   dimensionJson?: Record<string, unknown> | null;
+  /** Optional FK to analytic_accounts (Issue #2197).
+   *  Analytical dimension — NOT a GL posting target. */
+  analyticAccountId?: number | null;
 }
 
 export interface JournalEntryPayload {

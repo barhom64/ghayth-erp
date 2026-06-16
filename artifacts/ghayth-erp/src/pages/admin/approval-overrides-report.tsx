@@ -120,7 +120,7 @@ export default function ApprovalOverridesReportPage() {
   return (
     <PageShell
       title="سجل تجاوز الـ Workflow"
-      subtitle="audit_logs.workflow_override — كل قرار تجاوز للـ approval chain (override) — متاح للمراجع الخارجي والـ CFO"
+      subtitle="كل قرارات تجاوز سلسلة الاعتماد — متاح للمراجع الخارجي والمدير المالي"
       breadcrumbs={[
         { href: "/admin", label: "الإدارة" },
         { label: "تجاوز Workflow" },

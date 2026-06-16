@@ -170,6 +170,13 @@ const NON_ROUTE_EXCEPTIONS = new Map([
   // caller drops back to the NULL-ref path.
   ["lib/engines/legalEngine.ts",     "caseNumber is now optional; caller (routes/requests.ts G5) passes a numberingService-issued value. Coverage report §3 G5 closed."],
   ["lib/engines/supportEngine.ts",   "ref is now optional; callers (routes/requests.ts G4, routes/clientPortal.ts) pass a numberingService-issued value. Coverage report §3 G4 closed."],
+  // warehouseEngine.issueStock accepts `reference` as a REQUIRED parameter
+  // (same contract as financialEngine.createPurchaseOrder). The only caller
+  // today is the fleet.warehouse_deduction.requested handler in
+  // lib/eventListeners.ts, which passes the maintenance correlation ref
+  // MAINT-{maintenanceId}; route-level movement INSERTs issue via the
+  // warehouse.stock_movement scheme directly.
+  ["lib/engines/warehouseEngine.ts", "reference is a required parameter; caller (lib/eventListeners.ts fleet handler) passes MAINT-{id}. Caller-side audit covers compliance"],
   // lib/cronScheduler.ts G6+G7 closed in PR #1370: both auto-PO and
   // auto-legal-case paths now route through issueNumber. The audit's
   // regex detects those calls; no exemption needed.

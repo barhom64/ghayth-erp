@@ -18,6 +18,19 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { reloadCronScheduler } from "../lib/cronScheduler.js";
 import { bootstrapCompany } from "../lib/companyBootstrap.js";
+import {
+  TASK_SLA_REMINDER_SETTING_KEY,
+  DEFAULT_TASK_SLA_REMINDER_CONFIG,
+  resolveTaskSlaReminderConfig,
+  validateTaskSlaReminderConfig,
+  TASK_ROLE_CHAIN_SETTING_KEY,
+  ROLES_BY_TASK_TYPE,
+  DEFAULT_TASK_ROLE_CHAIN,
+  INBOX_TASK_TYPES,
+  CATCHALL_ROLE,
+  resolveTaskRoleChains,
+  validateRoleChainMap,
+} from "../lib/inboxClassifier.js";
 import { z } from "zod";
 import { logger } from "../lib/logger.js";
 
@@ -70,13 +83,37 @@ const createDepartmentSchema = z.object({
   name: z.string().min(1),
   nameEn: z.string().optional(),
   manager: z.string().optional(),
+  // PR-7 (#2077) — the unified org tree. A department now lives under
+  // an administration (إدارة) which itself sits under a branch. Both
+  // fields are optional for back-compat with the existing wizard +
+  // seed scripts; the admin UI surfaces «orphan» rows so HR can fill
+  // them in incrementally.
+  administrationId: z.coerce.number().int().positive().optional().nullable(),
+  branchId: z.coerce.number().int().positive().optional().nullable(),
 });
 
 const updateDepartmentSchema = z.object({
   name: z.string().min(1),
   nameEn: z.string().optional(),
   manager: z.string().optional(),
+  administrationId: z.coerce.number().int().positive().optional().nullable(),
+  branchId: z.coerce.number().int().positive().optional().nullable(),
 });
+
+// PR-7 (#2077) — administrations: the missing layer between Branch
+// and Department in the org tree. Decided shape:
+//   Company → Branch → Administration → Department → Team
+// Committee + Project + Cost Center stay as OPERATIONAL bridges, not
+// tree nodes (PR-1's wiring).
+const createAdministrationSchema = z.object({
+  name: z.string().min(1).max(200),
+  nameEn: z.string().max(200).optional().nullable(),
+  description: z.string().optional().nullable(),
+  branchId: z.coerce.number().int().positive().optional().nullable(),
+  managerAssignmentId: z.coerce.number().int().positive().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+const updateAdministrationSchema = createAdministrationSchema.partial();
 
 const createCompanySchema = z.object({
   name: z.string().min(1),
@@ -264,6 +301,148 @@ router.delete("/", authorize({ feature: "settings", action: "update" }), async (
     res.json({ success: true });
   } catch (err) {
     handleRouteError(err, res, "Delete setting error:");
+  }
+});
+
+/* ── Inbox task SLA reminder tuning (key: inbox.task_sla_reminder) ────
+ * Thin read/write surface over the 3-level settings engine consumed by the
+ * inbox_task_sla_reminder_scan cron. No new table — the value is a JSON blob
+ * validated by validateTaskSlaReminderConfig. */
+
+router.get("/task-sla-reminder", authorize({ feature: "settings", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const stored = await resolveSettings(TASK_SLA_REMINDER_SETTING_KEY, scope.companyId, scope.branchId);
+    res.json({
+      data: {
+        config: resolveTaskSlaReminderConfig(stored),
+        defaults: DEFAULT_TASK_SLA_REMINDER_CONFIG,
+        isOverridden: stored !== undefined && stored !== null,
+      },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Get task SLA reminder settings error:");
+  }
+});
+
+router.put("/task-sla-reminder", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { config, errors } = validateTaskSlaReminderConfig(req.body);
+    if (errors.length > 0) throw new ValidationError(errors.join("، "));
+    await upsertSetting("company", scope.companyId, TASK_SLA_REMINDER_SETTING_KEY, config);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
+      entity: "settings", entityId: scope.companyId,
+      after: { key: TASK_SLA_REMINDER_SETTING_KEY, value: config },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_SLA_REMINDER_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ data: { config, defaults: DEFAULT_TASK_SLA_REMINDER_CONFIG, isOverridden: true } });
+  } catch (err) {
+    handleRouteError(err, res, "Update task SLA reminder settings error:");
+  }
+});
+
+router.delete("/task-sla-reminder", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await deleteSetting("company", scope.companyId, TASK_SLA_REMINDER_SETTING_KEY);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
+      entity: "settings", entityId: scope.companyId,
+      before: { key: TASK_SLA_REMINDER_SETTING_KEY },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_SLA_REMINDER_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ data: { config: DEFAULT_TASK_SLA_REMINDER_CONFIG, defaults: DEFAULT_TASK_SLA_REMINDER_CONFIG, isOverridden: false } });
+  } catch (err) {
+    handleRouteError(err, res, "Reset task SLA reminder settings error:");
+  }
+});
+
+/* ── Inbox auto-routing role chains (key: inbox.task_role_chains) ─────
+ * Per-company override of the classifier's role escalation chains, consumed by
+ * eventListeners auto-routing via resolveTaskRoleChains. No new table. */
+
+const INBOX_ROLE_LABEL_FALLBACK: Record<string, string> = {
+  owner: "مالك النظام",
+  general_manager: "مدير عام",
+  branch_manager: "مدير فرع",
+  support_manager: "مدير الدعم الفني",
+  finance_manager: "مدير المالية",
+  accountant: "محاسب",
+};
+
+router.get("/inbox-routing", authorize({ feature: "settings", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const stored = await resolveSettings(TASK_ROLE_CHAIN_SETTING_KEY, scope.companyId, scope.branchId);
+    const resolved = resolveTaskRoleChains(stored);
+
+    const taskTypes = INBOX_TASK_TYPES.map((type) => {
+      const def = [...(ROLES_BY_TASK_TYPE[type] ?? DEFAULT_TASK_ROLE_CHAIN)];
+      const chain = [...resolved[type]];
+      const isOverridden = chain.length !== def.length || chain.some((v, i) => v !== def[i]);
+      return { type, defaultChain: def, chain, isOverridden };
+    });
+
+    // Canonical Arabic labels come from the company's own rbac_roles; the inbox
+    // fallback map covers any chain role not yet seeded as an rbac_roles row.
+    const dbRoles = await rawQuery<{ key: string; label: string }>(
+      `SELECT role_key AS "key", label_ar AS "label" FROM rbac_roles WHERE "companyId" = $1 ORDER BY level DESC`,
+      [scope.companyId],
+    ).catch(() => [] as Array<{ key: string; label: string }>);
+    const labelMap = new Map<string, string>();
+    for (const r of dbRoles) labelMap.set(r.key, r.label);
+
+    const roleKeys = new Set<string>(dbRoles.map((r) => r.key));
+    for (const type of INBOX_TASK_TYPES) {
+      for (const role of ROLES_BY_TASK_TYPE[type] ?? []) roleKeys.add(role);
+      for (const role of resolved[type]) roleKeys.add(role);
+    }
+    roleKeys.add(CATCHALL_ROLE);
+    const availableRoles = [...roleKeys].map((key) => ({
+      key,
+      label: labelMap.get(key) ?? INBOX_ROLE_LABEL_FALLBACK[key] ?? key,
+    }));
+
+    res.json({ data: { taskTypes, availableRoles, catchAllRole: CATCHALL_ROLE } });
+  } catch (err) {
+    handleRouteError(err, res, "Get inbox routing settings error:");
+  }
+});
+
+router.put("/inbox-routing", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const raw = (req.body ?? {}) as { chains?: unknown };
+    const { chains, errors } = validateRoleChainMap(raw.chains);
+    if (errors.length > 0) throw new ValidationError(errors.map((e) => `${e.taskType}: ${e.message}`).join("، "));
+    await upsertSetting("company", scope.companyId, TASK_ROLE_CHAIN_SETTING_KEY, chains);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
+      entity: "settings", entityId: scope.companyId,
+      after: { key: TASK_ROLE_CHAIN_SETTING_KEY, value: chains },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_ROLE_CHAIN_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ success: true });
+  } catch (err) {
+    handleRouteError(err, res, "Update inbox routing settings error:");
+  }
+});
+
+router.delete("/inbox-routing", authorize({ feature: "settings", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    await deleteSetting("company", scope.companyId, TASK_ROLE_CHAIN_SETTING_KEY);
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
+      entity: "settings", entityId: scope.companyId,
+      before: { key: TASK_ROLE_CHAIN_SETTING_KEY },
+    }).catch((e) => logger.error(e, "settings background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: scope.companyId, details: JSON.stringify({ key: TASK_ROLE_CHAIN_SETTING_KEY }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({ success: true });
+  } catch (err) {
+    handleRouteError(err, res, "Reset inbox routing settings error:");
   }
 });
 
@@ -541,9 +720,24 @@ router.post("/departments", authorizeAny(
 ), async (req, res) => {
   try {
     const body = zodParse(createDepartmentSchema.safeParse(req.body));
-    const { name, nameEn, manager } = body;
+    const { name, nameEn, manager, administrationId, branchId } = body;
     const scope = req.scope!;
-    const r = await rawExecute(`INSERT INTO departments (name, "nameEn", "companyId", "managerId") VALUES ($1,$2,$3,$4)`, [name, nameEn || null, scope.companyId, manager || null]);
+    // PR-7 (#2077) — the tree fields (administrationId + branchId) are
+    // optional inputs that, when present, anchor the department to its
+    // parent administration + branch. Validation: when administrationId
+    // is provided, the row must belong to this company (back-end FK +
+    // company filter guards against cross-tenant linkage).
+    if (administrationId) {
+      const [adm] = await rawQuery<{ id: number }>(
+        `SELECT id FROM administrations WHERE id=$1 AND "companyId"=$2 AND "isActive"=TRUE LIMIT 1`,
+        [administrationId, scope.companyId]
+      );
+      if (!adm) throw new ValidationError("الإدارة غير موجودة أو غير مفعّلة في شركتك");
+    }
+    const r = await rawExecute(
+      `INSERT INTO departments (name, "nameEn", "companyId", "managerId", "administrationId", "branchId") VALUES ($1,$2,$3,$4,$5,$6)`,
+      [name, nameEn || null, scope.companyId, manager || null, administrationId ?? null, branchId ?? null]
+    );
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "settings.created",
       entity: "departments", entityId: r.insertId,
@@ -573,9 +767,19 @@ router.put("/departments/:id", authorizeAny(
   try {
     const body = zodParse(updateDepartmentSchema.safeParse(req.body));
     const id = parseId(req.params.id, "id");
-    const { name, nameEn, manager } = body;
+    const { name, nameEn, manager, administrationId, branchId } = body;
     const scope = req.scope!;
-    const { affectedRows } = await rawExecute(`UPDATE departments SET name=$1, "nameEn"=$2, "managerId"=$3 WHERE id=$4 AND "companyId"=$5 RETURNING id`, [name, nameEn || null, manager || null, id, scope.companyId]);
+    if (administrationId) {
+      const [adm] = await rawQuery<{ id: number }>(
+        `SELECT id FROM administrations WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [administrationId, scope.companyId]
+      );
+      if (!adm) throw new ValidationError("الإدارة غير موجودة في شركتك");
+    }
+    const { affectedRows } = await rawExecute(
+      `UPDATE departments SET name=$1, "nameEn"=$2, "managerId"=$3, "administrationId"=$4, "branchId"=$5 WHERE id=$6 AND "companyId"=$7 RETURNING id`,
+      [name, nameEn || null, manager || null, administrationId ?? null, branchId ?? null, id, scope.companyId]
+    );
     if (!affectedRows) throw new NotFoundError("القسم غير موجود");
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "settings.updated",
@@ -914,6 +1118,259 @@ router.put("/channels", authorize({ feature: "settings", action: "update" }), as
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.updated", entity: "settings", entityId: 0, details: JSON.stringify({ key: "channels" }) }).catch((e) => logger.error(e, "settings background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "settings"); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// PR-7 (#2077) — Administrations CRUD + unified org tree.
+//
+// Administrations are the NEW level the deep audit found missing:
+//   Company → Branch → Administration → Department → Team
+// They're company-scoped, optionally branch-anchored (an «إدارة» can
+// span branches OR live under one), with the same activate/archive
+// shape every other org node uses.
+//
+// Committee + Project + Cost Center are NOT mounted here. They live in
+// /org/{committees,projects,scoring-weights}/* and stay as operational
+// bridges (employee_committee_memberships, employee_project_assignments)
+// per the product owner's final decision.
+// ════════════════════════════════════════════════════════════════════════════
+
+const HR_ORG_READ  = { feature: "hr.organization", action: "list" } as const;
+const HR_ORG_WRITE = { feature: "hr.organization", action: "update" } as const;
+
+router.get("/administrations", authorize(HR_ORG_READ), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const includeInactive = req.query.includeInactive === "true";
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT a.id, a.name, a."nameEn", a.description, a."branchId",
+              b.name AS "branchName",
+              a."managerAssignmentId", a."isActive",
+              a."createdAt", a."updatedAt",
+              (SELECT COUNT(*)::int FROM departments d WHERE d."administrationId" = a.id) AS "departmentCount",
+              (SELECT COUNT(*)::int FROM employee_assignments ea
+                JOIN departments d ON d.id = ea."departmentId"
+                WHERE d."administrationId" = a.id AND ea.status = 'active') AS "employeeCount"
+         FROM administrations a
+         LEFT JOIN branches b ON b.id = a."branchId"
+        WHERE a."companyId" = $1
+          ${includeInactive ? "" : `AND a."isActive" = TRUE`}
+        ORDER BY a."isActive" DESC, a.name`,
+      [scope.companyId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (e) { handleRouteError(e, res, "تعذّر جلب الإدارات"); }
+});
+
+router.post("/administrations", authorize(HR_ORG_WRITE), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(createAdministrationSchema.safeParse(req.body));
+    if (body.branchId) {
+      const [br] = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches WHERE id=$1 AND "companyId"=$2 LIMIT 1`,
+        [body.branchId, scope.companyId]
+      );
+      if (!br) throw new ValidationError("الفرع غير موجود في شركتك");
+    }
+    const [row] = await rawQuery<{ id: number; name: string }>(
+      `INSERT INTO administrations
+        ("companyId", "branchId", name, "nameEn", description, "managerAssignmentId", "isActive")
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, TRUE))
+       RETURNING id, name`,
+      [scope.companyId, body.branchId ?? null, body.name, body.nameEn ?? null,
+       body.description ?? null, body.managerAssignmentId ?? null, body.isActive ?? null],
+    );
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "create", entity: "administrations", entityId: row.id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      activeDepartmentId: scope.activeDepartmentId ?? null,
+      resolvedScope: scope.resolvedScope ?? null,
+      impersonationSourceUser: scope.impersonationSourceUser ?? null,
+      after: { name: body.name, branchId: body.branchId ?? null },
+    }).catch((e) => logger.warn(e, "administration audit failed"));
+    await emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+      action: "org.administration.created", entity: "administrations", entityId: row.id,
+      details: JSON.stringify({ name: body.name, branchId: body.branchId ?? null }),
+    }).catch((e) => logger.warn(e, "administration event failed"));
+    res.status(201).json({ data: row });
+  } catch (e) { handleRouteError(e, res, "تعذّر إنشاء الإدارة"); }
+});
+
+router.patch("/administrations/:id", authorize(HR_ORG_WRITE), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id);
+    const body = zodParse(updateAdministrationSchema.safeParse(req.body));
+    const sets: string[] = []; const vals: unknown[] = [];
+    let i = 1;
+    for (const [k, v] of Object.entries(body)) {
+      if (v === undefined) continue;
+      sets.push(`"${k}" = $${i++}`); vals.push(v);
+    }
+    if (sets.length === 0) { res.json({ data: null, noop: true }); return; }
+    sets.push(`"updatedAt" = now()`);
+    vals.push(id, scope.companyId);
+    const [row] = await rawQuery<{ id: number; name: string }>(
+      `UPDATE administrations SET ${sets.join(", ")}
+        WHERE id = $${i++} AND "companyId" = $${i++} RETURNING id, name`,
+      vals,
+    );
+    if (!row) throw new NotFoundError("الإدارة غير موجودة");
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "administrations", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      activeDepartmentId: scope.activeDepartmentId ?? null,
+      resolvedScope: scope.resolvedScope ?? null,
+      impersonationSourceUser: scope.impersonationSourceUser ?? null,
+      after: body,
+    }).catch((e) => logger.warn(e, "administration audit failed"));
+    res.json({ data: row });
+  } catch (e) { handleRouteError(e, res, "تعذّر تعديل الإدارة"); }
+});
+
+router.delete("/administrations/:id", authorize(HR_ORG_WRITE), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id);
+    // Soft-delete pattern (same as teams/committees): flip isActive
+    // off. Departments that reference this administration are NOT
+    // cascade-deleted — they become «orphan» and the admin UI flags
+    // them. Hard-delete would risk losing audit lineage.
+    const result = await rawExecute(
+      `UPDATE administrations SET "isActive" = FALSE, "updatedAt" = now()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId],
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("الإدارة غير موجودة");
+    await createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "archive", entity: "administrations", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      activeDepartmentId: scope.activeDepartmentId ?? null,
+      resolvedScope: scope.resolvedScope ?? null,
+      impersonationSourceUser: scope.impersonationSourceUser ?? null,
+    }).catch((e) => logger.warn(e, "administration audit failed"));
+    res.json({ data: { id, isActive: false } });
+  } catch (e) { handleRouteError(e, res, "تعذّر أرشفة الإدارة"); }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// Unified org tree: Company → Branch → Administration → Department → Team.
+// Returns the nested structure in ONE call so the admin page renders
+// the tree without 5 separate queries. Committee + Project are NOT
+// included — they're surfaced separately as operational bridges.
+// ════════════════════════════════════════════════════════════════════════════
+router.get("/org-tree", authorize(HR_ORG_READ), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [company] = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM companies WHERE id = $1`,
+      [scope.companyId],
+    );
+    if (!company) throw new NotFoundError("الشركة غير موجودة");
+
+    const branches = await rawQuery<{ id: number; name: string }>(
+      `SELECT id, name FROM branches
+        WHERE "companyId" = $1 AND status = 'active'
+        ORDER BY name`,
+      [scope.companyId],
+    );
+    const administrations = await rawQuery<{ id: number; name: string; branchId: number | null; isActive: boolean }>(
+      `SELECT id, name, "branchId", "isActive"
+         FROM administrations
+        WHERE "companyId" = $1
+        ORDER BY "isActive" DESC, name`,
+      [scope.companyId],
+    );
+    const departments = await rawQuery<{ id: number; name: string; branchId: number | null; administrationId: number | null; managerId: number | null }>(
+      `SELECT id, name, "branchId", "administrationId", "managerId"
+         FROM departments
+        WHERE "companyId" = $1 AND status = 'active'
+        ORDER BY name`,
+      [scope.companyId],
+    );
+    const teams = await rawQuery<{ id: number; name: string; departmentId: number | null; leaderAssignmentId: number | null }>(
+      `SELECT id, name, "departmentId", "leaderAssignmentId"
+         FROM teams
+        WHERE "companyId" = $1 AND "isActive" = TRUE
+        ORDER BY name`,
+      [scope.companyId],
+    );
+
+    // Employee count rollup per (administrationId | departmentId | teamId).
+    const empCounts = await rawQuery<{ administrationId: number | null; departmentId: number | null; teamId: number | null; count: string }>(
+      `SELECT d."administrationId", ea."departmentId",
+              etm."teamId", COUNT(*)::int AS count
+         FROM employee_assignments ea
+         LEFT JOIN departments d ON d.id = ea."departmentId"
+         LEFT JOIN employee_team_memberships etm
+           ON etm."assignmentId" = ea.id
+          AND (etm."endDate" IS NULL OR etm."endDate" >= CURRENT_DATE)
+        WHERE ea."companyId" = $1 AND ea.status = 'active'
+        GROUP BY d."administrationId", ea."departmentId", etm."teamId"`,
+      [scope.companyId],
+    );
+    const empByDept: Record<number, number> = {};
+    const empByAdm: Record<number, number> = {};
+    const empByTeam: Record<number, number> = {};
+    for (const r of empCounts) {
+      if (r.departmentId) empByDept[r.departmentId] = (empByDept[r.departmentId] ?? 0) + Number(r.count);
+      if (r.administrationId) empByAdm[r.administrationId] = (empByAdm[r.administrationId] ?? 0) + Number(r.count);
+      if (r.teamId) empByTeam[r.teamId] = (empByTeam[r.teamId] ?? 0) + Number(r.count);
+    }
+
+    // Build the nested structure. Departments without administrationId
+    // become «orphan» at the branch level (handled by the admin UI).
+    const teamsByDept: Record<number, Array<Record<string, unknown>>> = {};
+    for (const t of teams) {
+      const key = t.departmentId ?? 0;
+      if (!teamsByDept[key]) teamsByDept[key] = [];
+      teamsByDept[key].push({ ...t, employeeCount: empByTeam[t.id] ?? 0 });
+    }
+    const deptsByAdm: Record<number, Array<Record<string, unknown>>> = {};
+    const orphanDepts: Array<Record<string, unknown>> = [];
+    for (const d of departments) {
+      const entry = { ...d, employeeCount: empByDept[d.id] ?? 0, teams: teamsByDept[d.id] ?? [] };
+      if (d.administrationId) {
+        if (!deptsByAdm[d.administrationId]) deptsByAdm[d.administrationId] = [];
+        deptsByAdm[d.administrationId].push(entry);
+      } else {
+        orphanDepts.push(entry);
+      }
+    }
+    const admsByBranch: Record<number, Array<Record<string, unknown>>> = {};
+    const adminsWithoutBranch: Array<Record<string, unknown>> = [];
+    for (const a of administrations) {
+      const entry = {
+        ...a,
+        employeeCount: empByAdm[a.id] ?? 0,
+        departments: deptsByAdm[a.id] ?? [],
+      };
+      if (a.branchId) {
+        if (!admsByBranch[a.branchId]) admsByBranch[a.branchId] = [];
+        admsByBranch[a.branchId].push(entry);
+      } else {
+        adminsWithoutBranch.push(entry);
+      }
+    }
+
+    res.json({
+      company: { id: company.id, name: company.name },
+      branches: branches.map((b) => ({
+        ...b,
+        administrations: admsByBranch[b.id] ?? [],
+      })),
+      // Adminisrtations not bound to a branch (cross-branch) + departments
+      // not bound to an administration. The UI surfaces them with an
+      // «orphan» label so HR completes the chain.
+      crossBranchAdministrations: adminsWithoutBranch,
+      orphanDepartments: orphanDepts,
+    });
+  } catch (e) { handleRouteError(e, res, "تعذّر بناء الشجرة التنظيمية"); }
 });
 
 export default router;

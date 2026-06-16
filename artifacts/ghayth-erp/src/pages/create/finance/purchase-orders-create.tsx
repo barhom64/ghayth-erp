@@ -13,6 +13,7 @@ import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { CostCenterSelect, SupplierSelect, BranchSelect } from "@/components/shared/entity-selects";
 import { useAppContext } from "@/contexts/app-context";
+import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
@@ -30,6 +31,7 @@ export default function PurchaseOrdersCreate() {
   const copyFromId = new URLSearchParams(searchStr).get("copyFrom");
   const { toast } = useToast();
   const { selectedBranchId, selectedCompanyIds } = useAppContext();
+  const activeCtx = useActiveFinanceContext();
   const createMut = useApiMutation("/finance/purchase-requests", "POST", [["purchase-orders"], ["purchase-requests"]]);
   // POST /finance/purchase-orders — alternate path that creates a PO
   // directly without going through the purchase-request approval loop.
@@ -154,6 +156,7 @@ export default function PurchaseOrdersCreate() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
+      <ActiveContextNotice ctx={activeCtx} />
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <FormFieldWrapper label="التاريخ">
@@ -280,7 +283,7 @@ export default function PurchaseOrdersCreate() {
         </label>
         <div className="flex gap-3">
           <Button variant="outline" onClick={() => setLocation("/finance/purchase-orders")}>إلغاء</Button>
-          <Button onClick={handleSubmit} disabled={createMut.isPending || createDirectMut.isPending} rateLimitAware>
+          <Button onClick={handleSubmit} disabled={createMut.isPending || createDirectMut.isPending || !activeCtx.ready} rateLimitAware>
             {(createMut.isPending || createDirectMut.isPending) ? "جاري الحفظ..." : (createMode === "direct" ? "إنشاء PO مباشر" : "حفظ")}
           </Button>
         </div>

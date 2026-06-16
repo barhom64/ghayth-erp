@@ -41,9 +41,9 @@ class HREngineImpl implements DomainEngine {
 
     const [salaryExpense, allowanceExpense, deductionAccount, salaryPayable] =
       await Promise.all([
-        financialEngine.resolveAccountCode(ctx.companyId, "salary_expense", "debit", "6100"),
-        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "6110"),
-        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2130"),
+        financialEngine.resolveAccountCode(ctx.companyId, "salary_expense", "debit", "5210"),
+        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "5820"),
+        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2120"),
         financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       ]);
 
@@ -106,8 +106,8 @@ class HREngineImpl implements DomainEngine {
     loan: { id: number; employeeId: number; amount: number; departmentId?: number | null }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1400"),
-      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "debit", "1143"),
+      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_disbursement", "credit", "1111"),
     ]);
 
     // departmentId carries the employee's home cost-centre so per-dept
@@ -146,8 +146,8 @@ class HREngineImpl implements DomainEngine {
     }
   ) {
     const [eosExpense, leaveExpense, settlementPayable] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_expense", "debit", "6150"),
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_settlement_expense", "debit", "6160"),
+      financialEngine.resolveAccountCode(ctx.companyId, "eos_expense", "debit", "5260"),
+      financialEngine.resolveAccountCode(ctx.companyId, "leave_settlement_expense", "debit", "5270"),
       financialEngine.resolveAccountCode(ctx.companyId, "settlement_payable", "credit", "2140"),
     ]);
 
@@ -210,7 +210,7 @@ class HREngineImpl implements DomainEngine {
     accrual: { period: string; totalAmount: number; employeeCount: number }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_expense", "debit", "6170"),
+      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_expense", "debit", "5270"),
       financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_liability", "credit", "2150"),
     ]);
 
@@ -238,8 +238,8 @@ class HREngineImpl implements DomainEngine {
     accrual: { period: string; totalAmount: number; employeeCount: number }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_expense", "debit", "6180"),
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_liability", "credit", "2160"),
+      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_expense", "debit", "5260"),
+      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_liability", "credit", "2220"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -278,6 +278,15 @@ class HREngineImpl implements DomainEngine {
        *  amount on the next filing. The caller has already netted
        *  WHT off totalBankPayout, so credit-side totals remain balanced. */
       totalWht?: number;
+      /** Umrah sales commissions consumed by this run (راتب + عمولة).
+       *  When > 0, a DR on the commission-expense account (op
+       *  `payroll_commission_expense`, default 5240 «المكافآت والحوافز»)
+       *  is emitted — separate from salary expense so commission cost
+       *  stays its own ledger line. The caller has already ADDED the
+       *  commission into each line's net (→ totalBankPayout), so the
+       *  credit side carries it; subtracting it from the derived
+       *  salary-expense figure keeps the entry balanced and honest. */
+      totalCommission?: number;
       /**
        * Optional per-employee breakdown. When provided, the salary +
        * GOSI expense + overtime DR lines are split per employee with
@@ -298,6 +307,24 @@ class HREngineImpl implements DomainEngine {
         overtime: number;
         gosiEmployer: number;
         whtAmount?: number;
+        /** Per-employee umrah commission — splits the commission-expense
+         *  DR per employee (dimensional like salary/OT/GOSI). */
+        commission?: number;
+        /** #2303 — per-employee deduction split. Each is CREDITED to its own
+         *  account (per-employee, dimensional) instead of bundling into the
+         *  generic deductions-payable clearing (2150):
+         *    loanRepayment      → employee_loan_receivable (1143) — CLOSES loan
+         *    lateDeduction      → 5215 استقطاعات التأخير  (contra-expense)
+         *    absenceDeduction   → 5216 استقطاعات الغياب   (contra-expense)
+         *    violationDeduction → 5217 استقطاعات المخالفات (contra-expense)
+         *  Their sum equals totalOtherDeductions, so the credit total — and the
+         *  derived salary-expense debit — are unchanged and the entry stays
+         *  balanced. Only applied when the breakdown reconciles; otherwise the
+         *  legacy single 2150 line carries the aggregate. */
+        loanRepayment?: number;
+        lateDeduction?: number;
+        absenceDeduction?: number;
+        violationDeduction?: number;
       }>;
     }
   ) {
@@ -306,16 +333,27 @@ class HREngineImpl implements DomainEngine {
     // credited to salary_payable, settled later by postPayrollPostGL when the
     // run is posted. Crediting the bank here (and again at posting) was the
     // source of the double-count.
-    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode, whtPayableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5110"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5120"),
+    const [salaryExpenseCode, gosiExpenseCode, overtimeExpenseCode, salaryPayableCode, gosiPayableCode, deductionsPayableCode, whtPayableCode, commissionExpenseCode, loanReceivableCode, lateDeductionCode, absenceDeductionCode, violationDeductionCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_salary_expense", "debit", "5210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_expense", "debit", "5250"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5230"),
       financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2330"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2132"),
+      // Umrah commission expense — seeded by migration 288 to 5240
+      // (المكافآت والحوافز); the fallback matches the seed.
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_commission_expense", "debit", "5240"),
+      // #2303 — deduction-classification accounts (seeded by migration 378).
+      // Loan repayment CLOSES the receivable (credit 1143); late/absence/
+      // violation are contra-expense leaves under 5200.
+      financialEngine.resolveAccountCode(ctx.companyId, "employee_loan_receivable", "credit", "1143"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_late_deduction", "credit", "5215"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_absence_deduction", "credit", "5216"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_violation_deduction", "credit", "5217"),
     ]);
     const totalWht = roundTo2(payroll.totalWht ?? 0);
+    const totalCommission = roundTo2(payroll.totalCommission ?? 0);
 
     // The six payroll aggregates are each rounded independently, so Σdebit
     // can drift a sub-cent from Σcredit. The salary-expense debit is DERIVED
@@ -331,14 +369,17 @@ class HREngineImpl implements DomainEngine {
     // totalGross is derived as Σcredit − Σother-debits so debits and
     // credits balance to the cent. The WHT-payable credit is part of
     // the credit side (caller already netted WHT off bankPayout), so
-    // it joins the running total.
-    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer);
+    // it joins the running total. Commission joined the credit side
+    // inside bankPayout (net pay grew by it), so the commission DR is
+    // subtracted here to keep salary expense pure.
+    const totalGross = roundTo2(bankPayout + gosiPayable + otherDeductions + totalWht - totalOvertime - gosiEmployer - totalCommission);
 
     // Build debit lines — per-employee when breakdown is provided,
-    // otherwise the legacy 3-line aggregate. The credit side stays
-    // aggregated regardless: salary_payable, gosi_payable and
-    // deductions_payable are settlement liabilities, not per-employee
-    // expense.
+    // otherwise the legacy aggregate. salary_payable + gosi_payable stay
+    // aggregated (collective settlement balances), but the deduction credits
+    // are split per-employee per-type (#2303) when the breakdown reconciles —
+    // see breakdownTrusted, reused for the deduction split below.
+    let breakdownTrusted = false;
     const debitLines: Array<{
       accountCode: string; debit: number; credit: number;
       employeeId?: number; departmentId?: number;
@@ -348,23 +389,25 @@ class HREngineImpl implements DomainEngine {
       // Validate the breakdown sums match the aggregates within a
       // small rounding tolerance. If they diverge by more than a
       // cent the breakdown is unreliable — fall back to aggregate.
-      let sumBasic = 0, sumOT = 0, sumGosi = 0;
+      let sumBasic = 0, sumOT = 0, sumGosi = 0, sumCommission = 0;
       for (const e of payroll.breakdown) {
         sumBasic += roundTo2(e.basic);
         sumOT += roundTo2(e.overtime);
         sumGosi += roundTo2(e.gosiEmployer);
+        sumCommission += roundTo2(e.commission ?? 0);
       }
       const grossDiff = Math.abs(roundTo2(sumBasic) - totalGross);
       const otDiff = Math.abs(roundTo2(sumOT) - totalOvertime);
       const gosiDiff = Math.abs(roundTo2(sumGosi) - gosiEmployer);
-      const breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5;
+      const commissionDiff = Math.abs(roundTo2(sumCommission) - totalCommission);
+      breakdownTrusted = grossDiff < 0.5 && otDiff < 0.5 && gosiDiff < 0.5 && commissionDiff < 0.5;
 
       if (breakdownTrusted) {
-        // Per-employee DR lines for salary + overtime + GOSI.
+        // Per-employee DR lines for salary + overtime + GOSI + commission.
         // The rounding remainder lands on the LAST employee row in
         // each bucket so the bucket total stays exact.
         const lastIdx = payroll.breakdown.length - 1;
-        let runningBasic = 0, runningOT = 0, runningGosi = 0;
+        let runningBasic = 0, runningOT = 0, runningGosi = 0, runningCommission = 0;
         for (let i = 0; i < payroll.breakdown.length; i++) {
           const e = payroll.breakdown[i];
           const basicRounded = i === lastIdx
@@ -376,6 +419,9 @@ class HREngineImpl implements DomainEngine {
           const gosiRounded = i === lastIdx
             ? roundTo2(gosiEmployer - runningGosi)
             : roundTo2(e.gosiEmployer);
+          const commissionRounded = i === lastIdx
+            ? roundTo2(totalCommission - runningCommission)
+            : roundTo2(e.commission ?? 0);
           if (basicRounded > 0) {
             debitLines.push({
               accountCode: salaryExpenseCode, debit: basicRounded, credit: 0,
@@ -400,6 +446,14 @@ class HREngineImpl implements DomainEngine {
             });
             runningGosi = roundTo2(runningGosi + gosiRounded);
           }
+          if (commissionRounded > 0) {
+            debitLines.push({
+              accountCode: commissionExpenseCode, debit: commissionRounded, credit: 0,
+              employeeId: e.employeeId,
+              ...(e.departmentId != null ? { departmentId: e.departmentId } : {}),
+            });
+            runningCommission = roundTo2(runningCommission + commissionRounded);
+          }
         }
       } else {
         // Breakdown didn't reconcile — fall back to aggregate lines
@@ -409,22 +463,68 @@ class HREngineImpl implements DomainEngine {
           { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
           { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
           { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+          { accountCode: commissionExpenseCode, debit: totalCommission, credit: 0 },
         );
       }
     } else {
-      // Legacy 3-line aggregate.
+      // Legacy aggregate lines.
       debitLines.push(
         { accountCode: salaryExpenseCode, debit: totalGross, credit: 0 },
         { accountCode: overtimeExpenseCode, debit: totalOvertime, credit: 0 },
         { accountCode: gosiExpenseCode, debit: gosiEmployer, credit: 0 },
+        { accountCode: commissionExpenseCode, debit: totalCommission, credit: 0 },
       );
+    }
+
+    // #2303 — classify the deduction credit side. When the breakdown
+    // reconciles, split otherDeductions per-employee into its real homes:
+    // loan repayment CLOSES the receivable (1143), late/absence/violation hit
+    // their contra-expense leaves (5215/5216/5217). Σ(splits) == otherDeductions
+    // (each component is already 2dp and feeds otherDeductions upstream), so the
+    // credit total — and the derived salary-expense debit — are unchanged and the
+    // entry stays balanced. A residual (rounding, or any future unclassified
+    // deduction) falls back to the generic deductions-payable (2150) so the entry
+    // ALWAYS balances by construction.
+    const deductionLines: Array<{
+      accountCode: string; debit: number; credit: number;
+      employeeId?: number; departmentId?: number;
+    }> = [];
+    if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
+      let classified = 0;
+      for (const e of payroll.breakdown) {
+        const dept = e.departmentId != null ? { departmentId: e.departmentId } : {};
+        const pushDeduction = (accountCode: string, raw: number | undefined) => {
+          const amt = roundTo2(raw ?? 0);
+          if (amt > 0) {
+            deductionLines.push({ accountCode, debit: 0, credit: amt, employeeId: e.employeeId, ...dept });
+            classified = roundTo2(classified + amt);
+          }
+        };
+        // loan repayment CLOSES the receivable (1143); the rest are contra-expense.
+        pushDeduction(loanReceivableCode, e.loanRepayment);
+        pushDeduction(lateDeductionCode, e.lateDeduction);
+        pushDeduction(absenceDeductionCode, e.absenceDeduction);
+        pushDeduction(violationDeductionCode, e.violationDeduction);
+      }
+      // Residual is normally exactly 0; the guard keeps the entry balanced to
+      // the cent if a future deduction type isn't yet classified.
+      const residual = roundTo2(otherDeductions - classified);
+      if (residual > 0) {
+        deductionLines.push({ accountCode: deductionsPayableCode, debit: 0, credit: residual });
+      } else if (residual < 0) {
+        deductionLines.push({ accountCode: deductionsPayableCode, debit: -residual, credit: 0 });
+      }
+    } else {
+      // Legacy / untrusted breakdown — single aggregate clearing line (the
+      // pre-#2303 behaviour), so the dimensional split is never misleading.
+      deductionLines.push({ accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions });
     }
 
     const lines = [
       ...debitLines,
       { accountCode: salaryPayableCode, debit: 0, credit: bankPayout },
       { accountCode: gosiPayableCode, debit: 0, credit: gosiPayable },
-      { accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions },
+      ...deductionLines,
       // WHT payable — separate CR line on the ZATCA WHT-payable account.
       // Caller has already netted WHT off bankPayout so the entry balances.
       { accountCode: whtPayableCode, debit: 0, credit: totalWht },
@@ -463,7 +563,7 @@ class HREngineImpl implements DomainEngine {
 
     const [salaryPayableCode, bankCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "debit", "2120"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1124"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -496,10 +596,10 @@ class HREngineImpl implements DomainEngine {
     }
   ) {
     const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_expense", "debit", "5120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_expense", "debit", "5270"),
       financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_liability", "credit", "2220"),
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_expense", "debit", "5130"),
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2230"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_expense", "debit", "5260"),
+      financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2220"),
     ]);
 
     const lines = [

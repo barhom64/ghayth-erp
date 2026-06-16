@@ -1,0 +1,23 @@
+# dup-filename-allowlist.txt
+#
+# Pre-existing basenames duplicated within a single frontend artifact's
+# src/. These are accepted baseline duplicates; the guard only fails on
+# a basename NOT listed here. Regenerate with:
+#   node scripts/src/check-dup-filenames.mjs --write-allowlist
+# As duplicate sets are unified, prune the basename here.
+#
+# Baseline captured: 14 duplicated basename(s).
+calendar.tsx
+contracts-create.tsx
+correspondence.tsx
+dashboard.tsx
+invoices.tsx
+maintenance-create.tsx
+policies-tab.tsx
+profitability.tsx
+reports.tsx
+services.tsx
+settings.tsx
+shared.ts
+transport-requests.tsx
+violations.tsx

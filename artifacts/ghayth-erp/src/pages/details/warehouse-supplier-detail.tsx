@@ -7,7 +7,7 @@ import { FormGrid, FormTextField, FormTextareaField, FormNumberField } from "@wo
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Truck, Star, Phone, Mail, MapPin } from "lucide-react";
@@ -222,7 +222,7 @@ export default function WarehouseSupplierDetail() {
       actions={
         <>
           {supplier && (
-            <EntityPrintButton
+            <PrintButton
               entityType="vendor"
               entityId={id ?? 0}
              />

@@ -596,13 +596,22 @@ export const STATE_MACHINES: StateMachine[] = [
     },
   },
   {
+    // P0-4 (Properties plan) — single source of truth for the unit
+    // status graph. properties.ts used to carry its own richer copy
+    // (under_maintenance / out_of_service were missing here), so the
+    // two maps silently diverged: a transition the route allowed was
+    // illegal by this machine and vice versa. The route now derives
+    // its guard from THIS map (same pattern as SUP-016 for
+    // support_tickets), so there is no second copy to drift.
     entity: "property_units",
     label: "وحدة عقارية",
     transitions: {
-      available: ["reserved", "rented", "maintenance"],
-      reserved: ["rented", "available"],
-      rented: ["available", "maintenance"],
-      maintenance: ["available"],
+      available:         ["rented", "maintenance", "under_maintenance", "out_of_service", "reserved"],
+      rented:            ["available", "maintenance", "under_maintenance"],
+      maintenance:       ["available", "out_of_service"],
+      under_maintenance: ["available", "out_of_service"],
+      reserved:          ["available", "rented"],
+      out_of_service:    ["available", "maintenance", "under_maintenance"],
     },
   },
   {
@@ -631,6 +640,47 @@ export const STATE_MACHINES: StateMachine[] = [
       negotiation: ["won", "lost"],
       won: [],
       lost: [],
+    },
+  },
+  {
+    // PRJ-P2 — single source of truth for the project lifecycle graph.
+    // projects.ts PATCH validates status changes through this machine
+    // (isValidTransition) and POST /projects/:id/close drives the
+    // active/…/blocked → completed transition through applyTransition, which
+    // now enforces this same machine via defence-in-depth. Before this entry
+    // the graph lived split between projects.ts's local PROJECT_TRANSITIONS
+    // map and /close's inline fromStates whitelist, so the two could drift.
+    // `completed` is reachable from every non-terminal state, but only the
+    // /close route (with its accounting WIP→COGS posting) actually issues it;
+    // the PATCH route refuses `b.status === "completed"` explicitly so a plain
+    // edit can never bypass closure. `completed`/`cancelled` are terminal.
+    entity: "projects",
+    label: "مشروع",
+    transitions: {
+      planning:    ["active", "in_progress", "on_hold", "cancelled", "completed"],
+      planned:     ["active", "in_progress", "on_hold", "cancelled", "completed"],
+      draft:       ["planning", "active", "cancelled", "completed"],
+      active:      ["on_hold", "blocked", "in_progress", "completed"],
+      in_progress: ["active", "on_hold", "blocked", "completed"],
+      on_hold:     ["active", "in_progress", "cancelled", "completed"],
+      blocked:     ["active", "in_progress", "cancelled", "completed"],
+      completed:   [],
+      cancelled:   [],
+    },
+  },
+  {
+    // PRJ-P2 — project phase lifecycle. The phase-complete route validates
+    // through this machine and drives the in_progress → completed transition
+    // through applyTransition (defence-in-depth enforces this graph). A phase
+    // must pass through `in_progress` before it can complete — a `pending`
+    // phase has to be started first, matching the existing route behaviour.
+    entity: "project_phases",
+    label: "مرحلة مشروع",
+    transitions: {
+      pending:     ["in_progress", "cancelled"],
+      in_progress: ["completed", "cancelled"],
+      completed:   [],
+      cancelled:   [],
     },
   },
   {

@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
-import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -423,13 +423,13 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/approve — اعتماد الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
+router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action: "approve" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.overtime", "approve")) {
       throw new ForbiddenError(
         "صلاحية اعتماد الوقت الإضافي محصورة بالمدير أو HR أو المالك",
         { fix: "اطلب من مديرك المباشر تنفيذ الموافقة.", meta: { yourRole: scope.role } }
@@ -541,11 +541,11 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/overtime/:id/reject — رفض الطلب
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action: "update" }), async (req, res) => {
+router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action: "reject" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.overtime", "reject")) {
       throw new ForbiddenError("صلاحية رفض طلبات الوقت الإضافي محصورة بالمدير أو HR أو المالك");
     }
 

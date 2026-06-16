@@ -63,12 +63,10 @@ export function UpcomingEventsWidget({ days = 14, limit = 6, title = "الأحد
           <Calendar className="h-4 w-4 text-primary" />
           {title}
         </CardTitle>
-        <Link href="/calendar">
-          <Button variant="ghost" size="sm" className="text-xs h-7">
+        <Button asChild variant="ghost" size="sm" className="text-xs h-7"><Link href="/calendar">
             عرض الكل {total > 0 && <Badge variant="secondary" className="ms-1 h-4 px-1.5 text-[10px]">{total}</Badge>}
             <ChevronLeft className="h-3 w-3 ms-1" />
-          </Button>
-        </Link>
+          </Link></Button>
       </CardHeader>
       <CardContent className="space-y-2 pt-0">
         {isLoading ? (

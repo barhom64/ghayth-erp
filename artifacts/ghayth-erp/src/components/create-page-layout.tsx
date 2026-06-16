@@ -21,6 +21,7 @@ import {
 // This is the single-point leverage move: update one component, every
 // create page looks consistent.
 import { PageShell } from "@/components/page-shell";
+import { ActiveContextGate } from "@/components/shared/active-context-gate";
 
 interface CreatePageLayoutProps {
   title: string;
@@ -44,6 +45,22 @@ interface CreatePageLayoutProps {
   breadcrumbs?: Array<{ href?: string; label: string }>;
   children: React.ReactNode;
   isDirty?: boolean;
+  /**
+   * HR-Wave-0/0.1 — ActiveContextGate is wrapped around every create
+   * form by default so no record is written without a resolved
+   * (company + branch + role) for the INPUTTER. Tenant-level admin
+   * forms that don't write to a branch (e.g. company-wide settings)
+   * may opt out of the branch requirement.
+   */
+  requireBranch?: boolean;
+  /**
+   * Emergency opt-out: a create page that legitimately runs without
+   * any active context (e.g. the onboarding flow that BUILDS the
+   * first assignment) can disable the gate. Default = enabled — if
+   * you find yourself reaching for this, ask first whether you're
+   * actually breaking the IGOC governing principle.
+   */
+  skipContextGate?: boolean;
 }
 
 export function CreatePageLayout({
@@ -54,6 +71,8 @@ export function CreatePageLayout({
   breadcrumbs,
   children,
   isDirty = false,
+  requireBranch = true,
+  skipContextGate = false,
 }: CreatePageLayoutProps) {
   const [, setLocation] = useLocation();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -72,6 +91,15 @@ export function CreatePageLayout({
     { href: backPath, label: backLabel ?? "رجوع" },
   ];
 
+  const body = (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+
   return (
     <>
       <PageShell
@@ -85,12 +113,11 @@ export function CreatePageLayout({
           </Button>
         }
       >
-        <Card>
-          <CardHeader>
-            <CardTitle>{title}</CardTitle>
-          </CardHeader>
-          <CardContent>{children}</CardContent>
-        </Card>
+        {skipContextGate ? (
+          body
+        ) : (
+          <ActiveContextGate requireBranch={requireBranch}>{body}</ActiveContextGate>
+        )}
       </PageShell>
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

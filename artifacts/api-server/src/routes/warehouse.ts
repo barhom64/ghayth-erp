@@ -34,6 +34,131 @@ const router = Router();
 // ─────────────────────────────────────────────────────────────────────────────
 const MOVEMENT_TYPES = ["in", "out", "return", "transfer_in", "transfer_out", "adjustment_in", "adjustment_out"] as const;
 
+// Item types that never carry a stock balance — movements against them are
+// rejected. Stockable = product / consumable (NULL defaults to 'product').
+const NON_STOCK_ITEM_TYPES = new Set(["service", "digital", "asset"]);
+
+// ─── Controllable warehouse policies ────────────────────────────────────────
+// Stored in the cascading `settings` table (system → company), edited from
+// the system-controls tab (سياسات المستودع). Defaults preserve the current
+// behavior so flipping nothing changes nothing.
+interface WarehousePolicies {
+  /** W5 — "لا حركة بلا سبب": when true, POST /movements rejects an empty reference. */
+  requireMovementReference: boolean;
+  /** When false, hitting min-stock does NOT auto-create a purchase request. */
+  autoPurchaseRequestOnMinStock: boolean;
+  /** F1 — when true, issuing a tracksLots product also REJECTS expired lots
+   *  (recalled/quarantine are always rejected regardless). Default off so
+   *  enabling lot tracking on a product never silently blocks issues. */
+  enforceLotFefo: boolean;
+}
+
+function parsePolicyBool(raw: unknown, fallback: boolean): boolean {
+  if (raw === undefined || raw === null) return fallback;
+  if (typeof raw === "boolean") return raw;
+  try { return JSON.parse(String(raw)) === true; } catch { return fallback; }
+}
+
+async function getWarehousePolicies(companyId: number, branchId?: number): Promise<WarehousePolicies> {
+  const { resolveSettings } = await import("../lib/settings.js");
+  const [requireRef, autoPr, lotFefo] = await Promise.all([
+    resolveSettings("warehouse.require_movement_reference", companyId, branchId),
+    resolveSettings("warehouse.auto_purchase_request_on_min_stock", companyId, branchId),
+    resolveSettings("warehouse.enforce_lot_fefo", companyId, branchId),
+  ]);
+  return {
+    requireMovementReference: parsePolicyBool(requireRef, false),
+    autoPurchaseRequestOnMinStock: parsePolicyBool(autoPr, true),
+    enforceLotFefo: parsePolicyBool(lotFefo, false),
+  };
+}
+
+/** Default warehouse for the company inside a transaction — creates the
+ *  canonical "المستودع الرئيسي" once. Mirrors warehouse-cycle-counts'
+ *  resolveWarehouseId but uses the open client (lot receipt is transactional). */
+async function resolveDefaultWarehouseId(
+  client: import("pg").PoolClient, companyId: number, branchId: number | null
+): Promise<number> {
+  const existing = await client.query(
+    `SELECT id FROM warehouses WHERE "companyId"=$1 AND "deletedAt" IS NULL AND status='active' ORDER BY id ASC LIMIT 1`,
+    [companyId]
+  );
+  if (existing.rows.length) return existing.rows[0].id;
+  const created = await client.query(
+    `INSERT INTO warehouses ("companyId","branchId",name,code,status) VALUES ($1,$2,'المستودع الرئيسي','MAIN','active') RETURNING id`,
+    [companyId, branchId]
+  );
+  return created.rows[0].id;
+}
+
+const NON_ISSUABLE_LOT_STATUSES = new Set(["recalled", "quarantine", "disposed", "expired"]);
+
+/**
+ * Lot-aware outbound consumption for a tracksLots product (F1). Runs inside
+ * the movement transaction (`client`). Picks lots FEFO (earliest expiry first,
+ * NULLs last) or honours an explicit `lotId`; rejects recalled/quarantine/
+ * disposed lots always, and expired lots when the company policy is on;
+ * deducts `warehouse_stock_lots.quantity`; returns the consumed lots so the
+ * movement can stamp its `lotId` (recall trace) and value at lot cost. No GL
+ * here — the route posts via warehouseEngine as before.
+ */
+export async function consumeLotsFefo(
+  client: import("pg").PoolClient,
+  args: { companyId: number; productId: number; quantity: number; explicitLotId?: number | null; blockExpired: boolean }
+): Promise<{ lotId: number; takenQty: number; unitCost: number }[]> {
+  const { companyId, productId, quantity, explicitLotId, blockExpired } = args;
+  const expiredClause = blockExpired ? `AND ("expiryDate" IS NULL OR "expiryDate" >= CURRENT_DATE)` : "";
+  let lots: Array<Record<string, any>>;
+  if (explicitLotId) {
+    lots = (await client.query(
+      `SELECT id, quantity, "unitCost", status, "qualityControlStatus", "expiryDate"
+       FROM warehouse_stock_lots
+       WHERE id=$1 AND "companyId"=$2 AND "productId"=$3 AND "deletedAt" IS NULL FOR UPDATE`,
+      [explicitLotId, companyId, productId]
+    )).rows;
+    if (!lots.length) throw new ValidationError("الدفعة المحددة غير موجودة لهذا الصنف", { field: "lotId", fix: "اختر دفعة صحيحة" });
+    const lot = lots[0];
+    if (NON_ISSUABLE_LOT_STATUSES.has(String(lot.status)) || (blockExpired && lot.expiryDate && new Date(lot.expiryDate) < new Date(new Date().toDateString()))) {
+      throw new ValidationError(`لا يمكن الصرف من دفعة بحالة "${lot.status}"${lot.expiryDate ? " أو منتهية" : ""}`, { field: "lotId", fix: "اختر دفعة نشطة وغير منتهية" });
+    }
+    if (String(lot.qualityControlStatus) !== "approved") {
+      throw new ValidationError("الدفعة لم تُعتمد في فحص الجودة (QC)", { field: "lotId", fix: "اعتمد الدفعة في QC قبل الصرف" });
+    }
+  } else {
+    lots = (await client.query(
+      `SELECT id, quantity, "unitCost", "expiryDate"
+       FROM warehouse_stock_lots
+       WHERE "companyId"=$1 AND "productId"=$2 AND "deletedAt" IS NULL
+         AND status='active' AND "qualityControlStatus"='approved' AND quantity > 0 ${expiredClause}
+       ORDER BY "expiryDate" ASC NULLS LAST, id ASC FOR UPDATE`,
+      [companyId, productId]
+    )).rows;
+  }
+
+  const available = lots.reduce((s, l) => s + Number(l.quantity), 0);
+  if (available < quantity) {
+    throw new ConflictError(
+      `الكمية المطلوبة (${quantity}) تتجاوز رصيد الدفعات الصالحة (${available})`,
+      { field: "lotId", fix: `رصيد الدفعات الصالح للصرف: ${available}` }
+    );
+  }
+
+  let remaining = quantity;
+  const consumed: { lotId: number; takenQty: number; unitCost: number }[] = [];
+  for (const lot of lots) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, Number(lot.quantity));
+    if (take <= 0) continue;
+    remaining -= take;
+    await client.query(
+      `UPDATE warehouse_stock_lots SET quantity = quantity - $1, "updatedAt"=NOW() WHERE id=$2`,
+      [take, lot.id]
+    );
+    consumed.push({ lotId: lot.id, takenQty: take, unitCost: Number(lot.unitCost ?? 0) });
+  }
+  return consumed;
+}
+
 const createProductSchema = z.object({
   name: z.string().min(1, "اسم المنتج مطلوب"),
   sku: z.string().min(1, "رمز المنتج (SKU) مطلوب"),
@@ -144,6 +269,12 @@ const createMovementSchema = z.object({
   unitCost: z.coerce.number().min(0, "تكلفة الوحدة يجب أن تكون 0 أو أكثر").optional().nullable(),
   reference: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
+  // Lot tracking (F1): on a tracksLots product, an inbound receipt carries a
+  // lotNumber (+optional expiry) to create/augment the lot; an outbound issue
+  // may name a specific lotId, else the engine auto-picks FEFO.
+  lotId: z.coerce.number().int().positive().optional().nullable(),
+  lotNumber: z.string().max(80).optional().nullable(),
+  expiryDate: z.string().optional().nullable(),
 });
 
 const PRODUCT_STATUSES = ["active", "inactive", "discontinued"] as const;
@@ -628,10 +759,81 @@ router.get("/movements/:id", authorize({ feature: "warehouse.transfers", action:
   } catch (err) { handleRouteError(err, res, "Warehouse movement detail error:"); }
 });
 
+// W6 — معاينة الأثر قبل الحفظ. Pure read: computes the stock delta, the
+// min-stock alert, the overdraw danger, and an estimated value line, shaped
+// for the shared ImpactPreviewButton. Costs here are visible only to roles
+// that can already create movements (the form shows unitCost + the context
+// card's costPrice to the same audience). Valuation/COGS itself stays in
+// finance — this previews quantities and flags, it does not post anything.
+router.post("/movements/impact-preview", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createMovementSchema.safeParse(req.body));
+    const [product] = await rawQuery<Record<string, any>>(
+      `SELECT * FROM warehouse_products WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [b.productId, scope.companyId]
+    );
+    if (!product) throw new NotFoundError("المنتج غير موجود");
+
+    const isOutbound = b.type === "out" || b.type === "transfer_out" || b.type === "adjustment_out";
+    const qty = Math.abs(Number(b.quantity));
+    const current = Number(product.currentStock ?? 0);
+    const minStock = Number(product.minStock ?? 0);
+    const newStock = isOutbound ? current - qty : current + qty;
+    const unitCost = Number(b.unitCost) > 0 ? Number(b.unitCost) : Number(product.costPrice ?? 0);
+    const estValue = roundTo2(qty * unitCost);
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [
+      { category: "المخزون", label: "الرصيد الحالي", value: String(current), severity: "info" },
+      { category: "المخزون", label: "الرصيد بعد الحركة", value: String(newStock), severity: newStock < 0 ? "danger" : "success" },
+    ];
+    if (NON_STOCK_ITEM_TYPES.has(String(product.itemType ?? "product"))) {
+      items.push({ category: "تحقق", label: "صنف غير مخزني", value: "سيُرفض الحفظ — الخدمات/الرقمي/الأصول بلا حركات", severity: "danger" });
+    }
+    if (isOutbound && qty > current) {
+      items.push({ category: "تحقق", label: "سحب زائد", value: `الكمية (${qty}) تتجاوز المتاح (${current}) — سيُرفض الحفظ`, severity: "danger" });
+    }
+    if (newStock >= 0 && newStock <= minStock) {
+      const policies = await getWarehousePolicies(scope.companyId, scope.branchId);
+      items.push({
+        category: "الحد الأدنى",
+        label: "تنبيه حد أدنى",
+        value: policies.autoPurchaseRequestOnMinStock
+          ? `سيهبط الرصيد إلى ${newStock} (الحد: ${minStock}) — سيُنشأ طلب شراء تلقائي`
+          : `سيهبط الرصيد إلى ${newStock} (الحد: ${minStock}) — إنشاء طلب الشراء التلقائي معطَّل بالسياسة`,
+        severity: "warning",
+      });
+    }
+    if (estValue > 0) {
+      items.push({ category: "القيمة", label: "قيمة تقديرية (تُحتسب نهائياً في المالية)", value: `${estValue.toFixed(2)} ر.س`, severity: "info" });
+    }
+
+    const hasDanger = items.some((i) => i.severity === "danger");
+    res.json(maskFields(req, {
+      actionType: "warehouse_movement",
+      employeeId: 0,
+      employeeName: `${product.name}${product.sku ? ` (${product.sku})` : ""}`,
+      items,
+      summary: hasDanger
+        ? "لا يمكن حفظ هذه الحركة — راجع بنود الخطر أعلاه"
+        : `حركة ${isOutbound ? "صرف" : "إدخال"} ${qty} × ${product.name} — الرصيد ${current} ← ${newStock}`,
+    }));
+  } catch (err) { handleRouteError(err, res, "Movement impact preview error:"); }
+});
+
 router.post("/movements", authorize({ feature: "warehouse.transfers", action: "create" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
     const b = zodParse(createMovementSchema.safeParse(req.body));
+    const policies = await getWarehousePolicies(scope.companyId, scope.branchId);
+    // W5 — "لا حركة بلا سبب/مرجع" — enforced only when the company policy
+    // (سياسات المستودع في ضوابط النظام) turns it on.
+    if (policies.requireMovementReference && !(b.reference && b.reference.trim().length > 0)) {
+      throw new ValidationError(
+        "المرجع مطلوب لكل حركة مخزون (سياسة الشركة: لا حركة بلا سبب)",
+        { field: "reference", fix: "أدخل مرجع الحركة: GRN / أمر صرف / تذكرة صيانة / طلب" }
+      );
+    }
     const qtyNum = b.quantity;
     // A movement either raises or lowers on-hand stock. `adjustment_in`
     // (stock-up correction) behaves like a receipt; `adjustment_out`
@@ -644,6 +846,7 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
     let updatedProduct: any = null;
     let preMovementAvgCost = 0;
     let productRef: any = null;
+    let lotForMovement: number | null = null; // F1 — recall-trace link on the movement
 
     await withTransaction(async (client) => {
       const prodRes = await client.query(
@@ -652,6 +855,17 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
       );
       const product = prodRes.rows[0];
       if (!product) throw new NotFoundError("المنتج غير موجود");
+
+      // Non-stock item types (service / digital / fixed asset) never carry a
+      // stock balance, so a warehouse movement against them is meaningless.
+      // Stockable = product / consumable (and the legacy NULL default which
+      // the DB treats as 'product'). Reject early with a clear Arabic reason.
+      if (NON_STOCK_ITEM_TYPES.has(String(product.itemType ?? "product"))) {
+        throw new ValidationError(
+          "هذا الصنف غير مخزني (خدمة/رقمي/أصل) ولا تُسجَّل له حركة مخزون",
+          { field: "productId", fix: "اختر صنفاً مخزنياً (منتج أو مستهلك)" }
+        );
+      }
 
       // Prevent overdraw on any stock-lowering movement
       if (isOutbound && Number(product.currentStock) < qtyNum) {
@@ -674,54 +888,100 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
         unitCost = preMovementAvgCost;
       }
 
+      const tracksLots = product.tracksLots === true;
+
       if (isOutbound) {
-        const batchRes = await client.query(
-          `SELECT id, quantity, "unitCost", "receivedDate" FROM warehouse_stock_batches WHERE "productId"=$1 AND quantity > 0 ORDER BY "receivedDate" ASC`,
-          [b.productId]
-        );
-        const batches = batchRes.rows;
-        let remaining = Number(b.quantity);
-        const updates: { id: number; newQty: number }[] = [];
-        for (const batch of batches) {
-          if (remaining <= 0) break;
-          const take = Math.min(remaining, Number(batch.quantity));
-          remaining -= take;
-          updates.push({ id: batch.id, newQty: Math.max(Number(batch.quantity) - take, 0) });
-        }
-        if (updates.length > 0) {
-          // Single UPDATE ... FROM (VALUES ...) instead of one round-trip per batch.
-          const valuesSql: string[] = [];
-          const params: unknown[] = [];
-          for (const u of updates) {
-            const base = params.length;
-            valuesSql.push(`($${base + 1}::int, $${base + 2}::numeric)`);
-            params.push(u.id, u.newQty);
-          }
-          await client.query(
-            `UPDATE warehouse_stock_batches AS wsb
-             SET quantity = v.new_qty
-             FROM (VALUES ${valuesSql.join(",")}) AS v(id, new_qty)
-             WHERE wsb.id = v.id`,
-            params
+        if (tracksLots) {
+          // F1 — lot-aware consumption: FEFO (or explicit lotId), rejecting
+          // recalled/quarantine/disposed always and expired when policy on.
+          // Value the issue at the weighted lot cost so COGS reflects reality.
+          const consumed = await consumeLotsFefo(client, {
+            companyId: scope.companyId, productId: b.productId, quantity: Number(b.quantity),
+            explicitLotId: b.lotId ?? null, blockExpired: policies.enforceLotFefo,
+          });
+          lotForMovement = consumed[0]?.lotId ?? null; // recall trace link
+          const totalCost = consumed.reduce((s, c) => s + c.takenQty * c.unitCost, 0);
+          unitCost = Number(b.quantity) > 0 ? roundTo2(totalCost / Number(b.quantity)) : 0;
+        } else {
+          const batchRes = await client.query(
+            `SELECT id, quantity, "unitCost", "receivedDate" FROM warehouse_stock_batches WHERE "productId"=$1 AND quantity > 0 ORDER BY "receivedDate" ASC`,
+            [b.productId]
           );
+          const batches = batchRes.rows;
+          let remaining = Number(b.quantity);
+          const updates: { id: number; newQty: number }[] = [];
+          for (const batch of batches) {
+            if (remaining <= 0) break;
+            const take = Math.min(remaining, Number(batch.quantity));
+            remaining -= take;
+            updates.push({ id: batch.id, newQty: Math.max(Number(batch.quantity) - take, 0) });
+          }
+          if (updates.length > 0) {
+            // Single UPDATE ... FROM (VALUES ...) instead of one round-trip per batch.
+            const valuesSql: string[] = [];
+            const params: unknown[] = [];
+            for (const u of updates) {
+              const base = params.length;
+              valuesSql.push(`($${base + 1}::int, $${base + 2}::numeric)`);
+              params.push(u.id, u.newQty);
+            }
+            await client.query(
+              `UPDATE warehouse_stock_batches AS wsb
+               SET quantity = v.new_qty
+               FROM (VALUES ${valuesSql.join(",")}) AS v(id, new_qty)
+               WHERE wsb.id = v.id`,
+              params
+            );
+          }
+          unitCost = Number(product.costPrice ?? 0);
         }
-        unitCost = Number(product.costPrice ?? 0);
       }
 
       if (b.type === 'in') {
-        // Internal correlation id, NOT a customer-visible doc number
-        // (Issue #1141). Stays as a time-based ref by design.
-        const batchNum = internalTechRef("BATCH");
-        await client.query(
-          `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
-          [b.productId, batchNum, b.quantity, b.unitCost || 0]
-        );
+        if (tracksLots) {
+          // F1 — a tracked receipt creates/augments a lot (not a plain batch).
+          // The lot starts QC 'approved' here only if explicitly received into
+          // an existing approved lot; brand-new lots created via the lots
+          // endpoint carry their own QC gate. A receipt requires a lotNumber.
+          if (b.lotId) {
+            const up = await client.query(
+              `UPDATE warehouse_stock_lots SET quantity = quantity + $1, "updatedAt"=NOW()
+               WHERE id=$2 AND "companyId"=$3 AND "productId"=$4 AND "deletedAt" IS NULL RETURNING id`,
+              [b.quantity, b.lotId, scope.companyId, b.productId]
+            );
+            if (!up.rows.length) throw new ValidationError("الدفعة المحددة غير موجودة لهذا الصنف", { field: "lotId", fix: "اختر دفعة صحيحة" });
+            lotForMovement = b.lotId;
+          } else {
+            if (!(b.lotNumber && b.lotNumber.trim())) {
+              throw new ValidationError("هذا الصنف يتتبّع الدفعات — رقم الدفعة مطلوب عند الاستلام", { field: "lotNumber", fix: "أدخل رقم الدفعة (وتاريخ الصلاحية إن وُجد)" });
+            }
+            const warehouseId = await resolveDefaultWarehouseId(client, scope.companyId, scope.branchId);
+            const lotRes = await client.query(
+              `INSERT INTO warehouse_stock_lots
+                 ("companyId","productId","warehouseId","lotNumber",quantity,"originalQuantity","unitCost","receivedDate","expiryDate",status,"qualityControlStatus")
+               VALUES ($1,$2,$3,$4,$5,$5,$6,CURRENT_DATE,$7,'active','approved')
+               ON CONFLICT ("companyId","productId","warehouseId","lotNumber") WHERE "deletedAt" IS NULL
+               DO UPDATE SET quantity = warehouse_stock_lots.quantity + EXCLUDED.quantity, "updatedAt"=NOW()
+               RETURNING id`,
+              [scope.companyId, b.productId, warehouseId, b.lotNumber.trim(), b.quantity, b.unitCost || 0, b.expiryDate ?? null]
+            );
+            lotForMovement = lotRes.rows[0]?.id ?? null;
+          }
+        } else {
+          // Internal correlation id, NOT a customer-visible doc number
+          // (Issue #1141). Stays as a time-based ref by design.
+          const batchNum = internalTechRef("BATCH");
+          await client.query(
+            `INSERT INTO warehouse_stock_batches ("productId","batchNumber",quantity,"unitCost","receivedDate") VALUES ($1,$2,$3,$4,NOW())`,
+            [b.productId, batchNum, b.quantity, b.unitCost || 0]
+          );
+        }
       }
 
       const sign = isInbound ? 1 : -1;
       const movRes = await client.query(
-        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [scope.companyId, b.productId, b.type, b.quantity, unitCost, b.reference, b.notes, scope.userId, scope.branchId]
+        `INSERT INTO warehouse_movements ("companyId","productId",type,quantity,"unitCost",reference,notes,"createdBy","branchId","lotId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [scope.companyId, b.productId, b.type, b.quantity, unitCost, b.reference, b.notes, scope.userId, scope.branchId, lotForMovement]
       );
       insertId = movRes.rows[0]?.id ?? 0;
 
@@ -881,10 +1141,14 @@ router.post("/movements", authorize({ feature: "warehouse.transfers", action: "c
 
     if (updatedProduct && Number(updatedProduct.currentStock) <= Number(updatedProduct.minStock)) {
       let autoRequestId: number | null = null;
-      try {
-        autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId, scope.activeAssignmentId);
-      } catch (e) {
-        logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
+      // Controllable: the auto purchase-request can be switched off from
+      // سياسات المستودع; the low-stock alert itself still fires.
+      if (policies.autoPurchaseRequestOnMinStock) {
+        try {
+          autoRequestId = await triggerMinStockPipeline(scope.companyId, updatedProduct, scope.userId, scope.activeAssignmentId);
+        } catch (e) {
+          logger.error(e, "[MinStock] Pipeline error (non-critical, movement already committed):");
+        }
       }
       res.status(201).json({ ...row, autoRequestId, lowStockAlert: true });
       return;
@@ -1175,6 +1439,79 @@ router.get("/suppliers/:id", authorize({ feature: "warehouse.inventory", action:
   } catch (err) { handleRouteError(err, res, "Supplier detail error:"); }
 });
 
+// ── Supplier item memory (FIN-P5-SUPPLIER-ITEMS-MEMORY #2235) ────────────────
+// The supplier's usual items + relationship defaults (unit / tax / last price /
+// account PURPOSE / allowed scenarios) so the expense flow stops re-typing them.
+// Built on the canonical `suppliers.id` (no separate vendor entity, per #2234).
+// The item returns `accountPurpose` — NEVER a final accountCode; financialEngine
+// resolves the purpose to a real account and preflight verifies it.
+router.get("/suppliers/:id/items", authorize({ feature: "warehouse.inventory", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Supplier must belong to the caller's company (cross-company → not found).
+    const [supplier] = await rawQuery<{ id: number }>(
+      `SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!supplier) throw new NotFoundError("المورد غير موجود");
+    const scenario = typeof req.query.scenario === "string" && req.query.scenario ? req.query.scenario : null;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, "supplierId", name, "itemType", "defaultUnit", "defaultTaxCodeId",
+              "accountPurpose", "allowedScenarios", "lastPrice", "lastPriceDate", "priceCurrency"
+         FROM supplier_items
+        WHERE "companyId"=$1 AND "supplierId"=$2 AND "isActive"=true AND "deletedAt" IS NULL
+          AND ($3::text IS NULL OR "allowedScenarios" IS NULL OR "allowedScenarios" @> to_jsonb($3::text))
+        ORDER BY name ASC`,
+      [scope.companyId, id, scenario],
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "Supplier items error:"); }
+});
+
+const createSupplierItemSchema = z.object({
+  name: z.string().min(1, "اسم البند مطلوب"),
+  itemType: z.string().optional(),
+  defaultUnit: z.string().optional(),
+  defaultTaxCodeId: z.coerce.number().int().positive().optional(),
+  accountPurpose: z.string().optional(),
+  allowedScenarios: z.array(z.string()).optional(),
+  lastPrice: z.coerce.number().optional(),
+  priceCurrency: z.string().optional(),
+});
+
+router.post("/suppliers/:id/items", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [supplier] = await rawQuery<{ id: number }>(
+      `SELECT id FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!supplier) throw new NotFoundError("المورد غير موجود");
+    const b = zodParse(createSupplierItemSchema.safeParse(req.body));
+    const { insertId } = await rawExecute(
+      `INSERT INTO supplier_items
+         ("companyId","supplierId",name,"itemType","defaultUnit","defaultTaxCodeId",
+          "accountPurpose","allowedScenarios","lastPrice","lastPriceDate","priceCurrency")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)`,
+      [
+        scope.companyId, id, b.name.trim(), b.itemType ?? null, b.defaultUnit ?? null,
+        b.defaultTaxCodeId ?? null, b.accountPurpose ?? null,
+        b.allowedScenarios ? JSON.stringify(b.allowedScenarios) : null,
+        b.lastPrice ?? null, b.lastPrice != null ? todayISO() : null,
+        b.priceCurrency ?? "SAR",
+      ],
+    );
+    assertInsert(insertId, "supplier_items");
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM supplier_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [insertId, scope.companyId],
+    );
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create supplier item error:"); }
+});
+
 router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1196,6 +1533,21 @@ router.post("/suppliers", authorize({ feature: "warehouse.inventory", action: "c
       [scope.companyId, b.name.trim(), b.contactPerson, b.phone, b.email, b.address, b.taxNumber, b.paymentTerms || 30]
     );
     assertInsert(insertId, "suppliers");
+    // Link to the Party master (migration 249) at creation so a supplier who
+    // is also a client/employee resolves to ONE party immediately — no
+    // duplicate master data, no waiting for the operator-triggered backfill.
+    // Non-fatal: a party-link failure must not block supplier creation.
+    try {
+      const { registerEntityParty } = await import("../lib/partyService.js");
+      await registerEntityParty(scope.companyId, "suppliers", insertId, "supplier", {
+        displayName: b.name.trim(),
+        phone: b.phone ?? null,
+        email: b.email ?? null,
+        kind: "organization",
+      });
+    } catch (e) {
+      logger.error(e, "[warehouse] supplier→party link failed (non-fatal)");
+    }
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
     emitEvent({
       companyId: scope.companyId,
@@ -1539,8 +1891,8 @@ router.post("/inventory-counts/:id/approve", authorize({ feature: "warehouse.inv
     // Pre-fetch count items so we can use them inside onApply and for
     // GL posting after the transition commits.
     const items = await rawQuery<Record<string, unknown>>(
-      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 LIMIT 10000`,
-      [countId]
+      `SELECT ici.*, wp."currentStock" FROM inventory_count_items ici JOIN warehouse_products wp ON wp.id=ici."productId" WHERE ici."countId"=$1 AND wp."companyId"=$2 LIMIT 10000`,
+      [countId, scope.companyId]
     );
 
     // P02-MED2 — GL posting failures used to be swallowed by a bare

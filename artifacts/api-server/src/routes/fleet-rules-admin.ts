@@ -222,10 +222,7 @@ fleetRulesAdminRouter.delete(
 // ─────────────────────── transport_intake_rules ──────────────────────
 
 const OPERATION_TYPES = ["booking", "dispatch", "service_line"] as const;
-const TRANSPORT_SERVICE_TYPES = [
-  "cargo_load", "passenger_umrah", "passenger_general",
-  "equipment_rental", "internal_transfer", "other",
-] as const;
+import { TRANSPORT_SERVICE_TYPES } from "../lib/transportEnums.js";
 
 const createIntakeRuleSchema = z.object({
   ruleName: z.string().min(1).max(255),

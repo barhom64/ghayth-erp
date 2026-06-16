@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { apiFetch } from "@/lib/api";
+import { ROUTE_TYPES } from "@/lib/transport-constants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,22 +18,67 @@ import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { UmrahGroupPicker } from "@/components/shared/umrah-group-picker";
 import { BookingSourceSelector, type BookingSourcePrefill } from "@/components/shared/booking-source-selector";
 import { LocationKindPicker } from "@/components/shared/location-kind-picker";
+import { MapLocationPicker } from "@/components/shared/map-location-picker";
 import { MultiLegBookingEditor, type BookingLeg, legsToApiPayload } from "@/components/shared/multi-leg-booking-editor";
 import { UmrahContextQuestionnaire } from "@/components/shared/umrah-context-questionnaire";
+import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
 
 // #1733 Comment 9 — booking create form. The operator-side intake
 // surface for the pre-trip pipeline. Field visibility is driven by the
 // selected `transportServiceType` so cargo-specific fields don't clutter
 // an umrah-passenger booking and vice versa.
 
-const SERVICE_TYPES = [
-  { value: "cargo_load", label: "نقل حمولة" },
-  { value: "passenger_umrah", label: "نقل معتمرين" },
-  { value: "passenger_general", label: "نقل ركاب" },
-  { value: "equipment_rental", label: "تأجير معدة" },
-  { value: "internal_transfer", label: "نقل داخلي" },
-  { value: "other", label: "أخرى" },
-] as const;
+// #2079 TA-T18-12 (RM-04) — family-first booking creation.
+//
+// Before: the operator landed on a dropdown of 6 service types
+// with no upstream cue, and the form's downstream branches
+// (passengerCount vs cargoWeight, validForPassengers vs
+// validForCargo) only showed up after a service-type pick — a
+// known UX trap because the operator often picked the wrong
+// type then had to back out. The audit's RM-04 fix: a two-step
+// flow — first choose the trip FAMILY (ركاب / حمولة), then
+// narrow the service-type dropdown to the matching subset.
+//
+// The server's deriveTripFamily() stays the canonical source of
+// truth — this is a UI-only narrowing. equipment_rental,
+// internal_transfer, and `other` are presented under BOTH
+// families because their canon depends on payload data, not the
+// service-type alone (the engine's deriveTripFamily uses
+// passengerCount > 0 → passenger, cargoWeight > 0 → cargo, with
+// rental tilting passenger and the rest tilting cargo).
+type TripFamily = "passenger" | "cargo";
+
+const SERVICE_TYPES_BY_FAMILY: Record<TripFamily, ReadonlyArray<{ value: string; label: string }>> = {
+  passenger: [
+    { value: "passenger_umrah", label: "نقل معتمرين" },
+    { value: "passenger_general", label: "نقل ركاب" },
+    { value: "equipment_rental", label: "تأجير معدة (مع ركاب/سائق)" },
+    { value: "internal_transfer", label: "نقل داخلي" },
+    { value: "other", label: "أخرى" },
+  ],
+  cargo: [
+    { value: "cargo_load", label: "نقل حمولة" },
+    { value: "equipment_rental", label: "تأجير معدة" },
+    { value: "internal_transfer", label: "نقل داخلي" },
+    { value: "other", label: "أخرى" },
+  ],
+} as const;
+
+// Server canon: cargo_load → cargo, passenger_* → passenger.
+// Anything else: tilts cargo unless the operator picked the
+// passenger family. We use the family choice as the
+// disambiguator for the ambiguous service-types — the server
+// re-derives from the row data so this only affects the picker.
+function serviceTypesForFamily(family: TripFamily | null): ReadonlyArray<{ value: string; label: string }> {
+  if (!family) return [];
+  return SERVICE_TYPES_BY_FAMILY[family];
+}
+
+// Family-stable default service-type when the family flips.
+const DEFAULT_SERVICE_BY_FAMILY: Record<TripFamily, string> = {
+  passenger: "passenger_umrah",
+  cargo: "cargo_load",
+};
 
 const BOOKING_SOURCES = [
   { value: "manual_entry", label: "إدخال يدوي" },
@@ -44,15 +90,7 @@ const BOOKING_SOURCES = [
   { value: "recurring_schedule", label: "جدول متكرر" },
 ] as const;
 
-const ROUTE_TYPES = [
-  { value: "airport_to_makkah", label: "المطار → مكة" },
-  { value: "makkah_to_madinah", label: "مكة → المدينة" },
-  { value: "madinah_to_airport", label: "المدينة → المطار" },
-  { value: "makkah_local", label: "تنقل محلي بمكة" },
-  { value: "madinah_local", label: "تنقل محلي بالمدينة" },
-  { value: "ziyarah", label: "زيارة" },
-  { value: "custom", label: "مخصص" },
-] as const;
+// ROUTE_TYPES مُوحَّد في "@/lib/transport-constants" (UX-05 — كان مكرّرًا حرفيًا).
 
 export default function TransportBookingCreate() {
   const [, navigate] = useLocation();
@@ -60,9 +98,36 @@ export default function TransportBookingCreate() {
   const [submitting, setSubmitting] = useState(false);
 
   // Shared fields.
-  const [bookingNumber, setBookingNumber] = useState("");
+  // #TA-T18-UX-AUDIT-01 UX-04 — رقم الحجز يُولَّد تلقائيًا (قابل للتعديل) بدل
+  // إلزام المستخدم بإدخال مفتاح تقني في أول حقل.
+  const [bookingNumber, setBookingNumber] = useState(
+    () => `B-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+  );
   const [bookingSource, setBookingSource] = useState<string>("manual_entry");
+  // #2079 TA-T18-12 — family is picked FIRST; service-type defaults
+  // from the family so the operator never sees a mismatched dropdown.
+  const [tripFamily, setTripFamily] = useState<TripFamily | null>(null);
   const [transportServiceType, setTransportServiceType] = useState<string>("cargo_load");
+
+  // Flipping the family resets the service-type to its canonical
+  // default for that family (passenger → passenger_umrah, cargo →
+  // cargo_load). Leftover cargo-specific picks don't bleed into a
+  // passenger booking and vice versa.
+  const onTripFamilyChange = (next: TripFamily): void => {
+    setTripFamily(next);
+    if (
+      next === "passenger" &&
+      !SERVICE_TYPES_BY_FAMILY.passenger.some((s) => s.value === transportServiceType)
+    ) {
+      setTransportServiceType(DEFAULT_SERVICE_BY_FAMILY.passenger);
+    }
+    if (
+      next === "cargo" &&
+      !SERVICE_TYPES_BY_FAMILY.cargo.some((s) => s.value === transportServiceType)
+    ) {
+      setTransportServiceType(DEFAULT_SERVICE_BY_FAMILY.cargo);
+    }
+  };
   const [customerName, setCustomerName] = useState("");
   // #1812 source-driven booking (gap #1) — customer/contract/project IDs
   // come from the source selector; the form proceeds to text-only edit
@@ -82,6 +147,9 @@ export default function TransportBookingCreate() {
   const [toLat, setToLat] = useState("");
   const [toLng, setToLng] = useState("");
   const [showGeoFields, setShowGeoFields] = useState(false);
+  // #TA-T18-UX-AUDIT-01 UX-04 — الحد الأدنى أولًا: تُطوى كتلة «اتفاق العميل +
+  // النوافذ الزمنية» المتقدمة افتراضيًا، وتظهر عند الطلب فقط.
+  const [showAgreement, setShowAgreement] = useState(false);
   // #1812 multi-leg booking — user's #1 explicit gap.
   const [legs, setLegs] = useState<BookingLeg[]>([]);
   const [requestedPickupDate, setRequestedPickupDate] = useState("");
@@ -137,10 +205,27 @@ export default function TransportBookingCreate() {
   const isUmrah = transportServiceType === "passenger_umrah";
   const isPassenger = transportServiceType.startsWith("passenger_");
 
+  // #1812 Wave 0.2 — linked-source guard. Any one of these IDs being
+  // set means the booking is anchored to a structured upstream entity
+  // (CRM / umrah / contract / project). Free-text customerName alone
+  // is no longer accepted by the backend (see transport-bookings.ts
+  // createBookingSchema refinement).
+  const hasLinkedSource = Boolean(
+    customerId || umrahGroupId || contractId || projectId,
+  );
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookingNumber.trim()) {
       toast({ variant: "destructive", title: "رقم الحجز مطلوب" });
+      return;
+    }
+    if (!hasLinkedSource) {
+      toast({
+        variant: "destructive",
+        title: "اختر مصدر الحجز أولاً",
+        description: "يجب ربط الحجز بعميل من CRM أو مجموعة عمرة أو عقد أو مشروع. اسم العميل النصّي وحده غير مقبول.",
+      });
       return;
     }
     setSubmitting(true);
@@ -227,11 +312,9 @@ export default function TransportBookingCreate() {
         { label: "حجز جديد" },
       ]}
       actions={
-        <Link href="/fleet/transport/bookings">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
             <ArrowLeft className="h-4 w-4 me-1" />العودة للقائمة
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <FleetTabsNav />
@@ -261,12 +344,55 @@ export default function TransportBookingCreate() {
                 required
               />
             </div>
+            {/* #2079 TA-T18-12 (RM-04) — step 1: family picker.
+                Two-button choice between ركاب (passenger) and حمولة
+                (cargo). The service-type dropdown below narrows to
+                the family's subset; the operator can't pick a
+                cargo service-type while in passenger mode. */}
+            <div className="md:col-span-2">
+              <Label className="text-xs">نوع الرحلة *</Label>
+              <div className="mt-1.5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => onTripFamilyChange("passenger")}
+                  className={
+                    "rounded border px-3 py-2 text-sm font-medium transition-colors " +
+                    (tripFamily === "passenger"
+                      ? "bg-status-info-surface border-status-info-foreground text-status-info-foreground"
+                      : "bg-surface-subtle border-border text-muted-foreground hover:bg-surface")
+                  }
+                >
+                  ركاب
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onTripFamilyChange("cargo")}
+                  className={
+                    "rounded border px-3 py-2 text-sm font-medium transition-colors " +
+                    (tripFamily === "cargo"
+                      ? "bg-amber-50 border-amber-600 text-amber-700"
+                      : "bg-surface-subtle border-border text-muted-foreground hover:bg-surface")
+                  }
+                >
+                  حمولة
+                </button>
+              </div>
+              {tripFamily == null && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  اختر نوع الرحلة لظهور أنواع الخدمة المناسبة.
+                </p>
+              )}
+            </div>
             <div>
               <Label htmlFor="transportServiceType">نوع الخدمة *</Label>
-              <Select value={transportServiceType} onValueChange={setTransportServiceType}>
-                <SelectTrigger id="transportServiceType"><SelectValue /></SelectTrigger>
+              <Select
+                value={transportServiceType}
+                onValueChange={setTransportServiceType}
+                disabled={tripFamily == null}
+              >
+                <SelectTrigger id="transportServiceType"><SelectValue placeholder="اختر نوع الرحلة أولاً" /></SelectTrigger>
                 <SelectContent>
-                  {SERVICE_TYPES.map((s) => (
+                  {serviceTypesForFamily(tripFamily).map((s) => (
                     <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -283,24 +409,37 @@ export default function TransportBookingCreate() {
                 </SelectContent>
               </Select>
             </div>
+            {/* #1812 Wave 0.2 — customer name/phone are READ-ONLY here.
+                They come from the BookingSourceSelector above so a
+                downstream invoice always points to a real CRM /
+                umrah / contract / project record. */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label htmlFor="customerName">اسم العميل</Label>
+                <Label htmlFor="customerName">اسم العميل (من المصدر)</Label>
                 <Input
                   id="customerName"
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  readOnly
+                  className="bg-surface-subtle"
+                  placeholder={hasLinkedSource ? customerName : "اختر مصدر الحجز أعلاه"}
                 />
               </div>
               <div>
-                <Label htmlFor="customerPhone">جوال العميل</Label>
+                <Label htmlFor="customerPhone">جوال العميل (من المصدر)</Label>
                 <Input
                   id="customerPhone"
                   value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  readOnly
+                  className="bg-surface-subtle"
+                  placeholder={hasLinkedSource ? customerPhone : "—"}
                 />
               </div>
             </div>
+            {!hasLinkedSource && (
+              <div className="md:col-span-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md p-2">
+                لا يمكن إنشاء الحجز بدون مصدر منظَّم (عميل CRM / مجموعة عمرة / عقد / مشروع). اختر مصدراً من القسم أعلاه.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -340,16 +479,23 @@ export default function TransportBookingCreate() {
                 placeholder="نوع موقع التحميل"
               />
               {showGeoFields && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number" step="0.0000001" value={fromLat}
-                    onChange={(e) => setFromLat(e.target.value)}
-                    placeholder="خط العرض"
-                  />
-                  <Input
-                    type="number" step="0.0000001" value={fromLng}
-                    onChange={(e) => setFromLng(e.target.value)}
-                    placeholder="خط الطول"
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number" step="0.0000001" value={fromLat}
+                      onChange={(e) => setFromLat(e.target.value)}
+                      placeholder="خط العرض"
+                    />
+                    <Input
+                      type="number" step="0.0000001" value={fromLng}
+                      onChange={(e) => setFromLng(e.target.value)}
+                      placeholder="خط الطول"
+                    />
+                  </div>
+                  <MapLocationPicker
+                    lat={fromLat ? Number(fromLat) : undefined}
+                    lng={fromLng ? Number(fromLng) : undefined}
+                    onPick={(la, ln) => { setFromLat(String(la)); setFromLng(String(ln)); }}
                   />
                 </div>
               )}
@@ -364,16 +510,23 @@ export default function TransportBookingCreate() {
                 placeholder="نوع موقع التسليم"
               />
               {showGeoFields && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number" step="0.0000001" value={toLat}
-                    onChange={(e) => setToLat(e.target.value)}
-                    placeholder="خط العرض"
-                  />
-                  <Input
-                    type="number" step="0.0000001" value={toLng}
-                    onChange={(e) => setToLng(e.target.value)}
-                    placeholder="خط الطول"
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number" step="0.0000001" value={toLat}
+                      onChange={(e) => setToLat(e.target.value)}
+                      placeholder="خط العرض"
+                    />
+                    <Input
+                      type="number" step="0.0000001" value={toLng}
+                      onChange={(e) => setToLng(e.target.value)}
+                      placeholder="خط الطول"
+                    />
+                  </div>
+                  <MapLocationPicker
+                    lat={toLat ? Number(toLat) : undefined}
+                    lng={toLng ? Number(toLng) : undefined}
+                    onPick={(la, ln) => { setToLat(String(la)); setToLng(String(ln)); }}
                   />
                 </div>
               )}
@@ -409,6 +562,13 @@ export default function TransportBookingCreate() {
             <div>
               <Label htmlFor="deliveryTime">وقت التسليم</Label>
               <Input id="deliveryTime" type="time" value={requestedDeliveryTime} onChange={(e) => setRequestedDeliveryTime(e.target.value)} />
+            </div>
+            {/* #TA-T18-UX-AUDIT-01 P2-1 — نموذج توقيت موحّد: هذه الأوقات هي مرجع
+                الجدولة؛ تُشتقّ منها نافذة المحرك تلقائيًا. النوافذ المتقدمة اختيارية. */}
+            <div className="sm:col-span-2">
+              <p className="text-[11px] text-muted-foreground">
+                تُستخدم أوقات التحميل/التسليم أعلاه للجدولة والتوزيع تلقائيًا — لا حاجة لتعبئة النوافذ الزمنية في «تفاصيل إضافية» إلا عند الحاجة.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -541,10 +701,19 @@ export default function TransportBookingCreate() {
         )}
 
         {/* #1812 — اتفاق العميل + النوافذ الزمنية (Comment 3) */}
+        {/* #TA-T18-UX-AUDIT-01 UX-04 — كتلة متقدمة مطويّة افتراضيًا (الحد الأدنى أولًا). */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">اتفاق العميل + النوافذ الزمنية</CardTitle>
+            <button
+              type="button"
+              onClick={() => setShowAgreement((s) => !s)}
+              className="flex items-center justify-between w-full text-start"
+            >
+              <CardTitle className="text-sm">تفاصيل إضافية (اتفاق العميل + النوافذ الزمنية)</CardTitle>
+              <span className="text-xs text-muted-foreground">{showAgreement ? "إخفاء ▲" : "إظهار ▼"}</span>
+            </button>
           </CardHeader>
+          {showAgreement && (
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <Label>فئة المركبة المطلوبة</Label>
@@ -569,20 +738,25 @@ export default function TransportBookingCreate() {
               </Select>
             </div>
             <div>
-              <Label>المركبة المحددة (id — اختياري)</Label>
-              <Input type="number" min={0}
+              {/* #TA-T18-UX-AUDIT-01 UX-03 — منتقي مركبة حقيقي بدل إدخال رقم
+                  قاعدة البيانات الخام. المحرك يفرض requiredExactVehicleId كحارس
+                  صلب عند الاقتراح والإسناد. */}
+              <VehicleSelect
+                label="المركبة المطلوبة (اختياري)"
                 value={requiredExactVehicleId}
-                onChange={(e) => setRequiredExactVehicleId(e.target.value)}
-                placeholder="إذا اشترط العميل مركبة بعينها"
+                onChange={(v) => setRequiredExactVehicleId(String(v ?? ""))}
+                allowCreate={false}
               />
+              <p className="text-[11px] text-muted-foreground mt-1">إذا اشترط العميل مركبة بعينها</p>
             </div>
             <div>
-              <Label>السائق المحدد (id — اختياري)</Label>
-              <Input type="number" min={0}
+              <DriverSelect
+                label="السائق المطلوب (اختياري)"
                 value={requiredExactDriverId}
-                onChange={(e) => setRequiredExactDriverId(e.target.value)}
-                placeholder="إذا اشترط العميل سائقاً بعينه"
+                onChange={(v) => setRequiredExactDriverId(String(v ?? ""))}
+                allowCreate={false}
               />
+              <p className="text-[11px] text-muted-foreground mt-1">إذا اشترط العميل سائقاً بعينه</p>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -635,6 +809,7 @@ export default function TransportBookingCreate() {
               />
             </div>
           </CardContent>
+          )}
         </Card>
 
         <Card>
@@ -645,12 +820,10 @@ export default function TransportBookingCreate() {
         </Card>
 
         <div className="flex items-center gap-2 justify-end">
-          <Link href="/fleet/transport/bookings">
-            <Button type="button" variant="outline">إلغاء</Button>
-          </Link>
-          <Button type="submit" disabled={submitting} rateLimitAware>
+          <Button asChild type="button" variant="outline"><Link href="/fleet/transport/bookings">إلغاء</Link></Button>
+          <Button type="submit" disabled={submitting || !hasLinkedSource || tripFamily == null} rateLimitAware>
             <Plus className="h-4 w-4 me-1" />
-            {submitting ? "جارٍ الإنشاء…" : "إنشاء الحجز"}
+            {submitting ? "جاري الإنشاء…" : "إنشاء الحجز"}
           </Button>
         </div>
       </form>

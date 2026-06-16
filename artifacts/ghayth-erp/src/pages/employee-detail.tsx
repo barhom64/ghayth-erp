@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -19,15 +19,21 @@ import {
   ListTodo, Clock, BookOpen, DollarSign, AlertTriangle, Printer,
   FileText, TrendingUp, TrendingDown, Minus, Award, Activity, CheckCircle2,
   XCircle, AlertCircle, ChevronDown, ChevronUp, Pencil, Check, X,
-  KeyRound, ShieldCheck, Lock, Star, FileSignature, Package, Sparkles, Flame
+  KeyRound, ShieldCheck, Lock, Star, FileSignature, Package, Sparkles, Flame,
+  // PR-6 (#2077) — icons for the three new tabs: documents (FileText
+  // — already imported), evaluation (Award), activity (History), and
+  // training (GraduationCap, renamed from Award which now belongs to
+  // evaluation).
+  History, GraduationCap, ArrowUpRight,
 } from "lucide-react";
 import { FinancialTab } from "@/components/shared/financial-tab";
 import { EntityFinancialProfile } from "@/components/shared/entity-financial-profile";
-import { useRoute } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
 import { PrintPreviewModal } from "@workspace/report-kit";
@@ -75,6 +81,194 @@ function OperationalStatusBar({ employeeId }: { employeeId: string }) {
       <Icon className="h-4 w-4" />
       <span>{opStatus.label}</span>
       {opStatus.reason && <span className="text-xs opacity-70">— {opStatus.reason}</span>}
+    </div>
+  );
+}
+
+// PR-8 (#2077) — Lifecycle tab content.
+// Renders the timeline + the «إجراء انتقال جديد» panel that wraps
+// POST /employees/:id/lifecycle/transitions. The panel is intentionally
+// minimal: pick a next state (the engine returns the legal options) +
+// reason + the four dates. The backend runs the guards; this UI just
+// shows the resulting error inline so HR knows which guard blocked.
+function LifecycleTabContent({ employeeId, status, history, onTransitioned }: {
+  employeeId: number;
+  status: any;
+  history: any[];
+  onTransitioned: () => void;
+}) {
+  const { toast } = useToast();
+  const nextOpts: Array<{ state: string; label: string }> = status?.nextTransitions ?? [];
+  const [target, setTarget] = useState<string>(nextOpts[0]?.state ?? "");
+  const [reason, setReason] = useState("");
+  const [decisionDate, setDecisionDate] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [documentDate, setDocumentDate] = useState("");
+  const [documentRef, setDocumentRef] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Map target state → event type. The engine uses event types under
+  // the hood; this mapping mirrors EVENT_TO_STATE_AFTER server-side.
+  const stateToEvent: Record<string, string> = {
+    offer_extended: "offer_extended",
+    onboarding: "offer_accepted",
+    active: "onboarded",            // when current=onboarding
+    probation: "probation_started",
+    confirmed: "probation_passed",
+    suspended: "suspended",
+    resigned: "resigned",
+    terminated: "terminated",
+    clearance_pending: "clearance_started",
+    clearance_complete: "clearance_completed",
+  };
+  const reactivation = status?.currentState === "terminated" && target === "active";
+  const eventType = reactivation ? "reactivated" : (stateToEvent[target] ?? "");
+
+  const submit = async () => {
+    if (!eventType) { toast({ title: "اختر حالة هدف", variant: "destructive" }); return; }
+    if (!reason.trim()) { toast({ title: "السبب مطلوب", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      await apiFetch(`/employees/${employeeId}/lifecycle/transitions`, {
+        method: "POST",
+        body: JSON.stringify({
+          eventType,
+          reason: reason.trim(),
+          decisionDate: decisionDate || undefined,
+          effectiveDate: effectiveDate || undefined,
+          documentDate: documentDate || undefined,
+          documentRef: documentRef || undefined,
+          overrideReason: overrideReason || undefined,
+        }),
+      });
+      toast({ title: "تم تسجيل الانتقال" });
+      setReason(""); setDecisionDate(""); setEffectiveDate(""); setDocumentDate("");
+      setDocumentRef(""); setOverrideReason("");
+      onTransitioned();
+    } catch (err: any) {
+      toast({ title: err?.message || "فشل الانتقال", variant: "destructive" });
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="space-y-5" data-testid="lifecycle-content">
+      {/* Next-transition launcher: only HR-write users see the panel
+          via the GuardedButton on submit. */}
+      {nextOpts.length > 0 ? (
+        <div className="border rounded-lg p-4 space-y-3 bg-surface-subtle/30" data-testid="lifecycle-transition-panel">
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            إجراء انتقال جديد
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">الحالة المستهدفة</Label>
+              <select
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                className="w-full mt-1 border rounded px-2 py-1.5 text-sm"
+                data-testid="lifecycle-target-select"
+              >
+                {nextOpts.map((o) => (
+                  <option key={o.state} value={o.state}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs">سبب الانتقال *</Label>
+              <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="مثال: قرار اعتماد التثبيت" className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">تاريخ القرار</Label>
+              <Input type="date" value={decisionDate} onChange={(e) => setDecisionDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">تاريخ التنفيذ</Label>
+              <Input type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">تاريخ المستند</Label>
+              <Input type="date" value={documentDate} onChange={(e) => setDocumentDate(e.target.value)} className="mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs">مرجع المستند</Label>
+              <Input value={documentRef} onChange={(e) => setDocumentRef(e.target.value)} placeholder="مثال: HR-2026-045" className="mt-1" />
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-xs">سبب التجاوز (إذا كانت الحوارس ستحجب)</Label>
+              <Input value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} placeholder="اتركه فارغًا إن لم يكن لازمًا" className="mt-1" />
+              <p className="text-[11px] text-muted-foreground mt-1">يُسجَّل التجاوز في الـAudit ويظهر في السجل أدناه — استخدمه فقط للحالات الموثَّقة.</p>
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={submit} disabled={submitting || !reason.trim()} data-testid="lifecycle-submit-btn">
+              {submitting ? "جارٍ التنفيذ..." : "تسجيل الانتقال"}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-muted-foreground border rounded p-3 bg-status-success-surface/30">
+          <CheckCircle2 className="h-4 w-4 inline-block ms-1" />
+          لا يوجد انتقال متاح من الحالة الحالية. (انتهت دورة الحياة أو الانتقال يتم خارج هذا التبويب.)
+        </div>
+      )}
+
+      {/* Timeline. Each event card shows the four dates + the actor +
+          the override reason when present (the override flag is the
+          most-watched audit signal). */}
+      <div className="border-t pt-4">
+        <p className="text-sm font-semibold mb-3">السجل الزمني ({history.length})</p>
+        {history.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic text-center py-4">لا يوجد سجل انتقالات لهذا الموظف بعد.</p>
+        ) : (
+          <div className="space-y-2">
+            {history.map((e: any) => (
+              <div key={e.id} className="border rounded p-3 text-sm" data-testid={`lifecycle-event-${e.id}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="outline" className="text-xs">{e.eventLabel || e.eventType}</Badge>
+                  {e.stateBeforeLabel && e.stateAfterLabel && (
+                    <span className="text-xs text-muted-foreground">
+                      {e.stateBeforeLabel} ← {e.stateAfterLabel}
+                    </span>
+                  )}
+                  {e.overrideReason && (
+                    <Badge className="bg-status-warning-surface text-status-warning-foreground border-0 text-xs ms-auto" data-testid="lifecycle-override-badge">
+                      تجاوز موثَّق
+                    </Badge>
+                  )}
+                </div>
+                {e.reason && <p className="text-sm font-medium mb-2">{e.reason}</p>}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-muted-foreground">
+                  <DateRow label="تاريخ القرار" value={e.decisionDate} />
+                  <DateRow label="تاريخ التنفيذ" value={e.effectiveDate} />
+                  <DateRow label="تاريخ المستند" value={e.documentDate} />
+                  <DateRow label="مرجع المستند" value={e.documentRef} mono />
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground border-t pt-2">
+                  <span>المنفِّذ: <strong>{e.actorName || `#${e.actorUserId}`}</strong></span>
+                  <span>{e.activeRoleKey ? `بدور: ${e.activeRoleKey}` : ""}</span>
+                  <span>{formatDateAr(e.createdAt)}</span>
+                </div>
+                {e.overrideReason && (
+                  <p className="text-xs bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+                    <strong>سبب التجاوز:</strong> {e.overrideReason}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DateRow({ label, value, mono }: { label: string; value: string | null | undefined; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-[11px]">{label}</p>
+      <p className={cn("text-xs font-medium", mono && "font-mono")}>{value ? formatDateAr(value) : "—"}</p>
     </div>
   );
 }
@@ -288,7 +482,12 @@ function LeaveBalanceSummary({ employeeId }: { employeeId: string }) {
 // (Mon 03:00 weekly + 1st of month 04:00) so HR doesn't think the page
 // is broken on day-1 for a new hire.
 // ════════════════════════════════════════════════════════════════════════════
-function PerformanceWidget({ latestScore, activeSignals }: {
+// PR-4 (#2077) — props grow by one: `employeeId` so the widget can
+// link to the dedicated score detail page (/hr/employees/:id/score)
+// where the operator gets the full per-dimension rationale, raw
+// counters, history, and the on-demand «إعادة الحساب» button.
+function PerformanceWidget({ employeeId, latestScore, activeSignals }: {
+  employeeId: number;
   latestScore: { compositeScore: number; trend: number; periodKey: string;
                  disciplineScore: number; activityScore: number;
                  productivityScore: number; qualityScore: number;
@@ -339,6 +538,14 @@ function PerformanceWidget({ latestScore, activeSignals }: {
                 {latestScore.periodKey}
               </span>
             )}
+            {/* PR-4 (#2077) — link to the dedicated score detail page
+                where HR sees full rationale per dimension + raw counters
+                + history + the on-demand recompute button. */}
+            <Link href={`/hr/employees/${employeeId}/score`}>
+              <a className="text-xs text-status-info-foreground hover:underline ms-auto" data-testid="link-employee-score-detail">
+                تفصيل كامل ←
+              </a>
+            </Link>
           </p>
           {sigCount > 0 && (
             <Badge variant={critical > 0 ? "destructive" : "outline"} className="gap-1">
@@ -491,24 +698,52 @@ function ViolationTimeline({ violations }: { violations: any[] }) {
 // tabs; this batch adds 2/5 of the missing ones.
 const TABS = [
   // HR-012 / #1799 priority #1 — Employee 360 final 3 tabs complete
-  // the 14-tab target from the inventory. After this PR every section
-  // of an employee profile lives under one screen.
-  { key: "overview", label: "نظرة شاملة", icon: Activity },
-  { key: "info", label: "البيانات الشخصية", icon: User },
-  { key: "titles", label: "المسميات والمناصب", icon: Briefcase },
-  { key: "account", label: "الحساب والدخول", icon: KeyRound },
-  { key: "roles", label: "الأدوار والصلاحيات", icon: ShieldCheck },
-  { key: "contract", label: "العقد", icon: FileSignature },
-  { key: "attendance", label: "الحضور", icon: Clock },
-  { key: "leaves", label: "الإجازات", icon: Calendar },
-  { key: "custodies", label: "العهد والأصول", icon: Package },
-  { key: "payroll", label: "الرواتب", icon: DollarSign },
-  { key: "violations", label: "المخالفات", icon: AlertTriangle },
-  { key: "tasks", label: "المهام", icon: ListTodo },
-  { key: "trainings", label: "التدريب", icon: Award },
-  { key: "finance", label: "المالية", icon: BookOpen },
+  // the 14-tab target from the inventory.
+  // PR-6 (#2077) — added the three missing tabs the deep audit
+  // surfaced: documents (endpoint existed but the page never called
+  // it), activity (audit timeline filtered by entityType=employees),
+  // and evaluation (history view of the PR-4 scoring engine). The
+  // tab order follows the «around the employee» mental model:
+  // identity → documents → org → access → contract → operations
+  // (attendance/leaves) → custody → financial → discipline →
+  // history (activity + evaluation) → development.
+  { key: "overview",    label: "نظرة شاملة",        icon: Activity },
+  { key: "info",        label: "البيانات الشخصية",  icon: User },
+  { key: "documents",   label: "الوثائق",           icon: FileText },        // PR-6 NEW
+  { key: "titles",      label: "المسميات والمناصب", icon: Briefcase },
+  { key: "account",     label: "الحساب والدخول",    icon: KeyRound },
+  { key: "roles",       label: "الأدوار والصلاحيات", icon: ShieldCheck },
+  { key: "contract",    label: "العقد",             icon: FileSignature },
+  { key: "attendance",  label: "الحضور",            icon: Clock },
+  { key: "leaves",      label: "الإجازات",          icon: Calendar },
+  { key: "custodies",   label: "العهد والأصول",     icon: Package },
+  { key: "payroll",     label: "الرواتب",           icon: DollarSign },
+  { key: "violations",  label: "المخالفات",         icon: AlertTriangle },
+  { key: "evaluation",  label: "التقييم",           icon: Award },           // PR-6 NEW
+  { key: "tasks",       label: "المهام",            icon: ListTodo },
+  { key: "trainings",   label: "التدريب",           icon: GraduationCap },
+  { key: "activity",    label: "النشاط",            icon: History },         // PR-6 NEW
+  { key: "lifecycle",   label: "دورة الحياة",       icon: Activity },        // PR-8 NEW
+  { key: "finance",     label: "المالية",           icon: BookOpen },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
+
+// PR-6 (#2077) — Tab status: «مكتمل / ناقص / يحتاج إجراء / غير مصرح».
+// The status drives both the badge color on the tab strip AND the empty
+// state inside the tab so the operator never sees a blank list.
+type TabStatus = "complete" | "missing" | "action_needed" | "forbidden";
+const STATUS_LABEL: Record<TabStatus, string> = {
+  complete:      "مكتمل",
+  missing:       "ناقص",
+  action_needed: "يحتاج إجراء",
+  forbidden:     "غير مصرح",
+};
+const STATUS_TONE: Record<TabStatus, string> = {
+  complete:      "bg-status-success-surface text-status-success-foreground",
+  missing:       "bg-amber-50 text-amber-700",
+  action_needed: "bg-status-error-surface text-status-error-foreground",
+  forbidden:     "bg-surface-subtle text-muted-foreground",
+};
 
 export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const [, params] = useRoute("/employees/:id");
@@ -541,6 +776,51 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
   const branch = useBranchLetterhead(user?.branchId);
   const { data: templatesResp } = useApiQuery<any>(["doc-templates"], "/documents/templates");
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+
+  // PR-6 (#2077) — three new lazy queries for the three new tabs.
+  // Each is gated on (activeTab match || id known) so we don't pay
+  // for fetches the operator never opens.
+  //
+  // Documents: GET /employees/documents returns the company-wide list
+  // (existing endpoint), we filter client-side on employeeId — keeping
+  // the doctrine of «no new backend». Acceptable because employee
+  // documents are typically <100 per company.
+  const { data: docsResp } = useApiQuery<any>(
+    ["employee-documents-list", String(id)],
+    "/employees/documents",
+    { enabled: !!id && activeTab === "documents" },
+  );
+  // Activity: GET /audit-logs/employees/:id. The endpoint is gated
+  // server-side on admin.audit:view; if the operator doesn't have it
+  // the request 403s and the tab renders the «غير مصرح» state instead
+  // of crashing. The hook doesn't throw on 403, it sets isError.
+  const { data: activityResp, isError: activityForbidden } = useApiQuery<any>(
+    ["employee-activity-audit", String(id)],
+    id ? `/audit-logs/employees/${id}` : null,
+    { enabled: !!id && activeTab === "activity" },
+  );
+  // Evaluation: scoring history (PR-4). The route is gated on
+  // hr.employees:list which the HR Manager has.
+  const { data: scoringHistResp } = useApiQuery<any>(
+    ["employee-scoring-history", String(id), "monthly"],
+    id ? `/employees/${id}/scoring/history?scope=monthly&limit=12` : null,
+    { enabled: !!id && activeTab === "evaluation" },
+  );
+
+  // PR-8 (#2077) — Lifecycle: status + history.
+  // Status is light (current state + next allowed transitions) and
+  // ALSO gates the lifecycle tab's status badge ("action_needed" when
+  // a next transition exists). History is heavier; lazy.
+  const { data: lifecycleStatusResp, refetch: refetchLifecycle } = useApiQuery<any>(
+    ["employee-lifecycle-status", String(id)],
+    id ? `/employees/${id}/lifecycle/status` : null,
+    { enabled: !!id },
+  );
+  const { data: lifecycleHistResp } = useApiQuery<any>(
+    ["employee-lifecycle-history", String(id)],
+    id ? `/employees/${id}/lifecycle/history?limit=50` : null,
+    { enabled: !!id && activeTab === "lifecycle" },
+  );
   const [govEditing, setGovEditing] = useState(false);
   const [govForm, setGovForm] = useState<Record<string, string>>({});
 
@@ -621,6 +901,61 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
 
   const pendingTasks = tasks.filter(t => t.status !== "completed" && t.status !== "cancelled").length;
 
+  // PR-6 (#2077) — extract PR-6 tab data + compute status badges.
+  // Documents arrive from /employees/documents (company-wide list)
+  // and are filtered client-side to this employee. Activity arrives
+  // from /audit-logs/employees/:id (admin-gated; 403 → forbidden
+  // state). Evaluation history comes from PR-4's /scoring/history.
+  const allDocs: any[] = (docsResp?.data ?? docsResp ?? []) as any[];
+  const documents = allDocs.filter((d: any) => String(d.employeeId) === String(id));
+  const activityRows: any[] = (activityResp?.data ?? activityResp ?? []) as any[];
+  const scoringHistory: any[] = (scoringHistResp?.data ?? scoringHistResp ?? []) as any[];
+  const lifecycleHistory: any[] = (lifecycleHistResp?.data ?? lifecycleHistResp ?? []) as any[];
+
+  // Compute the status of each tab. Used for both the tab strip badge
+  // and the empty-state messaging. «action_needed» beats «complete»
+  // when there are pending/expiring items so the operator's eye is
+  // drawn to the right tab.
+  const now = Date.now();
+  const msIn90Days = 90 * 24 * 60 * 60 * 1000;
+  const expiringDocs = [employee?.iqamaExpiry, employee?.passportExpiry, employee?.workPermitExpiry, employee?.visaExpiry]
+    .filter(Boolean)
+    .filter((d: string) => {
+      const t = new Date(d).getTime();
+      return !isNaN(t) && t > 0 && t < now + msIn90Days;
+    }).length;
+  const overdueTasks = tasks.filter((t: any) =>
+    t.status !== "completed" && t.status !== "cancelled" && t.dueDate && new Date(t.dueDate).getTime() < now
+  ).length;
+  const openLeaves = leaves.filter((l: any) => l.status === "pending").length;
+  const openViolations = violations.filter((v: any) => v.status === "pending" || v.status === "open").length;
+
+  const tabStatus: Record<TabKey, TabStatus> = {
+    overview:    "complete",
+    info:        employee?.nationalId && employee?.phone ? "complete" : "missing",
+    documents:   expiringDocs > 0 ? "action_needed" : (employee?.iqamaNumber || employee?.passportNumber) ? "complete" : "missing",
+    titles:      employee?.jobTitle ? "complete" : "missing",
+    account:     employee?.userAccount ? "complete" : "missing",
+    roles:       roles.length > 0 ? "complete" : "missing",
+    contract:    employee?.contract ? "complete" : "missing",
+    attendance:  attendance.length > 0 ? "complete" : "missing",
+    leaves:      openLeaves > 0 ? "action_needed" : leaves.length > 0 ? "complete" : "missing",
+    custodies:   custodies.length > 0 ? "complete" : "missing",
+    payroll:     payroll.length > 0 ? "complete" : "missing",
+    violations:  openViolations > 0 ? "action_needed" : violations.length === 0 ? "complete" : "complete",
+    evaluation:  latestScore ? "complete" : scoringHistory.length > 0 ? "complete" : "missing",
+    tasks:       overdueTasks > 0 ? "action_needed" : tasks.length > 0 ? "complete" : "missing",
+    trainings:   trainings.length > 0 ? "complete" : "missing",
+    activity:    activityForbidden ? "forbidden" : activityRows.length > 0 ? "complete" : "missing",
+    // PR-8 (#2077) — lifecycle. «action_needed» when the engine
+    // suggests next transitions (HR has work to do); «complete» when
+    // the employee is at a terminal-ish state (confirmed / clearance
+    // complete); «missing» when no events have landed yet.
+    lifecycle:   lifecycleStatusResp?.nextTransitions?.length ? "action_needed"
+                 : lifecycleStatusResp?.currentState ? "complete" : "missing",
+    finance:     "complete",
+  };
+
   const overview = (
     <div className="space-y-4">
       {(empKpis || empSchedule.length > 0) && (
@@ -653,7 +988,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
           )}
         </div>
       )}
-      <div className="flex gap-1 border-b overflow-x-auto pb-px">
+      <div className="flex gap-1 border-b overflow-x-auto pb-px" data-testid="employee-360-tabs">
         {TABS.map((tab) => {
           const count = tab.key === "tasks" ? tasks.length
             : tab.key === "leaves" ? leaves.length
@@ -661,11 +996,24 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             : tab.key === "violations" ? violations.length
             : tab.key === "attendance" ? attendance.length
             : tab.key === "roles" ? roles.length
-            : tab.key === "custodies" ? custodies.length : 0;
+            : tab.key === "custodies" ? custodies.length
+            : tab.key === "documents" ? documents.length
+            : tab.key === "evaluation" ? scoringHistory.length
+            : tab.key === "trainings" ? trainings.length
+            : tab.key === "activity" ? activityRows.length
+            : 0;
+          // PR-6 (#2077) — status badge: «مكتمل/ناقص/يحتاج إجراء/غير
+          // مصرح» on every tab so the operator instantly sees which
+          // sections need attention without clicking. forbidden +
+          // missing get muted tones; action_needed is red (impossible
+          // to miss).
+          const status = tabStatus[tab.key as TabKey];
           return (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
+              data-testid={`tab-${tab.key}`}
+              data-tab-status={status}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                 activeTab === tab.key
@@ -677,6 +1025,14 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               {tab.label}
               {count > 0 && tab.key !== "overview" && tab.key !== "info" && (
                 <Badge variant="secondary" className="text-[10px] px-1.5 h-4">{count}</Badge>
+              )}
+              {status !== "complete" && tab.key !== "overview" && (
+                <Badge
+                  className={cn("text-[10px] px-1.5 h-4 border-0", STATUS_TONE[status])}
+                  data-testid={`tab-status-${tab.key}`}
+                >
+                  {STATUS_LABEL[status]}
+                </Badge>
               )}
             </button>
           );
@@ -697,7 +1053,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               the unacknowledged rows in employee_signals (last 90 days).
               When the engines haven't yet produced a score (new hire, or
               before the first monthly cron run), renders an empty state. */}
-          <PerformanceWidget latestScore={latestScore} activeSignals={activeSignals} />
+          <PerformanceWidget employeeId={Number(params?.id ?? 0)} latestScore={latestScore} activeSignals={activeSignals} />
 
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
@@ -815,6 +1171,11 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
             </CardHeader>
             <CardContent className="space-y-4">
               <InfoRow label="المسمى الوظيفي" value={employee.jobTitle} bold />
+              {/* PR-7 (#2077) — full org chain (شركة → فرع → إدارة → قسم → فريق).
+                  The Administration row pulls from departments.administrationName
+                  resolved by the /employees/:id route via the LEFT JOIN added
+                  in PR-7. When NULL the row shows «—» (no UI break). */}
+              <InfoRow label="الإدارة" value={employee.administrationName || "—"} />
               <InfoRow label="القسم" value={employee.departmentName || "-"} />
               <InfoRow label={<span className="flex items-center gap-2"><Building className="h-4 w-4" /> الفرع</span>} value={employee.branchName || "-"} />
               <InfoRow label="المدير المباشر" value={employee.managerName || "-"} />
@@ -1511,6 +1872,229 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         </Card>
       )}
 
+      {/* ─────────────────────────────────────────────────────────────
+          PR-6 (#2077) — three NEW tabs: documents + evaluation + activity.
+          Each consumes an EXISTING endpoint (no new backend) and shows
+          a summary header + last-N items + a deep-link to the canonical
+          screen that owns the full surface. Empty + forbidden states
+          are explicit (per the «status badges» mandate) so the operator
+          never sees a blank tab.
+          ───────────────────────────────────────────────────────────── */}
+      {activeTab === "documents" && (
+        <Card data-testid="tab-content-documents">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                وثائق الموظف ({documents.length})
+              </span>
+              {/* Quick-glance status of the 4 expiry fields living on
+                  the employee row — iqama, passport, work permit, visa.
+                  Drives the «يحتاج إجراء» badge on the documents tab. */}
+              <span className="text-xs font-normal text-muted-foreground">
+                {expiringDocs > 0
+                  ? <Badge className="bg-status-error-surface text-status-error-foreground border-0">{expiringDocs} وثيقة تنتهي خلال 90 يومًا</Badge>
+                  : "كل الوثائق سارية"}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* The 4 government IDs always live on the employee row, so
+                we render them as a fixed summary card BEFORE the
+                attached documents list. Even when /employees/documents
+                returns empty, this section still shows information. */}
+            <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+              <InfoRow label="الهوية / الإقامة" value={employee?.iqamaNumber || "—"} />
+              <InfoRow label="انتهاء الإقامة" value={employee?.iqamaExpiry ? formatDateAr(employee.iqamaExpiry) : "—"} />
+              <InfoRow label="رقم الجواز" value={employee?.passportNumber || "—"} />
+              <InfoRow label="انتهاء الجواز" value={employee?.passportExpiry ? formatDateAr(employee.passportExpiry) : "—"} />
+              <InfoRow label="رخصة العمل" value={employee?.workPermitNumber || "—"} />
+              <InfoRow label="انتهاء رخصة العمل" value={employee?.workPermitExpiry ? formatDateAr(employee.workPermitExpiry) : "—"} last />
+            </div>
+            {documents.length === 0 ? (
+              <div className="text-center py-6 border-t border-dashed">
+                <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-muted-foreground text-sm">لا توجد وثائق مرفقة لهذا الموظف</p>
+                <p className="text-xs text-muted-foreground mt-1">يمكنك إضافة الوثائق من <Link href="/hr/documents"><a className="text-primary hover:underline">إدارة وثائق الموارد البشرية</a></Link></p>
+              </div>
+            ) : (
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs text-muted-foreground mb-2">الوثائق المرفقة ({documents.length})</p>
+                {documents.slice(0, 5).map((d: any) => (
+                  <div key={d.id} className="flex items-center justify-between p-2 rounded border hover:bg-surface-subtle text-sm">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{d.title || d.type || `وثيقة #${d.id}`}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{d.createdAt ? formatDateAr(d.createdAt) : "—"}</span>
+                  </div>
+                ))}
+                {documents.length > 5 && (
+                  <Link href="/hr/documents">
+                    <a className="text-xs text-primary hover:underline flex items-center gap-1 mt-2">
+                      عرض كل الوثائق ({documents.length}) <ArrowUpRight className="h-3 w-3" />
+                    </a>
+                  </Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "evaluation" && (
+        <Card data-testid="tab-content-evaluation">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Award className="h-5 w-5" />
+                التقييم المؤسسي
+              </span>
+              <Link href={`/hr/employees/${id}/score`}>
+                <a className="text-xs text-primary hover:underline flex items-center gap-1">
+                  التفصيل الكامل <ArrowUpRight className="h-3 w-3" />
+                </a>
+              </Link>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* Latest score headline — always shown when present. */}
+            {latestScore && (
+              <div className="bg-surface-subtle rounded p-4 mb-4">
+                <div className="flex items-end gap-3">
+                  <span className="text-4xl font-bold">{Math.round(Number(latestScore.compositeScore || 0))}</span>
+                  <span className="text-muted-foreground pb-1">/100</span>
+                  <Badge variant="outline" className="ms-auto">{latestScore.periodKey || "—"}</Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs mt-3">
+                  {[
+                    { k: "disciplineScore",   l: "انضباط" },
+                    { k: "activityScore",     l: "نشاط" },
+                    { k: "productivityScore", l: "إنتاجية" },
+                    { k: "qualityScore",      l: "جودة" },
+                    { k: "managerScore",      l: "تقييم المدير" },
+                    { k: "developmentScore",  l: "تطوير" },
+                  ].map((d) => (
+                    <div key={d.k} className="bg-white rounded p-2 border">
+                      <p className="text-muted-foreground">{d.l}</p>
+                      <p className="font-bold">{Math.round(Number((latestScore as any)[d.k] || 0))}/100</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Scoring history — last 12 monthly periods. */}
+            {scoringHistory.length === 0 && !latestScore ? (
+              <div className="text-center py-6">
+                <Award className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-muted-foreground text-sm">لا يوجد سجل تقييم لهذا الموظف بعد</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  يحسب المحرّك الدرجات أسبوعيًا (الإثنين 3 صباحًا) وشهريًا (1 من كل شهر) — أو اضغط «التفصيل الكامل» ثم «إعادة الحساب الآن».
+                </p>
+              </div>
+            ) : scoringHistory.length > 0 && (
+              <div className="border-t pt-3">
+                <p className="text-xs text-muted-foreground mb-2">السجل الشهري (آخر {Math.min(scoringHistory.length, 6)} أشهر)</p>
+                <div className="space-y-1">
+                  {scoringHistory.slice(0, 6).map((s: any) => (
+                    <div key={`${s.scope}-${s.periodKey}`} className="flex items-center justify-between p-2 rounded border hover:bg-surface-subtle text-sm">
+                      <span className="font-mono text-xs">{s.periodKey}</span>
+                      <span className="font-bold">{Number(s.compositeScore).toFixed(1)}/100</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === "activity" && (
+        <Card data-testid="tab-content-activity">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <History className="h-5 w-5" />
+              النشاط (آخر التغييرات على هذا الملف)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* PR-6 (#2077) — activity is the most sensitive tab in the
+                360 view. /audit-logs/:entityType/:entityId is gated on
+                admin.audit:view; non-admins get 403 → we render the
+                «غير مصرح» state with a permission hint instead of
+                trying to show the empty page that a blanket
+                hideTab/permission gate would produce. */}
+            {activityForbidden ? (
+              <div className="text-center py-6">
+                <Lock className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-muted-foreground text-sm">لا تملك صلاحية عرض سجل النشاط</p>
+                <p className="text-xs text-muted-foreground mt-1">يتطلّب صلاحية <code className="font-mono">admin.audit:view</code></p>
+              </div>
+            ) : activityRows.length === 0 ? (
+              <div className="text-center py-6">
+                <History className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-muted-foreground text-sm">لا يوجد نشاط مُسجَّل على هذا الملف</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activityRows.slice(0, 10).map((a: any) => (
+                  <div key={a.id} className="flex items-start gap-3 p-2 rounded border hover:bg-surface-subtle text-sm">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">{a.action}</Badge>
+                        <span className="text-xs text-muted-foreground">{a.userName || `مستخدم #${a.userId}`}</span>
+                      </div>
+                      {a.reason && <p className="text-xs text-muted-foreground mt-1">{a.reason}</p>}
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{formatDateAr(a.createdAt)}</span>
+                  </div>
+                ))}
+                {activityRows.length > 10 && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    عرض 10 من {activityRows.length} سجلًا — افتح
+                    <Link href={`/audit-logs?entity=employees&entityId=${id}`}>
+                      <a className="text-primary hover:underline mx-1">سجل التدقيق الكامل</a>
+                    </Link>
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* PR-8 (#2077) — دورة الحياة tab. Reads the lifecycle status +
+          history endpoints; surfaces the current state + a timeline +
+          a transition launcher. The transition dialog is intentionally
+          minimal (eventType + reason + the 4 dates) — every transition
+          goes through POST /lifecycle/transitions which validates the
+          state machine + runs the guards. */}
+      {activeTab === "lifecycle" && (
+        <Card data-testid="tab-content-lifecycle">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                دورة حياة الموظف
+              </span>
+              {lifecycleStatusResp?.currentStateLabel && (
+                <Badge variant="outline" className="text-sm" data-testid="lifecycle-current-state">
+                  الحالة الحالية: {lifecycleStatusResp.currentStateLabel}
+                </Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LifecycleTabContent
+              employeeId={Number(id)}
+              status={lifecycleStatusResp}
+              history={lifecycleHistory}
+              onTransitioned={() => { refetchLifecycle(); refetch(); }}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {activeTab === "finance" && (
         <div className="space-y-4">
           {/* سلف الموظف */}
@@ -1610,7 +2194,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
-            <EntityPrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
+            <PrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
             {id && <EntityPnlButton entityType="employee" entityId={Number(id)} />}
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>

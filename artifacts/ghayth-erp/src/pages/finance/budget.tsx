@@ -110,21 +110,15 @@ export default function BudgetPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/budget-heatmap">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/budget-heatmap">
               <Grid3x3 className="h-4 w-4 me-2" />الخريطة الحرارية
-            </Button>
-          </Link>
-          <Link href="/finance/budget-variance">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/budget-variance">
               <Target className="h-4 w-4 me-2" />الانحرافات
-            </Button>
-          </Link>
-          <Link href="/finance/budget-approvals">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/budget-approvals">
               <ShieldCheck className="h-4 w-4 me-2" />الاعتمادات
-            </Button>
-          </Link>
+            </Link></Button>
           <Button size="sm" asChild>
             <Link href="/finance/budget/create">
               <Plus className="h-4 w-4 me-1" />إضافة بند

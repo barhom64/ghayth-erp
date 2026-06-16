@@ -457,10 +457,11 @@ describe("Auto-detection system", () => {
     expect(DISCIPLINE_ROUTE).toContain("getAutoDetectionSettings");
   });
 
-  it("PUT /auto-detection/settings restricts to HR/GM/Owner", () => {
+  it("PUT /auto-detection/settings restricts to the discipline grant", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('router.put("/auto-detection/settings"');
     const section = DISCIPLINE_ROUTE.slice(idx, idx + 800);
-    expect(section).toContain("HR_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the HR_ROLES array.
+    expect(section).toContain('scopeCan(scope, "hr.discipline", "update")');
     expect(section).toContain("غير مصرح بتعديل إعدادات الرصد التلقائي");
   });
 

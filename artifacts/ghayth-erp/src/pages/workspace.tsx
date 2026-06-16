@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { ProactiveInsightsCard } from "@/components/shared/proactive-insights-card";
 import { formatDateAr } from "@/lib/formatters";
 import {
   CheckSquare, MessageSquare, Phone, CalendarDays,
@@ -96,14 +97,17 @@ export default function Workspace() {
       ]}
       subtitle={`صباحك خير ${user?.name || ""} — هذا برنامج يومك`}
       actions={
-        <Link href="/manager-board">
-          <Button variant="outline" size="sm" className="gap-2">
+        <Button asChild variant="outline" size="sm" className="gap-2"><Link href="/manager-board">
             <ArrowUpRight className="w-3 h-3" />
             لوحة المدير
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
+      {/* IGOC-006 — proactive insights surface (shapes itself by active role) */}
+      <div className="mb-4">
+        <ProactiveInsightsCard />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <CountCard
           icon={<CheckSquare className="w-5 h-5 text-blue-600" />}

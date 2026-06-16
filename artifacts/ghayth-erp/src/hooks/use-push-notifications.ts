@@ -63,7 +63,11 @@ export function usePushNotifications() {
 
       let vapidKey: string;
       try {
-        const keyResp = await apiFetch<{ publicKey: string }>("/communications/push/vapid-key");
+        const keyResp = await apiFetch<{ publicKey: string | null }>("/communications/push/vapid-key");
+        if (!keyResp.publicKey) {
+          setError("إشعارات المتصفح غير مُفعّلة على الخادم");
+          return false;
+        }
         vapidKey = keyResp.publicKey;
       } catch {
         setError("خادم الإشعارات غير متاح حالياً");

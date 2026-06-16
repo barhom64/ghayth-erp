@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { redirectTo } from "@/components/shared/redirect-to";
 
 const HR = lazy(() => import("@/pages/hr"));
 const HrServices = lazy(() => import("@/pages/hr/services"));
@@ -17,7 +18,10 @@ const PerformanceCreate = lazy(() => import("@/pages/create/hr/performance-creat
 const Training = lazy(() => import("@/pages/hr/training"));
 const TrainingDetail = lazy(() => import("@/pages/hr/training-detail"));
 const TrainingCreate = lazy(() => import("@/pages/create/hr/training-create"));
-const Organization = lazy(() => import("@/pages/hr/organization"));
+// HR-REV-2 (ADR-HR-02) — `org-tree` هو الهيكل التنظيمي الموحّد القانوني؛
+// /hr/organization و /hr/organization/structure أُبقِيا redirect إليه (لا 404
+// للروابط القديمة). صفحتا العرض المكرّرتان (مجرّد KPIs وبطاقات) أُزيلتا
+// (retire) لأن org-tree يُغنيهما، وaudit:routes يمنع الصفحات اليتيمة.
 const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
 const RecruitmentCreate = lazy(() => import("@/pages/create/hr/recruitment-create"));
 const JobDetail = lazy(() => import("@/pages/hr/job-detail"));
@@ -43,7 +47,8 @@ const ShiftsCreate = lazy(() => import("@/pages/create/hr/shifts-create"));
 const ShiftDetail = lazy(() => import("@/pages/details/shift-detail"));
 
 const AttendanceReports = lazy(() => import("@/pages/hr/attendance-reports"));
-const LeaveManagement = lazy(() => import("@/pages/hr/leave-management"));
+// (LeaveManagement أُزيل — أرصدة/أنواع الإجازات صارت تبويبات في صفحة الإجازات
+// الموحّدة، و/hr/leaves/management يُعاد توجيهه إليها. HR-REV-2)
 const ApprovalChains = lazy(() => import("@/pages/hr/approval-chains"));
 const FieldTracking = lazy(() => import("@/pages/hr/field-tracking"));
 const QRScanner = lazy(() => import("@/pages/hr/qr-scanner"));
@@ -51,12 +56,20 @@ const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
-const OrganizationStructure = lazy(() => import("@/pages/hr/organization-structure"));
-const PerformanceAdvanced = lazy(() => import("@/pages/hr/performance-advanced"));
-const RecruitmentAdvanced = lazy(() => import("@/pages/hr/recruitment-advanced"));
-const TrainingAdvanced = lazy(() => import("@/pages/hr/training-advanced"));
-const ViolationsManagement = lazy(() => import("@/pages/hr/violations-management"));
-const ShiftsManagement = lazy(() => import("@/pages/hr/shifts-management"));
+const ActivationBoard = lazy(() => import("@/pages/hr/activation-board"));
+// (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
+// (PerformanceAdvanced أُزيل — توزيع التقييمات + أفضل ١٠ صارا تبويب «التحليلات»
+// في /hr/performance، والمسار /hr/performance/advanced يُعاد توجيهه إليها. HR-REV)
+// (RecruitmentAdvanced أُزيل — كان عرضًا تحليليًّا مكرّرًا مشمولًا بالكامل في
+// /hr/recruitment، والمسار /hr/recruitment/advanced يُعاد توجيهه إليها. HR-REV)
+// (TrainingAdvanced أُزيل — «البرامج حسب الحالة» صار قسمًا في تبويب البرامج بصفحة
+// /hr/training، والمسار /hr/training/advanced يُعاد توجيهه إليها. HR-REV)
+// (ViolationsManagement أُزيل — قائمة المخالفات الخام + الاعتماد + التحليل صارت
+// تبويب «المخالفات الخام» داخل /hr/violations، و/hr/violations/management يُعاد
+// توجيهه إليها. HR-REV-7)
+// (ShiftsManagement أُزيل — نموذج إسناد الموظف لوردية صار في تبويب «التعيينات»
+// بصفحة /hr/shifts (كان التبويب للعرض فقط)، والمسار /hr/shifts/management يُعاد
+// توجيهه إليها. HR-REV)
 const ApplicationList = lazy(() => import("@/pages/hr/application-list"));
 const Evaluation360 = lazy(() => import("@/pages/hr/evaluation-360"));
 const Evaluation360Create = lazy(() => import("@/pages/create/hr/evaluation-360-create"));
@@ -66,6 +79,22 @@ const Evaluation360Upward = lazy(() => import("@/pages/hr/evaluation-360-upward"
 const Evaluation360History = lazy(() => import("@/pages/hr/evaluation-360-history"));
 const PublicHolidays = lazy(() => import("@/pages/hr/public-holidays"));
 const AttendancePolicy = lazy(() => import("@/pages/hr/attendance-policy"));
+// PR-3 (#2077) — per-category attendance overrides. Page module already
+// existed under /admin (HR-015) but was only reachable by admins; mount
+// it under /hr too so the HR Manager can manage policies without
+// crossing into the admin module. The /admin route stays as a back-
+// compat alias for any bookmark/print/notification deep-link.
+const AttendanceCategoriesHr = lazy(() => import("@/pages/admin/attendance-categories"));
+// PR-4 (#2077) — institutional scoring detail page (NEW) + scoring-weights
+// admin page mirrored under /hr so the HR Manager can edit weights
+// without crossing the /admin/* boundary. The engine + cron already
+// exist (lib/employeeScoringEngine.ts + cronScheduler.ts); PR-4 only
+// adds the HTTP entry points for on-demand recompute/history and this
+// detail page that visualizes them.
+const EmployeeScore = lazy(() => import("@/pages/hr/employee-score"));
+const ScoringWeightsHr = lazy(() => import("@/pages/admin/scoring-weights"));
+// PR-7 (#2077) — unified org tree page (شركة → فرع → إدارة → قسم → فريق).
+const OrgTree = lazy(() => import("@/pages/hr/org-tree"));
 const Delegations = lazy(() => import("@/pages/hr/delegations"));
 const Accruals = lazy(() => import("@/pages/hr/accruals"));
 const Transfers = lazy(() => import("@/pages/hr/transfers"));
@@ -94,6 +123,9 @@ const AttendanceEdit = lazy(() => import("@/pages/create/hr/attendance-edit"));
 const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
 const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
 const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
+// Phase 2 wiring — orphan pages with existing backends.
+const AccrualsMonthly = lazy(() => import("@/pages/hr/accruals-monthly"));
+const WpsSettings = lazy(() => import("@/pages/hr/saudi-compliance/wps/settings"));
 
 export const hrRoutes = [
   { path: "/hr", component: HR },
@@ -116,7 +148,8 @@ export const hrRoutes = [
   { path: "/hr/leaves", component: Leaves, subKey: "leaves" },
   { path: "/hr/leaves/create", component: LeavesCreate, subKey: "leaves" },
   // Literal sub-routes must precede "/hr/leaves/:id" (see attendance above).
-  { path: "/hr/leaves/management", component: LeaveManagement, subKey: "leaves" },
+  // GAP_MATRIX P1 — redirect /management until merged as tab inside base page.
+  { path: "/hr/leaves/management", component: redirectTo("/hr/leaves"), subKey: "leaves" },
   { path: "/hr/leaves/approval-chains", component: ApprovalChains, subKey: "leaves" },
   { path: "/hr/leaves/:id/edit", component: LeavesEdit, subKey: "leaves" },
   { path: "/hr/leaves/:id", component: LeaveDetail, subKey: "leaves" },
@@ -126,19 +159,20 @@ export const hrRoutes = [
   { path: "/hr/payroll/:id", component: PayrollDetail, subKey: "payroll" },
   { path: "/hr/performance", component: Performance, subKey: "performance" },
   { path: "/hr/performance/create", component: PerformanceCreate, subKey: "performance" },
-  { path: "/hr/performance/advanced", component: PerformanceAdvanced, subKey: "performance" },
+  // GAP_MATRIX P1 — redirect /advanced until merged as analytics tab inside base page.
+  { path: "/hr/performance/advanced", component: redirectTo("/hr/performance"), subKey: "performance" },
   { path: "/hr/performance/:id", component: PerformanceDetail, subKey: "performance" },
   { path: "/hr/training", component: Training, subKey: "training" },
   { path: "/hr/training/create", component: TrainingCreate, subKey: "training" },
-  { path: "/hr/training/advanced", component: TrainingAdvanced, subKey: "training" },
+  { path: "/hr/training/advanced", component: redirectTo("/hr/training"), subKey: "training" },
   { path: "/hr/training/:id", component: TrainingDetail, subKey: "training" },
-  { path: "/hr/organization", component: Organization, subKey: "organization" },
-  { path: "/hr/organization/structure", component: OrganizationStructure, subKey: "organization" },
+  { path: "/hr/organization", component: redirectTo("/hr/org-tree"), subKey: "organization" },
+  { path: "/hr/organization/structure", component: redirectTo("/hr/org-tree"), subKey: "organization" },
   { path: "/hr/recruitment", component: Recruitment, subKey: "recruitment" },
   { path: "/hr/recruitment/create", component: RecruitmentCreate, subKey: "recruitment" },
   { path: "/hr/recruitment/applicants/create", component: ApplicantsCreate, subKey: "recruitment" },
   { path: "/hr/recruitment/applications", component: ApplicationList, subKey: "recruitment" },
-  { path: "/hr/recruitment/advanced", component: RecruitmentAdvanced, subKey: "recruitment" },
+  { path: "/hr/recruitment/advanced", component: redirectTo("/hr/recruitment"), subKey: "recruitment" },
   { path: "/hr/recruitment/jobs/:id", component: JobDetail, subKey: "recruitment" },
   { path: "/hr/loans", component: Loans, subKey: "payroll" },
   { path: "/hr/loans/create", component: LoansCreate, subKey: "payroll" },
@@ -151,7 +185,8 @@ export const hrRoutes = [
   { path: "/hr/exit/:id", component: ExitDetail, subKey: "employees" },
   { path: "/hr/violations", component: Violations, subKey: "violations" },
   { path: "/hr/violations/create", component: ViolationsCreate, subKey: "violations" },
-  { path: "/hr/violations/management", component: ViolationsManagement, subKey: "violations" },
+  // GAP_MATRIX P1 — redirect /management until merged as tab inside base page.
+  { path: "/hr/violations/management", component: redirectTo("/hr/violations"), subKey: "violations" },
   { path: "/hr/violations/penalty-escalation", component: PenaltyEscalation, subKey: "violations" },
   { path: "/hr/violations/auto-detection", component: AutoDetection, subKey: "violations" },
   { path: "/hr/violations/:id", component: ViolationDetail, subKey: "violations" },
@@ -161,9 +196,10 @@ export const hrRoutes = [
   { path: "/hr/discipline/memos/:id", component: DisciplineMemoDetail, subKey: "violations" },
   { path: "/hr/shifts", component: Shifts, subKey: "shifts" },
   { path: "/hr/shifts/create", component: ShiftsCreate, subKey: "shifts" },
-  { path: "/hr/shifts/management", component: ShiftsManagement, subKey: "shifts" },
+  { path: "/hr/shifts/management", component: redirectTo("/hr/shifts"), subKey: "shifts" },
   { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
+  { path: "/hr/activation-board", component: ActivationBoard, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },
   { path: "/hr/evaluation-360/create", component: Evaluation360Create, subKey: "performance" },
   { path: "/hr/evaluation-360/history/:employeeId", component: Evaluation360History, subKey: "performance" },
@@ -173,8 +209,20 @@ export const hrRoutes = [
   { path: "/hr/evaluation-360/:id", component: Evaluation360Detail, subKey: "performance" },
   { path: "/hr/public-holidays", component: PublicHolidays, subKey: "leaves" },
   { path: "/hr/attendance-policy", component: AttendancePolicy, subKey: "attendance" },
+  // PR-3 (#2077) — per-category overrides. Same component as the legacy
+  // /admin/attendance-categories route; just exposed under /hr so HR
+  // managers can reach it via the HR navigation.
+  { path: "/hr/attendance-categories", component: AttendanceCategoriesHr, subKey: "attendance" },
+  // PR-4 (#2077) — institutional score for one employee + scoring-weights
+  // editor mirrored under /hr. The /admin route for weights stays as a
+  // back-compat alias just like /admin/attendance-categories did.
+  { path: "/hr/employees/:id/score", component: EmployeeScore, subKey: "performance" },
+  { path: "/hr/scoring-weights", component: ScoringWeightsHr, subKey: "performance" },
+  // PR-7 (#2077) — الشجرة التنظيمية الموحّدة.
+  { path: "/hr/org-tree", component: OrgTree, subKey: "employees" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
+  { path: "/hr/accruals/monthly", component: AccrualsMonthly, subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
   { path: "/hr/transfers/:id/edit", component: TransfersEdit, subKey: "employees" },
   { path: "/hr/transfers/:id", component: TransferDetail, subKey: "employees" },
@@ -195,4 +243,5 @@ export const hrRoutes = [
   { path: "/hr/wps/:id", component: WpsRunDetail, subKey: "payroll" },
   { path: "/hr/saudization", component: Saudization, subKey: "employees" },
   { path: "/hr/saudi-compliance", component: SaudiCompliance, subKey: "payroll" },
+  { path: "/hr/saudi-compliance/wps/settings", component: WpsSettings, subKey: "payroll" },
 ];

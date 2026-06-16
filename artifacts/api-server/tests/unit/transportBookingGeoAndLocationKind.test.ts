@@ -28,6 +28,7 @@ const MIGRATION = readApi("migrations/279_transport_booking_inline_geo_and_kind.
 const ROUTER    = readApi("routes/transport-bookings.ts");
 const PICKER    = readSpa("components/shared/location-kind-picker.tsx");
 const CREATE    = readSpa("pages/fleet/transport-booking-create.tsx");
+const MAP_PICKER_PATH = "components/shared/map-location-picker.tsx";
 
 describe("#1812 — migration 279: inline geo + location kind on bookings", () => {
   it("migration file exists with @rollback header", () => {
@@ -151,5 +152,39 @@ describe("#1812 — booking-create wires location kind + optional GPS", () => {
   it("offers an Arabic GPS toggle (optional fields hidden by default)", () => {
     expect(CREATE).toMatch(/أضف إحداثيات GPS/);
     expect(CREATE).toMatch(/إخفاء إحداثيات GPS/);
+  });
+});
+
+// #TA-T18 (owner gap #8) — the raw lat/lng inputs are now backed by an
+// interactive click-to-pin map so the operator sets a precise point
+// instead of typing decimal degrees.
+describe("#TA-T18 — precise map location picker", () => {
+  const MAP_PICKER = readSpa(MAP_PICKER_PATH);
+
+  it("component file exists", () => {
+    expect(existsSync(join(spaSrc, MAP_PICKER_PATH))).toBe(true);
+  });
+
+  it("is a real leaflet map with click-to-pin + draggable marker (no map key / new dep)", () => {
+    expect(MAP_PICKER).toMatch(/from "leaflet"/);
+    expect(MAP_PICKER).toMatch(/L\.tileLayer\(/);
+    expect(MAP_PICKER).toMatch(/\.on\(\s*"click"/);          // click to pin
+    expect(MAP_PICKER).toMatch(/draggable:\s*true/);          // drag to adjust
+    expect(MAP_PICKER).toMatch(/onPickRef\.current\(/);       // reports the edit out
+  });
+
+  it("is a controlled component (lat/lng in, onPick out — form keeps the truth)", () => {
+    expect(MAP_PICKER).toMatch(/lat\?:\s*number/);
+    expect(MAP_PICKER).toMatch(/lng\?:\s*number/);
+    expect(MAP_PICKER).toMatch(/onPick:\s*\(lat:\s*number,\s*lng:\s*number\)\s*=>/);
+  });
+
+  it("booking-create imports + renders the map picker for both endpoints", () => {
+    expect(CREATE).toContain('from "@/components/shared/map-location-picker"');
+    const matches = CREATE.match(/<MapLocationPicker/g) ?? [];
+    expect(matches.length, "expected 2 MapLocationPicker usages (from + to)").toBe(2);
+    // wired to the existing coordinate state (still the single source of truth).
+    expect(CREATE).toMatch(/setFromLat\(String\(la\)\);\s*setFromLng\(String\(ln\)\)/);
+    expect(CREATE).toMatch(/setToLat\(String\(la\)\);\s*setToLng\(String\(ln\)\)/);
   });
 });

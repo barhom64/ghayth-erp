@@ -11,11 +11,25 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import type { RequestScope } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
-import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2 } from "../lib/businessHelpers.js";
+import { currentPeriod, currentYear, toDateISO, todayISO, roundTo2, auditFromRequest } from "../lib/businessHelpers.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 
 export const reportsRouter = Router();
 reportsRouter.use(authMiddleware);
+// GAP_MATRIX P1 — every finance report GET must leave an audit trail (PDPL / forensics).
+// Runs on res.finish so the audit happens after the response is sent, never blocking the caller.
+reportsRouter.use((req, res, next) => {
+  if (req.method === "GET") {
+    res.on("finish", () => {
+      if (res.statusCode < 400) {
+        auditFromRequest(req, "finance.reports.read", "finance_reports", 0, {
+          after: { path: req.path, query: req.query },
+        });
+      }
+    });
+  }
+  next();
+});
 
 /**
  * Builds a branch restriction SQL condition for queries joining `journal_entries`
@@ -819,6 +833,37 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
     const totalCredit = movements.reduce((s, m) => s + Number(m.credit), 0);
     const endingBalance = roundTo2(openingBalance + totalDebit - totalCredit);
 
+    // ── Security deposits held for this customer ─────────────────────
+    // Property security deposits post to the GL as a LIABILITY
+    // (security_deposit_liability / 2300 — see propertiesEngine.
+    // postSecurityDepositGL), so they must NOT enter the AR running
+    // balance above: a held deposit is money we owe the tenant, the
+    // opposite direction of the receivable. Pre-fix the statement was
+    // blind to them entirely — an operator settling a departing
+    // tenant had to hunt the deposit in the property module while the
+    // statement implied a clean slate. Surface them as a separate
+    // block: per-deposit rows + the total still held as of `asOf`.
+    // Join chain: deposit → rental_contract → tenants.clientId.
+    const depositParams: unknown[] = [clientId, scope.companyId, asOf];
+    const heldDeposits = await rawQuery<Record<string, unknown>>(
+      `SELECT psd.id, psd.amount, psd."receivedDate", psd.status,
+              rc.id AS "contractId", rc."contractNumber",
+              COALESCE(psd."refundAmount", 0) AS "refundedAmount",
+              (psd.amount - COALESCE(psd."refundAmount", 0)) AS "heldAmount"
+         FROM property_security_deposits psd
+         JOIN rental_contracts rc ON rc.id = psd."contractId" AND rc."deletedAt" IS NULL
+         JOIN tenants t ON t.id = rc."tenantId" AND t."deletedAt" IS NULL
+        WHERE t."clientId" = $1
+          AND psd."companyId" = $2
+          AND psd."receivedDate" <= $3
+          AND (psd.amount - COALESCE(psd."refundAmount", 0)) > 0.01
+        ORDER BY psd."receivedDate"`,
+      depositParams
+    );
+    const totalHeldDeposits = roundTo2(
+      heldDeposits.reduce((s, d) => s + Number(d.heldAmount), 0)
+    );
+
     res.json(maskFields(req, {
       client,
       period: { from, to: asOf },
@@ -838,6 +883,10 @@ reportsRouter.get("/reports/customer-statement/:clientId", authorize({ feature: 
         "90+": roundTo2(buckets.d90plus),
         total: roundTo2(
           (buckets.current + buckets.d30 + buckets.d60 + buckets.d90 + buckets.d90plus)),
+      },
+      securityDeposits: {
+        totalHeld: totalHeldDeposits,
+        rows: heldDeposits,
       },
     }));
   } catch (err) {
@@ -1763,8 +1812,12 @@ reportsRouter.get("/reports/unmapped-lines", authorize({ feature: "finance.repor
     }
 
     if (tableFilter("goods_receipt_items")) {
+      // goods_receipts has no workflow `status` column (no migration ever
+      // added one) — selecting grn.status 500'd this whole report. The
+      // frontend treats source status as optional, so NULL is honest.
       const rows = await rawQuery<Record<string, unknown>>(
-        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef", grn.status,
+        `SELECT gri.id, gri."grnId", gri."itemName", gri."lineTotal", grn.ref AS "grnRef",
+                NULL::text AS status,
                 gri."allocationStatus", grn."createdAt"
            FROM goods_receipt_items gri
            JOIN goods_receipts grn ON grn.id = gri."grnId"
@@ -1811,8 +1864,8 @@ reportsRouter.get(
 
       const params: unknown[] = [scope.companyId];
       let whereExtra = "";
-      if (startDate) { params.push(startDate); whereExtra += ` AND je."postingDate" >= $${params.length}`; }
-      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (startDate) { params.push(startDate); whereExtra += ` AND je."date" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   whereExtra += ` AND je."date" < ($${params.length}::date + 1)`; }
       if (supplierId) {
         const sid = Number(supplierId);
         if (Number.isFinite(sid) && sid > 0) {
@@ -1879,7 +1932,7 @@ reportsRouter.get(
         `SELECT spa.id           AS "allocationId",
                 spa."journalEntryId",
                 je.ref            AS "journalRef",
-                je."postingDate"::text AS "postingDate",
+                je."date"::text AS "postingDate",
                 spa."obligationType",
                 spa."obligationId",
                 spa.amount::float8        AS amount,
@@ -1894,7 +1947,7 @@ reportsRouter.get(
                 sup."residencyStatus"     AS "supplierResidencyStatus",
                 sup."taxResidenceCountry" AS "supplierTaxResidenceCountry"
          ${baseSql}
-         ORDER BY je."postingDate" DESC NULLS LAST, spa.id DESC
+         ORDER BY je."date" DESC NULLS LAST, spa.id DESC
          LIMIT 5000`,
         params,
       );
@@ -2973,14 +3026,14 @@ reportsRouter.get(
       // 2300 / 1400 defaults via accounting_mappings).
       const { financialEngine } = await import("../lib/engines/index.js");
       const [outputVatCode, inputVatCode] = await Promise.all([
-        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2300"),
-        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1400"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_output", "credit", "2131"),
+        financialEngine.resolveAccountCode(scope.companyId, "vat_input",  "debit",  "1180"),
       ]);
 
       const params: unknown[] = [scope.companyId, outputVatCode, inputVatCode];
       let dateFilter = "";
-      if (startDate) { params.push(startDate); dateFilter += ` AND je."postingDate" >= $${params.length}`; }
-      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."postingDate" < ($${params.length}::date + 1)`; }
+      if (startDate) { params.push(startDate); dateFilter += ` AND je."date" >= $${params.length}`; }
+      if (endDate)   { params.push(endDate);   dateFilter += ` AND je."date" < ($${params.length}::date + 1)`; }
       const branchFilter = getBranchCondition(scope, undefined, params, "je");
 
       // ── 1. Period movement on the two VAT accounts ──────────────────
@@ -3294,6 +3347,267 @@ reportsRouter.get(
       }));
     } catch (err) {
       handleRouteError(err, res, "GL integrity gaps error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ledger-truth measurement — FIN-INTEGRITY-CONTRACT (#2246) المرحلة أ (قياس فقط).
+//
+// **read-only، صفر إنفاذ، صفر تعديل قيود.** يقيس «صدق دفتر الأستاذ» على السطور
+// المرحَّلة (balancesApplied=true، غير معكوسة، غير محذوفة):
+//   1. اكتمال الأبعاد: سطور أصناف مُبعّدة (مركبة/عقار/مشروع/مورد/عميل) بلا بُعدها.
+//   2. توزيع التسريب حسب باب الترحيل (je.type) — تشغيلي مقابل typed.
+//   3. ترحيلات الحساب الافتراضي (audit_logs action='mapping_fallback').
+//   4. القيد اليدوي الأعمى (isManual + بلا أي بُعد و/أو بلا سبب).
+// تصنيف البُعد المطلوب مبدئي ويُحاكي src/lib/gl/ledgerTruth.ts
+// (expectedDimensionForAccount) — يُرسَّم رسميًا كعقد إنفاذ في #2233.
+// **مكمّل لا مكرّر:** /reports/gl-integrity-gaps يقيس فجوات الربط (كيان↔قيد)،
+// و/reports/unmapped-lines يقيس سطور ما قبل الترحيل؛ هذا يقيس صدق السطور المرحَّلة.
+// ─────────────────────────────────────────────────────────────────────────────
+reportsRouter.get(
+  "/reports/ledger-truth",
+  authorize({ feature: "finance.reports", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { startDate, endDate, branchId } =
+        req.query as Record<string, string | undefined>;
+
+      // كل استعلام يبني params الخاصة به (getBranchCondition يضيف للـparams).
+      const buildScope = (alias: string) => {
+        const params: unknown[] = [scope.companyId];
+        let dateFilter = "";
+        if (startDate) { params.push(startDate); dateFilter += ` AND ${alias}."createdAt" >= $${params.length}`; }
+        if (endDate)   { params.push(endDate);   dateFilter += ` AND ${alias}."createdAt" < ($${params.length}::date + 1)`; }
+        return { params, dateFilter };
+      };
+
+      // ── 1 + 2. اكتمال الأبعاد + التوزيع حسب الباب ──────────────────────────
+      const { params: dimParams, dateFilter: dimDate } = buildScope("je");
+      const dimBranch = getBranchCondition(scope, branchId, dimParams, "je");
+      // CASE يحاكي expectedDimensionForAccount (ledgerTruth.ts) — أبقهما متزامنين.
+      const dimClass = `CASE
+              WHEN (coa.code ~ '^55[0-9]{2}$' OR coa.code = '5710') THEN 'vehicle'
+              WHEN coa.code ~ '^56[0-9]{2}$' THEN 'property'
+              WHEN coa.code IN ('5130','4140') THEN 'project'
+              WHEN coa.code ~ '^211[1-3]$' THEN 'vendor'
+              WHEN coa.code ~ '^113[1-3]$' THEN 'client'
+              ELSE NULL END`;
+      const dimMissing = `CASE
+              WHEN (coa.code ~ '^55[0-9]{2}$' OR coa.code = '5710') AND jl."vehicleId" IS NULL THEN true
+              WHEN coa.code ~ '^56[0-9]{2}$' AND jl."propertyId" IS NULL THEN true
+              WHEN coa.code IN ('5130','4140') AND jl."projectId" IS NULL THEN true
+              WHEN coa.code ~ '^211[1-3]$' AND jl."vendorId" IS NULL THEN true
+              WHEN coa.code ~ '^113[1-3]$' AND jl."clientId" IS NULL THEN true
+              ELSE false END`;
+      const dimensionRows = await rawQuery<{
+        expectedDim: string; totalLines: number; missingLines: number; missingValue: number;
+      }>(
+        `SELECT cls.expected_dim AS "expectedDim",
+                COUNT(*)::int AS "totalLines",
+                SUM(CASE WHEN cls.dim_missing THEN 1 ELSE 0 END)::int AS "missingLines",
+                COALESCE(SUM(CASE WHEN cls.dim_missing THEN ABS(cls.debit - cls.credit) ELSE 0 END), 0)::float8 AS "missingValue"
+           FROM (
+             SELECT jl.debit, jl.credit,
+                    ${dimClass} AS expected_dim,
+                    ${dimMissing} AS dim_missing
+               FROM journal_lines jl
+               JOIN journal_entries je ON je.id = jl."journalId"
+               JOIN chart_of_accounts coa ON coa.id = jl."accountId" AND coa."companyId" = $1
+              WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+                AND je."balancesApplied" = true AND je."reversedById" IS NULL
+                AND jl."deletedAt" IS NULL${dimDate}${dimBranch}
+           ) cls
+          WHERE cls.expected_dim IS NOT NULL
+          GROUP BY cls.expected_dim
+          ORDER BY "missingValue" DESC`,
+        dimParams,
+      );
+
+      const { params: doorParams, dateFilter: doorDate } = buildScope("je");
+      const doorBranch = getBranchCondition(scope, branchId, doorParams, "je");
+      const doorRows = await rawQuery<{ door: string; missingLines: number; missingValue: number }>(
+        `SELECT COALESCE(je.type, '—') AS door,
+                COUNT(*)::int AS "missingLines",
+                COALESCE(SUM(ABS(jl.debit - jl.credit)), 0)::float8 AS "missingValue"
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN chart_of_accounts coa ON coa.id = jl."accountId" AND coa."companyId" = $1
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."balancesApplied" = true AND je."reversedById" IS NULL AND jl."deletedAt" IS NULL
+            AND ${dimMissing} = true${doorDate}${doorBranch}
+          GROUP BY je.type
+          ORDER BY "missingValue" DESC`,
+        doorParams,
+      );
+
+      // ── 3. ترحيلات الحساب الافتراضي ──────────────────────────────────────
+      const { params: fbParams, dateFilter: fbDate } = buildScope("al");
+      const fallbackRows = await rawQuery<{ operationType: string; count: number }>(
+        `SELECT COALESCE(al."after"->>'operationType', '—') AS "operationType",
+                COUNT(*)::int AS count
+           FROM audit_logs al
+          WHERE al."companyId" = $1
+            AND al.action = 'mapping_fallback'
+            AND al.entity = 'accounting_mappings'${fbDate}
+          GROUP BY al."after"->>'operationType'
+          ORDER BY count DESC`,
+        fbParams,
+      );
+
+      // ── 4. القيد اليدوي الأعمى ────────────────────────────────────────────
+      const { params: mjParams, dateFilter: mjDate } = buildScope("je");
+      const [manualRow] = await rawQuery<{
+        total: number; noReason: number; noDimension: number; blind: number;
+      }>(
+        `SELECT
+            COUNT(*)::int AS total,
+            SUM(CASE WHEN (je.description IS NULL OR je.description = 'قيد يدوي') THEN 1 ELSE 0 END)::int AS "noReason",
+            SUM(CASE WHEN NOT EXISTS (
+                  SELECT 1 FROM journal_lines jl
+                   WHERE jl."journalId" = je.id AND jl."deletedAt" IS NULL
+                     AND (jl."vehicleId" IS NOT NULL OR jl."propertyId" IS NOT NULL OR jl."projectId" IS NOT NULL
+                       OR jl."vendorId" IS NOT NULL OR jl."clientId" IS NOT NULL OR jl."employeeId" IS NOT NULL
+                       OR jl."umrahSeasonId" IS NOT NULL OR jl."umrahAgentId" IS NOT NULL OR jl."contractId" IS NOT NULL
+                       OR jl."unitId" IS NOT NULL OR jl."assetId" IS NOT NULL OR jl."driverId" IS NOT NULL)
+                ) THEN 1 ELSE 0 END)::int AS "noDimension",
+            SUM(CASE WHEN (je.description IS NULL OR je.description = 'قيد يدوي') AND NOT EXISTS (
+                  SELECT 1 FROM journal_lines jl
+                   WHERE jl."journalId" = je.id AND jl."deletedAt" IS NULL
+                     AND (jl."vehicleId" IS NOT NULL OR jl."propertyId" IS NOT NULL OR jl."projectId" IS NOT NULL
+                       OR jl."vendorId" IS NOT NULL OR jl."clientId" IS NOT NULL OR jl."employeeId" IS NOT NULL
+                       OR jl."umrahSeasonId" IS NOT NULL OR jl."umrahAgentId" IS NOT NULL OR jl."contractId" IS NOT NULL
+                       OR jl."unitId" IS NOT NULL OR jl."assetId" IS NOT NULL OR jl."driverId" IS NOT NULL)
+                ) THEN 1 ELSE 0 END)::int AS blind
+           FROM journal_entries je
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."isManual" = true${mjDate}`,
+        mjParams,
+      );
+      const manual = manualRow ?? { total: 0, noReason: 0, noDimension: 0, blind: 0 };
+
+      // ── 5. صنفان محسوبان للمخالفات (SLICE 1, #2246) — company-scoped, بلا جدول جديد ──
+      //  (i) قيود على حساب غير قابل للترحيل (allowPosting=false أو غير نشط أو محذوف).
+      //  (ii) قيود يدوية مرتبطة تشغيليًا بلا سبب.
+      const { params: npParams, dateFilter: npDate } = buildScope("je");
+      const npBranch = getBranchCondition(scope, branchId, npParams, "je");
+      const nonPostableRows = await rawQuery<{
+        journalId: number; ref: string | null; createdAt: string; accountCode: string; accountName: string; reason: string;
+      }>(
+        `SELECT je.id AS "journalId", je.ref, je."createdAt"::text AS "createdAt",
+                coa.code AS "accountCode", coa.name AS "accountName",
+                CASE WHEN coa."deletedAt" IS NOT NULL THEN 'محذوف'
+                     WHEN coa."isActive" = false THEN 'غير نشط'
+                     WHEN coa."allowPosting" = false THEN 'لا يسمح بالترحيل'
+                     ELSE '—' END AS reason
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN chart_of_accounts coa ON coa.id = jl."accountId" AND coa."companyId" = $1
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND jl."deletedAt" IS NULL
+            AND (coa."allowPosting" = false OR coa."isActive" = false OR coa."deletedAt" IS NOT NULL)${npDate}${npBranch}
+          ORDER BY je."createdAt" DESC
+          LIMIT 200`,
+        npParams,
+      );
+
+      const { params: molParams, dateFilter: molDate } = buildScope("je");
+      const molBranch = getBranchCondition(scope, branchId, molParams, "je");
+      const manualNoReasonRows = await rawQuery<{
+        journalId: number; ref: string | null; createdAt: string; description: string | null;
+      }>(
+        `SELECT je.id AS "journalId", je.ref, je."createdAt"::text AS "createdAt", je.description
+           FROM journal_entries je
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."isManual" = true
+            AND (je.description IS NULL OR je.description = '' OR je.description = 'قيد يدوي')
+            AND EXISTS (
+              SELECT 1 FROM journal_lines jl
+               WHERE jl."journalId" = je.id AND jl."deletedAt" IS NULL
+                 AND (jl."vehicleId" IS NOT NULL OR jl."propertyId" IS NOT NULL OR jl."assetId" IS NOT NULL
+                   OR jl."employeeId" IS NOT NULL OR jl."driverId" IS NOT NULL OR jl."unitId" IS NOT NULL
+                   OR jl."contractId" IS NOT NULL)
+            )${molDate}${molBranch}
+          ORDER BY je."createdAt" DESC
+          LIMIT 200`,
+        molParams,
+      );
+
+      // ── الملخص + ترتيب جاهزية الـratchet (الأصغر تسريبًا أولًا) ───────────
+      const dimTotalLines = dimensionRows.reduce((s, r) => s + Number(r.totalLines), 0);
+      const dimMissingLines = dimensionRows.reduce((s, r) => s + Number(r.missingLines), 0);
+      const dimMissingValue = dimensionRows.reduce((s, r) => s + Number(r.missingValue), 0);
+      const fallbackTotal = fallbackRows.reduce((s, r) => s + Number(r.count), 0);
+      const completenessPct = dimTotalLines > 0
+        ? Number((((dimTotalLines - dimMissingLines) / dimTotalLines) * 100).toFixed(2))
+        : 100;
+
+      const ratchetReadiness = dimensionRows
+        .map((r) => ({
+          expectedDim: r.expectedDim,
+          missingLines: Number(r.missingLines),
+          missingValue: Number(r.missingValue),
+          completenessPct: Number(r.totalLines) > 0
+            ? Number((((Number(r.totalLines) - Number(r.missingLines)) / Number(r.totalLines)) * 100).toFixed(2))
+            : 100,
+        }))
+        .sort((a, b) => a.missingValue - b.missingValue);
+
+      res.json(maskFields(req, {
+        filters: { startDate: startDate ?? null, endDate: endDate ?? null, branchId: branchId ?? null },
+        summary: {
+          dimTotalLines,
+          dimMissingLines,
+          dimMissingValue,
+          completenessPct,
+          fallbackTotal,
+          manualTotal: Number(manual.total),
+          manualBlind: Number(manual.blind),
+          enforcement: "none",
+          phase: "measurement",
+        },
+        dimensionCompleteness: dimensionRows.map((r) => ({
+          expectedDim: r.expectedDim,
+          totalLines: Number(r.totalLines),
+          missingLines: Number(r.missingLines),
+          missingValue: Number(r.missingValue),
+          completenessPct: Number(r.totalLines) > 0
+            ? Number((((Number(r.totalLines) - Number(r.missingLines)) / Number(r.totalLines)) * 100).toFixed(2))
+            : 100,
+        })),
+        byDoor: doorRows.map((r) => ({
+          door: r.door,
+          missingLines: Number(r.missingLines),
+          missingValue: Number(r.missingValue),
+        })),
+        fallbackByOperation: fallbackRows.map((r) => ({
+          operationType: r.operationType,
+          count: Number(r.count),
+        })),
+        manual: {
+          total: Number(manual.total),
+          noReason: Number(manual.noReason),
+          noDimension: Number(manual.noDimension),
+          blind: Number(manual.blind),
+        },
+        nonPostableAccountEntries: nonPostableRows.map((r) => ({
+          journalId: Number(r.journalId),
+          ref: r.ref,
+          createdAt: r.createdAt,
+          accountCode: r.accountCode,
+          accountName: r.accountName,
+          reason: r.reason,
+        })),
+        manualOperationalNoReason: manualNoReasonRows.map((r) => ({
+          journalId: Number(r.journalId),
+          ref: r.ref,
+          createdAt: r.createdAt,
+          description: r.description,
+        })),
+        ratchetReadiness,
+      }));
+    } catch (err) {
+      handleRouteError(err, res, "Ledger truth report error:");
     }
   },
 );

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
-import { ShieldAlert, Plus, Trash2, AlertTriangle, X } from "lucide-react";
+import { ShieldAlert, Plus, Trash2, AlertTriangle, X, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { actionLabelAr } from "@/lib/permission-labels";
 import {
@@ -74,6 +74,11 @@ const SEVERITY_COLORS: Record<string, string> = {
 export function SodRulesTab() {
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
+  // The rule currently open in the inline editor (null = not editing).
+  // Editing reuses the same RuleForm as create but PATCHes instead of
+  // POSTing and leaves rule_key immutable (the server PATCH schema
+  // rejects ruleKey anyway).
+  const [editingRule, setEditingRule] = useState<SodRule | null>(null);
   // Replaces window.confirm() — the dialog owns the DELETE call and
   // surfaces 409 blockers inline if the server refuses (e.g. rules
   // referenced by active assignments).
@@ -122,7 +127,7 @@ export function SodRulesTab() {
             تمنع اجتماع صلاحيتين متعارضتين في دور واحد (مَن يُنشئ القيد لا يَعتمده).
           </p>
         </div>
-        <GuardedButton perm="admin:create" size="sm" onClick={() => setShowAdd(!showAdd)}>
+        <GuardedButton perm="admin:create" size="sm" onClick={() => { setEditingRule(null); setShowAdd(!showAdd); }}>
           {showAdd ? <><X className="h-4 w-4 me-1" />إلغاء</> : <><Plus className="h-4 w-4 me-1" />قاعدة جديدة</>}
         </GuardedButton>
       </div>
@@ -131,7 +136,21 @@ export function SodRulesTab() {
         <Card className="border-2 border-primary/20">
           <CardHeader className="pb-2"><CardTitle className="text-base">قاعدة فصل مهام جديدة</CardTitle></CardHeader>
           <CardContent>
-            <AddSodRuleForm features={features} onCreated={() => { setShowAdd(false); refetch(); }} />
+            <SodRuleForm features={features} onSaved={() => { setShowAdd(false); refetch(); }} />
+          </CardContent>
+        </Card>
+      )}
+
+      {editingRule && (
+        <Card className="border-2 border-primary/20">
+          <CardHeader className="pb-2"><CardTitle className="text-base">تعديل القاعدة: {editingRule.label_ar}</CardTitle></CardHeader>
+          <CardContent>
+            <SodRuleForm
+              features={features}
+              initial={editingRule}
+              onSaved={() => { setEditingRule(null); refetch(); }}
+              onCancel={() => setEditingRule(null)}
+            />
           </CardContent>
         </Card>
       )}
@@ -183,7 +202,10 @@ export function SodRulesTab() {
                   <Badge className="ms-1 text-xs bg-status-error-surface text-status-error-foreground">{offenders.length} منتهك</Badge>
                 )}
               </div>
-              <div className="col-span-1">
+              <div className="col-span-1 flex items-center">
+                <GuardedButton perm="admin:update" size="sm" variant="ghost" onClick={() => { setShowAdd(false); setEditingRule(r); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </GuardedButton>
                 <GuardedButton perm="admin:create" size="sm" variant="ghost" onClick={() => remove(r)}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </GuardedButton>
@@ -213,16 +235,42 @@ export function SodRulesTab() {
   );
 }
 
-function AddSodRuleForm({ features, onCreated }: { features: Feature[]; onCreated: () => void }) {
+function SodRuleForm({
+  features,
+  onSaved,
+  initial,
+  onCancel,
+}: {
+  features: Feature[];
+  onSaved: () => void;
+  initial?: SodRule;
+  onCancel?: () => void;
+}) {
   const { toast } = useToast();
+  const isEdit = !!initial;
 
   const submit = async (values: SodRuleForm) => {
     try {
-      await apiFetch("/rbac/v2/sod", { method: "POST", body: JSON.stringify(values) });
-      toast({ title: "تم إنشاء القاعدة" });
-      onCreated();
+      if (isEdit) {
+        // rule_key is immutable — the PATCH schema rejects it. Send only
+        // the editable fields.
+        const patch = {
+          labelAr: values.labelAr,
+          featureA: values.featureA,
+          actionA: values.actionA,
+          featureB: values.featureB,
+          actionB: values.actionB,
+          severity: values.severity,
+        };
+        await apiFetch(`/rbac/v2/sod/${initial!.id}`, { method: "PATCH", body: JSON.stringify(patch) });
+        toast({ title: "تم تحديث القاعدة" });
+      } else {
+        await apiFetch("/rbac/v2/sod", { method: "POST", body: JSON.stringify(values) });
+        toast({ title: "تم إنشاء القاعدة" });
+      }
+      onSaved();
     } catch (err: any) {
-      toast({ title: "فشل الإنشاء", description: err?.message || "خطأ", variant: "destructive" });
+      toast({ title: isEdit ? "فشل التحديث" : "فشل الإنشاء", description: err?.message || "خطأ", variant: "destructive" });
     }
   };
 
@@ -230,21 +278,21 @@ function AddSodRuleForm({ features, onCreated }: { features: Feature[]; onCreate
     <FormShell
       schema={sodRuleSchema}
       defaultValues={{
-        ruleKey: "",
-        labelAr: "",
-        featureA: "",
-        actionA: "",
-        featureB: "",
-        actionB: "",
-        severity: "high" as const,
+        ruleKey: initial?.rule_key ?? "",
+        labelAr: initial?.label_ar ?? "",
+        featureA: initial?.feature_a ?? "",
+        actionA: initial?.action_a ?? "",
+        featureB: initial?.feature_b ?? "",
+        actionB: initial?.action_b ?? "",
+        severity: initial?.severity ?? ("high" as const),
       }}
-      submitLabel="إنشاء"
+      submitLabel={isEdit ? "حفظ" : "إنشاء"}
       onSubmit={async (values) => {
         await submit(values);
       }}
     >
       <FormGrid cols={2}>
-        <FormTextField name="ruleKey" label="المفتاح" required placeholder="my_rule" />
+        <FormTextField name="ruleKey" label="المفتاح" required placeholder="my_rule" disabled={isEdit} />
         <FormTextField name="labelAr" label="الاسم بالعربية" required placeholder="اسم القاعدة" />
         <FormSelectField
           name="featureA"
@@ -282,6 +330,11 @@ function AddSodRuleForm({ features, onCreated }: { features: Feature[]; onCreate
           ]}
         />
       </div>
+      {onCancel && (
+        <div className="mt-3">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>إلغاء التعديل</Button>
+        </div>
+      )}
     </FormShell>
   );
 }

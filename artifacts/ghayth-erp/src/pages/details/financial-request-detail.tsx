@@ -3,7 +3,7 @@ import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
@@ -220,7 +220,7 @@ export default function FinancialRequestDetail() {
       hideTabs={hideTabs}
       actions={
         <>
-          <EntityPrintButton
+          <PrintButton
             entityType="purchase_request"
             entityId={item?.id ?? id}
            />

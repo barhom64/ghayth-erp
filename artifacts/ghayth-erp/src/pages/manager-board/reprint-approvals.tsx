@@ -32,7 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Check, X, AlertTriangle, Repeat } from "lucide-react";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 interface ReprintRequest {
   id: number;
@@ -128,98 +128,56 @@ export default function ReprintApprovalsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="text-sm text-muted-foreground p-4 text-center">جارٍ التحميل…</div>
-          ) : !data?.items?.length ? (
-            <div className="text-sm text-muted-foreground p-6 text-center">
-              {statusFilter === "pending"
-                ? "لا توجد طلبات إعادة طباعة قيد الانتظار."
-                : "لا توجد طلبات بهذه الحالة."}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-right p-2">التاريخ</th>
-                    <th className="text-right p-2">طالب الإصدار</th>
-                    <th className="text-right p-2">الوثيقة</th>
-                    <th className="text-right p-2">السبب</th>
-                    {statusFilter !== "pending" && (
-                      <th className="text-right p-2">معالجة بواسطة</th>
-                    )}
-                    <th className="text-right p-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.items.map((r) => (
-                    <tr key={r.id} className="border-t hover:bg-muted/30">
-                      <td className="p-2 whitespace-nowrap">
-                        {new Date(r.createdAt).toLocaleString("ar-SA")}
-                      </td>
-                      <td className="p-2">{r.requesterName ?? `#${r.requestedBy}`}</td>
-                      <td className="p-2 font-mono text-xs">
-                        {r.entityType}{" "}
-                        <span className="text-muted-foreground">#{r.entityId}</span>
-                      </td>
-                      <td className="p-2 max-w-md">
-                        <span className="line-clamp-2">{r.reason ?? "—"}</span>
-                      </td>
-                      {statusFilter !== "pending" && (
-                        <td className="p-2 text-xs text-muted-foreground">
-                          {r.approvedAt
-                            ? new Date(r.approvedAt).toLocaleDateString("ar-SA")
-                            : "—"}
-                          {r.rejectedReason && (
-                            <div className="text-status-error-foreground mt-1">
-                              <AlertTriangle className="inline h-3 w-3 me-1" />
-                              {r.rejectedReason}
-                            </div>
-                          )}
-                        </td>
+          {(() => {
+              const cols: DataTableColumn<ReprintRequest>[] = [
+                { key: "createdAt", header: "التاريخ", render: (r) => new Date(r.createdAt).toLocaleString("ar-SA") },
+                { key: "requesterName", header: "طالب الإصدار", render: (r) => r.requesterName ?? `#${r.requestedBy}` },
+                { key: "entityType", header: "الوثيقة", render: (r) => <span className="font-mono text-xs">{r.entityType} <span className="text-muted-foreground">#{r.entityId}</span></span> },
+                { key: "reason", header: "السبب", render: (r) => <span className="line-clamp-2">{r.reason ?? "—"}</span> },
+                ...(statusFilter !== "pending" ? [{
+                  key: "approvedAt" as const,
+                  header: "معالجة بواسطة",
+                  render: (r: ReprintRequest) => (
+                    <span className="text-xs text-muted-foreground">
+                      {r.approvedAt ? new Date(r.approvedAt).toLocaleDateString("ar-SA") : "—"}
+                      {r.rejectedReason && (
+                        <div className="text-status-error-foreground mt-1">
+                          <AlertTriangle className="inline h-3 w-3 me-1" />
+                          {r.rejectedReason}
+                        </div>
                       )}
-                      <td className="p-2 text-left whitespace-nowrap">
-                        {r.status === "pending" ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="gap-1"
-                              onClick={() => approve(r)}
-                              disabled={busyId === r.id}
-                            >
-                              <Check className="h-3 w-3" />
-                              موافقة
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="gap-1 me-1"
-                              onClick={() => setRejecting(r)}
-                              disabled={busyId === r.id}
-                            >
-                              <X className="h-3 w-3" />
-                              رفض
-                            </Button>
-                          </>
-                        ) : (
-                          <span
-                            className={
-                              r.status === "approved"
-                                ? "text-status-success-foreground text-xs"
-                                : "text-status-error-foreground text-xs"
-                            }
-                          >
-                            {r.status === "approved" ? "✓ معتمد" : "✗ مرفوض"}
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                    </span>
+                  ),
+                }] : []),
+                {
+                  key: "status", header: "", render: (r) => r.status === "pending" ? (
+                    <div className="flex gap-1 whitespace-nowrap">
+                      <Button size="sm" variant="default" className="gap-1" onClick={() => approve(r)} disabled={busyId === r.id}>
+                        <Check className="h-3 w-3" />موافقة
+                      </Button>
+                      <Button size="sm" variant="destructive" className="gap-1" onClick={() => setRejecting(r)} disabled={busyId === r.id}>
+                        <X className="h-3 w-3" />رفض
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className={r.status === "approved" ? "text-status-success-foreground text-xs" : "text-status-error-foreground text-xs"}>
+                      {r.status === "approved" ? "✓ معتمد" : "✗ مرفوض"}
+                    </span>
+                  ),
+                },
+              ];
+              return (
+                <DataTable<ReprintRequest>
+                  data={data?.items ?? []}
+                  rowKey={(r) => String(r.id)}
+                  columns={cols}
+                  noToolbar
+                  pageSize={0}
+                  isLoading={isLoading}
+                  emptyMessage={statusFilter === "pending" ? "لا توجد طلبات إعادة طباعة قيد الانتظار." : "لا توجد طلبات بهذه الحالة."}
+                />
+              );
+            })()}
         </CardContent>
       </Card>
 

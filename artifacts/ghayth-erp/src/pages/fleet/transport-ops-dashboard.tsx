@@ -74,7 +74,7 @@ const STATUS_LABEL: Record<string, string> = {
   notified: "تم الإبلاغ",
   accepted: "قَبِل",
   declined: "رفض",
-  executing: "جارٍ التنفيذ",
+  executing: "جاري التنفيذ",
   completed: "اكتمل",
   closed: "مغلق",
   cancelled: "ملغى",
@@ -192,16 +192,12 @@ export default function TransportOpsDashboard() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/fleet/transport/dispatch">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/dispatch">
               <Calendar className="h-4 w-4 me-1" />لوحة التوزيع
-            </Button>
-          </Link>
-          <Link href="/fleet/transport/bookings">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
               <ArrowLeft className="h-4 w-4 me-1" />العودة للحجوزات
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -453,7 +449,7 @@ export default function TransportOpsDashboard() {
                   rateLimitAware
                 >
                   <Wand2 className="h-3 w-3 me-1" />
-                  {planningAll ? "جارٍ التخطيط…" : "خطّط الكل"}
+                  {planningAll ? "جاري التخطيط…" : "خطّط الكل"}
                 </Button>
               )}
               <span className="ms-auto text-xs font-normal text-muted-foreground">

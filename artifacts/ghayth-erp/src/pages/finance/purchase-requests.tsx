@@ -230,11 +230,9 @@ export default function PurchaseRequestsPage() {
           )}
           {r.status === "approved" && (
             <>
-              <Link href={`/finance/purchase-orders/create?fromRequestId=${r.id}`}>
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-purple-700">
+              <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-purple-700"><Link href={`/finance/purchase-orders/create?fromRequestId=${r.id}`}>
                   <ArrowRight className="h-3 w-3 me-1" /> صفحة التحويل
-                </Button>
-              </Link>
+                </Link></Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -256,7 +254,7 @@ export default function PurchaseRequestsPage() {
   return (
     <PageShell
       title="طلبات الشراء (Purchase Requests)"
-      subtitle="purchase_requests — تدفّق طلب الشراء قبل إصدار أمر الشراء الرسمي. لكل طلب اعتماد ثم تحويل إلى PO."
+      subtitle="تدفّق طلب الشراء قبل إصدار أمر الشراء الرسمي — لكل طلب اعتماد ثم تحويل إلى أمر شراء"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/purchase-orders", label: "أوامر الشراء" },

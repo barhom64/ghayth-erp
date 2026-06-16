@@ -277,7 +277,7 @@ export default function VendorContractsPage() {
   return (
     <PageShell
       title="عقود الموردين"
-      subtitle="vendor_contracts — إدارة عقود الإطار مع الموردين، تواريخ النهاية، التنبيه قبل الانتهاء"
+      subtitle="إدارة عقود الإطار مع الموردين، تواريخ النهاية، والتنبيه قبل الانتهاء"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/vendors", label: "الموردون" },
@@ -285,16 +285,12 @@ export default function VendorContractsPage() {
       ]}
       actions={
         <>
-          <Link href="/finance/vendor-contracts-tracker">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/vendor-contracts-tracker">
               <FileText className="h-4 w-4 me-2" />متابعة العقود
-            </Button>
-          </Link>
-          <Link href="/finance/vendors">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/vendors">
               <Users className="h-4 w-4 me-2" />الموردون
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_vendor_contracts"
             entityId="list"
@@ -493,7 +489,7 @@ export default function VendorContractsPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">جارٍ التحميل...</p>
+              <p className="text-sm text-muted-foreground">جاري التحميل...</p>
             )}
           </DialogContent>
         </Dialog>

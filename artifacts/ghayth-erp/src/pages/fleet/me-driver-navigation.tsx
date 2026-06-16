@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { statusLabel } from "@/lib/transport-status-labels";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,24 +57,8 @@ interface NavigationSession {
   toLocationText: string | null;
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  active: "في الطريق",
-  arrived_pickup: "وصلت موقع التحميل",
-  loaded: "تم التحميل",
-  arrived_dropoff: "وصلت موقع التسليم",
-  delivered: "تم التسليم",
-  ended: "انتهت",
-  cancelled: "ملغاة",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  active: "bg-status-info-surface text-status-info-foreground",
-  arrived_pickup: "bg-purple-50 text-purple-700",
-  loaded: "bg-status-warning-surface text-status-warning-foreground",
-  arrived_dropoff: "bg-purple-50 text-purple-700",
-  delivered: "bg-status-success-surface text-status-success-foreground",
-  ended: "bg-surface-subtle text-muted-foreground",
-};
+// #TA-T18-UX-AUDIT-01 — حالات جلسة الملاحة من القاموس الموحّد
+// (lib/transport-status-labels، كيان "navigation") بدل خريطتين محليتين.
 
 const NEXT_EVENT: Record<string, { event: string; label: string; icon: typeof CheckCircle2 } | null> = {
   active:          { event: "arrived_pickup",  label: "وصلت موقع التحميل", icon: MapPin },
@@ -161,11 +146,9 @@ export default function MeDriverNavigation() {
         title="الملاحة"
         breadcrumbs={[{ href: "/me/driver", label: "السائق" }, { label: "الملاحة" }]}
         actions={
-          <Link href="/me/driver">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/me/driver">
               <ArrowLeft className="h-4 w-4 me-1" />العودة
-            </Button>
-          </Link>
+            </Link></Button>
         }
       >
         <Card>
@@ -232,11 +215,9 @@ export default function MeDriverNavigation() {
       subtitle={`حجز #${session.bookingNumber}`}
       breadcrumbs={[{ href: "/me/driver", label: "السائق" }, { label: "الملاحة" }]}
       actions={
-        <Link href="/me/driver">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/me/driver">
             <ArrowLeft className="h-4 w-4 me-1" />العودة
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       {/* Hero status card */}
@@ -244,8 +225,8 @@ export default function MeDriverNavigation() {
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-3">
             <Navigation className="h-5 w-5 text-status-info-foreground" />
-            <Badge className={STATUS_TONE[session.status] ?? ""}>
-              {STATUS_LABEL[session.status] ?? session.status}
+            <Badge className={statusLabel("navigation", session.status).tone}>
+              {statusLabel("navigation", session.status).label}
             </Badge>
             <span className="ms-auto text-xs text-muted-foreground">
               المزود: {session.provider}
@@ -269,9 +250,13 @@ export default function MeDriverNavigation() {
             </div>
           </div>
 
-          {/* In-app map placeholder. Phase 2 will mount a real Maps
-              widget here; for now we show a neutral panel + a deep
-              link to external navigation as the fallback. */}
+          {/* Maps Provider Adapter (owner brief 2026-06-15) — until the
+              in-app map widget lands (Phase 2), the primary action
+              for the driver is the "ابدأ الملاحة" button that opens
+              Google Maps directly. The deep link is keyless, so it
+              works whether or not a Google API key is configured on
+              the server. The driver never has to leave-and-search:
+              the destination is pre-filled. */}
           <div className="mt-3 rounded-md border-2 border-dashed border-status-info-foreground/30 bg-status-info-surface/30 p-6 text-center">
             <MapPin className="h-12 w-12 mx-auto text-status-info-foreground/40 mb-2" />
             <div className="text-sm text-muted-foreground">
@@ -282,16 +267,23 @@ export default function MeDriverNavigation() {
                 موقعك الحالي: {Number(session.lastLat).toFixed(5)}, {Number(session.lastLng).toFixed(5)}
               </div>
             )}
-            {externalLink && (
-              <a
-                href={externalLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 mt-3 text-xs text-status-info-foreground hover:underline"
+            {externalLink ? (
+              <Button
+                asChild
+                size="lg"
+                className="mt-4 w-full sm:w-auto"
+                data-testid="start-navigation-button"
               >
-                <ExternalLink className="h-3 w-3" />
-                فتح في خرائط Google (احتياطي)
-              </a>
+                <a href={externalLink} target="_blank" rel="noreferrer">
+                  <Navigation className="h-5 w-5 me-2" />
+                  ابدأ الملاحة
+                  <ExternalLink className="h-3 w-3 ms-2 opacity-70" />
+                </a>
+              </Button>
+            ) : (
+              <div className="mt-4 text-xs text-muted-foreground">
+                إحداثيات الوجهة غير متوفرة — راجع التحكم لتثبيت الإحداثيات على الحجز.
+              </div>
             )}
           </div>
 
@@ -314,7 +306,7 @@ export default function MeDriverNavigation() {
             {next ? (
               <Button onClick={advance} disabled={advancing} className="flex-1" size="lg" rateLimitAware>
                 {(() => { const Icon = next.icon; return <Icon className="h-5 w-5 me-2" />; })()}
-                {advancing ? "جارٍ التحديث…" : next.label}
+                {advancing ? "جاري التحديث…" : next.label}
               </Button>
             ) : !isFinished ? (
               <Button onClick={complete} size="lg" className="flex-1" rateLimitAware>

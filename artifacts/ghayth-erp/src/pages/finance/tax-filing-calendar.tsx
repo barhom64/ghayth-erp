@@ -1,3 +1,7 @@
+/**
+ * GAP_MATRIX P2 — Pure-frontend tax-filing calendar. Static content with
+ * Saudi fiscal year deadlines; makes no API calls. Intentional.
+ */
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";
@@ -206,24 +210,18 @@ export default function TaxFilingCalendarPage() {
       subtitle="مواعيد إقرارات ZATCA + GOSI خلال السنة — لا تفوّت أي موعد"
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/vat-filing-readiness">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/vat-filing-readiness">
               <FileCheck2 className="h-3.5 w-3.5 ml-1" />
               جاهزية VAT
-            </Button>
-          </Link>
-          <Link href="/finance/wht-filing-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/wht-filing-workbench">
               <Receipt className="h-3.5 w-3.5 ml-1" />
               منضدة WHT
-            </Button>
-          </Link>
-          <Link href="/finance/reports/zatca">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/zatca">
               <Building2 className="h-3.5 w-3.5 ml-1" />
               تقارير ZATCA
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_tax_filing_calendar"
             entityId="list"
@@ -328,10 +326,10 @@ export default function TaxFilingCalendarPage() {
             <div>
               <div className="font-semibold mb-1">المواعيد القانونية:</div>
               <ul className="space-y-0.5 text-muted-foreground">
-                <li>• <strong>VAT (شهري)</strong>: آخر يوم من الشهر التالي للفترة الضريبية</li>
-                <li>• <strong>VAT (ربعي)</strong>: آخر يوم من الشهر التالي لنهاية الربع</li>
-                <li>• <strong>WHT</strong>: اليوم 10 من الشهر التالي</li>
-                <li>• <strong>GOSI</strong>: اليوم 15 من الشهر التالي</li>
+                <li>• <strong>القيمة المضافة (شهري)</strong>: آخر يوم من الشهر التالي للفترة الضريبية</li>
+                <li>• <strong>القيمة المضافة (ربعي)</strong>: آخر يوم من الشهر التالي لنهاية الربع</li>
+                <li>• <strong>ضريبة الاستقطاع (WHT)</strong>: اليوم 10 من الشهر التالي</li>
+                <li>• <strong>التأمينات الاجتماعية (GOSI)</strong>: اليوم 15 من الشهر التالي</li>
                 <li>• <strong>الزكاة وضريبة الدخل</strong>: 30 أبريل من السنة التالية</li>
               </ul>
             </div>

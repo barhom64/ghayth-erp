@@ -15,7 +15,7 @@ import {
   PageStatusBadge,
   DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
-import { Package, MapPin, Plus, Trash2 } from "lucide-react";
+import { Package, MapPin, Plus, Trash2, Pencil } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -102,6 +102,8 @@ export default function CargoDetail() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [showAddItem, setShowAddItem] = useState(false);
+  const [editingItem, setEditingItem] = useState<CargoItem | null>(null);
+  const [editItemDraft, setEditItemDraft] = useState({ description: "", quantity: 1, weight: 0, declaredValue: 0 });
   const [itemDraft, setItemDraft] = useState({
     description: "", quantity: 1, weight: 0, declaredValue: 0, isHazmat: false, hazmatClass: "",
   });
@@ -146,6 +148,26 @@ export default function CargoDetail() {
     }
   };
 
+  const saveItemEdit = async () => {
+    if (!editingItem) return;
+    try {
+      await apiFetch(`/cargo/items/${editingItem.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          description: editItemDraft.description,
+          quantity: editItemDraft.quantity,
+          weight: editItemDraft.weight,
+          declaredValue: editItemDraft.declaredValue,
+        }),
+      });
+      toast({ title: "تم تحديث الصنف" });
+      setEditingItem(null);
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل التحديث", description: err?.message || "" });
+    }
+  };
+
   const removeItem = async (itemId: number) => {
     try {
       await apiFetch(`/cargo/items/${itemId}`, { method: "DELETE" });
@@ -173,15 +195,28 @@ export default function CargoDetail() {
       key: "actions",
       header: "",
       render: (i) => (
-        <GuardedButton
-          perm="fleet.cargo:update"
-          variant="ghost"
-          size="sm"
-          onClick={() => removeItem(i.id)}
-          title="حذف الصنف"
-        >
-          <Trash2 className="h-4 w-4 text-rose-600" />
-        </GuardedButton>
+        <div className="flex gap-1">
+          <GuardedButton
+            perm="fleet.cargo:update"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => { setEditingItem(i); setEditItemDraft({ description: i.description, quantity: i.quantity, weight: Number(i.weight), declaredValue: Number(i.declaredValue) }); }}
+            title="تعديل الصنف"
+          >
+            <Pencil className="h-3 w-3" />
+          </GuardedButton>
+          <GuardedButton
+            perm="fleet.cargo:update"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => removeItem(i.id)}
+            title="حذف الصنف"
+          >
+            <Trash2 className="h-4 w-4 text-rose-600" />
+          </GuardedButton>
+        </div>
       ),
     },
   ];
@@ -214,11 +249,9 @@ export default function CargoDetail() {
             </SelectContent>
           </Select>
           {m.fleetTripId && (
-            <Link href={`/fleet/trips/${m.fleetTripId}`}>
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href={`/fleet/trips/${m.fleetTripId}`}>
                 <MapPin className="h-4 w-4 me-1" />الرحلة #{m.fleetTripId}
-              </Button>
-            </Link>
+              </Link></Button>
           )}
           <GuardedButton
             perm="fleet.cargo:delete"
@@ -340,6 +373,39 @@ export default function CargoDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Item edit modal */}
+      {editingItem && (
+        <Dialog open onOpenChange={() => setEditingItem(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader><DialogTitle>تعديل الصنف</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>الوصف *</Label>
+                <Input value={editItemDraft.description} onChange={e => setEditItemDraft(d => ({ ...d, description: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label>الكمية</Label>
+                  <Input type="number" value={editItemDraft.quantity} onChange={e => setEditItemDraft(d => ({ ...d, quantity: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label>الوزن (كغ)</Label>
+                  <Input type="number" value={editItemDraft.weight} onChange={e => setEditItemDraft(d => ({ ...d, weight: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label>القيمة المُصرَّح بها</Label>
+                  <Input type="number" value={editItemDraft.declaredValue} onChange={e => setEditItemDraft(d => ({ ...d, declaredValue: Number(e.target.value) }))} />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingItem(null)}>إلغاء</Button>
+              <Button onClick={saveItemEdit} disabled={!editItemDraft.description.trim()}>حفظ</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </PageShell>
   );
 }

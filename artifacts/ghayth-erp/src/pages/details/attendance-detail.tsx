@@ -7,7 +7,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Clock, MapPin, AlertTriangle } from "lucide-react";
@@ -237,7 +237,7 @@ export default function AttendanceDetail() {
       actions={
         <>
           {record && (
-            <EntityPrintButton
+            <PrintButton
               entityType="attendance"
               entityId={id ?? 0}
              />

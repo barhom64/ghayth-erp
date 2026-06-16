@@ -154,11 +154,9 @@ export default function AllocationRulesPage() {
     { key: "_actions", header: "إجراءات",
       render: (r) => (
         <div className="flex items-center gap-1">
-          <Link href={`/finance/allocation-rules/${r.id}/edit`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة">
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="تعديل القاعدة"><Link href={`/finance/allocation-rules/${r.id}/edit`}>
               <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link></Button>
           <RowActions
             onDelete={() => ruleActions.startDelete(r.id)}
             canEdit={false}
@@ -171,7 +169,7 @@ export default function AllocationRulesPage() {
   return (
     <PageShell
       title="قواعد التوجيه المحاسبي"
-      subtitle="accounting_allocation_rules — تحدد كيف يتم توجيه كل بند مالي إلى حسابه ومركز تكلفته وكيانه التشغيلي تلقائياً (Phase 6)"
+      subtitle="قواعد التوجيه المحاسبي — تحدد كيف يُوجَّه كل بند مالي إلى حسابه ومركز تكلفته وكيانه التشغيلي تلقائياً"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/accounts", label: "الحسابات" },

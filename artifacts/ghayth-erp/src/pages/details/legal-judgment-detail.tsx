@@ -8,7 +8,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import {
   FormGrid,
@@ -250,7 +250,7 @@ export default function LegalJudgmentDetail() {
       actions={
         <>
           {judgment && (
-            <EntityPrintButton
+            <PrintButton
               entityType="legal_judgment"
               entityId={id ?? 0}
              />

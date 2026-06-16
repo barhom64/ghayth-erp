@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatUmrahDate } from "@/lib/formatters";
-import { Paperclip, ExternalLink, Search } from "lucide-react";
+import { Paperclip, Download, Search } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
 
 // Standalone /umrah/attachments page — surfaces every row from
@@ -108,18 +108,26 @@ export default function UmrahAttachmentsPage() {
     { key: "type", header: "النوع", render: (a) => TYPE_LABEL[a.type] || a.type },
     { key: "title", header: "العنوان", render: (a) => <span className="font-medium">{a.title}</span> },
     {
-      key: "fileUrl",
+      // U-16-P1 — server-mediated download.
+      //
+      // The old renderer linked directly to `a.fileUrl` (raw cloud URL),
+      // bypassing the server's ACL check, document_access_log write,
+      // companyId tenant guard, X-Content-Type-Options: nosniff header,
+      // and soft-delete check. The /api/documents/:id/download route
+      // wraps all of those. Same pattern used by the shared
+      // documents-page.tsx (line 202-203).
+      key: "download",
       header: "الملف",
       render: (a) =>
-        a.fileUrl ? (
-          <a
-            href={a.fileUrl}
-            target="_blank"
-            rel="noreferrer"
+        a.storageKey ? (
+          <button
+            type="button"
+            onClick={() => window.open(`/api/documents/${a.id}/download`, "_blank")}
             className="inline-flex items-center gap-1 text-status-info-foreground hover:underline"
+            aria-label="تحميل المرفق"
           >
-            <ExternalLink className="h-3.5 w-3.5" /> فتح
-          </a>
+            <Download className="h-3.5 w-3.5" /> تحميل
+          </button>
         ) : (
           <span className="text-muted-foreground text-xs">—</span>
         ),

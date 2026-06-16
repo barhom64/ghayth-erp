@@ -72,7 +72,12 @@ describe("umrahInternalNotifications — three documented helpers", () => {
 describe("cron handlers route through the internal helpers, not SMS", () => {
   it("visa expiry cron imports notifyInternalVisaExpiring (not notifyVisaExpiringSoon)", () => {
     // The legacy SMS import is gone; the internal helper takes over.
-    expect(CRON).toMatch(/notifyInternalVisaExpiring \} = await import\("\.\/umrahInternalNotifications\.js"\)/);
+    // U-17-P4 added a sibling import for resolveInternalRecipients in
+    // the same destructure, so the regex tolerates an optional
+    // comma-separated second binding before the closing brace.
+    expect(CRON).toMatch(
+      /notifyInternalVisaExpiring(?:,\s*\w+)?\s*\} = await import\("\.\/umrahInternalNotifications\.js"\)/,
+    );
   });
 
   it("departure cron renamed: umrah_departure_reminder_notify (no _sms)", () => {
@@ -98,7 +103,7 @@ describe("POST /umrah/notifications/test", () => {
     expect(ROUTE).toMatch(/router\.post\("\/notifications\/test"/);
     // No phone input — the test target is the caller's own
     // employee_assignment.
-    expect(ROUTE).toMatch(/SELECT ea\.id FROM employee_assignments ea[\s\S]{0,200}ea\."userId" = \$1/);
+    expect(ROUTE).toMatch(/SELECT ea\.id FROM employee_assignments ea[\s\S]{0,200}u\.id = \$1/);
     expect(ROUTE).toMatch(/createNotification \} = await import\("\.\.\/lib\/businessHelpers\.js"\)/);
     expect(ROUTE).toMatch(/title: "🔔 إشعار تجريبي من نظام العمرة"/);
   });

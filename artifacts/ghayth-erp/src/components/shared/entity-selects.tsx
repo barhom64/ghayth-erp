@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { z } from "zod";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -71,7 +71,14 @@ function QuickCreateDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>إلغاء</Button>
           }
           onSubmit={(values) => {
-            createMut.mutate(values, {
+            // #2134 — drop untouched optional fields instead of sending "".
+            // The backend zod schemas validate present values strictly (an
+            // empty-string email fails z.email()), so a quick-create with
+            // «البريد» left blank 422'd and the entity silently never existed.
+            const payload = Object.fromEntries(
+              Object.entries(values).filter(([, v]) => String(v ?? "").trim() !== "")
+            );
+            createMut.mutate(payload, {
               onSuccess: (data: any) => {
                 onCreated?.(data);
                 onOpenChange(false);
@@ -173,6 +180,37 @@ interface EntitySelectConfig {
   getName: (row: any) => string;
   getSublabel?: (row: any) => string;
   getValueField?: string;
+  /**
+   * #2134 — when set, typing in the dropdown also queries the endpoint with
+   * `&search=...` (server-side) and merges the matches into the options. The
+   * preloaded list is capped (e.g. /clients?limit=500 sorted by name), so an
+   * entity beyond that window — like a freshly added client — was invisible
+   * AND unfindable, since cmdk only filters what's already loaded.
+   */
+  serverSearch?: boolean;
+}
+
+/**
+ * Merge picker options from the three sources, deduped by value, in priority
+ * order: just-created entities first (they must appear instantly, before any
+ * refetch lands — #2134 acceptance), then the preloaded window, then
+ * server-side search matches. Pure — unit-tested in entity-selects.test.tsx.
+ */
+export function mergeEntityOptions(
+  created: SelectOption[],
+  base: SelectOption[],
+  searchResults: SelectOption[],
+): SelectOption[] {
+  const seen = new Set<string>();
+  const out: SelectOption[] = [];
+  for (const list of [created, base, searchResults]) {
+    for (const o of list) {
+      if (!o.value || seen.has(o.value)) continue;
+      seen.add(o.value);
+      out.push(o);
+    }
+  }
+  return out;
 }
 
 interface EntitySelectProps {
@@ -200,19 +238,44 @@ function buildEntitySelect(config: EntitySelectConfig) {
     filter,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
+    // #2134 — entities created from «+ جديد» are appended locally so they
+    // show (and stay selected) the instant the dialog closes, independent of
+    // the list refetch round-trip or the 500-row preload window.
+    const [createdOptions, setCreatedOptions] = useState<SelectOption[]>([]);
+    const [searchText, setSearchText] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+    useEffect(() => {
+      const t = setTimeout(() => setDebouncedSearch(searchText.trim()), 250);
+      return () => clearTimeout(t);
+    }, [searchText]);
+
     const { data, refetch } = useApiQuery<{ data: any[] }>([config.queryKey], config.endpoint);
+    // #2134 — server-side search companion query: the preloaded list is a
+    // capped window, so typing also asks the server (same scope injection,
+    // same company filters) and the matches are merged in below.
+    const searchActive = !!config.serverSearch && debouncedSearch.length >= 2;
+    const searchPath = searchActive
+      ? `${config.endpoint}${config.endpoint.includes("?") ? "&" : "?"}search=${encodeURIComponent(debouncedSearch)}`
+      : null;
+    const { data: searchData } = useApiQuery<{ data: any[] }>(
+      [`${config.queryKey}-search`, debouncedSearch],
+      searchPath,
+      { enabled: searchActive },
+    );
+
     let rows = data?.data || [];
     if (filter) rows = rows.filter(filter);
+    let searchRows = searchData?.data || [];
+    if (filter) searchRows = searchRows.filter(filter);
 
-    const options = useMemo(
-      () =>
-        rows.map((r: any) => ({
-          value: String(r[config.getValueField || "id"]),
-          label: config.getName(r),
-          sublabel: config.getSublabel?.(r),
-        })),
-      [rows]
-    );
+    const options = useMemo(() => {
+      const toOption = (r: any): SelectOption => ({
+        value: String(r[config.getValueField || "id"]),
+        label: config.getName(r),
+        sublabel: config.getSublabel?.(r),
+      });
+      return mergeEntityOptions(createdOptions, rows.map(toOption), searchRows.map(toOption));
+    }, [rows, searchRows, createdOptions]);
 
     return (
       <>
@@ -229,6 +292,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           fieldClassName={className}
           onCreateNew={allowCreate ? () => setShowCreate(true) : undefined}
           createNewLabel={config.createLabel}
+          onSearchChange={config.serverSearch ? setSearchText : undefined}
         />
         {allowCreate && (
           <QuickCreateDialog
@@ -239,8 +303,15 @@ function buildEntitySelect(config: EntitySelectConfig) {
             apiPath={config.createApiPath}
             invalidateKey={config.queryKey}
             onCreated={(res) => {
-              const newId = String(res?.id || res?.data?.id || "");
-              if (newId) onChange(newId);
+              const row = res?.data && res.data.id ? res.data : res;
+              const newId = String(row?.id || "");
+              if (newId) {
+                setCreatedOptions((prev) => mergeEntityOptions(
+                  [{ value: newId, label: config.getName(row), sublabel: config.getSublabel?.(row) }],
+                  prev, [],
+                ));
+                onChange(newId);
+              }
               refetch();
             }}
           />
@@ -271,6 +342,10 @@ export const EmployeeSelect = buildEntitySelect({
 export const ClientSelect = buildEntitySelect({
   queryKey: "clients-list",
   endpoint: "/clients?limit=500",
+  // #2134 — the client master can exceed the 500-row preload window (sorted
+  // by name), making a newly added client invisible and unfindable in the
+  // invoice form. GET /clients supports ?search= over name/email/phone.
+  serverSearch: true,
   defaultLabel: "العميل",
   defaultPlaceholder: "اختر العميل",
   searchPlaceholder: "ابحث عن عميل...",
@@ -465,4 +540,137 @@ export const VehicleSelect = buildEntitySelect({
   ],
   getName: (r) => r?.plateNumber ? `${r.plateNumber}${r.make ? ` - ${r.make}` : ""}` : `#${r?.id}`,
   getSublabel: (r) => r?.model || "",
+});
+
+// HR-Wave-0/0.4 — JobTitleSelect: master-data picker for hr.job_titles.
+// The inline `<Select>` in employees-create.tsx (line ~565) hand-rolls
+// the same data source; once that form moves to the canonical scaffold
+// it will use this picker. allowCreate=true lets HR coin a new title
+// from inside the employee form without leaving the page, which the
+// mandate's «نمط الإنشاء الداخلي الموحّد» rule requires. Backend
+// endpoint is POST /employees/job-titles (authorize hr.employees:create).
+export const JobTitleSelect = buildEntitySelect({
+  queryKey: "job-titles-list",
+  endpoint: "/employees/job-titles",
+  defaultLabel: "المسمى الوظيفي",
+  defaultPlaceholder: "اختر المسمى الوظيفي",
+  searchPlaceholder: "ابحث عن مسمى وظيفي...",
+  createTitle: "إضافة مسمى وظيفي جديد",
+  createLabel: "+ مسمى وظيفي جديد",
+  createApiPath: "/employees/job-titles",
+  createFields: [
+    { key: "name", label: "اسم المسمى", required: true },
+    { key: "category", label: "الفئة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.defaultRoleKey || r?.category || "",
+});
+
+// HR-Wave-0/0.4 — CostCenterMasterSelect: master-data picker for the
+// `cost_centers` table (real CC id/code/name). Distinct from the
+// legacy `CostCenterSelect` above, which composes synthetic «فرع/قسم/مشروع»
+// labels for forms that still store free-text cost-center tags.
+// Used by payroll/expense/advance forms to bind HR-touching financial
+// movements to a cost center. allowCreate=true lets finance open a
+// missing center from inside the form. Backend endpoint is POST
+// /finance/cost-centers (authorize finance.cost_centers:create).
+export const CostCenterMasterSelect = buildEntitySelect({
+  queryKey: "cost-centers-list",
+  endpoint: "/finance/cost-centers?limit=500",
+  defaultLabel: "مركز التكلفة",
+  defaultPlaceholder: "اختر مركز التكلفة",
+  searchPlaceholder: "ابحث عن مركز تكلفة (اسم أو رمز)...",
+  createTitle: "إضافة مركز تكلفة جديد",
+  createLabel: "+ مركز تكلفة جديد",
+  createApiPath: "/finance/cost-centers",
+  createFields: [
+    { key: "code", label: "رمز المركز", required: true },
+    { key: "name", label: "اسم المركز", required: true },
+  ],
+  getName: (r) => r?.name ? `${r.code ?? ""}${r.code ? " - " : ""}${r.name}` : r?.code || `#${r?.id}`,
+  getSublabel: (r) => r?.type || "",
+});
+
+// PR-1 (#2077) — PositionSelect: master-data picker for `positions`
+// (institutional matrix). The new-employee wizard binds the user via
+// `employee_assignments.positionId`. Backend: /org/positions.
+export const PositionSelect = buildEntitySelect({
+  queryKey: "positions-list",
+  endpoint: "/org/positions",
+  defaultLabel: "المنصب الإداري",
+  defaultPlaceholder: "اختر المنصب",
+  searchPlaceholder: "ابحث عن منصب...",
+  createTitle: "إضافة منصب جديد",
+  createLabel: "+ منصب جديد",
+  createApiPath: "/org/positions",
+  createFields: [
+    { key: "positionKey", label: "مفتاح المنصب", required: true },
+    { key: "labelAr", label: "الاسم بالعربية", required: true },
+  ],
+  getName: (r) => r?.labelAr || r?.labelEn || r?.positionKey || `#${r?.id}`,
+  getSublabel: (r) => r?.level != null ? `مستوى ${r.level}` : "",
+});
+
+// PR-1 (#2077) — TeamSelect: master-data picker for `teams` (sub-unit
+// within a department). The wizard binds the new employee to one team
+// via `employee_team_memberships`. Backend: /org/teams.
+export const TeamSelect = buildEntitySelect({
+  queryKey: "teams-list",
+  endpoint: "/org/teams",
+  defaultLabel: "الفريق",
+  defaultPlaceholder: "اختر الفريق",
+  searchPlaceholder: "ابحث عن فريق...",
+  createTitle: "إضافة فريق جديد",
+  createLabel: "+ فريق جديد",
+  createApiPath: "/org/teams",
+  createFields: [
+    { key: "name", label: "اسم الفريق", required: true },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.departmentName || "",
+});
+
+// PR-1 (#2077) — CommitteeSelect: master-data picker for `committees`
+// (cross-department, time-bounded). Optional binding via
+// `employee_committee_memberships`. Backend: /org/committees.
+export const CommitteeSelect = buildEntitySelect({
+  queryKey: "committees-list",
+  endpoint: "/org/committees",
+  defaultLabel: "اللجنة",
+  defaultPlaceholder: "اختر اللجنة",
+  searchPlaceholder: "ابحث عن لجنة...",
+  createTitle: "إضافة لجنة جديدة",
+  createLabel: "+ لجنة جديدة",
+  createApiPath: "/org/committees",
+  createFields: [
+    { key: "name", label: "اسم اللجنة", required: true },
+    { key: "type", label: "نوع اللجنة", required: true },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.type || "",
+});
+
+// PR-1 (#2077) — EmployeeCategorySelect: master-data picker for
+// `employee_categories` (workforce type: worker / driver / manager …).
+// Binds via `employee_assignments.categoryKey` (VARCHAR(40)), NOT the
+// id, since the per-category attendance policy keys off the string key.
+// Backend: /org/employee-categories. Quick-create disabled here — the
+// 6 system categories are seeded by migration 270 and a per-company
+// override needs a richer form than what the QuickCreateDialog offers.
+export const EmployeeCategorySelect = buildEntitySelect({
+  queryKey: "employee-categories-list",
+  endpoint: "/org/employee-categories",
+  defaultLabel: "فئة الموظف",
+  defaultPlaceholder: "اختر الفئة",
+  searchPlaceholder: "ابحث عن فئة...",
+  createTitle: "إضافة فئة موظفين",
+  createLabel: "+ فئة جديدة",
+  createApiPath: "/org/employee-categories",
+  createFields: [
+    { key: "categoryKey", label: "مفتاح الفئة", required: true },
+    { key: "labelAr", label: "الاسم بالعربية", required: true },
+  ],
+  getValueField: "categoryKey",
+  getName: (r) => r?.labelAr || r?.labelEn || r?.categoryKey || `#${r?.id}`,
+  getSublabel: (r) => r?.exemptFromAutoDeduction ? "مُعفاة من الخصم التلقائي" : "",
 });

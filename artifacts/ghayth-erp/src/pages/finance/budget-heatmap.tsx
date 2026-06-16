@@ -162,24 +162,18 @@ export default function BudgetHeatmapPage() {
       subtitle="استخدام الميزانية شهرياً × بنداً — ألوان فورية تكشف نقاط الانفجار"
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/reports/is-vs-budget">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/is-vs-budget">
               <TrendingUp className="h-3.5 w-3.5 ml-1" />
               P&L vs Budget
-            </Button>
-          </Link>
-          <Link href="/finance/budget-variance">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/budget-variance">
               <TrendingDown className="h-3.5 w-3.5 ml-1" />
               انحرافات الميزانية
-            </Button>
-          </Link>
-          <Link href="/finance/budget-approvals">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/budget-approvals">
               <AlertTriangle className="h-3.5 w-3.5 ml-1" />
               اعتماد الميزانية
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >

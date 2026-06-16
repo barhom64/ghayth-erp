@@ -112,9 +112,7 @@ export default function Evaluation360UpwardPage() {
         <h2 className="text-2xl font-bold text-status-success-foreground">تم الإرسال بنجاح</h2>
         <p className="text-muted-foreground">تم إرسال تقييمك العكسي بشكل سري تام. لن يعرف أحد هويتك.</p>
         <p className="text-sm text-muted-foreground">تُعرض النتائج فقط كمتوسط مجمّع عند وجود 3 تقييمات أو أكثر</p>
-        <Link href={`/hr/evaluation-360/${cycleId}`}>
-          <Button>العودة إلى الدورة</Button>
-        </Link>
+        <Button asChild><Link href={`/hr/evaluation-360/${cycleId}`}>العودة إلى الدورة</Link></Button>
       </div>
     );
   }
@@ -125,9 +123,7 @@ export default function Evaluation360UpwardPage() {
       subtitle={cycle ? `دورة تقييم: ${cycle.period}` : undefined}
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "التقييم العكسي السري" }]}
       actions={
-        <Link href={`/hr/evaluation-360/${cycleId}`}>
-          <Button variant="ghost" size="sm"><ArrowRight className="w-4 h-4 me-1" />عودة</Button>
-        </Link>
+        <Button asChild variant="ghost" size="sm"><Link href={`/hr/evaluation-360/${cycleId}`}><ArrowRight className="w-4 h-4 me-1" />عودة</Link></Button>
       }
     >
       <HrTabsNav />
@@ -220,9 +216,7 @@ export default function Evaluation360UpwardPage() {
       </Card>
 
       <div className="flex gap-3 justify-end">
-        <Link href={`/hr/evaluation-360/${cycleId}`}>
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+        <Button asChild variant="outline"><Link href={`/hr/evaluation-360/${cycleId}`}>إلغاء</Link></Button>
         <GuardedButton
           perm="hr:create"
           onClick={handleSubmit}
@@ -231,7 +225,7 @@ export default function Evaluation360UpwardPage() {
           rateLimitAware
         >
           <Shield className="w-4 h-4 me-1" />
-          {submitMutation.isPending ? "جارٍ الإرسال..." : "إرسال بشكل سري"}
+          {submitMutation.isPending ? "جاري الإرسال..." : "إرسال بشكل سري"}
         </GuardedButton>
       </div>
     </PageShell>

@@ -99,6 +99,18 @@ export default function CargoCreate() {
       toast({ variant: "destructive", title: "رقم البوليصة مطلوب" });
       return;
     }
+    // #1812 Wave 0.2 — manifest must link a structured CRM customer.
+    // Backend's createManifestSchema rejects free-text customerName
+    // without customerId; surface that here so the user gets a clear
+    // message instead of a 400.
+    if (!form.customerId) {
+      toast({
+        variant: "destructive",
+        title: "اختر العميل من السجل (CRM)",
+        description: "بوليصة الشحن لا تُنشأ بدون عميل منظَّم. اسم العميل النصّي وحده غير مقبول.",
+      });
+      return;
+    }
     setSubmitting(true);
     try {
       const manifestPayload: Record<string, any> = {
@@ -187,26 +199,50 @@ export default function CargoCreate() {
             <Label>رقم البوليصة *</Label>
             <Input value={form.manifestNumber} onChange={(e) => setForm({ ...form, manifestNumber: e.target.value })} placeholder="BL-2026-001" />
           </div>
-          <div>
-            <Label>العميل (CRM)</Label>
-            <Select value={form.customerId || "none"} onValueChange={(v) => setForm({ ...form, customerId: v === "none" ? "" : v })}>
-              <SelectTrigger><SelectValue placeholder="اختر عميل…" /></SelectTrigger>
+          <div className="md:col-span-2">
+            <Label>العميل (CRM) *</Label>
+            <Select
+              value={form.customerId || "none"}
+              onValueChange={(v) => {
+                if (v === "none") {
+                  setForm({ ...form, customerId: "", customerName: "", customerPhone: "" });
+                  return;
+                }
+                const c = clients.find((x) => String(x.id) === v);
+                setForm({
+                  ...form,
+                  customerId: v,
+                  customerName: c?.name ?? "",
+                  customerPhone: c?.phone ?? "",
+                });
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="اختر العميل من السجل…" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">بدون</SelectItem>
+                <SelectItem value="none">— اختر —</SelectItem>
                 {clients.map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {!form.customerId && (
+              <p className="text-xs text-rose-700 mt-1">
+                بوليصة الشحن لا تُنشأ بدون عميل من CRM. اسم العميل النصّي وحده غير مقبول.
+              </p>
+            )}
           </div>
-          <div>
-            <Label>أو اسم العميل يدوياً</Label>
-            <Input value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} placeholder="إن لم يكن في CRM" />
-          </div>
-          <div>
-            <Label>هاتف العميل</Label>
-            <Input value={form.customerPhone} onChange={(e) => setForm({ ...form, customerPhone: e.target.value })} placeholder="+9665XXXXXXXX" />
-          </div>
+          {form.customerId && (
+            <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-surface-subtle rounded-md p-2">
+              <div>
+                <Label className="text-xs text-muted-foreground">اسم العميل (من CRM)</Label>
+                <p className="font-medium">{form.customerName || "—"}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">جوال العميل</Label>
+                <p className="font-mono text-sm">{form.customerPhone || "—"}</p>
+              </div>
+            </div>
+          )}
           <div>
             <Label>من</Label>
             <Input value={form.fromLocation} onChange={(e) => setForm({ ...form, fromLocation: e.target.value })} placeholder="جدة" />
@@ -321,8 +357,8 @@ export default function CargoCreate() {
       </Card>
 
       <div className="mt-4 flex justify-end gap-2">
-        <Link href="/fleet/cargo"><Button variant="outline">إلغاء</Button></Link>
-        <Button rateLimitAware onClick={submit} disabled={submitting || !form.manifestNumber.trim()}>
+        <Button asChild variant="outline"><Link href="/fleet/cargo">إلغاء</Link></Button>
+        <Button rateLimitAware onClick={submit} disabled={submitting || !form.manifestNumber.trim() || !form.customerId}>
           <Save className="h-4 w-4 me-1" />
           {submitting ? "جاري الحفظ…" : "حفظ البوليصة"}
         </Button>

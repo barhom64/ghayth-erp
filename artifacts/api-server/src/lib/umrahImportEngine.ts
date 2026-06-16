@@ -5,6 +5,7 @@ import { ValidationError } from "./errorHandler.js";
 import type pg from "pg";
 import { logger } from "./logger.js";
 import { encryptField, blindIndex } from "./fieldEncryption.js";
+import { resolveSettings } from "./settings.js";
 
 // ---------------------------------------------------------------------------
 // Arabic header → DB column mapping
@@ -24,9 +25,21 @@ export const MUTAMER_HEADER_MAP: Record<string, string> = {
   "رقم المجموعة": "nuskGroupNumber",
   "اسم المجموعة": "groupName",
   "رقم الوكيل": "nuskAgentNumber",
+  "رقم الوكيل الرئيسي": "nuskAgentNumber",
+  "كود الوكيل": "nuskAgentNumber",
+  "رمز الوكيل": "nuskAgentNumber",
   "اسم الوكيل": "agentName",
+  "الوكيل": "agentName",
+  "الوكيل الرئيسي": "agentName",
+  "اسم الوكيل الرئيسي": "agentName",
   "رمز المكتب": "nuskCode",
+  "كود المكتب": "nuskCode",
+  "رمز الوكيل الفرعي": "nuskCode",
+  "كود الوكيل الفرعي": "nuskCode",
   "اسم المكتب": "subAgentName",
+  "المكتب": "subAgentName",
+  "الوكيل الفرعي": "subAgentName",
+  "اسم الوكيل الفرعي": "subAgentName",
   "الحالة": "status",
   "تاريخ الدخول": "entryDate",
   "تاريخ الخروج": "exitDate",
@@ -50,6 +63,11 @@ export const VOUCHER_HEADER_MAP: Record<string, string> = {
   "رقم المجموعة": "nuskGroupNumber",
   "اسم المجموعة": "groupName",
   "عدد المعتمرين": "mutamerCount",
+  "إجمالي المعتمرين": "mutamerCount",
+  "اجمالي المعتمرين": "mutamerCount",
+  "عدد المعتمرين في الفاتورة": "mutamerCount",
+  "عدد الحجاج": "mutamerCount",
+  "العدد": "mutamerCount",
   "خدمات أرضية": "groundServices",
   "رسوم إلكترونية": "electronicFees",
   "رسوم التأشيرة": "visaFees",
@@ -68,9 +86,21 @@ export const VOUCHER_HEADER_MAP: Record<string, string> = {
   "تاريخ الانتهاء": "expiryDate",
   "مدة البرنامج": "programDuration",
   "رقم الوكيل": "nuskAgentNumber",
+  "رقم الوكيل الرئيسي": "nuskAgentNumber",
+  "كود الوكيل": "nuskAgentNumber",
+  "رمز الوكيل": "nuskAgentNumber",
   "اسم الوكيل": "agentName",
+  "الوكيل": "agentName",
+  "الوكيل الرئيسي": "agentName",
+  "اسم الوكيل الرئيسي": "agentName",
   "رمز المكتب": "nuskCode",
+  "كود المكتب": "nuskCode",
+  "رمز الوكيل الفرعي": "nuskCode",
+  "كود الوكيل الفرعي": "nuskCode",
   "اسم المكتب": "subAgentName",
+  "المكتب": "subAgentName",
+  "الوكيل الفرعي": "subAgentName",
+  "اسم الوكيل الفرعي": "subAgentName",
 };
 
 // ---------------------------------------------------------------------------
@@ -303,6 +333,19 @@ function normaliseHeader(s: string): string {
 }
 
 /**
+ * Folded header key for tolerant matching in `normalizeImportRows`. Same
+ * Arabic folds as `normaliseHeader` (hamza / alif-maksura / ta-marbuta /
+ * tatweel / whitespace / case) plus quote-stripping. Lets a vendor file
+ * whose column is written "الوكيل الرئيسي" / "إجمالى المعتمرين" still
+ * resolve against the dictionary even though the exact (trim-only) key
+ * differs — the silent-drop that left agentId/subAgentId NULL and
+ * mutamerCount 0 on import.
+ */
+function foldHeaderKey(s: string): string {
+  return normaliseHeader(s).replace(/["']/g, "");
+}
+
+/**
  * Classic 2-row Levenshtein distance — O(n×m) time, O(min(n,m)) space.
  * Iterative bottom-up DP; no recursion to keep the call stack flat
  * when the wizard suggests for 30+ headers at once.
@@ -401,12 +444,20 @@ export function normalizeImportRows(
   customMapping?: Record<string, string>,
 ): ParsedRow[] {
   const builtin = fileType === "vouchers" ? VOUCHER_HEADER_MAP : MUTAMER_HEADER_MAP;
-  // Build a fast lookup whose keys are trimmed (Excel files often pad
-  // headers with whitespace). Trim once here, then match against
-  // pre-trimmed runtime keys below.
+  // Build two lookups per source: a trim-only exact map (Excel files often
+  // pad headers with whitespace) AND an Arabic-folded map (hamza /
+  // ta-marbuta / alif-maksura / tatweel / case variants). The folded layer
+  // is what lets "الوكيل الرئيسي" / "إجمالى المعتمرين" resolve against the
+  // dictionary's canonical key — without it those columns silently dropped,
+  // landing agentId/subAgentId NULL and mutamerCount 0 on import.
   const trimmedBuiltin: Record<string, string> = {};
-  for (const [k, v] of Object.entries(builtin)) trimmedBuiltin[k.trim()] = v;
+  const foldedBuiltin: Record<string, string> = {};
+  for (const [k, v] of Object.entries(builtin)) {
+    trimmedBuiltin[k.trim()] = v;
+    foldedBuiltin[foldHeaderKey(k)] = v;
+  }
   const trimmedCustom: Record<string, string> = {};
+  const foldedCustom: Record<string, string> = {};
   if (customMapping) {
     for (const [k, v] of Object.entries(customMapping)) {
       const trimmedKey = k.trim();
@@ -415,6 +466,7 @@ export function normalizeImportRows(
       // built-in lookup or be dropped.
       if (trimmedKey && typeof v === "string" && v.trim()) {
         trimmedCustom[trimmedKey] = v.trim();
+        foldedCustom[foldHeaderKey(k)] = v.trim();
       }
     }
   }
@@ -423,9 +475,13 @@ export function normalizeImportRows(
     const out: ParsedRow = {};
     for (const [origKey, val] of Object.entries(raw)) {
       const key = origKey.trim();
-      // Custom mapping takes priority over built-in. If neither knows
-      // the key, drop it — see the function-level comment.
-      const target = trimmedCustom[key] ?? trimmedBuiltin[key];
+      const folded = foldHeaderKey(origKey);
+      // Resolution order: custom-exact → custom-folded → builtin-exact →
+      // builtin-folded. Custom (operator) mapping always beats built-in;
+      // exact always beats folded. If nothing knows the key, drop it.
+      const target =
+        trimmedCustom[key] ?? foldedCustom[folded] ??
+        trimmedBuiltin[key] ?? foldedBuiltin[folded];
       if (!target) continue;
       // Engine fields use camelCase strings/numbers; we coerce non-null
       // values to string to match the ParsedRow value shape (the engine
@@ -589,6 +645,49 @@ export interface ImportDiff {
   rowsWithoutSubAgent: number;
   totalRows: number;
   financialImpactCount: number;
+  /**
+   * U-11 Phase 3a (#2080) — detection-only enrichment.
+   *
+   * The active `umrah.auto_link.clientLinkagePolicy` value at preview
+   * time. Surfaced verbatim so the FE banner can name the company's
+   * declared stance ("operational_until_linked" by default). The
+   * preview engine NEVER acts on the policy — it does not auto-link,
+   * does not auto-create clients, does not change behaviour by
+   * policy. The value is purely informational; Phase 3b will decide
+   * whether to use the policy for operator-confirmed suggestions.
+   */
+  clientLinkagePolicy: string;
+  /**
+   * BILL-MAIN P6 (#2080) — main-agent linkage detection. Lists the
+   * main agents referenced by this import file that exist in
+   * `umrah_agents` but carry `clientId = NULL`. Surfaced so the
+   * operator preparing to switch the company to `main_agent_client`
+   * mode (a future hard-pause phase) can see which main agents
+   * still need an explicit `PUT /umrah/agents/:id/link-client` call
+   * before invoicing in that mode would succeed. The preview engine
+   * NEVER acts on this list — no auto-link, no client creation, no
+   * behaviour change.
+   */
+  unlinkedMainAgents: {
+    agentId: number;
+    name: string;
+    nuskAgentNumber: string | null;
+  }[];
+  /**
+   * Non-null when the import would create or reference sub-agents
+   * that lack a `clientId`. Tells the operator BEFORE confirm that
+   * invoicing on these rows will fail at `generateSalesInvoice` until
+   * the sub-agent is explicitly linked. The hint NEVER triggers a
+   * linkage — surfacing is the whole point of Phase 3a.
+   */
+  unlinkedSubAgentInvoicingHint:
+    | {
+        willBlockInvoicing: boolean;
+        unlinkedSubAgentCount: number;
+        activePolicy: string;
+        arabicHint: string;
+      }
+    | null;
 }
 
 export async function previewMutamersImport(scope: ImportScope, rows: ParsedRow[]): Promise<ImportDiff> {
@@ -600,6 +699,26 @@ export async function previewVouchersImport(scope: ImportScope, rows: ParsedRow[
 }
 
 async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "mutamers" | "vouchers"): Promise<ImportDiff> {
+  // U-11 Phase 3a — resolve the active client-linkage policy ONCE,
+  // up front, and stash it on the diff. The preview engine is
+  // deliberately read-only on the policy: the value is surfaced for
+  // the operator's banner, never used to mutate import behaviour.
+  // Same `umrah.auto_link.clientLinkagePolicy` key as the invoicing
+  // engine reads — single source of truth, no rival key.
+  let policyRaw: unknown;
+  try {
+    policyRaw = await resolveSettings(
+      "umrah.auto_link.clientLinkagePolicy",
+      scope.companyId,
+    );
+  } catch {
+    policyRaw = undefined;
+  }
+  const activePolicy =
+    typeof policyRaw === "string" && policyRaw.length > 0
+      ? policyRaw
+      : "operational_until_linked";
+
   const diff: ImportDiff = {
     newRows: [],
     updatedRows: [],
@@ -612,6 +731,9 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     rowsWithoutSubAgent: 0,
     totalRows: rows.length,
     financialImpactCount: 0,
+    clientLinkagePolicy: activePolicy,
+    unlinkedSubAgentInvoicingHint: null,
+    unlinkedMainAgents: [],
   };
 
   if (fileType === "mutamers") {
@@ -655,19 +777,45 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     }
     const knownByNuskNumber = new Set<string>();
     const knownByName = new Set<string>();
+    // BILL-MAIN P6 — track every referenced main agent's clientId so
+    // the preview can list main agents that are still unlinked. The
+    // map is keyed by `umrah_agents.id` so a duplicate-by-name +
+    // duplicate-by-nuskNumber match collapses to one entry.
+    const matchedMainAgents = new Map<
+      number,
+      { agentId: number; name: string; nuskAgentNumber: string | null; clientId: number | null }
+    >();
     if (agentNuskNumbers.size > 0) {
-      const found = await rawQuery<Record<string, unknown>>(
-        `SELECT "contractRef" FROM umrah_agents WHERE "companyId" = $1 AND "contractRef" = ANY($2) AND "deletedAt" IS NULL`,
+      const found = await rawQuery<{ id: number; name: string; contractRef: string | null; clientId: number | null }>(
+        `SELECT id, name, "contractRef", "clientId" FROM umrah_agents WHERE "companyId" = $1 AND "contractRef" = ANY($2) AND "deletedAt" IS NULL`,
         [scope.companyId, [...agentNuskNumbers]]
       );
-      for (const r of found) knownByNuskNumber.add(String(r.contractRef));
+      for (const r of found) {
+        knownByNuskNumber.add(String(r.contractRef));
+        matchedMainAgents.set(r.id, {
+          agentId: r.id,
+          name: String(r.name ?? ""),
+          nuskAgentNumber: r.contractRef ?? null,
+          clientId: r.clientId,
+        });
+      }
     }
     if (agentNames.size > 0) {
-      const found = await rawQuery<Record<string, unknown>>(
-        `SELECT name FROM umrah_agents WHERE "companyId" = $1 AND name = ANY($2) AND "deletedAt" IS NULL`,
+      const found = await rawQuery<{ id: number; name: string; contractRef: string | null; clientId: number | null }>(
+        `SELECT id, name, "contractRef", "clientId" FROM umrah_agents WHERE "companyId" = $1 AND name = ANY($2) AND "deletedAt" IS NULL`,
         [scope.companyId, [...agentNames]]
       );
-      for (const r of found) knownByName.add(String(r.name));
+      for (const r of found) {
+        knownByName.add(String(r.name));
+        if (!matchedMainAgents.has(r.id)) {
+          matchedMainAgents.set(r.id, {
+            agentId: r.id,
+            name: String(r.name ?? ""),
+            nuskAgentNumber: r.contractRef ?? null,
+            clientId: r.clientId,
+          });
+        }
+      }
     }
 
     const unlinkedMap = new Map<string, { name: string; count: number }>();
@@ -759,6 +907,37 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
       agentName: v.agentName,
       rowCount: v.count,
     }));
+
+    // BILL-MAIN P6 — main agents this file references that already
+    // exist in `umrah_agents` but have `clientId IS NULL`. Sorted by
+    // name for stable display. Only matters in `main_agent_client`
+    // policy mode (engine fallback still hard-pause); surfaced
+    // unconditionally so the operator can prep linkage ahead of any
+    // future mode switch.
+    diff.unlinkedMainAgents = [...matchedMainAgents.values()]
+      .filter((a) => a.clientId == null)
+      .map((a) => ({
+        agentId: a.agentId,
+        name: a.name,
+        nuskAgentNumber: a.nuskAgentNumber,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    // U-11 Phase 3a — invoicing-block hint. The message is the SAME
+    // signal the operator will eventually receive from
+    // `generateSalesInvoice`'s ConflictError, surfaced UP-front so
+    // the operator can link before confirming, not after a failed
+    // invoice draft. The hint is non-null whenever the import would
+    // create/reference any sub-agent that lacks a clientId.
+    if (diff.unlinkedSubAgents.length > 0) {
+      diff.unlinkedSubAgentInvoicingHint = {
+        willBlockInvoicing: true,
+        unlinkedSubAgentCount: diff.unlinkedSubAgents.length,
+        activePolicy,
+        arabicHint:
+          "السياسة الحالية للربط: " + activePolicy + ". الاستيراد سيُنشئ/يُحدِّث هؤلاء الوكلاء الفرعيين ككيانات تشغيلية فقط (بلا عميل مالي تلقائي وبلا ربط صامت). محاولة إصدار فاتورة عليهم ستفشل حتى يتم الربط الصريح عبر PUT /umrah/sub-agents/:id/link.",
+      };
+    }
   } else {
     const invoiceNumbers = rows.map((r) => r.nuskInvoiceNumber).filter(Boolean) as string[];
 
@@ -855,6 +1034,7 @@ export async function confirmMutamersImport(
 
     let newCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0, financialImpactCount = 0;
     let unlinkedAgentCount = 0, unlinkedGroupCount = 0, unlinkedSubAgentCount = 0;
+    const touchedGroupIds = new Set<number>();
     const BATCH_SIZE = 200;
 
     for (let offset = 0; offset < rows.length; offset += BATCH_SIZE) {
@@ -877,9 +1057,12 @@ export async function confirmMutamersImport(
         if (!row.nuskNumber) { errorCount++; continue; }
         await client.query("SAVEPOINT sp_row");
         try {
-          const groupId = await resolveGroup(client, scope, row);
+          // Resolve agent + sub-agent BEFORE the group so the group row
+          // can be created/backfilled already linked to them.
           const agentId = await resolveAgent(client, scope, row);
           const subAgentId = await resolveSubAgent(client, scope, row, agentId);
+          const groupId = await resolveGroup(client, scope, row, agentId, subAgentId);
+          if (groupId) touchedGroupIds.add(groupId);
 
           // Track unlinkage so the operator gets a precise count on
           // the batch detail row + can drill into the recovery page.
@@ -988,6 +1171,20 @@ export async function confirmMutamersImport(
           }
         }
       }
+    }
+
+    // Backfill each touched group's agent / sub-agent (and mutamerCount)
+    // from the pilgrims actually linked to it — covers groups whose source
+    // row lacked agent info. Savepoint-guarded so a backfill hiccup can't
+    // roll back the import work already committed in this transaction.
+    try {
+      await client.query("SAVEPOINT sp_group_backfill");
+      await backfillGroupLinks(client, scope, Array.from(touchedGroupIds), { syncCounts: true });
+      await client.query("RELEASE SAVEPOINT sp_group_backfill");
+    } catch (e) {
+      await client.query("ROLLBACK TO SAVEPOINT sp_group_backfill");
+      await client.query("RELEASE SAVEPOINT sp_group_backfill");
+      logger.error(e, "umrah mutamers import group backfill failed");
     }
 
     await client.query(
@@ -1122,14 +1319,18 @@ export async function confirmVouchersImport(
     const batchId = batchRes.rows[0].id;
 
     let newCount = 0, updatedCount = 0, skippedCount = 0, errorCount = 0, financialImpactCount = 0;
+    const touchedGroupIds = new Set<number>();
 
     for (const row of rows) {
       if (!row.nuskInvoiceNumber) { errorCount++; continue; }
       await client.query("SAVEPOINT sp_row");
       try {
-        const groupId = await resolveGroup(client, scope, row);
+        // Resolve agent + sub-agent BEFORE the group so the group row can
+        // be created/backfilled already linked to them.
         const agentId = await resolveAgent(client, scope, row);
         const subAgentId = await resolveSubAgent(client, scope, row, agentId);
+        const groupId = await resolveGroup(client, scope, row, agentId, subAgentId);
+        if (groupId) touchedGroupIds.add(groupId);
 
         const [ex] = (await client.query(
           `SELECT * FROM umrah_nusk_invoices WHERE "companyId"=$1 AND "nuskInvoiceNumber"=$2 AND "deletedAt" IS NULL`,
@@ -1195,6 +1396,7 @@ export async function confirmVouchersImport(
 
           if (groupId && ex.groupId !== groupId) { vals.push(groupId); changes.push(`"groupId"=$${vals.length}`); }
           if (subAgentId && ex.subAgentId !== subAgentId) { vals.push(subAgentId); changes.push(`"subAgentId"=$${vals.length}`); }
+          if (agentId && ex.agentId !== agentId) { vals.push(agentId); changes.push(`"agentId"=$${vals.length}`); }
 
           if (changes.length > 0) {
             vals.push(scope.userId);
@@ -1238,6 +1440,23 @@ export async function confirmVouchersImport(
           try { await logChange(client, batchId, "nusk_invoice", 0, "error", null, null, msg); } catch (e) { logger.error(e, "umrah import logChange failed"); }
         }
       }
+    }
+
+    // Backfill each touched group's agent / sub-agent from the nusk
+    // invoices linked to it — covers groups whose source row lacked agent
+    // info. syncCounts:true keeps mutamerCount honest from the linked nusk
+    // invoices (vouchers don't seed pilgrim rows, so without this the group
+    // "معتمرون" count is stuck at 0 even though the invoices carry the real
+    // mutamer count). Savepoint-guarded so a backfill hiccup can't roll back
+    // committed import work.
+    try {
+      await client.query("SAVEPOINT sp_group_backfill");
+      await backfillGroupLinks(client, scope, Array.from(touchedGroupIds), { syncCounts: true });
+      await client.query("RELEASE SAVEPOINT sp_group_backfill");
+    } catch (e) {
+      await client.query("ROLLBACK TO SAVEPOINT sp_group_backfill");
+      await client.query("RELEASE SAVEPOINT sp_group_backfill");
+      logger.error(e, "umrah vouchers import group backfill failed");
     }
 
     await client.query(
@@ -1316,6 +1535,43 @@ export async function postNuskJournalEntries(
 ): Promise<void> {
   const { nuskId, nuskInvoiceNumber, totalAmount, refundAmount, nuskStatus, existingApJeId, existingRefundJeId } = params;
 
+  // §6.2 of #1870 — every NUSK purchase JE line now carries the FULL
+  // cycle dimensions per operator directive:
+  //   1) umrahAgentId   — the main NUSK agent (from umrah_nusk_invoices.agentId).
+  //                       "الوكيل الرئيسي في نسك" the operator drills by.
+  //   2) umrahSeasonId  — resolved via the NUSK row's groupId → group.seasonId.
+  //                       Lets purchase cost roll up to the season's
+  //                       margin report alongside the matching sales.
+  //   3) vendorId       — companies.nuskSupplierId on the AP line so the
+  //                       supplier sub-ledger ("ذمم المورد — وزارة الحج عبر
+  //                       نسك") reconciles end-to-end. Cost line stays
+  //                       vendor-less (it's the company's own expense).
+  // All three are looked up in a SINGLE round-trip; failures are
+  // non-fatal (the JE still posts, just without the dimension).
+  const [dims] = await rawQuery<{
+    agentId: number | null;
+    seasonId: number | null;
+    nuskSupplierId: number | null;
+  }>(
+    // Season comes via the group (umrah_nusk_invoices has no own seasonId
+    // column). If the NUSK row isn't linked to a group, season stays null
+    // — the JE still posts; only the drill-by-season slice is degraded
+    // until the import flow links the group.
+    `SELECT ni."agentId",
+            g."seasonId",
+            c."nuskSupplierId"
+       FROM umrah_nusk_invoices ni
+       LEFT JOIN umrah_groups g ON g.id = ni."groupId" AND g."companyId" = ni."companyId"
+       LEFT JOIN companies c    ON c.id = ni."companyId"
+      WHERE ni.id = $1 AND ni."companyId" = $2`,
+    [nuskId, scope.companyId]
+  );
+  const purchaseDims = {
+    umrahAgentId: dims?.agentId ?? undefined,
+    umrahSeasonId: dims?.seasonId ?? undefined,
+  };
+  const vendorId = dims?.nuskSupplierId ?? undefined;
+
   if (totalAmount > 0 && nuskStatus !== "cancelled" && !existingApJeId) {
     try {
       const expCode = scope.purchaseAccountCode
@@ -1332,8 +1588,8 @@ export async function postNuskJournalEntries(
         sourceId: nuskId,
         sourceKey: `umrah_nusk_ap_${nuskId}`,
         lines: [
-          { accountCode: expCode, debit: totalAmount, credit: 0, description: "تكلفة خدمات نسك" },
-          { accountCode: apCode, debit: 0, credit: totalAmount, description: "مستحقات نسك" },
+          { accountCode: expCode, debit: totalAmount, credit: 0, description: "تكلفة خدمات نسك", ...purchaseDims },
+          { accountCode: apCode, debit: 0, credit: totalAmount, description: "مستحقات نسك", ...purchaseDims, vendorId },
         ],
       }, { table: "umrah_nusk_invoices", id: nuskId });
       if (apJeId) {
@@ -1363,8 +1619,8 @@ export async function postNuskJournalEntries(
         sourceId: nuskId,
         sourceKey: `umrah_nusk_refund_${nuskId}`,
         lines: [
-          { accountCode: apCode, debit: refundAmount, credit: 0, description: "عكس مستحقات نسك — إرجاع" },
-          { accountCode: expCode, debit: 0, credit: refundAmount, description: "عكس تكلفة خدمات نسك — إرجاع" },
+          { accountCode: apCode, debit: refundAmount, credit: 0, description: "عكس مستحقات نسك — إرجاع", ...purchaseDims, vendorId },
+          { accountCode: expCode, debit: 0, credit: refundAmount, description: "عكس تكلفة خدمات نسك — إرجاع", ...purchaseDims },
         ],
       }, { table: "umrah_nusk_invoices", id: nuskId });
       if (refundJeId) {
@@ -1408,33 +1664,169 @@ async function resolveAgent(client: pg.PoolClient, scope: ImportScope, row: Pars
 }
 
 async function resolveSubAgent(client: pg.PoolClient, scope: ImportScope, row: ParsedRow, agentId: number | null): Promise<number | null> {
-  if (!row.nuskCode) return null;
-  const [ex] = (await client.query(
-    `SELECT id FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode"=$2 AND "deletedAt" IS NULL`,
-    [scope.companyId, row.nuskCode]
-  )).rows;
-  if (ex) return ex.id;
+  // Accept a name-only sub-agent (اسم المكتب without رمز المكتب). Pre-fix
+  // the engine returned null when nuskCode was missing, so a partner file
+  // that named the office but had no NUSK code never created the sub-agent
+  // — it vanished from the الوكلاء الفرعيين tab AND left the group/pilgrim
+  // FK blank.
+  if (!row.nuskCode && !row.subAgentName) return null;
+  if (row.nuskCode) {
+    const [ex] = (await client.query(
+      `SELECT id, "agentId" FROM umrah_sub_agents WHERE "companyId"=$1 AND "nuskCode"=$2 AND "deletedAt" IS NULL`,
+      [scope.companyId, row.nuskCode]
+    )).rows;
+    if (ex) {
+      if (agentId && !ex.agentId) {
+        await client.query(
+          `UPDATE umrah_sub_agents SET "agentId"=$1,"updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+          [agentId, ex.id, scope.companyId]
+        );
+      }
+      return ex.id;
+    }
+  }
+  if (row.subAgentName) {
+    const [exByName] = (await client.query(
+      `SELECT id, "agentId" FROM umrah_sub_agents WHERE "companyId"=$1 AND name=$2 AND "deletedAt" IS NULL`,
+      [scope.companyId, row.subAgentName]
+    )).rows;
+    if (exByName) {
+      if (agentId && !exByName.agentId) {
+        await client.query(
+          `UPDATE umrah_sub_agents SET "agentId"=$1,"updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3`,
+          [agentId, exByName.id, scope.companyId]
+        );
+      }
+      return exByName.id;
+    }
+  }
   const res = await client.query(
     `INSERT INTO umrah_sub_agents ("companyId","branchId","nuskCode",name,"agentId","createdBy","createdAt","updatedAt")
      VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING id`,
-    [scope.companyId, scope.branchId, row.nuskCode, row.subAgentName || `فرعي ${row.nuskCode}`, agentId, scope.userId]
+    [scope.companyId, scope.branchId, row.nuskCode || null, row.subAgentName || `فرعي ${row.nuskCode}`, agentId, scope.userId]
   );
   return res.rows[0]?.id ?? null;
 }
 
-async function resolveGroup(client: pg.PoolClient, scope: ImportScope, row: ParsedRow): Promise<number | null> {
+async function resolveGroup(
+  client: pg.PoolClient,
+  scope: ImportScope,
+  row: ParsedRow,
+  agentId: number | null = null,
+  subAgentId: number | null = null,
+): Promise<number | null> {
   if (!row.nuskGroupNumber) return null;
   const [ex] = (await client.query(
-    `SELECT id FROM umrah_groups WHERE "companyId"=$1 AND "nuskGroupNumber"=$2 AND "deletedAt" IS NULL`,
+    `SELECT id, "agentId", "subAgentId" FROM umrah_groups WHERE "companyId"=$1 AND "nuskGroupNumber"=$2 AND "deletedAt" IS NULL`,
     [scope.companyId, row.nuskGroupNumber]
   )).rows;
-  if (ex) return ex.id;
+  if (ex) {
+    // Backfill the group's agent / sub-agent link when the existing row is
+    // still unlinked. An import that first sees a row without agent info
+    // (group created blank) and later one that carries it ends up linked.
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    if (agentId && !ex.agentId) { vals.push(agentId); sets.push(`"agentId"=$${vals.length}`); }
+    if (subAgentId && !ex.subAgentId) { vals.push(subAgentId); sets.push(`"subAgentId"=$${vals.length}`); }
+    if (sets.length > 0) {
+      sets.push(`"updatedAt"=NOW()`);
+      vals.push(ex.id);
+      vals.push(scope.companyId);
+      await client.query(
+        `UPDATE umrah_groups SET ${sets.join(",")} WHERE id=$${vals.length - 1} AND "companyId"=$${vals.length}`,
+        vals
+      );
+    }
+    return ex.id;
+  }
   const res = await client.query(
-    `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber",name,"seasonId","createdBy","createdAt","updatedAt")
-     VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING id`,
-    [scope.companyId, scope.branchId, row.nuskGroupNumber, row.groupName || `مجموعة ${row.nuskGroupNumber}`, scope.seasonId, scope.userId]
+    `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId","createdBy","createdAt","updatedAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW()) RETURNING id`,
+    [scope.companyId, scope.branchId, row.nuskGroupNumber, row.groupName || `مجموعة ${row.nuskGroupNumber}`, agentId, subAgentId, scope.seasonId, scope.userId]
   );
   return res.rows[0]?.id ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Backfill a group's agent / sub-agent (and, for the mutamers path, its
+// mutamerCount) from the children actually linked to it. Handles the case
+// where the source row that created the group lacked agent info but its
+// pilgrims / nusk-invoices carry it. Runs once per import over the set of
+// groups the batch touched.
+// ---------------------------------------------------------------------------
+async function backfillGroupLinks(
+  client: pg.PoolClient,
+  scope: ImportScope,
+  groupIds: number[],
+  opts: { syncCounts?: boolean } = {},
+): Promise<void> {
+  if (groupIds.length === 0) return;
+  await client.query(
+    `UPDATE umrah_groups g
+        SET "agentId" = COALESCE(g."agentId", src."agentId"),
+            "subAgentId" = COALESCE(g."subAgentId", src."subAgentId"),
+            "updatedAt" = NOW()
+       FROM (
+         SELECT DISTINCT ON ("groupId") "groupId", "agentId", "subAgentId"
+           FROM umrah_pilgrims
+          WHERE "companyId" = $1 AND "groupId" = ANY($2::int[]) AND "deletedAt" IS NULL
+            AND ("agentId" IS NOT NULL OR "subAgentId" IS NOT NULL)
+          ORDER BY "groupId", "agentId" NULLS LAST, "subAgentId" NULLS LAST
+       ) src
+      WHERE g.id = src."groupId" AND g."companyId" = $1
+        AND (g."agentId" IS NULL OR g."subAgentId" IS NULL)`,
+    [scope.companyId, groupIds]
+  );
+  await client.query(
+    `UPDATE umrah_groups g
+        SET "agentId" = COALESCE(g."agentId", src."agentId"),
+            "subAgentId" = COALESCE(g."subAgentId", src."subAgentId"),
+            "updatedAt" = NOW()
+       FROM (
+         SELECT DISTINCT ON ("groupId") "groupId", "agentId", "subAgentId"
+           FROM umrah_nusk_invoices
+          WHERE "companyId" = $1 AND "groupId" = ANY($2::int[]) AND "deletedAt" IS NULL
+            AND ("agentId" IS NOT NULL OR "subAgentId" IS NOT NULL)
+          ORDER BY "groupId", "agentId" NULLS LAST, "subAgentId" NULLS LAST
+       ) src
+      WHERE g.id = src."groupId" AND g."companyId" = $1
+        AND (g."agentId" IS NULL OR g."subAgentId" IS NULL)`,
+    [scope.companyId, groupIds]
+  );
+  if (opts.syncCounts) {
+    // Keep mutamerCount honest so the groups list "معتمرون" column, the
+    // delete-guard, and the merge dialog all read the real number after an
+    // import. The count is pilgrim-or-invoice aware: a group with real
+    // pilgrim rows (the mutamers path) uses COUNT(pilgrims); a voucher-only
+    // group (no pilgrims) falls back to SUM(nusk_invoices.mutamerCount) so
+    // the count is never stuck at 0 just because vouchers don't seed pilgrims.
+    await client.query(
+      `UPDATE umrah_groups g
+          SET "mutamerCount" = src.cnt, "updatedAt" = NOW()
+         FROM (
+           SELECT grp.id AS "groupId",
+                  COALESCE(NULLIF(pil.cnt, 0), nusk.cnt, grp."mutamerCount", 0) AS cnt
+             FROM umrah_groups grp
+             LEFT JOIN (
+               SELECT "groupId", COUNT(*)::int AS cnt
+                 FROM umrah_pilgrims
+                WHERE "companyId" = $1 AND "groupId" = ANY($2::int[]) AND "deletedAt" IS NULL
+                GROUP BY "groupId"
+             ) pil ON pil."groupId" = grp.id
+             LEFT JOIN (
+               SELECT "groupId", COALESCE(SUM("mutamerCount"), 0)::int AS cnt
+                 FROM umrah_nusk_invoices
+                WHERE "companyId" = $1 AND "groupId" = ANY($2::int[]) AND "deletedAt" IS NULL
+                  AND "nuskStatus" != 'cancelled'
+                GROUP BY "groupId"
+             ) nusk ON nusk."groupId" = grp.id
+            WHERE grp.id = ANY($2::int[]) AND grp."companyId" = $1
+         ) src
+        WHERE g.id = src."groupId" AND g."companyId" = $1
+          AND g."mutamerCount" IS DISTINCT FROM src.cnt`,
+      [scope.companyId, groupIds]
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowRight, Clock, FileText, Activity, CheckSquare, Link2,
-  User, Calendar, Hash, Briefcase, Printer, Eye, MessageCircle
+  User, Calendar, Hash, Briefcase, Printer, Eye, MessageCircle, ShieldCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -15,6 +15,7 @@ import { EntityDocuments } from "./entity-documents";
 import { EntityTimeline } from "./entity-timeline";
 import { EntityComments } from "./entity-comments";
 import { LinkedTasks } from "./linked-tasks";
+import { AuditTrailPanel } from "./audit-trail-panel";
 import { PageStatusBadge } from "@/components/page-status-badge";
 
 /**
@@ -140,7 +141,7 @@ export interface DetailPageLayoutProps {
   onPrint?: () => void;
 
   /** Hide specific standard tabs. */
-  hideTabs?: ("documents" | "timeline" | "comments" | "tasks")[];
+  hideTabs?: ("documents" | "timeline" | "comments" | "tasks" | "audit")[];
 
   /** Loading / error state for the top-level entity fetch. */
   isLoading?: boolean;
@@ -189,17 +190,16 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
     headerExtra,
   } = props;
 
+
   const [activeTab, setActiveTab] = useState<string>(defaultTab);
 
   // --- Header strip (always visible, even during loading) -----------------
   const header = (
     <div className="flex items-start justify-between gap-4 flex-wrap">
-      <Link href={backPath}>
-        <Button variant="ghost" size="sm" className="gap-1">
+      <Button asChild variant="ghost" size="sm" className="gap-1"><Link href={backPath}>
           <ArrowRight className="h-4 w-4" />
           {backLabel}
-        </Button>
-      </Link>
+        </Link></Button>
       <div className="flex items-center gap-2 flex-wrap">
         {printable && onPrint && (
           <Button onClick={onPrint} size="sm" variant="outline" className="gap-1">
@@ -262,6 +262,14 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
       label: "المناقشة",
       icon: MessageCircle,
       content: () => <EntityComments entityType={entityType} entityId={entityId} />,
+    });
+  }
+  if (!hideTabs.includes("audit")) {
+    STANDARD_TABS.push({
+      key: "audit",
+      label: "سجل التدقيق",
+      icon: ShieldCheck,
+      content: () => <AuditTrailPanel entityType={entityType} entityId={entityId} />,
     });
   }
 

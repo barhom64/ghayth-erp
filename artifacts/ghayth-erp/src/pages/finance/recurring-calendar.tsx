@@ -147,11 +147,9 @@ export default function RecurringCalendarPage() {
       ]}
       actions={
         <>
-          <Link href="/finance/recurring-journals/create">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/recurring-journals/create">
               <Plus className="h-4 w-4 me-1" /> قيد متكرر جديد
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_recurring_calendar"
             entityId="list"

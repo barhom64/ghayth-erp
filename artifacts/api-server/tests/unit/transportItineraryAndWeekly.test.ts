@@ -79,11 +79,17 @@ describe("#1812 — itinerary detail + leg editor", () => {
     ]) {
       expect(ITINERARY_DETAIL, `leg type ${t} missing`).toContain(`value: "${t}"`);
     }
+    // UX-05 (TA-T18-UX-AUDIT-01) — قائمة حالات المقطع تُشتق من القاموس الموحّد
+    // (كيان "leg")؛ فينتقل ضمان القيم السبع إلى المصدر الموحّد.
+    expect(ITINERARY_DETAIL).toMatch(/Object\.entries\(statusDict\("leg"\)\)/);
+    const LEG_DICT = readSpa("lib/transport-status-labels.ts");
+    const legStart = LEG_DICT.indexOf("const LEG:");
+    const legBlock = LEG_DICT.slice(legStart, LEG_DICT.indexOf("const ", legStart + 10));
     for (const s of [
       "pending", "scheduled", "assigned", "in_progress",
       "completed", "cancelled", "skipped",
     ]) {
-      expect(ITINERARY_DETAIL, `leg status ${s} missing`).toContain(`value: "${s}"`);
+      expect(legBlock, `leg status ${s} missing`).toContain(`${s}:`);
     }
   });
 
@@ -110,10 +116,22 @@ describe("#1812 — weekly planning endpoint", () => {
     expect(PLANNING).toMatch(/WHERE o\.status IN \('pending', 'notified'\)[\s\S]{0,200}INTERVAL '15 minutes'/);
   });
 
-  it("computes per-vehicle utilisation as bookedSeconds / weekSeconds × 100", () => {
+  it("computes per-vehicle utilisation against the operating-window denominator (UTIL-02)", () => {
     expect(PLANNING).toContain("vehicleUtilisation");
-    expect(PLANNING).toMatch(/7 \* 24 \* 3600/);
+    // TR-021: the denominator is now the company's configured operating
+    // window (dailyOperatingMinutes × 7 × 60), not a flat 24×7 — so the
+    // ops-weekly % matches what the assignment engine scores on.
+    expect(PLANNING).toMatch(/NULLIF\(\$3, 0\)/);
+    expect(PLANNING).toMatch(/dailyOperatingMinutes\(windowRow \?\? null\) \* 7 \* 60/);
     expect(PLANNING).toMatch(/EXTRACT\(EPOCH FROM/);
+    expect(PLANNING).not.toMatch(/NULLIF\(7 \* 24 \* 3600/);
+  });
+
+  it("TR-021 — exposes a fleet-level utilisation summary", () => {
+    expect(PLANNING).toMatch(/fleetSummary/);
+    for (const k of ["vehiclesTracked", "activeVehicles", "idleVehicles", "avgUtilisation", "overUtilised", "underUtilised", "operatingHoursPerDay"]) {
+      expect(PLANNING, `fleetSummary.${k} missing`).toContain(k);
+    }
   });
 
   it("excludes declined + cancelled dispatch orders from utilisation", () => {

@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const PROJ_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/projects.ts"), "utf8");
+const LIFECYCLE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/lib/lifecycleEngine.ts"), "utf8");
 
 // ─── Projects Golden Path Tests ─────────────────────────────────────────────
 // P4.6 — Lock in project lifecycle contracts: projects, phases, tasks,
@@ -36,10 +37,9 @@ describe("Projects route structure", () => {
   });
 });
 
-describe("Projects state machine", () => {
-  it("defines PROJECT_STATUSES and PROJECT_TRANSITIONS", () => {
+describe("Projects state machine (PRJ-P2 — unified through lifecycleEngine)", () => {
+  it("defines PROJECT_STATUSES", () => {
     expect(PROJ_ROUTE).toContain("PROJECT_STATUSES");
-    expect(PROJ_ROUTE).toContain("PROJECT_TRANSITIONS");
   });
 
   it("project statuses include planning through cancelled", () => {
@@ -50,15 +50,25 @@ describe("Projects state machine", () => {
     expect(PROJ_ROUTE).toContain('"cancelled"');
   });
 
-  it("completed and cancelled are terminal project states", () => {
-    const idx = PROJ_ROUTE.indexOf("PROJECT_TRANSITIONS");
-    const block = PROJ_ROUTE.slice(idx, idx + 700);
-    expect(block).toContain("completed:");
-    expect(block).toContain("cancelled:");
+  it("no longer keeps a local PROJECT_TRANSITIONS / PHASE_TRANSITIONS map (single source of truth lives in lifecycleEngine)", () => {
+    expect(PROJ_ROUTE).not.toContain("PROJECT_TRANSITIONS");
+    expect(PROJ_ROUTE).not.toContain("PHASE_TRANSITIONS");
   });
 
-  it("validates project status transitions", () => {
-    expect(PROJ_ROUTE).toContain("PROJECT_TRANSITIONS[existing.status");
+  it("validates project status transitions through lifecycleEngine, not a local map", () => {
+    expect(PROJ_ROUTE).toContain('isValidTransition("projects", existing.status');
+    expect(PROJ_ROUTE).toContain('getStateMachine("projects")');
+  });
+
+  it('registers a "projects" state machine in lifecycleEngine STATE_MACHINES', () => {
+    expect(LIFECYCLE).toContain('entity: "projects"');
+  });
+
+  it("completed and cancelled are terminal project states in the engine machine", () => {
+    const idx = LIFECYCLE.indexOf('entity: "projects"');
+    const block = LIFECYCLE.slice(idx, idx + 700);
+    expect(block).toContain("completed:   [],");
+    expect(block).toContain("cancelled:   [],");
   });
 });
 
@@ -82,9 +92,20 @@ describe("Task state machine", () => {
   });
 });
 
-describe("Phase state machine", () => {
-  it("defines PHASE_TRANSITIONS", () => {
-    expect(PROJ_ROUTE).toContain("PHASE_TRANSITIONS");
+describe("Phase state machine (PRJ-P2 — unified through lifecycleEngine)", () => {
+  it('registers a "project_phases" state machine in lifecycleEngine', () => {
+    expect(LIFECYCLE).toContain('entity: "project_phases"');
+  });
+
+  it("validates phase completion through lifecycleEngine, not a local map", () => {
+    expect(PROJ_ROUTE).toContain('isValidTransition("project_phases", phaseStatus, "completed")');
+  });
+
+  it("drives phase completion through applyTransition (engine-enforced)", () => {
+    const idx = PROJ_ROUTE.indexOf('"/:id/phases/:phaseId/complete"');
+    const section = PROJ_ROUTE.slice(idx, idx + 2200);
+    expect(section).toContain("applyTransition");
+    expect(section).toContain('entity: "project_phases"');
   });
 });
 

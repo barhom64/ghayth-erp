@@ -206,7 +206,20 @@ export default function ExpensesPage() {
       key: "status",
       header: "الحالة",
       sortable: true,
-      render: (e) => <PageStatusBadge status={e.status || "draft"} />,
+      // FIN-CORRECTION (A3): keep the legacy document badge, and surface the
+      // truthful posting axis (from /finance/expenses, migration-311 trigger)
+      // in the list so a directly-posted expense (status='draft' +
+      // balancesApplied=true) reads «مرحّل» here, not just in the expanded row.
+      render: (e) => (
+        <span className="inline-flex items-center gap-1">
+          <PageStatusBadge status={e.status || "draft"} />
+          {e.postingStatus && (
+            <span className={`text-[10px] ${e.postingStatus === "posted" ? "text-status-success-foreground" : "text-muted-foreground"}`}>
+              {POSTING_STATUS_LABELS[e.postingStatus as keyof typeof POSTING_STATUS_LABELS]}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: "createdAt",
@@ -252,16 +265,12 @@ export default function ExpensesPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }]}
       actions={
         <>
-          <Link href="/finance/expense-bulk-approvals">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/expense-bulk-approvals">
               <CheckSquare className="h-4 w-4 me-2" />الاعتماد بالجملة
-            </Button>
-          </Link>
-          <Link href="/finance/expense-burn-rate">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/expense-burn-rate">
               <BarChart3 className="h-4 w-4 me-2" />معدل الحرق
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/finance/expenses/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة مصروف</GuardedButton>
           </Link>
@@ -407,21 +416,26 @@ export default function ExpensesPage() {
                       <span className="block font-medium">{e.relatedEntityType} #{e.relatedEntityId}</span>
                     </div>
                   )}
-                  {/* #1945 — الحالة على ثلاثة محاور منفصلة (مستند/دفع/ترحيل)،
-                      مشتقّة من نموذج الحالة المركزي بدل الخلط في حقل واحد. */}
+                  {/* #1945 — الحالة على ثلاثة محاور منفصلة (مستند/دفع/ترحيل).
+                      FIN-CORRECTION (A3): تُقرأ الآن من محاور الـAPI (محاور
+                      trigger 311 عبر /finance/expenses، مُتاحة منذ #2150) بدل
+                      اشتقاقها محليًا عبر mapJournalStatus(e.status) — الذي كان
+                      يُضلِّل في حالة المصروف المُرحَّل مباشرةً (status='draft'
+                      مع balancesApplied=true → يظهر «غير مرحّل» خطأً). fallback
+                      دفاعي للاشتقاق المحلي إن غاب الحقل عن صف قديم. */}
                   <div>
                     <span className="text-muted-foreground">حالة المستند:</span>
-                    <span className="block font-medium">{DOCUMENT_STATUS_LABELS[mapJournalStatus(e.status).documentStatus]}</span>
+                    <span className="block font-medium">{DOCUMENT_STATUS_LABELS[(e.documentStatus ?? mapJournalStatus(e.status).documentStatus) as keyof typeof DOCUMENT_STATUS_LABELS]}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">حالة الدفع:</span>
-                    <span className={`block font-medium ${e.isPaid ? "text-status-success-foreground" : "text-orange-600"}`}>
-                      {PAYMENT_STATUS_LABELS[e.isPaid ? "paid" : "unpaid"]}
+                    <span className={`block font-medium ${(e.paymentStatus ?? (e.isPaid ? "paid" : "unpaid")) === "paid" ? "text-status-success-foreground" : "text-orange-600"}`}>
+                      {PAYMENT_STATUS_LABELS[(e.paymentStatus ?? (e.isPaid ? "paid" : "unpaid")) as keyof typeof PAYMENT_STATUS_LABELS]}
                     </span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">حالة الترحيل:</span>
-                    <span className="block font-medium">{POSTING_STATUS_LABELS[mapJournalStatus(e.status).postingStatus]}</span>
+                    <span className="block font-medium">{POSTING_STATUS_LABELS[(e.postingStatus ?? mapJournalStatus(e.status).postingStatus) as keyof typeof POSTING_STATUS_LABELS]}</span>
                   </div>
                   {e.attachmentUrl && (
                     <div>
@@ -464,12 +478,10 @@ export default function ExpensesPage() {
               <EntityComments entityType="expense" entityId={e.id} />
               <ActionHistory entityType="expense" entityId={e.id} defaultOpen />
               <div className="flex justify-end pt-2 border-t">
-                <Link href={`/finance/expenses/${e.id}`}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
+                <Button asChild variant="outline" size="sm" className="gap-1.5"><Link href={`/finance/expenses/${e.id}`}>
                     <ExternalLink className="h-3.5 w-3.5" />
                     عرض الصفحة الكاملة
-                  </Button>
-                </Link>
+                  </Link></Button>
               </div>
             </div>
           );
