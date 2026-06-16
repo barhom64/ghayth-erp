@@ -67,6 +67,17 @@ const CREATE_IN_SIDEBAR_ALLOWLIST = new Set([
   "/hr/leaves/create", // employee self-service "طلب إجازة" entry point
 ]);
 
+// Pages intentionally OFF the sidebar because a tab-shell page supersets them —
+// the shell re-implements their endpoints as in-page tabs, so the standalone
+// route stays mounted for deep-links + command-palette search but must NOT count
+// as an orphan. See CROSS_MODULE_DUPLICATION_AUDIT.md (Warehouse «عمليات متقدّمة»).
+const SUPERSEDED_BY_SHELL = new Set([
+  "/warehouse/lots",         // → /warehouse/advanced · tab "lots"
+  "/warehouse/serials",      // → /warehouse/advanced · tab "serials"
+  "/warehouse/cycle-counts", // → /warehouse/advanced · tab "cycle-counts"
+  "/warehouse/abc",          // → /warehouse/advanced · tab "abc"
+]);
+
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
 function basePath(p) {
   return p.replace(/[?#].*$/, "");
@@ -156,6 +167,7 @@ function main() {
   const missing = [];
   let legitimatelyOff = 0;
   let redirectOff = 0;
+  let supersededOff = 0;
   for (const r of routes) {
     if (sidebarSet.has(r)) continue;
     // Redirect-only routes are intentional deep-link aliases, not orphans.
@@ -165,6 +177,11 @@ function main() {
     }
     if (isLegitimatelyOffSidebar(r)) {
       legitimatelyOff++;
+      continue;
+    }
+    // Superseded by a tab-shell page — intentional off-sidebar, not an orphan.
+    if (SUPERSEDED_BY_SHELL.has(r)) {
+      supersededOff++;
       continue;
     }
     missing.push(r);
@@ -203,6 +220,7 @@ function main() {
   console.log(`entries in sidebar:                      ${sidebarSet.size}`);
   console.log(`legitimately off-sidebar (detail/create): ${legitimatelyOff}`);
   console.log(`redirect routes (off-sidebar, legit):    ${redirectOff}`);
+  console.log(`superseded by tab-shell (off-sidebar):   ${supersededOff}`);
   console.log(`[HARD] orphan pages (missing from nav):  ${missing.length}`);
   console.log(`[HARD] dead links (nav → no route):      ${deadLinks.length}`);
   console.log(`[HARD] create/edit pages in nav drawer:  ${createInSidebar.length}`);

@@ -195,6 +195,12 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
     aliases: ["موردو المستودع", "الموردين"],
     note: "INVENTORY §2 — owner kept «الموردون» for both lists; section context (المالية vs المستودع) disambiguates. No rename.",
   },
+  {
+    path: "/warehouse/advanced",
+    canonicalLabel: "عمليات متقدّمة (دفعات/تسلسلات/جرد/ABC)",
+    aliases: ["الدفعات", "الأرقام التسلسلية", "الجرد الدوري", "تصنيف ABC"],
+    note: "CROSS_MODULE_DUPLICATION_AUDIT — tab-shell that supersets /warehouse/{lots,serials,cycle-counts,abc}; their standalone nav entries were removed (owner «keep shell, remove siblings»), kept here as command-palette search aliases.",
+  },
 
   // ── §7 — redirect destinations referenced by stale quick actions ──
   {

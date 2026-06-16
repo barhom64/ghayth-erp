@@ -637,14 +637,12 @@ export const allNavSections: NavSection[] = [
           { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
           { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
         ]},
-        // 2) الدفعات والتسلسلات والجرد المتقدّم.
-        { label: "الدفعات والتسلسلات", path: "/warehouse/advanced", icon: Layers, children: [
-          { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
-          { label: "الدفعات", path: "/warehouse/lots", icon: Package },
-          { label: "الأرقام التسلسلية", path: "/warehouse/serials", icon: ListChecks },
-          { label: "الجرد الدوري", path: "/warehouse/cycle-counts", icon: ClipboardCheck },
-          { label: "تصنيف ABC", path: "/warehouse/abc", icon: BarChart3 },
-        ]},
+        // 2) الدفعات والتسلسلات والجرد المتقدّم — صفحة قشرة بتبويبات
+        // (warehouse-advanced.tsx) تضمّ الدفعات/التسلسلات/الجرد الدوري/ABC. أُزيلت
+        // المداخل المنفصلة المكرّرة معها (CROSS_MODULE_DUPLICATION_AUDIT — قرار
+        // المالك «أبقِ القشرة، احذف الإخوة»). مساراتها تبقى مُركَّبة وقابلة للبحث،
+        // ومُدرجة في SUPERSEDED_BY_SHELL بحارس التغطية فلا تُعدّ أيتامًا.
+        { label: "عمليات متقدّمة (دفعات/تسلسلات/جرد/ABC)", path: "/warehouse/advanced", icon: Layers },
         // 3) التقارير.
         { label: "التقارير", path: "/warehouse/reports/accuracy", icon: FileBarChart, children: [
           { label: "تقرير دقة الجرد", path: "/warehouse/reports/accuracy", icon: BarChart3 },
