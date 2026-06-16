@@ -164,6 +164,12 @@ run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
 # — dormant until their separate cleanup PRs land, since each still has
 # real findings unrelated to the guard wiring itself).
 run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
+# REDIRECT-TO-NOWHERE: every redirectTo("/x") alias in the ghayth-erp route
+# table must resolve to a real mounted route. Catches the A4-navigation failure
+# class (delete/rename a canonical page, leave its alias behind -> SPA 404)
+# statically, before merge. Pure-logic fixtures first, then the live scan.
+run_step "check:redirect-targets:tests" node scripts/src/check-redirect-targets.test.mjs
+run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
 # Fourth of the four originally-dormant guards from PR #574 — finally
@@ -196,6 +202,23 @@ run_step "check:gl-swallow" node scripts/src/check-gl-swallow.mjs
 # build. Route-level exemptions live in scripts/src/audit-stop-ship.mjs.
 run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
+# Dynamic Postgres integration suite (tests/integration/**/*.dynamic.test.ts):
+# cron/RBAC/finance/tenant-scoping against a real DB. DB-gated like the
+# schema-drift/ghost-rows/sql-ambiguity checks above — runs only when a test
+# DATABASE_URL is provisioned (guard.yml's :54329 service container), and skips
+# cleanly elsewhere (the harness itself describe.skip's without a test-marked
+# DATABASE_URL, but we also avoid spinning vitest up at all). Quarantined files
+# that fail against the unseeded CI harness for pre-existing systemic reasons
+# are excluded via tests/integration/quarantine.txt (see that file's header);
+# every other integration test — and any NEW one — must pass to keep `guard`
+# green, so a failing dynamic test blocks merge.
+if [ -n "${DATABASE_URL:-}" ]; then
+  run_step "test:integration" pnpm -s --filter @workspace/api-server run test:integration
+elif [ -n "${CI:-}" ]; then
+  echo -e "${INFO} [test:integration] WARN: skipped in CI (no DATABASE_URL secret configured)"
+else
+  echo -e "${INFO} [test:integration] skipped (DATABASE_URL not set; allowed outside CI)"
+fi
 # Frontend component tests (jsdom + @testing-library/react). Real behavioural
 # verification for sensitive UI (e.g. ProductSelect snap-to-catalog) without a
 # live app — the gate the package requires for FE component work.
