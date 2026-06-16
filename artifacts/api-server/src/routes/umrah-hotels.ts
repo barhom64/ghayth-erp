@@ -35,7 +35,7 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -74,7 +74,7 @@ router.post("/hotels", authorize({ feature: "umrah", action: "create" }), async 
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, scope.branchId ?? null, b.name, b.nameEn ?? null, b.city ?? null, b.address ?? null, b.starRating ?? null, b.contactName ?? null, b.contactPhone ?? null, b.notes ?? null]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_hotels", entityId: insertId, after: { name: b.name, city: b.city } }).catch(() => undefined);
+    auditFromRequest(req, "create", "umrah_hotels", insertId, { after: { name: b.name, city: b.city } }).catch(() => undefined);
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.hotel.created", entity: "umrah_hotels", entityId: insertId }).catch(() => undefined);
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "hotels create error"); }
@@ -171,7 +171,7 @@ router.post("/room-blocks", authorize({ feature: "umrah", action: "create" }), a
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [scope.companyId, b.hotelId, b.seasonId ?? null, b.checkInDate ?? null, b.checkOutDate ?? null, b.roomType ?? null, b.totalRooms, b.ratePerNight ?? null, b.currency ?? 'SAR', b.notes ?? null]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_room_blocks", entityId: insertId, after: { hotelId: b.hotelId, seasonId: b.seasonId, totalRooms: b.totalRooms } }).catch(() => undefined);
+    auditFromRequest(req, "create", "umrah_room_blocks", insertId, { after: { hotelId: b.hotelId, seasonId: b.seasonId, totalRooms: b.totalRooms } }).catch(() => undefined);
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.room_block.created", entity: "umrah_room_blocks", entityId: insertId }).catch(() => undefined);
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "room-blocks create error"); }
@@ -225,7 +225,7 @@ router.post("/room-allocations", authorize({ feature: "umrah", action: "create" 
        VALUES ($1,$2,$3,$4,$5,$6)`,
       [scope.companyId, b.blockId, b.pilgrimId, b.roomNumber ?? null, b.occupants ?? 1, b.checkInAt ?? null]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_room_allocations", entityId: insertId, after: { blockId: b.blockId, pilgrimId: b.pilgrimId } }).catch(() => undefined);
+    auditFromRequest(req, "create", "umrah_room_allocations", insertId, { after: { blockId: b.blockId, pilgrimId: b.pilgrimId } }).catch(() => undefined);
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "allocate error"); }
 });
@@ -258,12 +258,7 @@ router.delete("/room-allocations/:id", authorize({ feature: "umrah", action: "de
       [id, scope.companyId]
     );
     if (affectedRows > 0 && existing) {
-      createAuditLog({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "umrah.room_allocation.deleted",
-        entity: "umrah_room_allocations",
-        entityId: id,
+      auditFromRequest(req, "umrah.room_allocation.deleted", "umrah_room_allocations", id, {
         before: existing,
         after: { deletedAt: "NOW()" },
       });

@@ -43,7 +43,11 @@ describe("DELETE /umrah/room-allocations/:id — audit trail", () => {
   });
 
   it("audit before-payload carries the full snapshot for reconstruction", () => {
-    expect(ROUTE).toMatch(/action: "umrah\.room_allocation\.deleted"[\s\S]{0,400}before: existing/);
+    // U-07 Phase 4 — migrated from createAuditLog({...}) to
+    // auditFromRequest(req, action, entity, entityId, {before, after}) per
+    // the IGOC ratchet. The invariant is unchanged: the `before` block
+    // must carry the existing-row snapshot before the soft delete.
+    expect(ROUTE).toMatch(/auditFromRequest\(\s*req,\s*"umrah\.room_allocation\.deleted",\s*"umrah_room_allocations",\s*id,\s*\{\s*before:\s*existing/);
   });
 
   it("event details broadcast pilgrim + block ids (no row-by-row room geometry)", () => {
