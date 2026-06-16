@@ -9,6 +9,8 @@
  *   - إعادة تقييم FX  → fx_revaluation_log rows where journalEntryId IS NULL
  *   - جرد دوري        → approved cycle counts where no line carries
  *                        adjustmentJournalEntryId yet
+ *   - التزامات الرواتب → posted payroll runs whose accrued GOSI/WHT/
+ *                        deductions liabilities aren't fully remitted yet (#2303)
  *
  * Realised FX renders as a HISTORY tab (not a pending queue): the
  * realisation event is triggered from the invoice settlement
@@ -35,6 +37,7 @@ import {
   RefreshCcw,
   ClipboardCheck,
   History,
+  Landmark,
 } from "lucide-react";
 import {
   DataTable,
@@ -107,6 +110,28 @@ interface PostOutcome {
   };
 }
 
+interface PayrollLiabilityPendingRow {
+  runId: number;
+  period: string;
+  gosiOutstanding: string;
+  whtOutstanding: string;
+  deductionsOutstanding: string;
+}
+
+type PayrollLiabilityType = "gosi" | "wht" | "deductions";
+
+// Payroll-liability settlement returns hrEngine's own outcome shape
+// ({ journalEntryId, settlementId, alreadyExists, amount }) — not the
+// shared { status } envelope — so its toast is described inline below.
+interface PayrollSettleOutcome {
+  data: {
+    journalEntryId: number;
+    settlementId: number;
+    alreadyExists: boolean;
+    amount: number;
+  };
+}
+
 function describeOutcome(o: PostOutcome["data"]): string {
   if (o.status === "posted") return `تم نشر القيد (#${o.journalEntryId})`;
   if (o.status === "draft") return `تم إنشاء مسودة قيد (#${o.journalEntryId})`;
@@ -115,7 +140,7 @@ function describeOutcome(o: PostOutcome["data"]): string {
   return "تمت المعالجة";
 }
 
-type Tab = "mudad" | "lots" | "fx" | "cycle" | "realized";
+type Tab = "mudad" | "lots" | "fx" | "cycle" | "realized" | "payroll-liability";
 
 export default function GLPostingQueuePage() {
   const [tab, setTab] = useState<Tab>("mudad");
@@ -139,6 +164,10 @@ export default function GLPostingQueuePage() {
   const realized = useApiQuery<{ data: RealizedFxHistoryRow[] }>(
     ["gl-helpers", "realized-fx", "history"],
     "/finance/gl-helpers/realized-fx/history",
+  );
+  const payrollLiability = useApiQuery<{ data: PayrollLiabilityPendingRow[] }>(
+    ["gl-helpers", "payroll-liability", "pending"],
+    "/finance/gl-helpers/payroll-liability/pending",
   );
 
   const postMudad = useApiMutation<PostOutcome, { id: number }>(
@@ -206,15 +235,52 @@ export default function GLPostingQueuePage() {
   const [realizedDate, setRealizedDate] = useState(todayLocal());
   const [realizedAmount, setRealizedAmount] = useState("");
 
+  // Payroll-liability settlement (#2303) — DR GOSI(2140)/WHT(2132)/deductions(2150)
+  // / CR bank when the company remits to the authority. Idempotent per
+  // (run, liability) and capped at the run's accrued balance (both enforced
+  // server-side via hrEngine), so a re-submit is a no-op and over-pay rejected.
+  const postPayrollLiability = useApiMutation<PayrollSettleOutcome, {
+    runId: number;
+    liabilityType: PayrollLiabilityType;
+    amount: number;
+    paymentDate: string;
+    referenceNumber?: string;
+  }>(
+    (body) => `/finance/gl-helpers/payroll-liability/${body.runId}`,
+    "POST",
+    [["gl-helpers", "payroll-liability", "pending"]],
+    {
+      successMessage: false,
+      onSuccess: (r) =>
+        toast({
+          title: r.data.alreadyExists
+            ? "تمت تسوية هذا الالتزام مسبقاً لهذه الدورة — لا حركة"
+            : `تم نشر قيد التسوية (#${r.data.journalEntryId})`,
+        }),
+    },
+  );
+  const [plRunId, setPlRunId] = useState("");
+  const [plType, setPlType] = useState<PayrollLiabilityType>("gosi");
+  const [plAmount, setPlAmount] = useState("");
+  const [plDate, setPlDate] = useState(todayLocal());
+  const [plRef, setPlRef] = useState("");
+
+  // Click an outstanding liability in the table → prefill the settle form.
+  const prefillSettle = (runId: number, type: PayrollLiabilityType, amount: string) => {
+    setPlRunId(String(runId));
+    setPlType(type);
+    setPlAmount(amount);
+  };
+
   if (
     mudad.isLoading || lots.isLoading || fx.isLoading ||
-    cycle.isLoading || realized.isLoading
+    cycle.isLoading || realized.isLoading || payrollLiability.isLoading
   ) {
     return <LoadingSpinner />;
   }
   if (
     mudad.isError || lots.isError || fx.isError ||
-    cycle.isError || realized.isError
+    cycle.isError || realized.isError || payrollLiability.isError
   ) {
     return <ErrorState />;
   }
@@ -224,6 +290,7 @@ export default function GLPostingQueuePage() {
   const fxRows = fx.data?.data ?? [];
   const cycleRows = cycle.data?.data ?? [];
   const realizedRows = realized.data?.data ?? [];
+  const payrollLiabilityRows = payrollLiability.data?.data ?? [];
 
   const mudadColumns: DataTableColumn<MudadPendingRow>[] = [
     {
@@ -499,6 +566,79 @@ export default function GLPostingQueuePage() {
     },
   ];
 
+  const payrollLiabilityColumns: DataTableColumn<PayrollLiabilityPendingRow>[] = [
+    {
+      key: "runId",
+      header: "الدورة",
+      sortable: true,
+      className: "font-mono text-muted-foreground",
+      render: (r) => `#${r.runId}`,
+    },
+    {
+      key: "period",
+      header: "الفترة",
+      sortable: true,
+      className: "font-mono text-status-info-foreground",
+      render: (r) => r.period,
+    },
+    {
+      key: "gosiOutstanding",
+      header: "تأمينات GOSI",
+      sortable: true,
+      className: "font-semibold",
+      render: (r) => formatCurrency(Number(r.gosiOutstanding)),
+    },
+    {
+      key: "whtOutstanding",
+      header: "ضريبة الاستقطاع",
+      sortable: true,
+      className: "font-semibold",
+      render: (r) => formatCurrency(Number(r.whtOutstanding)),
+    },
+    {
+      key: "deductionsOutstanding",
+      header: "استقطاعات",
+      sortable: true,
+      className: "font-semibold",
+      render: (r) => formatCurrency(Number(r.deductionsOutstanding)),
+    },
+    {
+      key: "actions" as keyof PayrollLiabilityPendingRow,
+      header: "تسوية",
+      render: (r) => (
+        <div className="flex gap-1 flex-wrap">
+          {Number(r.gosiOutstanding) > 0.005 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => prefillSettle(r.runId, "gosi", r.gosiOutstanding)}
+            >
+              GOSI
+            </Button>
+          )}
+          {Number(r.whtOutstanding) > 0.005 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => prefillSettle(r.runId, "wht", r.whtOutstanding)}
+            >
+              ضريبة
+            </Button>
+          )}
+          {Number(r.deductionsOutstanding) > 0.005 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => prefillSettle(r.runId, "deductions", r.deductionsOutstanding)}
+            >
+              استقطاعات
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <PageShell
       title="قائمة الانتظار للترحيل المحاسبي"
@@ -516,6 +656,7 @@ export default function GLPostingQueuePage() {
               { "النوع": "شطب الدفعات (Lots)", "العدد": lotRows.length },
               { "النوع": "إعادة تقييم FX", "العدد": fxRows.length },
               { "النوع": "الجرد الدوري", "العدد": cycleRows.length },
+              { "النوع": "التزامات الرواتب", "العدد": payrollLiabilityRows.length },
               { "النوع": "FX محقق (تاريخي)", "العدد": realizedRows.length },
             ],
           }}
@@ -523,7 +664,7 @@ export default function GLPostingQueuePage() {
       }
     >
       <FinanceTabsNav />
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-6">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-7">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 bg-status-info-surface rounded-lg">
@@ -581,13 +722,24 @@ export default function GLPostingQueuePage() {
         </Card>
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-amber-50 rounded-lg">
+              <Landmark className="h-5 w-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">التزامات الرواتب</p>
+              <p className="text-xl font-bold">{payrollLiabilityRows.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 bg-slate-100 rounded-lg">
               <AlertCircle className="h-5 w-5 text-slate-600" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">الإجمالي</p>
               <p className="text-xl font-bold">
-                {mudadRows.length + lotRows.length + fxRows.length + cycleRows.length}
+                {mudadRows.length + lotRows.length + fxRows.length + cycleRows.length + payrollLiabilityRows.length}
               </p>
             </div>
           </CardContent>
@@ -607,6 +759,9 @@ export default function GLPostingQueuePage() {
           </TabsTrigger>
           <TabsTrigger value="cycle">
             جرد دوري ({cycleRows.length})
+          </TabsTrigger>
+          <TabsTrigger value="payroll-liability">
+            التزامات الرواتب ({payrollLiabilityRows.length})
           </TabsTrigger>
           <TabsTrigger value="realized">
             FX مُحقَّق ({realizedRows.length})
@@ -656,6 +811,105 @@ export default function GLPostingQueuePage() {
             rowKey={(r) => `cycle-${r.id}`}
             emptyMessage="لا توجد عمليات جرد دوري معتمدة بانتظار الترحيل"
             emptyIcon={<ClipboardCheck className="h-10 w-10 opacity-30" />}
+            pageSize={20}
+            noToolbar
+          />
+        </TabsContent>
+
+        <TabsContent value="payroll-liability" className="mt-3">
+          <div className="mb-2 text-xs text-muted-foreground">
+            التزامات الرواتب المستحقّة على كل دورة (تأمينات GOSI 2140 / ضريبة الاستقطاع 2132 / استقطاعات 2150)، محسوبة من رصيد القيد نفسه. اختر التزامًا من الجدول لتعبئة النموذج، ثم سجّل التحويل لترحيل قيد التسوية (مدين الالتزام / دائن البنك). العملية idempotent لكل (دورة، التزام) ومقيّدة بالرصيد المستحق.
+          </div>
+          <div className="mb-3 grid grid-cols-1 md:grid-cols-6 gap-2 p-3 border rounded bg-muted/30">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">دورة الرواتب *</label>
+              <input
+                type="number"
+                value={plRunId}
+                onChange={(e) => setPlRunId(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">نوع الالتزام *</label>
+              <select
+                value={plType}
+                onChange={(e) => setPlType(e.target.value as PayrollLiabilityType)}
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              >
+                <option value="gosi">تأمينات GOSI</option>
+                <option value="wht">ضريبة استقطاع</option>
+                <option value="deductions">استقطاعات</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">المبلغ *</label>
+              <input
+                type="number"
+                step="0.01"
+                value={plAmount}
+                onChange={(e) => setPlAmount(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">تاريخ الدفع *</label>
+              <input
+                type="date"
+                value={plDate}
+                onChange={(e) => setPlDate(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">مرجع التحويل</label>
+              <input
+                type="text"
+                value={plRef}
+                onChange={(e) => setPlRef(e.target.value)}
+                dir="ltr"
+                className="w-full h-8 px-2 text-xs border rounded bg-white"
+              />
+            </div>
+            <Button
+              size="sm"
+              rateLimitAware
+              disabled={postPayrollLiability.isPending || !plRunId.trim() || !plAmount.trim() || !plDate}
+              onClick={() => {
+                const id = Number(plRunId);
+                const amt = Number(plAmount);
+                if (!Number.isFinite(id) || id <= 0) return;
+                if (!Number.isFinite(amt) || amt <= 0) return;
+                postPayrollLiability.mutate(
+                  {
+                    runId: id,
+                    liabilityType: plType,
+                    amount: amt,
+                    paymentDate: plDate,
+                    referenceNumber: plRef.trim() || undefined,
+                  },
+                  {
+                    onSuccess: () => {
+                      setPlAmount("");
+                      setPlRef("");
+                    },
+                  },
+                );
+              }}
+            >
+              <Send className="h-3.5 w-3.5 ml-1" />
+              تسوية ونشر
+            </Button>
+          </div>
+          <DataTable
+            columns={payrollLiabilityColumns}
+            data={payrollLiabilityRows}
+            rowKey={(r) => `pl-${r.runId}`}
+            emptyMessage="لا توجد التزامات رواتب مستحقّة بانتظار التسوية"
+            emptyIcon={<Landmark className="h-10 w-10 opacity-30" />}
             pageSize={20}
             noToolbar
           />
