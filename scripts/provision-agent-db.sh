@@ -208,6 +208,13 @@ SEED_REPLAY_ALLOWLIST=(
   # preserved by the replay loop, so this entry stays below 338.
   # Idempotent UPDATE scoped to one operationType. #2140 slice 5-a.
   "377_fix_asset_disposal_cash_anchor.sql"
+  # 382 re-points purchase_grni from 2150 → 2115 (the dedicated GRNI
+  # leaf, now live in every company via 035_inventory_projects_gl_accounts
+  # — also in this allowlist). 378 MUST replay AFTER 336 (which seeds
+  # the original 2150 row) and AFTER 035 (which seeds 2115) — array
+  # order is preserved by the replay loop, so this entry stays below
+  # both. Idempotent UPDATE scoped to one operationType. FIN-SUB-01.
+  "382_fix_purchase_grni_anchor.sql"
 )
 is_replay_seed() {
   for s in "${SEED_REPLAY_ALLOWLIST[@]}"; do

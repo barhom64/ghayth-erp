@@ -148,12 +148,13 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // (GET /attendance/field-ping/eligibility on hr.ts; the /my/field
     // self-service mount lives outside the HR file set). All gated.
     // HR-REV-3 (#2222) added 1 (POST /employees/quick-activate, gated). 223→224.
-    expect(ALL_REGISTRATIONS.length).toBe(224);
+    // HR-REV-8 (#2222) added 1 (POST /recruitment/applications/:id/hire, gated). 224→225.
+    expect(ALL_REGISTRATIONS.length).toBe(225);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(224);
+    expect(gated).toBe(225);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
@@ -174,7 +175,8 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
       "hr-loans.ts": 6,
       "hr-overtime.ts": 7,
       "hr-wps.ts": 8,
-      "recruitment.ts": 13,
+      // HR-REV-8 (#2222) added POST /applications/:id/hire (gated). 13→14.
+      "recruitment.ts": 14,
     });
   });
 });

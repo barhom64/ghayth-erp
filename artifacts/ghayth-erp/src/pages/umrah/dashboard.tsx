@@ -19,6 +19,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { UmrahFinanceHygieneCard } from "@/components/shared/umrah-finance-hygiene-card";
+import { UmrahJourneyHealthCard } from "@/components/shared/umrah-journey-health-card";
 
 export default function UmrahDashboard() {
   const { data: seasons, isLoading: seasonsLoading, isError: seasonsError } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
@@ -124,6 +125,13 @@ export default function UmrahDashboard() {
           البطاقة خضراء، وإلا توضح للمدير كم بند يحتاج اعتماد/ترحيل
           محاسبي + المبلغ المتأثر. روابط مباشرة للتقارير. */}
       <UmrahFinanceHygieneCard />
+
+      {/* U-19-P7 — Journey Health. Surfaces the 4 stuck-item buckets
+          from /umrah/reports/recovery-hub so the operator sees them
+          immediately. Each tile links to the page where the operator
+          actually fixes the problem. Hides itself entirely when all 4
+          buckets are zero (clean tenant). */}
+      <UmrahJourneyHealthCard />
 
       {/* Quick Actions — أهم 4 إجراءات يومية للعامل، ظاهرة مباشرة
           بدون ما يضطر يفتح tab. كانت كل وحدة مدفونة في مكان مختلف:

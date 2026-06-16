@@ -1,15 +1,17 @@
-# gl-swallow-allowlist.txt — #2301 triage baseline (whole-file).
-# Each file currently catches a GL-posting error without rethrowing
-# (returns success while the journal silently fails → financial_posting_failures
-# retry queue). Fix in the owning track (rethrow / compensate-then-surface),
-# then delete its line. The guard fails on a NEW file that does the same.
-
-lib/engines/warehouseEngine.ts
-lib/eventListeners.ts
-routes/legal.ts
-routes/projects.ts
-routes/store.ts
-routes/support.ts
-routes/umrah.ts
-routes/warehouse-cycle-counts.ts
-routes/warehouse.ts
+# gl-swallow-allowlist.txt — #2301 baseline.
+#
+# EMPTY as of 2026-06-16: all former entries were verified false-positives and
+# retired. The check (check-gl-swallow.mjs) now recognises that a GL-error catch
+# which does NOT rethrow is still SAFE when the wrapped post is GUARANTEED to
+# record the failure — i.e. it routes through createGuardedJournalEntry
+# (businessHelpers.ts), which INSERTs into financial_posting_failures (drained
+# by the postingFailureRetry cron) before rethrowing. Every previously-baselined
+# file posts through a guardTable path, so the swallowed rethrow loses nothing.
+#
+# Live-proven by tests/integration/glGuardedFailureRecording.dynamic.test.ts: a
+# forced guarded-post failure lands a financial_posting_failures row.
+#
+# Add a `routes/<file>.ts` / `lib/<...>.ts` line here ONLY if a genuinely
+# UNGUARDED GL post (raw createJournalEntry, no recording) must be retained —
+# the guard still fails on that. Real fixes (rethrow, or route through a
+# guardTable post) are preferred over an allowlist entry.

@@ -353,7 +353,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
          WHERE "entityType" = 'employee' AND "companyId" = $${govCompanyIdx}
          GROUP BY "entityId"
        )
-       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status, e."activationStatus",
               ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
@@ -410,23 +410,60 @@ const quickActivateSchema = z.object({
   hireDate: z.string().optional().nullable(),
 });
 
-// HR-REV-3 (#2222) §3/§4 — the default activation plan. Each task carries its
-// owning role + reason + whether it's mandatory, so completion is distributed
-// across owners (documents / payroll / department / it / hr / …) instead of
-// dumped on HR. Profile-driven, per-job-title generation is HR-REV-4; this is
-// the flat default until then. Both the quick-activate and the full-create
-// paths build their onboarding tasks from this single source.
-const DEFAULT_ONBOARDING_PLAN: ReadonlyArray<{
+// HR-REV-4 (#2223) §2/§4 — the activation plan is generated from the job
+// title's professional category, so a سائق, a محاسب and an إداري get materially
+// different distributed task sets (each task routed to its owning role, with a
+// serviceType for the ones that are a service request — vehicle/custody/access
+// — never a manual HR checkbox). This is the in-code profile until the
+// DB-driven job_activation_profiles tables land (HR-REV-4 full). Both the
+// quick-activate and the full-create paths call this with the resolved
+// job_titles.category (null → the general/admin default).
+type ActivationTask = {
   title: string;
   ownerRole: string;
   reason: string;
   mandatory: boolean;
-}> = [
-  { title: "تسليم أجهزة IT وإعداد الحسابات", ownerRole: "it", reason: "تجهيز الحساب والبريد وصرف عهدة الأجهزة", mandatory: true },
-  { title: "توقيع عقد العمل والتأمينات", ownerRole: "documents", reason: "العقد والتأمينات والتحقق من الوثائق", mandatory: true },
-  { title: "تعريف المدير المباشر والفريق", ownerRole: "department", reason: "تأكيد المباشرة وتعريف الفريق وموقع العمل", mandatory: true },
-  { title: "دورة التعريف بالشركة وسياساتها", ownerRole: "hr", reason: "التعريف بالسياسات واللوائح", mandatory: false },
-];
+  serviceType?: string;
+};
+
+function buildActivationPlan(category: string | null): ReadonlyArray<ActivationTask> {
+  const c = (category || "").toLowerCase();
+  const contract: ActivationTask = { title: "توقيع عقد العمل والتأمينات", ownerRole: "documents", reason: "العقد والتأمينات والتحقق من الوثائق", mandatory: true };
+  const manager: ActivationTask = { title: "تعريف المدير المباشر والفريق", ownerRole: "department", reason: "تأكيد المباشرة وتعريف الفريق وموقع العمل", mandatory: true };
+
+  // Driver — field/GPS attendance + vehicle + device custody + cost center.
+  if (c.includes("driver") || c.includes("سائق") || c.includes("field") || c.includes("ميدان")) {
+    return [
+      { title: "التحقق من رخصة القيادة", ownerRole: "documents", reason: "رخصة قيادة سارية شرط للقيادة", mandatory: true },
+      contract,
+      manager,
+      { title: "تطبيق سياسة حضور ميدانية (GPS)", ownerRole: "hr", reason: "فئة السائق تتطلب تتبّع GPS", mandatory: true },
+      { title: "طلب تخصيص مركبة", ownerRole: "fleet", reason: "تخصيص مركبة من الأسطول (طلب خدمة لا إنشاء)", mandatory: true, serviceType: "vehicle" },
+      { title: "صرف عهدة جهاز/شريحة", ownerRole: "warehouse", reason: "عهدة تشغيلية بوثيقة استلام", mandatory: false, serviceType: "custody" },
+      { title: "ربط مركز التكلفة/المشروع", ownerRole: "payroll", reason: "تحميل التكلفة على المركز الصحيح", mandatory: true },
+    ];
+  }
+
+  // Accountant / finance — restricted financial access, no vehicle, no GPS.
+  if (c.includes("account") || c.includes("finance") || c.includes("محاسب") || c.includes("مالي")) {
+    return [
+      contract,
+      manager,
+      { title: "منح صلاحية مالية مقيّدة", ownerRole: "access", reason: "وصول مالي محدود حسب الدور (لا رؤية تحقيقات إلا بمنح صريح)", mandatory: true, serviceType: "access" },
+      { title: "ربط مركز التكلفة", ownerRole: "payroll", reason: "ربط محاسبي لمركز التكلفة", mandatory: false },
+      { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    ];
+  }
+
+  // General / admin default.
+  return [
+    { title: "تسليم أجهزة IT وإعداد الحسابات", ownerRole: "it", reason: "تجهيز الحساب والبريد وصرف عهدة الأجهزة", mandatory: true, serviceType: "access" },
+    contract,
+    manager,
+    { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    { title: "دورة التعريف بالشركة وسياساتها", ownerRole: "hr", reason: "التعريف بالسياسات واللوائح", mandatory: false },
+  ];
+}
 
 router.post("/quick-activate", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
@@ -467,8 +504,8 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       // 'inactive' is the only CHECK-allowed pending-ish status (migration
       // 084); it gates the employee until the activation flow flips it.
       const empRes = await client.query(
-        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status)
-         VALUES ($1, $2, $3, $4, $5, 'inactive')
+        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status, "activationStatus")
+         VALUES ($1, $2, $3, $4, $5, 'inactive', 'pending_activation')
          RETURNING id`,
         [name, phone || null, finalEmpNumber, nationalId || null, nationality || null]
       );
@@ -480,14 +517,19 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
         [empId, preIssued.assignmentId]
       );
 
-      // ── Resolve jobTitleId from the jobTitle text (company-scoped) ──
+      // ── Resolve jobTitleId + category from the jobTitle text (company-scoped) ──
+      // category drives the activation plan (HR-REV-4 §1): سائق ≠ محاسب ≠ إداري.
       let resolvedJobTitleId: number | null = null;
+      let resolvedCategory: string | null = null;
       if (effectiveJobTitle && effectiveJobTitle !== "موظف") {
         const jtRes = await client.query(
-          `SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+          `SELECT id, category FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
           [effectiveJobTitle, effectiveCompanyId]
         );
-        if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
+        if (jtRes.rows.length > 0) {
+          resolvedJobTitleId = jtRes.rows[0].id;
+          resolvedCategory = jtRes.rows[0].category ?? null;
+        }
       }
 
       // ── Create the first assignment in ACTIVE state ──
@@ -502,14 +544,14 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       );
       const assignmentId = assignRes.rows[0].id;
 
-      // ── Create the onboarding tasks (same distributed plan as full create) ──
+      // ── Create the onboarding tasks from the job-category profile ──
       const dueDateOnboarding = new Date();
       dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const task of DEFAULT_ONBOARDING_PLAN) {
+      for (const task of buildActivationPlan(resolvedCategory)) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory)
-           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8)`,
-          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
 
@@ -1037,6 +1079,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         );
         if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
       }
+      // Resolve the job category for the activation plan (HR-REV-4 §1). Falls
+      // back to categoryKey (attendance category) when the title has none.
+      let resolvedCategory: string | null = null;
+      if (resolvedJobTitleId) {
+        const catRes = await client.query(`SELECT category FROM job_titles WHERE id = $1 LIMIT 1`, [resolvedJobTitleId]);
+        resolvedCategory = catRes.rows[0]?.category ?? null;
+      }
+      if (!resolvedCategory && categoryKey) resolvedCategory = String(categoryKey);
 
       const assignRes = await client.query(
         `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId","positionId","categoryKey")
@@ -1154,14 +1204,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         [contractRes.rows[0].id, issuedContract.assignmentId]
       );
 
-      // ── Step 7: Create the distributed onboarding tasks ──
+      // ── Step 7: Create the onboarding tasks from the job-category profile ──
       const dueDateOnboarding = new Date();
       dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const task of DEFAULT_ONBOARDING_PLAN) {
+      for (const task of buildActivationPlan(resolvedCategory)) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory)
-           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8)`,
-          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
 
@@ -1579,11 +1629,17 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, status } = req.query as Record<string, string | undefined>;
+    const { employeeId, status, ownerRole, mandatory } = req.query as Record<string, string | undefined>;
     const conditions = [`ot."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
     if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
+    // HR-REV-3 (#2222) — per-owner queue: each owning department (الأسطول/
+    // الوثائق/الرواتب…) can pull just the activation tasks routed to it.
+    if (ownerRole) { params.push(ownerRole); conditions.push(`ot."ownerRole" = $${params.length}`); }
+    // mandatory=true|false narrows to the gating items (or the optional ones).
+    if (mandatory === "true") { conditions.push(`ot.mandatory IS NOT FALSE`); }
+    else if (mandatory === "false") { conditions.push(`ot.mandatory IS FALSE`); }
     interface OnboardingTaskRow extends Record<string, unknown> {
       id: number;
       companyId: number;
@@ -1620,14 +1676,47 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
       completedAt?: string | null;
       completedBy?: number | null;
     }
-    const [row] = await rawQuery<OnboardingTaskRow>(
-      `UPDATE onboarding_tasks SET status = $1,
-       "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
-       "completedBy" = $2
-       WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
-      [status, scope.activeAssignmentId, id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("المهمة غير موجودة");
+    // The task update + the activation auto-gate touch two tables, so they run
+    // in one transaction (rawQuery auto-joins the ambient tx) — a failure on the
+    // employees UPDATE must not leave the task flipped on its own.
+    const row = await withTransaction(async () => {
+      const [r] = await rawQuery<OnboardingTaskRow>(
+        `UPDATE onboarding_tasks SET status = $1,
+         "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
+         "completedBy" = $2
+         WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
+        [status, scope.activeAssignmentId, id, scope.companyId]
+      );
+      if (!r) throw new NotFoundError("المهمة غير موجودة");
+
+      // HR-REV-3 §1 auto-gate — once every MANDATORY task for this hire is done,
+      // advance a still-pending_activation employee to ready_for_hr_review so HR
+      // knows the distributed plan is complete. Only flips from pending_activation
+      // (never overrides a later state); reversible if a task is re-opened.
+      if (status === "completed") {
+        const [pending] = await rawQuery<{ cnt: number }>(
+          `SELECT COUNT(*)::int AS cnt FROM onboarding_tasks
+            WHERE "employeeId" = $1 AND "companyId" = $2 AND mandatory IS NOT FALSE
+              AND status NOT IN ('completed','skipped')`,
+          [r.employeeId, scope.companyId]
+        );
+        if (pending && pending.cnt === 0) {
+          // Tenant scope via the employee's assignment (employees.companyId is
+          // not populated on quick-activate; the assignment carries the tenant).
+          await rawQuery(
+            `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
+              WHERE id = $1 AND "activationStatus" = 'pending_activation'
+                AND EXISTS (
+                  SELECT 1 FROM employee_assignments ea
+                  WHERE ea."employeeId" = employees.id AND ea."companyId" = $2
+                )`,
+            [r.employeeId, scope.companyId]
+          );
+        }
+      }
+      return r;
+    });
+
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: id,
@@ -2251,6 +2340,33 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
           field: "departmentId",
           fix: "اختر قسماً موجوداً في الشركة.",
         });
+      }
+    }
+
+    // HR-REV-3 (#2222) — activation ready-gate. Flipping a quick-activated
+    // employee (inactive/pending/onboarding) to active is only allowed once
+    // every MANDATORY onboarding task is completed or skipped — so activation
+    // can't bypass the distributed plan's owning roles. Re-activating a
+    // suspended/terminated employee is exempt (it carries no onboarding plan).
+    const PENDING_ACTIVATION = ["inactive", "pending", "onboarding"];
+    if (status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status)) {
+      const [gate] = await rawQuery<{ remaining: number }>(
+        `SELECT COUNT(*)::int AS remaining FROM onboarding_tasks
+          WHERE "employeeId" = $1 AND "companyId" = $2
+            AND mandatory IS NOT FALSE
+            AND status NOT IN ('completed','skipped')`,
+        [id, scope.companyId]
+      );
+      const remaining = Number(gate?.remaining ?? 0);
+      if (remaining > 0) {
+        throw new ValidationError(
+          `لا يمكن التفعيل: ${remaining} بند إلزامي في خطة التهيئة لم يكتمل بعد`,
+          {
+            field: "status",
+            fix: "أكمل البنود الإلزامية في «لوحة قيد التفعيل» قبل تفعيل الموظف.",
+            meta: { remainingMandatory: remaining },
+          }
+        );
       }
     }
 
