@@ -164,6 +164,12 @@ run_step "check:migration-policy" node scripts/src/check-migration-policy.mjs
 # — dormant until their separate cleanup PRs land, since each still has
 # real findings unrelated to the guard wiring itself).
 run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
+# REDIRECT-TO-NOWHERE: every redirectTo("/x") alias in the ghayth-erp route
+# table must resolve to a real mounted route. Catches the A4-navigation failure
+# class (delete/rename a canonical page, leave its alias behind -> SPA 404)
+# statically, before merge. Pure-logic fixtures first, then the live scan.
+run_step "check:redirect-targets:tests" node scripts/src/check-redirect-targets.test.mjs
+run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
 # Fourth of the four originally-dormant guards from PR #574 — finally
