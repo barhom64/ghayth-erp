@@ -1862,8 +1862,9 @@ router.post("/commission-plans/:id/simulate", authorize({ feature: "umrah", acti
     const { month, year, totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent } = parsed;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const result = await simulateCommission(id, month, year, scope.companyId,
-      { totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent });
+    const result = await simulateCommission(id, month, year, scope.companyId, {
+      totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent,
+    });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_commission_plans", entityId: id, after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(result);

@@ -651,12 +651,7 @@ function SimulatorTab({
       const month = Number(currentMonthPaddedRiyadh());
       const year = currentYearRiyadh();
       let res: any;
-      if (planRowId) {
-        res = await apiFetch(`/umrah/commission-plans/${planRowId}/simulate`, {
-          method: "POST",
-          body: JSON.stringify({ month, year, ...values }),
-        });
-      } else {
+      if (!planRowId) {
         const live = getPlanValues();
         if (!live.employeeId || !live.seasonId) {
           toast({
@@ -692,6 +687,11 @@ function SimulatorTab({
             month, year,
             ...values,
           }),
+        });
+      } else {
+        res = await apiFetch(`/umrah/commission-plans/${planRowId}/simulate`, {
+          method: "POST",
+          body: JSON.stringify({ month, year, ...values }),
         });
       }
       setSimResult(res?.data ?? res);
