@@ -2,8 +2,7 @@
 # Baseline of handlers that write 2+ tables outside withTransaction/
 # applyTransition. As each is wrapped, delete its line — the guard fails
 # on any NEW offender. Regenerate: node scripts/src/check-tx-coverage.mjs --write-allowlist
-# Baseline: 41 handler(s).
-routes/accounting-engine.ts:POST /classification-center/posting-failures/:id/classify
+# Baseline: 36 handler(s).
 routes/admin-ai-governance.ts:POST /prompts/:id/evaluate
 routes/admin-ai-governance.ts:POST /prompts/:id/reviews
 routes/admin-communication-control.ts:POST /outbound-queue/bulk-retry
@@ -13,7 +12,6 @@ routes/communications.ts:POST /click-to-call
 routes/communications.ts:POST /pbx/completed
 routes/communications.ts:POST /whatsapp/webhook
 routes/crm.ts:POST /opportunities
-routes/finance-journal.ts:POST /expenses/:id/request-attachment
 routes/fleet-telematics.ts:POST /telematics/video/session/:id/stop
 routes/fleet.ts:POST /me/trips/:id/complete
 routes/hr-overtime.ts:PATCH /overtime/:id/approve
@@ -25,7 +23,6 @@ routes/inboxConversations.ts:POST /:id/link
 routes/legal.ts:POST /cases
 routes/legal.ts:POST /contracts
 routes/numbering.ts:PATCH /schemes/:id
-routes/operationsCenter.ts:POST /daily-close/execute
 routes/properties.ts:PATCH /maintenance-requests/:id
 routes/properties.ts:POST /maintenance-requests
 routes/rbacV2.ts:DELETE /users/:userId/roles/:roleId
