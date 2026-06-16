@@ -59,6 +59,14 @@ run_step "audit:routes"       node scripts/src/audit-routes.mjs
 # "/foo/..." paths, producing /api/foo/foo/.... See scripts/src/
 # audit-route-doubling.mjs header for the canonical example.
 run_step "audit:route-doubling" node scripts/src/audit-route-doubling.mjs
+# Navigation governance gates (UX Nav Governance wave) — source-only, no DB.
+#   gate:tabs          — fails if an internal *-tabs-nav tab points at a dead /
+#                        redirect-only / create-edit-detail route.
+#   gate:quick-actions — fails if a header quick-action button points at a
+#                        redirect-only / dead route (create links are allowed).
+# Report-only siblings for local triage: audit:tabs / audit:quick-actions.
+run_step "gate:tabs"          pnpm -s run gate:tabs
+run_step "gate:quick-actions" pnpm -s run gate:quick-actions
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a
