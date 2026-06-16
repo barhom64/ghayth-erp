@@ -73,14 +73,16 @@ describe("HR-014 — backend: overview enrichment Promise.all", () => {
   });
 
   it("both queries are companyId-scoped (no cross-tenant leak)", () => {
-    // Both new queries reference $2 = scope.companyId in their WHERE clause.
+    // Both queries bind scope.companyId as a parameter in their WHERE clause
+    // (placeholder position is not fixed — the security invariant is that
+    //  companyId is parameterized, never interpolated).
     const latestSection = ROUTE_SRC.slice(
       ROUTE_SRC.indexOf("FROM employee_scores"),
       ROUTE_SRC.indexOf("FROM employee_signals"),
     );
-    expect(latestSection).toMatch(/"companyId" = \$2/);
+    expect(latestSection).toMatch(/"companyId" = \$\d/);
     const signalsSection = ROUTE_SRC.slice(ROUTE_SRC.indexOf("FROM employee_signals"));
-    expect(signalsSection).toMatch(/"companyId" = \$2/);
+    expect(signalsSection).toMatch(/"companyId" = \$\d/);
   });
 });
 
