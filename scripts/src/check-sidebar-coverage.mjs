@@ -17,6 +17,8 @@
 //        - detail pages with `:id` params (opened from list pages)
 //        - create/edit pages (`/create`, `/new`, `/:id/edit`) — opened
 //          from a button on the list/detail page
+//        - redirect stubs (`component: redirectTo(...)` / `RedirectToXxx`) —
+//          deep-link aliases that bounce to a canonical page, not real pages
 //        - login / 404 / shell routes
 //   4. Reports the difference, plus governance checks (below).
 //
@@ -86,6 +88,26 @@ function getMountedRoutes() {
   return [...set].sort();
 }
 
+/**
+ * Paths whose route component is a redirect — `component: redirectTo("/x")` or a
+ * named `RedirectToXxx` component. These are deep-link / back-compat aliases that
+ * bounce to a canonical page, not pages in their own right, so (like detail /
+ * create pages) they are never expected to carry a sidebar entry.
+ */
+function getRedirectRoutePaths() {
+  const set = new Set();
+  for (const file of fs.readdirSync(ROUTES_DIR)) {
+    if (!file.endsWith(".tsx")) continue;
+    const src = fs.readFileSync(path.join(ROUTES_DIR, file), "utf-8");
+    for (const m of src.matchAll(
+      /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*(?:redirectTo\b|RedirectTo[A-Za-z]*)/g,
+    )) {
+      set.add(m[1]);
+    }
+  }
+  return set;
+}
+
 /** Pull every `path: "/x"` value from the navigation registry. */
 function getSidebarPaths() {
   const src = fs.readFileSync(SIDEBAR_FILE, "utf-8");
@@ -123,6 +145,7 @@ function isCreateEditDetail(p) {
 function main() {
   const routes = getMountedRoutes();
   const routesSet = new Set(routes);
+  const redirectPaths = getRedirectRoutePaths();
   const sidebarPaths = [...new Set(getSidebarPaths())].sort();
   const sidebarSet = new Set(sidebarPaths);
 
@@ -131,7 +154,9 @@ function main() {
   let legitimatelyOff = 0;
   for (const r of routes) {
     if (sidebarSet.has(r)) continue;
-    if (isLegitimatelyOffSidebar(r)) {
+    // Redirect stubs bounce to a canonical page — aliases, not pages, so they
+    // don't need their own nav entry (same treatment as detail/create pages).
+    if (redirectPaths.has(r) || isLegitimatelyOffSidebar(r)) {
       legitimatelyOff++;
       continue;
     }

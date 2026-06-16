@@ -873,9 +873,10 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
         { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
         { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
-        { label: "مؤشرات الأداء", path: "/bi/kpis", icon: TrendingUp },
-        { label: "التقارير التحليلية", path: "/bi/reports", icon: FileBarChart },
-        { label: "لوحات BI", path: "/bi/dashboards", icon: LayoutDashboard },
+        // BI de-dup — «مؤشرات الأداء» (/bi/kpis)، «التقارير التحليلية» (/bi/reports)
+        // و«لوحات BI» (/bi/dashboards) كانت بنوداً مكرّرة: مساراتها الثلاثة تعيد
+        // التوجيه إلى /bi، وهذه العروض أصلاً تبويبات داخل صفحة /bi نفسها. أُزيلت
+        // البنود الخارجية المسدودة (وأُبقيت مسارات إعادة التوجيه للروابط القديمة).
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
         { label: "منصة AI", path: "/intelligence/ai-workbench", icon: Sparkles },
