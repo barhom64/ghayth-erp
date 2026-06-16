@@ -477,7 +477,9 @@ function CompanyDocEditDialog({ doc, onClose, onSaved }: { doc: CompanyDocRow; o
 }
 
 function EmployeeDocsTab() {
+  const { toast } = useToast();
   const [employeeFilter, setEmployeeFilter] = useState<string>("");
+  const [editingDoc, setEditingDoc] = useState<EmployeeDocRow | null>(null);
   // Cross-employee mirror (no filter) — surfaces in the dashboard
   // summary when the operator hasn't picked a specific employee.
   useApiQuery<any>(
@@ -501,6 +503,17 @@ function EmployeeDocsTab() {
   const rows = data?.data ?? [];
   const [filters, setFilters] = useFilters();
   const [creating, setCreating] = useState(false);
+
+  const deleteDoc = async (id: number) => {
+    if (!confirm("حذف وثيقة الموظف هذه؟")) return;
+    try {
+      await apiFetch(`/hr/employee-documents/${id}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      refetch();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل الحذف", description: err?.message });
+    }
+  };
 
   const filtered = applyFilters(rows, filters, {
     searchFields: ["employeeName", "type", "name", "number"],
@@ -560,6 +573,22 @@ function EmployeeDocsTab() {
           </span>
         );
       },
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (r) => (
+        <div className="flex gap-1">
+          <GuardedButton perm="hr.employees:update" variant="ghost" size="sm" className="h-7 w-7 p-0"
+            onClick={() => setEditingDoc(r)}>
+            <Pencil className="h-3 w-3" />
+          </GuardedButton>
+          <GuardedButton perm="hr.employees:delete" variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+            onClick={() => deleteDoc(r.id)}>
+            <Trash2 className="h-3 w-3" />
+          </GuardedButton>
+        </div>
+      ),
     },
   ];
 
@@ -632,7 +661,70 @@ function EmployeeDocsTab() {
           }}
         />
       )}
+
+      {editingDoc && (
+        <EmployeeDocEditDialog
+          doc={editingDoc}
+          onClose={() => setEditingDoc(null)}
+          onSaved={() => {
+            setEditingDoc(null);
+            refetch();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function EmployeeDocEditDialog({ doc, onClose, onSaved }: { doc: EmployeeDocRow; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [form, setForm] = useState({
+    documentType: doc.type || "",
+    documentNumber: doc.number || "",
+    issueDate: doc.issueDate || "",
+    expiryDate: doc.expiryDate || "",
+    notes: doc.notes || "",
+  });
+  const save = async () => {
+    try {
+      await apiFetch(`/hr/employee-documents/${doc.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          documentType: form.documentType,
+          documentNumber: form.documentNumber || undefined,
+          issueDate: form.issueDate || undefined,
+          expiryDate: form.expiryDate || undefined,
+          notes: form.notes || undefined,
+        }),
+      });
+      toast({ title: "تم التحديث" });
+      onSaved();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "فشل التحديث", description: err?.message });
+    }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent dir="rtl" className="sm:max-w-md">
+        <DialogHeader><DialogTitle>تعديل وثيقة الموظف</DialogTitle></DialogHeader>
+        <div className="space-y-3 py-2">
+          <div><label className="text-xs text-muted-foreground">نوع الوثيقة *</label>
+            <input className="w-full h-9 px-3 border rounded-md mt-1 text-sm" value={form.documentType} onChange={(e) => setForm((f) => ({ ...f, documentType: e.target.value }))} /></div>
+          <div><label className="text-xs text-muted-foreground">الرقم</label>
+            <input className="w-full h-9 px-3 border rounded-md mt-1 text-sm" value={form.documentNumber} onChange={(e) => setForm((f) => ({ ...f, documentNumber: e.target.value }))} /></div>
+          <div><label className="text-xs text-muted-foreground">تاريخ الإصدار</label>
+            <input type="date" className="w-full h-9 px-3 border rounded-md mt-1 text-sm" value={form.issueDate} onChange={(e) => setForm((f) => ({ ...f, issueDate: e.target.value }))} /></div>
+          <div><label className="text-xs text-muted-foreground">تاريخ الانتهاء</label>
+            <input type="date" className="w-full h-9 px-3 border rounded-md mt-1 text-sm" value={form.expiryDate} onChange={(e) => setForm((f) => ({ ...f, expiryDate: e.target.value }))} /></div>
+          <div><label className="text-xs text-muted-foreground">ملاحظات</label>
+            <input className="w-full h-9 px-3 border rounded-md mt-1 text-sm" value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></div>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" onClick={onClose}>إلغاء</Button>
+          <Button disabled={!form.documentType} onClick={save}>حفظ</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
