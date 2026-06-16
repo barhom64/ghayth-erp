@@ -110,7 +110,7 @@ describe("HR-REV-3 (#2222) — activation ready-gate (slice 4b)", () => {
   });
   it("gates activation only on the pending-activation statuses (not suspended re-activation)", () => {
     expect(PATCH_BLOCK).toMatch(/PENDING_ACTIVATION\s*=\s*\[\s*"inactive",\s*"pending",\s*"onboarding"\s*\]/);
-    expect(PATCH_BLOCK).toMatch(/status === "active" && PENDING_ACTIVATION\.includes\(before\.status\)/);
+    expect(PATCH_BLOCK).toMatch(/status === "active" && before\.status != null && PENDING_ACTIVATION\.includes\(before\.status\)/);
   });
   it("counts only incomplete MANDATORY onboarding tasks", () => {
     expect(PATCH_BLOCK).toMatch(/FROM onboarding_tasks[\s\S]*?mandatory IS NOT FALSE[\s\S]*?status NOT IN \('completed','skipped'\)/);
