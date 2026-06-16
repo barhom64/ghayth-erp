@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
@@ -56,6 +57,11 @@ export default function ActivationBoardPage() {
     { successMessage: "تم تفعيل الموظف" },
   );
 
+  // Owner-role filter — narrow the board to employees still waiting on one
+  // owning role, so each department (الأسطول/الوثائق/الرواتب…) sees just its
+  // queue out of the distributed plan. KPIs stay on the full set.
+  const [ownerFilter, setOwnerFilter] = useState<string | null>(null);
+
   if (empLoading || tasksLoading) return <LoadingSpinner />;
   if (empError || tasksError) return <ErrorState />;
 
@@ -90,6 +96,10 @@ export default function ActivationBoardPage() {
     })
     .sort((a, b) => b.overdue - a.overdue || b.mandatoryRemaining - a.mandatoryRemaining);
 
+  // Owners that currently have at least one open task, for the filter bar.
+  const ownersPresent = Array.from(new Set(rows.flatMap((r) => r.owners))).filter(Boolean);
+  const visibleRows = ownerFilter ? rows.filter((r) => r.owners.includes(ownerFilter)) : rows;
+
   const kpis = [
     { label: "قيد التفعيل", value: pending.length, icon: UserCheck, color: "text-status-info-foreground bg-status-info-surface" },
     { label: "بنود إلزامية ناقصة", value: rows.reduce((s, r) => s + r.mandatoryRemaining, 0), icon: ListChecks, color: "text-status-warning-foreground bg-status-warning-surface" },
@@ -106,11 +116,41 @@ export default function ActivationBoardPage() {
       <HrTabsNav />
       <KpiGrid items={kpis} />
 
+      {ownersPresent.length > 0 && (
+        <div className="mt-4 flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground ml-1">تصفية بالجهة:</span>
+          <button
+            type="button"
+            onClick={() => setOwnerFilter(null)}
+            className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${ownerFilter === null ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:bg-surface-subtle"}`}
+          >
+            الكل ({rows.length})
+          </button>
+          {ownersPresent.map((role: string) => {
+            const o = ownerLabel(role);
+            const count = rows.filter((r) => r.owners.includes(role)).length;
+            const selected = ownerFilter === role;
+            return (
+              <button
+                key={role}
+                type="button"
+                onClick={() => setOwnerFilter(selected ? null : role)}
+                className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : `${o?.color ?? ""} hover:opacity-80`}`}
+              >
+                {o?.label ?? role} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="space-y-3 mt-4">
-        {rows.length === 0 && (
-          <Card><CardContent className="p-8 text-center text-muted-foreground">لا يوجد موظفون قيد التفعيل حاليًّا</CardContent></Card>
+        {visibleRows.length === 0 && (
+          <Card><CardContent className="p-8 text-center text-muted-foreground">
+            {ownerFilter ? "لا يوجد موظفون بانتظار هذه الجهة" : "لا يوجد موظفون قيد التفعيل حاليًّا"}
+          </CardContent></Card>
         )}
-        {rows.map(({ e, open, done, total, mandatoryRemaining, overdue, owners, age }) => {
+        {visibleRows.map(({ e, open, done, total, mandatoryRemaining, overdue, owners, age }) => {
           // Authoritative: the server advances activationStatus to
           // ready_for_hr_review once all mandatory tasks are done (HR-REV-3 §1);
           // fall back to the client computation for legacy rows without it.
