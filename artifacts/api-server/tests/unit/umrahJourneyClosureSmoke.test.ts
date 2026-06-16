@@ -33,19 +33,22 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const ROUTES = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-journey-reports.ts"),
   "utf8",
 );
 
 // Slice each handler so the §D negative assertions can scope to it.
+// Anchored on `router.get("<path>"` (the actual route definition) so
+// the file-header comment block listing the same paths doesn't get
+// mistaken for the route body.
 const SUB_AGENT_HANDLER =
-  ROUTES.match(/\/sub-agents\/:id\/journey[\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
+  ROUTES.match(/router\.get\(\s*\n?\s*["']\/sub-agents\/:id\/journey["'][\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
   "";
 const GROUP_HANDLER =
-  ROUTES.match(/\/groups\/:id\/journey[\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
+  ROUTES.match(/router\.get\(\s*\n?\s*["']\/groups\/:id\/journey["'][\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
   "";
 const RECOVERY_HANDLER =
-  ROUTES.match(/\/reports\/recovery-hub[\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
+  ROUTES.match(/router\.get\(\s*\n?\s*["']\/reports\/recovery-hub["'][\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
   "";
 
 // ─────────────────────────────────────────────────────────────────────────────
