@@ -1,0 +1,23 @@
+# Allowlist for check:rawquery-param-arity (scripts/src/check-rawquery-param-arity.mjs).
+#
+# Each non-comment line is a `file::handlerIndex::identifier::maxN` key emitted
+# by the checker. A key here suppresses that ONE call. Only add a key after
+# verifying the flagged call is safe; record the rationale above it.
+#
+# The checker's forward value is blocking NEW param-arity (PG 08P01) bugs of the
+# overstay class — a fixed-length array shared by a query whose *conditional*
+# interpolated clause may be empty, leaving the literal under-referencing the
+# array. The two entries below are the inverse: their interpolated clause is
+# UNCONDITIONALLY initialized to contain the higher placeholder, so the runtime
+# SQL always references the full array length. They are verified false positives,
+# not latent bugs. (De-allowlist by deleting the line if the call is refactored.)
+
+# tasks GET /:id — `scopeCondition` is initialized UNCONDITIONALLY to
+# ` AND t."companyId" = $2`, so $2 is always present in the runtime SQL; the
+# array is always [id, companyId] (>=2). The literal only references $1.
+artifacts/api-server/src/routes/tasks.ts::3::params::1
+
+# umrah PATCH /violations/:id — `sets` is initialized UNCONDITIONALLY with
+# `"updatedBy"=$3`, so $3 is always present; the array is always
+# [id, companyId, userId] (>=3). The literal WHERE only references $1,$2.
+artifacts/api-server/src/routes/umrah.ts::60::params::2
