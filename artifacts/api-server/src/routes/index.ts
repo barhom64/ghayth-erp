@@ -136,6 +136,7 @@ import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
 import { vendorContractsRouter } from "./finance-vendor-contracts.js";
 import { costCentersRouter } from "./finance-cost-centers.js";
+import { financeDatafixRouter } from "./finance-datafix.js";
 import disciplineRouter from "./hr-discipline.js";
 import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
@@ -395,6 +396,10 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), fin
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeInsuranceRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
+// #2090 FIN-DATAFIX — READ-ONLY misparented-subsidiary inventory (report only,
+// no mutation endpoint). Gated at requireMinLevel(70) + finance.accounts view
+// inside the router; mounted here so URLs are /finance/datafix/*.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDatafixRouter);
 // #1733 — Transport-to-finance handoff queue. Lives under /finance because
 // only finance-side roles see it (transport NEVER materialises JEs).
 router.use("/finance", requireModule("finance"), requireGuards("financial"), transportBillingCandidatesRouter);

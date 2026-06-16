@@ -78,6 +78,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // scope.companyId scoping is correct here (mirrors finance-amortization.ts).
   "finance-deferred-revenue.ts",
   "finance-custodies.ts",
+  // finance-datafix.ts: #2090 FIN-DATAFIX READ-ONLY misparented-subsidiary
+  // inventory. A single GET keyed on scope.companyId that delegates to
+  // buildMisparentedSubsidiaryInventory (lib/finance/datafixInventory.ts); the
+  // company predicate is applied in the lib SELECT. Aggregate report shape, not
+  // a branch list cascade — buildScopedWhere has no branch filter to add.
+  "finance-datafix.ts",
   "finance-gl-helpers.ts",
   "finance-hardening.ts",
   // finance-insurance.ts: FIN-PROPERTY-MEDICAL-INSURANCE (#2249) insurance
@@ -315,13 +321,17 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // routes/finance-insurance.ts — insurance premium posting + schedule
       // insertion. Three short POST handlers keyed by (companyId, …);
       // mirrors finance-amortization.ts (point-lookup, no branch cascade).
+      // +1 total/manualOnly: #2090 FIN-DATAFIX routes/finance-datafix.ts —
+      // READ-ONLY misparented-subsidiary inventory. Single GET keyed on
+      // scope.companyId (predicate applied in lib/finance/datafixInventory.ts);
+      // aggregate report shape, no branch list cascade for buildScopedWhere.
       // +1 total/manualOnly: U-07 Phase 1 routes/umrah-journey-reports.ts
       // — 4 read-only journey/recovery/pricing-drift routes carved verbatim
       // out of umrah-entities.ts. Same aggregate shape and same allowlist
       // justification as the parent.
-      total: 126,
+      total: 127,
       helperUsers: 39,
-      manualOnly: 84,
+      manualOnly: 85,
     });
   });
 });

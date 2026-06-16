@@ -671,7 +671,10 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
     const { newRoleKey, labelAr, asTemplate } = zodParse(cloneRoleSchema.safeParse(req.body));
 
     await withTransaction(async (client) => {
-      const [src] = (await client.query(`SELECT * FROM rbac_roles WHERE id = $1`, [sourceId])).rows;
+      const [src] = (await client.query(
+        `SELECT * FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template = TRUE)`,
+        [sourceId, scope.companyId],
+      )).rows;
       if (!src) throw new ValidationError("الدور المصدر غير موجود");
 
       const ins = await client.query(
