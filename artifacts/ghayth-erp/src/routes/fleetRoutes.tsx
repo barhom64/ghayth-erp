@@ -70,6 +70,8 @@ const TransportCalendar = lazy(() => import("@/pages/fleet/transport-calendar"))
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
 // #1812 integration bridges — linked sources view.
 const TransportIntegration = lazy(() => import("@/pages/fleet/transport-integration"));
+// #1812 Control Tower — fleet-state operator dashboard.
+const TransportControlTower = lazy(() => import("@/pages/fleet/transport-control-tower"));
 // #1812 itineraries — chained-trip programs.
 const TransportItineraries = lazy(() => import("@/pages/fleet/transport-itineraries"));
 const TransportItineraryDetail = lazy(() => import("@/pages/fleet/transport-itinerary-detail"));
@@ -155,6 +157,7 @@ export const fleetRoutes = [
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
   { path: "/fleet/transport/calendar", component: TransportCalendar }, // TR-022
   { path: "/fleet/transport/integration", component: TransportIntegration },
+  { path: "/fleet/transport/control-tower", component: TransportControlTower },
   { path: "/fleet/transport/itineraries", component: TransportItineraries },
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },
   { path: "/fleet/transport/route-patterns", component: TransportRoutePatterns },

@@ -199,6 +199,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // schedule template. List/lookup keyed on (companyId, id) — same shape as
   // the other transport surfaces; buildScopedWhere has no branch cascade to add.
   "transport-route-patterns.ts",
+  // transport-control-tower.ts: #1812 Control Tower — fleet-state aggregate
+  // endpoint. All COUNT(*) FILTER roll-ups keyed on (companyId, date) across
+  // vehicles/drivers/dispatches/bookings; aggregate shape, not a list cascade —
+  // buildScopedWhere has no branch/department filter to add.
+  "transport-control-tower.ts",
   "umrah-entities.ts",
   "umrah.ts",
   "wiring-stubs.ts",
@@ -319,9 +324,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // READ-ONLY misparented-subsidiary inventory. Single GET keyed on
       // scope.companyId (predicate applied in lib/finance/datafixInventory.ts);
       // aggregate report shape, no branch list cascade for buildScopedWhere.
-      total: 126,
+      // +1 total/manualOnly: routes/transport-control-tower.ts (#1812)
+      // Control Tower — fleet-state aggregate keyed on (companyId, date);
+      // aggregate shape, no list-cascade branch filter for buildScopedWhere.
+      total: 127,
       helperUsers: 39,
-      manualOnly: 84,
+      manualOnly: 85,
     });
   });
 });
