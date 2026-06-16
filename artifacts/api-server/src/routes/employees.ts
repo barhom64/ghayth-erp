@@ -1697,8 +1697,8 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
         if (pending && pending.cnt === 0) {
           await rawQuery(
             `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
-              WHERE id = $1 AND "activationStatus" = 'pending_activation'`,
-            [r.employeeId]
+              WHERE id = $1 AND "companyId" = $2 AND "activationStatus" = 'pending_activation'`,
+            [r.employeeId, scope.companyId]
           );
         }
       }
