@@ -170,6 +170,11 @@ run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
 # statically, before merge. Pure-logic fixtures first, then the live scan.
 run_step "check:redirect-targets:tests" node scripts/src/check-redirect-targets.test.mjs
 run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
+# TABS-NAV COVERAGE: every tab in components/shared/*-tabs-nav.tsx must point at
+# a real mounted route — a dead tab silently 404s (companion to the sidebar +
+# redirect-target nav guards). Pure-logic fixtures first, then the live scan.
+run_step "check:tabs-coverage:tests" node scripts/src/check-tabs-coverage.test.mjs
+run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
 # RAWQUERY-PARAM-ARITY: a Postgres parameterized statement must be bound with
 # exactly max($N) values. Catches the 08P01 "bind message supplies N parameters,
 # but prepared statement requires M" class statically — e.g. the umrah
