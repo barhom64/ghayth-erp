@@ -618,21 +618,33 @@ export const allNavSections: NavSection[] = [
     title: "المستودعات والمتجر",
     items: [
       { label: "المستودعات", path: "/warehouse", icon: Package, module: "warehouse", children: [
-        // Agent-5: explicit module="bi" matches backend gate.
-        // PR-1 / #2163 — was module:"bi" (FU-2).
+        // #2493-follow-up — كانت «المستودعات» قائمة مسطّحة من 13 مدخلاً.
+        // أُعيد تنظيمها إلى لوحة + مجموعات (تشغيل ثم تقارير). إعادة تجميع فقط.
+        // Agent-5/PR-1 (#2163): تبقى لوحة التحكم ورقة مستقلة (module: warehouse)
+        // مع تعليقها قبلها — كي لا يقع مسار /module-dashboards داخل نطاق فخّ
+        // الـregex في platformWave2Pr1…DecouplingSmoke.
         { label: "لوحة التحكم", path: "/module-dashboards?tab=warehouse", icon: LayoutDashboard, module: "warehouse" },
-        { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
-        { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
-        { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
-        { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
-        { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
-        { label: "الدفعات", path: "/warehouse/lots", icon: Package },
-        { label: "الأرقام التسلسلية", path: "/warehouse/serials", icon: ListChecks },
-        { label: "الجرد الدوري", path: "/warehouse/cycle-counts", icon: ClipboardCheck },
-        { label: "تصنيف ABC", path: "/warehouse/abc", icon: BarChart3 },
-        { label: "تقرير دقة الجرد", path: "/warehouse/reports/accuracy", icon: BarChart3 },
-        { label: "تقرير الأصناف المنتهية", path: "/warehouse/reports/expiring", icon: AlertTriangle },
-        { label: "تقادم الدفعات", path: "/warehouse/reports/lot-aging", icon: FileBarChart },
+        // 1) المخزون والحركات.
+        { label: "المخزون والحركات", path: "/warehouse/movements", icon: Activity, children: [
+          { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
+          { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
+          { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
+          { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
+        ]},
+        // 2) الدفعات والتسلسلات والجرد المتقدّم.
+        { label: "الدفعات والتسلسلات", path: "/warehouse/advanced", icon: Layers, children: [
+          { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
+          { label: "الدفعات", path: "/warehouse/lots", icon: Package },
+          { label: "الأرقام التسلسلية", path: "/warehouse/serials", icon: ListChecks },
+          { label: "الجرد الدوري", path: "/warehouse/cycle-counts", icon: ClipboardCheck },
+          { label: "تصنيف ABC", path: "/warehouse/abc", icon: BarChart3 },
+        ]},
+        // 3) التقارير.
+        { label: "التقارير", path: "/warehouse/reports/accuracy", icon: FileBarChart, children: [
+          { label: "تقرير دقة الجرد", path: "/warehouse/reports/accuracy", icon: BarChart3 },
+          { label: "تقرير الأصناف المنتهية", path: "/warehouse/reports/expiring", icon: AlertTriangle },
+          { label: "تقادم الدفعات", path: "/warehouse/reports/lot-aging", icon: FileBarChart },
+        ]},
       ]},
       { label: "المتجر", path: "/store", icon: ShoppingCart, module: "store", children: [
         // Agent-5: explicit module="bi" matches backend gate.
@@ -650,20 +662,37 @@ export const allNavSections: NavSection[] = [
     title: "إدارة الأملاك",
     items: [
       { label: "إدارة الأملاك", path: "/properties/dashboard", icon: Home, module: "property", children: [
+        // #2493-follow-up — كانت «إدارة الأملاك» قائمة مسطّحة من 14 مدخلاً.
+        // أُعيد تنظيمها إلى لوحة + مجموعات موضوعية (تشغيل ثم تقارير/أدلة).
+        // إعادة تجميع فقط — كل مسار محفوظ.
         { label: "نظرة عامة", path: "/properties/dashboard", icon: LayoutDashboard },
-        { label: "المباني والمجمعات", path: "/properties/buildings", icon: Building2 },
-        { label: "الوحدات العقارية", path: "/properties", icon: Building },
-        { label: "المستأجرون", path: "/properties/tenants", icon: Users2 },
-        { label: "الملاك", path: "/properties/owners", icon: User },
-        { label: "كشف حساب المالك", path: "/properties/owners/statement", icon: FileBarChart },
-        { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
-        { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
-        { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },
-        { label: "الفحص والتفتيش", path: "/properties/inspections", icon: ClipboardCheck },
-        { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
-        { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
-        { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
-        { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
+        // 1) العقارات والأطراف.
+        { label: "العقارات والأطراف", path: "/properties/buildings", icon: Building2, children: [
+          { label: "المباني والمجمعات", path: "/properties/buildings", icon: Building2 },
+          { label: "الوحدات العقارية", path: "/properties", icon: Building },
+          { label: "المستأجرون", path: "/properties/tenants", icon: Users2 },
+          { label: "الملاك", path: "/properties/owners", icon: User },
+        ]},
+        // 2) العقود والمالية.
+        { label: "العقود والمالية", path: "/properties/contracts", icon: FileSignature, children: [
+          { label: "عقود الإيجار", path: "/properties/contracts", icon: FileSignature },
+          { label: "المدفوعات", path: "/properties/payments", icon: Banknote },
+          { label: "كشف حساب المالك", path: "/properties/owners/statement", icon: FileBarChart },
+          { label: "ودائع الضمان", path: "/properties/deposits", icon: Banknote },
+          // كانت orphan: صفحة المبيعات العقارية (بيع الوحدات) مركّبة بلا مدخل في القائمة.
+          { label: "المبيعات العقارية", path: "/properties/sales", icon: TrendingUp },
+        ]},
+        // 3) الصيانة والتفتيش.
+        { label: "الصيانة والتفتيش", path: "/properties/maintenance", icon: Hammer, children: [
+          { label: "طلبات الصيانة", path: "/properties/maintenance", icon: Hammer },
+          { label: "الفحص والتفتيش", path: "/properties/inspections", icon: ClipboardCheck },
+        ]},
+        // 4) التقارير والأدلة.
+        { label: "التقارير والأدلة", path: "/properties/occupancy-report", icon: BarChart3, children: [
+          { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
+          { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
+          { label: "دليل إرشادي مصور", path: "/guide/properties", icon: BookOpen },
+        ]},
       ]},
     ],
   },
@@ -680,38 +709,63 @@ export const allNavSections: NavSection[] = [
       // backend never granted, so the entry collapsed for everyone
       // except owner/GM (who get every module).
       { label: "إدارة العمرة", path: "/umrah", icon: CloudRain, module: "operations", children: [
+        // #2488-follow-up — كانت «إدارة العمرة» قائمة مسطّحة من 27 مدخلاً بلا
+        // تجميع. أُعيد تنظيمها إلى مجموعات فرعية موضوعية (نفس نمط الأسطول/المالية):
+        // اللوحة أولاً ثم دورة العمل ثم التقارير ثم الإعدادات آخراً. إعادة تجميع
+        // فقط — كل مسار/صلاحية محفوظ (لا أيتام ولا روابط ميتة).
         { label: "لوحة التشغيل", path: "/umrah", icon: LayoutDashboard },
+        // 1) المعتمرون والوكلاء.
         // U-18-P2 — sidebar plural unification. Standalone labels use
         // the nominative plural ("المعتمرون", "الوكلاء الرئيسيون",
         // "الوكلاء الفرعيون") per the UMRAH_CANONICAL_GLOSSARY.md
         // rule. Object-position phrases ("حركات المعتمرين",
         // "كشف المعتمرين", etc.) keep the accusative form.
-        { label: "المعتمرون", path: "/umrah/pilgrims", icon: Users },
-        { label: "الوكلاء الرئيسيون", path: "/umrah/agents", icon: Building2 },
-        { label: "الوكلاء الفرعيون", path: "/umrah/sub-agents", icon: Users },
-        { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
-        { label: "الباقات", path: "/umrah/packages", icon: Package },
-        { label: "المجموعات", path: "/umrah/groups", icon: Users2 },
-        { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
-        { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
-        { label: "حساب العمولات", path: "/umrah/commission-calculations", icon: Calculator },
-        { label: "الفواتير", path: "/umrah/invoices", icon: Receipt },
-        { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
-        { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: Sparkles },
-        { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
-        { label: "طلبات الاسترداد", path: "/umrah/refund-requests", icon: RefreshCw },
-        { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
-        { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
-        { label: "طلبات النقل", path: "/umrah/transport-requests", icon: Truck, perm: "umrah:list" },
-        { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
-        { label: "التقويم التشغيلي", path: "/umrah/calendar", icon: CalendarClock },
-        { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
-        { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
-        { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
-        { label: "السكن والإقامة", path: "/umrah/accommodations", icon: Home },
-        { label: "المعتمرون المعفون", path: "/umrah/exempt-pilgrims", icon: Users },
-        { label: "الامتثال", path: "/umrah/compliance", icon: FileCheck },
-        { label: "الإعدادات", path: "/umrah/settings", icon: Settings },
+        { label: "المعتمرون والوكلاء", path: "/umrah/pilgrims", icon: Users, children: [
+          { label: "المعتمرون", path: "/umrah/pilgrims", icon: Users },
+          { label: "المعتمرون المعفون", path: "/umrah/exempt-pilgrims", icon: Users },
+          { label: "الوكلاء الرئيسيون", path: "/umrah/agents", icon: Building2 },
+          { label: "الوكلاء الفرعيون", path: "/umrah/sub-agents", icon: Users },
+        ]},
+        // 2) المواسم والباقات والمجموعات والسكن.
+        { label: "المواسم والباقات", path: "/umrah/seasons", icon: Calendar, children: [
+          { label: "المواسم", path: "/umrah/seasons", icon: Calendar },
+          { label: "الباقات", path: "/umrah/packages", icon: Package },
+          { label: "المجموعات", path: "/umrah/groups", icon: Users2 },
+          { label: "السكن والإقامة", path: "/umrah/accommodations", icon: Home },
+        ]},
+        // 3) التسعير والعمولات.
+        { label: "التسعير والعمولات", path: "/umrah/pricing", icon: DollarSign, children: [
+          { label: "التسعير", path: "/umrah/pricing", icon: DollarSign },
+          { label: "خطط العمولات", path: "/umrah/commission-plans", icon: TrendingUp },
+          { label: "حساب العمولات", path: "/umrah/commission-calculations", icon: Calculator },
+        ]},
+        // 4) المبيعات والفوترة.
+        { label: "المبيعات والفوترة", path: "/umrah/sales-wizard", icon: Sparkles, children: [
+          { label: "معالج المبيعات", path: "/umrah/sales-wizard", icon: Sparkles },
+          { label: "الفواتير", path: "/umrah/invoices", icon: Receipt },
+          { label: "المدفوعات", path: "/umrah/payments", icon: Banknote },
+          { label: "طلبات الاسترداد", path: "/umrah/refund-requests", icon: RefreshCw },
+        ]},
+        // 5) العمليات والنقل.
+        { label: "العمليات والنقل", path: "/umrah/daily-runsheet", icon: CalendarClock, children: [
+          { label: "البرنامج اليومي", path: "/umrah/daily-runsheet", icon: Calendar },
+          { label: "التقويم التشغيلي", path: "/umrah/calendar", icon: CalendarClock },
+          { label: "النقل والمواصلات", path: "/umrah/transport", icon: Truck },
+          { label: "طلبات النقل", path: "/umrah/transport-requests", icon: Truck, perm: "umrah:list" },
+        ]},
+        // 6) الالتزام والمخالفات.
+        { label: "الالتزام والمخالفات", path: "/umrah/compliance", icon: FileCheck, children: [
+          { label: "الامتثال", path: "/umrah/compliance", icon: FileCheck },
+          { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
+          { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
+        ]},
+        // 7) التسوية والبيانات.
+        { label: "التسوية والبيانات", path: "/umrah/reconciliation", icon: RefreshCw, children: [
+          { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
+          { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
+          { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
+        ]},
+        // 8) التقارير — مجموعة قائمة، تبقى كما هي.
         { label: "التقارير", path: "/umrah/reports", icon: FileBarChart, children: [
           { label: "أرصدة الوكلاء", path: "/umrah/reports/agent-balances", icon: DollarSign },
           { label: "أرصدة الوكلاء الفرعيين", path: "/umrah/reports/subagent-balances", icon: DollarSign },
@@ -728,6 +782,8 @@ export const allNavSections: NavSection[] = [
           { label: "ملخّص المخالفات", path: "/umrah/reports/violations-summary", icon: Shield },
           { label: "ملخّص أخطاء الاستيراد", path: "/umrah/reports/import-errors-summary", icon: AlertTriangle },
         ]},
+        // 9) الإعدادات آخراً (معيار #1715).
+        { label: "الإعدادات", path: "/umrah/settings", icon: Settings },
       ]},
     ],
   },
@@ -896,6 +952,9 @@ export const allNavSections: NavSection[] = [
         { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
       ]},
+      // كانت orphan: إدارة اشتراك المنشأة (الحالة/التفعيل/تمديد التجربة) — صفحة
+      // admin مستقلة مبوّبة على admin:view (على نمط «الأتمتة»).
+      { label: "اشتراك المنشأة", path: "/admin/subscription", icon: CreditCard, module: "admin", perm: "admin:view" },
       { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
         { label: "عام", path: "/settings", icon: Cog },
         { label: "الفروع", path: "/settings/branches", icon: Building, perm: "settings:write" },

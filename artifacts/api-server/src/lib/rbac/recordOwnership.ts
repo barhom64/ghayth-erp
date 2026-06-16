@@ -35,6 +35,7 @@ export const CREATED_BY_IDENTITY: Record<string, CreatedByIdentity> = {
   debit_memos: "user",
   employee_of_month: "user",
   hr_violations: "user",
+  maps_usage_thresholds: "user",
   marketing_campaigns: "user",
   payment_runs: "user",
   property_sales: "user",
