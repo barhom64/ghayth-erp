@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 // #1733 Comment 9 — booking detail page. Single-screen view of the
 // booking + its lines + the dispatch orders that came out of it.
@@ -61,6 +62,9 @@ interface BookingDetail {
   createdAt: string;
   lines: BookingLine[];
   dispatchOrders: DispatchOrder[];
+  // #2475-follow-up — resolved booking-cancel policy (guard|cascade), used by
+  // the confirmation/preview dialog. Defaults to "guard" when absent.
+  cancelPolicy?: "guard" | "cascade";
   // #1812 source-context (from loadSourceContext on backend).
   // Null when the booking is manual_entry or the FK didn't resolve.
   sourceContext: {
@@ -219,6 +223,10 @@ export default function TransportBookingDetail() {
     [["transport-booking", id || ""], ["transport-bookings"]],
     { successMessage: "تم تحديث حالة الحجز" },
   );
+  // #2475-follow-up — cancelling is destructive (under "cascade" it also cancels
+  // the dispatch orders + trips and frees the vehicle/driver), so route the
+  // "cancelled" transition through a policy-aware confirmation dialog.
+  const [cancelConfirm, setCancelConfirm] = useState(false);
 
   // #2079 TA-T18-08 — dedicated approval mutations.
   const canApprove = usePermission("fleet.bookings:approve");
@@ -337,7 +345,11 @@ export default function TransportBookingDetail() {
                 {opts.length > 0 && (
                   <Select
                     value=""
-                    onValueChange={(v) => { if (v) statusMut.mutate({ status: v }); }}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      if (v === "cancelled") setCancelConfirm(true);
+                      else statusMut.mutate({ status: v });
+                    }}
                   >
                     <SelectTrigger className="w-44">
                       <SelectValue placeholder={`تغيير الحالة (${opts.length})`} />
@@ -613,6 +625,42 @@ export default function TransportBookingDetail() {
           }}
         />
       )}
+      {/* #2475-follow-up — policy-aware confirmation/preview before a cancel. */}
+      {(() => {
+        const policy = b.cancelPolicy === "cascade" ? "cascade" : "guard";
+        const ACTIVE_ORDER = new Set(["pending", "notified", "accepted", "executing"]);
+        const activeOrders = (b.dispatchOrders || []).filter((o) => ACTIVE_ORDER.has(String(o.status)));
+        const hasActive = activeOrders.length > 0;
+        const guardBlocked = policy === "guard" && hasActive;
+        return (
+          <ConfirmActionDialog
+            open={cancelConfirm}
+            onOpenChange={setCancelConfirm}
+            variant={guardBlocked ? "caution" : "destructive"}
+            title={guardBlocked ? "تنبيه: يوجد أمر توزيع نشط" : "تأكيد إلغاء الحجز"}
+            description={
+              guardBlocked
+                ? `سياسة الإلغاء الحالية «حماية»: لا يمكن إلغاء الحجز ما دام هناك ${activeOrders.length} أمر توزيع نشط. ألغِ أوامر التوزيع أولاً من لوحة التوزيع (تُلغى معها الرحلة وتُحرَّر المركبة والسائق) ثم أعد المحاولة.`
+                : hasActive
+                  ? `سياسة الإلغاء الحالية «تتالٍ»: سيُلغى ${activeOrders.length} أمر توزيع نشط ورحلاتها، وتُحرَّر المركبة والسائق، وتُلغى الأسطر غير المنتهية. لا يمكن التراجع.`
+                  : "سيُعلَّم هذا الحجز كملغى. لا يمكن التراجع."
+            }
+            confirmLabel={guardBlocked ? "محاولة الإلغاء" : "تأكيد الإلغاء"}
+            pending={statusMut.isPending}
+            onConfirm={() => statusMut.mutate({ status: "cancelled" }, { onSuccess: () => setCancelConfirm(false) })}
+          >
+            {hasActive && (
+              <ul className="text-xs list-disc ps-5 space-y-0.5 max-h-40 overflow-auto">
+                {activeOrders.map((o) => (
+                  <li key={o.id}>
+                    {o.driverName || "بلا سائق"}{o.vehiclePlate ? ` — ${o.vehiclePlate}` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ConfirmActionDialog>
+        );
+      })()}
     </PageShell>
   );
 }
