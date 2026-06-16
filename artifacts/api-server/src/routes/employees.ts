@@ -27,6 +27,9 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
 import { sendMessage } from "../lib/messageSender.js";
+import { randomBytes } from "node:crypto";
+import { issueAuthToken, PublicBaseUrlMissingError, TOKEN_TTL_MINUTES } from "../lib/authTokens.js";
+import { sendAuthEmail } from "../lib/authNotifications.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 // PR-4 (#2077) — on-demand recompute + history wraps the existing
 // employeeScoringEngine library. The library + the weekly/monthly
@@ -1223,12 +1226,16 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
       let createdNewUser = false;
-      let tempPassword: string | null = null;
       if (loginEmail) {
         const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [loginEmail]);
         if (existingUser.rows.length === 0) {
-          tempPassword = Math.random().toString(36).slice(-8) + "A1!";
-          const hashedPw = await hashPassword(tempPassword);
+          // #2137 — NEVER store or email a known/guessable temporary
+          // password. Create the account with an unguessable random
+          // password the user never sees, then (post-commit) email a
+          // single-use invitation link so they set their own. Mirrors the
+          // admin user-create flow (admin.ts).
+          const unknownPassword = randomBytes(16).toString("hex");
+          const hashedPw = await hashPassword(unknownPassword);
           const userRes = await client.query(
             `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true) RETURNING id`,
             [loginEmail, hashedPw, role || "employee", empId]
@@ -1424,10 +1431,11 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         ).catch((e) => logger.error(e, "employees background task failed"));
       }
 
-      return { empId, assignmentId, finalEmpNumber, userId, tempPassword };
+      return { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail };
     });
 
-    const { empId, assignmentId, finalEmpNumber, userId, tempPassword } = result;
+    const { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail } = result;
+    let accountInviteWarning: string | null = null;
 
     // ── Step 8: Notify manager and HR ──
     const managerAssignmentId = await getManagerAssignmentId(scope.companyId, targetBranchId);
@@ -1480,21 +1488,35 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         templateKey: "employee.welcome",
       }).catch((e) => logger.error(e, "employees background task failed"));
     }
-    if (email && tempPassword) {
-      // dlpExempt: credentials send (see admin.ts for full reasoning).
-      void sendMessage({
-        channel: "email",
-        recipient: email,
-        recipientName: name,
-        subject: `بيانات الدخول إلى النظام - ${finalEmpNumber}`,
-        body: `أهلاً ${name}،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
-        companyId: scope.companyId,
-        userId: scope.userId,
-        relatedType: "user",
-        relatedId: empId,
-        dlpExempt: true,
-        templateKey: "employee.credentials.welcome",
-      }).catch((e) => logger.error(e, "employees background task failed"));
+    if (createdNewUser && loginEmail) {
+      // #2137 — send a single-use invitation LINK (set-your-own-password)
+      // instead of a raw temporary password. issueAuthToken builds the
+      // link first, so an empty PUBLIC_BASE_URL fails BEFORE any token row
+      // is written; we surface a warning rather than emailing a broken
+      // link. Mirrors POST /admin/users.
+      try {
+        const issued = await issueAuthToken({ userId, email: loginEmail, purpose: "invitation" });
+        await sendAuthEmail({
+          companyId: scope.companyId,
+          userId: scope.userId,
+          recipientEmail: loginEmail,
+          recipientName: name,
+          templateKey: "auth.new_user_invitation.email",
+          vars: {
+            userName: name,
+            activationUrl: issued.url,
+            expiresHours: String(TOKEN_TTL_MINUTES.invitation / 60),
+          },
+        });
+      } catch (e) {
+        if (e instanceof PublicBaseUrlMissingError) {
+          accountInviteWarning = "أُنشئ حساب الموظف لكن تعذّر إرسال رابط الدعوة: رابط النظام العام (PUBLIC_BASE_URL) غير مضبوط.";
+          logger.error("[employees] PUBLIC_BASE_URL empty — invitation link not sent");
+        } else {
+          logger.error(e, "[employees] failed to send invitation email");
+          accountInviteWarning = "أُنشئ حساب الموظف لكن تعذّر إرسال رابط الدعوة.";
+        }
+      }
     }
 
     // ── Step 10: Event log ──
@@ -1614,11 +1636,12 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return toDateISO(d); })(),
       userAccount: userId ? {
         userId,
-        email: email || null,
-        isNewAccount: !!tempPassword,
-        message: tempPassword
-          ? "تم إنشاء حساب مستخدم. كلمة المرور المؤقتة أُرسلت إلى الموظف عبر البريد الإلكتروني."
+        email: loginEmail || email || null,
+        isNewAccount: createdNewUser,
+        message: createdNewUser
+          ? (accountInviteWarning ?? "تم إنشاء حساب مستخدم وأُرسل رابط الدعوة لتعيين كلمة المرور إلى الموظف.")
           : "تم ربط الحساب الموجود بالموظف.",
+        inviteWarning: accountInviteWarning,
       } : null,
     });
   } catch (err) {
@@ -2128,10 +2151,15 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 ea."serialNumber", ea."assignedAt", ea."returnedAt",
                 ea."conditionOnAssign", ea."conditionOnReturn", ea.notes
            FROM employee_assets ea
-          WHERE ea."assignmentId" = $3 AND ea."companyId" = $2
+          WHERE ea."assignmentId" = $2 AND ea."companyId" = $1
           ORDER BY ea."returnedAt" NULLS FIRST, ea."assignedAt" DESC
           LIMIT 50`,
-        [id, scope.companyId, employee.assignmentId]
+        // NOTE: the employee `id` is NOT referenced by this child query (it
+        // filters by assignmentId + companyId), so it must NOT be bound — a
+        // leftover $1=id made Postgres 42P18 "could not determine data type of
+        // parameter $1", which the .catch swallowed → the «العهد» tab was
+        // silently always empty.
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees custodies query failed"); return []; }),
       // HR-012 / #1799 priority #1 — Employee 360 tab «المسميات».
       // Resolves the assignment's position (admin role) to its label
@@ -2145,9 +2173,11 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 p.level, p.description
            FROM employee_assignments ea
            JOIN positions p ON p.id = ea."positionId"
-            AND (p."companyId" IS NULL OR p."companyId" = $2)
-          WHERE ea.id = $3 LIMIT 1`,
-        [id, scope.companyId, employee.assignmentId]
+            AND (p."companyId" IS NULL OR p."companyId" = $1)
+          WHERE ea.id = $2 LIMIT 1`,
+        // employee `id` unreferenced here → not bound (was a $1 42P18 that the
+        // .catch swallowed, leaving «المسميات» blank).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees position query failed"); return []; }) : Promise.resolve([]),
       // HR-014 — Employee 360 overview enrichment (#1799 priority #10):
       // surface the latest monthly score + active (unacknowledged) signals
@@ -2160,15 +2190,16 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 "qualityScore", "managerScore", "developmentScore",
                 rationale, "computedAt"
            FROM employee_scores
-          WHERE "assignmentId" = $3 AND "companyId" = $2 AND scope = 'monthly'
+          WHERE "assignmentId" = $2 AND "companyId" = $1 AND scope = 'monthly'
           ORDER BY "periodKey" DESC LIMIT 1`,
-        [id, scope.companyId, employee.assignmentId]
+        // employee `id` unreferenced here → not bound (42P18-then-swallowed).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees latestScore query failed"); return []; }) : Promise.resolve([]),
       employee.assignmentId ? rawQuery<Record<string, unknown>>(
         `SELECT id, "signalType", severity, scope, "periodKey", title,
                 reasons, "compositeScore", "createdAt"
            FROM employee_signals
-          WHERE "assignmentId" = $3 AND "companyId" = $2
+          WHERE "assignmentId" = $2 AND "companyId" = $1
             AND "acknowledgedAt" IS NULL
             AND "createdAt" >= CURRENT_DATE - INTERVAL '90 days'
           ORDER BY
@@ -2178,7 +2209,8 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
             END,
             "createdAt" DESC
           LIMIT 20`,
-        [id, scope.companyId, employee.assignmentId]
+        // employee `id` unreferenced here → not bound (42P18-then-swallowed).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees activeSignals query failed"); return []; }) : Promise.resolve([]),
     ]);
 

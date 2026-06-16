@@ -377,11 +377,20 @@ describe("Employees — audit, events, and obligations", () => {
     expect(s).toContain("onboardingTasksCreated: 4");
   });
 
-  it("POST / auto-creates user account with temp password when email is provided", () => {
+  it("POST / creates the user account with an invitation link, never a raw temp password (#2137)", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("INSERT INTO users");
     expect(s).toContain("hashPassword");
-    expect(s).toContain("tempPassword");
+    // The account is created with an unguessable random password the user
+    // never sees — NOT a known/guessable temp password that gets emailed.
+    expect(s).toContain("randomBytes");
+    expect(s).not.toContain("tempPassword");
+    // Instead, a single-use invitation link is issued and emailed.
+    expect(s).toContain("issueAuthToken");
+    expect(s).toContain('purpose: "invitation"');
+    expect(s).toContain('"auth.new_user_invitation.email"');
+    // And no plaintext "كلمة المرور المؤقتة" is ever put in an email body.
+    expect(s).not.toContain("كلمة المرور المؤقتة");
   });
 
   it("POST / grants the RBAC v2 role (rbac_user_roles) so a new employee's services actually work", () => {

@@ -11,6 +11,8 @@ import {
   splitTopLevelArgs,
   maxPlaceholder,
   hasInterpolation,
+  placeholderGap,
+  stripComments,
   literalArrayLength,
   extractSqlLiteral,
   splitHandlers,
@@ -168,4 +170,61 @@ router.get('/x', async (req,res) => {
   rawQuery(\`SELECT b WHERE c=$1 AND e BETWEEN $2 AND $3 \${clause}\`, baseParams);
 });`;
   assert.equal(analyzeSource("f.ts", src).length, 0);
+});
+
+// --- RULE C: placeholder gaps (42P18) -------------------------------------
+
+test("placeholderGap finds leading, middle, and reports 0 when contiguous", () => {
+  assert.equal(placeholderGap("WHERE a=$2 AND b=$3"), 1);          // leading gap
+  assert.equal(placeholderGap("SELECT $1,$2,$4"), 3);              // middle gap
+  assert.equal(placeholderGap("WHERE a=$1 AND b=$2 AND c=$3"), 0); // contiguous
+  assert.equal(placeholderGap("no placeholders"), 0);              // none
+  assert.equal(placeholderGap("only=$1"), 0);
+});
+
+test("stripComments removes comment commas but preserves string contents", () => {
+  // The accountingAllocation.ts false-positive shape: a // comment containing a
+  // comma sat between two array elements and inflated the element count.
+  assert.equal(
+    literalArrayLength("[a, b, // computed from the line, not the pin\n c]"),
+    3,
+  );
+  assert.equal(literalArrayLength("[a, /* x, y */ b]"), 2);
+  // A comma INSIDE a string literal element must still count as one element.
+  assert.equal(literalArrayLength("['a, b', c]"), 2);
+  // `//` inside a string (e.g. a URL) is not a comment.
+  assert.equal(stripComments("const u = 'http://x'; // tail").trim(), "const u = 'http://x';");
+});
+
+test("RULE C flags a leading-gap query (the employee 360 / clients shape)", () => {
+  // Mirrors the real bug: params [id, companyId, name] but SQL uses only $2,$3.
+  const src = "router.get('/x', async (req,res) => { rawQuery(`SELECT a WHERE c=$2 AND n=$3`, [id, companyId, name]); });";
+  const v = analyzeSource("f.ts", src);
+  const c = v.find((x) => x.rule === "C");
+  assert.ok(c, "expected a RULE C violation");
+  assert.equal(c.gap, 1);
+  assert.equal(c.maxN, 3);
+});
+
+test("RULE C flags a middle-gap query (the autoViolation shape)", () => {
+  const src = "router.get('/x', async (req,res) => { rawQuery(`SELECT a WHERE c=$1 AND d=$2 AND e=$4`, p); });";
+  const v = analyzeSource("f.ts", src);
+  const c = v.find((x) => x.rule === "C");
+  assert.ok(c);
+  assert.equal(c.gap, 3);
+});
+
+test("RULE C passes a contiguous query and skips interpolated SQL", () => {
+  const ok = "router.get('/x', async (req,res) => { rawQuery(`SELECT a WHERE c=$1 AND d=$2`, [a,b]); });";
+  assert.equal(analyzeSource("f.ts", ok).filter((x) => x.rule === "C").length, 0);
+  // Interpolation may inject the missing $1, so RULE C must not fire.
+  const interp = "router.get('/x', async (req,res) => { rawQuery(`SELECT a WHERE c=$2 ${extra}`, p); });";
+  assert.equal(analyzeSource("f.ts", interp).filter((x) => x.rule === "C").length, 0);
+});
+
+test("analyzeSource scans a lib-style file (no router.) as one segment", () => {
+  // Lib helpers have no `router.<verb>(` delimiter — the whole file is segment 0.
+  const src = "export async function load() { return rawQuery(`SELECT a WHERE c=$2 AND d=$3`, [id, c, d]); }";
+  const v = analyzeSource("lib/print/dataLoader.ts", src);
+  assert.ok(v.some((x) => x.rule === "C" && x.gap === 1));
 });
