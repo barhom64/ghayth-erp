@@ -2337,6 +2337,33 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       }
     }
 
+    // HR-REV-3 (#2222) — activation ready-gate. Flipping a quick-activated
+    // employee (inactive/pending/onboarding) to active is only allowed once
+    // every MANDATORY onboarding task is completed or skipped — so activation
+    // can't bypass the distributed plan's owning roles. Re-activating a
+    // suspended/terminated employee is exempt (it carries no onboarding plan).
+    const PENDING_ACTIVATION = ["inactive", "pending", "onboarding"];
+    if (status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status)) {
+      const [gate] = await rawQuery<{ remaining: number }>(
+        `SELECT COUNT(*)::int AS remaining FROM onboarding_tasks
+          WHERE "employeeId" = $1 AND "companyId" = $2
+            AND mandatory IS NOT FALSE
+            AND status NOT IN ('completed','skipped')`,
+        [id, scope.companyId]
+      );
+      const remaining = Number(gate?.remaining ?? 0);
+      if (remaining > 0) {
+        throw new ValidationError(
+          `لا يمكن التفعيل: ${remaining} بند إلزامي في خطة التهيئة لم يكتمل بعد`,
+          {
+            field: "status",
+            fix: "أكمل البنود الإلزامية في «لوحة قيد التفعيل» قبل تفعيل الموظف.",
+            meta: { remainingMandatory: remaining },
+          }
+        );
+      }
+    }
+
     const employee = { id: before.id, assignmentId: before.assignmentId };
 
     await withTransaction(async (client) => {
