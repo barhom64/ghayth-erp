@@ -1670,34 +1670,40 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
       completedAt?: string | null;
       completedBy?: number | null;
     }
-    const [row] = await rawQuery<OnboardingTaskRow>(
-      `UPDATE onboarding_tasks SET status = $1,
-       "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
-       "completedBy" = $2
-       WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
-      [status, scope.activeAssignmentId, id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("المهمة غير موجودة");
-
-    // HR-REV-3 §1 auto-gate — once every MANDATORY task for this hire is done,
-    // advance a still-pending_activation employee to ready_for_hr_review so HR
-    // knows the distributed plan is complete. Only flips from pending_activation
-    // (never overrides a later state); reversible if a task is re-opened.
-    if (status === "completed") {
-      const [pending] = await rawQuery<{ cnt: number }>(
-        `SELECT COUNT(*)::int AS cnt FROM onboarding_tasks
-          WHERE "employeeId" = $1 AND "companyId" = $2 AND mandatory IS NOT FALSE
-            AND status NOT IN ('completed','skipped')`,
-        [row.employeeId, scope.companyId]
+    // The task update + the activation auto-gate touch two tables, so they run
+    // in one transaction (rawQuery auto-joins the ambient tx) — a failure on the
+    // employees UPDATE must not leave the task flipped on its own.
+    const row = await withTransaction(async () => {
+      const [r] = await rawQuery<OnboardingTaskRow>(
+        `UPDATE onboarding_tasks SET status = $1,
+         "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
+         "completedBy" = $2
+         WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
+        [status, scope.activeAssignmentId, id, scope.companyId]
       );
-      if (pending && pending.cnt === 0) {
-        await rawQuery(
-          `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
-            WHERE id = $1 AND "activationStatus" = 'pending_activation'`,
-          [row.employeeId]
+      if (!r) throw new NotFoundError("المهمة غير موجودة");
+
+      // HR-REV-3 §1 auto-gate — once every MANDATORY task for this hire is done,
+      // advance a still-pending_activation employee to ready_for_hr_review so HR
+      // knows the distributed plan is complete. Only flips from pending_activation
+      // (never overrides a later state); reversible if a task is re-opened.
+      if (status === "completed") {
+        const [pending] = await rawQuery<{ cnt: number }>(
+          `SELECT COUNT(*)::int AS cnt FROM onboarding_tasks
+            WHERE "employeeId" = $1 AND "companyId" = $2 AND mandatory IS NOT FALSE
+              AND status NOT IN ('completed','skipped')`,
+          [r.employeeId, scope.companyId]
         );
+        if (pending && pending.cnt === 0) {
+          await rawQuery(
+            `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
+              WHERE id = $1 AND "activationStatus" = 'pending_activation'`,
+            [r.employeeId]
+          );
+        }
       }
-    }
+      return r;
+    });
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
