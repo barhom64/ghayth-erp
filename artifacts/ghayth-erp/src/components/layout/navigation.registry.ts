@@ -395,7 +395,7 @@ export const allNavSections: NavSection[] = [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
         { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
         { label: "قائمة الدخل حسب مركز التكلفة", path: "/finance/cost-center-pnl", icon: BarChart3 },
-        { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
+        { label: "تقييم المخزون (المتوسط المرجح)", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
       ]},
       { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
@@ -429,7 +429,7 @@ export const allNavSections: NavSection[] = [
         // (9) دمج «تقارير محاسبية متقدمة» (CoGS/تقييم/دوران/صلاحيات/مخزون سالب
         // + انحرافات واعتماد الموازنة) في نفس مجموعة التقارير.
         { label: "ملخص التكلفة (CoGS)", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
-        { label: "تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
+        { label: "تقرير تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
         { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
         { label: "تنبيهات صلاحية الدفعات", path: "/finance/reports/lot-expiry-alerts", icon: AlertTriangle },
         { label: "مخزون سالب", path: "/finance/reports/negative-stock", icon: AlertTriangle },
@@ -763,7 +763,7 @@ export const allNavSections: NavSection[] = [
         // 7) التسوية والبيانات.
         { label: "التسوية والبيانات", path: "/umrah/reconciliation", icon: RefreshCw, children: [
           { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
-          { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
+          { label: "استيراد بيانات العمرة", path: "/umrah/import", icon: FileText },
           { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
         ]},
         // 8) التقارير — مجموعة قائمة، تبقى كما هي.
@@ -932,7 +932,7 @@ export const allNavSections: NavSection[] = [
           { label: "مراجعات ZATCA", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مختبر الذكاء", path: "/admin/intelligence-playground", icon: Brain, perm: "admin:update" },
-          { label: "استيراد البيانات", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
+          { label: "استيراد البيانات (إداري)", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
           { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
