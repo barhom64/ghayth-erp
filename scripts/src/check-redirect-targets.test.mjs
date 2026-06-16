@@ -40,6 +40,17 @@ assert(extractRoutePaths(sample).includes("/finance/invoices/:id"), "extractRout
 assert(extractRedirectTargets(sample).includes("/hr/leaves"), "extractRedirectTargets picks inline target");
 assert(extractRedirectTargets(sample).includes("/bi"), "extractRedirectTargets picks const-assigned target");
 
+// quote-agnostic extraction: single quotes and backticks must be seen too, so a
+// formatter/style switch can't silently blind the scan.
+const quoteSample = `
+  { path: '/a/single', component: redirectTo('/a/target') },
+  { path: \`/b/backtick\`, component: redirectTo(\`/b/target\`) },
+`;
+assert(extractRoutePaths(quoteSample).includes("/a/single"), "extractRoutePaths picks single-quoted path");
+assert(extractRoutePaths(quoteSample).includes("/b/backtick"), "extractRoutePaths picks backtick path");
+assert(extractRedirectTargets(quoteSample).includes("/a/target"), "extractRedirectTargets picks single-quoted target");
+assert(extractRedirectTargets(quoteSample).includes("/b/target"), "extractRedirectTargets picks backtick target");
+
 // ── resolves: positives (must resolve / not flag) ──────────────────────────
 console.log("resolves — must RESOLVE");
 const defined = new Set([
@@ -59,6 +70,18 @@ console.log("resolves — must NOT resolve (broken)");
 assert(!resolves("/hr/org-tree-typo", defined), "typo target does not resolve");
 assert(!resolves("/finance/fiscal-periods", defined), "renamed-away target does not resolve");
 assert(!resolves("/nonexistent/page", defined), "totally unknown target does not resolve");
+
+// ── resolves: strict-depth semantics (the no-prefix-fallthrough guarantee) ──
+// These are the regression fixtures for the tightened matcher: a target must
+// match a defined route of the SAME depth — a shorter ancestor is NOT a match.
+console.log("resolves — strict depth (no prefix fallthrough)");
+const depthSet = new Set(["/finance", "/finance/invoices/:id", "/x/:id"]);
+assert(!resolves("/finance/typo/sub", depthSet), "deeper target does NOT resolve to shorter ancestor /finance");
+assert(!resolves("/finance/invoices", depthSet), "ancestor of a param route does NOT resolve");
+assert(!resolves("/x", depthSet), "bare /x does NOT resolve to /x/:id (param needs its segment)");
+assert(!resolves("/x/1/2", depthSet), "too-deep /x/1/2 does NOT resolve to /x/:id");
+assert(resolves("/finance", depthSet), "exact /finance still resolves");
+assert(resolves("/x/123", depthSet), "/x/123 resolves to /x/:id (same depth)");
 
 if (failed) {
   console.error(`\n[check:redirect-targets.test] ${failed} assertion(s) FAILED`);
