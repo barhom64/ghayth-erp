@@ -40,9 +40,29 @@
 //     We never flag `max($N) > minLen`: pushes may have grown the array to
 //     exactly that, so it is not provably wrong.
 //
-// Scan scope: artifacts/api-server/src/routes/**/*.ts (recursive). Handlers are
-// delimited by `router.<verb>(` so an identifier named `params` in one handler
-// is never grouped with a `params` in another.
+//   RULE C — placeholder gap. Postgres parses a statement's parameter count
+//     from the HIGHEST `$N` referenced and then requires a resolvable data type
+//     for EVERY `$1..$max`. An unreferenced placeholder inside that range — a
+//     "gap", whether LEADING (`$1` unused while `$2,$3` are) or MIDDLE (`$3`
+//     unused while `$1,$2,$4` are) — has no usage from which to infer its type:
+//
+//         42P18  could not determine data type of parameter $1
+//
+//     This is independent of how many values are bound, so it is a pure
+//     property of the SQL string (verified empirically against live Postgres
+//     for both leading and middle gaps). It is the silent twin of the arity
+//     bug: the offending child queries here were all wrapped in
+//     `.catch(() => [])`, so the 42P18 was swallowed and the owning UI section
+//     (employee «العهد»/«المسميات»/scores/signals, client active-contracts,
+//     printed Umrah manifests) just rendered permanently EMPTY. Skipped for
+//     interpolated SQL, where a `${...}` clause may supply the missing `$i`.
+//
+// Scan scope: artifacts/api-server/src/{routes,lib}/**/*.ts (recursive) — the
+// arity/gap invariants are Postgres facts that hold for SQL built in lib
+// helpers (print loaders, engines) just as much as in route handlers. Route
+// handlers are delimited by `router.<verb>(` so an identifier named `params` in
+// one handler is never grouped with a `params` in another; a lib file with no
+// `router.` calls is analyzed as a single module-scope segment.
 //
 // Allowlist: scripts/rawquery-param-arity-allowlist.txt — one
 // `file::handlerIndex::identifier::maxN` (or `file::LITERAL::lineHint`) key per
@@ -50,6 +70,17 @@
 // historical cleanup. Lines starting with `#` are comments.
 //
 // Exit codes: 0 = clean, 1 = arity violation(s), 2 = scan failed.
+//
+// KNOWN BLIND SPOTS (accepted — soundness over coverage):
+//   * Fully interpolated SQL whose placeholders all live inside `${...}` is not
+//     arity-checked for RULE A/C (we cannot statically count `$N` we cannot
+//     see). RULE B still catches an under-bound shared array in that case.
+//   * A params argument passed as a bare identifier whose initializer is NOT a
+//     statically-sized literal (e.g. built by a helper / `.map()` / `.concat()`)
+//     has no known minimum length, so RULE B does not fire. RULE A still
+//     applies to inline literals. These are deliberate to keep false positives
+//     at zero; a missed dynamic case is still caught at runtime by the gap-aware
+//     `.catch()` audit, not by this static gate.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -57,7 +88,10 @@ import url from "node:url";
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
-const ROUTES_DIR = "artifacts/api-server/src/routes";
+const SCAN_DIRS = [
+  "artifacts/api-server/src/routes",
+  "artifacts/api-server/src/lib",
+];
 const ALLOWLIST = "scripts/rawquery-param-arity-allowlist.txt";
 
 // Query-builder call names whose first arg is a SQL string and whose second arg
@@ -170,13 +204,78 @@ export function hasInterpolation(sql) {
   return /\$\{/.test(sql);
 }
 
+// Smallest unreferenced placeholder `$i` within `1..max($N)`, or 0 when the
+// run `$1..$max` is contiguous (or there are no placeholders). Postgres needs a
+// resolvable type for EVERY placeholder up to the max it parsed, so any gap —
+// leading (`$1` unused) or middle (`$3` unused) — is a 42P18 at runtime. Pure
+// function of the SQL string; callers skip interpolated SQL (a `${...}` clause
+// may inject the missing `$i`).
+export function placeholderGap(sql) {
+  const max = maxPlaceholder(sql);
+  if (max === 0) return 0;
+  const seen = new Set();
+  const re = /\$(\d+)/g;
+  let m;
+  while ((m = re.exec(sql)) !== null) seen.add(Number(m[1]));
+  for (let i = 1; i <= max; i++) if (!seen.has(i)) return i;
+  return 0;
+}
+
+// Remove `// line` and `/* block */` comments that appear OUTSIDE of string /
+// template literals, preserving everything inside them. Needed before counting
+// array elements: a comment such as `// computed from the input line, not the
+// pin` contains a comma that `splitTopLevelArgs` would otherwise treat as an
+// element separator, inflating the count (the false 17-vs-16 reading of
+// accountingAllocation.ts). Newlines are preserved so any downstream line math
+// stays correct.
+export function stripComments(code) {
+  let out = "";
+  const stack = []; // pending closing delimiters: "'" '"' "`" or "}" (for ${})
+  const top = () => stack[stack.length - 1];
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    const nx = code[i + 1];
+    const cur = top();
+    if (cur === "'" || cur === '"') {
+      out += ch;
+      if (ch === "\\") { out += nx ?? ""; i++; continue; }
+      if (ch === cur) stack.pop();
+      continue;
+    }
+    if (cur === "`") {
+      out += ch;
+      if (ch === "\\") { out += nx ?? ""; i++; continue; }
+      if (ch === "`") { stack.pop(); continue; }
+      if (ch === "$" && nx === "{") { out += nx; i++; stack.push("}"); continue; }
+      continue;
+    }
+    // Code region (top of stack is undefined or a "}" sentinel for `${...}`).
+    if (ch === "/" && nx === "/") {
+      while (i < code.length && code[i] !== "\n") i++;
+      out += "\n";
+      continue;
+    }
+    if (ch === "/" && nx === "*") {
+      i += 2;
+      while (i < code.length && !(code[i] === "*" && code[i + 1] === "/")) i++;
+      i++; // skip the closing "/"
+      out += " ";
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") { stack.push(ch); out += ch; continue; }
+    if (cur === "}" && ch === "}") { stack.pop(); out += ch; continue; }
+    out += ch;
+  }
+  return out;
+}
+
 // Count elements of a statically-sized array literal like "[a, b, c]".
 // Returns null when not a plain array literal or when it contains a spread
 // (`...x`) whose contribution is not statically known.
 export function literalArrayLength(arg) {
   const t = arg.trim();
   if (!t.startsWith("[") || !t.endsWith("]")) return null;
-  const inner = t.slice(1, -1).trim();
+  const inner = stripComments(t.slice(1, -1)).trim();
   if (inner === "") return 0;
   const parts = splitTopLevelArgs(inner).filter((p) => p.length > 0);
   if (parts.some((p) => p.startsWith("..."))) return null;
@@ -278,7 +377,7 @@ export function findArrayLiteralDecls(text) {
     const openBracket = re.lastIndex - 1; // index of the `[`
     const inner = readBalancedArgs(text, openBracket);
     if (inner == null) continue;
-    const trimmed = inner.trim();
+    const trimmed = stripComments(inner).trim();
     let len;
     if (trimmed === "") len = 0;
     else {
@@ -355,6 +454,27 @@ export function analyzeSource(relFile, src) {
         });
       }
     }
+    // RULE C — placeholder gap. A property of the SQL string alone, so it runs
+    // for every static-SQL call regardless of how the params are passed.
+    for (const c of calls) {
+      if (hasInterpolation(c.sqlLiteral)) continue;
+      const gap = placeholderGap(c.sqlLiteral);
+      if (gap > 0) {
+        const maxN = maxPlaceholder(c.sqlLiteral);
+        const line = lineOf(src, seg.start + c.callOffset);
+        violations.push({
+          file: relFile,
+          rule: "C",
+          handler: seg.index,
+          identifier: "GAP",
+          maxN,
+          gap,
+          line,
+          key: `${relFile}::GAP::${line}`,
+          msg: `SQL references $${maxN} but never uses $${gap} (42P18: could not determine data type of parameter $${gap})`,
+        });
+      }
+    }
   }
   return violations;
 }
@@ -400,16 +520,19 @@ export function loadAllowlist(absPath) {
 // ---------------------------------------------------------------------------
 
 export function runCheck({ repoRoot = REPO_ROOT } = {}) {
-  const absRoutes = path.join(repoRoot, ROUTES_DIR);
-  const files = collectTsFiles(absRoutes);
   const allow = loadAllowlist(path.join(repoRoot, ALLOWLIST));
   const all = [];
-  for (const abs of files) {
-    const rel = path.relative(repoRoot, abs).split(path.sep).join("/");
-    const src = fs.readFileSync(abs, "utf8");
-    for (const v of analyzeSource(rel, src)) {
-      if (allow.has(v.key)) continue;
-      all.push(v);
+  const seenFiles = new Set();
+  for (const dir of SCAN_DIRS) {
+    for (const abs of collectTsFiles(path.join(repoRoot, dir))) {
+      if (seenFiles.has(abs)) continue; // guard against overlapping SCAN_DIRS
+      seenFiles.add(abs);
+      const rel = path.relative(repoRoot, abs).split(path.sep).join("/");
+      const src = fs.readFileSync(abs, "utf8");
+      for (const v of analyzeSource(rel, src)) {
+        if (allow.has(v.key)) continue;
+        all.push(v);
+      }
     }
   }
   return all;
