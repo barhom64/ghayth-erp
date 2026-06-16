@@ -873,9 +873,13 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
         { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
         { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
-        { label: "مؤشرات الأداء", path: "/bi/kpis", icon: TrendingUp },
-        { label: "التقارير التحليلية", path: "/bi/reports", icon: FileBarChart },
-        { label: "لوحات BI", path: "/bi/dashboards", icon: LayoutDashboard },
+        // UX Nav Governance (موجة التنقّل، شريحة 6) — أُزيلت 3 مداخل كانت تؤول
+        // جميعها إلى /bi عبر redirect: «مؤشرات الأداء» (/bi/kpis)، «التقارير
+        // التحليلية» (/bi/reports)، «لوحات BI» (/bi/dashboards). صار «ذكاء
+        // الأعمال» مدخلاً واحداً بدل أربعة بنفس الوجهة. الأسماء الثلاثة محفوظة
+        // كأسماء بحث في navigation.canonical-map.ts (المبدأ #6)، والمسارات تبقى
+        // مُركَّبة كـ redirect (لا حذف — المبدأ #3). check-sidebar-coverage رُقِّي
+        // ليعدّ مسارات الـ redirect off-sidebar مشروعة فلا تصير orphan.
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
         { label: "منصة الذكاء الاصطناعي", path: "/intelligence/ai-workbench", icon: Sparkles },

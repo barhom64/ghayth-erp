@@ -86,6 +86,31 @@ function getMountedRoutes() {
   return [...set].sort();
 }
 
+/**
+ * Pull the subset of mounted routes that ONLY redirect elsewhere
+ * (component = redirectTo("/y"), or a const assigned redirectTo(...)). These
+ * are intentional deep-link aliases kept for old bookmarks, so a redirect
+ * route with no nav entry is NOT an orphan — it is legitimately off-sidebar.
+ */
+function getRedirectRoutes() {
+  const set = new Set();
+  for (const file of fs.readdirSync(ROUTES_DIR)) {
+    if (!file.endsWith(".tsx")) continue;
+    const src = fs.readFileSync(path.join(ROUTES_DIR, file), "utf-8");
+    const redirectConsts = new Set();
+    for (const m of src.matchAll(/const\s+(\w+)\s*=\s*redirectTo\(/g)) {
+      redirectConsts.add(m[1]);
+    }
+    for (const m of src.matchAll(
+      /\{\s*path:\s*["']([^"']+)["']\s*,\s*component:\s*(redirectTo\(|\w+)/g,
+    )) {
+      const comp = m[2];
+      if (comp === "redirectTo(" || redirectConsts.has(comp)) set.add(m[1]);
+    }
+  }
+  return set;
+}
+
 /** Pull every `path: "/x"` value from the navigation registry. */
 function getSidebarPaths() {
   const src = fs.readFileSync(SIDEBAR_FILE, "utf-8");
@@ -123,14 +148,21 @@ function isCreateEditDetail(p) {
 function main() {
   const routes = getMountedRoutes();
   const routesSet = new Set(routes);
+  const redirectSet = getRedirectRoutes();
   const sidebarPaths = [...new Set(getSidebarPaths())].sort();
   const sidebarSet = new Set(sidebarPaths);
 
   // ── coverage: routes with no nav entry ────────────────────────────────
   const missing = [];
   let legitimatelyOff = 0;
+  let redirectOff = 0;
   for (const r of routes) {
     if (sidebarSet.has(r)) continue;
+    // Redirect-only routes are intentional deep-link aliases, not orphans.
+    if (redirectSet.has(r)) {
+      redirectOff++;
+      continue;
+    }
     if (isLegitimatelyOffSidebar(r)) {
       legitimatelyOff++;
       continue;
@@ -170,6 +202,7 @@ function main() {
   console.log(`total mounted routes:                    ${routes.length}`);
   console.log(`entries in sidebar:                      ${sidebarSet.size}`);
   console.log(`legitimately off-sidebar (detail/create): ${legitimatelyOff}`);
+  console.log(`redirect routes (off-sidebar, legit):    ${redirectOff}`);
   console.log(`[HARD] orphan pages (missing from nav):  ${missing.length}`);
   console.log(`[HARD] dead links (nav → no route):      ${deadLinks.length}`);
   console.log(`[HARD] create/edit pages in nav drawer:  ${createInSidebar.length}`);
