@@ -430,10 +430,10 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
     // page always sends real dates (enforced client-side), so this default
     // only ever applies to the lightweight inline path.
     if (!b.startDate || !String(b.startDate).trim()) {
-      b.startDate = new Date().toISOString().slice(0, 10);
+      b.startDate = todayISO();
     }
     if (!b.endDate || !String(b.endDate).trim()) {
-      b.endDate = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      b.endDate = toDateISO(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
     }
     const startD = new Date(b.startDate);
     const endD = new Date(b.endDate);
