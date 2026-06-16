@@ -37,6 +37,11 @@ router.get("/lots", authorize({ feature: "warehouse.inventory", action: "list" }
     const scope = req.scope!;
     const { where, params } = buildScopedWhere(scope, parseScopeFilters(req), {
       companyColumn: 'l."companyId"',
+      // warehouse_stock_lots has no branchId of its own; a ?branchIds= filter
+      // must scope by the lot's warehouse branch. Without this qualifier the
+      // bare "branchId" was ambiguous between warehouse_products (p) and
+      // warehouses (w) → 42702 500.
+      branchColumn: 'w."branchId"',
       enforceBranchScope: false,
     });
     const rows = await rawQuery<Record<string, unknown>>(
@@ -183,6 +188,10 @@ router.get("/serials", authorize({ feature: "warehouse.inventory", action: "list
     const scope = req.scope!;
     const { where, params } = buildScopedWhere(scope, parseScopeFilters(req), {
       companyColumn: 's."companyId"',
+      // warehouse_stock_serials (s) and warehouse_products (p) both have a
+      // branchId; qualify to the serial's own branch so a ?branchIds= filter
+      // isn't ambiguous (42702 500).
+      branchColumn: 's."branchId"',
       enforceBranchScope: false,
     });
     const rows = await rawQuery<Record<string, unknown>>(

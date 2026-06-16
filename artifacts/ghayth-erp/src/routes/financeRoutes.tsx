@@ -294,7 +294,7 @@ export const financeRoutes = [
   { path: "/finance/vendor-invoices/create", component: VendorInvoiceCreate },
   // Legacy multi-line route now redirects to the unified expenses-create
   // form, which supports multi-line via the "حفظ وإضافة آخر" button.
-  { path: "/finance/expenses/multi-line", component: ExpensesCreate },
+  { path: "/finance/expenses/multi-line", component: redirectTo("/finance/expenses/create") },
   { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
