@@ -302,7 +302,10 @@ export const allNavSections: NavSection[] = [
         { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart },
       ]},
       // (2) الحسابات والقيود
-      { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
+      // F-2 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ②) — فُكّت «الحسابات والقيود»
+      // (20 مدخلاً) إلى مجموعتين: الحسابات/مراكز التكلفة، والقيود/الترحيل. إعادة
+      // تجميع فقط — لم يتغيّر أي مسار/صلاحية/تسمية ابن.
+      { label: "الحسابات ومراكز التكلفة", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
         { label: "فجوات تصنيف الحسابات", path: "/finance/usage-gaps", icon: ShieldAlert },
         { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
@@ -310,6 +313,9 @@ export const allNavSections: NavSection[] = [
         { label: "شجرة مراكز التكلفة", path: "/finance/cost-centers/tree", icon: Network },
         { label: "ترتيب مراكز التكلفة", path: "/finance/cost-centers/ranking", icon: BarChart3 },
         { label: "كشف الحساب التحليلي", path: "/finance/entity-statements", icon: FileText },
+        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus, minRoleLevel: 70 },
+      ]},
+      { label: "القيود والترحيل", path: "/finance/journal", icon: ScrollText, module: "finance", children: [
         { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
         { label: "ميزان مع تتبّع", path: "/finance/trial-balance-drilldown", icon: Scale },
         { label: "مقارنة ميزان", path: "/finance/trial-balance-comparison", icon: BarChart3 },
@@ -322,7 +328,6 @@ export const allNavSections: NavSection[] = [
         { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
         { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
         { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
-        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus, minRoleLevel: 70 },
       ]},
       { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [
         { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
