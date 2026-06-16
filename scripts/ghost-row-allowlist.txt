@@ -178,8 +178,6 @@ routes/finance-reports.ts:chart_of_accounts
 routes/finance-reports.ts:employees
 routes/finance-reports.ts:financial_periods
 routes/finance-reports.ts:purchase_orders
-routes/finance-vendors.ts:journal_lines
-routes/finance-vendors.ts:suppliers
 routes/fleet-telematics.ts:fleet_drivers
 routes/fleet-telematics.ts:fleet_telematics_devices
 routes/fleet-telematics.ts:fleet_trips
