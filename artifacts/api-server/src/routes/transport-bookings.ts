@@ -415,7 +415,13 @@ transportBookingsRouter.get(
       // bookingSource so the SPA can show contextual data without
       // forcing the operator to click through other modules.
       const sourceContext = await loadSourceContext(scope.companyId, booking);
-      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, sourceContext } }));
+      // #2475-follow-up — surface the resolved booking-cancel policy so the SPA
+      // shows an accurate confirmation/preview before a (destructive) cancel.
+      const rawCancelPolicy = await resolveSettings(
+        "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
+      );
+      const cancelPolicy = rawCancelPolicy === "cascade" ? "cascade" : "guard";
+      res.json(maskFields(req, { data: { ...booking, lines, dispatchOrders, sourceContext, cancelPolicy } }));
     } catch (err) {
       handleRouteError(err, res, "Get transport booking error:");
     }
