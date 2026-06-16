@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { UserCheck, Clock, AlertTriangle, ListChecks, CheckCircle } from "lucide-react";
 
 /**
@@ -45,6 +47,21 @@ export default function ActivationBoardPage() {
   const { data: empData, isLoading: empLoading, isError: empError } = useApiQuery<any>(["employees"], "/employees?limit=200");
   const { data: tasksData, isLoading: tasksLoading, isError: tasksError } = useApiQuery<any>(["employees-onboarding-tasks"], "/employees/onboarding-tasks");
 
+  // PATCH /employees/:id { status: "active" } — flip a quick-activated employee
+  // to active once their plan is done. The server enforces the same ready-gate
+  // (every mandatory onboarding task complete) so this is safe to expose here.
+  const activateMut = useApiMutation<unknown, { id: number; status: "active" }>(
+    (b) => `/employees/${b.id}`,
+    "PATCH",
+    [["employees"], ["employees-onboarding-tasks"]],
+    { successMessage: "تم تفعيل الموظف" },
+  );
+
+  // Owner-role filter — narrow the board to employees still waiting on one
+  // owning role, so each department (الأسطول/الوثائق/الرواتب…) sees just its
+  // queue out of the distributed plan. KPIs stay on the full set.
+  const [ownerFilter, setOwnerFilter] = useState<string | null>(null);
+
   if (empLoading || tasksLoading) return <LoadingSpinner />;
   if (empError || tasksError) return <ErrorState />;
 
@@ -79,6 +96,10 @@ export default function ActivationBoardPage() {
     })
     .sort((a, b) => b.overdue - a.overdue || b.mandatoryRemaining - a.mandatoryRemaining);
 
+  // Owners that currently have at least one open task, for the filter bar.
+  const ownersPresent = Array.from(new Set(rows.flatMap((r) => r.owners))).filter(Boolean);
+  const visibleRows = ownerFilter ? rows.filter((r) => r.owners.includes(ownerFilter)) : rows;
+
   const kpis = [
     { label: "قيد التفعيل", value: pending.length, icon: UserCheck, color: "text-status-info-foreground bg-status-info-surface" },
     { label: "بنود إلزامية ناقصة", value: rows.reduce((s, r) => s + r.mandatoryRemaining, 0), icon: ListChecks, color: "text-status-warning-foreground bg-status-warning-surface" },
@@ -95,12 +116,45 @@ export default function ActivationBoardPage() {
       <HrTabsNav />
       <KpiGrid items={kpis} />
 
+      {ownersPresent.length > 0 && (
+        <div className="mt-4 flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground ml-1">تصفية بالجهة:</span>
+          <button
+            type="button"
+            onClick={() => setOwnerFilter(null)}
+            className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${ownerFilter === null ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:bg-surface-subtle"}`}
+          >
+            الكل ({rows.length})
+          </button>
+          {ownersPresent.map((role: string) => {
+            const o = ownerLabel(role);
+            const count = rows.filter((r) => r.owners.includes(role)).length;
+            const selected = ownerFilter === role;
+            return (
+              <button
+                key={role}
+                type="button"
+                onClick={() => setOwnerFilter(selected ? null : role)}
+                className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${selected ? "bg-primary text-primary-foreground border-primary" : `${o?.color ?? ""} hover:opacity-80`}`}
+              >
+                {o?.label ?? role} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="space-y-3 mt-4">
-        {rows.length === 0 && (
-          <Card><CardContent className="p-8 text-center text-muted-foreground">لا يوجد موظفون قيد التفعيل حاليًّا</CardContent></Card>
+        {visibleRows.length === 0 && (
+          <Card><CardContent className="p-8 text-center text-muted-foreground">
+            {ownerFilter ? "لا يوجد موظفون بانتظار هذه الجهة" : "لا يوجد موظفون قيد التفعيل حاليًّا"}
+          </CardContent></Card>
         )}
-        {rows.map(({ e, open, done, total, mandatoryRemaining, overdue, owners, age }) => {
-          const ready = total > 0 && mandatoryRemaining === 0;
+        {visibleRows.map(({ e, open, done, total, mandatoryRemaining, overdue, owners, age }) => {
+          // Authoritative: the server advances activationStatus to
+          // ready_for_hr_review once all mandatory tasks are done (HR-REV-3 §1);
+          // fall back to the client computation for legacy rows without it.
+          const ready = e.activationStatus === "ready_for_hr_review" || (total > 0 && mandatoryRemaining === 0);
           const pct = total > 0 ? Math.round((done.length / total) * 100) : 0;
           return (
             <Card key={e.id} className="hover:shadow-md transition-shadow">
@@ -117,7 +171,19 @@ export default function ActivationBoardPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {ready ? (
-                      <Badge className="bg-status-success-surface text-status-success-foreground">جاهز للمراجعة</Badge>
+                      <>
+                        <Badge className="bg-status-success-surface text-status-success-foreground">جاهز للمراجعة</Badge>
+                        <GuardedButton
+                          perm="hr:update"
+                          size="sm"
+                          className="h-7 gap-1"
+                          disabled={activateMut.isPending}
+                          onClick={() => activateMut.mutate({ id: e.id, status: "active" })}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          تفعيل الموظف
+                        </GuardedButton>
+                      </>
                     ) : (
                       <Badge className="bg-status-warning-surface text-status-warning-foreground">{mandatoryRemaining} بند إلزامي ناقص</Badge>
                     )}

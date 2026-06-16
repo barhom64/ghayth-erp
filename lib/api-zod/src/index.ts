@@ -7,3 +7,12 @@
 // re-export them here; consumers that need the raw TS interfaces can
 // import them directly from `@workspace/api-zod/src/generated/types`.
 export * from "./generated/api";
+
+// FIN-SUB-05 (#2101) — the single canonical source for the finance direction
+// maps shared by the api-server (enforcement) and the ghayth-erp form UX.
+// Previously hand-duplicated on both sides (D-02/D-07); now both import here.
+export {
+  ACCOUNT_TYPE_LABELS,
+  VOUCHER_COUNTER_ACCOUNT_TYPES,
+} from "./financeDirectionMaps";
+export type { AccountTypeKey } from "./financeDirectionMaps";

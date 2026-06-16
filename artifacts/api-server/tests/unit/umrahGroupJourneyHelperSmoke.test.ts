@@ -27,14 +27,14 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const ROUTES = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-journey-reports.ts"),
   "utf8",
 );
 
 // Slice the group journey handler so negative assertions are scoped
 // per-handler (mirrors the U-19-P1 smoke pattern).
 const HANDLER =
-  ROUTES.match(/\/groups\/:id\/journey[\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
+  ROUTES.match(/router\.get\(\s*\n?\s*["']\/groups\/:id\/journey["'][\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m)?.[0] ??
   "";
 
 // ─────────────────────────────────────────────────────────────────────────────
