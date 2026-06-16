@@ -14,12 +14,15 @@
 // route while leaving its alias behind would strand every bookmark on that
 // alias. This guard fails the build the moment that happens.
 //
-// Scan scope: artifacts/ghayth-erp/src/routes/**/*.tsx
+// Scan scope: artifacts/ghayth-erp/src/routes/**/*.tsx (recursive).
 //
-// Resolution rule: a target resolves if it exactly equals a defined `path`, or
-// matches one as a parameterized family (a `:param` segment matches any single
-// segment, and a shorter defined prefix matches — so "/x/123" resolves against
-// a defined "/x/:id" and "/x").
+// Resolution rule: a target resolves ONLY if it exactly equals a defined `path`
+// or matches one of the SAME segment count where each `:param` segment matches
+// any single concrete segment (so "/x/123" resolves against a defined "/x/:id",
+// but NOT against a bare "/x"). This mirrors how the SPA router actually mounts
+// routes — there is no catch-all/prefix fallthrough — so a target whose only
+// "match" is a shorter ancestor path is a genuine redirect-to-nowhere and is
+// flagged, not silently accepted.
 //
 // Exit codes: 0 = clean, 1 = broken redirect target(s), 2 = scan failed.
 
@@ -31,19 +34,22 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const ROUTES_DIR = "artifacts/ghayth-erp/src/routes";
 
-// Extract every `path: "/..."` literal in a route-table source file.
+// Extract every `path: "/..."` literal in a route-table source file. Quote-
+// agnostic (double, single, or backtick) so a formatter switch can't silently
+// blind the scan; a route path never itself contains a quote char.
 export function extractRoutePaths(src) {
   const out = [];
-  const re = /path:\s*"(\/[^"]*)"/g;
+  const re = /path:\s*["'`](\/[^"'`]*)["'`]/g;
   let m;
   while ((m = re.exec(src)) !== null) out.push(m[1]);
   return out;
 }
 
-// Extract every `redirectTo("/...")` target literal in a source file.
+// Extract every `redirectTo("/...")` target literal in a source file. Quote-
+// agnostic for the same reason as extractRoutePaths.
 export function extractRedirectTargets(src) {
   const out = [];
-  const re = /redirectTo\(\s*"(\/[^"]*)"\s*\)/g;
+  const re = /redirectTo\(\s*["'`](\/[^"'`]*)["'`]\s*\)/g;
   let m;
   while ((m = re.exec(src)) !== null) out.push(m[1]);
   return out;
@@ -51,13 +57,16 @@ export function extractRedirectTargets(src) {
 
 const segs = (p) => p.split("/").filter(Boolean);
 
-// Does `target` resolve against the set of defined route paths?
+// Does `target` resolve against the set of defined route paths? Exact match, or
+// a defined path of the SAME segment count where each `:param` segment matches
+// any one concrete segment. No shorter-prefix fallthrough — the SPA router has
+// no catch-all, so "/x/123" must match a defined "/x/:id", not merely "/x".
 export function resolves(target, definedSet) {
   if (definedSet.has(target)) return true;
   const t = segs(target);
   for (const d of definedSet) {
     const ds = segs(d);
-    if (ds.length > t.length) continue; // defined can be a shorter prefix only
+    if (ds.length !== t.length) continue; // same depth only
     let ok = true;
     for (let i = 0; i < ds.length; i++) {
       if (ds[i].startsWith(":")) continue; // param matches any one segment
@@ -72,9 +81,15 @@ function listRouteFiles() {
   const abs = path.join(REPO_ROOT, ROUTES_DIR);
   if (!fs.existsSync(abs)) return [];
   const out = [];
-  for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
-    if (entry.isFile() && /\.tsx?$/.test(entry.name)) out.push(path.join(ROUTES_DIR, entry.name));
-  }
+  const walk = (dirAbs, dirRel) => {
+    for (const entry of fs.readdirSync(dirAbs, { withFileTypes: true })) {
+      const childAbs = path.join(dirAbs, entry.name);
+      const childRel = path.join(dirRel, entry.name);
+      if (entry.isDirectory()) walk(childAbs, childRel);
+      else if (entry.isFile() && /\.tsx?$/.test(entry.name)) out.push(childRel);
+    }
+  };
+  walk(abs, ROUTES_DIR);
   return out;
 }
 
