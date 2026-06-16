@@ -353,7 +353,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
          WHERE "entityType" = 'employee' AND "companyId" = $${govCompanyIdx}
          GROUP BY "entityId"
        )
-       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status, e."activationStatus",
               ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
@@ -504,8 +504,8 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       // 'inactive' is the only CHECK-allowed pending-ish status (migration
       // 084); it gates the employee until the activation flow flips it.
       const empRes = await client.query(
-        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status)
-         VALUES ($1, $2, $3, $4, $5, 'inactive')
+        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status, "activationStatus")
+         VALUES ($1, $2, $3, $4, $5, 'inactive', 'pending_activation')
          RETURNING id`,
         [name, phone || null, finalEmpNumber, nationalId || null, nationality || null]
       );
@@ -1678,6 +1678,27 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
       [status, scope.activeAssignmentId, id, scope.companyId]
     );
     if (!row) throw new NotFoundError("المهمة غير موجودة");
+
+    // HR-REV-3 §1 auto-gate — once every MANDATORY task for this hire is done,
+    // advance a still-pending_activation employee to ready_for_hr_review so HR
+    // knows the distributed plan is complete. Only flips from pending_activation
+    // (never overrides a later state); reversible if a task is re-opened.
+    if (status === "completed") {
+      const [pending] = await rawQuery<{ cnt: number }>(
+        `SELECT COUNT(*)::int AS cnt FROM onboarding_tasks
+          WHERE "employeeId" = $1 AND "companyId" = $2 AND mandatory IS NOT FALSE
+            AND status NOT IN ('completed','skipped')`,
+        [row.employeeId, scope.companyId]
+      );
+      if (pending && pending.cnt === 0) {
+        await rawQuery(
+          `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
+            WHERE id = $1 AND "activationStatus" = 'pending_activation'`,
+          [row.employeeId]
+        );
+      }
+    }
+
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: id,

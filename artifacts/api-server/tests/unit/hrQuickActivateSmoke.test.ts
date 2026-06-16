@@ -54,6 +54,11 @@ describe("HR-REV-3 (#2222) — pending (inactive) employee creation", () => {
   it("creates the assignment in 'active' status (so activation flow finds it)", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO employee_assignments[\s\S]*?'active'/);
   });
+  it("stamps activationStatus = 'pending_activation' on the hire (HR-REV-3 slice 4a)", () => {
+    const empInsert = QA_BLOCK.match(/INSERT INTO employees[\s\S]*?RETURNING/)?.[0] || "";
+    expect(empInsert).toMatch(/"activationStatus"/);
+    expect(empInsert).toMatch(/'pending_activation'/);
+  });
 });
 
 describe("HR-REV-3 (#2222) — onboarding plan + audit + numbering", () => {
