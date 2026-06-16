@@ -42,6 +42,9 @@ describe("HR-REV-8 — conversion guards", () => {
 });
 
 describe("HR-REV-8 — employee creation", () => {
+  it("wraps the multi-table writes in withTransaction (tx-coverage)", () => {
+    expect(HIRE_BLOCK).toMatch(/await withTransaction\(async \(\) =>/);
+  });
   it("inserts employee with status 'inactive'", () => {
     expect(HIRE_BLOCK).toMatch(/INSERT INTO employees[\s\S]*?'inactive'/);
   });

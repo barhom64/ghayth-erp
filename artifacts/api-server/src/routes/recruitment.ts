@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { handleRouteError, ValidationError, NotFoundError,
@@ -439,35 +439,38 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
     if (!name) throw new ValidationError("اسم المرشح مطلوب", { field: "name" });
     if (!phone) throw new ValidationError("رقم جوال المرشح مطلوب", { field: "phone" });
 
-    // Delegate actual employee creation to the quick-activate endpoint's
-    // logic by calling the internal API. We do it inline (not via HTTP) to
-    // share the transaction and avoid an extra round-trip.
-    //
-    // 1. Mark the application hired.
-    await rawExecute(
-      `UPDATE job_applications SET status = 'hired', "updatedAt" = NOW() WHERE id = $1`,
-      [id],
-    );
-    // 2. Insert the inactive employee.
+    // All four writes (application flip, employee insert, assignment insert,
+    // optional institutional links) must be atomic — a partial failure would
+    // leave a hired application with no employee, or an employee with no
+    // assignment. rawQuery/rawExecute auto-join the ambient transaction.
     const hireDate = b.hireDate || new Date().toISOString().slice(0, 10);
-    const [empRow] = await rawQuery<{ id: number }>(
-      `INSERT INTO employees (name, phone, email, nationality, "nationalId", status, "hireDate", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, 'inactive', $6, NOW(), NOW())
-       RETURNING id`,
-      [name, phone, email, b.nationality, b.nationalId, hireDate],
-    );
-    const empId = empRow.id;
-    // 3. Insert the active assignment.
-    const [assignRow] = await rawQuery<{ id: number }>(
-      `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "startDate", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW(), NOW())
-       RETURNING id`,
-      [empId, scope.companyId, b.branchId, b.departmentId, b.jobTitle, b.salary, hireDate],
-    );
-    const assignmentId = assignRow.id;
-    // 4. Link the optional institutional fields.
-    if (b.positionId) await rawExecute(`INSERT INTO employee_position_assignments ("employeeId","positionId","assignmentId","startDate","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [empId, b.positionId, assignmentId, hireDate]);
-    if (b.teamId) await rawExecute(`INSERT INTO employee_team_memberships ("employeeId","teamId","assignmentId","joinedAt","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [empId, b.teamId, assignmentId, hireDate]);
+    const { empId, assignmentId } = await withTransaction(async () => {
+      // 1. Mark the application hired.
+      await rawExecute(
+        `UPDATE job_applications SET status = 'hired', "updatedAt" = NOW() WHERE id = $1`,
+        [id],
+      );
+      // 2. Insert the inactive employee.
+      const [empRow] = await rawQuery<{ id: number }>(
+        `INSERT INTO employees (name, phone, email, nationality, "nationalId", status, "hireDate", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, 'inactive', $6, NOW(), NOW())
+         RETURNING id`,
+        [name, phone, email, b.nationality, b.nationalId, hireDate],
+      );
+      const newEmpId = empRow.id;
+      // 3. Insert the active assignment.
+      const [assignRow] = await rawQuery<{ id: number }>(
+        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "startDate", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW(), NOW())
+         RETURNING id`,
+        [newEmpId, scope.companyId, b.branchId, b.departmentId, b.jobTitle, b.salary, hireDate],
+      );
+      const newAssignmentId = assignRow.id;
+      // 4. Link the optional institutional fields.
+      if (b.positionId) await rawExecute(`INSERT INTO employee_position_assignments ("employeeId","positionId","assignmentId","startDate","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [newEmpId, b.positionId, newAssignmentId, hireDate]);
+      if (b.teamId) await rawExecute(`INSERT INTO employee_team_memberships ("employeeId","teamId","assignmentId","joinedAt","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [newEmpId, b.teamId, newAssignmentId, hireDate]);
+      return { empId: newEmpId, assignmentId: newAssignmentId };
+    });
     // 5. Audit + event.
     await createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "hire", entity: "job_applications", entityId: id, after: { employeeId: empId, name, jobTitle: b.jobTitle } });
     await emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "recruitment.application.hired", entity: "job_applications", entityId: id }).catch(() => {});
