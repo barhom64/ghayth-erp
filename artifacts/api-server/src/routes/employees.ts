@@ -410,23 +410,60 @@ const quickActivateSchema = z.object({
   hireDate: z.string().optional().nullable(),
 });
 
-// HR-REV-3 (#2222) §3/§4 — the default activation plan. Each task carries its
-// owning role + reason + whether it's mandatory, so completion is distributed
-// across owners (documents / payroll / department / it / hr / …) instead of
-// dumped on HR. Profile-driven, per-job-title generation is HR-REV-4; this is
-// the flat default until then. Both the quick-activate and the full-create
-// paths build their onboarding tasks from this single source.
-const DEFAULT_ONBOARDING_PLAN: ReadonlyArray<{
+// HR-REV-4 (#2223) §2/§4 — the activation plan is generated from the job
+// title's professional category, so a سائق, a محاسب and an إداري get materially
+// different distributed task sets (each task routed to its owning role, with a
+// serviceType for the ones that are a service request — vehicle/custody/access
+// — never a manual HR checkbox). This is the in-code profile until the
+// DB-driven job_activation_profiles tables land (HR-REV-4 full). Both the
+// quick-activate and the full-create paths call this with the resolved
+// job_titles.category (null → the general/admin default).
+type ActivationTask = {
   title: string;
   ownerRole: string;
   reason: string;
   mandatory: boolean;
-}> = [
-  { title: "تسليم أجهزة IT وإعداد الحسابات", ownerRole: "it", reason: "تجهيز الحساب والبريد وصرف عهدة الأجهزة", mandatory: true },
-  { title: "توقيع عقد العمل والتأمينات", ownerRole: "documents", reason: "العقد والتأمينات والتحقق من الوثائق", mandatory: true },
-  { title: "تعريف المدير المباشر والفريق", ownerRole: "department", reason: "تأكيد المباشرة وتعريف الفريق وموقع العمل", mandatory: true },
-  { title: "دورة التعريف بالشركة وسياساتها", ownerRole: "hr", reason: "التعريف بالسياسات واللوائح", mandatory: false },
-];
+  serviceType?: string;
+};
+
+function buildActivationPlan(category: string | null): ReadonlyArray<ActivationTask> {
+  const c = (category || "").toLowerCase();
+  const contract: ActivationTask = { title: "توقيع عقد العمل والتأمينات", ownerRole: "documents", reason: "العقد والتأمينات والتحقق من الوثائق", mandatory: true };
+  const manager: ActivationTask = { title: "تعريف المدير المباشر والفريق", ownerRole: "department", reason: "تأكيد المباشرة وتعريف الفريق وموقع العمل", mandatory: true };
+
+  // Driver — field/GPS attendance + vehicle + device custody + cost center.
+  if (c.includes("driver") || c.includes("سائق") || c.includes("field") || c.includes("ميدان")) {
+    return [
+      { title: "التحقق من رخصة القيادة", ownerRole: "documents", reason: "رخصة قيادة سارية شرط للقيادة", mandatory: true },
+      contract,
+      manager,
+      { title: "تطبيق سياسة حضور ميدانية (GPS)", ownerRole: "hr", reason: "فئة السائق تتطلب تتبّع GPS", mandatory: true },
+      { title: "طلب تخصيص مركبة", ownerRole: "fleet", reason: "تخصيص مركبة من الأسطول (طلب خدمة لا إنشاء)", mandatory: true, serviceType: "vehicle" },
+      { title: "صرف عهدة جهاز/شريحة", ownerRole: "warehouse", reason: "عهدة تشغيلية بوثيقة استلام", mandatory: false, serviceType: "custody" },
+      { title: "ربط مركز التكلفة/المشروع", ownerRole: "payroll", reason: "تحميل التكلفة على المركز الصحيح", mandatory: true },
+    ];
+  }
+
+  // Accountant / finance — restricted financial access, no vehicle, no GPS.
+  if (c.includes("account") || c.includes("finance") || c.includes("محاسب") || c.includes("مالي")) {
+    return [
+      contract,
+      manager,
+      { title: "منح صلاحية مالية مقيّدة", ownerRole: "access", reason: "وصول مالي محدود حسب الدور (لا رؤية تحقيقات إلا بمنح صريح)", mandatory: true, serviceType: "access" },
+      { title: "ربط مركز التكلفة", ownerRole: "payroll", reason: "ربط محاسبي لمركز التكلفة", mandatory: false },
+      { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    ];
+  }
+
+  // General / admin default.
+  return [
+    { title: "تسليم أجهزة IT وإعداد الحسابات", ownerRole: "it", reason: "تجهيز الحساب والبريد وصرف عهدة الأجهزة", mandatory: true, serviceType: "access" },
+    contract,
+    manager,
+    { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    { title: "دورة التعريف بالشركة وسياساتها", ownerRole: "hr", reason: "التعريف بالسياسات واللوائح", mandatory: false },
+  ];
+}
 
 router.post("/quick-activate", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
@@ -480,14 +517,19 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
         [empId, preIssued.assignmentId]
       );
 
-      // ── Resolve jobTitleId from the jobTitle text (company-scoped) ──
+      // ── Resolve jobTitleId + category from the jobTitle text (company-scoped) ──
+      // category drives the activation plan (HR-REV-4 §1): سائق ≠ محاسب ≠ إداري.
       let resolvedJobTitleId: number | null = null;
+      let resolvedCategory: string | null = null;
       if (effectiveJobTitle && effectiveJobTitle !== "موظف") {
         const jtRes = await client.query(
-          `SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+          `SELECT id, category FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
           [effectiveJobTitle, effectiveCompanyId]
         );
-        if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
+        if (jtRes.rows.length > 0) {
+          resolvedJobTitleId = jtRes.rows[0].id;
+          resolvedCategory = jtRes.rows[0].category ?? null;
+        }
       }
 
       // ── Create the first assignment in ACTIVE state ──
@@ -502,14 +544,14 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       );
       const assignmentId = assignRes.rows[0].id;
 
-      // ── Create the onboarding tasks (same distributed plan as full create) ──
+      // ── Create the onboarding tasks from the job-category profile ──
       const dueDateOnboarding = new Date();
       dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const task of DEFAULT_ONBOARDING_PLAN) {
+      for (const task of buildActivationPlan(resolvedCategory)) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory)
-           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8)`,
-          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
 
@@ -1037,6 +1079,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         );
         if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
       }
+      // Resolve the job category for the activation plan (HR-REV-4 §1). Falls
+      // back to categoryKey (attendance category) when the title has none.
+      let resolvedCategory: string | null = null;
+      if (resolvedJobTitleId) {
+        const catRes = await client.query(`SELECT category FROM job_titles WHERE id = $1 LIMIT 1`, [resolvedJobTitleId]);
+        resolvedCategory = catRes.rows[0]?.category ?? null;
+      }
+      if (!resolvedCategory && categoryKey) resolvedCategory = String(categoryKey);
 
       const assignRes = await client.query(
         `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId","positionId","categoryKey")
@@ -1154,14 +1204,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         [contractRes.rows[0].id, issuedContract.assignmentId]
       );
 
-      // ── Step 7: Create the distributed onboarding tasks ──
+      // ── Step 7: Create the onboarding tasks from the job-category profile ──
       const dueDateOnboarding = new Date();
       dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const task of DEFAULT_ONBOARDING_PLAN) {
+      for (const task of buildActivationPlan(resolvedCategory)) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory)
-           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8)`,
-          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
 
