@@ -64,25 +64,44 @@ export function assertTestDatabase(): void {
 }
 
 async function truncateAll(): Promise<void> {
-  // Order matters only when CASCADE is missing; since we use RESTART
-  // IDENTITY CASCADE, the order is irrelevant — but we list children
-  // first so the SQL stays readable.
+  // 2026-06-15 — SCOPED cleanup of ONLY this fixture's own data.
+  //
+  // The previous implementation did `TRUNCATE TABLE … companies …
+  // RESTART IDENTITY CASCADE`, which wiped EVERY company's rows — incl.
+  // the provisioned finance baseline (the Al-Diyaa company + its full
+  // chart of accounts). Any finance dynamic test (which targets
+  // COMPANY=2 and assumes a seeded COA) scheduled AFTER a tenant-
+  // isolation test in the same vitest process then saw a bare company 2
+  // and failed en masse. That cross-test contamination is exactly what
+  // a clean-slate fixture is supposed to PREVENT.
+  //
+  // The fixture only ever writes to the 11 tables below, all for its
+  // own two companies ('Test Company A' / 'Test Company B'). So we
+  // delete just those rows, child-first (companies has no ON DELETE
+  // CASCADE — verified — so order matters), scoped by the company-name
+  // marker. The Al-Diyaa finance company (a different name) and its
+  // COA survive untouched. Repeated calls stay idempotent.
+  const FIXTURE_COMPANY_NAMES = ["Test Company A", "Test Company B"];
+  const inFixtureCompanies = `"companyId" IN (SELECT id FROM companies WHERE name = ANY($1))`;
+  // refresh_tokens → users → employees.companyId
   await rawExecute(
-    `TRUNCATE TABLE
-       refresh_tokens,
-       requests,
-       documents,
-       tasks,
-       projects,
-       clients,
-       employee_assignments,
-       users,
-       employees,
-       branches,
-       companies
-     RESTART IDENTITY CASCADE`,
-    []
+    `DELETE FROM refresh_tokens WHERE "userId" IN (
+       SELECT u.id FROM users u JOIN employees e ON e.id = u."employeeId"
+        WHERE e.${inFixtureCompanies})`,
+    [FIXTURE_COMPANY_NAMES],
   );
+  for (const tbl of ["requests", "documents", "tasks", "projects", "clients", "employee_assignments"]) {
+    await rawExecute(`DELETE FROM ${tbl} WHERE ${inFixtureCompanies}`, [FIXTURE_COMPANY_NAMES]);
+  }
+  // users → employees.companyId (users has no companyId column)
+  await rawExecute(
+    `DELETE FROM users WHERE "employeeId" IN (
+       SELECT id FROM employees WHERE ${inFixtureCompanies})`,
+    [FIXTURE_COMPANY_NAMES],
+  );
+  await rawExecute(`DELETE FROM employees WHERE ${inFixtureCompanies}`, [FIXTURE_COMPANY_NAMES]);
+  await rawExecute(`DELETE FROM branches WHERE ${inFixtureCompanies}`, [FIXTURE_COMPANY_NAMES]);
+  await rawExecute(`DELETE FROM companies WHERE name = ANY($1)`, [FIXTURE_COMPANY_NAMES]);
 }
 
 async function seedCompany(name: string): Promise<{

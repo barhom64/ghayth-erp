@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { z } from "zod";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -13,6 +15,10 @@ import {
   applyFilters,
   PageShell,
   exportToCSV,
+  FormShell,
+  FormSelectField,
+  FormDateField,
+  FormGrid,
 } from "@workspace/ui-core";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarClock, Plus, Clock, Users, Sun, Moon } from "lucide-react";
@@ -25,9 +31,41 @@ import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
+// HR-REV — نموذج إسناد الموظف لوردية. كان حصريًّا في صفحة «إدارة الورديات
+// المتقدمة» المكرّرة (مسارها يرتدّ هنا)؛ نُقل إلى تبويب «التعيينات» حتى لا تفقد
+// الواجهة القدرة على إنشاء التعيينات (تبويب التعيينات كان للعرض فقط).
+// كل الـ IDs مطلوبة — النموذج الأصلي تتبّع assignmentId دون حقل، فكان يرسل 0
+// ويُرفض FK؛ المنتقي أُضيف ليصلح ذلك.
+const shiftAssignSchema = z.object({
+  assignmentId: z.string().min(1, "الموظف مطلوب"),
+  shiftId: z.string().min(1, "الوردية مطلوبة"),
+  startDate: z.string().min(1, "تاريخ البدء مطلوب"),
+});
+type ShiftAssignForm = z.infer<typeof shiftAssignSchema>;
+const defaultShiftAssignForm: ShiftAssignForm = {
+  assignmentId: "", shiftId: "", startDate: "",
+};
+
 export default function ShiftsPage() {
   const { data, isLoading, isError, refetch } = useApiQuery<any>(["shifts"], "/hr/shifts");
   const { data: assignmentsData } = useApiQuery<any>(["shift-assignments"], "/hr/shift-assignments");
+  const { data: empData } = useApiQuery<any>(["employees"], "/employees?limit=200");
+  const employees = empData?.data || [];
+  const [showAssignForm, setShowAssignForm] = useState(false);
+  const assignMut = useApiMutation<unknown, { assignmentId: number; shiftId: number; startDate: string }>(
+    "/hr/shift-assignments",
+    "POST",
+    [["shift-assignments"]],
+    { successMessage: "تم تعيين الوردية" },
+  );
+  const handleAssign = async (values: ShiftAssignForm) => {
+    await assignMut.mutateAsync({
+      assignmentId: Number(values.assignmentId),
+      shiftId: Number(values.shiftId),
+      startDate: values.startDate,
+    });
+    setShowAssignForm(false);
+  };
   const items = data?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const assignments = assignmentsData?.data || [];
@@ -197,6 +235,61 @@ export default function ShiftsPage() {
         </TabsContent>
         <TabsContent value="assignments">
           <div className="space-y-4">
+            <div>
+              <GuardedButton perm="hr:create" size="sm" onClick={() => setShowAssignForm(!showAssignForm)}>
+                <Plus className="h-4 w-4 me-1" />{showAssignForm ? "إلغاء" : "تعيين وردية لموظف"}
+              </GuardedButton>
+            </div>
+            {showAssignForm && (
+              <Card className="mb-4 border-status-info-surface">
+                <CardContent className="p-4">
+                  <FormShell
+                    schema={shiftAssignSchema}
+                    defaultValues={defaultShiftAssignForm}
+                    submitLabel="تعيين"
+                    secondaryActions={
+                      <Button type="button" variant="outline" onClick={() => setShowAssignForm(false)}>
+                        إلغاء
+                      </Button>
+                    }
+                    onSubmit={async (values, ctx) => {
+                      await handleAssign(values);
+                      ctx.reset();
+                    }}
+                  >
+                    <FormGrid cols={3}>
+                      {/* employee/assignment picker — submit used to send
+                          `Number("") = 0` as assignmentId and FK-fail. */}
+                      <FormSelectField
+                        name="assignmentId"
+                        label="الموظف"
+                        required
+                        options={[
+                          { value: "", label: "اختر موظفاً" },
+                          ...employees.map((e: any) => ({
+                            value: String(e.activeAssignmentId ?? e.assignmentId ?? e.id),
+                            label: e.name,
+                          })),
+                        ]}
+                      />
+                      <FormSelectField
+                        name="shiftId"
+                        label="الوردية"
+                        required
+                        options={[
+                          { value: "", label: "اختر" },
+                          ...items.map((s: any) => ({
+                            value: String(s.id),
+                            label: `${s.name} (${s.startTime}-${s.endTime})`,
+                          })),
+                        ]}
+                      />
+                      <FormDateField name="startDate" label="من تاريخ" required />
+                    </FormGrid>
+                  </FormShell>
+                </CardContent>
+              </Card>
+            )}
             <AdvancedFilters
               config={{
                 searchPlaceholder: "بحث بالموظف أو الوردية...",

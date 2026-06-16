@@ -80,12 +80,16 @@ import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
 import { financeMemoryRouter } from "./finance-memory.js";
+import { financeAmortizationRouter } from "./finance-amortization.js";
+import { financeDeferredRevenueRouter } from "./finance-deferred-revenue.js";
+import { financeInsuranceRouter } from "./finance-insurance.js";
 import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
 import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
 import { transportCalendarRouter } from "./transport-calendar.js"; // TR-022
+import { fleetOptimizerRouter } from "./fleet-optimizer.js"; // TA-T18-VRP Phase 2
 import { transportIntegrationRouter } from "./transport-integration.js";
 import { transportRoutePatternsRouter } from "./transport-route-patterns.js";
 import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
@@ -127,6 +131,7 @@ import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
 import { vendorContractsRouter } from "./finance-vendor-contracts.js";
 import { costCentersRouter } from "./finance-cost-centers.js";
+import { financeDatafixRouter } from "./finance-datafix.js";
 import disciplineRouter from "./hr-discipline.js";
 import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
@@ -384,7 +389,14 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeInsuranceRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
+// #2090 FIN-DATAFIX — READ-ONLY misparented-subsidiary inventory (report only,
+// no mutation endpoint). Gated at requireMinLevel(70) + finance.accounts view
+// inside the router; mounted here so URLs are /finance/datafix/*.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDatafixRouter);
 // #1733 — Transport-to-finance handoff queue. Lives under /finance because
 // only finance-side roles see it (transport NEVER materialises JEs).
 router.use("/finance", requireModule("finance"), requireGuards("financial"), transportBillingCandidatesRouter);
@@ -433,6 +445,7 @@ router.use(vehicleProfileRouter);
 router.use(transportPricingRouter);
 router.use(transportPlanningRouter);
 router.use(transportCalendarRouter); // TR-022 unified transport calendar
+router.use(fleetOptimizerRouter);    // TA-T18-VRP Phase 2 batch optimizer
 router.use(transportIntegrationRouter);
 router.use(transportRoutePatternsRouter);
 router.use(fleetRulesAdminRouter);

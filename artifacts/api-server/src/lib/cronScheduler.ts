@@ -50,6 +50,8 @@ import { runAllProactiveChecks, registerProactiveEventListeners } from "./proact
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
+import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
+import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
 import {
   fleetTelematicsRetention,
   fleetTelematicsHeartbeat,
@@ -492,6 +494,17 @@ export async function scanVehicleMaintenanceSchedules(): Promise<string> {
     }
   }
   return `vehicle_maintenance_schedule_scan: ${dueCount} due schedule(s) processed`;
+}
+
+/**
+ * TA-GAP-09 Phase 3 — sweep every active maps-usage threshold and
+ * fire warning/critical events when the operator's cap is crossed.
+ * Dedupe is enforced inside the lib via the alerts table UNIQUE.
+ */
+async function mapsUsageThresholdAlerts(): Promise<string> {
+  const { runThresholdAlertCheck } = await import("./fleet/mapsUsageThresholdAlerts.js");
+  const result = await runThresholdAlertCheck(new Date());
+  return `[mapsUsageThresholdAlerts] checked=${result.thresholdsChecked} emitted=${result.alertsEmitted}`;
 }
 
 async function fleetStatusCheck(): Promise<string> {
@@ -4697,6 +4710,11 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  // TA-GAP-09 Phase 3 — maps usage threshold alert sweep (kicks at 80%
+  // warning and 100% critical of the operator-set cap). Runs every
+  // 15 minutes so a sudden burst escalates within a quarter-hour;
+  // dedupe is enforced by the unique constraint on the alerts table.
+  { name: "maps_usage_threshold_alerts", description: "تنبيهات تجاوز عتبة استهلاك الخرائط (TA-GAP-09 Phase 3)", schedule: "*/15 * * * *", handler: mapsUsageThresholdAlerts },
   { name: "vehicle_maintenance_schedule_scan", description: "فحص جداول الصيانة الوقائية المستحقّة (بالتاريخ أو العداد) وإطلاق التنبيهات/الالتزامات", schedule: "0 6 * * *", handler: scanVehicleMaintenanceSchedules },
   { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
   { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
@@ -4776,6 +4794,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
   { name: "retry_stuck_official_letters", description: "إعادة محاولة إرسال الخطابات المعتمدة العالقة", schedule: "*/15 * * * *", handler: retryStuckOfficialLetters },
   { name: "daily_recurring_journals", description: "تنفيذ القيود المحاسبية الدورية المستحقة", schedule: "0 1 * * *", handler: processDueRecurringJournals },
+  { name: "monthly_prepaid_amortization", description: "إطفاء المصروفات المدفوعة مقدماً المستحقة شهرياً", schedule: "0 2 1 * *", handler: processDueAmortizations },
+  { name: "monthly_deferred_revenue_recognition", description: "تحقّق الإيرادات المؤجلة المستحقة شهرياً", schedule: "0 2 1 * *", handler: processDueRecognitions },
   { name: "hourly_obligations_scan", description: "فحص الالتزامات — ترقية المتأخرات وتصعيد المهام", schedule: "15 * * * *", handler: hourlyObligationsScan },
   { name: "daily_dunning_auto_send", description: "إرسال تلقائي لخطابات التحصيل حسب المرحلة", schedule: "0 9 * * *", handler: dailyDunningAutoSend },
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },

@@ -40,6 +40,11 @@ const TelematicsDevices = lazy(() => import("@/pages/fleet/telematics/devices"))
 const TelematicsVideoEvidence = lazy(() => import("@/pages/fleet/telematics/video-evidence"));
 const TelematicsSettings = lazy(() => import("@/pages/fleet/telematics/settings"));
 const TelematicsOperations = lazy(() => import("@/pages/fleet/telematics/operations"));
+// TA-GAP-09 Phase 2 — Maps quota usage dashboard.
+const MapsUsage = lazy(() => import("@/pages/fleet/maps-usage"));
+// TA-T18-VRP Phase 2 — Fleet Optimizer batch-mode (runs list + detail).
+const OptimizerRuns = lazy(() => import("@/pages/fleet/optimizer-runs"));
+const OptimizerRunDetail = lazy(() => import("@/pages/fleet/optimizer-run-detail"));
 const TelematicsEvidence = lazy(() => import("@/pages/fleet/telematics/evidence"));
 const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecard"));
 const CargoList = lazy(() => import("@/pages/fleet/cargo"));
@@ -113,6 +118,11 @@ export const fleetRoutes = [
   { path: "/fleet/telematics/video-evidence", component: TelematicsVideoEvidence },
   { path: "/fleet/telematics/settings", component: TelematicsSettings },
   { path: "/fleet/telematics/operations", component: TelematicsOperations },
+  // TA-GAP-09 Phase 2 — Maps quota usage dashboard.
+  { path: "/fleet/maps/usage", component: MapsUsage },
+  // TA-T18-VRP Phase 2 — Fleet Optimizer (detail BEFORE list since wouter is order-sensitive).
+  { path: "/fleet/optimizer/runs/:id", component: OptimizerRunDetail },
+  { path: "/fleet/optimizer/runs", component: OptimizerRuns },
   { path: "/fleet/telematics/evidence", component: TelematicsEvidence },
   { path: "/fleet/telematics/scorecard", component: TelematicsScorecard },
   // Driver self-service dashboard — appears at /me/driver. Role gate

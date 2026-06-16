@@ -7,7 +7,11 @@
 // runs in every environment via scripts/guard.sh, exactly like
 // check-ghost-rows.test.mjs. Exits 0 when every fixture passes, 1 otherwise.
 
-import { stripSql, findBreakingStatements } from "./check-migration-policy.mjs";
+import {
+  stripSql,
+  findBreakingStatements,
+  findUnguardedAddConstraints,
+} from "./check-migration-policy.mjs";
 
 let failed = 0;
 function check(name, cond) {
@@ -38,6 +42,19 @@ check("NOT NULL inside a fresh CREATE TABLE", !breaks(`CREATE TABLE t (id serial
 check("ADD CONSTRAINT … CHECK … NOT VALID", !breaks(`ALTER TABLE t ADD CONSTRAINT t_chk CHECK (s IN ('a','b')) NOT VALID;`));
 check("breaking keyword only inside a -- comment", !breaks(`-- @rollback: ALTER TABLE t DROP CONSTRAINT t_chk;\nALTER TABLE t ADD COLUMN c integer;`));
 check("plain ALTER TABLE … ADD COLUMN (no TYPE clause)", !breaks(`ALTER TABLE t ADD COLUMN c integer;`));
+
+const unguarded = (sql) => findUnguardedAddConstraints(sql).length > 0;
+
+console.log("findUnguardedAddConstraints — bare (non-idempotent) constraint adds ARE flagged");
+check("bare ADD CONSTRAINT … CHECK", unguarded(`ALTER TABLE t ADD CONSTRAINT t_chk CHECK (x > 0) NOT VALID;`));
+check("bare ADD CONSTRAINT quoted name", unguarded(`ALTER TABLE t ADD CONSTRAINT "t_chk" CHECK (x > 0);`));
+check("guard names a DIFFERENT constraint", unguarded(`ALTER TABLE t DROP CONSTRAINT IF EXISTS other_chk; ALTER TABLE t ADD CONSTRAINT t_chk CHECK (x > 0);`));
+
+console.log("findUnguardedAddConstraints — idempotency-guarded constraint adds are NOT flagged");
+check("DROP CONSTRAINT IF EXISTS guard", !unguarded(`ALTER TABLE t DROP CONSTRAINT IF EXISTS t_chk; ALTER TABLE t ADD CONSTRAINT t_chk CHECK (x > 0) NOT VALID;`));
+check("pg_constraint existence DO-block guard", !unguarded(`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 't_chk') THEN ALTER TABLE t ADD CONSTRAINT t_chk CHECK (x > 0) NOT VALID; END IF; END $$;`));
+check("no ADD CONSTRAINT at all", !unguarded(`ALTER TABLE t ADD COLUMN c integer;`));
+check("ADD CONSTRAINT keyword only inside a -- comment", !unguarded(`-- ADD CONSTRAINT t_chk in a past migration\nALTER TABLE t ADD COLUMN c integer;`));
 
 if (failed > 0) {
   console.error(`\n[check-migration-policy.test] FAIL — ${failed} fixture(s) failed.`);

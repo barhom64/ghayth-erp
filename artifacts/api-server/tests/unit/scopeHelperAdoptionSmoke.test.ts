@@ -66,9 +66,31 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "execDashboard.ts",
   "export.ts",
   "finance-algorithms.ts",
+  // finance-amortization.ts: FIN-TIME-SPREADING (#2247) prepaid-amortization
+  // CRUD + run trigger. List/insert/run keyed by (companyId, …) — point
+  // lookups + a per-company recognition run, not a branch list cascade.
+  // Manual scope.companyId scoping is correct here (mirrors finance-memory.ts).
+  "finance-amortization.ts",
+  // finance-deferred-revenue.ts: FIN-DEFERRED-REVENUE (#2248) deferred-revenue
+  // recognition CRUD + run trigger — the symmetric counterpart of
+  // finance-amortization.ts. List/insert/run keyed by (companyId, …) — point
+  // lookups + a per-company recognition run, not a branch list cascade. Manual
+  // scope.companyId scoping is correct here (mirrors finance-amortization.ts).
+  "finance-deferred-revenue.ts",
   "finance-custodies.ts",
+  // finance-datafix.ts: #2090 FIN-DATAFIX READ-ONLY misparented-subsidiary
+  // inventory. A single GET keyed on scope.companyId that delegates to
+  // buildMisparentedSubsidiaryInventory (lib/finance/datafixInventory.ts); the
+  // company predicate is applied in the lib SELECT. Aggregate report shape, not
+  // a branch list cascade — buildScopedWhere has no branch filter to add.
+  "finance-datafix.ts",
   "finance-gl-helpers.ts",
   "finance-hardening.ts",
+  // finance-insurance.ts: FIN-PROPERTY-MEDICAL-INSURANCE (#2249) insurance
+  // premium posting + amortization schedule insertion. Three short POST
+  // handlers keyed by (companyId, …) — point-lookup shape, no list cascade;
+  // mirrors finance-amortization.ts. Manual scope.companyId is correct here.
+  "finance-insurance.ts",
   // finance-memory.ts: financial-memory CRUD (manual journal templates,
   // expense-category memory, supplier finance defaults). Point lookups +
   // upserts keyed by (companyId, supplierId)/(companyId, categoryKey)/
@@ -76,6 +98,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
   // company/branch list cascades which this surface intentionally isn't.
   "finance-memory.ts",
+  // fleet-optimizer.ts: TA-T18-VRP Phase 2 — five short handlers that
+  // each touch a single tenant-scoped table with literal `"companyId" =
+  // $N`; the buildScopedWhere helper adds noise without changing
+  // behaviour. Manual is the right call here and is explicitly signed
+  // off in this file.
+  "fleet-optimizer.ts",
   "fleet-telematics-webhook.ts",
   "fleet-telematics.ts",
   "governance.ts",
@@ -279,9 +307,28 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: routes/hr-saudi-compliance.ts (Task #272)
       // WPS/Mudad endpoints — point-lookup CRUD keyed on (companyId); no
       // branch-cascade list endpoints; manual scoping correct here.
-      total: 122,
+      // +1 total/manualOnly: FIN-TIME-SPREADING (#2247)
+      // routes/finance-amortization.ts — prepaid-amortization CRUD + run
+      // trigger keyed by (companyId, …); allowlisted with justification
+      // (mirrors finance-memory.ts, point-lookup/per-company-run shape).
+      // +1 total/manualOnly: FIN-DEFERRED-REVENUE (#2248)
+      // routes/finance-deferred-revenue.ts — deferred-revenue recognition CRUD
+      // + run trigger keyed by (companyId, …); allowlisted with justification
+      // (the symmetric counterpart of finance-amortization.ts).
+      // +1 total/manualOnly: TA-T18-VRP Phase 2 routes/fleet-optimizer.ts
+      // — five short handlers each scoped on a single tenant table; the
+      // helper adds noise without behaviour change, manual is intentional.
+      // +1 total/manualOnly: FIN-PROPERTY-MEDICAL-INSURANCE (#2249)
+      // routes/finance-insurance.ts — insurance premium posting + schedule
+      // insertion. Three short POST handlers keyed by (companyId, …);
+      // mirrors finance-amortization.ts (point-lookup, no branch cascade).
+      // +1 total/manualOnly: #2090 FIN-DATAFIX routes/finance-datafix.ts —
+      // READ-ONLY misparented-subsidiary inventory. Single GET keyed on
+      // scope.companyId (predicate applied in lib/finance/datafixInventory.ts);
+      // aggregate report shape, no branch list cascade for buildScopedWhere.
+      total: 127,
       helperUsers: 39,
-      manualOnly: 80,
+      manualOnly: 85,
     });
   });
 });

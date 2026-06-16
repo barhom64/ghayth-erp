@@ -219,7 +219,27 @@ export default function TrainingPage() {
           <TabsTrigger value="programs">البرامج</TabsTrigger>
           <TabsTrigger value="enrollments">التسجيلات</TabsTrigger>
         </TabsList>
-        <TabsContent value="programs">
+        <TabsContent value="programs" className="space-y-4">
+          {/* HR-REV — «البرامج حسب الحالة»: العرض الوحيد الفريد الذي كان في صفحة
+              «تحليلات التدريب المتقدمة» المكرّرة (مسارها يرتدّ هنا) — أُدمج هنا. */}
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-sm font-medium mb-3">البرامج حسب الحالة</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {["upcoming", "active", "completed", "cancelled"].map((s) => {
+                  const label = s === "upcoming" ? "قادم" : s === "active" ? "جاري" : s === "completed" ? "مكتمل" : "ملغي";
+                  const count = items.filter((p: any) => p.status === s).length;
+                  const color = s === "active" ? "bg-status-success-surface text-status-success-foreground" : s === "completed" ? "bg-status-info-surface text-status-info-foreground" : s === "cancelled" ? "bg-status-error-surface text-status-error-foreground" : "bg-status-warning-surface text-status-warning-foreground";
+                  return (
+                    <div key={s} className={`p-4 rounded-lg text-center ${color}`}>
+                      <p className="text-2xl font-bold">{count}</p>
+                      <p className="text-sm">{label}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((t: any) => (
               <Card key={t.id} className="hover:shadow-md transition-shadow">

@@ -33,6 +33,11 @@ const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
 const TASKS = readFileSync(join(ROUTES, "tasks.ts"), "utf8");
 const PROJECTS = readFileSync(join(ROUTES, "projects.ts"), "utf8");
 const WAREHOUSE_ADV = readFileSync(join(ROUTES, "warehouse-advanced.ts"), "utf8");
+const WAREHOUSE = readFileSync(join(ROUTES, "warehouse.ts"), "utf8");
+const WAREHOUSE_CC = readFileSync(join(ROUTES, "warehouse-cycle-counts.ts"), "utf8");
+const BI = readFileSync(join(ROUTES, "bi.ts"), "utf8");
+const NUMBERING = readFileSync(join(ROUTES, "numbering.ts"), "utf8");
+const MEINSIGHTS = readFileSync(join(ROUTES, "meInsights.ts"), "utf8");
 
 // Strip block + line comments so a table name inside a JSDoc doesn't
 // register as a live statement.
@@ -234,5 +239,86 @@ describe("FND-013 #2340 — warehouse-advanced post-insert read-backs (batch 6) 
       /FROM warehouse_stock_serials WHERE id=\$1 AND "companyId"=\$2/,
     );
     expect(stripped).not.toMatch(/FROM warehouse_stock_serials WHERE id=\$1 AND "deletedAt"/);
+  });
+});
+
+describe("FND-013 #2340 — warehouse_products JOINs (batch 7) carry companyId", () => {
+  // Display joins (product name / stock) behind a companyId-verified parent
+  // (cycle-count / inventory-count). The driving line tables have no companyId
+  // column, so the joined warehouse_products is scoped via scope.companyId.
+  it("cycle-count line reads scope the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE_CC);
+    const joins = [...stripped.matchAll(/JOIN warehouse_products p ON p\.id=l\."productId"/g)];
+    expect(joins.length).toBeGreaterThanOrEqual(2);
+    // Every such statement must carry p."companyId"=$N somewhere.
+    for (const m of stripped.matchAll(/FROM warehouse_cycle_count_lines l[\s\S]*?`/g)) {
+      if (/JOIN warehouse_products p/.test(m[0])) {
+        expect(m[0]).toMatch(/p\."companyId"=\$\d/);
+      }
+    }
+  });
+
+  it("inventory-count item read scopes the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE);
+    // The pre-apply fetch (LIMIT 10000) must carry wp."companyId".
+    expect(stripped).toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 AND wp\."companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 LIMIT/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — bi.ts per-user reads (batch 8) carry companyId", () => {
+  // Personal alert-fatigue surfaces scoped by the caller's own assignment;
+  // companyId added so the read is scoped on both axes (assignmentId is
+  // already company-unique, so this is defense-in-depth).
+  it("alert_fatigue_settings read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM alert_fatigue_settings WHERE "assignmentId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM alert_fatigue_settings WHERE "assignmentId" = \$1`/);
+  });
+
+  it("notifications daily-count read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM notifications\s+WHERE "assignmentId" = \$1 AND "companyId" = \$2 AND DATE\("createdAt"\)/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — numbering_counters read (batch 9) carries companyId", () => {
+  // numbering_counters.companyId is NOT NULL — strictly per-company. The
+  // scheme is companyId-verified first; the counters list under it must be
+  // scoped too (numbering integrity: never surface another tenant's counters).
+  it("scheme-counters list scopes by companyId", () => {
+    const stripped = stripComments(NUMBERING);
+    expect(stripped).toMatch(
+      /FROM numbering_counters\s+WHERE "schemeId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM numbering_counters\s+WHERE "schemeId" = \$1\s+ORDER/);
+  });
+});
+
+describe("FND-013 #2340 — meInsights pending-requests UNION (batch 10) carries companyId", () => {
+  // /me/proactive-insights category 3 UNION-ALLs the caller's pending
+  // leave / loan / overtime requests, scoped by their own assignment. Each
+  // branch also carries companyId so all three tenant tables are scoped.
+  it("each UNION branch scopes its table by companyId", () => {
+    const stripped = stripComments(MEINSIGHTS);
+    for (const t of ["hr_leave_requests", "hr_employee_loans", "hr_overtime_requests"]) {
+      expect(stripped).toMatch(
+        new RegExp(`WHERE "assignmentId" = \\$1 AND ${t}\\."companyId" = \\$2 AND status = 'pending'`),
+      );
+    }
+    // No bare unscoped form left for any of the three.
+    for (const t of ["hr_leave_requests", "hr_employee_loans", "hr_overtime_requests"]) {
+      expect(stripped).not.toMatch(
+        new RegExp(`WHERE "assignmentId" = \\$1 AND status = 'pending' AND ${t}\\."deletedAt"`),
+      );
+    }
   });
 });

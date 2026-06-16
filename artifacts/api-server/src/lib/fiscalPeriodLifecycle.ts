@@ -11,6 +11,12 @@ import type * as pg from "pg";
 import { rawQuery, withTransaction } from "./rawdb.js";
 import { applyTransition } from "./lifecycleEngine.js";
 import { ConflictError, NotFoundError } from "./errorHandler.js";
+import {
+  collectPeriodCloseBlockers,
+  buildPeriodCloseReport,
+  type PeriodCloseBlocker,
+  type PeriodCloseReport,
+} from "./periodCloseCoordinator.js";
 
 type Scope = {
   companyId: number;
@@ -34,6 +40,8 @@ export type CloseFiscalPeriodResult = {
   periodId: number;
   name: string;
   status: string;
+  /** Close report (counts + closedBy/closedAt) recorded on the close. */
+  report?: PeriodCloseReport;
 };
 
 /**
@@ -64,25 +72,40 @@ export async function closeFiscalPeriodCanonical(
   const period = await fetchPeriod();
   if (!period) throw new NotFoundError("الفترة غير موجودة");
 
-  const pendingRows = await rawQuery<{ pendingCount: string }>(
-    `SELECT COUNT(*)::text AS "pendingCount" FROM journal_entries
-     WHERE "companyId"=$1 AND "deletedAt" IS NULL
-       AND "createdAt"::date BETWEEN $2 AND $3
-       AND ("approvalStatus" IS NULL OR "approvalStatus" IN ('draft','pending_review'))
-       AND "isManual" = TRUE`,
-    [scope.companyId, period.startDate, period.endDate]
-  );
-  const pendingCount = Number(pendingRows[0]?.pendingCount ?? 0);
-  if (pendingCount > 0) {
+  // FIN-PERIOD-CLOSE (#2250) — AGGREGATE every integrity blocker in one pass
+  // (no longer fail-fast on the first). The coordinator runs ALL checks —
+  // pending manual JEs (#1715), due un-posted prepaid amortizations (#2247),
+  // due un-posted deferred-revenue recognitions (#2248), operational JEs missing
+  // required dimensions, mapping-fallback postings, manual operationally-linked
+  // JEs without a reason, and open financial posting failures — all company-
+  // scoped and windowed to the period's date range. If ANY blocker stands, the
+  // close is REFUSED with the FULL list in meta.blockers (one round-trip, not N).
+  const blockers: PeriodCloseBlocker[] = await collectPeriodCloseBlockers({
+    companyId: scope.companyId,
+    period: { startDate: period.startDate, endDate: period.endDate, name: period.name },
+  });
+
+  if (blockers.length > 0) {
     throw new ConflictError(
-      `لا يمكن إقفال الفترة "${period.name}": يوجد ${pendingCount} قيد يدوي لم يُرحّل بعد`,
+      `لا يمكن إقفال الفترة "${period.name}": يوجد ${blockers.length} مانع نزاهة يجب معالجته أولاً`,
       {
-        field: "journalEntries",
-        fix: "ارحّل أو احذف القيود اليدوية المعلّقة قبل إقفال الفترة",
-        meta: { pendingCount, periodId, periodName: period.name },
+        field: "fiscalPeriod",
+        fix: "عالج جميع موانع النزاهة المدرجة ثم أعد محاولة الإقفال",
+        meta: { blockers, blockerCount: blockers.length, periodId, periodName: period.name },
       }
     );
   }
+
+  // Clean — build the close report (no blockers) to persist into the audit/close
+  // record. closedBy/closedAt are stamped here for the record.
+  const closeReport = await buildPeriodCloseReport({
+    companyId: scope.companyId,
+    periodId,
+    period: { startDate: period.startDate, endDate: period.endDate, name: period.name },
+    blockers,
+    closedBy: scope.activeAssignmentId ?? null,
+    closedAt: new Date().toISOString(),
+  });
 
   const runTransition = async (c?: pg.PoolClient) =>
     applyTransition<Record<string, unknown>>({
@@ -103,7 +126,9 @@ export async function closeFiscalPeriodCanonical(
         closedBy: scope.activeAssignmentId ?? null,
         ...(reason ? { notes: reason } : {}),
       },
-      after: { name: period.name, notes: reason ?? null },
+      // The close report rides into the audit `after` payload so the audit
+      // trail captures the integrity snapshot at the moment of close.
+      after: { name: period.name, notes: reason ?? null, closeReport },
       ...(c ? { client: c } : {}),
     });
 
@@ -115,5 +140,6 @@ export async function closeFiscalPeriodCanonical(
     periodId,
     name: period.name,
     status: String(updated.status ?? "closed"),
+    report: closeReport,
   };
 }

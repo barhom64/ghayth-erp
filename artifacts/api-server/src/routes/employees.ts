@@ -410,6 +410,24 @@ const quickActivateSchema = z.object({
   hireDate: z.string().optional().nullable(),
 });
 
+// HR-REV-3 (#2222) §3/§4 — the default activation plan. Each task carries its
+// owning role + reason + whether it's mandatory, so completion is distributed
+// across owners (documents / payroll / department / it / hr / …) instead of
+// dumped on HR. Profile-driven, per-job-title generation is HR-REV-4; this is
+// the flat default until then. Both the quick-activate and the full-create
+// paths build their onboarding tasks from this single source.
+const DEFAULT_ONBOARDING_PLAN: ReadonlyArray<{
+  title: string;
+  ownerRole: string;
+  reason: string;
+  mandatory: boolean;
+}> = [
+  { title: "تسليم أجهزة IT وإعداد الحسابات", ownerRole: "it", reason: "تجهيز الحساب والبريد وصرف عهدة الأجهزة", mandatory: true },
+  { title: "توقيع عقد العمل والتأمينات", ownerRole: "documents", reason: "العقد والتأمينات والتحقق من الوثائق", mandatory: true },
+  { title: "تعريف المدير المباشر والفريق", ownerRole: "department", reason: "تأكيد المباشرة وتعريف الفريق وموقع العمل", mandatory: true },
+  { title: "دورة التعريف بالشركة وسياساتها", ownerRole: "hr", reason: "التعريف بالسياسات واللوائح", mandatory: false },
+];
+
 router.post("/quick-activate", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(quickActivateSchema.safeParse(req.body));
@@ -484,20 +502,14 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       );
       const assignmentId = assignRes.rows[0].id;
 
-      // ── Create the 4 onboarding tasks (same plan as the full create) ──
-      const onboardingTasks = [
-        "تسليم أجهزة IT وإعداد الحسابات",
-        "توقيع عقد العمل والتأمينات",
-        "تعريف المدير المباشر والفريق",
-        "دورة التعريف بالشركة وسياساتها",
-      ];
+      // ── Create the onboarding tasks (same distributed plan as full create) ──
       const dueDateOnboarding = new Date();
       dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const taskTitle of onboardingTasks) {
+      for (const task of DEFAULT_ONBOARDING_PLAN) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
-           VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory)
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory]
         );
       }
 
@@ -1142,20 +1154,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         [contractRes.rows[0].id, issuedContract.assignmentId]
       );
 
-      // ── Step 7: Create 4 onboarding tasks ──
-      const onboardingTasks = [
-        "تسليم أجهزة IT وإعداد الحسابات",
-        "توقيع عقد العمل والتأمينات",
-        "تعريف المدير المباشر والفريق",
-        "دورة التعريف بالشركة وسياساتها",
-      ];
+      // ── Step 7: Create the distributed onboarding tasks ──
       const dueDateOnboarding = new Date();
       dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const taskTitle of onboardingTasks) {
+      for (const task of DEFAULT_ONBOARDING_PLAN) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
-           VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory)
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory]
         );
       }
 

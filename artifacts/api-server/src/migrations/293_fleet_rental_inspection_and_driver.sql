@@ -71,15 +71,36 @@ CREATE INDEX IF NOT EXISTS idx_fleet_rental_contracts_driver
 -- operator actually fills the inspection — NOT VALID + ADD CONSTRAINT
 -- avoids re-validating any historical rows (there are none, but the
 -- pattern keeps the migration safe under expand/contract).
-ALTER TABLE fleet_rental_contracts
-  ADD CONSTRAINT fleet_rental_contracts_handover_fuel_range_check
-  CHECK ("handoverFuelLevel" IS NULL OR ("handoverFuelLevel" >= 0 AND "handoverFuelLevel" <= 1))
-  NOT VALID;
+-- Idempotent: Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, and a bare
+-- ADD CONSTRAINT throws 42710 (duplicate_object) if the constraint already
+-- exists — which crash-loops the migration runner in production (it
+-- re-throws on failure, freezing the whole chain) when this file (or its
+-- collided twin 282_*) re-runs over a DB that already has the constraint.
+-- The guard below only adds when absent, so re-runs are harmless.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fleet_rental_contracts_handover_fuel_range_check'
+      AND conrelid = 'fleet_rental_contracts'::regclass
+  ) THEN
+    ALTER TABLE fleet_rental_contracts
+      ADD CONSTRAINT fleet_rental_contracts_handover_fuel_range_check
+      CHECK ("handoverFuelLevel" IS NULL OR ("handoverFuelLevel" >= 0 AND "handoverFuelLevel" <= 1))
+      NOT VALID;
+  END IF;
 
-ALTER TABLE fleet_rental_contracts
-  ADD CONSTRAINT fleet_rental_contracts_return_fuel_range_check
-  CHECK ("returnFuelLevel" IS NULL OR ("returnFuelLevel" >= 0 AND "returnFuelLevel" <= 1))
-  NOT VALID;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'fleet_rental_contracts_return_fuel_range_check'
+      AND conrelid = 'fleet_rental_contracts'::regclass
+  ) THEN
+    ALTER TABLE fleet_rental_contracts
+      ADD CONSTRAINT fleet_rental_contracts_return_fuel_range_check
+      CHECK ("returnFuelLevel" IS NULL OR ("returnFuelLevel" >= 0 AND "returnFuelLevel" <= 1))
+      NOT VALID;
+  END IF;
+END $$;
 
 -- The 247 migration's paymentTerms CHECK already accepts daily/
 -- weekly/monthly/quarterly/one_time — no need to re-state it.

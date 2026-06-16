@@ -49,6 +49,8 @@ import { checkAccess } from "../lib/rbac/authzEngine.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { cascadeDispatchToBooking, cancelTripsForDispatchOrder } from "../lib/transportDispatchCascade.js";
+import { resolveSettings } from "../lib/settings.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
 import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
@@ -761,11 +763,113 @@ transportBookingsRouter.patch(
       if (sets.length === 0) { res.json({ data: { id } }); return; }
       sets.push(`"updatedAt" = NOW()`);
       params.push(id, scope.companyId);
-      await rawExecute(
+      const bookingUpdateSql =
         `UPDATE transport_bookings SET ${sets.join(", ")}
-          WHERE id = $${p++} AND "companyId" = $${p++} AND "deletedAt" IS NULL`,
-        params,
-      );
+          WHERE id = $${p++} AND "companyId" = $${p++} AND "deletedAt" IS NULL`;
+
+      // ─── booking-cancel policy (configurable, top of the cascade) ────────
+      // Cancelling a booking has downstream operational state: its dispatch
+      // orders, the fleet trips those spawned, and the held driver/vehicle.
+      // Until now the PATCH flipped only the booking row and orphaned all of
+      // it. How the downstream is handled is a company preference resolved from
+      // the 3-level `settings` engine (key: fleet.bookings.cancelPolicy):
+      //   • "guard"   (default) — refuse the cancel while any dispatch order is
+      //                still active; the operator cancels those first (which,
+      //                via the dispatch-cancel cascade, releases the trips and
+      //                resources) and only then cancels the booking. Safest: it
+      //                never force-cancels a trip with a driver already en route.
+      //   • "cascade" — cancel everything top-down in ONE atomic step: each
+      //                active dispatch order → cancelled, its nav session ended,
+      //                its trip cancelled + vehicle/driver released (shared
+      //                helper), every non-terminal line cancelled, then the
+      //                booking row itself.
+      const cancelling = b.status === "cancelled" && existing.status !== "cancelled";
+      let bookingUpdateDone = false;
+      if (cancelling) {
+        const rawPolicy = await resolveSettings(
+          "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
+        );
+        const policy = rawPolicy === "cascade" ? "cascade" : "guard";
+
+        if (policy === "guard") {
+          const [activeRow] = await rawQuery<{ active: number }>(
+            `SELECT COUNT(*)::int AS active
+               FROM transport_dispatch_orders
+              WHERE "companyId" = $1 AND "bookingId" = $2
+                AND status IN ('pending', 'notified', 'accepted', 'executing')`,
+            [scope.companyId, id],
+          );
+          const active = activeRow?.active ?? 0;
+          if (active > 0) {
+            throw new ConflictError(
+              `لا يمكن إلغاء الحجز: يوجد ${active} أمر توزيع نشط. ألغِ أوامر التوزيع أولاً (سيُلغى معها الرحلة المرتبطة وتُحرَّر المركبة/السائق تلقائيًا) ثم ألغِ الحجز.`,
+            );
+          }
+          // No active orders → nothing to orphan; fall through to the generic
+          // UPDATE below, which simply marks the booking cancelled.
+        } else {
+          // "cascade" — do the whole top-down cancel atomically with the
+          // booking row update so a mid-cascade failure rolls everything back.
+          await withTransaction(async (tx) => {
+            const ordersRes = await tx.query<{ id: number; bookingLineId: number }>(
+              `SELECT id, "bookingLineId"
+                 FROM transport_dispatch_orders
+                WHERE "companyId" = $1 AND "bookingId" = $2
+                  AND status IN ('pending', 'notified', 'accepted', 'executing')
+                FOR UPDATE`,
+              [scope.companyId, id],
+            );
+            for (const order of ordersRes.rows) {
+              await tx.query(
+                `UPDATE transport_dispatch_orders
+                    SET status = 'cancelled', "updatedAt" = NOW()
+                  WHERE id = $1 AND "companyId" = $2`,
+                [order.id, scope.companyId],
+              );
+              // End the driver's active nav session (mirrors the dispatch-action
+              // cancel branch's session cleanup).
+              await tx.query(
+                `UPDATE driver_navigation_sessions
+                    SET status = 'cancelled', "endedAt" = NOW(), "updatedAt" = NOW()
+                  WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+                    AND status NOT IN ('ended', 'cancelled')`,
+                [order.id, scope.companyId],
+              );
+              // Cancel the spawned trip + release vehicle/driver (shared helper,
+              // identical to the dispatch board's top-down cancel).
+              await cancelTripsForDispatchOrder(tx, {
+                dispatchOrderId: order.id,
+                companyId: scope.companyId,
+                reason: "أُلغي الحجز المرتبط",
+              });
+              // Cascade the cancelled state down to the booking line (and up to
+              // the booking once every line is terminal).
+              await cascadeDispatchToBooking(tx, {
+                bookingLineId: order.bookingLineId,
+                target: "cancelled",
+                companyId: scope.companyId,
+              });
+            }
+            // Cancel any remaining non-terminal lines that had no active order
+            // (e.g. still-"pending" legs awaiting dispatch) so the booking is
+            // consistently closed; completed legs are left intact.
+            await tx.query(
+              `UPDATE transport_booking_lines
+                  SET status = 'cancelled', "updatedAt" = NOW()
+                WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+                  AND status NOT IN ('completed', 'cancelled')`,
+              [id, scope.companyId],
+            );
+            // Finally the booking row itself (+ any other PATCHed fields).
+            await tx.query(bookingUpdateSql, params);
+          });
+          bookingUpdateDone = true;
+        }
+      }
+
+      if (!bookingUpdateDone) {
+        await rawExecute(bookingUpdateSql, params);
+      }
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
         action: "update", entity: "transport_bookings", entityId: id,
@@ -1277,95 +1381,35 @@ transportBookingsRouter.patch(
           }
         }
 
-        // #1812 operational review — "الحالة لا تتحدث تلقائيًا من
-        // أفعال السائق". When a dispatch lifecycle event fires, cascade
-        // the new state up the chain: booking_line → booking. Without
-        // this cascade the operator has to manually flip both states
-        // from the booking-detail dropdown, defeating the integration.
-        //
-        // Mapping (driver action → derived line + booking statuses):
-        //   accepted   → line: dispatched   , booking: dispatched   (no-op if already past)
-        //   executing  → line: in_progress  , booking: in_progress
-        //   completed  → line: completed    , booking: completed if ALL lines completed
-        //   cancelled  → line: cancelled    , booking: cancelled if ALL lines cancelled
-        //   declined   → line: pending      , booking unchanged (operator picks new driver)
-        const lineStatusMap: Record<string, string | null> = {
-          accepted:   "dispatched",
-          executing:  "in_progress",
-          completed:  "completed",
-          cancelled:  "cancelled",
-          declined:   "pending",
-          notified:   null,   // intermediate driver-side state — no line change
-          closed:     null,   // operational close is a finance handoff; line stays completed
-        };
-        const newLineStatus = lineStatusMap[target];
-        if (newLineStatus) {
-          await tx.query(
-            `UPDATE transport_booking_lines
-                SET status = $1, "updatedAt" = NOW()
-              WHERE id = $2 AND "companyId" = $3`,
-            [newLineStatus, order.bookingLineId, scope.companyId],
-          );
+        // Top-down cancel cascade — cancelling the dispatch order must also
+        // cancel the trip it spawned ("dispatch:<id>:<token>" sourceKey) and
+        // release its vehicle/driver, else the trip is orphaned and the
+        // resources stay locked. Extracted to the shared helper so the booking
+        // cancel cascade (PATCH /transport/bookings/:id, "cascade" policy)
+        // releases resources by the identical rule. No re-dispatch loop: the
+        // order is already 'cancelled' here, so the fleet trip-cancel
+        // re-dispatch guard (status IN 'accepted'/'executing') no-ops. (A
+        // simultaneous trip-cancel locks trip→order while this locks
+        // order→trip; the rare inversion is Postgres-detected and self-heals on
+        // retry since both sides no-op once the other has run.)
+        if (target === "cancelled") {
+          await cancelTripsForDispatchOrder(tx, {
+            dispatchOrderId: id,
+            companyId: scope.companyId,
+            reason: "أُلغي أمر التوزيع المرتبط",
+          });
         }
 
-        // Booking-level cascade: only flip when the change is meaningful.
-        if (target === "accepted" || target === "executing" || target === "completed" || target === "cancelled") {
-          // Need the booking_id; load it via the line.
-          const lineLookup = await tx.query<{ bookingId: number; bookingStatus: string }>(
-            `SELECT l."bookingId", b.status AS "bookingStatus"
-               FROM transport_booking_lines l
-                    JOIN transport_bookings b ON b.id = l."bookingId"
-              WHERE l.id = $1 AND l."companyId" = $2
-              LIMIT 1`,
-            [order.bookingLineId, scope.companyId],
-          );
-          const lineRow = lineLookup.rows[0];
-          if (lineRow) {
-            let nextBookingStatus: string | null = null;
-            // accepted (driver took the order) advances a still-scheduled
-            // booking to "dispatched" — applies the cascade declared in the
-            // map above (accepted → booking: dispatched) that was previously
-            // only mirrored onto the line, leaving the booking stuck at
-            // "scheduled" until the executing event. Guarded to scheduled so
-            // it never drags a booking already past dispatch backwards.
-            if (target === "accepted" && lineRow.bookingStatus === "scheduled") {
-              nextBookingStatus = "dispatched";
-            }
-            if (target === "executing" && lineRow.bookingStatus !== "in_progress") {
-              nextBookingStatus = "in_progress";
-            }
-            if (target === "completed" || target === "cancelled") {
-              // Aggregate state across all lines — only flip the booking
-              // when ALL lines are in the terminal state (avoids
-              // prematurely marking a 3-leg umrah trip "completed" after
-              // leg 1).
-              const linesAgg = await tx.query<{
-                total: string; matching: string;
-              }>(
-                `SELECT COUNT(*)::text AS total,
-                        COUNT(*) FILTER (WHERE status = $1)::text AS matching
-                   FROM transport_booking_lines
-                  WHERE "bookingId" = $2 AND "companyId" = $3
-                    AND "deletedAt" IS NULL`,
-                [target === "completed" ? "completed" : "cancelled",
-                 lineRow.bookingId, scope.companyId],
-              );
-              const total = Number(linesAgg.rows[0]?.total ?? 0);
-              const matching = Number(linesAgg.rows[0]?.matching ?? 0);
-              if (total > 0 && total === matching) {
-                nextBookingStatus = target === "completed" ? "completed" : "cancelled";
-              }
-            }
-            if (nextBookingStatus && nextBookingStatus !== lineRow.bookingStatus) {
-              await tx.query(
-                `UPDATE transport_bookings
-                    SET status = $1, "updatedAt" = NOW()
-                  WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
-                [nextBookingStatus, lineRow.bookingId, scope.companyId],
-              );
-            }
-          }
-        }
+        // #1812 — cascade the dispatch state down to the booking line and up
+        // to the booking. Shared with the fleet trip-completion auto-status
+        // path (#12) via lib/transportDispatchCascade so the two entry points
+        // never drift on the "booking completes only when ALL lines terminal"
+        // aggregate rule.
+        await cascadeDispatchToBooking(tx, {
+          bookingLineId: order.bookingLineId,
+          target,
+          companyId: scope.companyId,
+        });
 
         return { previous: order.status, next: target };
       });
