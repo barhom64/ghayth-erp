@@ -78,6 +78,13 @@ const SUPERSEDED_BY_SHELL = new Set([
   "/warehouse/abc",          // → /warehouse/advanced · tab "abc"
 ]);
 
+// Routes that are intentionally off-sidebar but NOT caught by the create/detail
+// heuristic or the redirectTo() scan — each is a documented exception:
+const INTENTIONAL_OFF_SIDEBAR = new Set([
+  "/finance/expenses/multi-line", // create variant — reuses ExpensesCreate, opened from the expenses list
+  "/my/work-queue",               // back-compat redirect shell (wouter setLocation → /work-inbox)
+]);
+
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
 function basePath(p) {
   return p.replace(/[?#].*$/, "");
@@ -143,7 +150,8 @@ function getSidebarPaths() {
  */
 function isLegitimatelyOffSidebar(routePath) {
   if (routePath.includes(":")) return true;
-  if (/\/(create|new|edit)$/.test(routePath)) return true;
+  if (/[/-](create|new|edit)$/.test(routePath)) return true; // /create OR quick-create, bulk-new …
+  if (INTENTIONAL_OFF_SIDEBAR.has(routePath)) return true;
   if (routePath === "/login") return true;
   if (routePath === "/") return true;
   if (routePath === "/dashboard") return true; // home shell

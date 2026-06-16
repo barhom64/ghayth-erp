@@ -64,9 +64,14 @@ run_step "audit:route-doubling" node scripts/src/audit-route-doubling.mjs
 #                        redirect-only / create-edit-detail route.
 #   gate:quick-actions — fails if a header quick-action button points at a
 #                        redirect-only / dead route (create links are allowed).
-# Report-only siblings for local triage: audit:tabs / audit:quick-actions.
+#   gate:nav           — fails on a sidebar dead-link, a create page in the nav
+#                        drawer, or an orphan list page (0 after the off-sidebar
+#                        recognition fixes: quick-create heuristic + documented
+#                        intentional-off-sidebar / superseded-by-shell allowlists).
+# Report-only siblings for local triage: audit:tabs / audit:quick-actions / audit:sidebar.
 run_step "gate:tabs"          pnpm -s run gate:tabs
 run_step "gate:quick-actions" pnpm -s run gate:quick-actions
+run_step "gate:nav"           pnpm -s run gate:nav
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a
