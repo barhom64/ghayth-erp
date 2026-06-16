@@ -227,8 +227,10 @@ describe("#1812 — planning routes", () => {
     expect(PLANNING_ROUTES).toMatch(/\.delete\(\s*"\/transport\/itineraries\/:id\/legs\/:legId"/);
   });
 
-  it("exposes navigation session lifecycle (start / ping / event / complete / get / me)", () => {
-    expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/start/);
+  it("exposes navigation session lifecycle (ping / event / complete / get / me)", () => {
+    // The explicit POST .../navigation/start route was retired — navigation
+    // sessions are now auto-created when a dispatch order is accepted (the
+    // auto-start hook in PATCH /transport/dispatch-orders/:id).
     expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/ping/);
     expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/event/);
     expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/complete/);
