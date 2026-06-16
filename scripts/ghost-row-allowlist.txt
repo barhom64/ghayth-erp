@@ -174,12 +174,10 @@ routes/finance-journal.ts:subsidiary_accounts
 routes/finance-purchase.ts:purchase_orders
 routes/finance-purchase.ts:store_products
 routes/finance-purchase.ts:suppliers
-routes/finance-recurring.ts:journal_entries
 routes/finance-reports.ts:chart_of_accounts
 routes/finance-reports.ts:employees
 routes/finance-reports.ts:financial_periods
 routes/finance-reports.ts:purchase_orders
-routes/finance-vendor-contracts.ts:vendor_contracts
 routes/finance-vendors.ts:journal_lines
 routes/finance-vendors.ts:suppliers
 routes/fleet-telematics.ts:fleet_drivers
