@@ -1,4 +1,4 @@
--- 383_thread_internal_notes.sql
+-- 385_thread_internal_notes.sql
 --
 -- @rollback:
 --   DROP TABLE IF EXISTS public.thread_internal_notes;
