@@ -64,6 +64,12 @@ describe("hrEngine GL account resolution patterns", () => {
     expect(section).toContain("salary_payable");
     expect(section).toContain("payroll_gosi_payable");
     expect(section).toContain("payroll_deductions_payable");
+    // #2303 — deduction classification: loan repayment CLOSES the receivable,
+    // late/absence/violation hit their own contra-expense leaves (5215/16/17).
+    expect(section).toContain("employee_loan_receivable");
+    expect(section).toContain("payroll_late_deduction");
+    expect(section).toContain("payroll_absence_deduction");
+    expect(section).toContain("payroll_violation_deduction");
   });
 
   it("postPayrollPostGL (payment) resolves salary_payable + bank only", () => {
@@ -204,6 +210,21 @@ describe("hrEngine debit/credit structure", () => {
     const next = ENGINE_SRC.indexOf("  async ", idx + 10);
     const section = ENGINE_SRC.slice(idx, next > idx ? next : idx + 6000);
     expect(section).toContain(".filter(l => l.debit > 0 || l.credit > 0)");
+  });
+
+  it("postPayrollRunGL: classifies deductions per-employee with a balancing residual (#2303)", () => {
+    const idx = ENGINE_SRC.indexOf("async postPayrollRunGL");
+    const next = ENGINE_SRC.indexOf("  async ", idx + 10);
+    const section = ENGINE_SRC.slice(idx, next > idx ? next : idx + 8000);
+    // Loan repayment credits the receivable account to CLOSE the loan.
+    expect(section).toContain("loanReceivableCode");
+    // Per-employee deduction credit lines (dimensional, stamped employeeId).
+    expect(section).toContain("pushDeduction");
+    expect(section).toContain("employeeId: e.employeeId");
+    // Residual safety keeps the entry balanced if anything stays unclassified.
+    expect(section).toContain("otherDeductions - classified");
+    // The split is gated on the reconciled breakdown (else legacy 2150 line).
+    expect(section).toContain("breakdownTrusted");
   });
 
   it("postPayrollPostGL: payment leg is balanced by construction (DR salary_payable = CR bank)", () => {

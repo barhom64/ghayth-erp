@@ -363,6 +363,13 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "5270", name: "الإجازات وتذاكر السفر", nameEn: "Leave & Air Tickets", type: "expense", level: 3, parentCode: "5200" },
   { code: "5280", name: "التدريب والتطوير", nameEn: "Training & Development", type: "expense", level: 3, parentCode: "5200" },
   { code: "5290", name: "مصروفات توظيف ورسوم عمالة", nameEn: "Recruitment & Labor Fees", type: "expense", level: 3, parentCode: "5200" },
+  // #2303 — payroll deduction contra-expense leaves. Late / absence /
+  // violation amounts withheld from salary are CREDITED here (reducing net
+  // employee cost) instead of bundling into the generic deductions-payable
+  // clearing (2150). Late/absence = salary not earned; violations = penalty.
+  { code: "5215", name: "استقطاعات التأخير", nameEn: "Late Deductions", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5216", name: "استقطاعات الغياب", nameEn: "Absence Deductions", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5217", name: "استقطاعات المخالفات", nameEn: "Violation Deductions", type: "expense", level: 3, parentCode: "5200" },
 
   // 53xx مصروفات إدارية وعمومية
   { code: "5300", name: "المصروفات الإدارية والعمومية", nameEn: "G&A Expenses", type: "expense", level: 2, parentCode: "5000", allowPosting: false },

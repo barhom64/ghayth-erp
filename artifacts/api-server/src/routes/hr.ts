@@ -3510,6 +3510,14 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
             gosiEmployer: l.gosiEmployer,
             whtAmount: l.whtAmount,
             commission: l.commission,
+            // #2303 — per-employee deduction split: loan repayment CLOSES the
+            // loan receivable (1143), late/absence/violation hit their
+            // contra-expense leaves (5215/5216/5217). Σ == totalOtherDeductions
+            // above, so the credit total and the entry's balance are unchanged.
+            loanRepayment: l.loanDeduction,
+            lateDeduction: l.lateDeduction,
+            absenceDeduction: l.absenceDeduction,
+            violationDeduction: l.violationDeduction,
           })),
         }
       );

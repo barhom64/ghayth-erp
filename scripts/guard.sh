@@ -100,6 +100,11 @@ else
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
+# Multi-table writes without a transaction — a failure on the second+ write
+# leaves the first committed (silent partial/corrupt data). OFFLINE, schema-
+# validated scan; baseline in scripts/tx-coverage-allowlist.txt, fails only on
+# a NEW offender so the debt shrinks but never regrows.
+run_step "check:tx-coverage"  node scripts/src/check-tx-coverage.mjs
 # Event-bus reconciliation — fails if any eventBus.on() handler can never fire
 # because its event is emitted nowhere (dynamic-dispatch aware). See
 # scripts/src/audit-event-bus.mjs.

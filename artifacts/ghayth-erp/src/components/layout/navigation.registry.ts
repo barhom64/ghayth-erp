@@ -173,6 +173,7 @@ export const allNavSections: NavSection[] = [
         { label: "وظائف التوظيف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
         { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
+        { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
