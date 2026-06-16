@@ -47,7 +47,7 @@ import { rawQuery as rawQueryShared, rawExecute as rawExecuteShared } from "./ra
 import { checkSlaStatus } from "./workflowEngine.js";
 import { applyTransition } from "./lifecycleEngine.js";
 import { runAllProactiveChecks, registerProactiveEventListeners } from "./proactiveEngine.js";
-import { eventBus } from "./eventBus.js";
+import { eventBus, getDlqStatsByCompany } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
 import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
@@ -62,7 +62,10 @@ import { setupBreakerCoordination } from "./fleet/telematicsBreakerCoordinator.j
 import { scanObligations, registerObligation } from "./obligationsEngine.js";
 import { runAutoDetectionAllCompanies } from "./autoViolationEngine.js";
 import { getRedisRateLimitStatus, type RedisRateLimitStatus } from "./rateLimitStore.js";
-import { zatcaRetryDrain } from "./zatca/worker.js";
+import { evaluateInfraCriticalDigest, buildInfraCriticalDigestConfigResolver, severitiesAtOrAbove, type InfraCriticalDigestState } from "./infraAlerts.js";
+import { zatcaRetryDrain, zatcaB2cReportDrain } from "./zatca/worker.js";
+import { mudadSalaryRetryDrain } from "./saudi-compliance/mudad/salary-retry-worker.js";
+import { mudadContractRegisterRetryDrain } from "./saudi-compliance/mudad/retry-worker.js";
 import { dailyFxRateFetchCron } from "./fx/jobs.js";
 import { fxStalenessCheckCron } from "./fx/staleness-alert.js";
 import { lotExpiryScanCron } from "./inventory/lots.js";
@@ -4161,7 +4164,7 @@ async function getPivotCompanyId(admins: RateLimitAdminRecipient[]): Promise<num
 async function sendInfraAdminEmails(
   emails: string[],
   pivotCompanyId: number | null,
-  type: "rate_limit_fallback" | "rate_limit_recovered",
+  type: "rate_limit_fallback" | "rate_limit_recovered" | "infra_critical_alert_digest" | "dlq_backlog",
   title: string,
   body: string,
   excludeEmails: Iterable<string> = []
@@ -4701,8 +4704,435 @@ async function inboxTaskSlaReminderScan(): Promise<string> {
   return `inbox SLA reminders: ${first} first, ${final} final`;
 }
 
+
+// --- New-critical-infra-alert digest (Task #831) ----------------------------
+// The infra-alerts page (GET /intelligence/alerts/infra) lets admins SEE recent
+// platform alerts, but a freshly-fired unacknowledged CRITICAL `system_health`
+// alert (Redis rate-limit fallback, event-DLQ backlog, suppression-trace write
+// failures, …) only gets noticed if someone opens the page. This scan closes
+// the loop: when a new unacknowledged critical alert appears it pages infra
+// admins in-app AND emails the configurable infra-admin on-call list — reusing
+// the exact recipient resolution (getRateLimitAlertRecipients + the infra-admin
+// email list) the rate-limit alerter uses. A watermark over the alert id (so an
+// already-paged alert never re-fires) plus a 30-min cooldown (so a burst of
+// criticals pages once, not per-alert) keep a sustained outage from spamming.
+const INFRA_CRITICAL_DIGEST_STATE_KEY = "infra_critical_alert_digest_state";
+
+// Per-company watermark + cooldown state (Task #845). The digest config is now
+// resolved per company (company override → system default), and a per-company
+// cooldown only takes effect if the watermark/cooldown state is tracked per
+// company too — otherwise one global cooldown would override every company's
+// choice. State rows live in system_settings keyed by the same key with
+// companyId = X (branchId NULL); the row is read/written via SELECT-then-
+// UPDATE/INSERT (no partial unique index covers the company-scoped row).
+async function loadInfraCriticalDigestState(companyId: number): Promise<InfraCriticalDigestState> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+      [INFRA_CRITICAL_DIGEST_STATE_KEY, companyId],
+    );
+    if (rows.length === 0 || !rows[0]?.value) return { lastMaxAlertId: 0, lastAlertedAt: 0 };
+    const parsed = JSON.parse(rows[0].value) as Partial<InfraCriticalDigestState>;
+    return {
+      lastMaxAlertId: typeof parsed.lastMaxAlertId === "number" ? parsed.lastMaxAlertId : 0,
+      lastAlertedAt: typeof parsed.lastAlertedAt === "number" ? parsed.lastAlertedAt : 0,
+    };
+  } catch (e) {
+    logger.error(e, "[cronScheduler] infra critical digest state load failed");
+    return { lastMaxAlertId: 0, lastAlertedAt: 0 };
+  }
+}
+
+async function saveInfraCriticalDigestState(
+  companyId: number,
+  state: InfraCriticalDigestState,
+): Promise<void> {
+  try {
+    const value = JSON.stringify(state);
+    const existing = await rawQuery<{ id: number }>(
+      `SELECT id FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+      [INFRA_CRITICAL_DIGEST_STATE_KEY, companyId],
+    );
+    if (existing.length > 0) {
+      await rawExecute(
+        `UPDATE system_settings SET value = $1, "updatedAt" = NOW()
+          WHERE key = $2 AND "companyId" = $3 AND "branchId" IS NULL`,
+        [value, INFRA_CRITICAL_DIGEST_STATE_KEY, companyId],
+      );
+    } else {
+      await rawExecute(
+        `INSERT INTO system_settings (key, value, "companyId", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, NOW(), NOW())`,
+        [INFRA_CRITICAL_DIGEST_STATE_KEY, value, companyId],
+      );
+    }
+  } catch (e) {
+    logger.error(e, "[cronScheduler] infra critical digest state save failed");
+  }
+}
+
+export async function infraCriticalAlertDigestScan(): Promise<string> {
+  const now = Date.now();
+
+  // Admin-tunable config (Task #834) is now resolved PER COMPANY (Task #845):
+  // a company override falls back to the system default, which falls back to the
+  // built-in defaults (critical-only, 30-min cooldown). One pair of queries
+  // loads every override + the system default so the per-company resolution is
+  // cheap regardless of tenant count.
+  const resolveConfig = await buildInfraCriticalDigestConfigResolver();
+
+  // Distinct companies that currently have any open (unacknowledged)
+  // system_health alert. We resolve each company's effective threshold below,
+  // so the candidate set must not be pre-filtered by a single global severity.
+  let companyRows: { companyId: number }[];
+  try {
+    companyRows = await rawQuery<{ companyId: number }>(
+      `SELECT DISTINCT "companyId"
+         FROM smart_alerts
+        WHERE "relatedType" = 'system_health'
+          AND "isDismissed" = false
+          AND "companyId" IS NOT NULL`,
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] infra critical digest company query failed");
+    return "infra critical digest: query failed";
+  }
+
+  if (companyRows.length === 0) {
+    return "infra critical digest: no new critical alerts";
+  }
+
+  // Recipient resolution (one GM/owner per company) is shared across alerters;
+  // index by companyId so each firing company pages its own admin.
+  const admins = await getRateLimitAlertRecipients();
+  const adminByCompany = new Map(admins.map((a) => [a.companyId, a]));
+  const infraEmails = await getInfraAdminEmails();
+
+  let companiesPaged = 0;
+  let adminsPaged = 0;
+  let infraQueuedTotal = 0;
+  let newAlertsTotal = 0;
+  let heldTotal = 0;
+
+  for (const { companyId } of companyRows) {
+    const cfg = resolveConfig(companyId);
+    const severities = severitiesAtOrAbove(cfg.severityThreshold);
+    const cooldownMs = cfg.cooldownMinutes * 60_000;
+
+    // This company's open system_health alerts at or above ITS configured
+    // threshold, newest first so the digest sample reads top-down.
+    let alerts: { id: number; title: string }[];
+    try {
+      alerts = await rawQuery<{ id: number; title: string }>(
+        `SELECT id, title
+           FROM smart_alerts
+          WHERE "relatedType" = 'system_health'
+            AND "companyId" = $1
+            AND severity = ANY($2)
+            AND "isDismissed" = false
+          ORDER BY id DESC
+          LIMIT 200`,
+        [companyId, severities],
+      );
+    } catch (e) {
+      logger.error(e, `[cronScheduler] infra critical digest query failed for company ${companyId}`);
+      continue;
+    }
+
+    const state = await loadInfraCriticalDigestState(companyId);
+    const decision = evaluateInfraCriticalDigest(state, alerts.map((a) => a.id), now, cooldownMs);
+    if (!decision.shouldAlert) {
+      if (decision.newAlertIds.length > 0) heldTotal += decision.newAlertIds.length;
+      continue;
+    }
+
+    const newSet = new Set(decision.newAlertIds);
+    const newAlerts = alerts.filter((a) => newSet.has(a.id));
+    const count = newAlerts.length;
+    newAlertsTotal += count;
+    const sample = newAlerts
+      .slice(0, 5)
+      .map((a) => `• ${a.title}`)
+      .join("\n");
+    const title = `تنبيه بنية تحتية حرج: ${count} تنبيه جديد بحاجة إلى مراجعة`;
+    const body =
+      `ظهرت ${count} تنبيهات بنية تحتية حرجة (system_health) جديدة وغير مُعتمدة. ` +
+      `افتح صفحة «تنبيهات البنية التحتية» لمراجعتها واعتمادها.\n\n${sample}` +
+      (count > 5 ? `\n… و${count - 5} أخرى` : "");
+
+    // In-app: page this company's GM/owner (same recipient set as the
+    // rate-limit alerter). Email is included for an admin with one on file;
+    // sendNotification silently drops the email channel when recipientEmail is unset.
+    const admin = adminByCompany.get(companyId);
+    if (admin) {
+      await sendNotification({
+        companyId: admin.companyId,
+        assignmentId: admin.assignmentId,
+        type: "infra_critical_alert_digest",
+        title,
+        body,
+        priority: "urgent",
+        refType: "system_health",
+        channels: admin.email ? ["in_app", "email"] : ["in_app"],
+        recipientEmail: admin.email ?? undefined,
+      });
+      adminsPaged++;
+    }
+
+    // Email the configurable infra-admin on-call list, de-duped against this
+    // company's GM email so nobody gets the same page twice.
+    const pivot = await getPivotCompanyId(admin ? [admin] : []);
+    const excludeEmails = admin?.email ? [admin.email] : [];
+    const infraQueued = await sendInfraAdminEmails(
+      infraEmails,
+      pivot,
+      "infra_critical_alert_digest",
+      title,
+      body,
+      excludeEmails,
+    );
+    infraQueuedTotal += infraQueued;
+
+    await saveInfraCriticalDigestState(companyId, decision.state);
+    companiesPaged++;
+  }
+
+  if (companiesPaged === 0) {
+    if (heldTotal > 0) {
+      return `infra critical digest: ${heldTotal} new critical alert(s) held (within cooldown)`;
+    }
+    return "infra critical digest: no new critical alerts";
+  }
+  return `infra critical digest: paged ${companiesPaged} company(ies), ${adminsPaged} admin(s) + ${infraQueuedTotal} infra email(s) for ${newAlertsTotal} new critical alert(s)`;
+}
+
+// --- DLQ backlog alerter (Task #690) ----------------------------------------
+// Proactively page a tenant's admin when its unresolved `event_dlq` rows pile
+// up past a threshold OR the oldest unresolved entry ages past a window — so a
+// background-event backlog reaches a human who isn't watching the governance
+// screen. Platform-wide (null-companyId) failures route to the infra-admin
+// email list (the same list the rate-limit / infra-critical alerters use). A
+// per-group cooldown (per-tenant + a single "platform" key) lives in
+// system_settings so a standing backlog never re-pages on every tick.
+const DLQ_BACKLOG_STATE_KEY = "dlq_backlog_alerter_state";
+const DLQ_BACKLOG_THRESHOLD = 20;
+const DLQ_BACKLOG_AGE_WINDOW_SEC = 6 * 3600;
+const DLQ_BACKLOG_REALERT_COOLDOWN_MS = 60 * 60_000;
+
+interface DlqBacklogAlerterState {
+  lastAlertedAt: Record<string, number>;
+}
+
+async function loadDlqBacklogAlerterState(): Promise<DlqBacklogAlerterState> {
+  try {
+    const rows = await rawQuery<{ value: string }>(
+      `SELECT value FROM system_settings WHERE key = $1 AND "companyId" IS NULL AND "branchId" IS NULL`,
+      [DLQ_BACKLOG_STATE_KEY],
+    );
+    if (rows.length === 0 || !rows[0]?.value) return { lastAlertedAt: {} };
+    const parsed = JSON.parse(rows[0].value) as Partial<DlqBacklogAlerterState>;
+    return { lastAlertedAt: (parsed.lastAlertedAt ?? {}) as Record<string, number> };
+  } catch (e) {
+    logger.error(e, "[cronScheduler] dlq backlog alerter state load failed");
+    return { lastAlertedAt: {} };
+  }
+}
+
+async function saveDlqBacklogAlerterState(state: DlqBacklogAlerterState): Promise<void> {
+  try {
+    await rawExecute(
+      `INSERT INTO system_settings (key, value, "createdAt", "updatedAt")
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (key) WHERE "companyId" IS NULL AND "branchId" IS NULL
+       DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [DLQ_BACKLOG_STATE_KEY, JSON.stringify(state)],
+    );
+  } catch (e) {
+    logger.error(e, "[cronScheduler] dlq backlog alerter state save failed");
+  }
+}
+
+export async function dlqBacklogAlertCheck(): Promise<string> {
+  const now = Date.now();
+  let stats: { companyId: number | null; pending: number; oldestAgeSec: number | null }[];
+  try {
+    stats = await getDlqStatsByCompany();
+  } catch (e) {
+    logger.error(e, "[cronScheduler] dlq backlog stats query failed");
+    return "dlq backlog: stats query failed";
+  }
+
+  const state = await loadDlqBacklogAlerterState();
+  // One GM/owner per company, shared with the other infra alerters.
+  const admins = await getRateLimitAlertRecipients();
+  const adminByCompany = new Map(admins.map((a) => [a.companyId, a]));
+
+  let tenantsAlerted = 0;
+  let infraEmailsQueued = 0;
+  let suppressed = 0;
+
+  for (const row of stats) {
+    const breach =
+      row.pending >= DLQ_BACKLOG_THRESHOLD ||
+      (row.oldestAgeSec != null && row.oldestAgeSec >= DLQ_BACKLOG_AGE_WINDOW_SEC);
+    if (!breach) continue;
+
+    const key = row.companyId === null ? "platform" : String(row.companyId);
+    const last = state.lastAlertedAt[key] ?? 0;
+    if (last > 0 && now - last < DLQ_BACKLOG_REALERT_COOLDOWN_MS) {
+      suppressed++;
+      continue;
+    }
+
+    const ageHours = row.oldestAgeSec != null ? Math.floor(row.oldestAgeSec / 3600) : 0;
+    const title = "تنبيه: تراكم في طابور الأحداث الفاشلة (event_dlq)";
+    const body =
+      `تجاوز عدد الأحداث الفاشلة غير المُعالجة الحدّ المسموح: ${row.pending} حدث` +
+      (ageHours > 0 ? ` (أقدمها منذ ${ageHours} ساعة)` : "") +
+      `. افتح صفحة طابور الأحداث الفاشلة لمراجعتها وإعادة معالجتها.`;
+
+    if (row.companyId === null) {
+      // Platform-wide backlog → infra-admin on-call email list only.
+      const infraEmails = await getInfraAdminEmails();
+      const pivot = await getPivotCompanyId(admins);
+      const queued = await sendInfraAdminEmails(infraEmails, pivot, "dlq_backlog", title, body);
+      infraEmailsQueued += queued;
+      state.lastAlertedAt[key] = now;
+    } else {
+      const admin = adminByCompany.get(row.companyId);
+      if (admin) {
+        await sendNotification({
+          companyId: admin.companyId,
+          assignmentId: admin.assignmentId,
+          type: "dlq_backlog",
+          title,
+          body,
+          priority: "high",
+          refType: "system_health",
+          actionUrl: "/admin/governance/event-dlq",
+          channels: admin.email ? ["in_app", "email"] : ["in_app"],
+          recipientEmail: admin.email ?? undefined,
+        });
+      }
+      tenantsAlerted++;
+      state.lastAlertedAt[key] = now;
+    }
+  }
+
+  await saveDlqBacklogAlerterState(state);
+
+  if (tenantsAlerted === 0 && infraEmailsQueued === 0) {
+    return `dlq backlog: within thresholds${suppressed > 0 ? ` (${suppressed} in cooldown)` : ""}`;
+  }
+  const parts: string[] = [];
+  if (tenantsAlerted > 0) parts.push(`${tenantsAlerted} tenants`);
+  if (infraEmailsQueued > 0) parts.push(`${infraEmailsQueued} infra emails`);
+  return `dlq backlog: alerted ${parts.join(", ")}`;
+}
+
+// --- Yearly financial-periods seed ------------------------------------------
+// Auto-create the upcoming calendar year's 12 monthly financial_periods for
+// every active company that is missing them, so journal entries and the
+// monthly/yearly close always land in an open period on Jan 1 without manual
+// setup. Idempotent: WHERE NOT EXISTS on (companyId, startDate) means a re-run
+// never duplicates a period. Scheduled in December so periods exist before the
+// new year begins.
+async function seedYearlyFinancialPeriods(): Promise<string> {
+  const targetYear = currentYear() + 1;
+  const arabicMonths = [
+    "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
+    "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر",
+  ];
+  let created = 0;
+  for (let month = 1; month <= 12; month++) {
+    const result = await rawExecute(
+      `INSERT INTO financial_periods ("companyId", name, "startDate", "endDate", status)
+       SELECT c.id, $1,
+              make_date($2::int, $3::int, 1),
+              (make_date($2::int, $3::int, 1) + INTERVAL '1 month' - INTERVAL '1 day')::date,
+              'open'
+         FROM companies c
+        WHERE c.status = 'active'
+          AND NOT EXISTS (
+            SELECT 1 FROM financial_periods fp
+            WHERE fp."companyId" = c.id
+              AND fp."startDate" = make_date($2::int, $3::int, 1)
+          )`,
+      [`${arabicMonths[month - 1]} ${targetYear}`, targetYear, month],
+    );
+    created += result.affectedRows ?? 0;
+  }
+  return `yearly_financial_periods_seed: seeded ${created} period(s) for ${targetYear}`;
+}
+
+// آلية منع التفاقم: تستنزف تلقائياً تراكم "فشل القيد المالي" غير المحلول لكل
+// شركة بإعادة استدعاء الترحيل الأصلي عبر retryPostingFailure (idempotent بمفتاح
+// المصدر). أي فشل قابل لإعادة المحاولة (مثل فواتير نسك التي تعطّلت بسبب رمز
+// الحساب 5201/2101) يُرحَّل ويُغلق السجل تلقائياً، فلا يتضخّم الرصيد ولا يقفل
+// النظام بوابة المنع المالي (postingFailuresGuard). يستثني الأنواع غير القابلة
+// لإعادة المحاولة الآلية (تُعالَج يدوياً) ويعمل ضمن دفعات محدودة لكل شركة حتى لا
+// يثقل قاعدة البيانات. يعمل بحدود أمان: لا يلمس السجلات المحلولة مسبقاً، ويُغلق
+// السجل فقط عند نجاح الترحيل فعلياً (result.ok && result.supported).
+async function financialPostingFailureAutoRetry(): Promise<string> {
+  const { retryPostingFailure, UNSUPPORTED_RETRY_SOURCE_TYPES } = await import("./postingFailureRetry.js");
+  const PER_COMPANY_CAP = 500; // bounded drain per run so the cron stays cheap
+  const PAGE = 100;
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let totalResolved = 0, totalStillFailing = 0, totalProcessed = 0;
+  let companiesTouched = 0;
+
+  for (const company of companies) {
+    let cursor = 0;
+    let processedForCompany = 0;
+    let resolvedForCompany = 0;
+    // Walk the retryable backlog one bounded window at a time (cursor by id so
+    // a head of still-failing rows can't stall later resolvable ones), capped
+    // at PER_COMPANY_CAP rows per run.
+    while (processedForCompany < PER_COMPANY_CAP) {
+      const limit = Math.min(PAGE, PER_COMPANY_CAP - processedForCompany);
+      const batch = await rawQuery<{ id: number; sourceType: string; sourceId: number | null }>(
+        `SELECT id, "sourceType", "sourceId" FROM financial_posting_failures
+          WHERE "companyId" = $1 AND resolved = false AND id > $2
+            AND "sourceType" <> ALL($3::text[])
+            AND "sourceId" IS NOT NULL AND "sourceId" > 0
+          ORDER BY id ASC LIMIT $4`,
+        [company.id, cursor, UNSUPPORTED_RETRY_SOURCE_TYPES as unknown as string[], limit],
+      );
+      if (batch.length === 0) break;
+
+      for (const f of batch) {
+        cursor = f.id;
+        processedForCompany++;
+        totalProcessed++;
+        // userId 0 = النظام (آلية تلقائية) — مطابق لنمط resolvedBy في المهام الآلية.
+        const result = await retryPostingFailure(
+          { companyId: company.id, branchId: 0, userId: 0 },
+          { sourceType: f.sourceType, sourceId: f.sourceId },
+        );
+        if (result.ok && result.supported) {
+          await rawExecute(
+            `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = 0
+              WHERE id = $1 AND "companyId" = $2 AND resolved = false`,
+            [f.id, company.id],
+          );
+          resolvedForCompany++;
+          totalResolved++;
+        } else if (result.supported) {
+          totalStillFailing++;
+        }
+      }
+      if (batch.length < limit) break;
+    }
+    if (resolvedForCompany > 0 || processedForCompany > 0) companiesTouched++;
+  }
+
+  return `financial_posting_failure_auto_retry: processed ${totalProcessed} across ${companiesTouched} company(ies) — resolved ${totalResolved}, stillFailing ${totalStillFailing}`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "financial_posting_failure_auto_retry", description: "آلية منع التفاقم — إعادة ترحيل تراكم فشل القيد المالي تلقائياً وإغلاق السجلات الناجحة لكل شركة", schedule: "*/15 * * * *", handler: financialPostingFailureAutoRetry },
   { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
+  { name: "infra_critical_alert_digest", description: "تنبيه مسؤولي البنية التحتية عند ظهور تنبيه بنية تحتية حرج جديد غير مُعتمد (system_health)", schedule: "*/5 * * * *", handler: infraCriticalAlertDigestScan },
   { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
   { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
   { name: "party_registry_sync", description: "مزامنة سجل الأطراف (Party) — ربط الكيانات الجديدة", schedule: "30 3 * * *", handler: partyRegistrySync },
@@ -4808,6 +5238,11 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   // #2079 TA-T18-02 — closes the misleading "by the daily cron" promise
   // in transport-route-patterns.ts. 06:30 Riyadh = 03:30 UTC.
   { name: "materialise_due_route_patterns", description: "تجسيد قوالب رحلات الحمولة المتكررة المستحقّة للغد (للشركات المفعّل لديها autoMaterialiseEnabled)", schedule: "30 3 * * *", handler: materialiseDueRoutePatterns },
+  { name: "dlq_backlog_alert", description: "تنبيه عند تراكم الأحداث الفاشلة غير المُعالجة في طابور event_dlq (لكل شركة + البنية التحتية)", schedule: "*/10 * * * *", handler: dlqBacklogAlertCheck },
+  { name: "yearly_financial_periods_seed", description: "إنشاء الفترات المالية الشهرية للسنة الميلادية القادمة لكل الشركات النشطة", schedule: "0 2 1 12 *", handler: seedYearlyFinancialPeriods },
+  { name: "zatca_b2c_report_drain", description: "تفريغ طابور تقارير ZATCA B2C (مع إيقاف مؤقت عند الارتفاع المفاجئ)", schedule: "*/2 * * * *", handler: zatcaB2cReportDrain },
+  { name: "mudad_salary_retry", description: "إعادة محاولة دفعات الرواتب العالقة في تكامل مُدد", schedule: "*/5 * * * *", handler: mudadSalaryRetryDrain },
+  { name: "mudad_contract_register_retry", description: "إعادة محاولة تسجيل عقود مُدد العالقة", schedule: "*/5 * * * *", handler: mudadContractRegisterRetryDrain },
 ];
 
 /**
