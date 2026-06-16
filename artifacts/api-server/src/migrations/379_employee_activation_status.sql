@@ -1,4 +1,4 @@
--- 378_employee_activation_status.sql
+-- 379_employee_activation_status.sql
 -- HR-REV-3 (#2222) Slice 4a — the activation status field + ready-for-review gate.
 --
 -- WHAT:    add "activationStatus" to employees — the pre-active state of a
