@@ -398,7 +398,11 @@ export const allNavSections: NavSection[] = [
         { label: "تقييم المخزون (المتوسط المرجح)", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
       ]},
-      { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
+      // F-1 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ①) — فُكّت مجموعة «الضرائب
+      // والتقارير» المتضخّمة (34 مدخلاً تخلط الضرائب بالتقارير) إلى مجموعتين:
+      // الضرائب/الزكاة، والتقارير/التحليلات. إعادة تجميع فقط — لم يتغيّر أي مسار
+      // أو صلاحية أو تسمية ابن (بوّابة check-sidebar-coverage تبقى خضراء).
+      { label: "الضرائب والزكاة", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
         { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
         { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
@@ -411,6 +415,8 @@ export const allNavSections: NavSection[] = [
         { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
         { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
         { label: "إعداد إقرار WHT", path: "/finance/wht-filing-workbench", icon: FileCheck },
+      ]},
+      { label: "التقارير والتحليلات المالية", path: "/finance/reports", icon: FileBarChart, module: "finance", children: [
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
         { label: "P&L مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
@@ -426,8 +432,7 @@ export const allNavSections: NavSection[] = [
         { label: "محلّل مزيج الإيرادات", path: "/finance/revenue-mix", icon: TrendingUp },
         { label: "محلّل مزيج المصاريف", path: "/finance/expense-mix", icon: TrendingUp },
         { label: "اتجاه DSO للسيولة", path: "/finance/reports/dso-trend", icon: Activity },
-        // (9) دمج «تقارير محاسبية متقدمة» (CoGS/تقييم/دوران/صلاحيات/مخزون سالب
-        // + انحرافات واعتماد الموازنة) في نفس مجموعة التقارير.
+        // تقارير محاسبية متقدمة (CoGS/تقييم/دوران/صلاحيات/مخزون سالب + انحرافات واعتماد الموازنة).
         { label: "ملخص التكلفة (CoGS)", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
         { label: "تقرير تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
         { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
