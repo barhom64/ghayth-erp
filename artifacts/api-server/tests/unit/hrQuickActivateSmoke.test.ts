@@ -61,12 +61,24 @@ describe("HR-REV-3 (#2222) — onboarding plan + audit + numbering", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO onboarding_tasks/);
   });
   it("routes each onboarding task to a distributed ownerRole (HR-REV-3 slice 1)", () => {
-    // Tasks are generated from the shared plan with an owning role + reason +
-    // mandatory flag, not flat title strings — so completion is distributed.
-    expect(QA_BLOCK).toMatch(/INSERT INTO onboarding_tasks[\s\S]*?"ownerRole"[\s\S]*?reason[\s\S]*?mandatory/);
-    expect(QA_BLOCK).toMatch(/DEFAULT_ONBOARDING_PLAN/);
+    // Tasks are generated with an owning role + reason + mandatory + serviceType,
+    // not flat title strings — so completion is distributed.
+    expect(QA_BLOCK).toMatch(/INSERT INTO onboarding_tasks[\s\S]*?"ownerRole"[\s\S]*?reason[\s\S]*?mandatory[\s\S]*?"serviceType"/);
+    expect(QA_BLOCK).toMatch(/buildActivationPlan\(resolvedCategory\)/);
     expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"documents"/);
     expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"department"/);
+  });
+  it("generates a per-category plan: driver ≠ accountant ≠ admin (HR-REV-4 slice)", () => {
+    // The plan builder branches on the job_titles.category resolved from the
+    // title, so a driver gets a vehicle/custody/GPS plan while an accountant
+    // gets restricted financial access and no vehicle.
+    expect(EMPLOYEES_ROUTE).toMatch(/function buildActivationPlan\(category: string \| null\)/);
+    expect(EMPLOYEES_ROUTE).toMatch(/c\.includes\("driver"\)/);
+    expect(EMPLOYEES_ROUTE).toMatch(/serviceType:\s*"vehicle"/);
+    expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"fleet"/);
+    expect(EMPLOYEES_ROUTE).toMatch(/c\.includes\("account"\)/);
+    // quick-activate resolves the category from job_titles to feed the plan.
+    expect(QA_BLOCK).toMatch(/SELECT id, category FROM job_titles/);
   });
   it("calls createAuditLog", () => {
     expect(QA_BLOCK).toMatch(/createAuditLog\(/);
