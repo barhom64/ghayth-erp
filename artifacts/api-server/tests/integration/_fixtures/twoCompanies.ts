@@ -143,7 +143,9 @@ async function seedCompany(name: string): Promise<{
   }
   // find-or-create employee — keyed on (companyId, email).
   let employeeId: number;
-  const ownerEmail = `owner-co${companyId}@test.local`;
+  // Email keyed on companyId. The leading 'owner-' (no 'co' prefix)
+  // matches the format mobileAuth.dynamic.test.ts depends on.
+  const ownerEmail = `owner-${companyId}@test.local`;
   const [existingEmp] = await rawQuery<{ id: number }>(
     `SELECT id FROM employees WHERE "companyId" = $1 AND email = $2 LIMIT 1`,
     [companyId, ownerEmail],
