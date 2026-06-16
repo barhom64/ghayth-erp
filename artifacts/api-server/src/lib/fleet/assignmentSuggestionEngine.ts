@@ -563,6 +563,21 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
   };
   const req = { companyId: c.companyId, branchId: c.branchId, limit: c.limit };
 
+  // #1812 — family filter. Drop vehicles incompatible with booking type at SQL level.
+  // NULL on validForPassengers/validForCargo means "unknown → allowed" (legacy safety).
+  const isPassengerBooking =
+    booking.transportServiceType.startsWith("passenger_") ||
+    booking.transportServiceType === "equipment_rental" ||
+    ((booking.passengerCount ?? 0) > 0);
+  const isCargoBooking =
+    booking.transportServiceType === "cargo_load" ||
+    ((Number(booking.cargoWeight) ?? 0) > 0);
+  const familyFilterSql = isPassengerBooking && !isCargoBooking
+    ? `AND (v."validForPassengers" IS NULL OR v."validForPassengers" = TRUE)`
+    : isCargoBooking && !isPassengerBooking
+    ? `AND (v."validForCargo" IS NULL OR v."validForCargo" = TRUE)`
+    : "";
+
   // 2) Load candidate vehicles. Pull `vehicle_location_snapshots`
   //    latest ping per vehicle as the proxy for "current location".
   const vehicles = await rawQuery<VehicleRow>(
@@ -594,6 +609,7 @@ async function suggestForCriteria(c: SuggestionCriteria): Promise<SuggestionResu
       WHERE v."companyId" = $1
         AND v."deletedAt" IS NULL
         AND v.status IN ('available', 'in_use')
+        ${familyFilterSql}
       LIMIT 200`,
     [req.companyId],
   );

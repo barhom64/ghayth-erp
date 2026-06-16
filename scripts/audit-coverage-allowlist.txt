@@ -415,3 +415,4 @@ PUT /rbac/v2/roles/:id/grants/simple
 PUT /warehouse/pricing/rules/:id
 PUT /warehouse/saudi/wps/credentials/:bankCode
 PUT /warehouse/settings/policies/:id
+POST /umrah/commission-plans/simulate

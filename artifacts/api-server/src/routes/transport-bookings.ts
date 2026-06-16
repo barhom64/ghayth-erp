@@ -175,6 +175,13 @@ const createBookingBaseSchema = z.object({
   beneficiaryId: z.coerce.number().int().positive().optional(),
   projectId: z.coerce.number().int().positive().optional(),
   waqfId: z.coerce.number().int().positive().optional(),
+  // #1812 audit fix — routePatternId was a dead-letter from the SPA
+  // (BookingSourceSelector + booking-create both sent it) but the
+  // schema rejected it. Now accepted; INSERT writes it to the column
+  // added by migration 284 when the booking is created from a
+  // recurring pattern via the materialise endpoint OR by the operator
+  // picking a pattern in the source selector.
+  routePatternId: z.coerce.number().int().positive().optional(),
   costCenterId: z.coerce.number().int().positive().optional(),
   // #1812 customer-agreement fields (Comment 3 — اتفاق العميل).
   // The schema columns were added in migration 271; this surface
@@ -573,7 +580,7 @@ transportBookingsRouter.post(
             "pickupWindowStart", "pickupWindowEnd",
             "dropoffWindowStart", "dropoffWindowEnd",
             "fixedAppointmentTime", "isFlexibleTime", priority,
-            notes, "createdBy", "tripFamily")
+            notes, "createdBy", "routePatternId", "tripFamily")
          VALUES ($1,$2,$3,$4,$5, $6,$7,$8,$9, $10,$11,$12,$13,$14,
                  $15,$16, $17,$18,$19,$20,$21,$22,
                  $23,$24,$25,$26,
@@ -584,7 +591,7 @@ transportBookingsRouter.post(
                  $48,$49,
                  $50,$51,
                  $52,$53,$54,
-                 $55,$56, $57)`,
+                 $55,$56, $57, $58)`,
         [
           scope.companyId, scope.branchId ?? null, b.bookingNumber,
           b.bookingSource ?? "manual_entry", b.transportServiceType,
@@ -607,6 +614,8 @@ transportBookingsRouter.post(
           b.fixedAppointmentTime ?? null, b.isFlexibleTime ?? false,
           b.priority ?? 0,
           b.notes ?? null, scope.userId,
+          // #1812 audit fix — accept the SPA's routePatternId prefill (was a dead-letter pre-audit).
+          b.routePatternId ?? null,
           // #1812 Comment 4663005810 — explicit tripFamily column.
           deriveTripFamily(b.transportServiceType, b.passengerCount, b.cargoWeight),
         ],
@@ -754,8 +763,16 @@ transportBookingsRouter.patch(
       const sets: string[] = [];
       const params: unknown[] = [];
       let p = 1;
+      // #1812 — column whitelist. `tripFamily` and `routePatternId`
+      // are system-managed (set by the create or materialise endpoint).
+      // Drop silently so the SPA can PATCH a wider partial safely.
+      const PATCH_BANNED = new Set([
+        "tripFamily", "routePatternId", "bookingSource",
+        "bookingNumber", "companyId", "branchId",
+        "createdBy", "createdAt", "deletedAt",
+      ]);
       for (const [col, val] of Object.entries(b)) {
-        if (val !== undefined) {
+        if (val !== undefined && !PATCH_BANNED.has(col)) {
           sets.push(`"${col}" = $${p++}`);
           params.push(val);
         }
