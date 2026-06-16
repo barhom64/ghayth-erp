@@ -8,6 +8,7 @@ import { handleRouteError, ValidationError, NotFoundError,
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
 import { logger } from "../lib/logger.js";
 
 // Local row shapes for recruitment tables.
@@ -439,10 +440,25 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
     if (!name) throw new ValidationError("اسم المرشح مطلوب", { field: "name" });
     if (!phone) throw new ValidationError("رقم جوال المرشح مطلوب", { field: "phone" });
 
-    // All four writes (application flip, employee insert, assignment insert,
-    // optional institutional links) must be atomic — a partial failure would
-    // leave a hired application with no employee, or an employee with no
-    // assignment. rawQuery/rawExecute auto-join the ambient transaction.
+    // Issue the employee number OUTSIDE the transaction via the numbering
+    // center (`hr.employee_code`) — same call as employees.ts POST / — so the
+    // audit:numbering-coverage check stays satisfied: the INSERT into
+    // employees gets its number from the numbering service.
+    const preIssued = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "hr",
+      entityKey: "employee_code",
+      entityTable: "employees",
+      actorId: scope.userId,
+      expectedTiming: "on_draft",
+    });
+    const empNumber = preIssued.number;
+
+    // All writes (application flip, employee insert, assignment insert,
+    // numbering link, optional institutional links) must be atomic — a partial
+    // failure would leave a hired application with no employee, or an employee
+    // with no assignment. rawQuery/rawExecute auto-join the ambient transaction.
     const hireDate = b.hireDate || new Date().toISOString().slice(0, 10);
     const { empId, assignmentId } = await withTransaction(async () => {
       // 1. Mark the application hired.
@@ -450,14 +466,19 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
         `UPDATE job_applications SET status = 'hired', "updatedAt" = NOW() WHERE id = $1`,
         [id],
       );
-      // 2. Insert the inactive employee.
+      // 2. Insert the inactive employee with its issued empNumber.
       const [empRow] = await rawQuery<{ id: number }>(
-        `INSERT INTO employees (name, phone, email, nationality, "nationalId", status, "hireDate", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, 'inactive', $6, NOW(), NOW())
+        `INSERT INTO employees (name, phone, email, "empNumber", nationality, "nationalId", status, "hireDate", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, 'inactive', $7, NOW(), NOW())
          RETURNING id`,
-        [name, phone, email, b.nationality, b.nationalId, hireDate],
+        [name, phone, email, empNumber, b.nationality, b.nationalId, hireDate],
       );
       const newEmpId = empRow.id;
+      // Link the numbering assignment to the new employee row.
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [newEmpId, preIssued.assignmentId],
+      );
       // 3. Insert the active assignment.
       const [assignRow] = await rawQuery<{ id: number }>(
         `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "startDate", "createdAt", "updatedAt")

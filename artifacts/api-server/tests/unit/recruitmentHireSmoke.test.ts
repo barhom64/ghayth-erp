@@ -45,6 +45,11 @@ describe("HR-REV-8 — employee creation", () => {
   it("wraps the multi-table writes in withTransaction (tx-coverage)", () => {
     expect(HIRE_BLOCK).toMatch(/await withTransaction\(async \(\) =>/);
   });
+  it("issues empNumber via the numbering center (numbering-coverage)", () => {
+    expect(HIRE_BLOCK).toMatch(/issueNumber\(\{[\s\S]*?entityKey: "employee_code"/);
+    expect(HIRE_BLOCK).toMatch(/"empNumber"/);
+    expect(HIRE_BLOCK).toMatch(/UPDATE numbering_assignments SET "entityId"/);
+  });
   it("inserts employee with status 'inactive'", () => {
     expect(HIRE_BLOCK).toMatch(/INSERT INTO employees[\s\S]*?'inactive'/);
   });
