@@ -29,7 +29,11 @@ const PFX = "test-5a-";
 
 // intents دورة الحياة مع الحسابات المتوقعة بعد تصحيح 5-أ
 const EXPECTED_INTENTS: Record<string, string> = {
-  asset_disposal_cash:          "1100",
+  // 2026-06-15 (migration 376): asset_disposal_cash anchors at the MAIN
+  // CASH leaf 1111 — NOT 1100 (الأصول المتداولة), which is a non-postable
+  // control parent the posting guard forbids. 338's literal fallback was
+  // 1100; 376 re-points it to the postable cash leaf.
+  asset_disposal_cash:          "1111",
   asset_disposal_gain:          "4920",
   asset_disposal_loss:          "5810",
   asset_impairment_loss:        "5850",
