@@ -8,7 +8,11 @@ const TABS = [
   { href: "/warehouse/categories", label: "التصنيفات", icon: FolderOpen, match: ["/warehouse/categories"] },
   { href: "/warehouse/suppliers", label: "الموردون", icon: Building2, match: ["/warehouse/suppliers"] },
   { href: "/warehouse/inventory-count", label: "جرد المخزون", icon: ClipboardCheck, match: ["/warehouse/inventory-count"] },
-  { href: "/warehouse/advanced", label: "عمليات متقدّمة", icon: BarChart3, match: ["/warehouse/advanced"] },
+  // The «عمليات متقدّمة» hub fronts the batch / serial / cycle-count / ABC
+  // pages, which are separate top-level routes (reachable from the sidebar),
+  // not /warehouse/advanced/* children — so list them in `match` to keep this
+  // tab highlighted when the operator is on any of them.
+  { href: "/warehouse/advanced", label: "عمليات متقدّمة", icon: BarChart3, match: ["/warehouse/advanced", "/warehouse/lots", "/warehouse/serials", "/warehouse/cycle-counts", "/warehouse/abc"] },
 ];
 
 export function WarehouseTabsNav() {
