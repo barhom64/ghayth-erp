@@ -28,6 +28,7 @@ import { z } from "zod";
 
 import {
   handleRouteError,
+  NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
@@ -471,6 +472,143 @@ glHelpersRouter.post(
       res.json({ data: outcome });
     } catch (err) {
       handleRouteError(err, res, "[gl-helpers] mudad-salary error:");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────
+// 6) Payroll-liability settlement (#2303) — DR GOSI(2140)/WHT(2132)/
+//    deductions(2150) / CR bank when the company remits to the authority.
+//    postPayrollRunGL only ever CREDITS these (accrual); this is the missing
+//    DEBIT-on-payment leg. Pairs a pending queue (what each posted run still
+//    owes) with a POST that records the remittance + posts the settlement JE
+//    through hrEngine (idempotent per run+liability, capped at the accrual).
+// ─────────────────────────────────────────────────────────────────────
+
+const payrollLiabilityBody = z.object({
+  liabilityType: z.enum(["gosi", "wht", "deductions"]),
+  amount: z.number().positive().finite(),
+  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "paymentDate must be YYYY-MM-DD"),
+  referenceNumber: z.string().max(100).optional(),
+});
+
+/** Payroll runs whose accrued GOSI / WHT / deductions liabilities aren't yet
+ *  fully settled. Outstanding = the accrual JE balance (CR − DR on each
+ *  liability account) minus what's already been remitted — the GL's own truth,
+ *  so it self-heals if an accrual is voided or a settlement reversed. */
+glHelpersRouter.get(
+  "/gl-helpers/payroll-liability/pending",
+  authorize({ feature: "finance.journal", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const { financialEngine } = await import("../lib/engines/index.js");
+      const [gosiCode, whtCode, deductionsCode] = await Promise.all([
+        financialEngine.resolveAccountCode(scope.companyId, "payroll_gosi_payable", "credit", "2140"),
+        financialEngine.resolveAccountCode(scope.companyId, "wht_payable", "credit", "2132"),
+        financialEngine.resolveAccountCode(scope.companyId, "payroll_deductions_payable", "credit", "2150"),
+      ]);
+
+      const rows = await rawQuery<{
+        runId: number;
+        period: string;
+        gosiOutstanding: string;
+        whtOutstanding: string;
+        deductionsOutstanding: string;
+      }>(
+        `WITH accrual AS (
+           SELECT je."sourceId" AS run_id, je.id AS je_id
+             FROM journal_entries je
+            WHERE je."companyId" = $1
+              AND je."sourceKey" LIKE 'hr:payroll_run:%'
+              AND je."deletedAt" IS NULL
+         ),
+         accrued AS (
+           SELECT a.run_id,
+                  SUM(CASE WHEN jl."accountCode" = $2 THEN jl.credit - jl.debit ELSE 0 END) AS gosi,
+                  SUM(CASE WHEN jl."accountCode" = $3 THEN jl.credit - jl.debit ELSE 0 END) AS wht,
+                  SUM(CASE WHEN jl."accountCode" = $4 THEN jl.credit - jl.debit ELSE 0 END) AS deductions
+             FROM accrual a
+             JOIN journal_lines jl ON jl."journalId" = a.je_id
+            WHERE jl."deletedAt" IS NULL
+            GROUP BY a.run_id
+         ),
+         settled AS (
+           SELECT s."payrollRunId" AS run_id,
+                  COALESCE(SUM(CASE WHEN s."liabilityType" = 'gosi'       THEN s.amount ELSE 0 END), 0) AS gosi,
+                  COALESCE(SUM(CASE WHEN s."liabilityType" = 'wht'        THEN s.amount ELSE 0 END), 0) AS wht,
+                  COALESCE(SUM(CASE WHEN s."liabilityType" = 'deductions' THEN s.amount ELSE 0 END), 0) AS deductions
+             FROM payroll_liability_settlements s
+            WHERE s."companyId" = $1 AND s."deletedAt" IS NULL
+            GROUP BY s."payrollRunId"
+         )
+         SELECT pr.id AS "runId", pr.period,
+                GREATEST(ac.gosi       - COALESCE(st.gosi, 0),       0)::text AS "gosiOutstanding",
+                GREATEST(ac.wht        - COALESCE(st.wht, 0),        0)::text AS "whtOutstanding",
+                GREATEST(ac.deductions - COALESCE(st.deductions, 0), 0)::text AS "deductionsOutstanding"
+           FROM accrued ac
+           JOIN payroll_runs pr ON pr.id = ac.run_id AND pr."companyId" = $1 AND pr."deletedAt" IS NULL
+           LEFT JOIN settled st ON st.run_id = ac.run_id
+          WHERE (ac.gosi       - COALESCE(st.gosi, 0))       > 0.005
+             OR (ac.wht        - COALESCE(st.wht, 0))        > 0.005
+             OR (ac.deductions - COALESCE(st.deductions, 0)) > 0.005
+          ORDER BY pr.period DESC, pr.id DESC
+          LIMIT 200`,
+        [scope.companyId, gosiCode, whtCode, deductionsCode],
+      );
+      res.json({ data: rows });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] payroll-liability pending list error:");
+    }
+  },
+);
+
+/** Record a remittance of an accrued payroll liability for a run and post the
+ *  DR liability / CR bank settlement JE. Idempotent per (run, liability) and
+ *  capped at the accrued balance (both enforced in hrEngine), so a re-submit is
+ *  a no-op and over-payment is rejected. */
+glHelpersRouter.post(
+  "/gl-helpers/payroll-liability/:runId",
+  authorize({ feature: "finance.journal", action: "create" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const runId = parseId(req.params.runId, "runId");
+      const body = zodParse(payrollLiabilityBody.safeParse(req.body ?? {}));
+
+      const [run] = await rawQuery<{ period: string }>(
+        `SELECT period FROM payroll_runs
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+        [runId, scope.companyId],
+      );
+      if (!run) throw new NotFoundError("دورة الرواتب غير موجودة");
+
+      const { hrEngine } = await import("../lib/engines/index.js");
+      const outcome = await hrEngine.postPayrollLiabilitySettlementGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        {
+          runId,
+          period: run.period,
+          liabilityType: body.liabilityType,
+          amount: body.amount,
+          paymentDate: body.paymentDate,
+          referenceNumber: body.referenceNumber,
+        },
+      );
+
+      recordSideEffects({
+        scope,
+        action: "payroll.liability.settled",
+        entity: "payroll_liability_settlements",
+        entityId: outcome.settlementId,
+        outcome: {
+          status: outcome.alreadyExists ? "noop" : "posted",
+          journalEntryId: outcome.journalEntryId,
+        },
+      });
+      res.json({ data: outcome });
+    } catch (err) {
+      handleRouteError(err, res, "[gl-helpers] payroll-liability settle error:");
     }
   },
 );
