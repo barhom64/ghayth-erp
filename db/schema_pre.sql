@@ -8791,6 +8791,7 @@ CREATE TABLE public.employees (
     lat numeric(10,7),
     lon numeric(10,7),
     status character varying(20) DEFAULT 'active'::character varying,
+    "activationStatus" character varying(40),
     "activationToken" character varying(100),
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "iqamaNumber" character varying(30),
