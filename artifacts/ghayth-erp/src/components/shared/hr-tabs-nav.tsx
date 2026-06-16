@@ -1,21 +1,53 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
-  Users, Clock, Calendar, AlertTriangle, GraduationCap, Target,
-  DollarSign, UserPlus, ListChecks, Building2,
+  Briefcase, Users, Clock, ClipboardCheck, Scale, Target,
+  DollarSign, FileBarChart, Settings,
 } from "lucide-react";
 
+// HR-REV — the horizontal HR bar mirrors the sidebar's top-level groups 1:1
+// (same order, same labels, same landing path), so the two menus express the
+// same structure. Each tab's `match` lists the sub-paths that live under that
+// sidebar group, so the right tab highlights wherever you are inside HR.
 const TABS = [
-  { href: "/employees", label: "الموظفون", icon: Users, match: ["/employees"], exact: true },
-  { href: "/hr/attendance", label: "الحضور", icon: Clock, match: ["/hr/attendance"] },
-  { href: "/hr/leaves", label: "الإجازات", icon: Calendar, match: ["/hr/leaves"] },
-  { href: "/hr/violations", label: "المخالفات", icon: AlertTriangle, match: ["/hr/violations"] },
-  { href: "/hr/training", label: "التدريب", icon: GraduationCap, match: ["/hr/training"] },
-  { href: "/hr/performance", label: "الأداء", icon: Target, match: ["/hr/performance"] },
-  { href: "/hr/payroll", label: "الرواتب", icon: DollarSign, match: ["/hr/payroll"] },
-  { href: "/hr/recruitment", label: "التوظيف", icon: UserPlus, match: ["/hr/recruitment"] },
-  { href: "/hr/shifts", label: "الورديات", icon: ListChecks, match: ["/hr/shifts"] },
-  { href: "/hr/organization", label: "الهيكل", icon: Building2, match: ["/hr/organization"] },
+  { href: "/hr", label: "لوحة HR", icon: Briefcase, match: ["/hr"], exact: true },
+  {
+    href: "/employees", label: "الموظفون", icon: Users,
+    match: [
+      "/employees", "/hr/recruitment", "/hr/employee-activation", "/hr/activation-board",
+      "/hr/onboarding-review", "/hr/transfers", "/hr/expiring-documents", "/hr/org-tree",
+      "/hr/organization", "/hr/delegations", "/hr/documents", "/hr/contracts",
+      "/hr/official-letters", "/hr/exit",
+    ],
+  },
+  {
+    href: "/hr/attendance", label: "النشاط والحضور", icon: Clock,
+    match: ["/hr/attendance", "/hr/shifts"],
+  },
+  {
+    href: "/hr/services", label: "الطلبات", icon: ClipboardCheck,
+    match: ["/hr/services", "/hr/approvals", "/hr/leaves", "/hr/overtime", "/hr/excuse-requests"],
+  },
+  {
+    href: "/hr/violations", label: "الامتثال والجزاءات", icon: Scale,
+    match: ["/hr/violations", "/hr/discipline", "/hr/saudization", "/hr/saudi-compliance"],
+  },
+  {
+    href: "/hr/performance", label: "الأداء والتطوير", icon: Target,
+    match: ["/hr/performance", "/hr/evaluation-360", "/hr/idp", "/hr/training"],
+  },
+  {
+    href: "/hr/payroll", label: "الرواتب والمستحقات", icon: DollarSign,
+    match: ["/hr/payroll", "/hr/loans", "/hr/gratuity", "/hr/accruals", "/hr/wps"],
+  },
+  {
+    href: "/hr/turnover-report", label: "التقارير", icon: FileBarChart,
+    match: ["/hr/turnover-report"],
+  },
+  {
+    href: "/hr/attendance-policy", label: "الإعدادات", icon: Settings,
+    match: ["/hr/attendance-policy", "/hr/public-holidays", "/hr/attendance-categories", "/hr/scoring-weights"],
+  },
 ];
 
 export function HrTabsNav() {

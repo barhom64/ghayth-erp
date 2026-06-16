@@ -54,6 +54,11 @@ describe("HR-REV-3 (#2222) — pending (inactive) employee creation", () => {
   it("creates the assignment in 'active' status (so activation flow finds it)", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO employee_assignments[\s\S]*?'active'/);
   });
+  it("stamps activationStatus = 'pending_activation' on the hire (HR-REV-3 slice 4a)", () => {
+    const empInsert = QA_BLOCK.match(/INSERT INTO employees[\s\S]*?RETURNING/)?.[0] || "";
+    expect(empInsert).toMatch(/"activationStatus"/);
+    expect(empInsert).toMatch(/'pending_activation'/);
+  });
 });
 
 describe("HR-REV-3 (#2222) — onboarding plan + audit + numbering", () => {
@@ -89,5 +94,30 @@ describe("HR-REV-3 (#2222) — onboarding plan + audit + numbering", () => {
     expect(QA_BLOCK).toMatch(/issueNumber\(/);
     expect(QA_BLOCK).toMatch(/entityKey: "employee_code"/);
     expect(QA_BLOCK).toMatch(/entityTable: "employees"/);
+  });
+});
+
+describe("HR-REV-3 (#2222) — activation ready-gate (slice 4b)", () => {
+  // PATCH /:id flips inactive→active; activation must be blocked until every
+  // mandatory onboarding task is done, enforced server-side (not just in the UI).
+  const PATCH_BLOCK =
+    EMPLOYEES_ROUTE.match(
+      /router\.patch\("\/:id"[\s\S]*?const employee = \{ id: before\.id/,
+    )?.[0] || "";
+
+  it("the PATCH /:id handler block was extracted", () => {
+    expect(PATCH_BLOCK).not.toBe("");
+  });
+  it("gates activation only on the pending-activation statuses (not suspended re-activation)", () => {
+    expect(PATCH_BLOCK).toMatch(/PENDING_ACTIVATION\s*=\s*\[\s*"inactive",\s*"pending",\s*"onboarding"\s*\]/);
+    expect(PATCH_BLOCK).toMatch(/status === "active" && before\.status != null && PENDING_ACTIVATION\.includes\(before\.status\)/);
+  });
+  it("counts only incomplete MANDATORY onboarding tasks", () => {
+    expect(PATCH_BLOCK).toMatch(/FROM onboarding_tasks[\s\S]*?mandatory IS NOT FALSE[\s\S]*?status NOT IN \('completed','skipped'\)/);
+  });
+  it("rejects activation with a ValidationError when any mandatory item remains", () => {
+    expect(PATCH_BLOCK).toMatch(/if \(remaining > 0\)/);
+    expect(PATCH_BLOCK).toMatch(/throw new ValidationError\(/);
+    expect(PATCH_BLOCK).toMatch(/remainingMandatory: remaining/);
   });
 });
