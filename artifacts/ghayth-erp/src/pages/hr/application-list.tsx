@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
-import { Plus, Users, UserCheck, Clock, XCircle } from "lucide-react";
+import { Plus, Users, UserCheck, Clock, XCircle, Zap } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
   PageShell,
@@ -24,9 +28,53 @@ import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS = Object.entries(RECRUITMENT_STAGES).map(([value, { label }]) => ({ value, label }));
 
+// Quick-hire dialog — collects the handful of extra fields needed by
+// POST /hr/recruitment/applications/:id/hire that aren't already on the
+// job_applications row (nationality, nationalId, branchId, departmentId,
+// salary), then fires the endpoint and navigates to the new employee.
+function QuickHireDialog({ app, onClose, onDone }: { app: any; onClose: () => void; onDone: (empId: number) => void }) {
+  const [form, setForm] = useState({
+    nationality: "", nationalId: "", branchId: "", departmentId: "",
+    jobTitle: app?.postingTitle || "", salary: "",
+  });
+  const hireMut = useApiMutation<{ data: { employeeId: number } }, typeof form>(
+    (b) => `/hr/recruitment/applications/${app.id}/hire`,
+    "POST",
+    [["applicants"]],
+    { successMessage: "تم تعيين المرشح وإنشاء الموظف" },
+  );
+  const submit = () => {
+    hireMut.mutate(form, {
+      onSuccess: (res) => { onDone((res as any)?.data?.employeeId); },
+    });
+  };
+  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogHeader><DialogTitle>تعيين سريع: {app?.name || app?.applicantName}</DialogTitle></DialogHeader>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>المسمى الوظيفي *</Label><Input value={form.jobTitle} onChange={f("jobTitle")} /></div>
+          <div><Label>الراتب *</Label><Input type="number" value={form.salary} onChange={f("salary")} /></div>
+          <div><Label>الجنسية *</Label><Input value={form.nationality} onChange={f("nationality")} /></div>
+          <div><Label>رقم الهوية *</Label><Input value={form.nationalId} onChange={f("nationalId")} /></div>
+          <div><Label>رقم الفرع *</Label><Input type="number" value={form.branchId} onChange={f("branchId")} /></div>
+          <div><Label>رقم القسم *</Label><Input type="number" value={form.departmentId} onChange={f("departmentId")} /></div>
+        </div>
+        <DialogFooter>
+          <GuardedButton perm="hr:create" onClick={submit} disabled={hireMut.isPending}>
+            <Zap className="h-4 w-4 ml-1" />تعيين وإنشاء موظف
+          </GuardedButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function ApplicationListPage() {
   const [, navigate] = useLocation();
   const [filters, setFilters] = useFilters();
+  const [quickHireApp, setQuickHireApp] = useState<any>(null);
   const { data, isLoading, isError } = useApiQuery<any>(["applicants"], "/hr/recruitment/applications");
   const apps = data?.data || [];
 
@@ -143,15 +191,26 @@ export default function ApplicationListPage() {
           phone: v.phone || "",
         }).toString();
         return (
-          <GuardedButton
-            perm="hr:create"
-            size="sm"
-            variant="outline"
-            className="text-xs"
-            onClick={() => navigate(`/employees/create?${qs}`)}
-          >
-            إنشاء موظف من الطلب
-          </GuardedButton>
+          <div className="flex gap-1 flex-wrap">
+            <GuardedButton
+              perm="hr:create"
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              onClick={() => setQuickHireApp(v)}
+            >
+              <Zap className="h-3 w-3 ml-0.5" />تعيين سريع
+            </GuardedButton>
+            <GuardedButton
+              perm="hr:create"
+              size="sm"
+              variant="ghost"
+              className="text-xs text-muted-foreground"
+              onClick={() => navigate(`/employees/create?${qs}`)}
+            >
+              نموذج كامل
+            </GuardedButton>
+          </div>
         );
       },
     },
@@ -234,6 +293,13 @@ export default function ApplicationListPage() {
         emptyMessage="لا يوجد متقدمين — أضف متقدم جديد للبدء"
         pageSize={20}
       />
+      {quickHireApp && (
+        <QuickHireDialog
+          app={quickHireApp}
+          onClose={() => setQuickHireApp(null)}
+          onDone={(empId) => { setQuickHireApp(null); navigate(`/employees/${empId}`); }}
+        />
+      )}
     </PageShell>
   );
 }

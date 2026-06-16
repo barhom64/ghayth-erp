@@ -27,6 +27,14 @@
 //                          model; remove the legacy "الجهة المرتبطة" + raw
 //                          account/cost-centre fields.
 
+// FIN-SUB-05 (#2101) — the voucher direction/label maps now live in ONE
+// canonical source shared with the backend; see the re-export block below.
+import {
+  ACCOUNT_TYPE_LABELS as ACCOUNT_TYPE_LABELS_AR,
+  VOUCHER_COUNTER_ACCOUNT_TYPES,
+  type AccountTypeKey,
+} from "@workspace/api-zod/financeDirectionMaps";
+
 export type FinanceDomain =
   | "general"
   | "vehicle"
@@ -429,38 +437,22 @@ export function deriveRelatedEntity(
 
 // ── #1945 item 5 — direction-aware voucher (صرف=مصروف / قبض=إيراد) ──────
 // Which chart-of-accounts TYPES the voucher's counter account may be, per
-// voucher operationType. Mirrors the backend enforcement map
-// (api-server/src/lib/financeOperationContext.ts VOUCHER_OPERATION_COUNTER_TYPES)
-// — the backend rejects with 422; this map drives the form hint so the
-// operator picks right the first time. Unknown operationType falls back to
-// the direction invariant: قبض لا يقيَّد على مصروف، صرف لا يقيَّد على إيراد.
-export type AccountTypeKey = "asset" | "liability" | "equity" | "revenue" | "expense";
-
-export const ACCOUNT_TYPE_LABELS_AR: Record<AccountTypeKey, string> = {
-  asset: "أصول/ذمم",
-  liability: "التزامات",
-  equity: "حقوق ملكية",
-  revenue: "إيراد",
-  expense: "مصروف",
-};
-
-export const VOUCHER_COUNTER_ACCOUNT_TYPES: Record<string, AccountTypeKey[]> = {
-  // receipt direction (قبض)
-  receipt: ["revenue"],
-  rent: ["revenue"],
-  invoice_payment: ["asset"],
-  deposit: ["liability"],
-  refund: ["expense", "revenue"],
-  // payment direction (صرف)
-  payment: ["expense"],
-  vendor_invoice: ["liability", "expense"],
-  salary: ["expense"],
-  advance: ["asset"],
-  legal_fee: ["expense"],
-  purchase: ["expense", "asset"],
-  custody: ["asset"],
-  insurance: ["expense", "asset"],
-  maintenance: ["expense"],
+// voucher operationType. FIN-SUB-05 (#2101): this map and its Arabic labels
+// now live in ONE canonical source (@workspace/api-zod/financeDirectionMaps)
+// consumed by BOTH this form UX and the backend enforcement
+// (api-server/src/lib/financeOperationContext.ts) — so the form can never
+// drift from what the server accepts. The backend rejects with 422; this map
+// drives the form hint so the operator picks right the first time. Unknown
+// operationType falls back to the direction invariant: قبض لا يقيَّد على مصروف،
+// صرف لا يقيَّد على إيراد.
+//
+// Re-exported under the legacy FE names (AccountTypeKey, ACCOUNT_TYPE_LABELS_AR,
+// VOUCHER_COUNTER_ACCOUNT_TYPES) so existing FE importers don't break. The
+// imports themselves are hoisted to the top of the file.
+export {
+  ACCOUNT_TYPE_LABELS_AR,
+  VOUCHER_COUNTER_ACCOUNT_TYPES,
+  type AccountTypeKey,
 };
 
 /** Human hint for the voucher form: which account types the chosen

@@ -16,6 +16,11 @@ const EXEMPT_PATHS = new Set([
   "/api/auth/register",
   "/api/auth/refresh",
   "/api/auth/forgot-password",
+  // #2137 slice 2 — public, token-authenticated account recovery. The
+  // single-use token in the body IS the credential; there is no session
+  // cookie to protect against CSRF.
+  "/api/auth/reset-password",
+  "/api/auth/activate",
 ]);
 
 export function setCsrfCookie(res: Response): string {

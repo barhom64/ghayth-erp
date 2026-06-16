@@ -30,7 +30,7 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const ROUTES = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-journey-reports.ts"),
   "utf8",
 );
 
@@ -38,7 +38,7 @@ const ROUTES = readFileSync(
 // from another route.
 const HANDLER =
   ROUTES.match(
-    /\/reports\/packages-vs-allocations-pricing-drift[\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m,
+    /router\.get\(\s*\n?\s*["']\/reports\/packages-vs-allocations-pricing-drift["'][\s\S]+?(?=^router\.|^\/\/ ─{3}|^export default)/m,
   )?.[0] ?? "";
 
 // ─────────────────────────────────────────────────────────────────────────────

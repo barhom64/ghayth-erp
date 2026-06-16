@@ -42,6 +42,8 @@ const TelematicsSettings = lazy(() => import("@/pages/fleet/telematics/settings"
 const TelematicsOperations = lazy(() => import("@/pages/fleet/telematics/operations"));
 // TA-GAP-09 Phase 2 — Maps quota usage dashboard.
 const MapsUsage = lazy(() => import("@/pages/fleet/maps-usage"));
+// Control Tower — single-page operator dashboard (audit file 22 + #1812).
+const TransportControlTower = lazy(() => import("@/pages/fleet/transport-control-tower"));
 // TA-T18-VRP Phase 2 — Fleet Optimizer batch-mode (runs list + detail).
 const OptimizerRuns = lazy(() => import("@/pages/fleet/optimizer-runs"));
 const OptimizerRunDetail = lazy(() => import("@/pages/fleet/optimizer-run-detail"));
@@ -120,6 +122,8 @@ export const fleetRoutes = [
   { path: "/fleet/telematics/operations", component: TelematicsOperations },
   // TA-GAP-09 Phase 2 — Maps quota usage dashboard.
   { path: "/fleet/maps/usage", component: MapsUsage },
+  // Control Tower — audit doc file 22 + #1812 user brief.
+  { path: "/fleet/transport/control-tower", component: TransportControlTower },
   // TA-T18-VRP Phase 2 — Fleet Optimizer (detail BEFORE list since wouter is order-sensitive).
   { path: "/fleet/optimizer/runs/:id", component: OptimizerRunDetail },
   { path: "/fleet/optimizer/runs", component: OptimizerRuns },
