@@ -4701,7 +4701,72 @@ async function inboxTaskSlaReminderScan(): Promise<string> {
   return `inbox SLA reminders: ${first} first, ${final} final`;
 }
 
+// آلية منع التفاقم: تستنزف تلقائياً تراكم "فشل القيد المالي" غير المحلول لكل
+// شركة بإعادة استدعاء الترحيل الأصلي عبر retryPostingFailure (idempotent بمفتاح
+// المصدر). أي فشل قابل لإعادة المحاولة (مثل فواتير نسك التي تعطّلت بسبب رمز
+// الحساب 5201/2101) يُرحَّل ويُغلق السجل تلقائياً، فلا يتضخّم الرصيد ولا يقفل
+// النظام بوابة المنع المالي (postingFailuresGuard). يستثني الأنواع غير القابلة
+// لإعادة المحاولة الآلية (تُعالَج يدوياً) ويعمل ضمن دفعات محدودة لكل شركة حتى لا
+// يثقل قاعدة البيانات. يعمل بحدود أمان: لا يلمس السجلات المحلولة مسبقاً، ويُغلق
+// السجل فقط عند نجاح الترحيل فعلياً (result.ok && result.supported).
+async function financialPostingFailureAutoRetry(): Promise<string> {
+  const { retryPostingFailure, UNSUPPORTED_RETRY_SOURCE_TYPES } = await import("./postingFailureRetry.js");
+  const PER_COMPANY_CAP = 500; // bounded drain per run so the cron stays cheap
+  const PAGE = 100;
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let totalResolved = 0, totalStillFailing = 0, totalProcessed = 0;
+  let companiesTouched = 0;
+
+  for (const company of companies) {
+    let cursor = 0;
+    let processedForCompany = 0;
+    let resolvedForCompany = 0;
+    // Walk the retryable backlog one bounded window at a time (cursor by id so
+    // a head of still-failing rows can't stall later resolvable ones), capped
+    // at PER_COMPANY_CAP rows per run.
+    while (processedForCompany < PER_COMPANY_CAP) {
+      const limit = Math.min(PAGE, PER_COMPANY_CAP - processedForCompany);
+      const batch = await rawQuery<{ id: number; sourceType: string; sourceId: number | null }>(
+        `SELECT id, "sourceType", "sourceId" FROM financial_posting_failures
+          WHERE "companyId" = $1 AND resolved = false AND id > $2
+            AND "sourceType" <> ALL($3::text[])
+            AND "sourceId" IS NOT NULL AND "sourceId" > 0
+          ORDER BY id ASC LIMIT $4`,
+        [company.id, cursor, UNSUPPORTED_RETRY_SOURCE_TYPES as unknown as string[], limit],
+      );
+      if (batch.length === 0) break;
+
+      for (const f of batch) {
+        cursor = f.id;
+        processedForCompany++;
+        totalProcessed++;
+        // userId 0 = النظام (آلية تلقائية) — مطابق لنمط resolvedBy في المهام الآلية.
+        const result = await retryPostingFailure(
+          { companyId: company.id, branchId: 0, userId: 0 },
+          { sourceType: f.sourceType, sourceId: f.sourceId },
+        );
+        if (result.ok && result.supported) {
+          await rawExecute(
+            `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = 0
+              WHERE id = $1 AND "companyId" = $2 AND resolved = false`,
+            [f.id, company.id],
+          );
+          resolvedForCompany++;
+          totalResolved++;
+        } else if (result.supported) {
+          totalStillFailing++;
+        }
+      }
+      if (batch.length < limit) break;
+    }
+    if (resolvedForCompany > 0 || processedForCompany > 0) companiesTouched++;
+  }
+
+  return `financial_posting_failure_auto_retry: processed ${totalProcessed} across ${companiesTouched} company(ies) — resolved ${totalResolved}, stillFailing ${totalStillFailing}`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "financial_posting_failure_auto_retry", description: "آلية منع التفاقم — إعادة ترحيل تراكم فشل القيد المالي تلقائياً وإغلاق السجلات الناجحة لكل شركة", schedule: "*/15 * * * *", handler: financialPostingFailureAutoRetry },
   { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
   { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
   { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
