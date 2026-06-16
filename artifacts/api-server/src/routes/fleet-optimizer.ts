@@ -36,7 +36,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   runOptimization,
   loadOptimizationRun,
@@ -277,23 +277,31 @@ async function createDispatchOrderFromAssignment(args: {
       const kinds = [...new Set(conflicts.map((c) => c.kind))].join("+");
       return { ok: false, reason: `تعارض في الجدولة: ${kinds}` };
     }
-    const { insertId } = await rawExecute(
-      `INSERT INTO transport_dispatch_orders
-         ("companyId", "branchId", "bookingId", "bookingLineId",
-          "vehicleId", "driverId", "scheduledStartAt", "scheduledEndAt",
-          status, "dispatchedBy", "dispatchedAt")
-       VALUES ($1,$2,$3,$4, $5,$6,$7,$8, 'pending', $9, NOW())`,
-      [companyId, branchId, snapshot.bookingId, assignment.bookingLineId,
-       assignment.vehicleId, assignment.driverId, snapshot.scheduledStartAt, snapshot.scheduledEndAt, userId],
-    );
+    // Atomic per assignment: creating the dispatch order and flipping its
+    // booking line to 'dispatched' must commit together — otherwise a failure
+    // on the line update leaves an order whose booking line is still 'pending'
+    // (it would be re-offered to another run and double-dispatched).
+    const insertId = await withTransaction(async () => {
+      const { insertId } = await rawExecute(
+        `INSERT INTO transport_dispatch_orders
+           ("companyId", "branchId", "bookingId", "bookingLineId",
+            "vehicleId", "driverId", "scheduledStartAt", "scheduledEndAt",
+            status, "dispatchedBy", "dispatchedAt")
+         VALUES ($1,$2,$3,$4, $5,$6,$7,$8, 'pending', $9, NOW())`,
+        [companyId, branchId, snapshot.bookingId, assignment.bookingLineId,
+         assignment.vehicleId, assignment.driverId, snapshot.scheduledStartAt, snapshot.scheduledEndAt, userId],
+      );
+      if (!insertId) return null;
+      await rawExecute(
+        `UPDATE transport_booking_lines SET status = 'dispatched', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [assignment.bookingLineId, companyId],
+      );
+      return insertId;
+    });
     if (!insertId) {
       return { ok: false, reason: "فشل إنشاء صف الـdispatch order" };
     }
-    await rawExecute(
-      `UPDATE transport_booking_lines SET status = 'dispatched', "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2`,
-      [assignment.bookingLineId, companyId],
-    );
     // Emit the same event the single-pair path emits — downstream
     // listeners (notifications, GL, telematics) don't need to know
     // the order came from the batch path.

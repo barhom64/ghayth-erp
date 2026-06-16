@@ -14,7 +14,7 @@ import { z } from "zod";
 import {
   handleRouteError, NotFoundError, parseId, zodParse,
 } from "../lib/errorHandler.js";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
@@ -233,27 +233,33 @@ financeMemoryRouter.post(
       const scope = req.scope!;
       const b = zodParse(createTemplateSchema.safeParse(req.body));
       if (b.defaultSupplierId) await assertSupplierInCompany(b.defaultSupplierId, scope.companyId);
-      const { insertId } = await rawExecute(
-        `INSERT INTO manual_journal_templates
-           ("companyId",name,description,"defaultSupplierId","defaultCostCenterId",currency)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [scope.companyId, b.name.trim(), b.description ?? null,
-         b.defaultSupplierId ?? null, b.defaultCostCenterId ?? null, b.currency ?? "SAR"],
-      );
-      assertInsert(insertId, "manual_journal_templates");
-      let lineNo = 1;
-      for (const ln of b.lines) {
-        await rawExecute(
-          `INSERT INTO manual_journal_template_lines
-             ("companyId","templateId","lineNo","accountPurpose",side,amount,ratio,
-              "requiredDimensions","defaultCostCenterId",description)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)`,
-          [scope.companyId, insertId, lineNo++, ln.accountPurpose, ln.side,
-           ln.amount ?? null, ln.ratio ?? null,
-           ln.requiredDimensions ? JSON.stringify(ln.requiredDimensions) : null,
-           ln.defaultCostCenterId ?? null, ln.description ?? null],
+      // Atomic: the template header and ALL its lines must commit together — a
+      // failure midway through the line loop would otherwise leave a header with
+      // a partial (or empty) line set, an unusable template.
+      const insertId = await withTransaction(async () => {
+        const { insertId } = await rawExecute(
+          `INSERT INTO manual_journal_templates
+             ("companyId",name,description,"defaultSupplierId","defaultCostCenterId",currency)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [scope.companyId, b.name.trim(), b.description ?? null,
+           b.defaultSupplierId ?? null, b.defaultCostCenterId ?? null, b.currency ?? "SAR"],
         );
-      }
+        assertInsert(insertId, "manual_journal_templates");
+        let lineNo = 1;
+        for (const ln of b.lines) {
+          await rawExecute(
+            `INSERT INTO manual_journal_template_lines
+               ("companyId","templateId","lineNo","accountPurpose",side,amount,ratio,
+                "requiredDimensions","defaultCostCenterId",description)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)`,
+            [scope.companyId, insertId, lineNo++, ln.accountPurpose, ln.side,
+             ln.amount ?? null, ln.ratio ?? null,
+             ln.requiredDimensions ? JSON.stringify(ln.requiredDimensions) : null,
+             ln.defaultCostCenterId ?? null, ln.description ?? null],
+          );
+        }
+        return insertId;
+      });
       const tpl = await loadManualJournalTemplate(scope.companyId, insertId);
       auditFromRequest(req, "finance.journal_template.created", "manual_journal_templates", insertId, {
         after: { name: b.name.trim(), lineCount: b.lines.length },
