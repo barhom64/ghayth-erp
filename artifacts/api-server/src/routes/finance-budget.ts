@@ -230,7 +230,7 @@ budgetRouter.post("/budget", authorize({ feature: "finance.budget", action: "cre
       }).catch((err) => logger.error(err, "[audit] budget.created:"));
     }
 
-    const [row] = await rawQuery<FullBudgetRow>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2`, [insertId || 0, scope.companyId]);
+    const [row] = await rawQuery<FullBudgetRow>(`SELECT * FROM budgets WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId || 0, scope.companyId]);
     res.status(201).json(row || { id: insertId, accountCode, period, amount: Number(amount), branchId: branchId ?? scope.branchId });
   } catch (err) {
     handleRouteError(err, res, "Create budget error:");
@@ -619,6 +619,7 @@ budgetRouter.get("/budget/variance", authorize({ feature: "finance.budget", acti
                 JOIN journal_entries je ON je.id = jl."journalId"
                 WHERE je."companyId" = b."companyId"
                   AND je."deletedAt" IS NULL
+                  AND jl."deletedAt" IS NULL
                   AND je."balancesApplied" = true
                   AND jl."accountCode" = b."accountCode"
                   AND je."createdAt"::date BETWEEN $2::date AND $3::date
@@ -701,7 +702,7 @@ budgetRouter.get("/fiscal-periods", authorize({ feature: "finance.budget", actio
               COUNT(*) AS entries,
               COALESCE(SUM(jl.debit), 0) AS "totalDebit"
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
          AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
        GROUP BY to_char(je."createdAt", 'YYYY-MM')`,

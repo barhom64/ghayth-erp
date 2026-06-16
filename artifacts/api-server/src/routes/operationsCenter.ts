@@ -544,13 +544,15 @@ router.post("/daily-close/execute", authorize({ feature: "finance.hardening", ac
       reason: forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`,
     }).catch((e) => logger.error(e, "operationsCenter background task failed"));
 
-    try {
-      await rawQuery(
-        `INSERT INTO audit_logs (action, entity, "entityId", "companyId", "userId", reason, "createdAt")
-         VALUES ('daily_close', 'system', '0', $1, $2, $3, NOW())`,
-        [cid, userId, forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`]
-      );
-    } catch (_e) { logger.error(_e, "OpsCenter: audit log for daily close failed:"); }
+    // Second, system-level audit row (action='daily_close', entity='system') —
+    // best-effort, like the createAuditLog above. Route it through the canonical
+    // helper (internally try/caught, never throws) instead of a raw INSERT, so
+    // the daily_close_log INSERT stays the handler's only mandatory write.
+    createAuditLog({
+      companyId: cid, userId,
+      action: "daily_close", entity: "system", entityId: 0,
+      reason: forceClose ? `إقفال يومي بتجاوز - ${today}` : `إقفال يومي - ${today}`,
+    }).catch((e) => logger.error(e, "OpsCenter: audit log for daily close failed:"));
 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "daily_close.executed", entity: "daily_close_log", entityId: 0, details: JSON.stringify({ date: today, forced: forceClose }) }).catch((e) => logger.error(e, "operationsCenter background task failed"));
     res.json({ success: true, message: "تم إقفال اليوم بنجاح", date: today, forced: forceClose });
