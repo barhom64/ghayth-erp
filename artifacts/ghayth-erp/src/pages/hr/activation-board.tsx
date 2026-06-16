@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { AvatarInitial } from "@/components/shared/avatar-initial";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { GuardedButton } from "@/components/shared/permission-gate";
 import { UserCheck, Clock, AlertTriangle, ListChecks, CheckCircle } from "lucide-react";
 
 /**
@@ -44,6 +45,16 @@ function ageInDays(iso?: string | null): number | null {
 export default function ActivationBoardPage() {
   const { data: empData, isLoading: empLoading, isError: empError } = useApiQuery<any>(["employees"], "/employees?limit=200");
   const { data: tasksData, isLoading: tasksLoading, isError: tasksError } = useApiQuery<any>(["employees-onboarding-tasks"], "/employees/onboarding-tasks");
+
+  // PATCH /employees/:id { status: "active" } — flip a quick-activated employee
+  // to active once their plan is done. The server enforces the same ready-gate
+  // (every mandatory onboarding task complete) so this is safe to expose here.
+  const activateMut = useApiMutation<unknown, { id: number; status: "active" }>(
+    (b) => `/employees/${b.id}`,
+    "PATCH",
+    [["employees"], ["employees-onboarding-tasks"]],
+    { successMessage: "تم تفعيل الموظف" },
+  );
 
   if (empLoading || tasksLoading) return <LoadingSpinner />;
   if (empError || tasksError) return <ErrorState />;
@@ -120,7 +131,19 @@ export default function ActivationBoardPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {ready ? (
-                      <Badge className="bg-status-success-surface text-status-success-foreground">جاهز للمراجعة</Badge>
+                      <>
+                        <Badge className="bg-status-success-surface text-status-success-foreground">جاهز للمراجعة</Badge>
+                        <GuardedButton
+                          perm="hr:update"
+                          size="sm"
+                          className="h-7 gap-1"
+                          disabled={activateMut.isPending}
+                          onClick={() => activateMut.mutate({ id: e.id, status: "active" })}
+                        >
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          تفعيل الموظف
+                        </GuardedButton>
+                      </>
                     ) : (
                       <Badge className="bg-status-warning-surface text-status-warning-foreground">{mandatoryRemaining} بند إلزامي ناقص</Badge>
                     )}
