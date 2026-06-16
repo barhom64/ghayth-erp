@@ -123,6 +123,19 @@ describe("Employees — companyId scoping", () => {
     const docs = section('router.get("/documents",', 3000);
     expect(docs).toContain('"companyId" = $1');
   });
+
+  it("GET /onboarding-tasks supports ownerRole + mandatory filters (HR-REV-3 per-owner queue)", () => {
+    const ob = section('router.get("/onboarding-tasks",', 3000);
+    // destructured from the query string
+    expect(ob).toContain("ownerRole, mandatory } = req.query");
+    // ownerRole is a parameterized equality, not interpolated
+    expect(ob).toContain('conditions.push(`ot."ownerRole" = $${params.length}`)');
+    // mandatory=true|false maps to the same NULL-tolerant predicate the
+    // activation ready-gate uses (mandatory IS NOT FALSE / IS FALSE)
+    expect(ob).toContain('mandatory === "true"');
+    expect(ob).toContain("ot.mandatory IS NOT FALSE");
+    expect(ob).toContain("ot.mandatory IS FALSE");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

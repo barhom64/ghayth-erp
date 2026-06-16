@@ -11,7 +11,12 @@ import { join } from "node:path";
  *
  *   admin/rbac-v2-sod-tab.tsx          → ConfirmDeleteDialog
  *   settings/workflow-definitions-tab  → ConfirmDeleteDialog
- *   settings/branches-tab.tsx          → ConfirmDeleteDialog
+ *   settings/branches-tab.tsx          → BranchDeleteDialog (AlertDialog —
+ *                                        a branch sits at the root of many FK
+ *                                        relations, so retiring one needs a
+ *                                        blocker-aware reassignment flow that
+ *                                        the generic ConfirmDeleteDialog can't
+ *                                        express)
  *   settings/companies-tab.tsx         → ConfirmDeleteDialog
  *   settings.tsx (CrudSection)         → ConfirmDeleteDialog (generic — endpoint-driven)
  *   daily-close.tsx                    → AlertDialog (normal + force-close modes)
@@ -54,14 +59,24 @@ describe("settings/workflow-definitions-tab — delete via ConfirmDeleteDialog",
   });
 });
 
-describe("settings/branches-tab — delete via ConfirmDeleteDialog", () => {
+describe("settings/branches-tab — retire via dedicated BranchDeleteDialog", () => {
   const SRC = read("settings/branches-tab.tsx");
   it("no longer calls confirm()", () => { expect(callsConfirm(SRC)).toBe(false); });
-  it("invalidates settings-branches on success", () => {
-    expect(SRC).toMatch(/invalidateKeys=\{\[\["settings-branches"\]\]\}/);
+  it("mounts the dedicated BranchDeleteDialog (blocker-aware reassignment flow)", () => {
+    expect(SRC).toContain("<BranchDeleteDialog");
+  });
+  it("refetches the branches list + cross-tenant filters after a successful retire", () => {
+    // The old ConfirmDeleteDialog carried invalidateKeys={[["settings-branches"]]};
+    // the dedicated dialog hands that off to the parent's onDeleted, which
+    // refetch()es the settings-branches query and refreshFilters().
+    expect(SRC).toMatch(/onDeleted=\{[\s\S]*?refetch\(\)[\s\S]*?refreshFilters\(\)[\s\S]*?\}/);
   });
   it("calls refreshFilters() in onDeleted (cross-tenant filter pickers depend on it)", () => {
     expect(SRC).toContain("refreshFilters()");
+  });
+  it("handles the server CONFLICT blockers + reassignment path", () => {
+    expect(SRC).toContain("reassignToBranchId");
+    expect(SRC).toContain("canReassign");
   });
 });
 
