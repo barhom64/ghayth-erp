@@ -56,6 +56,7 @@ const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
+const ActivationBoard = lazy(() => import("@/pages/hr/activation-board"));
 // (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
 // (PerformanceAdvanced أُزيل — توزيع التقييمات + أفضل ١٠ صارا تبويب «التحليلات»
 // في /hr/performance، والمسار /hr/performance/advanced يُعاد توجيهه إليها. HR-REV)
@@ -198,6 +199,7 @@ export const hrRoutes = [
   { path: "/hr/shifts/management", component: redirectTo("/hr/shifts"), subKey: "shifts" },
   { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
+  { path: "/hr/activation-board", component: ActivationBoard, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },
   { path: "/hr/evaluation-360/create", component: Evaluation360Create, subKey: "performance" },
   { path: "/hr/evaluation-360/history/:employeeId", component: Evaluation360History, subKey: "performance" },
