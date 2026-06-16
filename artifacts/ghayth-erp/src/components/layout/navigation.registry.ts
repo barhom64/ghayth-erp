@@ -417,7 +417,7 @@ export const allNavSections: NavSection[] = [
         { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
         { label: "المقارنة السنوية (سنة/سنة)", path: "/finance/reports/yoy", icon: BarChart2 },
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
-        { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
+        { label: "مؤشر صحة النظام المالي", path: "/finance/gl-health", icon: ShieldAlert },
         { label: "محفظة ربحية المشاريع", path: "/finance/project-portfolio", icon: BarChart2 },
         { label: "محفظة ربحية العقارات", path: "/finance/property-portfolio", icon: BarChart2 },
         { label: "محفظة ربحية وكلاء العمرة", path: "/finance/umrah-agent-portfolio", icon: BarChart2 },
@@ -439,15 +439,15 @@ export const allNavSections: NavSection[] = [
       // (10) الصناديق والارتباطات — دمج «صناديق الواردات» مع «ارتباطات الموظفين».
       { label: "الصناديق والارتباطات", path: "/finance/intake", icon: Bell, module: "finance", children: [
         { label: "مركز التلقّي المالي", path: "/finance/intake", icon: Truck },
-        { label: "Approvals Inbox", path: "/finance/approvals-inbox", icon: Bell },
+        { label: "صندوق الموافقات الموحّد", path: "/finance/approvals-inbox", icon: Bell },
         { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
         { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
         { label: "الجهات الخاملة", path: "/finance/dormant-entities", icon: Clock },
         { label: "صدق دفتر الأستاذ (قياس)", path: "/finance/reports/ledger-truth", icon: AlertTriangle },
-        { label: "GL Integrity Gaps", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
+        { label: "فجوات سلامة دفتر الأستاذ", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
         { label: "فجوات العمليات المالية", path: "/finance/reports/operation-gaps", icon: AlertTriangle },
-        { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
-        { label: "Posting Activity", path: "/finance/journal/activity", icon: Activity },
+        { label: "البنود غير المُوجَّهة", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
+        { label: "نشاط الترحيل المحاسبي", path: "/finance/journal/activity", icon: Activity },
         { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
         { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
       ]},
@@ -878,7 +878,7 @@ export const allNavSections: NavSection[] = [
         { label: "لوحات BI", path: "/bi/dashboards", icon: LayoutDashboard },
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
-        { label: "منصة AI", path: "/intelligence/ai-workbench", icon: Sparkles },
+        { label: "منصة الذكاء الاصطناعي", path: "/intelligence/ai-workbench", icon: Sparkles },
       ]},
       // 17-item "مدير النظام" was one flat list — broke into 4 themed
       // sub-groups so an admin can find a specific tool without scanning
