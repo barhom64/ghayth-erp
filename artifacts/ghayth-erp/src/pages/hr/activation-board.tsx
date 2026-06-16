@@ -100,7 +100,10 @@ export default function ActivationBoardPage() {
           <Card><CardContent className="p-8 text-center text-muted-foreground">لا يوجد موظفون قيد التفعيل حاليًّا</CardContent></Card>
         )}
         {rows.map(({ e, open, done, total, mandatoryRemaining, overdue, owners, age }) => {
-          const ready = total > 0 && mandatoryRemaining === 0;
+          // Authoritative: the server advances activationStatus to
+          // ready_for_hr_review once all mandatory tasks are done (HR-REV-3 §1);
+          // fall back to the client computation for legacy rows without it.
+          const ready = e.activationStatus === "ready_for_hr_review" || (total > 0 && mandatoryRemaining === 0);
           const pct = total > 0 ? Math.round((done.length / total) * 100) : 0;
           return (
             <Card key={e.id} className="hover:shadow-md transition-shadow">
