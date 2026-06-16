@@ -1652,11 +1652,17 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, status } = req.query as Record<string, string | undefined>;
+    const { employeeId, status, ownerRole, mandatory } = req.query as Record<string, string | undefined>;
     const conditions = [`ot."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
     if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
+    // HR-REV-3 (#2222) — per-owner queue: each owning department (الأسطول/
+    // الوثائق/الرواتب…) can pull just the activation tasks routed to it.
+    if (ownerRole) { params.push(ownerRole); conditions.push(`ot."ownerRole" = $${params.length}`); }
+    // mandatory=true|false narrows to the gating items (or the optional ones).
+    if (mandatory === "true") { conditions.push(`ot.mandatory IS NOT FALSE`); }
+    else if (mandatory === "false") { conditions.push(`ot.mandatory IS FALSE`); }
     interface OnboardingTaskRow extends Record<string, unknown> {
       id: number;
       companyId: number;
@@ -2357,6 +2363,33 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
           field: "departmentId",
           fix: "اختر قسماً موجوداً في الشركة.",
         });
+      }
+    }
+
+    // HR-REV-3 (#2222) — activation ready-gate. Flipping a quick-activated
+    // employee (inactive/pending/onboarding) to active is only allowed once
+    // every MANDATORY onboarding task is completed or skipped — so activation
+    // can't bypass the distributed plan's owning roles. Re-activating a
+    // suspended/terminated employee is exempt (it carries no onboarding plan).
+    const PENDING_ACTIVATION = ["inactive", "pending", "onboarding"];
+    if (status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status)) {
+      const [gate] = await rawQuery<{ remaining: number }>(
+        `SELECT COUNT(*)::int AS remaining FROM onboarding_tasks
+          WHERE "employeeId" = $1 AND "companyId" = $2
+            AND mandatory IS NOT FALSE
+            AND status NOT IN ('completed','skipped')`,
+        [id, scope.companyId]
+      );
+      const remaining = Number(gate?.remaining ?? 0);
+      if (remaining > 0) {
+        throw new ValidationError(
+          `لا يمكن التفعيل: ${remaining} بند إلزامي في خطة التهيئة لم يكتمل بعد`,
+          {
+            field: "status",
+            fix: "أكمل البنود الإلزامية في «لوحة قيد التفعيل» قبل تفعيل الموظف.",
+            meta: { remainingMandatory: remaining },
+          }
+        );
       }
     }
 
