@@ -32,7 +32,7 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -123,9 +123,7 @@ router.post("/refund-requests", authorize({ feature: "umrah", action: "create" }
       ],
     );
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء طلب الاسترداد");
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "umrah_refund_requests", entityId: rows[0].id as number,
+    auditFromRequest(req, "create", "umrah_refund_requests", rows[0].id as number, {
       after: { grossAmount: b.grossAmount, pilgrimId: b.pilgrimId, agentId: b.agentId },
     }).catch((e) => logger.error(e, "umrah-refunds background task failed"));
     emitEvent({
