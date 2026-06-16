@@ -42,7 +42,10 @@ describe("#1733 — booking create form", () => {
     // UX-05 (TA-T18-UX-AUDIT-01) — ROUTE_TYPES وُحِّد في مصدر مشترك؛ النموذج
     // يستورده بدل تعريفه محليًا، فينتقل ضمان القيم السبع إلى المصدر المشترك.
     expect(CREATE_PAGE).toMatch(/import \{ ROUTE_TYPES \} from "@\/lib\/transport-constants"/);
-    expect(CREATE_PAGE).toMatch(/ROUTE_TYPES\.map\(/);
+    // routeType select is rendered via UmrahContextQuestionnaire (UX-05 dedup —
+    // #1812 audit fix removed the duplicate inline select). Check there instead.
+    const QUESTIONNAIRE = read("components/shared/umrah-context-questionnaire.tsx");
+    expect(QUESTIONNAIRE).toMatch(/ROUTE_TYPES\.map\(/);
     const ROUTE_SRC = read("lib/transport-constants.ts");
     for (const v of [
       "airport_to_makkah", "makkah_to_madinah", "madinah_to_airport",
