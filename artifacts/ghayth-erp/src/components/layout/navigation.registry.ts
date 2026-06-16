@@ -85,7 +85,7 @@ export const allNavSections: NavSection[] = [
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
-        { label: "ما ينتظر إجراءاتي", path: "/work-inbox", icon: ListChecks },
+        { label: "صندوق الأعمال", path: "/work-inbox", icon: ListChecks },
         // PR-9 (#2077) — رفيق الميدان. The page itself checks the
         // category-policy eligibility; non-field categories see the
         // «فئتك لا تخضع للتتبع» banner and never get a location prompt.
@@ -119,7 +119,7 @@ export const allNavSections: NavSection[] = [
         // HR-010 / #1799 priority #4 — صفحة كتالوج خدمات HR الموحّدة:
         // بدل أن يبحث الموظف عن كل طلب في صفحة مختلفة، يفتح صفحة
         // واحدة فيها كل ما يمكن طلبه من HR كبطاقات منظّمة بالفئة.
-        { label: "كتالوج خدمات HR", path: "/hr/services", icon: ClipboardCheck },
+        { label: "خدمات الموارد البشرية", path: "/hr/services", icon: ClipboardCheck },
         { label: "طلب إجازة", path: "/hr/leaves/create", icon: Calendar },
       ]},
       { label: "معلوماتي", path: "/my-attendance", icon: User, children: [
@@ -206,7 +206,7 @@ export const allNavSections: NavSection[] = [
       // 4. الطلبات — single inbox for leaves/OT/excuses + the new
       // Services Catalog landing
       { label: "الطلبات", path: "/hr/services", icon: ClipboardCheck, module: "hr", children: [
-        { label: "كتالوج الخدمات", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
+        { label: "خدمات الموارد البشرية", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
         { label: "صندوق الواردات HR", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },

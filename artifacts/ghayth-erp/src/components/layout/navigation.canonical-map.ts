@@ -113,8 +113,7 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
     path: "/work-inbox",
     canonicalLabel: "صندوق الأعمال",
     aliases: ["ما ينتظر إجراءاتي"],
-    ownerDecision: true,
-    note: "INVENTORY §1.أ — two menu entries for one path.",
+    note: "INVENTORY §1.أ — applied slice 9 (owner-decided). Both nav entries now «صندوق الأعمال»; «ما ينتظر إجراءاتي» kept as a search alias.",
   },
   {
     path: "/my-space",
@@ -124,10 +123,9 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   },
   {
     path: "/hr/services",
-    canonicalLabel: "كتالوج خدمات الموارد البشرية",
-    aliases: ["كتالوج خدمات HR", "كتالوج الخدمات", "الطلبات", "خدمات الموارد البشرية"],
-    ownerDecision: true,
-    note: "INVENTORY §1.أ — four names for one path.",
+    canonicalLabel: "خدمات الموارد البشرية",
+    aliases: ["كتالوج خدمات HR", "كتالوج الخدمات", "الطلبات", "كتالوج خدمات الموارد البشرية"],
+    note: "INVENTORY §1.أ — applied slice 9 (owner «خدمات الموارد البشرية»); smoke tests updated. «الطلبات» stays the group/tab name.",
   },
   {
     path: "/admin",

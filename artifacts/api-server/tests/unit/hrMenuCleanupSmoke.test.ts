@@ -102,8 +102,9 @@ describe("Menu cleanup — HR section restructure (HR-011)", () => {
   });
 
   it("HR Services Catalog is the «الطلبات» landing entry", () => {
+    // Unified to «خدمات الموارد البشرية» by the UX Nav Governance wave.
     expect(hrSection).toMatch(
-      /\{\s*label:\s*"كتالوج الخدمات"\s*,\s*path:\s*"\/hr\/services"/,
+      /\{\s*label:\s*"خدمات الموارد البشرية"\s*,\s*path:\s*"\/hr\/services"/,
     );
   });
 });
