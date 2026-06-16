@@ -1946,6 +1946,28 @@ router.patch("/job-titles/:id", authorize({ feature: "hr.employees", action: "up
   } catch (err) { handleRouteError(err, res, "update job_title"); }
 });
 
+router.delete("/job-titles/:id", authorize({ feature: "hr.employees", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Soft delete — mirrors the org.ts catalog pattern (positions/teams/…):
+    // job_titles has an isActive flag and no deletedAt column, and existing
+    // assignments keep their jobTitleId FK, so we deactivate rather than drop.
+    // System titles (companyId IS NULL) are shared and must not be touched.
+    const result = await rawExecute(
+      `UPDATE job_titles SET "isActive" = FALSE, "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("المسمّى الوظيفي غير موجود أو غير قابل للحذف");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "job_titles", entityId: id,
+    }).catch(() => undefined);
+    res.json({ ok: true, isActive: false });
+  } catch (err) { handleRouteError(err, res, "delete job_title"); }
+});
+
 router.get("/documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
