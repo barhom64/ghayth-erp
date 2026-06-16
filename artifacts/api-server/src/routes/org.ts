@@ -189,7 +189,7 @@ const positionSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-router.get("/positions", authorize(ADMIN), async (req, res) => {
+router.get("/positions", authorize(HR_EMPLOYEES_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const includeSystem = req.query.includeSystem !== "false";
@@ -278,7 +278,7 @@ const teamSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-router.get("/teams", authorize(ADMIN), async (req, res) => {
+router.get("/teams", authorize(HR_EMPLOYEES_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const includeInactive = req.query.includeInactive === "true";
@@ -369,7 +369,7 @@ const committeeSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-router.get("/committees", authorize(ADMIN), async (req, res) => {
+router.get("/committees", authorize(HR_EMPLOYEES_READ), async (req, res) => {
   try {
     const { companyId } = requireScope(req);
     const includeInactive = req.query.includeInactive === "true";

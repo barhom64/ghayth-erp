@@ -11260,6 +11260,20 @@ CREATE INDEX idx_password_reset_pending ON public.password_reset_requests USING 
 
 
 --
+-- Name: uq_password_reset_token_hash_live; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_password_reset_token_hash_live ON public.password_reset_requests USING btree ("tokenHash") WHERE (("tokenHash" IS NOT NULL) AND ("usedAt" IS NULL));
+
+
+--
+-- Name: idx_password_reset_user_purpose_live; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_password_reset_user_purpose_live ON public.password_reset_requests USING btree ("userId", purpose) WHERE (("userId" IS NOT NULL) AND ("usedAt" IS NULL));
+
+
+--
 -- Name: idx_payment_run_items_run; Type: INDEX; Schema: public; Owner: -
 --
 
