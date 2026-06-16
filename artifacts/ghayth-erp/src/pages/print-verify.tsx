@@ -199,7 +199,7 @@ export default function PrintVerifyPage() {
             <div>
               <h1 className="text-xl font-bold text-slate-800">
                 {state.loading
-                  ? "جارٍ التحقق..."
+                  ? "جاري التحقق..."
                   : verified
                   ? "وثيقة موثَّقة ✓"
                   : state.data?.error === "NOT_FOUND"

@@ -16,6 +16,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -29,6 +30,7 @@ import { sendMessage } from "../lib/messageSender.js";
 import { issueNumber } from "../lib/numberingService.js";
 import { applyTransition, lifecycleErrorResponse, LifecycleError } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
+import { resolveSettings } from "../lib/settings.js";
 import { encryptField, decryptPilgrimRow, blindIndex, SENSITIVE_PILGRIM_FIELDS, logSensitiveAccess } from "../lib/fieldEncryption.js";
 import {
   confirmMutamersImport,
@@ -130,6 +132,21 @@ const AGENT_INVOICE_TRANSITIONS: Record<string, readonly string[]> = {
 
 const router = Router();
 
+// U-02b M3 of #2080 — gate for the legacy umrah_transport write path.
+// Reads the boolean catalog flag added in M2
+// (umrahSettingsPoliciesCatalog.ts → financial.legacyTransportWritesDisabled).
+// Default value in the catalog is false → unchanged behaviour for every
+// company that hasn't explicitly enabled the gate. When a company flips
+// the flag to true in `settings`, POST /transport and PATCH /transport/:id
+// return 410 + a hint pointing operators at the unified contract endpoint
+// (POST /umrah/groups/:id/transport-requests). Other handlers (GET,
+// DELETE, manifest, check-in, check-in-bulk) stay live so historic rows
+// remain inspectable/closable while the legacy write surface freezes.
+async function isLegacyTransportWritesDisabled(companyId: number): Promise<boolean> {
+  const raw = await resolveSettings("umrah.financial.legacyTransportWritesDisabled", companyId);
+  return raw === true || raw === "true";
+}
+
 const createSeasonSchema = z.object({
   title: z.string().min(1, "اسم الموسم مطلوب"),
   startDate: z.string().min(1, "تاريخ البداية مطلوب"),
@@ -223,6 +240,16 @@ const patchAgentSchema = z.object({
   currency: z.string().optional(),
   status: z.enum(["active", "inactive", "suspended", "blocked"]).optional(),
   notes: z.string().optional(),
+});
+
+// BILL-MAIN P3 (#2080) — explicit-confirmation linker payload for
+// linking a main umrah agent to an EXISTING financial client. No
+// `createNew` branch, no engine activation. Optional free-text
+// `reason` (max 500) is recorded on the audit log + event details
+// for downstream review.
+const linkAgentClientSchema = z.object({
+  clientId: z.coerce.number({ required_error: "معرف العميل مطلوب" }),
+  reason: z.string().max(500).optional(),
 });
 
 const patchPackageSchema = z.object({
@@ -567,6 +594,10 @@ router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الموسم");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
+    // Per-season cost centre — season is a time-bound cost/profit bucket
+    // (costs carry umrahSeasonId on their journal lines); auto-provision it so
+    // per-season P&L drill-down works from day one, like project/agent.
+    createCostCenterForEntity(scope.companyId, "umrah_season", rows[0].id as number, b.title, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah season cost-centre auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
@@ -739,7 +770,11 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.created", entity: "umrah_agents", entityId: rows[0].id, details: JSON.stringify({ name: b.name, country: b.country }) }).catch((e) => logger.error(e, "umrah background task failed"));
     // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
     // this agent route to its own revenue leaf via resolveRevenueAccount.
-    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
+    createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
+    // Per-agent cost centre — backs /reports/profitability/umrah-agent with a real
+    // cost_centers row (the agent already had a subsidiary account + umrahAgentId
+    // dimension, but no auto cost centre — the one asymmetry vs vehicle/property).
+    createCostCenterForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent cost-centre auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
@@ -797,6 +832,98 @@ router.delete("/agents/:id", authorize({ feature: "umrah", action: "delete" }), 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.deleted", entity: "umrah_agents", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete agent error"); }
+});
+
+// BILL-MAIN P3 (#2080) — explicit-confirmation linker that ties a main
+// umrah agent to an EXISTING financial client. Mirrors the safe shape of
+// the sub-agent linker shipped in BILL-LINK Phase 3b: existing-client
+// only (no `createNew` branch), single-target (no bulk path), reads the
+// before-state for proper audit before/after, and records an optional
+// operator-provided `reason`.
+//
+// What this route does NOT do (explicit Permanent Hard Rails carried
+// from #2080 / UMRAH_REMAINING_WORK_ROADMAP.md):
+//   • No client creation.
+//   • No AR opening (no subsidiary or receivable provisioning here —
+//     the existing client's subsidiary chain takes over naturally).
+//   • No engine touch — `generateSalesInvoice` still gates exclusively
+//     on `subAgent.clientId` until BILL-MAIN P4 (hard-pause, separate
+//     authorisation).
+//   • No `main_agent_client` activation; the catalog default stays
+//     `operational_until_linked`.
+//   • No bulk variant. Each call links exactly one agent.
+//   • No edit to issued invoices.
+router.put("/agents/:id/link-client", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { clientId, reason } = zodParse(linkAgentClientSchema.safeParse(req.body));
+
+    // 1. Verify the target client exists under this tenant. We do NOT
+    //    create it — the route is operator-confirmed linkage of an
+    //    EXISTING client.
+    const [existingClient] = await rawQuery<{ id: number }>(
+      `SELECT id FROM clients WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [clientId, scope.companyId]
+    );
+    if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
+
+    // 2. Read the agent's current `clientId` BEFORE the UPDATE so the
+    //    audit log carries a real before/after pair (often null → newId).
+    const [existingAgent] = await rawQuery<{ id: number; clientId: number | null; name: string | null }>(
+      `SELECT id, "clientId", name FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+    if (!existingAgent) throw new NotFoundError("الوكيل غير موجود");
+    const beforeClientId = existingAgent.clientId;
+
+    // 3. The link itself. Just `UPDATE umrah_agents SET "clientId"=...`.
+    //    No subsidiary_accounts row is created here: the linked
+    //    `clients` row already carries its own receivable subsidiary
+    //    (provisioned automatically at client creation time by the
+    //    finance-side helper, outside this file). AR resolution chains
+    //    to that automatically once the engine fallback ships in P4 —
+    //    until then this column is just data, no behaviour change.
+    await rawExecute(
+      `UPDATE umrah_agents SET "clientId"=$1, "updatedAt"=NOW() WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
+      [clientId, id, scope.companyId]
+    );
+
+    // 4. Read the row back so the response shape mirrors PATCH /agents/:id.
+    const [row] = await rawQuery(
+      `SELECT * FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId]
+    );
+
+    // 5. Full audit + event. The `source` flag distinguishes this
+    //    explicit-confirmation linker from any future automated path.
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "umrah_agents",
+      entityId: id,
+      before: { clientId: beforeClientId },
+      after: { clientId },
+      reason,
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "umrah.agent.linked_to_client",
+      entity: "umrah_agents",
+      entityId: id,
+      details: JSON.stringify({
+        clientId,
+        beforeClientId,
+        reason: reason ?? null,
+        source: "operator_confirmed_link_agent_client",
+      }),
+    }).catch((e) => logger.error(e, "umrah background task failed"));
+
+    res.json({ success: true, agentId: id, beforeClientId, ...row });
+  } catch (err) { handleRouteError(err, res, "Link agent to client"); }
 });
 
 router.get("/packages", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
@@ -1102,6 +1229,13 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
       entity: "umrah_pilgrims", ipAddress: req.ip, userAgent: req.headers["user-agent"],
       details: { count: rows.length, filters: { seasonId, status, agentId, groupId, flight, arrivalDate, departureDate, search: search || null } },
     });
+    // GAP_MATRIX P1 — pilgrims CSV export was in audit_logs (via logSensitiveAccess)
+    // but missing from print_jobs. Both lanes required for PDPL compliance.
+    rawExecute(
+      `INSERT INTO print_jobs ("companyId","branchId","userId","entityType","entityId","format","status")
+       VALUES ($1,$2,$3,'report_umrah_pilgrims','0','csv','completed')`,
+      [scope.companyId, scope.branchId ?? null, scope.userId]
+    ).catch(() => {});
 
     // RFC 4180 escape — quote when the cell contains the delimiter,
     // a quote, or any newline; double internal quotes.
@@ -1112,28 +1246,34 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     };
     // Manifest columns operators routinely need. Order matches what
     // MOFA / hotel / bus driver handouts use: identity → trip → flight.
+    //
+    // U-18-P4 — bilingual header policy: Arabic primary with English
+    // in parentheses so partner systems that operate in EN (MOFA
+    // status APIs, MOI border feed) can still parse the column set
+    // without a separate mapping table. Charter §3.2 endorses this
+    // direction.
     const headers = [
-      ["nuskNumber", "رقم نسك"],
-      ["fullName", "الاسم"],
-      ["passportNumber", "رقم الجواز"],
-      ["nationality", "الجنسية"],
-      ["gender", "الجنس"],
-      ["phone", "الهاتف"],
-      ["visaNumber", "رقم التأشيرة"],
-      ["visaExpiry", "صلاحية التأشيرة"],
-      ["mofaNumber", "رقم الموفا"],
-      ["borderNumber", "رقم الحدود"],
-      ["status", "الحالة"],
-      ["arrivalDate", "تاريخ الوصول"],
-      ["departureDate", "تاريخ المغادرة"],
-      ["entryFlight", "رحلة الوصول"],
-      ["exitFlight", "رحلة المغادرة"],
-      ["hotelName", "الفندق"],
-      ["roomNumber", "رقم الغرفة"],
-      ["seasonTitle", "الموسم"],
-      ["groupName", "المجموعة"],
-      ["agentName", "الوكيل الرئيسي"],
-      ["subAgentName", "الوكيل الفرعي"],
+      ["nuskNumber", "رقم نسك (Nusk No.)"],
+      ["fullName", "الاسم (Name)"],
+      ["passportNumber", "رقم الجواز (Passport No.)"],
+      ["nationality", "الجنسية (Nationality)"],
+      ["gender", "الجنس (Gender)"],
+      ["phone", "الهاتف (Phone)"],
+      ["visaNumber", "رقم التأشيرة (Visa No.)"],
+      ["visaExpiry", "صلاحية التأشيرة (Visa Expiry)"],
+      ["mofaNumber", "رقم الموفا (MOFA No.)"],
+      ["borderNumber", "رقم الحدود (Border No.)"],
+      ["status", "الحالة (Status)"],
+      ["arrivalDate", "تاريخ الوصول (Arrival Date)"],
+      ["departureDate", "تاريخ المغادرة (Departure Date)"],
+      ["entryFlight", "رحلة الوصول (Arrival Flight)"],
+      ["exitFlight", "رحلة المغادرة (Departure Flight)"],
+      ["hotelName", "الفندق (Hotel)"],
+      ["roomNumber", "رقم الغرفة (Room No.)"],
+      ["seasonTitle", "الموسم (Season)"],
+      ["groupName", "المجموعة (Group)"],
+      ["agentName", "الوكيل الرئيسي (Main Agent)"],
+      ["subAgentName", "الوكيل الفرعي (Sub-Agent)"],
     ] as const;
     const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
     const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
@@ -2449,6 +2589,13 @@ router.delete("/transport/:id", authorize({ feature: "umrah", action: "delete" }
 router.post("/transport", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    if (await isLegacyTransportWritesDisabled(scope.companyId)) {
+      res.status(410).json({
+        error: "المسار القديم لإنشاء النقل معطّل لهذه الشركة",
+        hint: "استخدم العقد الموحّد: POST /umrah/groups/:id/transport-requests",
+      });
+      return;
+    }
     const b = zodParse(createTransportSchema.safeParse(req.body));
     if (b.seasonId) await requireOpenSeason(Number(b.seasonId), scope.companyId);
     if (b.vehicleId) {
@@ -2544,6 +2691,13 @@ router.post("/transport", authorize({ feature: "umrah", action: "create" }), asy
 router.patch("/transport/:id", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
+    if (await isLegacyTransportWritesDisabled(scope.companyId)) {
+      res.status(410).json({
+        error: "المسار القديم لتعديل النقل معطّل لهذه الشركة",
+        hint: "استخدم العقد الموحّد: POST /umrah/groups/:id/transport-requests",
+      });
+      return;
+    }
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchTransportSchema.safeParse(req.body));
     if (b.vehicleId) {
@@ -3366,6 +3520,24 @@ const umrahSettingsPatchSchema = z.object({
   umrahOverstayDailyPenalty: nullableNumberPreproc,
   umrahOverstayTierDays: nullableNumberPreproc,
   umrahOverstayTierAmount: nullableNumberPreproc,
+  // §8 of #1870 — operator-facing knobs for the §6/§5 finance hygiene
+  // PRs. Stored as system_settings rows keyed per company; null clears
+  // back to the engine's default.
+  //   umrahVatRate    — standard rate the engine multiplies the margin by (0-100).
+  //   umrahVatMode    — 'inclusive' (default, KSA margin scheme extracts the VAT)
+  //                     or 'exclusive' (legacy add-on-top).
+  //   commissionViaHr — 'true' (default) routes commission CR to salary_payable
+  //                     so HR's payroll JE clears one payable; 'false' keeps the
+  //                     legacy commission_payable account.
+  umrahVatRate: nullableNumberPreproc,
+  umrahVatMode: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.enum(["inclusive", "exclusive"]).nullable().optional(),
+  ),
+  commissionViaHr: z.preprocess(
+    (v) => (v === "" ? null : v),
+    z.boolean().nullable().optional(),
+  ),
 });
 
 router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
@@ -3378,7 +3550,7 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT c."nuskSupplierId",
               s.name  AS "nuskSupplierName",
-              s.code  AS "nuskSupplierCode",
+              NULL::text AS "nuskSupplierCode",
               c."umrahVisaProductId",
               pv.name AS "umrahVisaProductName",
               c."umrahServicesProductId",
@@ -3412,7 +3584,10 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
       `SELECT key, value FROM system_settings
         WHERE key IN ('umrah.overstay_daily_penalty',
                       'umrah.overstay_tier_days',
-                      'umrah.overstay_tier_amount')
+                      'umrah.overstay_tier_amount',
+                      'umrah_vat_rate',
+                      'umrah_vat_mode',
+                      'commission_via_hr')
           AND ( ("companyId" IS NULL AND "branchId" IS NULL)
                 OR ("companyId" = $1 AND "branchId" IS NULL) )
         ORDER BY "companyId" NULLS FIRST`,
@@ -3426,7 +3601,26 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
       "umrah.overstay_tier_days": null,
       "umrah.overstay_tier_amount": null,
     };
+    // §8 of #1870 — the 3 finance-hygiene knobs. VAT rate is numeric,
+    // mode is a string enum, commission_via_hr is a boolean string.
+    // The engine defaults stay in effect if the setting is unread.
+    let umrahVatRate: number | null = null;
+    let umrahVatMode: string | null = null;
+    let commissionViaHr: boolean | null = null;
     for (const r of penaltyRows) {
+      if (r.key === "umrah_vat_rate") {
+        const v = Number(r.value);
+        umrahVatRate = Number.isFinite(v) ? v : null;
+        continue;
+      }
+      if (r.key === "umrah_vat_mode") {
+        umrahVatMode = r.value === "exclusive" ? "exclusive" : "inclusive";
+        continue;
+      }
+      if (r.key === "commission_via_hr") {
+        commissionViaHr = r.value !== "false";
+        continue;
+      }
       const v = Number(r.value);
       penaltyByKey[r.key] = Number.isFinite(v) ? v : null;
     }
@@ -3441,6 +3635,9 @@ router.get("/settings", authorize({ feature: "umrah", action: "view" }), async (
       umrahOverstayDailyPenalty: penaltyByKey["umrah.overstay_daily_penalty"],
       umrahOverstayTierDays: penaltyByKey["umrah.overstay_tier_days"],
       umrahOverstayTierAmount: penaltyByKey["umrah.overstay_tier_amount"],
+      umrahVatRate,
+      umrahVatMode,
+      commissionViaHr,
     });
   } catch (err) { handleRouteError(err, res, "Get umrah settings error"); }
 });
@@ -3500,7 +3697,7 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       ["umrahServicesProductId", b.umrahServicesProductId],
       ["umrahTransportProductId", b.umrahTransportProductId],
     ];
-    const auditAfter: Record<string, number | null> = {};
+    const auditAfter: Record<string, number | string | boolean | null> = {};
     for (const [field, value] of fields) {
       if (value === undefined) continue;
       params.push(value);
@@ -3514,22 +3711,31 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       );
     }
 
-    // Overstay-penalty knobs live in system_settings (not companies).
-    // Same omit/null/value semantics as the FK fields above. We UPSERT
-    // when the value is non-null, DELETE the company-scoped row when
-    // the value is explicitly null — clearing reverts to the global
-    // default (key with companyId IS NULL).
-    const penaltyFields: Array<[string, number | null | undefined]> = [
+    // Overstay-penalty knobs + §8 finance-hygiene knobs live in
+    // system_settings (not companies). Same omit/null/value semantics
+    // as the FK fields above. We UPSERT when the value is non-null,
+    // DELETE the company-scoped row when the value is explicitly null
+    // — clearing reverts to the global default (key with
+    // companyId IS NULL).
+    const settingsFields: Array<[string, number | string | boolean | null | undefined]> = [
       ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
-      ["umrah.overstay_tier_days", b.umrahOverstayTierDays],
-      ["umrah.overstay_tier_amount", b.umrahOverstayTierAmount],
+      ["umrah.overstay_tier_days",     b.umrahOverstayTierDays],
+      ["umrah.overstay_tier_amount",   b.umrahOverstayTierAmount],
+      // §8 of #1870 — finance-hygiene knobs operator-configurable from
+      // the same /umrah/settings UI page.
+      ["umrah_vat_rate",   b.umrahVatRate],
+      ["umrah_vat_mode",   b.umrahVatMode],
+      ["commission_via_hr", typeof b.commissionViaHr === "boolean" ? (b.commissionViaHr ? "true" : "false") : b.commissionViaHr],
     ];
     const keyToAuditField: Record<string, string> = {
       "umrah.overstay_daily_penalty": "umrahOverstayDailyPenalty",
-      "umrah.overstay_tier_days": "umrahOverstayTierDays",
-      "umrah.overstay_tier_amount": "umrahOverstayTierAmount",
+      "umrah.overstay_tier_days":     "umrahOverstayTierDays",
+      "umrah.overstay_tier_amount":   "umrahOverstayTierAmount",
+      "umrah_vat_rate":               "umrahVatRate",
+      "umrah_vat_mode":               "umrahVatMode",
+      "commission_via_hr":            "commissionViaHr",
     };
-    for (const [key, value] of penaltyFields) {
+    for (const [key, value] of settingsFields) {
       if (value === undefined) continue;
       if (value === null) {
         await rawExecute(
@@ -3664,7 +3870,8 @@ router.post("/notifications/test", authorize({ feature: "umrah", action: "create
     // silently dropping.
     const [me] = await rawQuery<{ id: number }>(
       `SELECT ea.id FROM employee_assignments ea
-        WHERE ea."userId" = $1 AND ea."companyId" = $2 AND ea.status = 'active'
+        JOIN users u ON u."employeeId" = ea."employeeId"
+        WHERE u.id = $1 AND ea."companyId" = $2 AND ea.status = 'active'
         ORDER BY ea.id DESC LIMIT 1`,
       [scope.userId, scope.companyId],
     );

@@ -1,0 +1,46 @@
+# tx-coverage-allowlist.txt — multi-table writes without a transaction.
+# Baseline of handlers that write 2+ tables outside withTransaction/
+# applyTransition. As each is wrapped, delete its line — the guard fails
+# on any NEW offender. Regenerate: node scripts/src/check-tx-coverage.mjs --write-allowlist
+# Baseline: 41 handler(s).
+routes/accounting-engine.ts:POST /classification-center/posting-failures/:id/classify
+routes/admin-ai-governance.ts:POST /prompts/:id/evaluate
+routes/admin-ai-governance.ts:POST /prompts/:id/reviews
+routes/admin-communication-control.ts:POST /outbound-queue/bulk-retry
+routes/admin.ts:POST /user-roles
+routes/cargo.ts:PATCH /manifests/:id
+routes/communications.ts:POST /click-to-call
+routes/communications.ts:POST /pbx/completed
+routes/communications.ts:POST /whatsapp/webhook
+routes/crm.ts:POST /opportunities
+routes/finance-hardening.ts:POST /bank-guarantees
+routes/finance-hardening.ts:POST /projects
+routes/finance-journal.ts:POST /expenses/:id/request-attachment
+routes/fleet-telematics.ts:POST /telematics/video/session/:id/stop
+routes/fleet.ts:POST /me/trips/:id/complete
+routes/hr-overtime.ts:PATCH /overtime/:id/approve
+routes/hr.ts:PATCH /official-letters/:id/approve
+routes/inbox.ts:POST /calls
+routes/inbox.ts:POST /messages/:id/cancel
+routes/inbox.ts:POST /messages/:id/retry
+routes/inboxConversations.ts:POST /:id/link
+routes/legal.ts:POST /cases
+routes/legal.ts:POST /contracts
+routes/numbering.ts:PATCH /schemes/:id
+routes/operationsCenter.ts:POST /daily-close/execute
+routes/properties.ts:PATCH /maintenance-requests/:id
+routes/properties.ts:POST /maintenance-requests
+routes/rbacV2.ts:DELETE /users/:userId/roles/:roleId
+routes/rbacV2.ts:POST /jit/:id/reject
+routes/tasks.ts:DELETE /:id/assignees/:assignmentId
+routes/tasks.ts:PATCH /:id
+routes/tasks.ts:POST /
+routes/tasks.ts:POST /:id/assignees
+routes/transport-bookings.ts:POST /transport/dispatch-orders
+routes/transport-integration.ts:POST /transport/integration/plan-bookings
+routes/transport-planning.ts:POST /transport/dispatch-orders/:id/navigation/complete
+routes/transport-planning.ts:POST /transport/dispatch-orders/:id/navigation/ping
+routes/umrah-entities.ts:POST /groups
+routes/umrah-entities.ts:PUT /sub-agents/:id/link
+routes/umrah.ts:PATCH /settings
+routes/warehouse-cycle-counts.ts:POST /cycle-counts/:id/record

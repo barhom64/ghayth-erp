@@ -96,7 +96,7 @@ export default function WhtCategoriesPage() {
     },
     {
       key: "nameEn",
-      header: "Name (EN)",
+      header: "الاسم (إنجليزي)",
       render: (c) => <span className="text-muted-foreground text-sm" dir="ltr">{c.nameEn || "—"}</span>,
     },
     {
@@ -150,16 +150,12 @@ export default function WhtCategoriesPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/tax-codes">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/tax-codes">
               <Percent className="h-4 w-4 me-1" />رموز الضريبة
-            </Button>
-          </Link>
-          <Link href="/finance/wht-filing-workbench">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/wht-filing-workbench">
               <FileCheck2 className="h-4 w-4 me-1" />منضدة WHT
-            </Button>
-          </Link>
+            </Link></Button>
           <GuardedButton perm="finance:create" size="sm" asChild>
             <Link href="/finance/wht-categories/create">
               <Plus className="h-4 w-4 me-1" />

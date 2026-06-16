@@ -101,14 +101,17 @@ describe("Phase 3c — group lineItem consumes the resolved services mapping", (
 });
 
 describe("Phase 3c — Phase 3d foundation", () => {
-  it("visa + transport mappings are RESOLVED for Phase 3d's per-NUSK split", () => {
+  it("visa + transport mappings remain RESOLVED (canSplit still gates on transport even after §6 folded transport into ground service)", () => {
     // Phase 3c originally pinned that visa+transport were NOT yet
-    // consumed; Phase 3d (PR #1474) now USES them in the split
-    // branch. Pin only that the resolver still surfaces the
-    // fields — the consumption assertions live in
-    // umrahInvoiceSplitSmoke.
+    // consumed. Phase 3d (PR #1474) introduced a 3-line split using
+    // them. §6 of #1870 then collapsed transport into the "ground
+    // service" line, but the canSplit gate STILL checks transport's
+    // mapping is set — it's the operator's "NUSK supplier fully
+    // wired" signal. Pin that all 3 mappings are still consulted
+    // (consumption assertions for the 2-line shape live in
+    // umrahInvoiceSplitSmoke).
     expect(ENGINE).toMatch(/productMap\?\.servicesProductId/);
     expect(ENGINE).toMatch(/productMap!\.visaProductId/);
-    expect(ENGINE).toMatch(/productMap!\.transportProductId/);
+    expect(ENGINE).toMatch(/productMap\?\.transportProductId/);
   });
 });

@@ -198,7 +198,7 @@ export default function CollectionStagesPage() {
   return (
     <PageShell
       title="مراحل تحصيل الفواتير المتأخرة"
-      subtitle="invoice_collection_stages — 6 مراحل من تذكير لطيف إلى إحالة قانونية، مع توصية تلقائية حسب أيام التأخر"
+      subtitle="6 مراحل تحصيل من تذكير لطيف إلى إحالة قانونية، مع توصية تلقائية حسب أيام التأخر"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/receivables", label: "الذمم" },
@@ -206,11 +206,9 @@ export default function CollectionStagesPage() {
       ]}
       actions={
         <>
-          <Link href="/finance/dunning">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/dunning">
               <Mail className="h-4 w-4 me-1" /> Dunning (إيميلات جماعية)
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_collection_stages"
             entityId="list"

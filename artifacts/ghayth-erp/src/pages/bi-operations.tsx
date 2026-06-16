@@ -20,11 +20,12 @@ import {
 } from "recharts";
 import {
   AlertTriangle, TrendingUp, Users, Clock, CheckCircle2, XCircle,
-  Activity, Timer, Download,
+  Activity, Timer, Download, Printer,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { BiTabsNav } from "@/components/shared/bi-tabs-nav";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { logClientPrint } from "@/lib/print-client";
 
 function useChartExport() {
   const { toast } = useToast();
@@ -492,8 +493,13 @@ export default function BiOperationsPage() {
               <Label>رقم القسم</Label>
               <Input type="number" placeholder="الكل" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} />
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
               <Button variant="ghost" onClick={() => { setFrom(""); setTo(""); setDepartmentId(""); }}>إعادة تعيين</Button>
+              {/* GAP_MATRIX P0 — audit window.print() via logClientPrint */}
+              <Button variant="outline" size="sm" onClick={() => { logClientPrint("report_bi_operations"); window.print(); }}>
+                <Printer className="h-4 w-4 ml-2" />
+                طباعة
+              </Button>
             </div>
           </div>
         </CardContent>

@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type RequestHandler } from "express";
 import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import healthRouter from "./health.js";
@@ -27,6 +27,8 @@ import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
 import warehouseRouter from "./warehouse.js";
+import { warehouseCycleCountsRouter } from "./warehouse-cycle-counts.js";
+import { warehouseAdvancedRouter } from "./warehouse-advanced.js";
 import propertiesRouter from "./properties.js";
 import legalRouter from "./legal.js";
 import projectsRouter from "./projects.js";
@@ -36,6 +38,7 @@ import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
 import inboxRouter from "./inbox.js";
+import inboxConversationsRouter from "./inboxConversations.js";
 import mailboxesRouter from "./mailboxes.js";
 import governanceRouter from "./governance.js";
 import biRouter from "./bi.js";
@@ -68,6 +71,7 @@ import impactPreviewRouter from "./impactPreview.js";
 import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
+import myFieldTrackingRouter from "./myFieldTracking.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
@@ -75,11 +79,17 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { financeMemoryRouter } from "./finance-memory.js";
+import { financeAmortizationRouter } from "./finance-amortization.js";
+import { financeDeferredRevenueRouter } from "./finance-deferred-revenue.js";
+import { financeInsuranceRouter } from "./finance-insurance.js";
 import { transportBillingCandidatesRouter } from "./transport-billing-candidates.js";
 import { transportBookingsRouter } from "./transport-bookings.js";
 import { vehicleProfileRouter } from "./vehicle-profile.js";
 import { transportPricingRouter } from "./transport-pricing.js";
 import { transportPlanningRouter } from "./transport-planning.js";
+import { transportCalendarRouter } from "./transport-calendar.js"; // TR-022
+import { fleetOptimizerRouter } from "./fleet-optimizer.js"; // TA-T18-VRP Phase 2
 import { transportIntegrationRouter } from "./transport-integration.js";
 import { transportRoutePatternsRouter } from "./transport-route-patterns.js";
 import { fleetRulesAdminRouter } from "./fleet-rules-admin.js";
@@ -121,6 +131,7 @@ import { accountsRouter } from "./finance-accounts.js";
 import { vendorsRouter } from "./finance-vendors.js";
 import { vendorContractsRouter } from "./finance-vendor-contracts.js";
 import { costCentersRouter } from "./finance-cost-centers.js";
+import { financeDatafixRouter } from "./finance-datafix.js";
 import disciplineRouter from "./hr-discipline.js";
 import orgRouter from "./org.js";
 import loansRouter from "./hr-loans.js";
@@ -337,7 +348,11 @@ const hrUserLimiter = createPerUserLimiter({
 
 router.use("/dashboard", dashboardRouter);
 router.use("/employees", requireModule("hr"), employeesRouter);
-router.use("/clients", requireModule("crm"), clientsRouter);
+// #2134 — clients are the finance counterparty master data: the invoice and
+// voucher forms (finance module) read this list for their client picker, so a
+// finance-module user must reach it without holding the CRM module. The
+// per-route authorize (crm.clients) still gates every action.
+router.use("/clients", requireModule("crm", "finance"), clientsRouter);
 // Per-user HR limiter mounted once on /hr so it runs exactly once per
 // request, regardless of which sub-router handles it. See umrah notes below.
 router.use("/hr", hrUserLimiter);
@@ -371,7 +386,15 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeInsuranceRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), costCentersRouter);
+// #2090 FIN-DATAFIX — READ-ONLY misparented-subsidiary inventory (report only,
+// no mutation endpoint). Gated at requireMinLevel(70) + finance.accounts view
+// inside the router; mounted here so URLs are /finance/datafix/*.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDatafixRouter);
 // #1733 — Transport-to-finance handoff queue. Lives under /finance because
 // only finance-side roles see it (transport NEVER materialises JEs).
 router.use("/finance", requireModule("finance"), requireGuards("financial"), transportBillingCandidatesRouter);
@@ -390,67 +413,80 @@ router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetTe
 // URLs stay /cargo/* at the top level (not /fleet/cargo/*) because
 // cargo is its own RBAC feature (fleet.cargo) and its own SPA tab.
 router.use("/cargo", requireModule("fleet"), requireGuards("financial"), cargoRouter);
-// #1733 Booking + Dispatch (Issue Comment 9). The routers carry their
-// own full paths (/transport/bookings, /transport/dispatch-orders,
-// /fleet/vehicles/:vehicleId/...) so they mount without a prefix.
-// Same fleet-module + financial guards.
-router.use(requireModule("fleet"), requireGuards("financial"), transportBookingsRouter);
-// #1733 Vehicle profile sub-resources (Issue Comment 7). URLs land at
-// /fleet/vehicles/:vehicleId/{components,driver-assignments,maintenance-schedules}.
-router.use(requireModule("fleet"), requireGuards("financial"), vehicleProfileRouter);
-// #1733 Pricing engine + invoice merging (Issue Comment 3). URLs land at
-// /transport/price-rules, /transport/service-lines, /transport/invoice-batches.
-router.use(requireModule("fleet"), requireGuards("financial"), transportPricingRouter);
-// #1812 Planning engine — assignment-suggestion + maps + ops dashboard +
-// itineraries + in-app driver navigation sessions. URLs land at
-// /transport/planning-settings, /transport/bookings/:id/suggest-assignment,
-// /transport/ops-dashboard, /transport/itineraries, and
-// /transport/dispatch-orders/:id/navigation/*. Fleet-module + financial
-// guards (same as the other transport routers).
-router.use(requireModule("fleet"), requireGuards("financial"), transportPlanningRouter);
-// #1812 integration bridges — pulls bookings FROM umrah groups + lists
-// linked sources that don't yet have transport materialized + iCalendar
-// feed for the central calendar. The user's governing comment: "النقل
-// ليس جزيرة" — this router is the proof.
-router.use(requireModule("fleet"), requireGuards("financial"), transportIntegrationRouter);
-// #1812 Comment 4663005810 — cargo recurring route patterns.
-router.use(requireModule("fleet"), requireGuards("financial"), transportRoutePatternsRouter);
-router.use(requireModule("fleet"), requireGuards("financial"), fleetRulesAdminRouter);
+// #1733/#1812 Booking/Dispatch/VehicleProfile/Pricing/Planning/Integration/
+// RoutePatterns/Rules routers carry their OWN absolute paths (/transport/* and
+// /fleet/*), so they mount WITHOUT a prefix.
+//
+// CRITICAL (#1959): the fleet-module + financial guards must be applied BY PATH,
+// not as a path-less `router.use(requireModule("fleet"), …)`. A path-less
+// requireModule runs for EVERY later request and 403'd every NON-OWNER user out
+// of every module mounted after this point (projects / crm / legal / properties
+// / support / …) — owner short-circuits requireModule, so only non-admins hit
+// it (admin-passes / non-admin-fails). `transportPathGate` is path-CONDITIONAL
+// with NO mount path (so Express never strips the prefix — requireGuards reads
+// the real req.path), and gates ONLY /transport + /fleet; every route in these 7
+// routers lives under those two prefixes (verified: 56 /transport + 14 /fleet,
+// zero others). PR-5a (#2077) hit the SAME bug for HR's صندوق الأعمال
+// and merged into main's #1959 solution.
+const fleetModuleGate = requireModule("fleet");
+const transportFinancialGate = requireGuards("financial");
+const transportPathGate: RequestHandler = (req, res, next) => {
+  if (req.path.startsWith("/transport") || req.path.startsWith("/fleet")) {
+    fleetModuleGate(req, res, (err?: unknown) => (err ? next(err as Error) : transportFinancialGate(req, res, next)));
+    return;
+  }
+  next();
+};
+router.use(transportPathGate);
+router.use(transportBookingsRouter);
+router.use(vehicleProfileRouter);
+router.use(transportPricingRouter);
+router.use(transportPlanningRouter);
+router.use(transportCalendarRouter); // TR-022 unified transport calendar
+router.use(fleetOptimizerRouter);    // TA-T18-VRP Phase 2 batch optimizer
+router.use(transportIntegrationRouter);
+router.use(transportRoutePatternsRouter);
+router.use(fleetRulesAdminRouter);
 router.use("/warehouse", warehouseUserLimiter);
 router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseRouter);
+router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseCycleCountsRouter);
+router.use("/warehouse", requireModule("warehouse"), requireGuards("financial"), warehouseAdvancedRouter);
 router.use("/properties", propertiesUserLimiter);
 router.use("/properties", requireModule("property"), requireGuards("financial"), propertiesRouter);
-// Agent 7 (visibility consistency sweep) — sidebar gates /legal/cases at
-// level 40 but the mount used to be module-only, so a level-10 employee
-// inside a tenant with the legal module could hit /api/legal/* directly.
-// Floor at 40 mirrors the sidebar promise; per-route authorize() still
-// runs inside legalRouter.
-router.use("/legal", requireModule("legal"), requireMinLevel(40), legalRouter);
+// GAP_MATRIX P1 — role ladder: 40 is not a real role level; nearest real
+// level above employee (10) is department_manager (50). Floor raised to 50.
+router.use("/legal", requireModule("legal"), requireMinLevel(50), legalRouter);
 router.use("/projects", requireModule("operations"), projectsRouter);
 router.use("/support", requireModule("support"), supportRouter);
 router.use("/crm", requireModule("crm"), crmRouter);
 router.use("/intelligence", requireModule("bi"), intelligenceRouter);
 // Agent 7 — sidebar shows الأتمتة only at level 60 + admin:update; the
 // mount used to be module-only. Floor at 60 so direct-URL traffic
-// matches what the menu promises (per-route authorize uses admin:list /
-// admin:update on every call).
-router.use("/automation", requireModule("automation"), requireMinLevel(60), automationRouter);
-// Agent 7 — sidebar gates the comms management surface (مراقبة الاتصالات،
-// محرك الإشعارات) at level 40. /inbox + /mailboxes below stay module-only
-// because their endpoints are still expected to work for every
-// comms-enabled employee; only the broad call/message log needs the
-// manager floor.
-router.use("/communications", requireModule("comms"), requireMinLevel(40), communicationsRouter);
+// GAP_MATRIX P1 — "automation" is not in CANONICAL_MODULES so no role gets it
+// by default; frontend nav gates the entry under module="admin". Align the
+// backend mount to module="admin" so admin-granted users can actually reach
+// the API. Per-route authorize() inside automationRouter uses admin:list /
+// admin:update on every call.
+router.use("/automation", requireModule("admin"), requireMinLevel(60), automationRouter);
+// GAP_MATRIX P1 — role ladder: 40 not a real role level; raised to 50
+// (department_manager+). Per-route authorize() still applies inside.
+router.use("/communications", requireModule("comms"), requireMinLevel(50), communicationsRouter);
 // User-facing inbox: compose/send + thread view + call log. Lives next
 // to /communications (read-only logs) so the SPA can navigate between
 // them without crossing module boundaries.
+// /inbox/conversations is the persisted Conversation canon (#2138,
+// migration 335) — mounted before the legacy /inbox router so its
+// paths win; the computed /inbox/threads view keeps serving the
+// current UI until the conversation-first frontend slice lands.
+router.use("/inbox/conversations", requireModule("comms"), inboxConversationsRouter);
 router.use("/inbox", requireModule("comms"), inboxRouter);
 router.use("/mailboxes", requireModule("comms"), mailboxesRouter);
 // Agent 7 — sidebar gates الحوكمة والامتثال at level 60 and ذكاء الأعمال
 // at level 40; mounts used to be module-only. Floor both at the sidebar
 // level so direct-URL access matches what the menu shows.
 router.use("/governance", requireModule("governance"), requireMinLevel(60), governanceRouter);
-router.use("/bi", requireModule("bi"), requireMinLevel(40), biRouter);
+// GAP_MATRIX P1 — role ladder: 40 not a real role level; raised to 50.
+router.use("/bi", requireModule("bi"), requireMinLevel(50), biRouter);
 router.use("/store", requireModule("store"), requireGuards("financial"), storeRouter);
 router.use("/documents", requireModule("documents"), documentsRouter);
 router.use("/requests", requireModule("requests"), requestsRouter);
@@ -465,7 +501,17 @@ router.use("/settings", requireModule("settings"), requireMinLevel(70), settings
 // per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
 router.use("/numbering", requireModule("settings"), requireMinLevel(70), numberingRouter);
 router.use("/rules", requireModule("settings"), requireMinLevel(70), rulesRouter);
-router.use("/module-dashboards", requireModule("bi"), moduleDashboardsRouter);
+// PR-1 / #2163 — decouple /module-dashboards/* from requireModule("bi").
+// Each tab endpoint inside moduleDashboardsRouter (/hr, /finance, /fleet,
+// /crm, /store, /support, /legal, /properties, /projects, /tasks,
+// /warehouse) already carries its own `authorize({ feature: "<module>",
+// action: "list" })` per-route gate. The mount-level requireModule("bi")
+// was an over-reach (FU-2 from #2077, PR-0 §7 of #2163): it blocked
+// every manager that owned their own module but not BI — e.g. مدير HR
+// couldn't open «لوحة الموارد البشرية» despite holding the hr module.
+// The per-route authorize() is the canonical gate; the mount stays
+// auth-only.
+router.use("/module-dashboards", moduleDashboardsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminRouter);
 // Observability operator pane (#1139 §5). Mounted under /admin/observability
 // so the same module + minLevel guards apply; each endpoint inside also
@@ -491,7 +537,18 @@ router.use("/admin/vendor-settings", requireModule("admin"), requireMinLevel(90)
 // authorize()-guarded per route; rbacV2.ts had a few routes without one;
 // gating the mount at level 90 (consistent with /admin) closes the gap
 // and is defence-in-depth against any future unguarded route.
-router.use("/permissions", requireMinLevel(90), permissionsRouter);
+// PR-10 (#2077) — pre-existing FND-004 (#866) over-reach: the guard
+// was added when this router only carried admin endpoints, but the
+// only route here today is /permissions/my, the self-introspection
+// surface that drives sidebar/button gating for EVERY user. The route
+// file's own comment is explicit: «self-introspection endpoint that
+// every authenticated user must be able to call regardless of role».
+// Without dropping this gate, hr_manager / department_manager /
+// payroll_officer would silently lose all perm-gated UI because their
+// /permissions/my call 403s and `apiData.permissions` stays empty —
+// exactly the symptom PR-10's nav gate hit. The route is scoped to
+// the caller (scope.userId/companyId) — no admin surface exposed.
+router.use("/permissions", permissionsRouter);
 router.use("/rbac/v2", requireMinLevel(90), rbacV2Router);
 // GAP_MATRIX item #16 — sidebar advertises this with perm=audit:read but
 // the mount only checked level≥70. Add requirePermission so direct-URL
@@ -507,6 +564,13 @@ router.use("/approval-actions", approvalActionsRouter);
 router.use("/workflows", workflowsRouter);
 router.use("/impact-preview", impactPreviewRouter);
 router.use("/my-space", mySpaceRouter);
+// PR-9 (#2077) — self-service field tracking. Same lane as /my-space:
+// authMiddleware + per-route authorize (hr.attendance.checkin is
+// selfService:true), NO module gate — plain employees (field workers,
+// drivers) don't carry the hr module but must reach their own ping
+// endpoint. The category policy inside fieldTrackingService stays the
+// single authority on WHO is trackable.
+router.use("/my/field", myFieldTrackingRouter);
 // IGOC-006 — /me/proactive-insights aggregates 9 role-adaptive categories
 // (my docs/iqama, my pending requests, team approvals, company iqama/journals/
 // invoices/obligations, critical notifications). Same surface for every role,
@@ -514,10 +578,9 @@ router.use("/my-space", mySpaceRouter);
 // underlying queries are already scope-protected (companyId / assignmentId /
 // employeeId), so no extra requireMinLevel floor is needed.
 router.use("/me", meInsightsRouter);
-// Agent 7 — sidebar gates مراكز التحكم → مركز القرارات (/action-center)
-// at level 20. Floor the mount to match so a level-10 pre-onboarding
-// account can't reach the action queue via direct URL.
-router.use("/action-center", requireMinLevel(20), actionCenterRouter);
+// GAP_MATRIX P1 — role ladder: 20 not a real role level; raised to 50
+// (department_manager+) to block employee-level (10) direct-URL access.
+router.use("/action-center", requireMinLevel(50), actionCenterRouter);
 router.use("/workspace", workspaceRouter);
 router.use("/entity-meta", entityMetaRouter);
 // Mount the umrah limiter once on the /umrah prefix so it runs exactly once per
@@ -525,28 +588,28 @@ router.use("/entity-meta", entityMetaRouter);
 // ultimately handles it. Mounting it on each router would cause double-counting
 // when Express falls through from the first router to the second.
 router.use("/umrah", umrahUserLimiter);
-router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahRouter);
-router.use("/umrah", requireModule("operations"), requireGuards("financial"), umrahEntitiesRouter);
-router.use("/operations-center", requireModule("operations"), requireMinLevel(40), operationsCenterRouter);
+// GAP_MATRIX P1 — frontend checks module="umrah"; backend was "operations" only.
+// Accept either so umrah-granted users (who may not carry operations) can reach the API.
+router.use("/umrah", requireModule("operations", "umrah"), requireGuards("financial"), umrahRouter);
+router.use("/umrah", requireModule("operations", "umrah"), requireGuards("financial"), umrahEntitiesRouter);
+// GAP_MATRIX P1 — role ladder: 40 not a real role level; raised to 50.
+router.use("/operations-center", requireModule("operations"), requireMinLevel(50), operationsCenterRouter);
 // Wiring stubs — fills the 42 frontend↔backend orphans surfaced by
 // scripts/src/check-frontend-backend-wiring.mjs. Mounted at /api root because
 // the routes carry their full domain prefix internally.
 // GAP_MATRIX item #17 — wiring stubs return canned envelopes for routes
 // the frontend is wired to but the backend hasn't fully implemented yet.
-// The stubs router had module gates but no min-level floor, so any
-// authenticated user with the module bit set could enumerate them.
-// Floor at level 20 (employee+) — same as exportRouter, deliberately
-// low because stubs are read-only stand-ins. As each stub is replaced
-// by a real implementation it should pick up the destination route's
-// own gates (authorize/requireMinLevel) and this floor becomes
-// belt-and-braces.
-router.use("/warehouse", requireModule("warehouse"), requireMinLevel(20), warehouseStubsRouter);
-router.use("/documents", requireModule("documents"), requireMinLevel(20), documentsStubsRouter);
-router.use("/hr", requireModule("hr"), requireMinLevel(20), hrStubsRouter);
-router.use("/finance", requireModule("finance"), requireMinLevel(20), financeStubsRouter);
+// Floor at level 10 (any authenticated employee) — stubs are read-only
+// stand-ins; real implementations carry their own authorize/requireMinLevel.
+// GAP_MATRIX P1 — role ladder: 20 not a real role level; corrected to 10.
+router.use("/warehouse", requireModule("warehouse"), requireMinLevel(10), warehouseStubsRouter);
+router.use("/documents", requireModule("documents"), requireMinLevel(10), documentsStubsRouter);
+router.use("/hr", requireModule("hr"), requireMinLevel(10), hrStubsRouter);
+router.use("/finance", requireModule("finance"), requireMinLevel(10), financeStubsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
 router.use(wiringScopeErrorHandler);
-router.use("/export", requireMinLevel(30), exportRouter);
+// GAP_MATRIX P1 — role ladder: 30 not a real role level; raised to 50.
+router.use("/export", requireMinLevel(50), exportRouter);
 router.use("/import", requireMinLevel(50), importRouter);
 router.use("/scheduled-reports", requireMinLevel(50), scheduledReportsRouter);
 router.use("/notification-engine", requireModule("notifications"), notificationEngineRouter);
@@ -566,12 +629,12 @@ router.use("/exec-dashboard", requireMinLevel(70), execDashboardRouter);
 // Smart assistant — curated Arabic owner questions → vetted parameterized
 // queries (no NL→SQL). Exec-only (cross-domain data). See routes/assistant.ts.
 router.use("/assistant", requireMinLevel(70), assistantRouter);
-// Agent 7 — sidebar gates مركز الالتزامات (/obligations) at level 30
-// and التقويم الموحد (/calendar) at level 20. Mounts used to have no
-// floor; align them with the sidebar so direct-URL access matches the
-// menu (per-route authorize() inside each router still applies).
-router.use("/obligations", requireMinLevel(30), obligationsRouter);
-router.use("/calendar", requireMinLevel(20), calendarRouter);
+// GAP_MATRIX P1 — role ladder: 30 and 20 are not real role levels.
+// Obligations and calendar are employee-accessible pages; floor at 10
+// (any authenticated user). The module-gated sidebar already filters by
+// permissions; the API relies on per-route authorize() inside each router.
+router.use("/obligations", requireMinLevel(10), obligationsRouter);
+router.use("/calendar", requireMinLevel(10), calendarRouter);
 router.use("/hr/contracts", requireModule("hr"), contractsRouter);
 router.use("/correspondence", requireModule("comms"), correspondenceRouter);
 router.use("/print", printRouter);

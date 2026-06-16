@@ -6,7 +6,13 @@ const Drivers = lazy(() => import("@/pages/fleet/drivers"));
 const DriversCreate = lazy(() => import("@/pages/create/fleet/drivers-create"));
 const DriverDetail = lazy(() => import("@/pages/details/driver-detail"));
 const Trips = lazy(() => import("@/pages/fleet/trips"));
-const TripsCreate = lazy(() => import("@/pages/create/fleet/trips-create"));
+// #2079 TA-T18-13 (FIX-10) — the /fleet/trips/create deprecation
+// page (5-sec redirect to /fleet/transport/bookings/create) is
+// removed entirely. After TA-T18-14 (#2285) tightened POST
+// /fleet/trips to require a parent dispatch order, no live SPA
+// path linked to it. The route entry, the lazy import, and the
+// page file itself are all gone — manual trip creation now flows
+// exclusively through booking → dispatch.
 const TripDetail = lazy(() => import("@/pages/fleet/trip-detail"));
 const FleetMaintenance = lazy(() => import("@/pages/fleet/maintenance"));
 const MaintenanceTicketImpact = lazy(() => import("@/pages/fleet/maintenance-ticket-impact"));
@@ -34,6 +40,11 @@ const TelematicsDevices = lazy(() => import("@/pages/fleet/telematics/devices"))
 const TelematicsVideoEvidence = lazy(() => import("@/pages/fleet/telematics/video-evidence"));
 const TelematicsSettings = lazy(() => import("@/pages/fleet/telematics/settings"));
 const TelematicsOperations = lazy(() => import("@/pages/fleet/telematics/operations"));
+// TA-GAP-09 Phase 2 — Maps quota usage dashboard.
+const MapsUsage = lazy(() => import("@/pages/fleet/maps-usage"));
+// TA-T18-VRP Phase 2 — Fleet Optimizer batch-mode (runs list + detail).
+const OptimizerRuns = lazy(() => import("@/pages/fleet/optimizer-runs"));
+const OptimizerRunDetail = lazy(() => import("@/pages/fleet/optimizer-run-detail"));
 const TelematicsEvidence = lazy(() => import("@/pages/fleet/telematics/evidence"));
 const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecard"));
 const CargoList = lazy(() => import("@/pages/fleet/cargo"));
@@ -46,6 +57,7 @@ const TransportBookingDetail = lazy(() => import("@/pages/fleet/transport-bookin
 const TransportBookingConfirmation = lazy(() => import("@/pages/fleet/transport-booking-confirmation"));
 const TransportDispatch = lazy(() => import("@/pages/fleet/transport-dispatch"));
 const TransportPriceRules = lazy(() => import("@/pages/fleet/transport-price-rules"));
+const TransportServiceLines = lazy(() => import("@/pages/fleet/transport-service-lines"));
 const TransportRulesAdmin = lazy(() => import("@/pages/fleet/transport-rules-admin"));
 // #1812 Wave 1 Step C — equipment rental (the third leg).
 const RentalContractsList = lazy(() => import("@/pages/fleet/rental-contracts"));
@@ -53,12 +65,17 @@ const RentalCreate = lazy(() => import("@/pages/fleet/rental-create"));
 const RentalDetail = lazy(() => import("@/pages/fleet/rental-detail"));
 // #1812 Planning engine — ops dashboard + driver in-app navigation.
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
+// TR-022 — unified transport calendar.
+const TransportCalendar = lazy(() => import("@/pages/fleet/transport-calendar"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
 // #1812 integration bridges — linked sources view.
 const TransportIntegration = lazy(() => import("@/pages/fleet/transport-integration"));
 // #1812 itineraries — chained-trip programs.
 const TransportItineraries = lazy(() => import("@/pages/fleet/transport-itineraries"));
 const TransportItineraryDetail = lazy(() => import("@/pages/fleet/transport-itinerary-detail"));
+// #2079 TA-T18-04 — Route patterns SPA (cargo recurring schedules).
+// Pure UI over existing /transport/route-patterns* endpoints.
+const TransportRoutePatterns = lazy(() => import("@/pages/fleet/transport-route-patterns"));
 // Unified driver self-service surface (#1354). Replaces /driver-portal/*
 // — drivers log in to the regular ERP, get the `driver` role, and land
 // here as their dashboard (see dashboard.tsx role-based redirect).
@@ -71,7 +88,7 @@ export const fleetRoutes = [
   { path: "/fleet/drivers/create", component: DriversCreate },
   { path: "/fleet/drivers/:id", component: DriverDetail },
   { path: "/fleet/trips", component: Trips },
-  { path: "/fleet/trips/create", component: TripsCreate },
+  // /fleet/trips/create route removed (see TA-T18-13 FIX-10 above).
   { path: "/fleet/trips/:id", component: TripDetail },
   { path: "/fleet/maintenance", component: FleetMaintenance },
   { path: "/fleet/maintenance-impact", component: MaintenanceTicketImpact },
@@ -101,6 +118,11 @@ export const fleetRoutes = [
   { path: "/fleet/telematics/video-evidence", component: TelematicsVideoEvidence },
   { path: "/fleet/telematics/settings", component: TelematicsSettings },
   { path: "/fleet/telematics/operations", component: TelematicsOperations },
+  // TA-GAP-09 Phase 2 — Maps quota usage dashboard.
+  { path: "/fleet/maps/usage", component: MapsUsage },
+  // TA-T18-VRP Phase 2 — Fleet Optimizer (detail BEFORE list since wouter is order-sensitive).
+  { path: "/fleet/optimizer/runs/:id", component: OptimizerRunDetail },
+  { path: "/fleet/optimizer/runs", component: OptimizerRuns },
   { path: "/fleet/telematics/evidence", component: TelematicsEvidence },
   { path: "/fleet/telematics/scorecard", component: TelematicsScorecard },
   // Driver self-service dashboard — appears at /me/driver. Role gate
@@ -121,6 +143,7 @@ export const fleetRoutes = [
   { path: "/fleet/transport/bookings/:id", component: TransportBookingDetail },
   { path: "/fleet/transport/dispatch", component: TransportDispatch },
   { path: "/fleet/transport/price-rules", component: TransportPriceRules },
+  { path: "/fleet/transport/service-lines", component: TransportServiceLines },
   { path: "/fleet/transport/rules", component: TransportRulesAdmin },
   // #1812 Wave 1 Step C — equipment rental (3rd transport leg).
   // /create + /:id come after the parent list path; /:id is a numeric
@@ -130,9 +153,11 @@ export const fleetRoutes = [
   { path: "/fleet/rental-contracts/:id", component: RentalDetail },
   // #1812 ops dashboard + driver navigation surfaces.
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
+  { path: "/fleet/transport/calendar", component: TransportCalendar }, // TR-022
   { path: "/fleet/transport/integration", component: TransportIntegration },
   { path: "/fleet/transport/itineraries", component: TransportItineraries },
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },
+  { path: "/fleet/transport/route-patterns", component: TransportRoutePatterns },
   { path: "/me/driver/navigation", component: MeDriverNavigation },
   { path: "/fleet/:id/status", component: VehicleStatusChange },
   { path: "/fleet/:id", component: VehicleDetail },

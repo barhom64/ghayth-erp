@@ -171,11 +171,9 @@ export default function RentalCreate() {
         { label: "عقد جديد" },
       ]}
       actions={
-        <Link href="/fleet/rental-contracts">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm"><Link href="/fleet/rental-contracts">
             <ArrowLeft className="h-4 w-4 me-1" />إلغاء
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <FleetTabsNav />
@@ -374,16 +372,14 @@ export default function RentalCreate() {
       </div>
 
       <div className="mt-4 flex justify-end gap-2 max-w-5xl">
-        <Link href="/fleet/rental-contracts">
-          <Button variant="outline">إلغاء</Button>
-        </Link>
+        <Button asChild variant="outline"><Link href="/fleet/rental-contracts">إلغاء</Link></Button>
         <Button
           rateLimitAware
           onClick={submit}
           disabled={submitting || !hasMinimum || (withDriver && !driverId)}
         >
           <Save className="h-4 w-4 me-1" />
-          {submitting ? "جارٍ الحفظ…" : "حفظ كمسودّة"}
+          {submitting ? "جاري الحفظ…" : "حفظ كمسودّة"}
         </Button>
       </div>
     </PageShell>

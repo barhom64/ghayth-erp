@@ -100,6 +100,11 @@ else
 fi
 run_step "audit:boundaries"   node scripts/src/audit-domain-boundaries.mjs
 run_step "audit:domain-routes" node scripts/src/audit-domain-routes.mjs
+# Multi-table writes without a transaction — a failure on the second+ write
+# leaves the first committed (silent partial/corrupt data). OFFLINE, schema-
+# validated scan; baseline in scripts/tx-coverage-allowlist.txt, fails only on
+# a NEW offender so the debt shrinks but never regrows.
+run_step "check:tx-coverage"  node scripts/src/check-tx-coverage.mjs
 # Event-bus reconciliation — fails if any eventBus.on() handler can never fire
 # because its event is emitted nowhere (dynamic-dispatch aware). See
 # scripts/src/audit-event-bus.mjs.
@@ -124,6 +129,30 @@ run_step "audit:numbering-bypass"      node scripts/src/audit-numbering-service-
 run_step "audit:numbering-schemes-vs-callers" node scripts/src/audit-numbering-schemes-vs-callers.mjs
 
 run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migrations.mjs
+# Dump staleness — every table a pre-cutoff migration creates must exist in
+# db/schema_pre.sql (fresh installs never re-run pre-cutoff migrations, so a
+# stale dump silently 500s clean environments — the 2026-06 inbox incident).
+run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
+# Invalid interactive-element nesting: <Link><Button> renders <a><button>,
+# which is invalid HTML and breaks keyboard / screen-reader semantics.
+# OFFLINE source scan; baseline in scripts/button-nesting-allowlist.txt,
+# fails only on a NEW offender. Pure-logic fixtures guard the detector.
+run_step "check:button-nesting:tests" node scripts/src/check-button-nesting.test.mjs
+run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
+# Duplicate basenames within a single frontend artifact's src/ (e.g. two
+# policies-tab.tsx) — copy-paste components that drift apart and resolve
+# imports to the wrong copy. OFFLINE filename scan; baseline in
+# scripts/dup-filename-allowlist.txt, fails only on a NEW collision.
+# Pure-logic fixtures guard the detector.
+run_step "check:dup-filenames:tests" node scripts/src/check-dup-filenames.test.mjs
+run_step "check:dup-filenames" node scripts/src/check-dup-filenames.mjs
+# WRITE endpoints (POST/PUT/PATCH/DELETE) with no detectable audit trail —
+# threat-model Repudiation requires every sensitive mutation to log who/what/
+# when. OFFLINE source scan (mirrors api-to-audit-map detection); baseline in
+# scripts/audit-coverage-allowlist.txt, fails only on a NEW unaudited write.
+# Pure-logic fixtures guard the detector.
+run_step "check:audit-coverage:tests" node scripts/src/check-audit-coverage.test.mjs
+run_step "check:audit-coverage" node scripts/src/check-audit-coverage.mjs
 # Pure-logic fixtures for the breaking-change detection — no DB needed,
 # guards the guard itself (same pattern as check:ghost-rows:tests above).
 run_step "check:migration-policy:tests" node scripts/src/check-migration-policy.test.mjs
@@ -142,6 +171,25 @@ run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent
 # PRs #1019 (frontend batch 1), #1026 (frontend batch 2), and #1028
 # (bi.ts + finance-budget.ts route files).
 run_step "check:finance-period-drift" node scripts/src/check-finance-period-drift.mjs
+# FIN-NONPOSTABLE-FALLBACK (#2325): every resolveAccountCode 4th-arg fallback
+# must be a postable leaf, never a non-postable parent (a parent fallback hard-
+# fails posting once account_mappings is empty). Baseline in the script's
+# ALLOWLIST (offenders in other in-flight tracks); fails only on a NEW offender,
+# which is exactly how #2044 silently re-introduced vat_output→2200 after #2181.
+run_step "check:postable-fallbacks" node scripts/src/check-postable-fallbacks.mjs
+# Tenant-isolation (FND-013): a static read/write of a tenant-scoped table
+# (has a "companyId" column) MUST carry a "companyId" predicate, else one
+# tenant's rows leak into another's session. Baseline in
+# scripts/tenant-isolation-allowlist.txt (the existing surface, to be triaged
+# and fixed in owning tracks); fails only on a NEW unscoped statement, freezing
+# the leak surface from growing while buildScopedWhere adoption catches up.
+run_step "check:tenant-isolation" node scripts/src/check-tenant-isolation.mjs
+# GL-failure handling (#2301): a catch around a GL posting must rethrow, else the
+# request 200s while the journal silently never posts (non-atomic; recoverable
+# only via the financial_posting_failures retry queue). Whole-file baseline in
+# scripts/gl-swallow-allowlist.txt (existing surface, triaged per #2301); fails
+# on a NEW file that swallows a GL error without rethrowing.
+run_step "check:gl-swallow" node scripts/src/check-gl-swallow.mjs
 # Stop-Ship compliance scan (#1139 §8): every write endpoint must have an
 # RBAC guard. File-level audit/event gaps are reported as warnings (the
 # global auditMiddleware provides baseline coverage) and don't fail the

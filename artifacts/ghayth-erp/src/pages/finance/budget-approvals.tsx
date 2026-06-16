@@ -13,11 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { formatCurrency, formatDateAr, formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { ShieldCheck, AlertTriangle, CheckCircle2, XCircle, Clock, Target, Grid3x3, TrendingUp } from "lucide-react";
@@ -181,64 +177,16 @@ export default function BudgetApprovalsPage() {
         }
         return (
           <div className="flex items-center gap-1">
-            <AlertDialog open={decideId === r.id && decisionType === "approve"}
-              onOpenChange={(open) => { if (!open) { setDecideId(null); setDecisionType(null); } }}>
-              <AlertDialogTrigger asChild>
-                <GuardedButton perm="finance:approve" variant="ghost" size="sm"
-                  className="h-7 text-xs text-emerald-700"
-                  onClick={() => { setDecideId(r.id); setDecisionType("approve"); }}>
-                  <CheckCircle2 className="h-3 w-3 me-1" /> اعتماد
-                </GuardedButton>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>اعتماد طلب تجاوز الميزانية</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    حساب {r.accountCode} — مبلغ {formatCurrency(Number(r.requestedAmount))} —
-                    سيرفع الاستخدام إلى {Number(r.utilizationAfter ?? 0).toFixed(0)}%
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div className="my-3">
-                  <Label className="text-xs">ملاحظات (اختياري)</Label>
-                  <Textarea value={decisionNotes} onChange={(e) => setDecisionNotes(e.target.value)} rows={2} />
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDecide} disabled={decideMut.isPending}>
-                    اعتماد
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <AlertDialog open={decideId === r.id && decisionType === "reject"}
-              onOpenChange={(open) => { if (!open) { setDecideId(null); setDecisionType(null); } }}>
-              <AlertDialogTrigger asChild>
-                <GuardedButton perm="finance:approve" variant="ghost" size="sm"
-                  className="h-7 text-xs text-status-error-foreground"
-                  onClick={() => { setDecideId(r.id); setDecisionType("reject"); }}>
-                  <XCircle className="h-3 w-3 me-1" /> رفض
-                </GuardedButton>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>رفض طلب تجاوز الميزانية</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    حساب {r.accountCode} — مبلغ {formatCurrency(Number(r.requestedAmount))}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div className="my-3">
-                  <Label className="text-xs">سبب الرفض</Label>
-                  <Textarea value={decisionNotes} onChange={(e) => setDecisionNotes(e.target.value)} rows={2} placeholder="مثال: تجاوز السقف العام للإدارة" />
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDecide} disabled={decideMut.isPending}
-                    className="bg-red-600 hover:bg-red-700">
-                    رفض
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <GuardedButton perm="finance:approve" variant="ghost" size="sm"
+              className="h-7 text-xs text-emerald-700"
+              onClick={() => { setDecideId(r.id); setDecisionType("approve"); }}>
+              <CheckCircle2 className="h-3 w-3 me-1" /> اعتماد
+            </GuardedButton>
+            <GuardedButton perm="finance:approve" variant="ghost" size="sm"
+              className="h-7 text-xs text-status-error-foreground"
+              onClick={() => { setDecideId(r.id); setDecisionType("reject"); }}>
+              <XCircle className="h-3 w-3 me-1" /> رفض
+            </GuardedButton>
           </div>
         );
       },
@@ -248,7 +196,7 @@ export default function BudgetApprovalsPage() {
   return (
     <PageShell
       title="اعتمادات تجاوز الميزانية"
-      subtitle="budget_approval_requests — طلبات التجاوز اللي تحتاج CFO (80%-99%) أو GM (99%-110%). فوق 110% مرفوض تلقائياً."
+      subtitle="طلبات تجاوز الموازنة — تحتاج اعتماد المدير المالي (80%-99%) أو المدير العام (99%-110%)، وفوق 110% تُرفض تلقائياً"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/budget", label: "الميزانية" },
@@ -256,24 +204,18 @@ export default function BudgetApprovalsPage() {
       ]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/budget-variance">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/budget-variance">
               <Target className="h-3.5 w-3.5 ml-1" />
               انحرافات الميزانية
-            </Button>
-          </Link>
-          <Link href="/finance/budget-heatmap">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/budget-heatmap">
               <Grid3x3 className="h-3.5 w-3.5 ml-1" />
               خريطة الميزانية
-            </Button>
-          </Link>
-          <Link href="/finance/reports/is-vs-budget">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/is-vs-budget">
               <TrendingUp className="h-3.5 w-3.5 ml-1" />
               P&L vs Budget
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_budget_approvals"
             entityId="list"
@@ -374,6 +316,48 @@ export default function BudgetApprovalsPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Approve dialog */}
+      {(() => {
+        const r = rows.find((row) => row.id === decideId);
+        return (
+          <>
+            <ConfirmActionDialog
+              open={decideId !== null && decisionType === "approve"}
+              onOpenChange={(o) => { if (!o) { setDecideId(null); setDecisionType(null); } }}
+              variant="confirm"
+              title="اعتماد طلب تجاوز الميزانية"
+              description={r ? `حساب ${r.accountCode} — مبلغ ${formatCurrency(Number(r.requestedAmount))} — سيرفع الاستخدام إلى ${Number(r.utilizationAfter ?? 0).toFixed(0)}%` : ""}
+              confirmLabel={decideMut.isPending ? "جاري الاعتماد…" : "اعتماد"}
+              pending={decideMut.isPending}
+              onConfirm={handleDecide}
+              confirmPerm="finance:approve"
+            >
+              <div className="my-2">
+                <Label className="text-xs">ملاحظات (اختياري)</Label>
+                <Textarea value={decisionNotes} onChange={(e) => setDecisionNotes(e.target.value)} rows={2} />
+              </div>
+            </ConfirmActionDialog>
+
+            <ConfirmActionDialog
+              open={decideId !== null && decisionType === "reject"}
+              onOpenChange={(o) => { if (!o) { setDecideId(null); setDecisionType(null); } }}
+              variant="destructive"
+              title="رفض طلب تجاوز الميزانية"
+              description={r ? `حساب ${r.accountCode} — مبلغ ${formatCurrency(Number(r.requestedAmount))}` : ""}
+              confirmLabel={decideMut.isPending ? "جاري الرفض…" : "رفض"}
+              pending={decideMut.isPending}
+              onConfirm={handleDecide}
+              confirmPerm="finance:approve"
+            >
+              <div className="my-2">
+                <Label className="text-xs">سبب الرفض</Label>
+                <Textarea value={decisionNotes} onChange={(e) => setDecisionNotes(e.target.value)} rows={2} placeholder="مثال: تجاوز السقف العام للإدارة" />
+              </div>
+            </ConfirmActionDialog>
+          </>
+        );
+      })()}
     </PageShell>
   );
 }

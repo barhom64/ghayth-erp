@@ -144,7 +144,7 @@ export default function DsoTrendPage() {
   return (
     <PageShell
       title="مؤشر أيام التحصيل (DSO Trend)"
-      subtitle="Days Sales Outstanding — كم يوم نحتاج لتحويل المبيعات إلى نقد؟ المؤشر الأهم للسيولة"
+      subtitle="متوسط فترة التحصيل (DSO) — كم يوماً نحتاج لتحويل المبيعات إلى نقد؟ المؤشر الأهم للسيولة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/reports", label: "التقارير" },

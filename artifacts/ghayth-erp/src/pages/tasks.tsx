@@ -245,11 +245,9 @@ export default function Tasks() {
             <PlayCircle className="h-4 w-4" />
           </Button>
         )}
-        <Link href={`/tasks/create?copyFrom=${r.id}&title=${encodeURIComponent(r.title)}&type=${r.type}&priority=${r.priority}`}>
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" title="نسخ">
+        <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground hover:text-foreground" title="نسخ"><Link href={`/tasks/create?copyFrom=${r.id}&title=${encodeURIComponent(r.title)}&type=${r.type}&priority=${r.priority}`}>
             <Copy className="h-4 w-4" />
-          </Button>
-        </Link>
+          </Link></Button>
         <Button
           variant="ghost"
           size="sm"

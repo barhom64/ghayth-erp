@@ -10,11 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
@@ -109,7 +105,7 @@ const CHECK_DEFS: CheckDef[] = [
   {
     key: "openCustomerAdvances",
     label: "دفعات مقدمة مفتوحة",
-    description: "Customer advances غير مطبقة — يفضّل تطبيقها على فواتير",
+    description: "دفعات مقدمة من العملاء غير مطبقة — يفضّل تطبيقها على فواتير",
     severity: "info",
     fixHref: "/finance/customer-advances",
     fixLabel: "تطبيق الدفعات",
@@ -159,6 +155,7 @@ function countOf(d: ListResp | undefined): number {
 export default function PeriodClosePreflightPage() {
   const { toast } = useToast();
   const [reason, setReason] = useState<string>("");
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
 
   const { data: periods, isLoading: periodsLoading, isError: periodsError } =
     useApiQuery<{ data: FiscalPeriod[] }>(["fiscal-periods-v2"], `/finance/fiscal-periods-v2`);
@@ -327,7 +324,7 @@ export default function PeriodClosePreflightPage() {
   return (
     <PageShell
       title="الفحص ما قبل إقفال الفترة"
-      subtitle="Period-end pre-flight — 10 فحوصات على الفترة المختارة قبل الإقفال. مع زر إقفال آمن مفعّل فقط لو كل الـ blockers خضراء."
+      subtitle="10 فحوصات على الفترة المختارة قبل الإقفال — زر الإقفال الآمن لا يتفعّل إلا بعد اجتياز كل الفحوصات الحاجبة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/fiscal-periods-v2", label: "الفترات المالية" },
@@ -364,7 +361,7 @@ export default function PeriodClosePreflightPage() {
                 "الفحص": c.def.label,
                 "الشدة": c.def.severity,
                 "العدد": c.count,
-                "الحالة": c.status === "pass" ? "ناجح" : c.status === "fail" ? "فاشل" : "جارٍ التحميل",
+                "الحالة": c.status === "pass" ? "ناجح" : c.status === "fail" ? "فاشل" : "جاري التحميل",
               })),
             }}
           />
@@ -381,11 +378,9 @@ export default function PeriodClosePreflightPage() {
             <p className="text-xs text-muted-foreground mb-4">
               لإقفال فترة جديدة لازم تكون مفتوحة. افتح صفحة الفترات وأنشئ/افتح فترة.
             </p>
-            <Link href="/finance/fiscal-periods-v2">
-              <Button variant="outline" size="sm">
+            <Button asChild variant="outline" size="sm"><Link href="/finance/fiscal-periods-v2">
                 <Calendar className="h-4 w-4 me-1" /> فتح صفحة الفترات
-              </Button>
-            </Link>
+              </Link></Button>
           </CardContent>
         </Card>
       ) : !period ? null : (
@@ -471,12 +466,10 @@ export default function PeriodClosePreflightPage() {
                       </div>
                       <p className="text-[11px] text-muted-foreground mt-0.5">{def.description}</p>
                     </div>
-                    <Link href={def.fixHref}>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs">
+                    <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href={def.fixHref}>
                         {def.fixLabel}
                         <ChevronRight className="h-3 w-3 ms-1" />
-                      </Button>
-                    </Link>
+                      </Link></Button>
                   </div>
                 );
               })}
@@ -509,31 +502,22 @@ export default function PeriodClosePreflightPage() {
                   <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2}
                     placeholder="مثال: إقفال شهر أبريل بعد تطابق VAT وقفل الرواتب" />
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <GuardedButton perm="finance:approve" disabled={!canClose}
-                      className={canClose ? "bg-emerald-600 hover:bg-emerald-700" : ""}>
-                      <Lock className="h-4 w-4 me-1" /> إقفال الفترة
-                    </GuardedButton>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>تأكيد إقفال "{period.name}"؟</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        بعد الإقفال لن يُسمح بالترحيل على هذه الفترة. الإعادة تتطلب
-                        صلاحية CFO + سبب موثّق. تأكد من تطابق VAT والبنك قبل
-                        المتابعة.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleClose}
-                        className="bg-emerald-600 hover:bg-emerald-700">
-                        نعم، أقفل
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <GuardedButton perm="finance:approve" disabled={!canClose}
+                  className={canClose ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+                  onClick={() => setConfirmCloseOpen(true)}>
+                  <Lock className="h-4 w-4 me-1" /> إقفال الفترة
+                </GuardedButton>
+                <ConfirmActionDialog
+                  open={confirmCloseOpen}
+                  onOpenChange={setConfirmCloseOpen}
+                  variant="destructive"
+                  title={`تأكيد إقفال "${period.name}"؟`}
+                  description="بعد الإقفال لن يُسمح بالترحيل على هذه الفترة. الإعادة تتطلب صلاحية CFO + سبب موثّق. تأكد من تطابق VAT والبنك قبل المتابعة."
+                  confirmLabel={closeMut?.isPending ? "جاري الإقفال…" : "نعم، أقفل"}
+                  pending={closeMut?.isPending}
+                  onConfirm={() => { setConfirmCloseOpen(false); handleClose(); }}
+                  confirmPerm="finance:approve"
+                />
               </div>
             </CardContent>
           </Card>

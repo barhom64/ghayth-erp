@@ -1,0 +1,100 @@
+# PR-5 (#2163): 8 false-positives removed (have FE consumers):
+#   /hr,GET /api/hr/attendance/field-track  → field-tracking.tsx:152
+#   /inbox,DELETE /api/inbox/threads/:channel/:address/snooze → inbox.tsx:996
+#   /org,GET /api/org/legal-entities → admin/org-model.tsx:82
+#   /org,GET /api/org/positions → shared/entity-selects.tsx:599
+#   /org,GET /api/org/supervision-lines → admin/org-model.tsx:418
+#   /org,GET /api/org/approval-authorities → admin/org-model.tsx:511
+#   /settings,GET /api/settings/administrations → hr/org-tree.tsx:78
+#   /fleet,GET /api/fleet/rental-contracts → fleet/rental-contracts.tsx:121
+# Note: /inbox/messages/:id/read is DIFFERENT from /inbox/threads/.../read (FE uses the latter)
+# Remaining: 88 genuine unused endpoints
+module,endpoint
+/activity-log,GET /api/activity-log/feed
+/admin,GET /api/admin/communication-control/outbound-queue
+/admin,POST /api/admin/communication-control/outbound-queue/bulk-retry
+/admin,GET /api/admin/communication-control/validation
+/admin,GET /api/admin/predefined-roles
+/admin,GET /api/admin/subscription
+/admin,POST /api/admin/subscription/activate
+/admin,POST /api/admin/subscription/extend-trial
+/auth,POST /api/auth/mobile/login
+/auth,POST /api/auth/mobile/refresh
+/cargo,PATCH /api/cargo/items/:id
+/clients,GET /api/clients/:id/contact-summary
+/communications,GET /api/communications/log/:id/referral-chain
+/documents,GET /api/documents/:id/access-log
+/documents,POST /api/documents/retention/backfill
+/documents,GET /api/documents/retention/due
+/documents,GET /api/documents/:id/acls
+/documents,POST /api/documents/:id/acls
+/documents,DELETE /api/documents/:id/acls/:aclId
+/export,GET /api/export/pdf/invoice/:id
+/export,GET /api/export/pdf/voucher/:id
+/export,GET /api/export/pdf/payroll/:id
+/finance,GET /api/finance/subsidiary-account-failures
+/finance,POST /api/finance/subsidiary-account-failures/:id/retry
+/finance,GET /api/finance/dso-trend
+/finance,GET /api/finance/customer-360/:clientId
+/finance,POST /api/finance/fixed-assets/:id/transfer
+/finance,POST /api/finance/fixed-assets/:id/dispose
+/finance,POST /api/finance/fixed-assets/:id/impair
+/finance,POST /api/finance/fixed-assets/:id/revalue
+/fleet,GET /api/fleet/cargo/manifests/:id/checkpoints
+/fleet,POST /api/fleet/trips
+/fleet,PATCH /api/fleet/tires/:id
+/fleet,DELETE /api/fleet/tires/:id
+/fleet,POST /api/fleet/rental-contracts/:id/payments
+/fleet,GET /api/fleet/rental-contracts/:id/payments
+/fleet,POST /api/fleet/rental-payments/:id/pay
+/hr,GET /api/hr/attendance/field-ping/eligibility
+/hr,POST /api/hr/attendance/field-ping
+/hr,POST /api/hr/leave-types
+/hr,PATCH /api/hr/leave-types/:id
+/hr,GET /api/hr/company-document-categories
+/hr,DELETE /api/hr/company-documents/:id
+/hr,PATCH /api/hr/company-documents/:id
+/inbox,POST /api/inbox/messages/:id/read
+/inbox,GET /api/inbox/unread-count
+/inbox,GET /api/inbox/snoozed
+/org,PATCH /api/org/legal-entities/:id
+/org,PATCH /api/org/positions/:id
+/org,PATCH /api/org/teams/:id
+/org,PATCH /api/org/committees/:id
+/parties,GET /api/parties/:id/360
+/parties,GET /api/parties/resolve
+/parties,POST /api/parties/backfill
+/projects,POST /api/projects/:id/boq
+/projects,GET /api/projects/:id/boq
+/projects,PATCH /api/projects/boq/:boqId
+/projects,DELETE /api/projects/boq/:boqId
+/projects,POST /api/projects/:id/boq/bill
+/projects,POST /api/projects/:id/units
+/projects,GET /api/projects/:id/units
+/projects,PATCH /api/projects/units/:uid
+/settings,PUT /api/settings/departments/:id
+/settings,DELETE /api/settings/departments/:id
+/settings,PATCH /api/settings/administrations/:id
+/settings,DELETE /api/settings/administrations/:id
+/tasks,GET /api/tasks/:id/assignees
+/tasks,POST /api/tasks/:id/assignees
+/tasks,DELETE /api/tasks/:id/assignees/:assignmentId
+/transport,GET /api/transport/locations
+/transport,POST /api/transport/locations
+/transport,POST /api/transport/bookings/:id/lines
+/transport,POST /api/transport/dispatch-orders
+/transport,PATCH /api/transport/dispatch-orders/:id
+/transport,GET /api/transport/integration/calendar.ics
+/transport,GET /api/transport/planning-settings
+/transport,PATCH /api/transport/planning-settings
+/umrah,PATCH /api/umrah/hotels/:id
+/umrah,DELETE /api/umrah/hotels/:id
+/umrah,GET /api/umrah/room-blocks/:id/allocations
+/umrah,POST /api/umrah/room-allocations
+/umrah,DELETE /api/umrah/room-allocations/:id
+/umrah,POST /api/umrah/reclassify-revenue
+/umrah,GET /api/umrah/families
+/umrah,POST /api/umrah/families
+/warehouse,PATCH /api/warehouse/serials/:id
+/warehouse,POST /api/warehouse/cycle-counts/plans
+/warehouse,POST /api/warehouse/suppliers

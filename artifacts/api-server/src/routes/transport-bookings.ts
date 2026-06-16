@@ -45,11 +45,16 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { checkAccess } from "../lib/rbac/authzEngine.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
+import { cascadeDispatchToBooking, cancelTripsForDispatchOrder } from "../lib/transportDispatchCascade.js";
+import { resolveSettings } from "../lib/settings.js";
 import { assertDriverEligibility } from "../lib/fleet/driverEligibility.js";
 import { assertDriverRest } from "../lib/fleet/driverRest.js";
+import { suggestAssignments } from "../lib/fleet/assignmentSuggestionEngine.js";
+import { fleetEngine } from "../lib/engines/index.js";
 
 export const transportBookingsRouter = Router();
 transportBookingsRouter.use(authMiddleware);
@@ -61,10 +66,7 @@ const BOOKING_SOURCES = [
   "recurring_schedule",
 ] as const;
 
-const TRANSPORT_SERVICE_TYPES = [
-  "cargo_load", "passenger_umrah", "passenger_general",
-  "equipment_rental", "internal_transfer", "other",
-] as const;
+import { TRANSPORT_SERVICE_TYPES } from "../lib/transportEnums.js";
 
 // #1812 Comment 4663005810 — explicit cargo vs passenger family.
 // The booking row carries a `tripFamily` column (migration 284) so
@@ -395,8 +397,8 @@ transportBookingsRouter.get(
       );
       if (!booking) throw new NotFoundError("الحجز غير موجود");
       const lines = await rawQuery<Record<string, unknown>>(
-        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
-        [id],
+        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
+        [id, scope.companyId],
       );
       const dispatchOrders = await rawQuery<Record<string, unknown>>(
         `SELECT d.*, v."plateNumber" AS "vehiclePlate", dr.name AS "driverName"
@@ -495,13 +497,16 @@ transportBookingsRouter.get(
       const scope = req.scope!;
       const id = parseId(req.params.id, "id");
       const [booking] = await rawQuery<Record<string, unknown>>(
-        `SELECT * FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        `SELECT b.*, c.name AS "linkedCustomerName"
+           FROM transport_bookings b
+           LEFT JOIN clients c ON c.id = b."customerId" AND c."companyId" = b."companyId" AND c."deletedAt" IS NULL
+          WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
         [id, scope.companyId],
       );
       if (!booking) throw new NotFoundError("الحجز غير موجود");
       const lines = await rawQuery<Record<string, unknown>>(
-        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
-        [id],
+        `SELECT * FROM transport_booking_lines WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
+        [id, scope.companyId],
       );
       const dispatchOrders = await rawQuery<Record<string, unknown>>(
         `SELECT d.*, v."plateNumber" AS "vehiclePlate", dr.name AS "driverName", dr.phone AS "driverPhone"
@@ -539,6 +544,17 @@ transportBookingsRouter.post(
       const b = zodParse(createBookingSchema.safeParse(req.body));
       // #1812 multi-leg — wrap booking header + lines in one transaction
       // so a leg-validation failure rolls back the orphan header.
+      // #TA-T18-UX-AUDIT-01 P2-1 — نموذج توقيت موحّد: التوقيت المرئي (أوقات
+      // التحميل/التسليم) يشتقّ نافذة المحرك (pickupWindowStart/End) حين لا
+      // يحدّد المشغّل النافذة المتقدمة صراحةً، فلا يبقى الحجز بلا نافذة (يُنهي
+      // مأزق «صفر ترشيح» من الجذر). إزاحة الرياض ثابتة (+03:00 — لا توقيت صيفي).
+      const toRiyadhTs = (d?: string | null, t?: string | null): string | null =>
+        d ? `${d}T${t && t.length >= 4 ? t : "00:00"}:00+03:00` : null;
+      const effPickupStart = b.pickupWindowStart ?? toRiyadhTs(b.requestedPickupDate, b.requestedPickupTime);
+      const effPickupEnd = b.pickupWindowEnd
+        ?? toRiyadhTs(b.requestedDeliveryDate, b.requestedDeliveryTime)
+        ?? effPickupStart;
+
       const { insertId, legsInserted } = await withTransaction(async () => {
         const headerInsert = await rawExecute(
         `INSERT INTO transport_bookings
@@ -586,7 +602,7 @@ transportBookingsRouter.post(
           b.vehicleSubstitutionPolicy ?? "equivalent_allowed",
           b.allowUpgrade ?? false,
           b.requiredExactVehicleId ?? null, b.requiredExactDriverId ?? null,
-          b.pickupWindowStart ?? null, b.pickupWindowEnd ?? null,
+          effPickupStart, effPickupEnd,
           b.dropoffWindowStart ?? null, b.dropoffWindowEnd ?? null,
           b.fixedAppointmentTime ?? null, b.isFlexibleTime ?? false,
           b.priority ?? 0,
@@ -598,45 +614,75 @@ transportBookingsRouter.post(
         assertInsert(headerInsert.insertId, "transport_bookings");
         const bookingId = headerInsert.insertId;
 
-        // #1812 multi-leg — atomically insert the lines payload if present.
-        // Server auto-numbers any leg that didn't supply lineNumber so the
-        // operator can just push legs onto an array without bookkeeping.
+        // #1812 multi-leg + #2079 Gate-PE-2 (Route Leg as Canon).
+        // Server auto-numbers any leg that didn't supply lineNumber so
+        // the operator can just push legs onto an array without
+        // bookkeeping. If the caller omitted `lines` entirely or sent
+        // an empty array, we synthesise a single leg derived from the
+        // booking header so the invariant «every booking has ≥1 line»
+        // holds for every new row. Single-leg posts therefore look
+        // exactly the same as before from the wire — but on the DB
+        // side they always produce a line.
         let inserted = 0;
-        if (b.lines && b.lines.length > 0) {
-          for (let i = 0; i < b.lines.length; i++) {
-            const leg = b.lines[i];
-            const lineNumber = leg.lineNumber ?? i + 1;
-            await rawExecute(
-              `INSERT INTO transport_booking_lines
-                 ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
-                  "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
-                  "fromLocationId", "toLocationId",
-                  "fromLocationText", "toLocationText",
-                  "fromLocationKind", "toLocationKind",
-                  "fromLat", "fromLng", "fromPlaceId",
-                  "toLat", "toLng", "toPlaceId",
-                  "legRouteType",
-                  "scheduledPickupAt", "scheduledDeliveryAt",
-                  "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
-               VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
-                       $14,$15,$16, $17,$18,$19, $20, $21,$22,
-                       $23,$24,$25,$26,$27)`,
-              [
-                scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
-                leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
-                leg.fromLocationId ?? null, leg.toLocationId ?? null,
-                leg.fromLocationText ?? null, leg.toLocationText ?? null,
-                leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
-                leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
-                leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
-                leg.legRouteType ?? null,
-                leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
-                leg.lineDescription ?? null, leg.quantity ?? null,
-                leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
-              ],
-            );
-            inserted++;
-          }
+        const legsToInsert: typeof bookingLineSchema._type[] = b.lines && b.lines.length > 0
+          ? b.lines
+          : [{
+              fromLocationId:   b.fromLocationId,
+              toLocationId:     b.toLocationId,
+              fromLocationText: b.fromLocationText,
+              toLocationText:   b.toLocationText,
+              fromLocationKind: b.fromLocationKind,
+              toLocationKind:   b.toLocationKind,
+              fromLat:          b.fromLat,
+              fromLng:          b.fromLng,
+              fromPlaceId:      b.fromPlaceId,
+              toLat:            b.toLat,
+              toLng:            b.toLng,
+              toPlaceId:        b.toPlaceId,
+              legRouteType:     b.routeType,
+              scheduledPickupAt:
+                effPickupStart ?? b.fixedAppointmentTime ?? undefined,
+              scheduledDeliveryAt:
+                b.dropoffWindowStart ?? undefined,
+              lineDescription:  b.cargoDescription ?? undefined,
+              quantity:         b.cargoQuantity ?? undefined,
+              unitOfMeasure:    b.cargoUnit ?? undefined,
+              passengerCount:   b.passengerCount ?? undefined,
+              notes:            "Auto-derived single leg",
+            }];
+        for (let i = 0; i < legsToInsert.length; i++) {
+          const leg = legsToInsert[i];
+          const lineNumber = leg.lineNumber ?? i + 1;
+          await rawExecute(
+            `INSERT INTO transport_booking_lines
+               ("companyId", "bookingId", "lineNumber", "requiredVehicleType",
+                "requiredCapacityKg", "requiredSeatCount", "requiredLicenseClass",
+                "fromLocationId", "toLocationId",
+                "fromLocationText", "toLocationText",
+                "fromLocationKind", "toLocationKind",
+                "fromLat", "fromLng", "fromPlaceId",
+                "toLat", "toLng", "toPlaceId",
+                "legRouteType",
+                "scheduledPickupAt", "scheduledDeliveryAt",
+                "lineDescription", quantity, "unitOfMeasure", "passengerCount", notes)
+             VALUES ($1,$2,$3,$4, $5,$6,$7, $8,$9, $10,$11, $12,$13,
+                     $14,$15,$16, $17,$18,$19, $20, $21,$22,
+                     $23,$24,$25,$26,$27)`,
+            [
+              scope.companyId, bookingId, lineNumber, leg.requiredVehicleType ?? null,
+              leg.requiredCapacityKg ?? null, leg.requiredSeatCount ?? null, leg.requiredLicenseClass ?? null,
+              leg.fromLocationId ?? null, leg.toLocationId ?? null,
+              leg.fromLocationText ?? null, leg.toLocationText ?? null,
+              leg.fromLocationKind ?? null, leg.toLocationKind ?? null,
+              leg.fromLat ?? null, leg.fromLng ?? null, leg.fromPlaceId ?? null,
+              leg.toLat ?? null, leg.toLng ?? null, leg.toPlaceId ?? null,
+              leg.legRouteType ?? null,
+              leg.scheduledPickupAt ?? null, leg.scheduledDeliveryAt ?? null,
+              leg.lineDescription ?? null, leg.quantity ?? null,
+              leg.unitOfMeasure ?? null, leg.passengerCount ?? null, leg.notes ?? null,
+            ],
+          );
+          inserted++;
         }
         return { insertId: bookingId, legsInserted: inserted };
       });
@@ -665,12 +711,41 @@ transportBookingsRouter.patch(
       const scope = req.scope!;
       const id = parseId(req.params.id, "id");
       const b = zodParse(updateBookingSchema.safeParse(req.body));
-      const [existing] = await rawQuery<{ status: typeof BOOKING_STATUSES[number] }>(
-        `SELECT status FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      const [existing] = await rawQuery<{
+        status: typeof BOOKING_STATUSES[number];
+        // #2079 FIX-13 (TA-SEC-02) — pull the linked-source fields
+        // alongside status so the audit log below can compute a true
+        // before/after delta for `linked_source_changed` events.
+        customerId: number | null;
+        umrahGroupId: number | null;
+        contractId: number | null;
+      }>(
+        `SELECT status, "customerId", "umrahGroupId", "contractId"
+           FROM transport_bookings
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [id, scope.companyId],
       );
       if (!existing) throw new NotFoundError("الحجز غير موجود");
       if (b.status && b.status !== existing.status) {
+        // #2079 TA-T18-08 — SoD: moving a booking to `approved` or
+        // `rejected` is an APPROVAL decision and requires the
+        // `fleet.bookings:approve` action on top of `update`. The
+        // generic update grant on its own does NOT unlock this
+        // transition. This rule is the second line of defence — the
+        // primary path is the dedicated POST /approve + /reject
+        // endpoints, but a permitted client can still drive the
+        // status via PATCH as long as it holds approve.
+        if (b.status === "approved" || b.status === "rejected") {
+          const approval = await checkAccess(scope, {
+            feature: "fleet.bookings",
+            action: "approve",
+          });
+          if (!approval.allowed) {
+            throw new ValidationError(
+              "اعتماد/رفض الحجز يتطلب صلاحية fleet.bookings:approve منفصلة عن صلاحية التعديل العامة",
+            );
+          }
+        }
         const allowed = BOOKING_TRANSITIONS[existing.status] ?? [];
         if (!allowed.includes(b.status)) {
           throw new ConflictError(`الانتقال من ${existing.status} إلى ${b.status} غير مسموح`);
@@ -688,19 +763,316 @@ transportBookingsRouter.patch(
       if (sets.length === 0) { res.json({ data: { id } }); return; }
       sets.push(`"updatedAt" = NOW()`);
       params.push(id, scope.companyId);
-      await rawExecute(
+      const bookingUpdateSql =
         `UPDATE transport_bookings SET ${sets.join(", ")}
-          WHERE id = $${p++} AND "companyId" = $${p++} AND "deletedAt" IS NULL`,
-        params,
-      );
+          WHERE id = $${p++} AND "companyId" = $${p++} AND "deletedAt" IS NULL`;
+
+      // ─── booking-cancel policy (configurable, top of the cascade) ────────
+      // Cancelling a booking has downstream operational state: its dispatch
+      // orders, the fleet trips those spawned, and the held driver/vehicle.
+      // Until now the PATCH flipped only the booking row and orphaned all of
+      // it. How the downstream is handled is a company preference resolved from
+      // the 3-level `settings` engine (key: fleet.bookings.cancelPolicy):
+      //   • "guard"   (default) — refuse the cancel while any dispatch order is
+      //                still active; the operator cancels those first (which,
+      //                via the dispatch-cancel cascade, releases the trips and
+      //                resources) and only then cancels the booking. Safest: it
+      //                never force-cancels a trip with a driver already en route.
+      //   • "cascade" — cancel everything top-down in ONE atomic step: each
+      //                active dispatch order → cancelled, its nav session ended,
+      //                its trip cancelled + vehicle/driver released (shared
+      //                helper), every non-terminal line cancelled, then the
+      //                booking row itself.
+      const cancelling = b.status === "cancelled" && existing.status !== "cancelled";
+      let bookingUpdateDone = false;
+      if (cancelling) {
+        const rawPolicy = await resolveSettings(
+          "fleet.bookings.cancelPolicy", scope.companyId, scope.branchId ?? undefined,
+        );
+        const policy = rawPolicy === "cascade" ? "cascade" : "guard";
+
+        if (policy === "guard") {
+          const [activeRow] = await rawQuery<{ active: number }>(
+            `SELECT COUNT(*)::int AS active
+               FROM transport_dispatch_orders
+              WHERE "companyId" = $1 AND "bookingId" = $2
+                AND status IN ('pending', 'notified', 'accepted', 'executing')`,
+            [scope.companyId, id],
+          );
+          const active = activeRow?.active ?? 0;
+          if (active > 0) {
+            throw new ConflictError(
+              `لا يمكن إلغاء الحجز: يوجد ${active} أمر توزيع نشط. ألغِ أوامر التوزيع أولاً (سيُلغى معها الرحلة المرتبطة وتُحرَّر المركبة/السائق تلقائيًا) ثم ألغِ الحجز.`,
+            );
+          }
+          // No active orders → nothing to orphan; fall through to the generic
+          // UPDATE below, which simply marks the booking cancelled.
+        } else {
+          // "cascade" — do the whole top-down cancel atomically with the
+          // booking row update so a mid-cascade failure rolls everything back.
+          await withTransaction(async (tx) => {
+            const ordersRes = await tx.query<{ id: number; bookingLineId: number }>(
+              `SELECT id, "bookingLineId"
+                 FROM transport_dispatch_orders
+                WHERE "companyId" = $1 AND "bookingId" = $2
+                  AND status IN ('pending', 'notified', 'accepted', 'executing')
+                FOR UPDATE`,
+              [scope.companyId, id],
+            );
+            for (const order of ordersRes.rows) {
+              await tx.query(
+                `UPDATE transport_dispatch_orders
+                    SET status = 'cancelled', "updatedAt" = NOW()
+                  WHERE id = $1 AND "companyId" = $2`,
+                [order.id, scope.companyId],
+              );
+              // End the driver's active nav session (mirrors the dispatch-action
+              // cancel branch's session cleanup).
+              await tx.query(
+                `UPDATE driver_navigation_sessions
+                    SET status = 'cancelled', "endedAt" = NOW(), "updatedAt" = NOW()
+                  WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+                    AND status NOT IN ('ended', 'cancelled')`,
+                [order.id, scope.companyId],
+              );
+              // Cancel the spawned trip + release vehicle/driver (shared helper,
+              // identical to the dispatch board's top-down cancel).
+              await cancelTripsForDispatchOrder(tx, {
+                dispatchOrderId: order.id,
+                companyId: scope.companyId,
+                reason: "أُلغي الحجز المرتبط",
+              });
+              // Cascade the cancelled state down to the booking line (and up to
+              // the booking once every line is terminal).
+              await cascadeDispatchToBooking(tx, {
+                bookingLineId: order.bookingLineId,
+                target: "cancelled",
+                companyId: scope.companyId,
+              });
+            }
+            // Cancel any remaining non-terminal lines that had no active order
+            // (e.g. still-"pending" legs awaiting dispatch) so the booking is
+            // consistently closed; completed legs are left intact.
+            await tx.query(
+              `UPDATE transport_booking_lines
+                  SET status = 'cancelled', "updatedAt" = NOW()
+                WHERE "bookingId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+                  AND status NOT IN ('completed', 'cancelled')`,
+              [id, scope.companyId],
+            );
+            // Finally the booking row itself (+ any other PATCHed fields).
+            await tx.query(bookingUpdateSql, params);
+          });
+          bookingUpdateDone = true;
+        }
+      }
+
+      if (!bookingUpdateDone) {
+        await rawExecute(bookingUpdateSql, params);
+      }
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
         action: "update", entity: "transport_bookings", entityId: id,
         before: { status: existing.status }, after: b,
       }).catch((e) => logger.error(e, "booking audit failed"));
-      res.json({ data: { id } });
+
+      // #2079 FIX-13 (TA-SEC-02) — when the operator touches a link
+      // field (customerId / umrahGroupId / contractId), surface that
+      // as a SEPARATE audit event on top of the generic update log.
+      // The audit trail needs a distinct row whose `action` makes
+      // the SoD-sensitive nature obvious — silently lumping a
+      // source-link rebind under "update" lets a malicious operator
+      // hide a customer swap inside a noisy notes/cost edit. The
+      // before/after carries ONLY the linked-source fields so the
+      // auditor reads the row cleanly without scrolling through
+      // unrelated field deltas.
+      const linkedSourceFields = ["customerId", "umrahGroupId", "contractId"] as const;
+      const linkedChange: Record<string, { before: number | null; after: number | null }> = {};
+      for (const field of linkedSourceFields) {
+        if (b[field] !== undefined && b[field] !== existing[field]) {
+          linkedChange[field] = {
+            before: existing[field],
+            after: (b[field] as number | null | undefined) ?? null,
+          };
+        }
+      }
+      if (Object.keys(linkedChange).length > 0) {
+        createAuditLog({
+          companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+          action: "linked_source_changed",
+          entity: "transport_bookings",
+          entityId: id,
+          before: Object.fromEntries(
+            Object.entries(linkedChange).map(([k, v]) => [k, v.before]),
+          ),
+          after: Object.fromEntries(
+            Object.entries(linkedChange).map(([k, v]) => [k, v.after]),
+          ),
+        }).catch((e) => logger.error(e, "booking linked-source audit failed"));
+      }
+
+      // #2079 TA-T18-01 — passenger booking close → Accounting Candidate.
+      // Mirrors the cargo + rental handoffs. Only fires when status
+      // actually transitions INTO `completed` (not when other fields
+      // change while already completed — idempotency still holds, but
+      // we save the query). Soft-fail: a candidate hiccup is logged
+      // and never rolls back the operational close (the insert is
+      // idempotent and the operator can re-fire the transition).
+      let passengerCandidateId: number | null = null;
+      if (b.status === "completed" && existing.status !== "completed") {
+        try {
+          const [row] = await rawQuery<{
+            tripFamily: string | null; customerId: number | null;
+            passengerCount: number | null;
+            bookingNumber: string;
+            fromLocationText: string | null; toLocationText: string | null;
+            notes: string | null;
+            vehicleId: number | null; driverId: number | null;
+          }>(
+            `SELECT b."tripFamily", b."customerId", b."passengerCount",
+                    b."bookingNumber", b."fromLocationText", b."toLocationText", b.notes,
+                    d."vehicleId", d."driverId"
+               FROM transport_bookings b
+               LEFT JOIN LATERAL (
+                 SELECT "vehicleId", "driverId"
+                   FROM transport_dispatch_orders
+                  WHERE "companyId" = b."companyId"
+                    AND "bookingId" = b.id
+                    AND status NOT IN ('declined', 'cancelled')
+                  ORDER BY id DESC LIMIT 1
+               ) d ON TRUE
+              WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL`,
+            [id, scope.companyId],
+          );
+          if (row) {
+            const candidate = await fleetEngine.createPassengerBillingCandidate(
+              { companyId: scope.companyId, branchId: scope.branchId ?? 0, createdBy: scope.userId },
+              {
+                id, bookingNumber: row.bookingNumber,
+                tripFamily: row.tripFamily, customerId: row.customerId,
+                passengerCount: row.passengerCount,
+                fromLocationText: row.fromLocationText, toLocationText: row.toLocationText,
+                vehicleId: row.vehicleId, driverId: row.driverId,
+                notes: row.notes,
+              },
+            );
+            passengerCandidateId = candidate?.id ?? null;
+          }
+        } catch (err) {
+          logger.error(err, "passenger billing candidate failed");
+        }
+      }
+      res.json({ data: { id, billingCandidateId: passengerCandidateId } });
     } catch (err) {
       handleRouteError(err, res, "Update transport booking error:");
+    }
+  },
+);
+
+// ─── #2079 TA-T18-08 — Approval endpoints (SoD) ──────────────────────
+//
+// These two routes are the canonical paths for moving a booking out of
+// `pending_approval`. They are authorized on the NEW `approve` action
+// (declared `approvableActions: ["approve"]` in the feature catalog),
+// distinct from `update`. A role can now hold `fleet.bookings:update`
+// (read+edit) without `fleet.bookings:approve`, which is the
+// segregation-of-duties guarantee the audit required:
+//
+//   • creator role  →  update only       (cannot self-approve)
+//   • approver role →  approve (+ view)  (cannot edit booking fields)
+//   • admin role    →  both              (legacy behaviour preserved
+//                                         via wildcard fleet.bookings:*
+//                                         or fleet.*)
+//
+// The generic PATCH still accepts status=approved|rejected from
+// callers who hold BOTH update + approve (e.g. the legacy admin
+// dropdown). The dedicated endpoints are the path the SPA's new
+// Approve / Reject buttons use.
+const approveBookingSchema = z.object({
+  note: z.string().max(2000).optional(),
+});
+const rejectBookingSchema = z.object({
+  reason: z.string().min(1, "سبب الرفض مطلوب").max(2000),
+});
+
+transportBookingsRouter.post(
+  "/transport/bookings/:id/approve",
+  authorize({ feature: "fleet.bookings", action: "approve" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(approveBookingSchema.safeParse(req.body));
+      const [existing] = await rawQuery<{ status: typeof BOOKING_STATUSES[number] }>(
+        `SELECT status FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!existing) throw new NotFoundError("الحجز غير موجود");
+      const allowed = BOOKING_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes("approved")) {
+        throw new ConflictError(`لا يمكن اعتماد حجز في حالة "${existing.status}"`);
+      }
+      await rawExecute(
+        `UPDATE transport_bookings
+            SET status = 'approved', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "approve", entity: "transport_bookings", entityId: id,
+        before: { status: existing.status },
+        after: { status: "approved", note: b.note ?? null },
+      }).catch((e) => logger.error(e, "booking approve audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+        action: "fleet.booking.approved", entity: "transport_bookings", entityId: id,
+        details: JSON.stringify({ previousStatus: existing.status }),
+      }).catch((e) => logger.error(e, "booking approve event failed"));
+      res.json({ data: { id, status: "approved" } });
+    } catch (err) {
+      handleRouteError(err, res, "Approve transport booking error:");
+    }
+  },
+);
+
+transportBookingsRouter.post(
+  "/transport/bookings/:id/reject",
+  authorize({ feature: "fleet.bookings", action: "approve" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(rejectBookingSchema.safeParse(req.body));
+      const [existing] = await rawQuery<{ status: typeof BOOKING_STATUSES[number] }>(
+        `SELECT status FROM transport_bookings WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!existing) throw new NotFoundError("الحجز غير موجود");
+      const allowed = BOOKING_TRANSITIONS[existing.status] ?? [];
+      if (!allowed.includes("rejected")) {
+        throw new ConflictError(`لا يمكن رفض حجز في حالة "${existing.status}"`);
+      }
+      await rawExecute(
+        `UPDATE transport_bookings
+            SET status = 'rejected', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "reject", entity: "transport_bookings", entityId: id,
+        before: { status: existing.status },
+        after: { status: "rejected", reason: b.reason },
+      }).catch((e) => logger.error(e, "booking reject audit failed"));
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
+        action: "fleet.booking.rejected", entity: "transport_bookings", entityId: id,
+        details: JSON.stringify({ previousStatus: existing.status, reason: b.reason }),
+      }).catch((e) => logger.error(e, "booking reject event failed"));
+      res.json({ data: { id, status: "rejected" } });
+    } catch (err) {
+      handleRouteError(err, res, "Reject transport booking error:");
     }
   },
 );
@@ -790,6 +1162,42 @@ transportBookingsRouter.post(
         [b.bookingLineId, scope.companyId],
       );
       if (!line) throw new NotFoundError("سطر الحجز غير موجود");
+
+      // #TA-T18-UX-AUDIT-01 §11-ب — الاختيار اليدوي لا يتجاوز الحراس الصلبة.
+      // نمرّر الزوج (مركبة/سائق) عبر المحرك نفسه (مصدر الحراس الوحيد) للنافذة
+      // المطلوبة: إن غاب الزوج عن نتائج المحرك فهو غير مؤهّل (مصفوفة القدرات /
+      // جاهزية المركبة / صيانة / إجازة السائق / حدود القيادة)؛ وإن حمل عوائق
+      // صلبة (تعارض / راحة / سعة / اتفاق العميل) رُفض ما لم يُوثَّق استثناء.
+      // معزول عن المسار التلقائي (plan-bookings يُدرج مباشرةً في transport-integration).
+      const ranked = await suggestAssignments({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        bookingId: line.bookingId,
+        bookingLineId: b.bookingLineId,
+        scheduledStartAt: b.scheduledStartAt,
+        scheduledEndAt: b.scheduledEndAt,
+        limit: 100000,
+      });
+      const guardPair = ranked.find(
+        (c) => c.vehicleId === b.vehicleId && c.driverId === b.driverId,
+      );
+      if (!guardPair) {
+        // الزوج خارج نتائج المحرك = غير مؤهّل (مصفوفة قدرات غير مكتملة / جاهزية /
+        // صيانة / إجازة / حدود قيادة). يُحجب افتراضيًا ويُسمح فقط باستثناء موثَّق
+        // (overrideReason) — اتساقًا مع فلسفة الحراس القائمة (الأهلية/الراحة/
+        // التعارض كلها override-able)، فلا يكسر إسناد مركبة لم يكتمل ملفها بعد.
+        if (!b.overrideReason) {
+          throw new ValidationError(
+            "هذه المركبة أو هذا السائق غير مؤهّل لهذا الحجز (مصفوفة القدرات، جاهزية المركبة، إجازة السائق، أو حدود القيادة). أرسل overrideReason للموافقة الموثَّقة على الاستثناء.",
+            { field: "vehicleId", fix: "اختر تركيبة مؤهّلة من الاقتراح، أو عالج سبب عدم الأهلية في الملف الفني/جاهزية السائق، أو وثّق سبب الاستثناء." },
+          );
+        }
+      } else if (guardPair.blockers.length > 0 && !b.overrideReason) {
+        throw new ConflictError(
+          `الإسناد يكسر حارسًا صلبًا: ${guardPair.blockers.join("؛ ")}. أرسل overrideReason للموافقة الموثَّقة.`,
+          { field: "blockers", fix: "اختر تركيبة بلا عوائق أو وضّح سبب الاستثناء." },
+        );
+      }
 
       // 1) Driver eligibility — reuses the #1761 guard.
       await assertDriverEligibility({
@@ -973,86 +1381,35 @@ transportBookingsRouter.patch(
           }
         }
 
-        // #1812 operational review — "الحالة لا تتحدث تلقائيًا من
-        // أفعال السائق". When a dispatch lifecycle event fires, cascade
-        // the new state up the chain: booking_line → booking. Without
-        // this cascade the operator has to manually flip both states
-        // from the booking-detail dropdown, defeating the integration.
-        //
-        // Mapping (driver action → derived line + booking statuses):
-        //   accepted   → line: dispatched   , booking: dispatched   (no-op if already past)
-        //   executing  → line: in_progress  , booking: in_progress
-        //   completed  → line: completed    , booking: completed if ALL lines completed
-        //   cancelled  → line: cancelled    , booking: cancelled if ALL lines cancelled
-        //   declined   → line: pending      , booking unchanged (operator picks new driver)
-        const lineStatusMap: Record<string, string | null> = {
-          accepted:   "dispatched",
-          executing:  "in_progress",
-          completed:  "completed",
-          cancelled:  "cancelled",
-          declined:   "pending",
-          notified:   null,   // intermediate driver-side state — no line change
-          closed:     null,   // operational close is a finance handoff; line stays completed
-        };
-        const newLineStatus = lineStatusMap[target];
-        if (newLineStatus) {
-          await tx.query(
-            `UPDATE transport_booking_lines
-                SET status = $1, "updatedAt" = NOW()
-              WHERE id = $2 AND "companyId" = $3`,
-            [newLineStatus, order.bookingLineId, scope.companyId],
-          );
+        // Top-down cancel cascade — cancelling the dispatch order must also
+        // cancel the trip it spawned ("dispatch:<id>:<token>" sourceKey) and
+        // release its vehicle/driver, else the trip is orphaned and the
+        // resources stay locked. Extracted to the shared helper so the booking
+        // cancel cascade (PATCH /transport/bookings/:id, "cascade" policy)
+        // releases resources by the identical rule. No re-dispatch loop: the
+        // order is already 'cancelled' here, so the fleet trip-cancel
+        // re-dispatch guard (status IN 'accepted'/'executing') no-ops. (A
+        // simultaneous trip-cancel locks trip→order while this locks
+        // order→trip; the rare inversion is Postgres-detected and self-heals on
+        // retry since both sides no-op once the other has run.)
+        if (target === "cancelled") {
+          await cancelTripsForDispatchOrder(tx, {
+            dispatchOrderId: id,
+            companyId: scope.companyId,
+            reason: "أُلغي أمر التوزيع المرتبط",
+          });
         }
 
-        // Booking-level cascade: only flip when the change is meaningful.
-        if (target === "executing" || target === "completed" || target === "cancelled") {
-          // Need the booking_id; load it via the line.
-          const lineLookup = await tx.query<{ bookingId: number; bookingStatus: string }>(
-            `SELECT l."bookingId", b.status AS "bookingStatus"
-               FROM transport_booking_lines l
-                    JOIN transport_bookings b ON b.id = l."bookingId"
-              WHERE l.id = $1 AND l."companyId" = $2
-              LIMIT 1`,
-            [order.bookingLineId, scope.companyId],
-          );
-          const lineRow = lineLookup.rows[0];
-          if (lineRow) {
-            let nextBookingStatus: string | null = null;
-            if (target === "executing" && lineRow.bookingStatus !== "in_progress") {
-              nextBookingStatus = "in_progress";
-            }
-            if (target === "completed" || target === "cancelled") {
-              // Aggregate state across all lines — only flip the booking
-              // when ALL lines are in the terminal state (avoids
-              // prematurely marking a 3-leg umrah trip "completed" after
-              // leg 1).
-              const linesAgg = await tx.query<{
-                total: string; matching: string;
-              }>(
-                `SELECT COUNT(*)::text AS total,
-                        COUNT(*) FILTER (WHERE status = $1)::text AS matching
-                   FROM transport_booking_lines
-                  WHERE "bookingId" = $2 AND "companyId" = $3
-                    AND "deletedAt" IS NULL`,
-                [target === "completed" ? "completed" : "cancelled",
-                 lineRow.bookingId, scope.companyId],
-              );
-              const total = Number(linesAgg.rows[0]?.total ?? 0);
-              const matching = Number(linesAgg.rows[0]?.matching ?? 0);
-              if (total > 0 && total === matching) {
-                nextBookingStatus = target === "completed" ? "completed" : "cancelled";
-              }
-            }
-            if (nextBookingStatus && nextBookingStatus !== lineRow.bookingStatus) {
-              await tx.query(
-                `UPDATE transport_bookings
-                    SET status = $1, "updatedAt" = NOW()
-                  WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
-                [nextBookingStatus, lineRow.bookingId, scope.companyId],
-              );
-            }
-          }
-        }
+        // #1812 — cascade the dispatch state down to the booking line and up
+        // to the booking. Shared with the fleet trip-completion auto-status
+        // path (#12) via lib/transportDispatchCascade so the two entry points
+        // never drift on the "booking completes only when ALL lines terminal"
+        // aggregate rule.
+        await cascadeDispatchToBooking(tx, {
+          bookingLineId: order.bookingLineId,
+          target,
+          companyId: scope.companyId,
+        });
 
         return { previous: order.status, next: target };
       });

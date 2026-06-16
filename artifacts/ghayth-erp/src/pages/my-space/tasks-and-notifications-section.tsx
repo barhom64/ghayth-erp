@@ -21,11 +21,9 @@ export function TasksAndNotificationsSection({ todayTasks, notifications }: Task
             مهامي اليوم
             {todayTasks.length > 0 && <Badge className="text-xs">{todayTasks.length}</Badge>}
           </CardTitle>
-          <Link href="/tasks">
-            <Button variant="ghost" size="sm" className="text-xs gap-1">
+          <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/tasks">
               عرض الكل <ChevronLeft className="w-3 h-3" />
-            </Button>
-          </Link>
+            </Link></Button>
         </CardHeader>
         <CardContent>
           {todayTasks.length === 0 ? (
@@ -67,11 +65,9 @@ export function TasksAndNotificationsSection({ todayTasks, notifications }: Task
               <Badge variant="destructive" className="text-xs">{notifications.filter((n: any) => !n.isRead).length}</Badge>
             )}
           </CardTitle>
-          <Link href="/notifications">
-            <Button variant="ghost" size="sm" className="text-xs gap-1">
+          <Button asChild variant="ghost" size="sm" className="text-xs gap-1"><Link href="/notifications">
               عرض الكل <ChevronLeft className="w-3 h-3" />
-            </Button>
-          </Link>
+            </Link></Button>
         </CardHeader>
         <CardContent>
           {notifications.length === 0 ? (

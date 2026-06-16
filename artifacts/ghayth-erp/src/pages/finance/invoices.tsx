@@ -186,9 +186,7 @@ export default function InvoicesPage() {
       render: (inv) => (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setPreviewItem(inv); }}><Eye className="h-4 w-4" /></Button>
-          <Link href={`/finance/invoices/${inv.id}`}>
-            <Button variant="ghost" size="sm" title="عرض التفاصيل"><ExternalLink className="h-4 w-4 me-1" />عرض</Button>
-          </Link>
+          <Button asChild variant="ghost" size="sm" title="عرض التفاصيل"><Link href={`/finance/invoices/${inv.id}`}><ExternalLink className="h-4 w-4 me-1" />عرض</Link></Button>
           <Button
             variant="ghost"
             size="sm"
@@ -200,11 +198,9 @@ export default function InvoicesPage() {
           >
             <Copy className="h-4 w-4" />
           </Button>
-          <Link href={`/finance/invoices/create?copyFrom=${inv.id}`}>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" title="نسخ الفاتورة">
+          <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" title="نسخ الفاتورة"><Link href={`/finance/invoices/create?copyFrom=${inv.id}`}>
               <Copy className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link></Button>
           <button onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === inv.id ? null : inv.id); }} className="text-muted-foreground hover:text-muted-foreground p-1">
             {expandedId === inv.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
@@ -224,16 +220,12 @@ export default function InvoicesPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/invoice-send-queue">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/invoice-send-queue">
               <Send className="h-4 w-4 me-2" />قائمة الإرسال
-            </Button>
-          </Link>
-          <Link href="/finance/ar-aging">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/ar-aging">
               <Clock className="h-4 w-4 me-2" />تقادم الذمم
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/finance/invoices/create">
             <GuardedButton perm="finance:create" size="sm"><Plus className="h-4 w-4 me-1" />فاتورة جديدة</GuardedButton>
           </Link>

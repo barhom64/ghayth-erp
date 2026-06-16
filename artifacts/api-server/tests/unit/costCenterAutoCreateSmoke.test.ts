@@ -78,7 +78,7 @@ describe("createCostCenterForEntity — naming + idempotency", () => {
 
   it("fills autoCreatedBy + autoCreatedReason — migration 203's traceability columns", () => {
     expect(HELPER).toMatch(/"autoCreatedBy", "autoCreatedReason"/);
-    const reasons = HELPER.match(/const REASON_BY_TYPE[\s\S]{0,400}\};/);
+    const reasons = HELPER.match(/const REASON_BY_TYPE[\s\S]{0,700}\};/);
     expect(reasons).toBeTruthy();
     expect(reasons![0]).toContain("auto-created on branch insert");
     expect(reasons![0]).toContain("auto-created on project insert");
@@ -131,7 +131,8 @@ describe("POST /settings/branches — auto-creates a top-level cost centre", () 
 
 describe("POST /projects — auto-creates a project CC nested under the branch", () => {
   it("imports the helper in projects.ts", () => {
-    expect(PROJECTS).toMatch(/import \{ createCostCenterForEntity \} from "\.\.\/lib\/costCenterAutoCreate\.js"/);
+    // Also imports syncEntityCostCenterAllocation (budget → allocatedAmount sync).
+    expect(PROJECTS).toMatch(/import \{ createCostCenterForEntity, syncEntityCostCenterAllocation \} from "\.\.\/lib\/costCenterAutoCreate\.js"/);
   });
 
   it("passes parentEntityType='branch' + parentEntityId=scope.branchId for proper nesting", () => {
@@ -144,7 +145,13 @@ describe("POST /projects — auto-creates a project CC nested under the branch",
   });
 
   it("non-blocking — same fire-and-forget shape as the branch path", () => {
-    expect(PROJECTS).toMatch(/createCostCenterForEntity\([\s\S]{1,400}\.catch\(\(e\) => logger\.error\(e, "project cost-centre auto-create failed"\)\)/);
+    // Window widened from 400 → 600: the call now also carries the
+    // allocatedAmount option (budget → cost-centre allocation) + its comment.
+    expect(PROJECTS).toMatch(/createCostCenterForEntity\([\s\S]{1,600}\.catch\(\(e\) => logger\.error\(e, "project cost-centre auto-create failed"\)\)/);
+  });
+
+  it("budget edits re-sync the CC allocation (PATCH /:id)", () => {
+    expect(PROJECTS).toMatch(/syncEntityCostCenterAllocation\(scope\.companyId, "project", id, Number\(after\.budget\) \|\| 0\)/);
   });
 });
 

@@ -107,12 +107,10 @@ export default function MyRequests() {
               <p className="font-medium">لا توجد طلبات بعد</p>
               <p className="text-sm mt-1">طلباتك ستظهر هنا بمجرد تقديمها</p>
               <div className="flex gap-2 justify-center mt-4">
-                <Link href="/hr/leaves">
-                  <Button size="sm" variant="outline" className="gap-1.5">
+                <Button asChild size="sm" variant="outline" className="gap-1.5"><Link href="/hr/leaves">
                     <Calendar size={14} />
                     طلب إجازة
-                  </Button>
-                </Link>
+                  </Link></Button>
               </div>
             </CardContent>
           </Card>
@@ -160,12 +158,10 @@ export default function MyRequests() {
             <CardContent className="py-16 text-center text-muted-foreground">
               <Calendar size={40} className="mx-auto mb-3 opacity-40" />
               <p className="font-medium">لا توجد طلبات إجازة</p>
-              <Link href="/hr/leaves">
-                <Button size="sm" variant="outline" className="mt-4 gap-1.5">
+              <Button asChild size="sm" variant="outline" className="mt-4 gap-1.5"><Link href="/hr/leaves">
                   <Calendar size={14} />
                   طلب إجازة جديدة
-                </Button>
-              </Link>
+                </Link></Button>
             </CardContent>
           </Card>
         ) : (

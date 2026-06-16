@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { exportRowsToCsv } from "@/lib/unified-export";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,7 +100,7 @@ export default function UmrahAgentBalancesReport() {
       columns: [
         { key: "id",                label: "id" },
         { key: "name",              label: "name" },
-        { key: "nuskAgentNumber",   label: "nuskAgentNumber" },
+        { key: "nuskAgentNumber",   label: "رقم وكيل نُسُك" },
         { key: "country",           label: "country" },
         { key: "phone",             label: "phone" },
         { key: "status",            label: "status" },
@@ -214,78 +214,49 @@ export default function UmrahAgentBalancesReport() {
         ))}
       </div>
 
-      <Card>
+      <Card data-testid="agent-balances-table">
         <CardContent className="p-0">
-          {visibleRows.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground text-sm" data-testid="agent-balances-empty">
-              لا يوجد وكلاء ضمن الفلتر الحالي.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs" data-testid="agent-balances-table">
-                <thead>
-                  <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                    <th className="p-2 font-medium">الوكيل</th>
-                    <th className="p-2 font-medium">رقم نسك</th>
-                    <th className="p-2 font-medium">الدولة</th>
-                    <th className="p-2 font-medium">معتمرون</th>
-                    <th className="p-2 font-medium">فواتير</th>
-                    <th className="p-2 font-medium">المُفوتر</th>
-                    <th className="p-2 font-medium">المُحصَّل</th>
-                    <th className="p-2 font-medium">المستحق</th>
-                    <th className="p-2 font-medium">آخر فاتورة</th>
-                    <th className="p-2 font-medium">الحالة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.map((r) => {
-                    const outstanding = Number(r.outstanding ?? 0);
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-b last:border-b-0 hover:bg-muted/30"
-                        data-testid={`agent-balances-row-${r.id}`}
-                      >
-                        <td className="p-2">
-                          <Link href={`/umrah/agents/${r.id}`} className="text-blue-600 hover:underline font-medium">
-                            {r.name}
-                          </Link>
-                          {r.phone && <p className="text-[10px] text-muted-foreground" dir="ltr">{r.phone}</p>}
-                        </td>
-                        <td className="p-2 font-mono text-[10px]">{r.nuskAgentNumber || "—"}</td>
-                        <td className="p-2">{r.country || "—"}</td>
-                        <td className="p-2">{r.pilgrimCount}</td>
-                        <td className="p-2">{r.invoiceCount}</td>
-                        <td className="p-2 font-semibold">{formatCurrency(Number(r.totalInvoiced))}</td>
-                        <td className="p-2 text-status-success-foreground">{formatCurrency(Number(r.totalPaid))}</td>
-                        <td
-                          className={`p-2 font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}
-                          data-testid={`agent-balances-outstanding-${r.id}`}
-                        >
-                          {formatCurrency(outstanding)}
-                        </td>
-                        <td className="p-2 text-[11px]">
-                          {r.lastInvoiceAt ? (
-                            <>
-                              {formatUmrahDate(r.lastInvoiceAt)}
-                              {r.lastInvoiceRef && (
-                                <p className="text-[10px] font-mono text-muted-foreground">{r.lastInvoiceRef}</p>
-                              )}
-                            </>
-                          ) : "—"}
-                        </td>
-                        <td className="p-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {STATUS_LABELS[r.status] || r.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable<AgentBalanceRow>
+            data={visibleRows}
+            rowKey={(r) => String(r.id)}
+            noToolbar
+            pageSize={0}
+            emptyMessage="لا يوجد وكلاء ضمن الفلتر الحالي."
+            columns={[
+              {
+                key: "name", header: "الوكيل",
+                render: (r) => (
+                  <div data-testid={`agent-balances-row-${r.id}`}>
+                    <Link href={`/umrah/agents/${r.id}`} className="text-blue-600 hover:underline font-medium">{r.name}</Link>
+                    {r.phone && <p className="text-[10px] text-muted-foreground" dir="ltr">{r.phone}</p>}
+                  </div>
+                ),
+              },
+              { key: "nuskAgentNumber", header: "رقم نسك", className: "font-mono text-[10px]", render: (r) => r.nuskAgentNumber || "—" },
+              { key: "country", header: "الدولة", render: (r) => r.country || "—" },
+              { key: "pilgrimCount", header: "معتمرون", align: "end" as const },
+              { key: "invoiceCount", header: "فواتير", align: "end" as const },
+              { key: "totalInvoiced", header: "المُفوتر", align: "end" as const, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.totalInvoiced))}</span> },
+              { key: "totalPaid", header: "المُحصَّل", align: "end" as const, render: (r) => <span className="text-status-success-foreground">{formatCurrency(Number(r.totalPaid))}</span> },
+              {
+                key: "outstanding", header: "المستحق", align: "end" as const,
+                render: (r) => {
+                  const outstanding = Number(r.outstanding ?? 0);
+                  return <span data-testid={`agent-balances-outstanding-${r.id}`} className={`font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}>{formatCurrency(outstanding)}</span>;
+                },
+              },
+              {
+                key: "lastInvoiceAt", header: "آخر فاتورة",
+                render: (r) => r.lastInvoiceAt ? (
+                  <>
+                    <span className="text-[11px]">{formatUmrahDate(r.lastInvoiceAt)}</span>
+                    {r.lastInvoiceRef && <p className="text-[10px] font-mono text-muted-foreground">{r.lastInvoiceRef}</p>}
+                  </>
+                ) : "—",
+              },
+              { key: "status", header: "الحالة", render: (r) => <Badge variant="outline" className="text-[10px]">{STATUS_LABELS[r.status] || r.status}</Badge> },
+            ] satisfies DataTableColumn<AgentBalanceRow>[]}
+          />
         </CardContent>
       </Card>
     </PageShell>

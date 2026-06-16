@@ -38,10 +38,7 @@ import { resolveTransportPrice } from "../lib/fleet/pricingEngine.js";
 export const transportPricingRouter = Router();
 transportPricingRouter.use(authMiddleware);
 
-const TRANSPORT_SERVICE_TYPES = [
-  "cargo_load", "passenger_umrah", "passenger_general",
-  "equipment_rental", "internal_transfer", "other",
-] as const;
+import { TRANSPORT_SERVICE_TYPES } from "../lib/transportEnums.js";
 
 const UNIT_OF_MEASURE_VALUES = [
   "kg", "tonne", "pax", "trip", "km", "hour", "day", "pallet", "carton",

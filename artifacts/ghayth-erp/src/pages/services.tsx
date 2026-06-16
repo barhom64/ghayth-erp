@@ -1,3 +1,9 @@
+/**
+ * GAP_MATRIX P2 — Pure navigation page that renders the full service catalog
+ * filtered by the user's allowed modules. Makes NO API calls directly;
+ * consumes useFilteredNavSections() which reads cached sidebar state.
+ * Intentional: a services directory / launchpad, not a data page.
+ */
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { PageShell } from "@workspace/ui-core";

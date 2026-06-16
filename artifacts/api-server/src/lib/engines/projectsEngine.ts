@@ -39,7 +39,7 @@ class ProjectsEngineImpl implements DomainEngine {
       creditFallback = "1151";
 
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "debit", "1350"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "debit", "1270"),
       financialEngine.resolveAccountCode(ctx.companyId, "project_cost_cash", "credit", creditFallback),
     ]);
 
@@ -71,8 +71,8 @@ class ProjectsEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "debit", "5225"),
-      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "credit", "1350"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "debit", "5130"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_cost_transfer", "credit", "1270"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -94,6 +94,46 @@ class ProjectsEngineImpl implements DomainEngine {
     });
   }
 
+  // Development-unit sale (Wave C.2): move the unit's snapshotted cost basis
+  // out of WIP into cost-of-sales, so profit = sale invoice − this COGS.
+  // Account choice stays a finance decision via accounting_mappings —
+  // migration 289 seeds dev_unit_cogs per company (5130 full COA / 5225 thin /
+  // 5110 both). The 5110 fallback below exists postable on BOTH seeded COAs
+  // (verified live: 5225 is absent from the full COA and 500'd).
+  async postUnitSaleCogsGL(
+    ctx: ProjectsGLContext,
+    sale: {
+      unitId: number;
+      unitName: string;
+      projectId: number;
+      projectName: string;
+      costBasis: number;
+    }
+  ) {
+    const [debitCode, creditCode] = await Promise.all([
+      financialEngine.resolveAccountCode(ctx.companyId, "dev_unit_cogs", "debit", "5110"),
+      financialEngine.resolveAccountCode(ctx.companyId, "project_wip", "credit", "1270"),
+    ]);
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `PROJ-UNIT-SALE-${sale.unitId}`,
+      description: `بيع وحدة تطوير "${sale.unitName}" — مشروع "${sale.projectName}": ترحيل أساس التكلفة ${sale.costBasis.toFixed(2)} ريال من WIP إلى تكلفة المبيعات`,
+      type: "general",
+      sourceType: "dev_unit_sale",
+      sourceId: sale.unitId,
+      sourceKey: `project:unit_sale:${sale.unitId}`,
+      guardTable: "development_units",
+      guardId: sale.unitId,
+      lines: [
+        { accountCode: debitCode, debit: sale.costBasis, credit: 0, projectId: sale.projectId, description: `تكلفة وحدة مباعة "${sale.unitName}"` },
+        { accountCode: creditCode, debit: 0, credit: sale.costBasis, projectId: sale.projectId },
+      ],
+    });
+  }
+
   async requestInvoiceCreation(
     ctx: ProjectsGLContext,
     params: {
@@ -106,6 +146,12 @@ class ProjectsEngineImpl implements DomainEngine {
       dueDate: string;
       sourceType: string;
       sourceId: number;
+      // Optional line-item billing (BOQ): the invoice handler creates one
+      // invoice_line per entry and stamps the source BOQ items with the new id.
+      projectId?: number;
+      lines?: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
+      boqItemIds?: number[];
+      devUnitIds?: number[];
     }
   ) {
     eventBus.emit("project.invoice.requested", {

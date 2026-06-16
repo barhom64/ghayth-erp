@@ -166,9 +166,7 @@ export default function CustomerAdvancesPage() {
             </GuardedButton>
           )}
           {r.journalId && (
-            <Link href={`/finance/journal/${r.journalId}`}>
-              <Button variant="ghost" size="sm">القيد</Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm"><Link href={`/finance/journal/${r.journalId}`}>القيد</Link></Button>
           )}
         </div>
       ),
@@ -180,7 +178,7 @@ export default function CustomerAdvancesPage() {
   return (
     <PageShell
       title="دفعات مقدمة من العملاء"
-      subtitle="customer advances — مبالغ مستلمة قبل الفاتورة، تُسجّل في حساب الالتزامات وتُطبَّق لاحقاً على فواتير العميل"
+      subtitle="دفعات العملاء المقدمة — مبالغ مستلمة قبل الفاتورة، تُسجّل في حساب الالتزامات وتُطبَّق لاحقاً على فواتير العميل"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { label: "دفعات مقدمة" },
@@ -369,18 +367,14 @@ export default function CustomerAdvancesPage() {
                               <td className="py-1.5 px-2">
                                 <div className="flex gap-1">
                                   {Number(a.remaining) > 0 && (
-                                    <Link href={`/finance/customer-advances/${a.id}/apply`}>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="تطبيق على فاتورة">
+                                    <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="تطبيق على فاتورة"><Link href={`/finance/customer-advances/${a.id}/apply`}>
                                         <ArrowDownToLine className="w-3 h-3" />
-                                      </Button>
-                                    </Link>
+                                      </Link></Button>
                                   )}
                                   {a.journalId && (
-                                    <Link href={`/finance/journal/${a.journalId}`}>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7" title="القيد">
+                                    <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="القيد"><Link href={`/finance/journal/${a.journalId}`}>
                                         <ExternalLink className="w-3 h-3" />
-                                      </Button>
-                                    </Link>
+                                      </Link></Button>
                                   )}
                                 </div>
                               </td>
@@ -391,12 +385,10 @@ export default function CustomerAdvancesPage() {
                     </table>
                     {g.clientId && (
                       <div className="flex justify-end gap-2 mt-3 border-t pt-3">
-                        <Link href={`/finance/customer-360-sheet?clientId=${g.clientId}`}>
-                          <Button size="sm" variant="outline">
+                        <Button asChild size="sm" variant="outline"><Link href={`/finance/customer-360-sheet?clientId=${g.clientId}`}>
                             <Users className="w-4 h-4 ml-1" />
                             ملف العميل 360°
-                          </Button>
-                        </Link>
+                          </Link></Button>
                       </div>
                     )}
                   </CardContent>

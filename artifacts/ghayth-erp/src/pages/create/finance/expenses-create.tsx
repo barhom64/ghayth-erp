@@ -34,6 +34,7 @@ import { VehicleContextCard } from "@/components/shared/vehicle-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { PropertyUnitContextCard } from "@/components/shared/property-unit-context-card";
 import { LiveImpactPreview } from "@/components/shared/impact-preview";
+import { FinancialAttachmentViewer } from "@/components/shared/financial-attachment-viewer";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -225,6 +226,29 @@ export default function ExpensesCreate() {
     if (type === "contract") { const c = (contractsData?.data || []).find((x: any) => String(x.id) === id); return c ? `${c.tenantName} - عقد #${c.id}` : ""; }
     return "";
   })();
+  // FIN-P6-FUEL-VEHICLE-WORKSPACE (#2236) — vehicle-fuel is a CONDENSED scenario
+  // that DRIVES the journal line: when fuel + vehicle + fuel-log, hide the
+  // general accounting fields, derive the amount from liters × price, show a
+  // read-only routing card, and hard-gate save on the dimensions the journal
+  // needs (vehicleId + supplier + liters/price/odometer). The account itself is
+  // resolved server-side (vehicle_fuel_expense → 5510, enforced) — never picked
+  // here, so the operator can't post fuel to a fallback account.
+  const isFuelScenario =
+    form.operationType === "fuel" && allocTarget.target === "vehicle" && !!allocTarget.createFuelLog;
+  const fuelLiters = Number(allocTarget.fuelLiters) || 0;
+  const fuelPricePerLiter = Number(allocTarget.fuelCostPerLiter) || 0;
+  const fuelDerivedAmount = isFuelScenario ? Number((fuelLiters * fuelPricePerLiter).toFixed(2)) : 0;
+  // Hard fields required before a vehicle-fuel journal may post.
+  const fuelHardMissing: string[] = [];
+  if (isFuelScenario) {
+    if (!allocTarget.allocation.vehicleId) fuelHardMissing.push("المركبة");
+    if (!allocTarget.fuelSupplierUnregistered && !allocTarget.allocation.vendorId)
+      fuelHardMissing.push("المورد (محطة الوقود)");
+    if (!(fuelLiters > 0)) fuelHardMissing.push("عدد اللترات");
+    if (!(fuelPricePerLiter > 0)) fuelHardMissing.push("سعر اللتر");
+    if (!allocTarget.fuelOdometer) fuelHardMissing.push("قراءة العداد (الممشى)");
+  }
+
   // #1715 (owner feedback) — the manual GL override is an ADVANCED escape
   // hatch, not a normal path: only finance approvers see it, it's collapsed by
   // default, and any override must carry a documented reason. Smart routing
@@ -254,6 +278,41 @@ export default function ExpensesCreate() {
   const attachmentRequired = ATTACHMENT_REQUIRED_TYPES.includes(form.operationType) ||
     (form.operationType === "payment" && Number(form.amount) >= 5000);
 
+  // #2237 — financial attachment workspace: feed the side viewer from the
+  // current attachment (uploaded file or pasted link) and let it upload/replace/
+  // remove through the SAME state the bottom block uses (no break to existing
+  // upload). The viewer is display-only — it never touches the journal.
+  const ATTACHMENT_TYPE_LABELS: Record<string, string> = {
+    invoice: "فاتورة", receipt: "وصل استلام", transfer: "إشعار تحويل",
+    contract: "عقد", approval: "موافقة", other: "أخرى",
+  };
+  const viewerAttachments = form.attachmentUrl
+    ? [{
+        url: form.attachmentUrl,
+        name: attachments[0]?.name,
+        type: attachments[0]?.type ?? null,
+        documentType: ATTACHMENT_TYPE_LABELS[form.attachmentType] ?? form.attachmentType,
+        // Internal serial: expense attachments are stored inline (attachmentUrl)
+        // with no dedicated attachment entity, so there is no internal serial yet
+        // (documented gap — needs a future financial_attachments table).
+        serialNo: null,
+        status: form.attachmentUrl ? "linked" : "pending",
+      }]
+    : [];
+  const applyAttachmentFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAttachments([{ name: file.name, size: file.size, type: file.type, dataUrl }]);
+      setForm((prev) => ({ ...prev, attachmentUrl: dataUrl }));
+    };
+    reader.readAsDataURL(file);
+  };
+  const clearAttachment = () => {
+    setAttachments([]);
+    setForm((prev) => (prev.attachmentUrl.startsWith("data:") ? { ...prev, attachmentUrl: "" } : prev));
+  };
+
   useEffect(() => {
     if (form.autoDescription) {
       const autoDesc = generateAutoDescription({
@@ -266,6 +325,14 @@ export default function ExpensesCreate() {
       setForm(prev => ({ ...prev, description: autoDesc }));
     }
   }, [form.operationType, derivedRelatedName, form.period, form.amount, form.autoDescription, form.expenseType]);
+
+  // #2236 — vehicle fuel: the amount is liters × price (read-only). Keep the
+  // form.amount in sync so the journal preview + save use the derived value.
+  useEffect(() => {
+    if (isFuelScenario && fuelDerivedAmount > 0 && form.amount !== String(fuelDerivedAmount)) {
+      setForm((f) => ({ ...f, amount: String(fuelDerivedAmount) }));
+    }
+  }, [isFuelScenario, fuelDerivedAmount]);
 
   if (accountsLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -300,6 +367,12 @@ export default function ExpensesCreate() {
   // description / account / allocation, preserving shared header fields
   // (date, branch, payment method, source treasury). Operators get the
   // multi-line workflow without a second form.
+  // #2238 — the journal-preview verdict gates save: a critical blocker (account
+  // not found / unbalanced / required dimension missing / illegal money source)
+  // disables the save button so the operator fixes the routing before posting,
+  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
+  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
+
   const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
       accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
@@ -314,6 +387,22 @@ export default function ExpensesCreate() {
     }
     if (ccRows.length > 0 && !ccBalanced) {
       toast({ variant: "destructive", title: `مجموع نسب توزيع مراكز التكلفة يجب أن يساوي 100% (الحالي ${ccPctTotal}%)` });
+      return;
+    }
+    // #2234 — vehicle fuel must carry a SAVED supplier (the gas station is a
+    // supplier, not free text). The unregistered exception is draft-only and
+    // policy-gated on the backend; the form still requires an explicit choice.
+    if (allocTarget.target === "vehicle" && allocTarget.createFuelLog &&
+        !allocTarget.fuelSupplierUnregistered && !allocTarget.allocation.vendorId) {
+      toast({ variant: "destructive", title: "اختر مورد محطة الوقود — أو فعّل «مورد غير مسجّل» للمسودة" });
+      return;
+    }
+    // #2236 — vehicle fuel drives the journal line: refuse to post without the
+    // hard fields the journal needs (vehicle dimension + supplier + liters/
+    // price/odometer). The vehicle dimension is also enforced server-side
+    // (account 5510, #2233); this is the early, friendly gate.
+    if (isFuelScenario && fuelHardMissing.length > 0) {
+      toast({ variant: "destructive", title: `أكمل بيانات الوقود الإلزامية: ${fuelHardMissing.join("، ")}` });
       return;
     }
     try {
@@ -412,7 +501,23 @@ export default function ExpensesCreate() {
           <Button variant="ghost" size="sm" className="text-status-warning-foreground h-7 px-2" onClick={clearDraft}>مسح المسودة</Button>
         </div>
       )}
-      <div data-form>
+      <div data-form className="lg:grid lg:grid-cols-[1fr_360px] lg:gap-4 lg:items-start">
+        {/* #2237 — financial attachment workspace: the document sits beside the
+            items form (left in RTL, sticky) during entry, instead of a bottom
+            upload field. Reusable across entry/approval/view (create mode here). */}
+        <aside className="mb-4 lg:mb-0 lg:order-2 lg:sticky lg:top-4">
+          <FinancialAttachmentViewer
+            mode="create"
+            attachments={viewerAttachments}
+            documentType={ATTACHMENT_TYPE_LABELS[form.attachmentType] ?? form.attachmentType}
+            canReplace={canManualOverride}
+            canDownload
+            onUpload={applyAttachmentFile}
+            onReplace={applyAttachmentFile}
+            onRemove={clearAttachment}
+          />
+        </aside>
+        <div className="min-w-0 lg:order-1">
         <ActiveContextNotice ctx={activeCtx} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <FormFieldWrapper label="التاريخ" required>
@@ -470,10 +575,27 @@ export default function ExpensesCreate() {
               endpoint="/finance/expenses/impact-preview"
               enabled={Boolean(form.amount && Number(form.amount) > 0)}
               payload={{
-                amount: Number(form.amount),
+                // #2238 — ship the FULL expense inputs so the backend builds the
+                // REAL journal plan (debit/credit + dimensions) through the same
+                // shared resolver the save path uses. `amount` is the NET (the
+                // backend adds VAT on top), matching the save payload exactly.
+                amount: Number(taxSplit.net),
                 expenseType: form.expenseType,
                 paymentMethod: form.paymentMethod,
                 costCenter: form.costCenter,
+                accountCode: form.accountCode || undefined,
+                sourceAccountCode: form.sourceAccountCode || undefined,
+                relatedEntityType: derivedRelated.type || undefined,
+                relatedEntityId: derivedRelated.id ? Number(derivedRelated.id) : undefined,
+                projectId: form.projectId ? Number(form.projectId) : undefined,
+                vatRate: form.vatRate ? Number(form.vatRate) : undefined,
+                operationType: form.operationType,
+                lineAllocation: Object.values(allocation).some((v) => v != null && v !== "")
+                  ? buildAllocationPayload(allocation)
+                  : undefined,
+                costCenterDistribution: ccRows.length > 0
+                  ? ccRows.map((r) => ({ costCenterId: Number(r.costCenterId), percentage: Number(r.percentage) }))
+                  : undefined,
                 supplierId: derivedRelated.type === "supplier" && derivedRelated.id ? Number(derivedRelated.id) : undefined,
                 targetType: allocTarget.target !== "none" ? allocTarget.target : undefined,
                 itemType: form.expenseType || undefined,
@@ -481,10 +603,12 @@ export default function ExpensesCreate() {
               // #1945 (owner review #3) — the scenario's suggested account becomes
               // the real DEFAULT at save: pre-fill the (editable) charge account
               // when the operator hasn't chosen one. Override stays one edit away.
+              // #2238 — capture the journal-preview blockers to gate the save button.
               onResult={(r) => {
                 if (r.suggestedAccountCode && !form.accountCode) {
                   setForm((f) => (f.accountCode ? f : { ...f, accountCode: r.suggestedAccountCode! }));
                 }
+                setJournalBlockers(r.journalPreview?.ready ? (r.journalPreview.blockers ?? []) : []);
               }}
             />
           </div>
@@ -493,11 +617,30 @@ export default function ExpensesCreate() {
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">الحسابات المحاسبية</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormFieldWrapper label="بند المصروفات" required>
-              <Autocomplete options={expenseOptions} value={form.accountCode}
-                onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
-                placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
-            </FormFieldWrapper>
+            {/* #2236 — in the condensed fuel scenario the charge account is
+                resolved by the financial engine (vehicle_fuel_expense), not
+                picked by hand, so fuel can't be posted to a fallback account. */}
+            {isFuelScenario ? (
+              <FormFieldWrapper label="بند المصروفات (توجيه تلقائي)">
+                <div className="rounded-md border bg-muted/40 p-2 text-sm flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span>
+                    {form.accountCode
+                      ? `حساب وقود المركبة: ${form.accountCode}`
+                      : "يُشتق تلقائيًا من ربط المركبة…"}
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      يحدّده المحرّك المالي ويتحقّق منه preflight — غير قابل للتعديل اليدوي.
+                    </span>
+                  </span>
+                </div>
+              </FormFieldWrapper>
+            ) : (
+              <FormFieldWrapper label="بند المصروفات" required>
+                <Autocomplete options={expenseOptions} value={form.accountCode}
+                  onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
+                  placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
+              </FormFieldWrapper>
+            )}
             <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">
               <Autocomplete options={sourceOptions} value={form.sourceAccountCode}
                 onChange={(val) => setForm(prev => ({ ...prev, sourceAccountCode: String(val) }))}
@@ -508,7 +651,25 @@ export default function ExpensesCreate() {
 
         {/* #1715 (owner feedback) — purchase/fleet line item: بند / كمية /
             وحدة / سعر الوحدة. The amount auto-fills from الكمية × سعر الوحدة. */}
-        {(form.operationType === "purchase" || form.expenseType === "fleet") && (
+        {/* #2236 — vehicle-fuel: a condensed read-only summary of the fuel log
+            (liters × price = amount, odometer) next to the live journal preview,
+            instead of the generic line-item block. */}
+        {isFuelScenario && (
+          <div className="border rounded-lg p-4 mb-4 space-y-2 bg-muted/30">
+            <h3 className="font-semibold text-sm text-muted-foreground">ملخّص تعبئة الوقود</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+              <div><span className="text-xs text-muted-foreground block">اللترات</span>{fuelLiters || "—"}</div>
+              <div><span className="text-xs text-muted-foreground block">سعر اللتر</span>{fuelPricePerLiter || "—"}</div>
+              <div><span className="text-xs text-muted-foreground block">العداد</span>{allocTarget.fuelOdometer || "—"}</div>
+              <div><span className="text-xs text-muted-foreground block">المبلغ (لتر×سعر)</span><span className="font-mono font-medium">{formatCurrency(fuelDerivedAmount)}</span></div>
+            </div>
+            {fuelHardMissing.length > 0 && (
+              <p className="text-xs text-status-warning-foreground">أكمل: {fuelHardMissing.join("، ")}</p>
+            )}
+          </div>
+        )}
+
+        {(form.operationType === "purchase" || form.expenseType === "fleet") && !isFuelScenario && (
           <div className="border rounded-lg p-4 mb-4 space-y-3">
             <h3 className="font-semibold text-sm text-muted-foreground">تفاصيل البند</h3>
             <p className="text-xs text-muted-foreground">أدخل بند الشراء وكميته؛ يُحسب المبلغ تلقائياً (الكمية × سعر الوحدة).</p>
@@ -541,8 +702,9 @@ export default function ExpensesCreate() {
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <NumberField label="المبلغ (ريال)" required value={form.amount}
-              onChange={(v) => setForm({ ...form, amount: v })} min={0} step={0.01} placeholder="0.00" />
+            <NumberField label={isFuelScenario ? "المبلغ (لتر × سعر — تلقائي)" : "المبلغ (ريال)"} required value={form.amount}
+              onChange={(v) => setForm({ ...form, amount: v })} min={0} step={0.01} placeholder="0.00"
+              disabled={isFuelScenario} />
             <FormFieldWrapper label="رمز الضريبة">
               <Select value={form.taxCodeId || "_none"} onValueChange={handleTaxCodeChange}>
                 <SelectTrigger><SelectValue placeholder="— بدون ضريبة —" /></SelectTrigger>
@@ -656,7 +818,7 @@ export default function ExpensesCreate() {
             default for approvers; any override requires a documented reason
             (logged to «Manual Overrides»). It is NOT a substitute for the
             smart operation context above. */}
-        {canManualOverride && (
+        {canManualOverride && !isFuelScenario && (
           <div className="border border-dashed rounded-lg p-4 mb-4 space-y-3">
             <button
               type="button"
@@ -934,14 +1096,36 @@ export default function ExpensesCreate() {
           )}
         </div>
 
+        {/* #2238 — surface why save is blocked (critical journal-preview blocker). */}
+        {journalBlockers.length > 0 && (
+          <div className="mt-4 rounded-lg border border-status-error-surface bg-status-error-surface p-3 text-xs text-status-error-foreground">
+            <p className="font-semibold mb-1">لا يمكن الحفظ — أصلِح القيد أولًا:</p>
+            <ul className="list-disc pr-4 space-y-0.5">
+              {journalBlockers.map((b, i) => <li key={i}>{b.message}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {/* #2236 — fuel hard-field gate: surface the missing dimensions the
+            vehicle-fuel journal needs before the save buttons unlock. */}
+        {isFuelScenario && fuelHardMissing.length > 0 && (
+          <div className="mt-4 rounded-lg border border-status-warning-surface bg-status-warning-surface p-3 text-xs text-status-warning-foreground">
+            <p className="font-semibold mb-1">لإتمام قيد وقود المركبة، أكمل:</p>
+            <ul className="list-disc pr-4 space-y-0.5">
+              {fuelHardMissing.map((f, i) => <li key={i}>{f}</li>)}
+            </ul>
+          </div>
+        )}
+
         <div className="flex justify-end gap-3 pt-4">
           <Button variant="outline" onClick={() => setLocation("/finance/expenses")}>إلغاء</Button>
-          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending || !activeCtx.ready} rateLimitAware>
+          <Button variant="secondary" onClick={() => handleSubmit({ addAnother: true })} disabled={createMut.isPending || !activeCtx.ready || journalBlockers.length > 0 || (isFuelScenario && fuelHardMissing.length > 0)} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ وإضافة آخر"}
           </Button>
-          <Button onClick={() => handleSubmit()} disabled={createMut.isPending || !activeCtx.ready} rateLimitAware>
+          <Button onClick={() => handleSubmit()} disabled={createMut.isPending || !activeCtx.ready || journalBlockers.length > 0 || (isFuelScenario && fuelHardMissing.length > 0)} rateLimitAware>
             {createMut.isPending ? "جاري الحفظ..." : "حفظ المصروف"}
           </Button>
+        </div>
         </div>
       </div>
     </CreatePageLayout>

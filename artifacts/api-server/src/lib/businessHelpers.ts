@@ -5,6 +5,7 @@ import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
+import { assertLedgerTruth } from "./financePostingPolicy.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
 import { config } from "./config.js";
 import {
@@ -397,6 +398,58 @@ export function auditMutation(
   );
 }
 
+/**
+ * auditFromRequest — canonical audit writer that automatically extracts
+ * the full IGOC operating context from `req.scope`:
+ *
+ *   - companyId  (always)
+ *   - branchId   (when present on scope)
+ *   - userId     (always)
+ *   - activeRoleKey            (RBAC-001 — capacity the actor performed under)
+ *   - activeDepartmentId       (IGOC-001 — actor's primary assignment department)
+ *   - resolvedScope            (IGOC-001 — authz resolution at action time)
+ *   - impersonationSourceUser  (IGOC-001 — super-admin acting as another user)
+ *
+ * Use this in every route handler instead of calling `createAuditLog`
+ * directly. The previous pattern — passing only `activeRoleKey` and
+ * dropping the other three IGOC fields — leaves audit rows with
+ * NULL context, making cross-tenant / impersonation forensics
+ * impossible to reconstruct. The HR-019 «جسور المؤسسة» write was
+ * the live find that surfaced this gap.
+ *
+ * Errors are swallowed (audit must never break the business write).
+ */
+export function auditFromRequest(
+  req: { scope?: any },
+  action: string,
+  entity: string,
+  entityId: number,
+  changes: { before?: any; after?: any; reason?: string } = {},
+): Promise<void> {
+  const scope = req.scope;
+  if (!scope) {
+    logger.warn({ entity, entityId, action }, "[audit] no scope on request — audit skipped");
+    return Promise.resolve();
+  }
+  return createAuditLog({
+    companyId: scope.companyId,
+    branchId: scope.branchId ?? undefined,
+    userId: scope.userId,
+    action,
+    entity,
+    entityId,
+    before: changes.before,
+    after: changes.after,
+    reason: changes.reason,
+    activeRoleKey: scope.selectedRoleKey ?? null,
+    activeDepartmentId: scope.activeDepartmentId ?? null,
+    resolvedScope: scope.resolvedScope ?? null,
+    impersonationSourceUser: scope.impersonationSourceUser ?? null,
+  }).catch((err) =>
+    logger.warn({ err, entity, entityId, action }, "[audit] auditFromRequest failed"),
+  );
+}
+
 export async function createAuditLog(params: {
   companyId: number;
   branchId?: number;
@@ -480,6 +533,11 @@ export interface JournalEntryLine {
   /** Free-form dimension bag for future allocation rules that don't
    *  warrant a dedicated column yet. */
   dimensionJson?: Record<string, unknown>;
+  /** Optional FK to analytic_accounts (Issue #2197).
+   *  Carries operational context (party/season/branch/employee/…) for
+   *  reporting drill-down. NOT a posting target — the debit/credit always
+   *  goes to a chart_of_accounts row (allowPosting=true). */
+  analyticAccountId?: number | null;
 }
 
 export async function createJournalEntry(params: {
@@ -624,6 +682,28 @@ export async function createJournalEntry(params: {
     // routing page surfaces the toggle so the operator can opt in.
     await substituteSubsidiaryAccountCodes(client, params.lines, params.companyId);
 
+    // FIN-INTEGRITY-CONTRACT (#2246 SLICE 1) — عقد صدق دفتر الأستاذ المركزي بعد
+    // اكتمال إثراء الأبعاد، قبل إدراج السطور (داخل المعاملة: الرفض يُرجِع كل شيء).
+    // مُنسِّق يُركّب عقد البُعد (enforce وقود 5510 + warn البقية، دون تغيير) +
+    // سيناريو فاتورة المورد (enforce vendorId) + حوكمة القيد اليدوي التشغيلي.
+    const dimContract = assertLedgerTruth({
+      lines: params.lines as any,
+      header: {
+        type: params.type ?? "manual",
+        sourceType: params.sourceType ?? null,
+        isManual: params.sourceType === "manual_journal" || (params.type ?? "manual") === "manual",
+        description: params.description ?? null,
+        reason: params.description ?? null,
+      },
+      context: { companyId: params.companyId },
+    });
+    if (dimContract.warnings.length > 0) {
+      logger.warn(
+        { companyId: params.companyId, ref: params.ref, warnings: dimContract.warnings },
+        "[dimension-contract] سطور بلا بُعد مطلوب (warn)",
+      );
+    }
+
     for (const line of params.lines) {
       let accountId = line.accountId ?? null;
       if (!accountId && line.accountCode) {
@@ -655,14 +735,16 @@ export async function createJournalEntry(params: {
           "activityType","templateId",
           "productId","clientId","vendorId","driverId",
           "costCenterId","unitId","assetId","umrahSeasonId","umrahAgentId",
-          "sourceLineTable","sourceLineId","dimensionJson","branchId"
+          "sourceLineTable","sourceLineId","dimensionJson","branchId",
+          "analyticAccountId"
          ) VALUES (
           $1,$2,$3,$4,$5,$6,$7,
           $8,$9,$10,$11,$12,$13,
           $14,$15,
           $16,$17,$18,$19,
           $20,$21,$22,$23,$24,
-          $25,$26,$27,$28
+          $25,$26,$27,$28,
+          $29
          )`,
         [
           jId, line.accountCode, accountId, line.debit, line.credit,
@@ -676,6 +758,7 @@ export async function createJournalEntry(params: {
           line.sourceLineTable ?? null, line.sourceLineId ?? null,
           line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
           lineBranchId,
+          line.analyticAccountId ?? null,
         ]
       );
     }
@@ -1330,7 +1413,7 @@ export async function checkFinancialPeriodOpen(
  * This stops "الحساب 1400 غير موجود في شجرة الحسابات" from blocking saves
  * when the company's chart uses different codes than the legacy defaults.
  */
-const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
+export const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   vat_input: { type: "asset", keywords: ["ضريبة قيمة مضافة مدفوعة", "ضريبة المدخلات", "vat input", "input vat"] },
   vat_output: { type: "liability", keywords: ["ضريبة القيمة المضافة المستحقة", "ضريبة المخرجات", "vat output", "output vat"] },
   withholding_tax: { type: "liability", keywords: ["ضريبة الاستقطاع", "withholding"] },
@@ -1353,13 +1436,152 @@ const MAPPING_INTENT: Record<string, { type: string; keywords: string[] }> = {
   // postable leaf (e.g. 1111 الصندوق الرئيسي, 2160 إيرادات مقبوضة مقدماً).
   invoice_payment_cash: { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
   customer_advance_liability: { type: "liability", keywords: ["دفعات مقدمة", "مقبوضة مقدم", "عملاء", "advance", "unearned"] },
+  // #1945 FIN-03 — the AR-clearing leg of customer receipts/payments. On a
+  // SOCPA tree the literal fallback "1200" is الأصول غير المتداولة (a
+  // non-postable header), so the credit leg of every customer payment
+  // resolved to a header and the post FAILED. Intent search finds the
+  // postable receivables leaf (e.g. 1131 عملاء محليون).
+  invoice_payment_ar: { type: "asset", keywords: ["ذمم", "مدينون", "عملاء", "receivable"] },
+  // …and the AR DEBIT side of issuing the invoice itself — fallback "1200"
+  // is الأصول غير المتداولة (non-postable header) on a SOCPA tree, so
+  // approving ANY invoice failed there before this entry.
+  invoice_ar: { type: "asset", keywords: ["ذمم", "مدينون", "عملاء", "receivable"] },
+  // #1945 FIN-18 — bank reconciliation adjustments (fees out / interest in).
+  bank_fee_expense: { type: "expense", keywords: ["عمولات بنكية", "رسوم بنكية", "مصروفات بنكية", "bank fee", "bank charge"] },
+  bank_interest_income: { type: "revenue", keywords: ["فوائد", "مرابحات", "عوائد بنكية", "interest"] },
+  // #1945 item 6 — generic sales-invoice revenue. The literal fallback
+  // "4000" is the REVENUE ROOT (non-postable header) on a SOCPA tree, so an
+  // invoice with any unmapped line could never approve there. Intent search
+  // finds the postable sales leaf (e.g. 4111 مبيعات نقدية).
+  invoice_revenue: { type: "revenue", keywords: ["إيرادات المبيعات", "مبيعات", "إيرادات", "sales"] },
+  // …and the invoice's output-VAT payable leg — fallback "2300" is absent on
+  // a SOCPA tree (the leaf is e.g. 2131 ضريبة القيمة المضافة المستحقة).
+  invoice_vat_payable: { type: "liability", keywords: ["ضريبة القيمة المضافة المستحقة", "ضريبة المخرجات", "vat output", "output vat"] },
+  // #1945 FIN-SUB-01 (#2097) — GRN per-line treatment routing. The literal
+  // fallbacks in finance-purchase.ts were wrong/absent on the SOCPA chart
+  // (inventory→1250 leasehold, custody→1130 AR, plus missing expense leaves);
+  // these intents resolve the right postable leaf on any tenant chart, and the
+  // GRN nature-enforcement guarantees the posted account matches the treatment.
+  inventory_receipt:           { type: "asset",   keywords: ["مخزون البضائع", "المخزون", "مخزون"] },
+  employee_custody:            { type: "asset",   keywords: ["عهد مالية للموظف", "عهد"] },
+  supplier_prepayment:         { type: "asset",   keywords: ["مصروفات مدفوعة مقدم", "مدفوعة مقدم", "دفعات مقدمة"] },
+  fixed_asset_purchase:        { type: "asset",   keywords: ["أعمال تحت التنفيذ", "الأصول غير الملموسة", "أصول"] },
+  general_expense:             { type: "expense", keywords: ["مصروفات عمومية", "مصروفات إدارية", "قرطاسية", "مصروف"] },
+  service_expense:             { type: "expense", keywords: ["تكلفة الخدمات", "أتعاب مهنية", "خدمات"] },
+  vehicle_expense:             { type: "expense", keywords: ["صيانة وإصلاح المركبات", "الوقود", "مركبات"] },
+  property_maintenance_expense:{ type: "expense", keywords: ["صيانة المباني والوحدات", "صيانة المباني", "صيانة"] },
+  project_cost:                { type: "expense", keywords: ["تكلفة المشاريع والمقاولات", "تكلفة المشاريع", "مشاريع"] },
+  // Root-cause sweep — intent coverage for EVERY operationType whose static
+  // fallback used to point at a non-postable header/missing code (now fixed at
+  // the call sites to the canonical postable leaf). These entries guarantee the
+  // SAME correct leaf is auto-resolved on ANY tenant chart whose codes differ
+  // from DEFAULT_CHART_OF_ACCOUNTS. Each opType maps to a SINGLE account type;
+  // dual-leg/cross-type opTypes (e.g. project_cost_transfer: debit→expense
+  // 5130, credit→asset 1270) are deliberately OMITTED — a one-type intent would
+  // mis-route one of their legs, so they rely on their now-postable fallbacks.
+  // --- Cash (→ الصندوق الرئيسي 1111) ---
+  cash:                          { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  fleet_cash_source:             { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  vendor_advance_cash:           { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  cip_funding_cash:              { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  property_cash:                 { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  property_building_purchase_cash:{ type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  fleet_vehicle_purchase_cash:   { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  asset_disposal_cash:           { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  employee_loan_disbursement:    { type: "asset", keywords: ["النقدية", "صندوق", "نقد", "cash"] },
+  // --- Bank (→ بنوك 1124/112x) ---
+  payroll_bank_payout:           { type: "asset", keywords: ["البنك", "بنوك", "مصرف", "bank"] },
+  // --- Receivables (→ عملاء محليون 1131) ---
+  accounts_receivable:           { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  legal_receivable:              { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  support_ar:                    { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  cargo_receivable:              { type: "asset", keywords: ["عملاء", "ذمم", "مدينون", "receivable"] },
+  rent_receivable:               { type: "asset", keywords: ["عملاء العقارات", "إيجارات", "ذمم", "عملاء"] },
+  bad_debt_allowance:            { type: "asset", keywords: ["مخصص الديون", "الديون المشكوك", "مخصص"] },
+  salary_advance_receivable:     { type: "asset", keywords: ["سلف الموظفين", "سلف", "عهد"] },
+  employee_loan_receivable:      { type: "asset", keywords: ["قروض موظفين", "قروض"] },
+  vendor_return_revenue:         { type: "asset", keywords: ["مخزون البضائع", "المخزون", "مخزون"] },
+  fleet_prepaid_insurance:       { type: "asset", keywords: ["تأمينات مدفوعة مقدم", "مدفوعة مقدم", "مصروفات مدفوعة مقدم"] },
+  // --- Fixed assets & accumulated depreciation ---
+  fleet_vehicle_asset:           { type: "asset", keywords: ["المركبات", "أسطول النقل", "مركبات"] },
+  fleet_acc_depreciation:        { type: "asset", keywords: ["مجمع إهلاك المركبات", "مجمع إهلاك"] },
+  asset_accumulated_impairment:  { type: "asset", keywords: ["مجمع إهلاك", "إهلاك متراكم"] },
+  property_building_asset:        { type: "asset", keywords: ["المباني والعقارات", "المباني", "عقارات"] },
+  property_sale_receivable:     { type: "asset", keywords: ["عملاء", "ذمم مدينة", "مدينون"] },
+  property_sale_loss:            { type: "expense", keywords: ["خسائر بيع أصول", "بيع أصول", "خسائر"] },
+  property_acc_depreciation:     { type: "asset", keywords: ["مجمع إهلاك المباني", "مجمع إهلاك"] },
+  project_wip:                   { type: "asset", keywords: ["أعمال تحت التنفيذ", "تحت التنفيذ"] },
+  // --- Payables (→ موردون محليون 2111) ---
+  purchase_vendor_ap:            { type: "liability", keywords: ["موردون", "دائنون", "ذمم دائنة"] },
+  vendor_credit_clearing:        { type: "liability", keywords: ["موردون", "دائنون", "ذمم دائنة"] },
+  vendor_advance_receivable:     { type: "liability", keywords: ["موردون", "دائنون", "ذمم دائنة"] },
+  // --- Payroll & statutory payables ---
+  payroll_deductions_payable:    { type: "liability", keywords: ["مستحقات الرواتب", "الرواتب", "استقطاعات"] },
+  employee_deductions:           { type: "liability", keywords: ["مستحقات الرواتب", "الرواتب", "استقطاعات"] },
+  payroll_gosi_payable:          { type: "liability", keywords: ["التأمينات الاجتماعية", "تأمينات اجتماعية", "gosi"] },
+  // --- Accrued expenses (→ مصروفات مستحقة الدفع 2150) ---
+  legal_payable:                 { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  legal_fee_payable:             { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  property_maintenance_payable:  { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  cargo_freight_payable:         { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  fleet_trip_payable:            { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  fleet_fines_payable:           { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  purchase_grni:                 { type: "liability", keywords: ["مصروفات مستحقة", "مستحقة الدفع", "مستحقات"] },
+  // --- Other liabilities ---
+  wht_payable:                   { type: "liability", keywords: ["ضريبة الاستقطاع", "استقطاع", "withholding"] },
+  security_deposit_liability:    { type: "liability", keywords: ["تأمينات وضمانات", "تأمينات من العملاء", "ضمانات"] },
+  hr_eos_accrual_liability:      { type: "liability", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  eos_accrual_liability:         { type: "liability", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  // --- Revenue ---
+  sales_revenue:                 { type: "revenue", keywords: ["مبيعات", "إيرادات المبيعات", "إيرادات", "sales"] },
+  invoice_sales_returns:         { type: "revenue", keywords: ["مردودات", "مسموحات المبيعات", "مردودات المبيعات"] },
+  rent_revenue:                  { type: "revenue", keywords: ["إيجارات", "إيرادات الإيجارات", "إيرادات"] },
+  rental_revenue:                { type: "revenue", keywords: ["إيجارات", "إيرادات الإيجارات", "إيرادات"] },
+  support_service_revenue:       { type: "revenue", keywords: ["إيرادات الخدمات", "خدمات", "إيرادات"] },
+  fleet_rental_revenue:          { type: "revenue", keywords: ["إيرادات النقل", "النقل", "الأسطول", "إيرادات"] },
+  cargo_freight_revenue:         { type: "revenue", keywords: ["إيرادات النقل", "شحن", "النقل", "إيرادات"] },
+  asset_disposal_gain:           { type: "revenue", keywords: ["أرباح بيع أصول", "بيع أصول", "أرباح"] },
+  legal_settlement_revenue:      { type: "revenue", keywords: ["إيرادات متنوعة", "متنوعة", "إيرادات"] },
+  // --- Expenses ---
+  salary_expense:                { type: "expense", keywords: ["الرواتب الأساسية", "رواتب", "أجور"] },
+  payroll_salary_expense:        { type: "expense", keywords: ["الرواتب الأساسية", "رواتب", "أجور"] },
+  payroll_overtime_expense:      { type: "expense", keywords: ["العمل الإضافي", "إضافي", "أوفر تايم"] },
+  payroll_gosi_expense:          { type: "expense", keywords: ["حصة المنشأة في التأمينات", "التأمينات", "gosi"] },
+  eos_expense:                   { type: "expense", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  eos_accrual_expense:           { type: "expense", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  hr_eos_accrual_expense:        { type: "expense", keywords: ["مكافأة نهاية الخدمة", "نهاية الخدمة"] },
+  leave_settlement_expense:      { type: "expense", keywords: ["الإجازات", "تذاكر السفر", "إجازات"] },
+  leave_accrual_expense:         { type: "expense", keywords: ["الإجازات", "إجازات"] },
+  hr_leave_accrual_expense:      { type: "expense", keywords: ["الإجازات", "إجازات"] },
+  fleet_trip_expense:            { type: "expense", keywords: ["تكاليف نقل وشحن", "نقل وشحن", "نقل", "شحن"] },
+  cargo_freight_cost:            { type: "expense", keywords: ["تكاليف نقل وشحن", "نقل وشحن", "شحن", "نقل"] },
+  fleet_maintenance_expense:     { type: "expense", keywords: ["صيانة وإصلاح المركبات", "صيانة المركبات", "صيانة"] },
+  fleet_fuel_expense:            { type: "expense", keywords: ["الوقود", "وقود", "fuel"] },
+  fleet_fines_expense:           { type: "expense", keywords: ["مخالفات مرورية", "مخالفات"] },
+  fleet_depreciation:            { type: "expense", keywords: ["إهلاك المركبات", "إهلاك"] },
+  property_depreciation:         { type: "expense", keywords: ["إهلاك المباني", "إهلاك"] },
+  vendor_invoice_expense:        { type: "expense", keywords: ["أتعاب مهنية واستشارية", "أتعاب مهنية", "استشارية"] },
+  legal_fee:                     { type: "expense", keywords: ["أتعاب محاماة", "محاماة", "أتعاب قانونية"] },
+  legal_expense:                 { type: "expense", keywords: ["أتعاب محاماة", "محاماة", "أتعاب قانونية"] },
+  legal_settlement_expense:      { type: "expense", keywords: ["رسوم محاكم وتقاضي", "رسوم محاكم", "تقاضي"] },
+  bad_debt_expense:              { type: "expense", keywords: ["ديون معدومة", "معدومة"] },
+  allowance_expense:             { type: "expense", keywords: ["ديون معدومة", "مخصص", "معدومة"] },
+  asset_revaluation_loss:        { type: "expense", keywords: ["خسائر بيع أصول", "خسائر", "اضمحلال"] },
+  asset_impairment_loss:         { type: "expense", keywords: ["خسائر بيع أصول", "خسائر", "اضمحلال"] },
+  asset_disposal_loss:           { type: "expense", keywords: ["خسائر بيع أصول", "بيع أصول", "خسائر"] },
 };
 
 const _resolvedAccountCache = new Map<string, string>();
 const _RESOLVED_ACCOUNT_CACHE_MAX_SIZE = 5_000;
 
 async function resolveByIntent(companyId: number, operationType: string, fallbackCode: string): Promise<string> {
-  const cacheKey = `${companyId}:${operationType}`;
+  // The fallback differs per side for operations that post both legs under the
+  // SAME operationType (e.g. inventory_issue_cogs: debit→5110 COGS,
+  // credit→1151 inventory). Keying the cache by operationType alone collapsed
+  // both legs onto whichever resolved first — producing a degenerate JE that
+  // debited AND credited COGS with no inventory relief (COGS never truly
+  // posted). Include the fallbackCode so each side resolves independently.
+  const cacheKey = `${companyId}:${operationType}:${fallbackCode}`;
   const cached = _resolvedAccountCache.get(cacheKey);
   if (cached) return cached;
 
@@ -1382,7 +1604,7 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     const rows = await rawQuery<{ code: string }>(
       `SELECT code FROM chart_of_accounts
        WHERE "companyId"=$1 AND type=$2 AND "allowPosting"=true AND "deletedAt" IS NULL AND (${likeClauses})
-       ORDER BY length(code) ASC LIMIT 1`,
+       ORDER BY length(code) ASC, code ASC LIMIT 1`,
       params
     );
     if (rows.length) {
@@ -1393,28 +1615,123 @@ async function resolveByIntent(companyId: number, operationType: string, fallbac
     }
   }
 
-  // 3. Last resort — return the (missing) fallback and let the caller surface
-  // a clear ValidationError. Better than picking a random account.
-  return fallbackCode;
+  // 3. Neither the fallback nor intent search found a postable account.
+  // Throw immediately with a clear config error rather than returning an
+  // unverified code that would travel silently through the system and
+  // produce a cryptic failure at the DB level much later.
+  throw new ValidationError(
+    `لا يمكن تحديد حساب قابل للترحيل للعملية "${operationType}"` +
+    (fallbackCode ? ` (الكود الافتراضي "${fallbackCode}" غير موجود أو غير قابل للترحيل)` : "") +
+    `. أضف ربطاً في إعدادات المحاسبة → ربط الحسابات.`,
+    {
+      field: "accountCode",
+      fix: `افتح إعدادات المحاسبة → ربط الحسابات وأضف إعداداً للعملية "${operationType}" يشير إلى حساب فرعي (تفصيلي) يقبل الحركة`,
+    }
+  );
+}
+
+/**
+ * Verify that a resolved account code is postable in the given company.
+ * Throws a descriptive ValidationError when:
+ *   - the code is empty / blank (missing mapping / fallback)
+ *   - the account does not exist in the company's chart
+ *   - the account is a grouping / summary account (allowPosting=false)
+ *   - the account is inactive
+ *
+ * Call this immediately after resolveAccountCode / getAccountCodeFromMapping
+ * before building journal lines — it is the single centralised choke-point
+ * that prevents ANY non-postable account from ever reaching the GL engine,
+ * regardless of the path (UI, API, mapping, fallback, import, seed).
+ */
+export async function assertPostableAccount(
+  companyId: number,
+  code: string,
+  context: { operationType?: string; side?: string; field?: string } = {}
+): Promise<void> {
+  if (!code || !code.trim()) {
+    const hint = context.operationType
+      ? `لم يُعثر على حساب مرتبط بالعملية "${context.operationType}" (${context.side ?? ""}). أضف ربطاً في إعدادات المحاسبة.`
+      : "لم يُحدَّد رقم الحساب.";
+    throw new ValidationError(hint, {
+      field: context.field ?? "accountCode",
+      fix: "افتح إعدادات المحاسبة → ربط الحسابات وأضف الإعداد الناقص",
+    });
+  }
+  const [acc] = await rawQuery<{ allowPosting: boolean; isActive: boolean; name: string }>(
+    `SELECT "allowPosting", "isActive", name FROM chart_of_accounts
+     WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [companyId, code]
+  );
+  if (!acc) {
+    throw new ValidationError(
+      `الحساب "${code}" غير موجود في شجرة الحسابات` +
+      (context.operationType ? ` (العملية: ${context.operationType})` : ""),
+      { field: context.field ?? "accountCode", fix: "تأكد من وجود الحساب في شجرة الحسابات أو أضف إعداد ربط صحيح" }
+    );
+  }
+  if (!acc.allowPosting) {
+    throw new ValidationError(
+      `الحساب "${code}" (${acc.name}) حساب تجميعي/رئيسي لا يقبل الترحيل المباشر` +
+      (context.operationType ? ` — العملية: ${context.operationType}` : "") +
+      ". استخدم حساباً فرعياً تفصيلياً أو أضف ربطاً صحيحاً في إعدادات المحاسبة.",
+      { field: context.field ?? "accountCode", fix: "اختر حساباً فرعياً (تفصيلياً) يقبل الحركة أو أصلح ربط الحسابات" }
+    );
+  }
+  if (!acc.isActive) {
+    throw new ValidationError(
+      `الحساب "${code}" (${acc.name}) معطّل — لا يمكن الترحيل عليه`,
+      { field: context.field ?? "accountCode", fix: "فعّل الحساب أو اختر حساباً نشطاً" }
+    );
+  }
 }
 
 export async function getAccountCodeFromMapping(
   companyId: number,
   operationType: string,
   side: "debit" | "credit",
-  fallbackCode: string
+  fallbackCode: string = ""
 ): Promise<string> {
-  const [mapping] = await rawQuery<{ debitAccountCode: string | null; creditAccountCode: string | null; debitCode: string | null; creditCode: string | null }>(
-    `SELECT "debitAccountCode", "creditAccountCode", "debitAccountId", "creditAccountId",
-            da.code AS "debitCode", ca.code AS "creditCode"
+  // Fetch both the mapping row AND the joined account info in one query.
+  // Two separate joins: one that checks allowPosting=true (valid), one that
+  // doesn't — so we can distinguish "no mapping at all" from "mapping exists
+  // but the account is a non-postable parent" and raise a CLEAR config error
+  // in the latter case rather than silently falling back to intent search.
+  const [mapping] = await rawQuery<{
+    debitAccountId:   number | null;
+    creditAccountId:  number | null;
+    debitCode:        string | null;  // null if account deleted/non-postable
+    creditCode:       string | null;
+    debitAllows:      boolean | null; // the actual allowPosting of the linked account
+    creditAllows:     boolean | null;
+    debitAccountCode: string | null;  // legacy text column (fallback)
+    creditAccountCode:string | null;
+  }>(
+    `SELECT am."debitAccountId", am."creditAccountId",
+            am."debitAccountCode", am."creditAccountCode",
+            valid_da.code    AS "debitCode",
+            valid_ca.code    AS "creditCode",
+            raw_da."allowPosting" AS "debitAllows",
+            raw_ca."allowPosting" AS "creditAllows"
      FROM accounting_mappings am
-     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
-     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
+     -- join to get postable account code (null when non-postable / deleted)
+     LEFT JOIN chart_of_accounts valid_da
+       ON valid_da.id = am."debitAccountId"
+       AND valid_da."allowPosting" = true AND valid_da."deletedAt" IS NULL
+     LEFT JOIN chart_of_accounts valid_ca
+       ON valid_ca.id = am."creditAccountId"
+       AND valid_ca."allowPosting" = true AND valid_ca."deletedAt" IS NULL
+     -- join WITHOUT allowPosting filter to detect misconfigured parent accounts
+     LEFT JOIN chart_of_accounts raw_da
+       ON raw_da.id = am."debitAccountId" AND raw_da."deletedAt" IS NULL
+     LEFT JOIN chart_of_accounts raw_ca
+       ON raw_ca.id = am."creditAccountId" AND raw_ca."deletedAt" IS NULL
      WHERE am."companyId" = $1 AND am."operationType" = $2 AND am."isActive" = true
      LIMIT 1`,
     [companyId, operationType]
   );
+
   if (!mapping) {
+    // No mapping configured at all — fall through to intent search.
     const resolved = await resolveByIntent(companyId, operationType, fallbackCode);
     if (resolved !== fallbackCode) return resolved;
     logger.warn(`[accounting_mappings] No mapping for "${operationType}", company=${companyId}. Fallback: "${fallbackCode}".`);
@@ -1423,8 +1740,39 @@ export async function getAccountCodeFromMapping(
        VALUES ($1,0,'mapping_fallback','accounting_mappings',0,$2)`,
       [companyId, JSON.stringify({ operationType, side, fallbackCode })]
     ).catch((e) => logger.error(e, "[businessHelpers] background task failed"));
+    // resolveByIntent already throws if it cannot find a postable account,
+    // so reaching here means it returned the fallback — which means it DID
+    // find it postable (step 1 in resolveByIntent). Return it.
+    // NOTE: the only way we reach this line is if resolveByIntent returned
+    // the same fallbackCode it was given — i.e. it found it postable in step 1
+    // but there was no explicit mapping. That is a valid "configured fallback" path.
     return fallbackCode;
   }
+
+  // If a mapping row EXISTS but its linked account is a non-postable parent,
+  // raise an explicit config error — do NOT silently fall back to intent search.
+  // Silent fallback would hide the misconfiguration from the operator.
+  if (side === "debit" && mapping.debitAccountId !== null && !mapping.debitAllows) {
+    throw new ValidationError(
+      `إعداد المحاسبة غير صحيح: العملية "${operationType}" مرتبطة بحساب مدين غير قابل للترحيل ` +
+      `(حساب تجميعي/رئيسي أو محذوف). أصلح الإعداد في قائمة ربط الحسابات.`,
+      {
+        field: "debitAccountId",
+        fix: `افتح إعدادات المحاسبة → ربط الحسابات → اختر حساباً فرعياً (تفصيلياً) يقبل الحركة للعملية "${operationType}"`,
+      }
+    );
+  }
+  if (side === "credit" && mapping.creditAccountId !== null && !mapping.creditAllows) {
+    throw new ValidationError(
+      `إعداد المحاسبة غير صحيح: العملية "${operationType}" مرتبطة بحساب دائن غير قابل للترحيل ` +
+      `(حساب تجميعي/رئيسي أو محذوف). أصلح الإعداد في قائمة ربط الحسابات.`,
+      {
+        field: "creditAccountId",
+        fix: `افتح إعدادات المحاسبة → ربط الحسابات → اختر حساباً فرعياً (تفصيلياً) يقبل الحركة للعملية "${operationType}"`,
+      }
+    );
+  }
+
   const explicitCode = side === "debit"
     ? (mapping.debitCode || mapping.debitAccountCode)
     : (mapping.creditCode || mapping.creditAccountCode);

@@ -11,6 +11,7 @@ import { Users, Plane, Wallet, AlertTriangle, Shield, Calendar } from "lucide-re
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 import { UmrahGroupCostBreakdownCard } from "@/components/shared/umrah-group-cost-breakdown-card";
+import { JourneyStepIndicator } from "@/components/shared/journey-step-indicator";
 
 // Pilgrim status → Arabic label. Mirrors the constant on the agent
 // detail page (kept in sync via the smoke test pin on both pages).
@@ -134,6 +135,16 @@ export default function UmrahGroupDetail() {
 
   const overview = (
     <div className="grid gap-4 md:grid-cols-3">
+      {/* U-19-P4 — journey step indicator pinned across the top. */}
+      {data?.id && (
+        <div className="md:col-span-3">
+          <JourneyStepIndicator
+            subjectKind="group"
+            subjectId={data.id}
+            currentStage="invoiced"
+          />
+        </div>
+      )}
       {/* Header card — identity + agent/season/sub-agent at a glance.
           The two-column layout keeps it readable on tablets without
           forcing a horizontal scroll. */}

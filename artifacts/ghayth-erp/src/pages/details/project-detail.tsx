@@ -63,7 +63,7 @@ import {
   ArrowRight, FolderKanban, Calendar, DollarSign, ListTodo,
   CheckCircle2, Pencil, Trash2, X, Check, AlertTriangle,
   BookOpen, FileText, Clock, Plus, Flag,
-  BarChart2, ShieldAlert, Users2, Mail, Lock, TrendingUp,
+  BarChart2, ShieldAlert, Users2, Mail, Lock, TrendingUp, ClipboardList,
 } from "lucide-react";
 import { formatDateAr, getCurrencySymbol, formatCurrency } from "@/lib/formatters";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -82,11 +82,13 @@ import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 
 const PROJECT_TABS = [
   { key: "overview", label: "نظرة عامة", icon: FolderKanban },
+  { key: "units", label: "الوحدات", icon: BarChart2 },
   { key: "tasks", label: "المهام", icon: ListTodo },
   { key: "team", label: "الفريق", icon: Users2 },
   { key: "costs", label: "التكاليف", icon: DollarSign },
   { key: "finance", label: "المالية", icon: BookOpen },
   { key: "letters", label: "المراسلات", icon: Mail },
+  { key: "boq", label: "جدول الكميات", icon: ClipboardList },
   { key: "documents", label: "المستندات", icon: FileText },
   { key: "timeline", label: "السجل الزمني", icon: Clock },
 ] as const;
@@ -124,6 +126,25 @@ export default function ProjectDetail() {
   const { data: resourcesResp } = useApiQuery<any>(["project-resources", id || ""], `/projects/${id}/resources`, !!id);
   const { data: costsResp, refetch: refetchCosts } = useApiQuery<any>(["project-costs", id || ""], `/projects/${id}/costs`, !!id);
   const { data: lettersResp } = useApiQuery<any>(["project-letters", id || ""], `/projects/${id}/letters`, !!id);
+  const unitsEnabled = !!id && activeTab === "units";
+  const { data: unitsResp, refetch: refetchUnits } = useApiQuery<any>(["project-units", id || ""], `/projects/${id}/units`, unitsEnabled);
+  const projectUnits: any[] = unitsResp?.units || [];
+  const boqEnabled = !!id && activeTab === "boq";
+  const { data: boqResp, refetch: refetchBoq } = useApiQuery<any>(["project-boq", id || ""], `/projects/${id}/boq`, boqEnabled);
+  const boqItems: any[] = boqResp?.data || boqResp || [];
+  const [showBoqForm, setShowBoqForm] = useState(false);
+  const [newBoq, setNewBoq] = useState<{ description?: string; unit?: string; quantity?: string; unitPrice?: string; notes?: string }>({});
+  const [editBoqId, setEditBoqId] = useState<number | null>(null);
+  const [editBoq, setEditBoq] = useState<{ description?: string; unit?: string; quantity?: string; unitPrice?: string; notes?: string }>({});
+  const [boqBilling, setBoqBilling] = useState(false);
+  const [showUnitForm, setShowUnitForm] = useState(false);
+  const [newUnit, setNewUnit] = useState<{ name?: string; code?: string; area?: string; salePrice?: string; notes?: string }>({});
+  const [sellUnitId, setSellUnitId] = useState<number | null>(null);
+  const [sellBuyerId, setSellBuyerId] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
+  const [sellLoading, setSellLoading] = useState(false);
+  const [editingUnitId, setEditingUnitId] = useState<number | null>(null);
+  const [editUnitDraft, setEditUnitDraft] = useState<{ name?: string; area?: string; salePrice?: string; notes?: string }>({});
   const risks: any[] = risksResp?.data || risksResp || [];
   const milestones: any[] = milestonesResp?.data || milestonesResp || [];
   const openRisks = risks.filter((r: any) => r.status === "open" || r.status === "realized");
@@ -312,6 +333,149 @@ export default function ProjectDetail() {
     }
   };
 
+  const saveUnit = async () => {
+    try {
+      await apiFetch(`/projects/${id}/units`, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newUnit.name,
+          code: newUnit.code || undefined,
+          area: newUnit.area ? Number(newUnit.area) : 0,
+          salePrice: newUnit.salePrice ? Number(newUnit.salePrice) : undefined,
+          notes: newUnit.notes || undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء الوحدة" });
+      setShowUnitForm(false);
+      setNewUnit({});
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const updateUnit = async () => {
+    if (!editingUnitId) return;
+    try {
+      await apiFetch(`/projects/units/${editingUnitId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editUnitDraft.name || undefined,
+          area: editUnitDraft.area ? Number(editUnitDraft.area) : undefined,
+          salePrice: editUnitDraft.salePrice ? Number(editUnitDraft.salePrice) : undefined,
+          notes: editUnitDraft.notes || undefined,
+        }),
+      });
+      toast({ title: "تم تحديث الوحدة" });
+      setEditingUnitId(null);
+      setEditUnitDraft({});
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const deleteUnit = async (uid: number) => {
+    if (!confirm("حذف هذه الوحدة؟")) return;
+    try {
+      await apiFetch(`/projects/units/${uid}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const sellUnit = async () => {
+    if (!sellUnitId) return;
+    setSellLoading(true);
+    try {
+      await apiFetch(`/projects/units/${sellUnitId}/sell`, {
+        method: "POST",
+        body: JSON.stringify({
+          buyerClientId: Number(sellBuyerId),
+          salePrice: sellPrice ? Number(sellPrice) : undefined,
+        }),
+      });
+      toast({ title: "تم تسجيل البيع", description: "تم ترحيل قيد التكلفة" });
+      setSellUnitId(null);
+      setSellBuyerId("");
+      setSellPrice("");
+      refetchUnits();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ في البيع", description: getErrorMessage(err) });
+    } finally {
+      setSellLoading(false);
+    }
+  };
+
+  const saveBoqItem = async () => {
+    if (!newBoq.description) return;
+    try {
+      await apiFetch(`/projects/${id}/boq`, {
+        method: "POST",
+        body: JSON.stringify({
+          description: newBoq.description,
+          unit: newBoq.unit,
+          quantity: newBoq.quantity ? Number(newBoq.quantity) : undefined,
+          unitPrice: newBoq.unitPrice ? Number(newBoq.unitPrice) : undefined,
+          notes: newBoq.notes,
+        }),
+      });
+      toast({ title: "تمت الإضافة" });
+      setShowBoqForm(false);
+      setNewBoq({});
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الإضافة", description: getErrorMessage(err) });
+    }
+  };
+
+  const updateBoqItem = async (boqId: number) => {
+    try {
+      await apiFetch(`/projects/boq/${boqId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          description: editBoq.description,
+          unit: editBoq.unit,
+          quantity: editBoq.quantity ? Number(editBoq.quantity) : undefined,
+          unitPrice: editBoq.unitPrice ? Number(editBoq.unitPrice) : undefined,
+          notes: editBoq.notes,
+        }),
+      });
+      toast({ title: "تم التحديث" });
+      setEditBoqId(null);
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل التحديث", description: getErrorMessage(err) });
+    }
+  };
+
+  const deleteBoqItem = async (boqId: number) => {
+    if (!confirm("حذف هذا البند؟")) return;
+    try {
+      await apiFetch(`/projects/boq/${boqId}`, { method: "DELETE" });
+      toast({ title: "تم الحذف" });
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الحذف", description: getErrorMessage(err) });
+    }
+  };
+
+  const billBoqItems = async () => {
+    if (!confirm("إرسال جدول الكميات للفوترة؟")) return;
+    setBoqBilling(true);
+    try {
+      await apiFetch(`/projects/${id}/boq/bill`, { method: "POST" });
+      toast({ title: "تم الإرسال للفوترة" });
+      refetchBoq();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الإرسال", description: getErrorMessage(err) });
+    } finally {
+      setBoqBilling(false);
+    }
+  };
+
   const actions = project ? (
     <div className="flex items-center gap-2 flex-wrap">
       {project.isSlipping && (
@@ -324,15 +488,9 @@ export default function ProjectDetail() {
           <ShieldAlert className="h-3 w-3" /> {criticalRisks.length} مخاطر حرجة
         </Badge>
       )}
-      <Link href={`/projects/gantt?projectId=${id}`}>
-        <Button variant="outline" size="sm"><BarChart2 className="h-4 w-4 me-1" />غانت</Button>
-      </Link>
-      <Link href={`/projects/risks?projectId=${id}`}>
-        <Button variant="outline" size="sm"><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Button>
-      </Link>
-      <Link href="/calendar">
-        <Button variant="outline" size="sm"><Calendar className="h-4 w-4 me-1" />التقويم</Button>
-      </Link>
+      <Button asChild variant="outline" size="sm"><Link href={`/projects/gantt?projectId=${id}`}><BarChart2 className="h-4 w-4 me-1" />غانت</Link></Button>
+      <Button asChild variant="outline" size="sm"><Link href={`/projects/risks?projectId=${id}`}><ShieldAlert className="h-4 w-4 me-1" />المخاطر</Link></Button>
+      <Button asChild variant="outline" size="sm"><Link href="/calendar"><Calendar className="h-4 w-4 me-1" />التقويم</Link></Button>
       {project.status !== "completed" && !closingProject && (
         <GuardedButton perm="operations:update" variant="outline" size="sm" className="text-emerald-600" onClick={() => setClosingProject(true)}>
           <Lock className="h-4 w-4 me-1" />إقفال المشروع
@@ -510,7 +668,7 @@ export default function ProjectDetail() {
                     <Button variant="ghost" size="sm" className="text-xs" onClick={handleAddMilestone} disabled={addMilestoneMut.isPending} rateLimitAware>
                       + إضافة
                     </Button>
-                    <Link href={`/projects/gantt?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">غانت</Button></Link>
+                    <Button asChild variant="ghost" size="sm" className="text-xs"><Link href={`/projects/gantt?projectId=${id}`}>غانت</Link></Button>
                   </div>
                 </div>
               </CardHeader>
@@ -552,7 +710,7 @@ export default function ProjectDetail() {
                       <Badge className="bg-status-error-surface text-status-error-foreground text-[10px]">{criticalRisks.length} حرج</Badge>
                     )}
                   </CardTitle>
-                  <Link href={`/projects/risks?projectId=${id}`}><Button variant="ghost" size="sm" className="text-xs">إدارة</Button></Link>
+                  <Button asChild variant="ghost" size="sm" className="text-xs"><Link href={`/projects/risks?projectId=${id}`}>إدارة</Link></Button>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
@@ -781,9 +939,7 @@ export default function ProjectDetail() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2"><Mail className="w-5 h-5 text-muted-foreground" /> المراسلات المرتبطة ({letters.length})</CardTitle>
-              <Link href={`/correspondence/create?relatedType=project&relatedId=${id}`}>
-                <Button size="sm" variant="outline"><Plus className="h-3 w-3 me-1" /> خطاب جديد</Button>
-              </Link>
+              <Button asChild size="sm" variant="outline"><Link href={`/correspondence/create?relatedType=project&relatedId=${id}`}><Plus className="h-3 w-3 me-1" /> خطاب جديد</Link></Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -805,6 +961,234 @@ export default function ProjectDetail() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === "units" && id && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2"><BarChart2 className="w-5 h-5" /> وحدات المشروع ({projectUnits.length})</CardTitle>
+              <GuardedButton perm="projects.list:create" size="sm" className="gap-1" onClick={() => setShowUnitForm(v => !v)}>
+                <Plus className="w-4 h-4" /> وحدة جديدة
+              </GuardedButton>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {showUnitForm && (
+                <div className="border rounded-lg p-4 bg-surface-subtle space-y-3">
+                  <p className="text-sm font-medium">إضافة وحدة جديدة</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs text-muted-foreground">اسم الوحدة</label>
+                      <input className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.name || ""} onChange={e => setNewUnit(p => ({ ...p, name: e.target.value }))} placeholder="مثال: شقة A-101" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">الرمز (اختياري)</label>
+                      <input className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.code || ""} onChange={e => setNewUnit(p => ({ ...p, code: e.target.value }))} placeholder="A-101" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">المساحة (م²)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.area || ""} onChange={e => setNewUnit(p => ({ ...p, area: e.target.value }))} placeholder="120" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">سعر البيع (اختياري)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.salePrice || ""} onChange={e => setNewUnit(p => ({ ...p, salePrice: e.target.value }))} placeholder="500000" />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs text-muted-foreground">ملاحظات (اختياري)</label>
+                      <input className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={newUnit.notes || ""} onChange={e => setNewUnit(p => ({ ...p, notes: e.target.value }))} placeholder="" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setShowUnitForm(false)}>إلغاء</Button>
+                    <Button size="sm" onClick={saveUnit} disabled={!newUnit.name}>إضافة</Button>
+                  </div>
+                </div>
+              )}
+              {sellUnitId !== null && (
+                <div className="border rounded-lg p-4 bg-status-warning-surface space-y-3">
+                  <p className="text-sm font-medium">تسجيل بيع الوحدة</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">رقم العميل المشتري (ID)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={sellBuyerId} onChange={e => setSellBuyerId(e.target.value)} placeholder="مثال: 5" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">سعر البيع (اتركه فارغاً لاستخدام السعر المسجل)</label>
+                      <input type="number" className="w-full h-9 px-3 py-1 text-sm border rounded-md bg-background" value={sellPrice} onChange={e => setSellPrice(e.target.value)} placeholder="اختياري" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setSellUnitId(null)}>إلغاء</Button>
+                    <Button size="sm" variant="destructive" onClick={sellUnit} disabled={!sellBuyerId || sellLoading}>
+                      {sellLoading ? "جارٍ البيع..." : "تأكيد البيع"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {editingUnitId !== null && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setEditingUnitId(null)}>
+                  <div className="bg-white rounded-lg shadow-xl p-5 w-96 space-y-3" onClick={(e) => e.stopPropagation()}>
+                    <h3 className="font-semibold text-sm">تعديل الوحدة</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className="text-xs text-muted-foreground">الاسم</label>
+                        <input className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.name || ""} onChange={e => setEditUnitDraft(d => ({ ...d, name: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">المساحة (م²)</label>
+                        <input type="number" className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.area || ""} onChange={e => setEditUnitDraft(d => ({ ...d, area: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-muted-foreground">سعر البيع</label>
+                        <input type="number" className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.salePrice || ""} onChange={e => setEditUnitDraft(d => ({ ...d, salePrice: e.target.value }))} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="text-xs text-muted-foreground">ملاحظات</label>
+                        <input className="w-full h-9 px-3 text-sm border rounded-md" value={editUnitDraft.notes || ""} onChange={e => setEditUnitDraft(d => ({ ...d, notes: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" size="sm" onClick={() => setEditingUnitId(null)}>إلغاء</Button>
+                      <Button size="sm" onClick={updateUnit}>حفظ</Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {projectUnits.length === 0 && !showUnitForm ? (
+                <p className="text-muted-foreground text-center py-8">لا توجد وحدات مشروع</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "name", header: "الوحدة", render: (u: any) => <div><p className="font-medium">{u.name}</p>{u.code && <p className="text-xs text-muted-foreground font-mono">{u.code}</p>}</div> },
+                    { key: "area", header: "المساحة", ltr: true, render: (u: any) => <span className="font-mono">{Number(u.area || 0).toFixed(1)} م²</span> },
+                    { key: "salePrice", header: "سعر البيع", render: (u: any) => u.salePrice != null ? formatCurrency(Number(u.salePrice)) : <span className="text-muted-foreground">—</span> },
+                    { key: "allocatedCost", header: "التكلفة المخصصة", render: (u: any) => u.allocatedCost > 0 ? formatCurrency(Number(u.allocatedCost)) : <span className="text-muted-foreground">—</span> },
+                    { key: "projectedProfit", header: "الربح المتوقع", render: (u: any) => u.projectedProfit != null ? <span className={Number(u.projectedProfit) >= 0 ? "text-status-success-foreground font-medium" : "text-status-error-foreground font-medium"}>{formatCurrency(Number(u.projectedProfit))}</span> : <span className="text-muted-foreground">—</span> },
+                    { key: "status", header: "الحالة", render: (u: any) => <PageStatusBadge status={u.status || "available"} /> },
+                    { key: "actions", header: "", render: (u: any) => (
+                      <div className="flex gap-1">
+                        {u.status !== "sold" && u.status !== "cancelled" && (
+                          <GuardedButton perm="projects.list:update" size="sm" variant="outline" onClick={() => { setSellUnitId(u.id); setSellPrice(u.salePrice ? String(u.salePrice) : ""); setSellBuyerId(""); }}>
+                            بيع
+                          </GuardedButton>
+                        )}
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                          onClick={() => { setEditingUnitId(u.id); setEditUnitDraft({ name: u.name, area: u.area ? String(u.area) : "", salePrice: u.salePrice ? String(u.salePrice) : "", notes: u.notes || "" }); }}>
+                          <Pencil className="h-3 w-3" />
+                        </GuardedButton>
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          onClick={() => deleteUnit(u.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </GuardedButton>
+                      </div>
+                    ) },
+                  ]}
+                  data={projectUnits}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      {activeTab === "boq" && id && (
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ClipboardList className="w-5 h-5" /> جدول الكميات ({boqItems.length})
+              </CardTitle>
+              <div className="flex gap-2">
+                <GuardedButton perm="projects.list:create" size="sm" variant="outline" className="gap-1"
+                  onClick={billBoqItems} disabled={boqBilling || boqItems.length === 0}>
+                  {boqBilling ? "جارٍ الإرسال..." : "إرسال للفوترة"}
+                </GuardedButton>
+                <GuardedButton perm="projects.list:create" size="sm" className="gap-1" onClick={() => setShowBoqForm(v => !v)}>
+                  <Plus className="w-4 h-4" /> بند جديد
+                </GuardedButton>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {showBoqForm && (
+                <div className="border rounded-lg p-4 bg-surface-subtle space-y-3">
+                  <p className="text-sm font-medium">إضافة بند BOQ</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs text-muted-foreground">الوصف *</label>
+                      <input className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.description || ""} onChange={e => setNewBoq(p => ({ ...p, description: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">الوحدة</label>
+                      <input className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.unit || ""} onChange={e => setNewBoq(p => ({ ...p, unit: e.target.value }))} placeholder="م²، طن، م.ط..." />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">الكمية</label>
+                      <input type="number" className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.quantity || ""} onChange={e => setNewBoq(p => ({ ...p, quantity: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">سعر الوحدة</label>
+                      <input type="number" className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.unitPrice || ""} onChange={e => setNewBoq(p => ({ ...p, unitPrice: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">ملاحظات</label>
+                      <input className="w-full h-9 px-3 text-sm border rounded-md bg-background" value={newBoq.notes || ""} onChange={e => setNewBoq(p => ({ ...p, notes: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setShowBoqForm(false)}>إلغاء</Button>
+                    <Button size="sm" onClick={saveBoqItem} disabled={!newBoq.description}>إضافة</Button>
+                  </div>
+                </div>
+              )}
+              {boqItems.length === 0 && !showBoqForm ? (
+                <p className="text-muted-foreground text-center py-8">لا توجد بنود في جدول الكميات</p>
+              ) : (
+                <DataTable
+                  columns={[
+                    { key: "description", header: "الوصف", render: (b: any) => editBoqId === b.id ? (
+                      <input className="w-full h-8 px-2 text-sm border rounded" value={editBoq.description || ""} onChange={e => setEditBoq(p => ({ ...p, description: e.target.value }))} />
+                    ) : <span className="font-medium">{b.description}</span> },
+                    { key: "unit", header: "الوحدة", render: (b: any) => editBoqId === b.id ? (
+                      <input className="w-20 h-8 px-2 text-sm border rounded" value={editBoq.unit || ""} onChange={e => setEditBoq(p => ({ ...p, unit: e.target.value }))} />
+                    ) : <span className="text-muted-foreground">{b.unit || "—"}</span> },
+                    { key: "quantity", header: "الكمية", ltr: true, render: (b: any) => editBoqId === b.id ? (
+                      <input type="number" className="w-20 h-8 px-2 text-sm border rounded" value={editBoq.quantity || ""} onChange={e => setEditBoq(p => ({ ...p, quantity: e.target.value }))} />
+                    ) : <span className="font-mono">{b.quantity != null ? Number(b.quantity).toFixed(2) : "—"}</span> },
+                    { key: "unitPrice", header: "سعر الوحدة", render: (b: any) => editBoqId === b.id ? (
+                      <input type="number" className="w-24 h-8 px-2 text-sm border rounded" value={editBoq.unitPrice || ""} onChange={e => setEditBoq(p => ({ ...p, unitPrice: e.target.value }))} />
+                    ) : b.unitPrice != null ? formatCurrency(Number(b.unitPrice)) : <span className="text-muted-foreground">—</span> },
+                    { key: "totalPrice", header: "الإجمالي", render: (b: any) => b.totalPrice != null ? <span className="font-bold">{formatCurrency(Number(b.totalPrice))}</span> : <span className="text-muted-foreground">—</span> },
+                    { key: "billingStatus", header: "الفوترة", render: (b: any) => b.billingStatus ? <Badge variant="outline">{b.billingStatus}</Badge> : <span className="text-muted-foreground">—</span> },
+                    { key: "actions", header: "", render: (b: any) => editBoqId === b.id ? (
+                      <div className="flex gap-1">
+                        <Button size="sm" className="h-7 px-2 text-xs" onClick={() => updateBoqItem(b.id)}>حفظ</Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditBoqId(null)}><X className="w-3 h-3" /></Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-1">
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                          onClick={() => { setEditBoqId(b.id); setEditBoq({ description: b.description, unit: b.unit || "", quantity: b.quantity != null ? String(b.quantity) : "", unitPrice: b.unitPrice != null ? String(b.unitPrice) : "", notes: b.notes || "" }); }}>
+                          <Pencil className="w-3 h-3" />
+                        </GuardedButton>
+                        <GuardedButton perm="projects.list:update" size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive"
+                          onClick={() => deleteBoqItem(b.id)}>
+                          <Trash2 className="w-3 h-3" />
+                        </GuardedButton>
+                      </div>
+                    ) },
+                  ]}
+                  data={boqItems}
+                  noToolbar
+                  pageSize={0}
+                  searchPlaceholder={null}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {activeTab === "documents" && id && (
@@ -833,11 +1217,9 @@ export default function ProjectDetail() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <Link href={`/finance/profitability/project/${id}`}>
-            <Button variant="outline" size="sm" className="gap-1">
+          <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/profitability/project/${id}`}>
               <TrendingUp className="h-4 w-4" /> الربحية
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton entityType="project" entityId={(id as any) ?? 0} label="طباعة" />
           {id != null && <EntityPnlButton entityType="project" entityId={Number(id)} />}
         </div>

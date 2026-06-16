@@ -149,24 +149,18 @@ export default function PaymentRunPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "دفعة الدفع" }]}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/ap-payment-calendar">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ap-payment-calendar">
               <Calendar className="h-3.5 w-3.5 ml-1" />
               تقويم الدفعات
-            </Button>
-          </Link>
-          <Link href="/finance/ap-aging">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ap-aging">
               <Clock className="h-3.5 w-3.5 ml-1" />
               تقادم الموردين
-            </Button>
-          </Link>
-          <Link href="/finance/vendor-settlement-workbench">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/vendor-settlement-workbench">
               <FileText className="h-3.5 w-3.5 ml-1" />
               تسوية المورد
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_payment_run"
             entityId="list"
@@ -302,32 +296,21 @@ export default function PaymentRunPage() {
             <Card>
               <CardContent className="p-4">
                 <h3 className="text-sm font-semibold mb-3">آخر دفعات تنفيذية ({history.length})</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-muted-foreground border-b">
-                        <th className="text-right py-2">المرجع</th>
-                        <th className="text-right py-2">التاريخ</th>
-                        <th className="text-right py-2">الطريقة</th>
-                        <th className="text-right py-2">الإجمالي</th>
-                        <th className="text-right py-2">PO</th>
-                        <th className="text-right py-2">الحالة</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.slice(0, 20).map((row: any) => (
-                        <tr key={row.id} className="border-b last:border-0">
-                          <td className="py-1.5 font-mono">{row.ref || `#${row.id}`}</td>
-                          <td className="py-1.5">{row.paymentDate ? new Date(row.paymentDate).toLocaleDateString("ar") : "—"}</td>
-                          <td className="py-1.5">{row.method || "—"}</td>
-                          <td className="py-1.5 font-mono">{formatCurrency(Number(row.totalAmount || 0))}</td>
-                          <td className="py-1.5">{row.poCount || 0}</td>
-                          <td className="py-1.5">{row.status || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable<any>
+                  data={history.slice(0, 20)}
+                  rowKey={(row) => String(row.id)}
+                  noToolbar
+                  pageSize={0}
+                  emptyMessage="لا يوجد سجل دفعات"
+                  columns={[
+                    { key: "ref", header: "المرجع", className: "font-mono text-xs", render: (row) => row.ref || `#${row.id}` },
+                    { key: "paymentDate", header: "التاريخ", render: (row) => row.paymentDate ? new Date(row.paymentDate).toLocaleDateString("ar") : "—" },
+                    { key: "method", header: "الطريقة", render: (row) => row.method || "—" },
+                    { key: "totalAmount", header: "الإجمالي", align: "end" as const, render: (row) => formatCurrency(Number(row.totalAmount || 0)) },
+                    { key: "poCount", header: "أ.شراء", align: "end" as const, render: (row) => row.poCount || 0 },
+                    { key: "status", header: "الحالة", render: (row) => row.status || "—" },
+                  ]}
+                />
               </CardContent>
             </Card>
           )}

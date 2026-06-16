@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
+import { STATUSES } from "@/lib/constants";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,6 +65,13 @@ interface CriticalObligationRow {
   amount: number | null;
 }
 
+interface UnifiedPnl {
+  period: { from: string; to: string };
+  totals: { revenue: number; expense: number; net: number };
+  bySource: Array<{ sourceType: string; revenue: number; expense: number; net: number }>;
+  byAccount: Array<{ accountCode: string; name: string; type: string; total: number }>;
+}
+
 export default function ExecDashboard() {
   const { data, isLoading, isError } = useApiQuery<any>(
     ["exec-dashboard"],
@@ -80,8 +88,15 @@ export default function ExecDashboard() {
     ["exec-dashboard-obligations"],
     "/exec-dashboard/critical-obligations",
   );
+  // Consolidated P&L for the current month-to-date (backend defaults the
+  // period to Riyadh MTD when no range is passed).
+  const { data: pnlResp } = useApiQuery<UnifiedPnl>(
+    ["exec-dashboard-unified-pnl"],
+    "/exec-dashboard/unified-pnl",
+  );
   const overdueInvoices = overdueResp?.data ?? [];
   const criticalObligations = obligResp?.data ?? [];
+  const pnl = pnlResp;
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -173,6 +188,48 @@ export default function ExecDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Consolidated P&L — current month-to-date */}
+      {pnl && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-status-success" />
+              الأرباح والخسائر — الشهر حتى تاريخه
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">الإيرادات</p>
+                <p className="text-2xl font-bold text-status-success-foreground">{formatCurrency(pnl.totals?.revenue)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">المصروفات</p>
+                <p className="text-2xl font-bold text-status-error-foreground">{formatCurrency(pnl.totals?.expense)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">صافي الربح</p>
+                <p className={cn("text-2xl font-bold", (pnl.totals?.net ?? 0) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground")}>
+                  {formatCurrency(pnl.totals?.net)}
+                </p>
+              </div>
+            </div>
+            {pnl.byAccount?.length > 0 && (
+              <div className="space-y-1 text-sm text-muted-foreground border-t border-muted/40 pt-3">
+                {pnl.byAccount.slice(0, 5).map((a) => (
+                  <div key={a.accountCode} className="flex justify-between">
+                    <span>{a.name || a.accountCode}</span>
+                    <span className={cn("font-medium", a.type === "revenue" ? "text-status-success-foreground" : "text-status-error-foreground")}>
+                      {formatCurrency(a.total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* AR Aging */}
@@ -361,7 +418,7 @@ export default function ExecDashboard() {
                 { key: "dueDate", header: "الاستحقاق", render: (r) => (
                   <span className="text-xs text-muted-foreground">{formatDateAr(r.dueDate)}</span>
                 )},
-                { key: "status", header: "الحالة", render: (r) => <Badge variant="outline" className="text-xs">{r.status}</Badge> },
+                { key: "status", header: "الحالة", render: (r) => <Badge variant="outline" className="text-xs">{STATUSES[r.status] ?? r.status}</Badge> },
               ] as DataTableColumn<CriticalObligationRow>[]}
               data={criticalObligations}
               noToolbar

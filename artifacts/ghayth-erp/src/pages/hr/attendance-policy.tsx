@@ -6,7 +6,8 @@ import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { Save } from "lucide-react";
+import { Save, Users, ArrowLeft } from "lucide-react";
+import { Link } from "wouter";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
@@ -130,6 +131,30 @@ export default function AttendancePolicyPage() {
                 );
               })}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* PR-3 (#2077) — discoverability hint for the per-category page.
+            Each employee carries a `categoryKey` (set on the wizard,
+            mandatory since PR-1); the override page lets HR adjust the
+            policy per category (driver vs office vs manager) instead
+            of fighting the company-wide defaults. The link uses the
+            new /hr route added in PR-3. */}
+        <Card className="border-dashed border-status-info-surface bg-status-info-surface/30">
+          <CardContent className="p-4 flex items-center gap-3 text-sm">
+            <Users className="h-5 w-5 text-status-info-foreground shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium">هل تحتاج سياسة مختلفة لفئة معيّنة؟</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                الإعدادات أعلاه هي سياسة الشركة الافتراضية. يمكنك تجاوزها لكل فئة موظفين (سائق، ميداني، مكتبي، …) من صفحة overrides المخصصة.
+              </p>
+            </div>
+            <Link href="/hr/attendance-categories">
+              <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline text-sm whitespace-nowrap">
+                إدارة الـoverrides
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </a>
+            </Link>
           </CardContent>
         </Card>
 

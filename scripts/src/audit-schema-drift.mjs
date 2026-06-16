@@ -85,6 +85,13 @@ const BUILTIN_IDENTIFIERS = new Set([
   // but not yet reflected in db/schema.sql dump. See umrahImportEngine.ts.
   "entryDate",
   "exitDate",
+  // Task SLA reminder stamps — present in live DB (added via migration
+  // 345_task_sla_reminder_columns) but the committed dump can't be re-uploaded
+  // (schema_pre.sql already tops the ~800 KB proxied-upload limit). Folded into
+  // the dump on the next Replit dump-schema refresh. See cronScheduler.ts
+  // (inbox_task_sla_reminder_scan).
+  "slaReminderSentAt",
+  "slaFinalReminderSentAt",
 ]);
 
 async function walk(dir, acc = []) {

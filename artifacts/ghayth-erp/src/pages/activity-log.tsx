@@ -274,6 +274,11 @@ export default function ActivityLogPage() {
     "/activity-log?limit=20",
   );
   const activityFeed: any[] = activityStream?.data ?? [];
+  const { data: feedResp } = useApiQuery<{ data: any[] }>(
+    ["activity-log-feed"],
+    "/activity-log/feed?limit=30",
+  );
+  const adminFeed: any[] = feedResp?.data ?? [];
 
   const items = data?.data || [];
   const total = data?.total || 0;
@@ -491,11 +496,9 @@ export default function ActivityLogPage() {
                           </Button>
                         )}
                         {link && (
-                          <Link href={link}>
-                            <Button variant="ghost" size="sm" className="shrink-0 text-xs h-7 px-2">
+                          <Button asChild variant="ghost" size="sm" className="shrink-0 text-xs h-7 px-2"><Link href={link}>
                               عرض <ChevronLeft className="w-3 h-3 ms-1" />
-                            </Button>
-                          </Link>
+                            </Link></Button>
                         )}
                       </div>
                     </div>
@@ -535,6 +538,26 @@ export default function ActivityLogPage() {
                 </span>
                 <span className="text-muted-foreground text-[10px]">
                   {a.createdAt ? new Date(a.createdAt).toLocaleTimeString("ar-SA") : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {adminFeed.length > 0 && (
+        <div className="mt-4 border rounded p-3 bg-white">
+          <p className="text-sm font-semibold mb-2">تغذية النشاط للمشرف ({adminFeed.length})</p>
+          <div className="divide-y text-xs max-h-64 overflow-y-auto">
+            {adminFeed.map((a: any, i: number) => (
+              <div key={a.id ?? i} className="py-1.5 flex items-start justify-between gap-2">
+                <span>
+                  <span className="font-medium text-status-neutral-foreground">{a.actor}</span>
+                  {" "}{a.actionLabel || a.action}
+                  {a.entity && <span className="text-muted-foreground"> · {a.entity}{a.entityId ? ` #${a.entityId}` : ""}</span>}
+                </span>
+                <span className="text-muted-foreground text-[10px] shrink-0">
+                  {a.at ? formatDateAr(a.at) : ""}
                 </span>
               </div>
             ))}

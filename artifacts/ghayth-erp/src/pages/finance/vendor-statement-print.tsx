@@ -190,12 +190,10 @@ export default function VendorStatementPrintPage() {
           </div>
           <div className="flex gap-2 mt-3 justify-end">
             {supplierId && (
-              <Link href={`/finance/vendor-360-sheet?vendorId=${supplierId}`}>
-                <Button variant="outline" size="sm">
+              <Button asChild variant="outline" size="sm"><Link href={`/finance/vendor-360-sheet?vendorId=${supplierId}`}>
                   <FileText className="w-4 h-4 ml-1" />
                   ملف المورد 360°
-                </Button>
-              </Link>
+                </Link></Button>
             )}
             <Button variant="outline" size="sm" onClick={exportCSV} disabled={!data}>
               <Download className="w-4 h-4 ml-1" />
@@ -328,9 +326,7 @@ export default function VendorStatementPrintPage() {
                       </td>
                       <td className="py-1.5 px-2 print:hidden">
                         {m.movementType === "purchase_order" && (
-                          <Link href={`/finance/purchase-orders/${m.id}`}>
-                            <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
-                          </Link>
+                          <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/purchase-orders/${m.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                         )}
                       </td>
                     </tr>

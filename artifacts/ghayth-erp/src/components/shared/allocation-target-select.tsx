@@ -6,6 +6,7 @@ import {
   VehicleSelect, ProjectSelect, SupplierSelect, ClientSelect,
   EmployeeSelect, DriverSelect,
 } from "@/components/shared/entity-selects";
+import { SupplierItemPicker } from "@/components/shared/supplier-item-picker";
 import type { LineAllocation } from "@/components/shared/line-allocation-panel";
 import type { FinanceTarget } from "@/lib/finance/scenario-model";
 import { useApiQuery } from "@/lib/api";
@@ -47,7 +48,13 @@ export interface AllocationTargetValue {
   fuelLiters?: string;
   fuelCostPerLiter?: string;
   fuelOdometer?: string;
+  // #2234 — `fuelStation` is now the temporary UNREGISTERED supplier name only;
+  // the saved supplier rides on allocation.vendorId. `fuelSupplierUnregistered`
+  // toggles the draft-only free-text exception.
   fuelStation?: string;
+  fuelSupplierUnregistered?: boolean;
+  // #2235 — the chosen supplier item (memory): fills the suggested price/unit.
+  fuelItemId?: string;
 }
 
 const TARGET_OPTIONS: { value: AllocationTarget; label: string }[] = [
@@ -147,6 +154,9 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
               <FormFieldWrapper label="المسبّب / السبب">
                 <Input value={value.reason ?? ""} onChange={(e) => set({ reason: e.target.value })} placeholder="سبب الصيانة" />
               </FormFieldWrapper>
+              {/* #2234 (عقد المورد التشغيلي) — الورشة/الفني طرف تجاري = مورد محفوظ
+                  يصل القيد كـvendorId (تقارير الصيانة حسب المورد). مُوصى لا إلزامي. */}
+              <SupplierSelect value={value.allocation.vendorId ?? ""} onChange={(v) => setAlloc({ vendorId: v })} label="الورشة / المورد" allowCreate={false} />
             </>
           )}
           {value.target === "vehicle" && (
@@ -166,9 +176,55 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
                   <FormFieldWrapper label="قراءة العداد (الممشى)">
                     <Input type="number" value={value.fuelOdometer ?? ""} onChange={(e) => set({ fuelOdometer: e.target.value })} placeholder="كم" />
                   </FormFieldWrapper>
-                  <FormFieldWrapper label="المحطة">
-                    <Input value={value.fuelStation ?? ""} onChange={(e) => set({ fuelStation: e.target.value })} placeholder="اسم المحطة" />
-                  </FormFieldWrapper>
+                  {/* #2234 — المورد (محطة الوقود المحفوظة) هو الطرف التجاري الصحيح،
+                      لا نص حر. يُربط على allocation.vendorId فيصل القيد كـvendorId.
+                      «مورد غير مسجّل» استثناء مؤقت (مسودة) يظهر تحذيرًا. */}
+                  <div className="md:col-span-2 space-y-2">
+                    {!value.fuelSupplierUnregistered ? (
+                      <SupplierSelect
+                        value={value.allocation.vendorId ?? ""}
+                        onChange={(v) => setAlloc({ vendorId: v })}
+                        label="المورد (محطة الوقود)"
+                        required
+                        allowCreate={false}
+                      />
+                    ) : (
+                      <FormFieldWrapper label="اسم المورد غير المسجّل (مؤقت — مسودة فقط)">
+                        <Input value={value.fuelStation ?? ""} onChange={(e) => set({ fuelStation: e.target.value })} placeholder="اسم المحطة/المورد" />
+                      </FormFieldWrapper>
+                    )}
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={value.fuelSupplierUnregistered ?? false}
+                        onChange={(e) => onChange({ ...value, fuelSupplierUnregistered: e.target.checked, allocation: { ...value.allocation, vendorId: e.target.checked ? undefined : value.allocation.vendorId } })}
+                      />
+                      مورد غير مسجّل (استثناء مؤقت)
+                    </label>
+                    {value.fuelSupplierUnregistered && (
+                      <p className="text-xs text-yellow-700 bg-status-warning-surface border border-yellow-300 rounded p-2">
+                        ⚠ المورد غير محفوظ — لا يُسمح بالترحيل النهائي إلا إذا سمحت سياسة الشركة. يُفضَّل حفظ المحطة كمورد.
+                      </p>
+                    )}
+                    {/* #2235 — بعد اختيار المورد، تظهر بنوده المعتادة لسيناريو الوقود؛
+                        اختيار البند يملأ السعر المقترح (آخر سعر). يعيد accountPurpose
+                        لا حسابًا نهائيًا — financialEngine يشتق الحساب. */}
+                    {!value.fuelSupplierUnregistered && value.allocation.vendorId && (
+                      <SupplierItemPicker
+                        supplierId={value.allocation.vendorId}
+                        scenario="vehicle_fuel"
+                        value={value.fuelItemId ?? ""}
+                        onPick={(item) =>
+                          onChange({
+                            ...value,
+                            fuelItemId: item ? String(item.id) : undefined,
+                            fuelCostPerLiter:
+                              item?.lastPrice != null ? String(item.lastPrice) : value.fuelCostPerLiter,
+                          })
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -220,6 +276,9 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
                   <SelectContent>{MAINTENANCE_TYPES.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                 </Select>
               </FormFieldWrapper>
+              {/* #2234 (عقد المورد التشغيلي) — المقاول/الفني طرف تجاري = مورد محفوظ
+                  يصل القيد كـvendorId (تقارير الصيانة حسب المورد). مُوصى لا إلزامي. */}
+              <SupplierSelect value={value.allocation.vendorId ?? ""} onChange={(v) => setAlloc({ vendorId: v })} label="المقاول / المورد" allowCreate={false} />
               <FormFieldWrapper label="من يتحمل التكلفة">
                 <Select value={value.costBearer ?? ""} onValueChange={(v) => set({ costBearer: v })}>
                   <SelectTrigger><SelectValue placeholder="اختر" /></SelectTrigger>
@@ -386,7 +445,11 @@ export function buildOperationalEffectsPayload(t: AllocationTargetValue) {
             liters: t.fuelLiters ? Number(t.fuelLiters) : undefined,
             costPerLiter: t.fuelCostPerLiter ? Number(t.fuelCostPerLiter) : undefined,
             odometer: t.fuelOdometer ? Number(t.fuelOdometer) : undefined,
-            stationName: t.fuelStation || undefined,
+            // #2234 — saved supplier is the truth (vendorId); stationName is a
+            // derived label. Unregistered name only when the exception is on.
+            supplierId: !t.fuelSupplierUnregistered && t.allocation.vendorId ? Number(t.allocation.vendorId) : undefined,
+            unregisteredSupplierName: t.fuelSupplierUnregistered ? (t.fuelStation || undefined) : undefined,
+            stationName: t.fuelSupplierUnregistered ? (t.fuelStation || undefined) : undefined,
           }
         : undefined,
   };

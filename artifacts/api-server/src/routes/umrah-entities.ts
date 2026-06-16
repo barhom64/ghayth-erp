@@ -37,6 +37,8 @@ import {
   listUninvoicedGroups,
 } from "../lib/umrahInvoicingEngine.js";
 import { postNuskJournalEntries } from "../lib/umrahImportEngine.js";
+import { UMRAH_POLICY_CATEGORIES, ALL_POLICY_IDS } from "../lib/umrahSettingsPoliciesCatalog.js";
+import { upsertSetting } from "../lib/settings.js";
 import {
   calculateCommissionForPlan,
   simulateCommission,
@@ -110,6 +112,11 @@ const linkSubAgentSchema = z.object({
 const linkByNuskSchema = z.object({
   nuskCode: z.string().min(1, "رمز نسك مطلوب"),
   clientId: z.coerce.number({ required_error: "معرف العميل مطلوب" }),
+  // U-11 Phase 3b (#2080) — optional free-text justification recorded
+  // on the audit log + emitted event. Surfaces the operator's intent
+  // ("matched by phone", "merger with #123", ...) for downstream
+  // review. Limited to 500 chars to keep the audit row sane.
+  reason: z.string().max(500).optional(),
 });
 
 const linkClientSchema = z.object({
@@ -476,20 +483,70 @@ router.post("/sub-agents/link-by-nusk", authorize({ feature: "umrah", action: "c
   try {
     const scope = req.scope!;
     const parsed = zodParse(linkByNuskSchema.safeParse(req.body));
-    const { nuskCode, clientId } = parsed;
+    const { nuskCode, clientId, reason } = parsed;
     const [existingClient] = await rawQuery<{ id: number }>(
       `SELECT id FROM clients WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [clientId, scope.companyId]
     );
     if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
+    // U-11 Phase 3b (#2080) — explicit-confirmation link from the
+    // import wizard. Look up the matching sub-agent BEFORE the
+    // UPDATE so the audit log captures `before.clientId` (a real
+    // before/after pair) and so we have a concrete entityId to
+    // attach to the event instead of the legacy `entityId: 0`.
+    // If multiple sub-agents share the nuskCode under this tenant
+    // (rare but legal in the current schema), we audit the first
+    // one — the UPDATE still touches all matching rows for
+    // backward compatibility.
+    const [existingSubAgent] = await rawQuery<{ id: number; clientId: number | null }>(
+      `SELECT id, "clientId" FROM umrah_sub_agents
+        WHERE "companyId"=$1 AND "nuskCode"=$2 AND "deletedAt" IS NULL
+        ORDER BY id LIMIT 1`,
+      [scope.companyId, nuskCode]
+    );
+    if (!existingSubAgent) throw new NotFoundError("الوكيل الفرعي غير موجود أو لا ينتمي لهذه الشركة");
+    const beforeClientId = existingSubAgent.clientId;
+    const subAgentId = existingSubAgent.id;
     await rawExecute(
       `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
        WHERE "companyId"=$3 AND "nuskCode"=$4 AND "deletedAt" IS NULL`,
       [clientId, scope.userId, scope.companyId, nuskCode]
     );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sub_agents", entityId: 0, after: { nuskCode, clientId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sub_agent.linked_by_nusk", entity: "umrah_sub_agents", entityId: 0, details: JSON.stringify({ nuskCode, clientId }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.json({ success: true });
+    // U-11 Phase 3b — enriched audit. `before` carries the prior
+    // clientId (often null in the import-wizard flow), `after`
+    // carries the new linkage + the nuskCode that drove the match,
+    // `reason` is the operator's free-text justification, and the
+    // entity id is the real sub-agent row (no longer 0).
+    createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "update",
+      entity: "umrah_sub_agents",
+      entityId: subAgentId,
+      before: { clientId: beforeClientId },
+      after: { nuskCode, clientId },
+      reason,
+    }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    // U-11 Phase 3b — enriched event. `source` flags this as the
+    // explicit-confirmation path from the import wizard so
+    // downstream consumers (notification rules, audit dashboards)
+    // can distinguish it from the detail-page linker.
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "umrah.sub_agent.linked_by_nusk",
+      entity: "umrah_sub_agents",
+      entityId: subAgentId,
+      details: JSON.stringify({
+        nuskCode,
+        clientId,
+        beforeClientId,
+        reason: reason ?? null,
+        source: "import_wizard_explicit_confirmation",
+      }),
+    }).catch((e) => logger.error(e, "umrah-entities background task failed"));
+    res.json({ success: true, subAgentId, beforeClientId });
   } catch (err) { handleRouteError(err, res, "Link sub-agent by nusk"); }
 });
 
@@ -657,13 +714,15 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
       `WITH nusk_stats AS (
          SELECT "groupId", "companyId",
                 COUNT(*) AS "nuskInvoiceCount",
-                COALESCE(SUM("totalAmount"), 0) AS "nuskCostTotal"
+                COALESCE(SUM("totalAmount"), 0) AS "nuskCostTotal",
+                COALESCE(SUM("mutamerCount"), 0) AS "nuskMutamerTotal"
          FROM umrah_nusk_invoices
          WHERE "deletedAt" IS NULL AND "nuskStatus" != 'cancelled'
          GROUP BY "groupId", "companyId"
        ),
        pilgrim_stats AS (
          SELECT "groupId", "companyId",
+                COUNT(*) AS "pilgrimsTotal",
                 COUNT(*) FILTER (WHERE status IN ('arrived','active','overstayed')) AS "pilgrimsInside",
                 COUNT(*) FILTER (WHERE status = 'overstayed') AS "pilgrimsOverstayed",
                 COUNT(*) FILTER (
@@ -686,6 +745,7 @@ router.get("/groups", authorize({ feature: "umrah", action: "list" }), async (re
               si.total AS "salesInvoiceTotal",
               si.status AS "salesInvoiceStatus",
               GREATEST(COALESCE(si.total, 0) - COALESCE(si."paidAmount", 0), 0) AS "salesOutstanding",
+              COALESCE(NULLIF(ps."pilgrimsTotal", 0), ns."nuskMutamerTotal", 0) AS "pilgrimsTotal",
               COALESCE(ps."pilgrimsInside", 0) AS "pilgrimsInside",
               COALESCE(ps."pilgrimsOverstayed", 0) AS "pilgrimsOverstayed",
               COALESCE(ps."visaAtRisk", 0) AS "visaAtRisk"
@@ -3155,7 +3215,7 @@ router.get("/room-blocks/:id/allocations", authorize({ feature: "umrah", action:
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const rows = await rawQuery(
-      `SELECT a.*, p.name AS "pilgrimName", p."passportNumber"
+      `SELECT a.*, p."fullName" AS "pilgrimName", p."passportNumber"
          FROM umrah_room_allocations a
          LEFT JOIN umrah_pilgrims p ON p.id = a."pilgrimId" AND p."deletedAt" IS NULL
         WHERE a."companyId" = $1 AND a."blockId" = $2 AND a."deletedAt" IS NULL
@@ -4193,7 +4253,15 @@ export type CalendarLayer =
   // operational dashboard answer "where does money flow?" not just
   // "where are the pilgrims?"
   | "nusk_invoice_issued"
-  | "penalty_created";
+  | "penalty_created"
+  // U-02b M5b (#2080) — surfaces the unified transport-contract
+  // requests (transport_bookings written via POST /umrah/groups/:id
+  // /transport-requests) as their own calendar layer. Runs ALONGSIDE
+  // the legacy `transport_trip` layer; both stay enabled by default
+  // because the underlying tables are independent — historic rows in
+  // umrah_transport keep flowing through `transport_trip`, contract
+  // bookings flow through this new layer. No conversion, no merge.
+  | "transport_request";
 
 export const CALENDAR_LAYER_META: Record<CalendarLayer, {
   label: string;
@@ -4208,6 +4276,11 @@ export const CALENDAR_LAYER_META: Record<CalendarLayer, {
   nusk_expiring:       { label: "فواتير نسك تنتهي",     color: "yellow", entityType: "umrah_nusk_invoices" },
   nusk_invoice_issued: { label: "فواتير نسك مُصدَرة",  color: "blue",   entityType: "umrah_nusk_invoices" },
   penalty_created:     { label: "غرامات مُصدرة",        color: "red",    entityType: "umrah_penalties" },
+  // U-02b M5b — distinct from `transport_trip` (purple). Reads
+  // transport_bookings.requestedPickupDate filtered to
+  // bookingSource = 'umrah_group' so non-umrah transport activity
+  // (cargo, CRM, etc.) does NOT leak into the umrah calendar.
+  transport_request:   { label: "طلبات نقل (موحَّد)",  color: "gray",   entityType: "transport_bookings" },
 };
 
 const ALL_LAYERS = Object.keys(CALENDAR_LAYER_META) as CalendarLayer[];
@@ -4270,6 +4343,7 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
       pilgrim_arrival: null, pilgrim_departure: null, visa_expiring: null,
       overstay: null, transport_trip: null, nusk_expiring: null,
       nusk_invoice_issued: null, penalty_created: null,
+      transport_request: null,
     };
 
     if (requestedLayers.includes("pilgrim_arrival")) {
@@ -4339,6 +4413,28 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
             AND t."tripDate" BETWEEN $2::date AND $3::date
             AND t."deletedAt" IS NULL${transportSeasonClause}
           GROUP BY t."tripDate"`,
+        baseParams,
+      );
+    }
+    // U-02b M5b — transport_bookings written by the unified contract
+    // (POST /umrah/groups/:id/transport-requests). Separate query, NO
+    // join with umrah_transport. bookingSource filter keeps non-umrah
+    // bookings out of the umrah calendar. Cancelled/rejected rows are
+    // suppressed because they shouldn't compete with operational
+    // attention on the day-cell. The query mirrors the transport_trip
+    // shape so the FE consumes both layers through the same Row type.
+    if (requestedLayers.includes("transport_request")) {
+      runs.transport_request = rawQuery<Row>(
+        `SELECT b."requestedPickupDate"::text AS date,
+                COUNT(*)::text AS c,
+                (ARRAY_AGG(b.id ORDER BY b.id))[1:10] AS "sampleIds"
+           FROM transport_bookings b
+          WHERE b."companyId" = $1
+            AND b."requestedPickupDate" BETWEEN $2::date AND $3::date
+            AND b."bookingSource" = 'umrah_group'
+            AND b.status NOT IN ('cancelled', 'rejected')
+            AND b."deletedAt" IS NULL
+          GROUP BY b."requestedPickupDate"`,
         baseParams,
       );
     }
@@ -4865,12 +4961,13 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
     const scope = req.scope!;
     const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
     const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+    const agentId     = req.query.agentId     ? Number(req.query.agentId)     : null;
     const yearParam   = req.query.year        ? Number(req.query.year)        : null;
     const statusParam = req.query.status      ? String(req.query.status)      : null;
 
     // Year + employee + status filter via cc.* columns. seasonId
-    // chains through employee_commission_plans (the calculations
-    // table doesn't carry seasonId itself).
+    // and agentId chain through employee_commission_plans (the
+    // calculations table doesn't carry either dim itself).
     const params: unknown[] = [scope.companyId];
     let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
     if (yearParam) {
@@ -4894,17 +4991,44 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
            AND cp."seasonId" = $${params.length}
       )`;
     }
+    // U-04-P4 — agentId filter (matches the umrahAgentId dim that
+    // U-05-P2 surfaces on the JE). The plan-level column is the
+    // attribution source; cc rows inherit it transitively via planId.
+    if (agentId) {
+      params.push(agentId);
+      where += ` AND EXISTS (
+        SELECT 1 FROM employee_commission_plans cp
+         WHERE cp.id = cc."planId"
+           AND cp."companyId" = cc."companyId"
+           AND cp."agentId" = $${params.length}
+      )`;
+    }
 
     const [kpiRow, byStatus, byMonth, byEmployee, recent] = await Promise.all([
       rawQuery<{
         total: string; calculatedAmount: string; paidAmount: string;
         pendingAmount: string; employeesCount: string;
+        conditionMetCount: string; conditionUnmetCount: string;
+        conditionMetAmount: string; conditionUnmetAmount: string;
+        hasViolationsCount: string;
       }>(
+        // U-04-P2 — KPIs extended with condition-met / -unmet splits and
+        // a hasViolations rollup. Both columns already exist on the calc
+        // row (cc."conditionMet" boolean, cc."hasViolations" boolean —
+        // surfaced on the recent table today but never aggregated). All
+        // counts and sums share the same WHERE filter set + parameter
+        // list as the existing KPI block, so the new fields don't
+        // change the result set semantics — they're additive sums.
         `SELECT COUNT(*)::text AS total,
                 COALESCE(SUM(cc."finalAmount"), 0)::text AS "calculatedAmount",
                 COALESCE(SUM(CASE WHEN cc.status = 'paid' THEN cc."finalAmount" ELSE 0 END), 0)::text AS "paidAmount",
                 COALESCE(SUM(CASE WHEN cc.status NOT IN ('paid') THEN cc."finalAmount" ELSE 0 END), 0)::text AS "pendingAmount",
-                COUNT(DISTINCT cc."employeeId")::text AS "employeesCount"
+                COUNT(DISTINCT cc."employeeId")::text AS "employeesCount",
+                COUNT(*) FILTER (WHERE cc."conditionMet" = true)::text AS "conditionMetCount",
+                COUNT(*) FILTER (WHERE cc."conditionMet" = false)::text AS "conditionUnmetCount",
+                COALESCE(SUM(CASE WHEN cc."conditionMet" = true THEN cc."finalAmount" ELSE 0 END), 0)::text AS "conditionMetAmount",
+                COALESCE(SUM(CASE WHEN cc."conditionMet" = false THEN cc."finalAmount" ELSE 0 END), 0)::text AS "conditionUnmetAmount",
+                COUNT(*) FILTER (WHERE cc."hasViolations" = true)::text AS "hasViolationsCount"
            FROM employee_commission_calculations cc
           WHERE ${where}`,
         params,
@@ -4933,7 +5057,7 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
         c: string; total: string;
       }>(
         `SELECT cc."employeeId",
-                e."fullName" AS "employeeName",
+                e.name AS "employeeName",
                 COUNT(*)::text AS c,
                 COALESCE(SUM(cc."finalAmount"), 0)::text AS total
            FROM employee_commission_calculations cc
@@ -4941,7 +5065,7 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
                                 AND e."companyId" = cc."companyId"
                                 AND e."deletedAt" IS NULL
           WHERE ${where}
-          GROUP BY cc."employeeId", e."fullName"
+          GROUP BY cc."employeeId", e.name
           ORDER BY SUM(cc."finalAmount") DESC NULLS LAST
           LIMIT 50`,
         params,
@@ -4955,7 +5079,7 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
         createdAt: string;
       }>(
         `SELECT cc.id, cc."planId", cp."planName",
-                cc."employeeId", e."fullName" AS "employeeName",
+                cc."employeeId", e.name AS "employeeName",
                 cc.month, cc.year, cc.status,
                 cc."finalAmount", cc."commissionAmount",
                 cc."totalMutamers", cc."conditionMet",
@@ -4972,7 +5096,15 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
       ),
     ]);
 
-    const k = kpiRow[0] ?? { total: "0", calculatedAmount: "0", paidAmount: "0", pendingAmount: "0", employeesCount: "0" };
+    // U-04-P2 — the kpiRow now carries 5 extra fields. Defaulting them
+    // to "0" string keeps the response shape stable on empty result.
+    const k = kpiRow[0] ?? {
+      total: "0", calculatedAmount: "0", paidAmount: "0",
+      pendingAmount: "0", employeesCount: "0",
+      conditionMetCount: "0", conditionUnmetCount: "0",
+      conditionMetAmount: "0", conditionUnmetAmount: "0",
+      hasViolationsCount: "0",
+    };
     res.json(maskFields(req, {
       kpis: {
         total: Number(k.total),
@@ -4980,6 +5112,12 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
         paidAmount: Number(k.paidAmount),
         pendingAmount: Number(k.pendingAmount),
         employeesCount: Number(k.employeesCount),
+        // U-04-P2 additions — condition-met + violations split.
+        conditionMetCount: Number(k.conditionMetCount),
+        conditionUnmetCount: Number(k.conditionUnmetCount),
+        conditionMetAmount: Number(k.conditionMetAmount),
+        conditionUnmetAmount: Number(k.conditionUnmetAmount),
+        hasViolationsCount: Number(k.hasViolationsCount),
       },
       byStatus:   byStatus.map((r) => ({ status: r.status, count: Number(r.c), total: Number(r.total) })),
       byMonth:    byMonth.map((r) => ({ year: r.year, month: r.month, count: Number(r.c), total: Number(r.total) })),
@@ -4988,6 +5126,148 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
     }));
   } catch (err) { handleRouteError(err, res, "Commissions summary"); }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U-04-P3 — Commissions Summary CSV export.
+//
+// Same query + same WHERE filter set as
+// GET /umrah/reports/commissions-summary, but:
+//   - returns a UTF-8 BOM-prefixed CSV (Excel-friendly Arabic)
+//   - bumps LIMIT to 5000 (vs the on-screen 100) for operator
+//     monthly close exports
+//   - one line per calc row, header row carries Arabic labels
+//
+// Read-only. Tenant-scoped via cc."companyId" + cc."deletedAt" IS
+// NULL on every row + the optional seasonId join still chains
+// through cp."companyId" = cc."companyId".
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/reports/commissions-summary/export",
+  authorize({ feature: "umrah", action: "list" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
+      const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+      const agentId     = req.query.agentId     ? Number(req.query.agentId)     : null;
+      const yearParam   = req.query.year        ? Number(req.query.year)        : null;
+      const statusParam = req.query.status      ? String(req.query.status)      : null;
+
+      const params: unknown[] = [scope.companyId];
+      let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
+      if (yearParam) {
+        params.push(yearParam);
+        where += ` AND cc.year = $${params.length}`;
+      }
+      if (employeeId) {
+        params.push(employeeId);
+        where += ` AND cc."employeeId" = $${params.length}`;
+      }
+      if (statusParam) {
+        params.push(statusParam);
+        where += ` AND cc.status = $${params.length}`;
+      }
+      if (seasonId) {
+        params.push(seasonId);
+        where += ` AND EXISTS (
+          SELECT 1 FROM employee_commission_plans cp
+           WHERE cp.id = cc."planId"
+             AND cp."companyId" = cc."companyId"
+             AND cp."seasonId" = $${params.length}
+        )`;
+      }
+      // U-04-P4 — same agentId filter as the summary route so the
+      // CSV export carries the same row set as the on-screen list.
+      if (agentId) {
+        params.push(agentId);
+        where += ` AND EXISTS (
+          SELECT 1 FROM employee_commission_plans cp
+           WHERE cp.id = cc."planId"
+             AND cp."companyId" = cc."companyId"
+             AND cp."agentId" = $${params.length}
+        )`;
+      }
+
+      // Same shape as the summary's `recent` block, but the
+      // on-screen cap is lifted — operators exporting for monthly
+      // close need the full window. We cap at 5000 to protect
+      // Excel / memory.
+      const rows = await rawQuery<{
+        id: number; planId: number; planName: string | null;
+        employeeId: number; employeeName: string | null;
+        month: number; year: number; status: string;
+        finalAmount: string; commissionAmount: string;
+        totalMutamers: number; conditionMet: boolean;
+        hasViolations: boolean; createdAt: string;
+      }>(
+        `SELECT cc.id, cc."planId", cp."planName",
+                cc."employeeId", e.name AS "employeeName",
+                cc.month, cc.year, cc.status,
+                cc."finalAmount"::text AS "finalAmount",
+                cc."commissionAmount"::text AS "commissionAmount",
+                cc."totalMutamers", cc."conditionMet", cc."hasViolations",
+                cc."createdAt"::text AS "createdAt"
+           FROM employee_commission_calculations cc
+           LEFT JOIN employee_commission_plans cp
+                  ON cp.id = cc."planId" AND cp."companyId" = cc."companyId" AND cp."deletedAt" IS NULL
+           LEFT JOIN employees e
+                  ON e.id = cc."employeeId" AND e."companyId" = cc."companyId" AND e."deletedAt" IS NULL
+          WHERE ${where}
+          ORDER BY cc.year DESC, cc.month DESC, cc."finalAmount" DESC
+          LIMIT 5000`,
+        params,
+      );
+
+      // RFC 4180 escape — quote when the cell contains the delimiter,
+      // a quote, or any newline; double internal quotes. Same shape
+      // as the pilgrims export (routes/umrah.ts:1233).
+      const csvEscape = (v: unknown): string => {
+        if (v === null || v === undefined) return "";
+        const s = String(v);
+        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+
+      // U-18-P4 — bilingual header policy: Arabic primary with English
+      // in parentheses so partner accounting / payroll systems that
+      // ingest the CSV in EN can map the columns without a separate
+      // glossary. Same convention applied to the pilgrims export.
+      const headers: Array<[keyof typeof rows[number], string]> = [
+        ["id",               "رقم (ID)"],
+        ["year",             "السنة (Year)"],
+        ["month",             "الشهر (Month)"],
+        ["employeeName",     "الموظف (Employee)"],
+        ["planName",         "الخطة (Plan)"],
+        ["status",           "الحالة (Status)"],
+        ["commissionAmount", "العمولة المحتسبة (Calculated Commission)"],
+        ["finalAmount",      "المبلغ النهائي (Final Amount)"],
+        ["totalMutamers",    "عدد المعتمرين (Pilgrim Count)"],
+        ["conditionMet",     "تحقّق الشرط (Condition Met)"],
+        ["hasViolations",    "وجود مخالفات (Has Violations)"],
+        ["createdAt",        "تاريخ الإنشاء (Created At)"],
+      ];
+
+      const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
+      const dataRows = rows.map((r) =>
+        headers
+          .map(([key]) => csvEscape(r[key]))
+          .join(","),
+      );
+      // BOM so Excel detects UTF-8 Arabic — without it the file opens
+      // as mojibake (same lesson as the pilgrims export).
+      const BOM = "﻿";
+      const csv = BOM + [headerRow, ...dataRows].join("\n");
+
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="umrah-commissions-${todayISO()}.csv"`,
+      );
+      res.send(csv);
+    } catch (err) {
+      handleRouteError(err, res, "Commissions summary CSV export");
+    }
+  },
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // §6 Finance Hygiene — Untraced Finance (Charter #1870)
@@ -5735,5 +6015,682 @@ router.get("/reports/import-errors-summary", authorize({ feature: "umrah", actio
   } catch (err) { handleRouteError(err, res, "Import errors summary report"); }
 });
 
+
+// §8 Phase 2 of #1870 — Settings Policies Catalog (11 categories).
+// Surfaces every umrah policy + its current value in one payload.
+// Companion PUT handles per-category saves through the existing
+// `settings` table (key pattern `umrah.<categoryId>.<fieldKey>`).
+router.get("/settings/policies", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // Resolve all umrah.* settings in one round-trip. The shared
+    // resolveSettings helper takes one key at a time + handles
+    // precedence on its own; for this catalog (dozens of keys per
+    // call) we'd rather do a single SELECT. Same precedence rule
+    // (system < company) reproduced inline so the read stays
+    // consistent with the rest of the platform.
+    const keys: string[] = [];
+    for (const cat of UMRAH_POLICY_CATEGORIES) {
+      for (const f of cat.fields) {
+        keys.push(`umrah.${cat.id}.${f.key}`);
+      }
+    }
+    const settingsRows = await rawQuery<{ key: string; scope: string; value: unknown }>(
+      `SELECT key, scope, value FROM settings
+        WHERE key = ANY($1::text[])
+          AND (
+            (scope = 'system' AND "scopeId" IS NULL)
+            OR (scope = 'company' AND "scopeId" = $2)
+          )
+        ORDER BY CASE scope WHEN 'system' THEN 1 WHEN 'company' THEN 2 END`,
+      [keys, scope.companyId],
+    );
+    const current: Record<string, unknown> = {};
+    for (const r of settingsRows) current[r.key] = r.value;
+
+    const data = UMRAH_POLICY_CATEGORIES.map((cat) => {
+      const fields = cat.fields.map((f) => {
+        const fullKey = `umrah.${cat.id}.${f.key}`;
+        const raw = current[fullKey];
+        return {
+          ...f,
+          fullKey,
+          // null → operator hasn't set; effective value falls back to
+          // the catalog default so the FE renders a populated input.
+          currentValue: raw === undefined ? null : raw,
+          effectiveValue: raw === undefined ? (f.defaultValue ?? null) : raw,
+        };
+      });
+      const configuredCount = fields.filter((f) => f.currentValue !== null).length;
+      const status: "configured" | "default" | "missing" =
+        configuredCount === 0 ? "default"
+        : configuredCount === fields.length ? "configured"
+        : "missing";
+      return { ...cat, fields, status, configuredCount };
+    });
+    res.json({ data });
+  } catch (err) { handleRouteError(err, res, "Settings policies catalog"); }
+});
+
+const savePolicySchema = z.object({
+  values: z.record(z.string(), z.union([
+    z.number(), z.boolean(), z.string(), z.null(),
+  ])),
+});
+
+router.put("/settings/policies/:categoryId", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const categoryId = String(req.params.categoryId);
+    if (!ALL_POLICY_IDS.includes(categoryId)) {
+      throw new NotFoundError("الفئة غير موجودة");
+    }
+    const cat = UMRAH_POLICY_CATEGORIES.find((c) => c.id === categoryId)!;
+    const b = zodParse(savePolicySchema.safeParse(req.body));
+    // Whitelist guard — only keys that exist in the category's
+    // schema are accepted. An unknown key would land as a dead
+    // settings row otherwise.
+    const knownKeys = new Set(cat.fields.map((f) => f.key));
+    for (const k of Object.keys(b.values)) {
+      if (!knownKeys.has(k)) {
+        throw new ValidationError(`الحقل "${k}" غير معروف في فئة "${cat.title}"`, { field: k });
+      }
+    }
+    // Save each provided value. Null means "clear the override and
+    // fall back to the system default" — upsertSetting persists the
+    // null and resolveSettings treats it as undefined on read.
+    for (const [k, v] of Object.entries(b.values)) {
+      await upsertSetting("company", scope.companyId, `umrah.${categoryId}.${k}`, v);
+    }
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update",
+      entity: "umrah_settings_policies", entityId: 0,
+      after: { categoryId, keys: Object.keys(b.values) },
+    }).catch((e) => logger.error(e, "policy save audit failed"));
+    res.json({ ok: true, categoryId, updated: Object.keys(b.values).length });
+  } catch (err) { handleRouteError(err, res, "Save policy"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U-19-P1 — journey-status helper (read-only)
+//
+// Surfaces the 4-stage journey for a sub-agent:
+//   1. imported   — pilgrims attributed to this sub-agent
+//   2. linked     — whether the sub-agent has a clientId
+//   3. invoiced   — sales invoices issued + total invoiced amount
+//   4. collected  — payments received against those invoices + total
+//
+// Outstanding counts (unlinkedPilgrims / uninvoicedGroups /
+// unpaidInvoices) help the operator triage stuck items without
+// flipping to 4 separate pages.
+//
+// READ-ONLY. No writes. Tenant-scoped via the standard sub-agent
+// existence guard. The audit (#2314 §3.1) proposed adding three
+// helper endpoints (sub-agents/:id/journey, import-batches/:id/journey,
+// groups/:id/journey); this slice ships the sub-agent variant. The
+// other two are P3 follow-ups in the FE rendering phase.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/sub-agents/:id/journey",
+  authorize({ feature: "umrah", action: "view" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      // Sub-agent existence + tenant scope. Same guard shape as
+      // /sub-agents/:id (line 303) — leaking journey data through a
+      // stale FK is the failure mode this gates.
+      const [subAgent] = await rawQuery<{ id: number; clientId: number | null; name: string; agentId: number | null }>(
+        `SELECT id, "clientId", name, "agentId"
+           FROM umrah_sub_agents
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
+
+      // All four stages computed in parallel — 0 sequential awaits.
+      // The queries are independent: import side reads
+      // umrah_pilgrims; invoice side reads umrah_sales_invoices;
+      // payment side reads umrah_payments; outstanding rolls up
+      // partials from the same tables.
+      const [
+        importRow,
+        invoiceRow,
+        paymentRow,
+        unlinkedPilgrimsRow,
+        uninvoicedGroupsRow,
+        unpaidInvoicesRow,
+      ] = await Promise.all([
+        rawQuery<{ count: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM(total), 0)::text AS total,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM("sarAmount"), 0)::text AS total,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_payments
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Pilgrims with subAgentId set but no further attribution
+          // (groupId IS NULL) — recoverable via the import unlink
+          // surface. Mirrors U-08's recovery wiring.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "groupId" IS NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Groups belonging to this sub-agent (via pilgrims) with
+          // no sales invoice covering them yet. Hand-rolled NOT IN
+          // because Postgres array semantics here are simpler than
+          // an EXISTS subquery for the JSON text "groupRefs" column.
+          `SELECT COUNT(DISTINCT g.id)::text AS count
+             FROM umrah_groups g
+             JOIN umrah_pilgrims p
+               ON p."groupId" = g.id
+              AND p."companyId" = g."companyId"
+              AND p."deletedAt" IS NULL
+            WHERE g."companyId" = $1
+              AND g."deletedAt" IS NULL
+              AND p."subAgentId" = $2
+              AND NOT EXISTS (
+                SELECT 1 FROM umrah_sales_invoices si
+                 WHERE si."companyId" = g."companyId"
+                   AND si."subAgentId" = $2
+                   AND si."deletedAt" IS NULL
+                   AND si."groupRefs" LIKE '%' || g.id || '%'
+              )`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Invoices where paidAmount < total (or paidAmount NULL).
+          // Includes drafts because the operator's mental model is
+          // "anything I haven't fully collected" — drafts surface as
+          // a separate ratio on the FE, not here.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "subAgentId" = $2
+              AND "deletedAt" IS NULL
+              AND COALESCE("paidAmount", 0) < COALESCE(total, 0)`,
+          [scope.companyId, id],
+        ),
+      ]);
+
+      const importedCount = Number(importRow[0]?.count ?? 0);
+      const invoicedCount = Number(invoiceRow[0]?.count ?? 0);
+      const invoicedTotal = Number(invoiceRow[0]?.total ?? 0);
+      const collectedCount = Number(paymentRow[0]?.count ?? 0);
+      const collectedTotal = Number(paymentRow[0]?.total ?? 0);
+
+      res.json(
+        maskFields(req, {
+          subAgent: {
+            id: subAgent.id,
+            name: subAgent.name,
+            clientId: subAgent.clientId,
+            agentId: subAgent.agentId,
+          },
+          stages: [
+            {
+              stage: "imported",
+              count: importedCount,
+              ts: importRow[0]?.latestAt ?? null,
+            },
+            {
+              // Linked stage flips on as soon as `clientId IS NOT NULL`.
+              // The audit-log timestamp would be richer but the journey
+              // helper doesn't need to drill that far — the FE shows
+              // a single boolean indicator.
+              stage: "linked",
+              count: subAgent.clientId ? 1 : 0,
+              ts: null,
+            },
+            {
+              stage: "invoiced",
+              count: invoicedCount,
+              total: invoicedTotal,
+              ts: invoiceRow[0]?.latestAt ?? null,
+            },
+            {
+              stage: "collected",
+              count: collectedCount,
+              total: collectedTotal,
+              ts: paymentRow[0]?.latestAt ?? null,
+            },
+          ],
+          outstanding: {
+            unlinkedPilgrims: Number(unlinkedPilgrimsRow[0]?.count ?? 0),
+            uninvoicedGroups: Number(uninvoicedGroupsRow[0]?.count ?? 0),
+            unpaidInvoices: Number(unpaidInvoicesRow[0]?.count ?? 0),
+          },
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Sub-agent journey");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U-19-P1b — group journey-status helper (read-only)
+//
+// Same shape as the sub-agent variant above, but keyed on
+// `umrah_groups.id` and surfaced for the group-detail FE drill-down.
+//
+// Stages:
+//   1. imported   — pilgrims attributed to this group
+//   2. linked     — whether the group has any pilgrim with a linked
+//                   subAgent → client chain (boolean roll-up)
+//   3. invoiced   — sales invoices whose groupRefs include this id
+//   4. collected  — payments tied to those invoices
+//
+// READ-ONLY. No writes. Tenant-scoped via the standard group
+// existence guard.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/groups/:id/journey",
+  authorize({ feature: "umrah", action: "view" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+
+      // Group existence + tenant scope. Same guard shape as the
+      // sub-agents/:id route — leaking journey data through a stale
+      // FK is the failure mode this gates.
+      const [group] = await rawQuery<{ id: number; name: string; agentId: number | null; subAgentId: number | null }>(
+        `SELECT id, name, "agentId", "subAgentId"
+           FROM umrah_groups
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!group) throw new NotFoundError("المجموعة غير موجودة");
+
+      const [
+        importRow,
+        linkedRow,
+        invoiceRow,
+        paymentRow,
+      ] = await Promise.all([
+        rawQuery<{ count: string; latestAt: string | null }>(
+          `SELECT COUNT(*)::text AS count,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "groupId" = $2
+              AND "deletedAt" IS NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string }>(
+          // Linked = at least one pilgrim in the group whose sub-agent
+          // has a clientId set. Same "linked" definition the sub-agent
+          // route uses (sub_agent.clientId IS NOT NULL), just folded
+          // up to the group level via the pilgrim → sub_agent chain.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_pilgrims p
+             JOIN umrah_sub_agents sa
+               ON sa.id = p."subAgentId"
+              AND sa."companyId" = p."companyId"
+              AND sa."deletedAt" IS NULL
+            WHERE p."companyId" = $1
+              AND p."groupId" = $2
+              AND p."deletedAt" IS NULL
+              AND sa."clientId" IS NOT NULL`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          // groupRefs is the text-LIKE pattern used by the sub-agent
+          // variant. Same approach so the two routes return shapes
+          // operators can compare 1:1.
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM(total), 0)::text AS total,
+                  MAX("createdAt")::text AS "latestAt"
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "deletedAt" IS NULL
+              AND "groupRefs" LIKE '%' || $2 || '%'`,
+          [scope.companyId, id],
+        ),
+        rawQuery<{ count: string; total: string; latestAt: string | null }>(
+          // Payments via invoices touching this group. Reuses the
+          // groupRefs LIKE pattern via an EXISTS subquery so the same
+          // string-match semantics carry through.
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM("sarAmount"), 0)::text AS total,
+                  MAX(pmt."createdAt")::text AS "latestAt"
+             FROM umrah_payments pmt
+            WHERE pmt."companyId" = $1
+              AND pmt."deletedAt" IS NULL
+              AND EXISTS (
+                SELECT 1 FROM umrah_sales_invoices si
+                 WHERE si.id = pmt."invoiceId"
+                   AND si."companyId" = pmt."companyId"
+                   AND si."deletedAt" IS NULL
+                   AND si."groupRefs" LIKE '%' || $2 || '%'
+              )`,
+          [scope.companyId, id],
+        ),
+      ]);
+
+      const importedCount = Number(importRow[0]?.count ?? 0);
+      const linkedCount = Number(linkedRow[0]?.count ?? 0);
+      const invoicedCount = Number(invoiceRow[0]?.count ?? 0);
+      const invoicedTotal = Number(invoiceRow[0]?.total ?? 0);
+      const collectedCount = Number(paymentRow[0]?.count ?? 0);
+      const collectedTotal = Number(paymentRow[0]?.total ?? 0);
+
+      res.json(
+        maskFields(req, {
+          group: {
+            id: group.id,
+            name: group.name,
+            agentId: group.agentId,
+            subAgentId: group.subAgentId,
+          },
+          stages: [
+            {
+              stage: "imported",
+              count: importedCount,
+              ts: importRow[0]?.latestAt ?? null,
+            },
+            {
+              stage: "linked",
+              count: linkedCount,
+              ts: null,
+            },
+            {
+              stage: "invoiced",
+              count: invoicedCount,
+              total: invoicedTotal,
+              ts: invoiceRow[0]?.latestAt ?? null,
+            },
+            {
+              stage: "collected",
+              count: collectedCount,
+              total: collectedTotal,
+              ts: paymentRow[0]?.latestAt ?? null,
+            },
+          ],
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Group journey");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U-15-P5 — Packages vs. allocations pricing-drift report.
+//
+// For each umrah_packages row that has been linked to a hotel via the
+// U-15-P1 column `defaultHotelId`, compare the package's `costPrice`
+// to the *expected* cost computed from the latest active room block
+// at that hotel: `expectedCost = duration × ratePerNight`. Surface
+// the rows whose drift exceeds the threshold (default 10%) so an
+// operator preparing prices for a new season can see the gap before
+// signing.
+//
+// Read-only. Tenant-scoped via p."companyId"+p."deletedAt" IS NULL on
+// the packages anchor, with the hotel/block joins inheriting the
+// same companyId through their join predicates.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/reports/packages-vs-allocations-pricing-drift",
+  authorize({ feature: "umrah", action: "list" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      // The threshold lets the operator pick a tighter window when
+      // they're chasing tiny drift, or a wider one when they only
+      // want to see major divergence. Default = 10%.
+      const thresholdPct = req.query.thresholdPct
+        ? Number(req.query.thresholdPct)
+        : 10;
+      const thresholdFraction = thresholdPct / 100;
+
+      // One round-trip: for each package with a defaultHotelId, fetch
+      // the latest active block at that hotel and compute the
+      // expected cost. The CASE pegs drift to NULL when the package
+      // costPrice is 0 (avoids divide-by-zero), so the FE can render
+      // a "not comparable" badge for fresh rows.
+      const rows = await rawQuery<{
+        packageId: number;
+        packageName: string;
+        defaultHotelId: number;
+        hotelName: string | null;
+        duration: number;
+        costPrice: string;
+        sellPrice: string;
+        latestRatePerNight: string | null;
+        expectedCost: string | null;
+        driftAmount: string | null;
+        driftFraction: string | null;
+      }>(
+        `WITH latest_block AS (
+           SELECT DISTINCT ON (rb."hotelId")
+                  rb."hotelId",
+                  rb."ratePerNight"
+             FROM umrah_room_blocks rb
+            WHERE rb."companyId" = $1
+              AND rb."deletedAt" IS NULL
+              AND rb."ratePerNight" IS NOT NULL
+            ORDER BY rb."hotelId", rb.id DESC
+         )
+         SELECT
+           p.id   AS "packageId",
+           p.name AS "packageName",
+           p."defaultHotelId"        AS "defaultHotelId",
+           h.name                    AS "hotelName",
+           COALESCE(p.duration, 7)   AS duration,
+           p."costPrice"::text       AS "costPrice",
+           p."sellPrice"::text       AS "sellPrice",
+           lb."ratePerNight"::text   AS "latestRatePerNight",
+           (lb."ratePerNight" * COALESCE(p.duration, 7))::text
+                                     AS "expectedCost",
+           (p."costPrice" - lb."ratePerNight" * COALESCE(p.duration, 7))::text
+                                     AS "driftAmount",
+           CASE
+             WHEN p."costPrice" = 0 THEN NULL
+             ELSE ((p."costPrice" - lb."ratePerNight" * COALESCE(p.duration, 7))
+                   / p."costPrice")::text
+           END                       AS "driftFraction"
+         FROM umrah_packages p
+         JOIN latest_block lb
+           ON lb."hotelId" = p."defaultHotelId"
+         LEFT JOIN umrah_hotels h
+           ON h.id = p."defaultHotelId"
+          AND h."companyId" = p."companyId"
+          AND h."deletedAt" IS NULL
+         WHERE p."companyId" = $1
+           AND p."defaultHotelId" IS NOT NULL
+           AND p."deletedAt" IS NULL
+         ORDER BY p.name
+         LIMIT 500`,
+        [scope.companyId],
+      );
+
+      // The SQL emits one row per linked package; filter to the rows
+      // whose drift exceeds the threshold. Numbers come back as
+      // strings to preserve precision; convert here for the FE.
+      const driftRows = rows
+        .map((r) => ({
+          packageId: r.packageId,
+          packageName: r.packageName,
+          defaultHotelId: r.defaultHotelId,
+          hotelName: r.hotelName,
+          duration: Number(r.duration),
+          costPrice: Number(r.costPrice),
+          sellPrice: Number(r.sellPrice),
+          latestRatePerNight: r.latestRatePerNight === null ? null : Number(r.latestRatePerNight),
+          expectedCost: r.expectedCost === null ? null : Number(r.expectedCost),
+          driftAmount: r.driftAmount === null ? null : Number(r.driftAmount),
+          driftFraction: r.driftFraction === null ? null : Number(r.driftFraction),
+        }))
+        .filter((r) => r.driftFraction !== null
+          && Math.abs(r.driftFraction) >= thresholdFraction);
+
+      res.json(
+        maskFields(req, {
+          thresholdPct,
+          totalPackagesLinked: rows.length,
+          driftRows,
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Pricing-drift report");
+    }
+  },
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// U-19-P6 — Recovery hub aggregate (read-only)
+//
+// One operator screen that surfaces every stuck stage of the umrah
+// journey in a single response. Helps an operator triage what to
+// rescue first instead of opening 4 different pages.
+//
+// Buckets:
+//   1. Imports with stuck unlinked rows — batches that ran but still
+//      have pilgrims with groupId IS NULL.
+//   2. Sub-agents waiting to be linked — sub-agents with NO clientId.
+//   3. Groups uninvoiced > 7 days — groups whose pilgrims exist but
+//      no sales invoice has been issued.
+//   4. Invoices unpaid > 30 days — sales invoices past the 30-day
+//      window with paidAmount < total.
+//
+// READ-ONLY. Tenant-scoped. No writes. Same shape style as the
+// journey helpers (P1/P1b) so the FE recovery-hub page can render
+// a uniform card grid.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get(
+  "/reports/recovery-hub",
+  authorize({ feature: "umrah", action: "list" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+
+      // Two operator-tunable thresholds. Both are bound by Number()
+      // so a string like ?uninvoicedDays=foo doesn't trickle into the
+      // SQL — falls back to the default.
+      const uninvoicedDays = Number(req.query.uninvoicedDays) > 0
+        ? Number(req.query.uninvoicedDays)
+        : 7;
+      const unpaidDays = Number(req.query.unpaidDays) > 0
+        ? Number(req.query.unpaidDays)
+        : 30;
+
+      const [
+        stuckImports,
+        unlinkedSubAgents,
+        uninvoicedGroups,
+        unpaidInvoices,
+      ] = await Promise.all([
+        rawQuery<{ count: string }>(
+          // Pilgrims attributed to a sub-agent / agent but never
+          // assigned to a group. The U-08 recovery surface handles
+          // resolution one-by-one; this is just the count.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_pilgrims
+            WHERE "companyId" = $1
+              AND "groupId" IS NULL
+              AND "subAgentId" IS NOT NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId],
+        ),
+        rawQuery<{ count: string }>(
+          // Sub-agents created but never wired to a client. Same shape
+          // as the sub-agents/:id/journey "linked" check.
+          `SELECT COUNT(*)::text AS count
+             FROM umrah_sub_agents
+            WHERE "companyId" = $1
+              AND "clientId" IS NULL
+              AND "deletedAt" IS NULL`,
+          [scope.companyId],
+        ),
+        rawQuery<{ count: string }>(
+          // Groups whose pilgrims exist but no sales invoice covers
+          // them. groupRefs uses the same LIKE pattern as the
+          // journey helpers so the row sets stay consistent.
+          // The 7-day threshold is anchored on g."createdAt".
+          `SELECT COUNT(DISTINCT g.id)::text AS count
+             FROM umrah_groups g
+             JOIN umrah_pilgrims p
+               ON p."groupId" = g.id
+              AND p."companyId" = g."companyId"
+              AND p."deletedAt" IS NULL
+            WHERE g."companyId" = $1
+              AND g."deletedAt" IS NULL
+              AND g."createdAt" < NOW() - ($2 || ' days')::interval
+              AND NOT EXISTS (
+                SELECT 1 FROM umrah_sales_invoices si
+                 WHERE si."companyId" = g."companyId"
+                   AND si."deletedAt" IS NULL
+                   AND si."groupRefs" LIKE '%' || g.id || '%'
+              )`,
+          [scope.companyId, uninvoicedDays],
+        ),
+        rawQuery<{ count: string; total: string }>(
+          // Sales invoices past unpaidDays with paidAmount < total.
+          // Drafts excluded — operator's mental model is "money I
+          // expected but never landed".
+          `SELECT COUNT(*)::text AS count,
+                  COALESCE(SUM(COALESCE(total, 0) - COALESCE("paidAmount", 0)), 0)::text AS total
+             FROM umrah_sales_invoices
+            WHERE "companyId" = $1
+              AND "deletedAt" IS NULL
+              AND status NOT IN ('draft', 'void')
+              AND "createdAt" < NOW() - ($2 || ' days')::interval
+              AND COALESCE("paidAmount", 0) < COALESCE(total, 0)`,
+          [scope.companyId, unpaidDays],
+        ),
+      ]);
+
+      res.json(
+        maskFields(req, {
+          thresholds: {
+            uninvoicedDays,
+            unpaidDays,
+          },
+          buckets: {
+            stuckImports: Number(stuckImports[0]?.count ?? 0),
+            unlinkedSubAgents: Number(unlinkedSubAgents[0]?.count ?? 0),
+            uninvoicedGroups: Number(uninvoicedGroups[0]?.count ?? 0),
+            unpaidInvoices: {
+              count: Number(unpaidInvoices[0]?.count ?? 0),
+              outstandingTotal: Number(unpaidInvoices[0]?.total ?? 0),
+            },
+          },
+        }),
+      );
+    } catch (err) {
+      handleRouteError(err, res, "Recovery-hub aggregate");
+    }
+  },
+);
 
 export default router;

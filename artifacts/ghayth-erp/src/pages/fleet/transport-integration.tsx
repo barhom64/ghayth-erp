@@ -160,11 +160,9 @@ export default function TransportIntegration() {
               <Calendar className="h-4 w-4 me-1" />تنزيل تقويم iCalendar
             </Button>
           </a>
-          <Link href="/fleet/transport/bookings">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
               <ArrowLeft className="h-4 w-4 me-1" />العودة للحجوزات
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       }
     >
@@ -244,7 +242,7 @@ export default function TransportIntegration() {
                         rateLimitAware
                       >
                         <Wand2 className="h-3.5 w-3.5 me-1" />
-                        {materializingId === g.id ? "جارٍ الإنشاء…" : "إنشاء حجوزات النقل"}
+                        {materializingId === g.id ? "جاري الإنشاء…" : "إنشاء حجوزات النقل"}
                       </Button>
                     )}
                   </div>
@@ -322,11 +320,9 @@ export default function TransportIntegration() {
         <CardContent className="p-3 text-xs text-muted-foreground flex items-center gap-2">
           <ExternalLink className="h-3 w-3" />
           إذا لم يكن المصدر مرتبطاً بالنظام، يمكنك إنشاء الحجز يدوياً.
-          <Link href="/fleet/transport/bookings/create">
-            <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+          <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs"><Link href="/fleet/transport/bookings/create">
               <Plus className="h-3 w-3 me-1" />حجز يدوي جديد
-            </Button>
-          </Link>
+            </Link></Button>
         </CardContent>
       </Card>
     </PageShell>

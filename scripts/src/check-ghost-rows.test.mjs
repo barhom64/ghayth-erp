@@ -22,6 +22,7 @@ import {
   extractTableVarFromArgs,
   extractJoinOnArg,
   predicateFiltersDeletedAt,
+  extractRawQueryBodies,
 } from "./check-ghost-rows.mjs";
 
 let failed = 0;
@@ -183,6 +184,77 @@ console.log("end-to-end: IS NOT NULL must still be flagged");
     !statementHasAliasedDeletedAtIsNull(stmt, refs[0].alias) &&
     !statementHasUnqualifiedDeletedAtIsNull(stmt);
   assert(flagged, `IS NOT NULL is a deleted-only listing, must still be flagged`);
+}
+
+// Regression guard for the silent typed-call skip (Task #490). The
+// extractor MUST capture rawQuery bodies written with inline generics,
+// including NESTED ones — otherwise a clean 0-finding run silently means
+// "matched nothing" instead of "nothing wrong". Reverting the canonical
+// regex back to a bare/one-level `rawQuery(` matcher turns these red.
+console.log("extractRawQueryBodies: tolerates inline generics");
+{
+  const bodies = extractRawQueryBodies(
+    'await rawQuery(`SELECT 1 FROM employees`);',
+  );
+  assert(
+    bodies.length === 1 && bodies[0].includes("FROM employees"),
+    "captures untyped rawQuery(`…`)",
+  );
+}
+{
+  const bodies = extractRawQueryBodies(
+    'await rawQuery<Row>(`SELECT 2 FROM clients`);',
+  );
+  assert(
+    bodies.length === 1 && bodies[0].includes("FROM clients"),
+    "captures single-level generic rawQuery<Row>(`…`)",
+  );
+}
+{
+  const bodies = extractRawQueryBodies(
+    'await rawQuery<Record<string, unknown>>(`SELECT 3 FROM suppliers`);',
+  );
+  assert(
+    bodies.length === 1 && bodies[0].includes("FROM suppliers"),
+    "captures NESTED generic rawQuery<Record<string, unknown>>(`…`)",
+  );
+}
+{
+  const src = [
+    'await rawQuery(`SELECT a FROM t1`);',
+    'await rawQuery<Map<string, Row[]>>(`SELECT b FROM t2`);',
+  ].join("\n");
+  const bodies = extractRawQueryBodies(src);
+  assert(
+    bodies.length === 2,
+    `mixed untyped + nested-generic calls all captured (got ${bodies.length})`,
+  );
+}
+
+// Combined end-to-end: a TYPED rawQuery that reads a soft-delete table with
+// NO `deletedAt IS NULL` predicate must be FLAGGED. This proves the typed
+// body is not merely extracted but actually run through the ghost-row scan;
+// if the extractor skipped typed calls, `flagged` would stay false and a
+// ghost-row read would ship unscanned.
+console.log("typed rawQuery<…> ghost-row read is flagged end-to-end");
+{
+  const src =
+    'await rawQuery<Record<string, unknown>>(`SELECT id FROM vendors v WHERE v."companyId" = $1`);';
+  const softDelete = new Set(["vendors"]); // soft-deletable in this fixture
+  let flagged = false;
+  for (const body of extractRawQueryBodies(src)) {
+    for (const stmt of splitStatements(stripCommentsAndStrings(body))) {
+      if (!/\bselect\b/i.test(stmt)) continue;
+      for (const { table, alias } of findFromJoinReferences(stmt)) {
+        if (!softDelete.has(table)) continue;
+        const ok =
+          statementHasAliasedDeletedAtIsNull(stmt, alias) ||
+          statementHasUnqualifiedDeletedAtIsNull(stmt);
+        if (!ok) flagged = true;
+      }
+    }
+  }
+  assert(flagged, "soft-delete read in a typed rawQuery<…> call is flagged");
 }
 
 console.log("Drizzle: extractTableVarFromArgs");

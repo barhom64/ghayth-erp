@@ -114,11 +114,9 @@ export default function FixedAssetsPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/fixed-asset-register">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/fixed-asset-register">
               <Building2 className="h-4 w-4 me-2" />السجل التحليلي
-            </Button>
-          </Link>
+            </Link></Button>
           <Link href="/finance/fixed-assets/batch-depreciate">
             <GuardedButton perm="finance:approve" variant="outline" size="sm">
               <TrendingDown className="h-4 w-4 me-2" />إهلاك دفعي
@@ -286,7 +284,7 @@ export default function FixedAssetsPage() {
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => { setShowDepreciate(false); setDepResult(null); }}>إغلاق</Button>
                 <Button onClick={handleDepreciate} disabled={depreciateMutation.isPending} rateLimitAware>
-                  {depreciateMutation.isPending ? "جارٍ الإهلاك..." : "تسجيل الإهلاك"}
+                  {depreciateMutation.isPending ? "جاري الإهلاك..." : "تسجيل الإهلاك"}
                 </Button>
               </div>
             </CardContent>

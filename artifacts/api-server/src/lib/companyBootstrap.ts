@@ -251,6 +251,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1172", name: "تأمينات مدفوعة مقدماً", nameEn: "Prepaid Insurance", type: "asset", level: 4, parentCode: "1170" },
   { code: "1173", name: "اشتراكات ورخص مدفوعة مقدماً", nameEn: "Prepaid Subscriptions", type: "asset", level: 4, parentCode: "1170" },
   { code: "1180", name: "ضريبة قيمة مضافة مدفوعة (مدخلات)", nameEn: "Input VAT", type: "asset", level: 3, parentCode: "1100" },
+  // دفعات مقدمة للموردين — أصل متداول قابل للترحيل (سلفة لمورد مقابل أمر شراء/فاتورة
+  // لاحقة). مرآة AP لـ"customer_advance_liability". موضوع L3 مباشرة تحت 1100 على
+  // نمط 1160 "إيرادات مستحقة" (أقرب سابقة لحساب فرعي قابل للترحيل تحت مجموعة الأصول
+  // المتداولة)، والرقم 1190 هو التالي بعد 1180 فلا يكسر تسلسل القالب. #2140 شريحة 2-أ.
+  { code: "1190", name: "دفعات مقدمة للموردين", nameEn: "Advances to Suppliers", type: "asset", level: 3, parentCode: "1100" },
 
   // 12xx الأصول غير المتداولة
   { code: "1200", name: "الأصول غير المتداولة", nameEn: "Non-Current Assets", type: "asset", level: 2, parentCode: "1000", allowPosting: false },
@@ -265,6 +270,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1250", name: "تحسينات على مأجور", nameEn: "Leasehold Improvements", type: "asset", level: 3, parentCode: "1200" },
   { code: "1260", name: "الأصول غير الملموسة (برامج وتراخيص)", nameEn: "Intangible Assets", type: "asset", level: 3, parentCode: "1200" },
   { code: "1270", name: "أعمال تحت التنفيذ", nameEn: "Capital Work In Progress", type: "asset", level: 3, parentCode: "1200" },
+
+  // 1291 مجمع انخفاض قيمة الأصول الثابتة — IAS 36 contra-asset مستقل عن مجمعات
+  // الإهلاك (1211/1221/…) لضمان فصل مخصص الهبوط عن مخصص الإهلاك في الميزانية.
+  // الترحيل: DR 5850 خسارة هبوط / CR 1291 مجمع هبوط. #2140-5a.
+  { code: "1291", name: "مجمع انخفاض قيمة الأصول الثابتة", nameEn: "Accum. Impairment – Fixed Assets", type: "asset", level: 3, parentCode: "1200" },
 
   // ============ 2xxx الالتزامات (Liabilities) ============
   { code: "2000", name: "الالتزامات", nameEn: "Liabilities", type: "liability", level: 1, allowPosting: false },
@@ -287,6 +297,9 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "2160", name: "إيرادات مقبوضة مقدماً", nameEn: "Unearned Revenue", type: "liability", level: 3, parentCode: "2100" },
   { code: "2161", name: "إيجارات مقبوضة مقدماً", nameEn: "Unearned Rent", type: "liability", level: 4, parentCode: "2160" },
   { code: "2170", name: "تأمينات وضمانات من العملاء", nameEn: "Customer Deposits", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2155", name: "عمولات مستحقة", nameEn: "Commissions Payable", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2156", name: "ذمم مُلّاك العقارات", nameEn: "Property Owners Payable", type: "liability", level: 3, parentCode: "2100" },
+  { code: "2157", name: "غرامات مرورية مستحقة", nameEn: "Traffic Fines Payable", type: "liability", level: 3, parentCode: "2100" },
 
   // 22xx الالتزامات طويلة الأجل
   { code: "2200", name: "الالتزامات طويلة الأجل", nameEn: "Long-Term Liabilities", type: "liability", level: 2, parentCode: "2000", allowPosting: false },
@@ -300,6 +313,10 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "3300", name: "الأرباح المحتجزة", nameEn: "Retained Earnings", type: "equity", level: 2, parentCode: "3000" },
   { code: "3400", name: "أرباح/خسائر العام الحالي", nameEn: "Current Year P/L", type: "equity", level: 2, parentCode: "3000" },
   { code: "3500", name: "السحوبات والتوزيعات", nameEn: "Drawings & Distributions", type: "equity", level: 2, parentCode: "3000" },
+  // 3600 فائض إعادة التقييم — IAS 16 Revaluation Model. حساب مستقل عن الأرباح
+  // المحتجزة (3300) لأن فائض إعادة التقييم لا يُوزَّع إلا عند التصرف في الأصل.
+  // الترحيل: DR أصل ثابت / CR 3600 (زيادة)؛ DR 5860 / CR أصل ثابت (نقص). #2140-5a.
+  { code: "3600", name: "فائض إعادة التقييم", nameEn: "Revaluation Surplus", type: "equity", level: 2, parentCode: "3000" },
 
   // ============ 4xxx الإيرادات ============
   { code: "4000", name: "الإيرادات", nameEn: "Revenue", type: "revenue", level: 1, allowPosting: false },
@@ -323,6 +340,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "4920", name: "أرباح بيع أصول ثابتة", nameEn: "Gain on Sale of Assets", type: "revenue", level: 3, parentCode: "4900" },
   { code: "4930", name: "إيرادات متنوعة", nameEn: "Miscellaneous Income", type: "revenue", level: 3, parentCode: "4900" },
   { code: "4940", name: "تخفيضات وخصومات مكتسبة", nameEn: "Discounts Earned", type: "revenue", level: 3, parentCode: "4900" },
+  { code: "4950", name: "أرباح فروق عملة", nameEn: "FX Revaluation Gain", type: "revenue", level: 3, parentCode: "4900" },
 
   // ============ 5xxx المصروفات ============
   { code: "5000", name: "المصروفات", nameEn: "Expenses", type: "expense", level: 1, allowPosting: false },
@@ -392,6 +410,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   // 58xx مصروفات أخرى ومخصصات
   { code: "5800", name: "مصروفات أخرى ومخصصات", nameEn: "Other Expenses & Provisions", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
   { code: "5810", name: "خسائر بيع أصول ثابتة", nameEn: "Loss on Sale of Assets", type: "expense", level: 3, parentCode: "5800" },
+  // 5850 / 5860: مصروفات IAS 36 (هبوط القيمة) و IAS 16 (إعادة التقييم النازلة).
+  // مستقلة عن 5810 (خسائر البيع) لأن طبيعتها وتوقيت الاعتراف بها مختلفان.
+  // #2140-5a مرتكزات الأصول الثابتة.
+  { code: "5850", name: "خسارة انخفاض قيمة الأصول الثابتة", nameEn: "Impairment Loss – Fixed Assets", type: "expense", level: 3, parentCode: "5800" },
+  { code: "5860", name: "خسارة إعادة تقييم الأصول الثابتة", nameEn: "Revaluation Loss – Fixed Assets", type: "expense", level: 3, parentCode: "5800" },
   { code: "5820", name: "ديون معدومة", nameEn: "Bad Debts", type: "expense", level: 3, parentCode: "5800" },
   { code: "5830", name: "مخصصات (ضمانات/التزامات)", nameEn: "Provisions", type: "expense", level: 3, parentCode: "5800" },
   { code: "5840", name: "زكاة وضرائب الدخل", nameEn: "Zakat & Income Tax", type: "expense", level: 3, parentCode: "5800" },

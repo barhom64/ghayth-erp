@@ -109,7 +109,7 @@ export function ProactiveInsightsCard() {
           <CardTitle className="text-base">ما يحتاج انتباهك</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">جارٍ التحميل…</p>
+          <p className="text-sm text-muted-foreground">جاري التحميل…</p>
         </CardContent>
       </Card>
     );
@@ -185,12 +185,10 @@ export function ProactiveInsightsCard() {
                       )}
                     </ul>
                   )}
-                  <Link href={insight.deepLink}>
-                    <Button variant="ghost" size="sm" className="h-6 px-2 gap-1">
+                  <Button asChild variant="ghost" size="sm" className="h-6 px-2 gap-1"><Link href={insight.deepLink}>
                       <span className="text-xs">افتح</span>
                       <ArrowUpRight className="w-3 h-3" />
-                    </Button>
-                  </Link>
+                    </Link></Button>
                 </div>
               </div>
             </div>

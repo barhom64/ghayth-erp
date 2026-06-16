@@ -3,16 +3,18 @@ import { useLocation, useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText } from "lucide-react";
+import { Edit, User, Phone, Mail, MapPin, Building2, Banknote, FileText, TrendingUp } from "lucide-react";
+import { Link } from "wouter";
 import { formatCurrency } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { useDetailEditDelete, DetailActionButtons, InlineEditCard } from "@/components/shared/detail-edit-delete-actions";
+import { OwnerPayoutsPanel } from "./owner-payouts-panel";
 
 /**
  * OwnerDetail — unified detail page for a single property owner.
@@ -39,7 +41,17 @@ export default function OwnerDetail() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/properties/owners/:id");
   const id = params?.id ? Number(params.id) : null;
-  const { extraTabs, hideTabs } = useRegistryTabs("owner", id ?? 0);
+  const { extraTabs: registryTabs, hideTabs } = useRegistryTabs("owner", id ?? 0);
+
+  const extraTabs = useMemo(() => [
+    ...registryTabs,
+    {
+      key: "payouts",
+      label: "المدفوعات للمالك",
+      icon: Banknote,
+      content: () => id ? <OwnerPayoutsPanel ownerId={id} /> : null,
+    },
+  ], [registryTabs, id]);
   const { toast } = useToast();
   const [previewAttachment, setPreviewAttachment] = useState<PreviewableAttachment | null>(null);
 
@@ -264,10 +276,18 @@ export default function OwnerDetail() {
             deletePerm="properties:delete"
             extra={
               owner ? (
-                <EntityPrintButton
-                  entityType="owner"
-                  entityId={id ?? 0}
-                 />
+                <>
+                  <Link href={`/properties/owners/statement?ownerId=${id}`}>
+                    <GuardedButton perm="properties:view" size="sm" variant="outline" className="gap-1">
+                      <TrendingUp className="h-4 w-4" />
+                      كشف الحساب
+                    </GuardedButton>
+                  </Link>
+                  <PrintButton
+                    entityType="owner"
+                    entityId={id ?? 0}
+                  />
+                </>
               ) : null
             }
           />

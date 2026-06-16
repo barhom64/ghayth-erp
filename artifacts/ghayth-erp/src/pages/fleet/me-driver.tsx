@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { useApiQuery, apiFetch, getErrorMessage } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { statusLabel } from "@/lib/transport-status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,19 @@ import {
   Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { CargoCheckpointDialog } from "@/components/shared/cargo-checkpoint-dialog";
+
+// #2079 TA-T18-03 — within-step operational checkpoints are recorded
+// through a dialog mounted on each cargo card while the manifest sits
+// in a driver-controlled state. The set mirrors the backend's
+// CARGO_DRIVER_CHECKPOINT_OPEN_STATES gate at
+// /api/fleet/me/cargo/:id/checkpoint (status ∈ driver_accepted ..
+// delivered). Closing the SPA half of #2056 — the dialog NEVER
+// changes the 7-state lifecycle; advance buttons own that.
+const CARGO_CHECKPOINT_OPEN: ReadonlySet<string> = new Set([
+  "driver_accepted", "trip_started", "arrived_pickup",
+  "loaded", "in_transit", "arrived_delivery", "delivered",
+]);
 
 interface DriverMe {
   id: number; name: string; phone: string | null;
@@ -39,30 +53,9 @@ interface DriverCargo {
   vehiclePlate: string | null;
 }
 
-const TRIP_STATUS: Record<string, { label: string; tone: string }> = {
-  scheduled:   { label: "مجدولة",   tone: "bg-status-info-surface text-status-info-foreground" },
-  planned:     { label: "مخططة",    tone: "bg-status-info-surface text-status-info-foreground" },
-  in_progress: { label: "جارية",    tone: "bg-status-warning-surface text-status-warning-foreground" },
-  completed:   { label: "مكتملة",   tone: "bg-status-success-surface text-status-success-foreground" },
-  cancelled:   { label: "ملغاة",    tone: "bg-surface-subtle text-muted-foreground" },
-};
-
-const CARGO_STATUS: Record<string, { label: string; tone: string }> = {
-  draft:      { label: "مسودة",     tone: "bg-surface-subtle text-muted-foreground" },
-  confirmed:  { label: "مؤكدة",     tone: "bg-status-info-surface text-status-info-foreground" },
-  loading:    { label: "تحميل",     tone: "bg-purple-50 text-purple-700" },
-  in_transit: { label: "في الطريق", tone: "bg-status-warning-surface text-status-warning-foreground" },
-  delivered:  { label: "مسلّمة",    tone: "bg-status-success-surface text-status-success-foreground" },
-  closed:     { label: "مغلقة",     tone: "bg-status-success-surface text-status-success-foreground" },
-  cancelled:  { label: "ملغاة",     tone: "bg-rose-100 text-rose-700" },
-};
-
-const DRIVER_STATUS: Record<string, { label: string; tone: string }> = {
-  available: { label: "متاح",      tone: "bg-status-success-surface text-status-success-foreground" },
-  on_trip:   { label: "في رحلة",   tone: "bg-status-info-surface text-status-info-foreground" },
-  off_duty:  { label: "خارج الدوام", tone: "bg-status-warning-surface text-status-warning-foreground" },
-  suspended: { label: "موقوف",     tone: "bg-rose-100 text-rose-700" },
-};
+// #TA-T18-UX-AUDIT-01 — حالات الرحلة والسائق والشحن كلها من القاموس الموحّد
+// (lib/transport-status-labels): trip / driver / cargo — لا خرائط محلية،
+// إنهاءً لـRM-03 «صفر fallback إنجليزي» على شاشة السائق.
 
 export default function MeDriver() {
   const qc = useQueryClient();
@@ -153,7 +146,7 @@ export default function MeDriver() {
     );
   }
 
-  const driverTone = DRIVER_STATUS[me.status] ?? { label: me.status, tone: "bg-surface-subtle" };
+  const driverTone = statusLabel("driver", me.status);
   const activeTrip = trips.find((t) => t.status === "in_progress");
   const activeCargo = cargo.find((m) => m.status === "in_transit");
 
@@ -162,11 +155,9 @@ export default function MeDriver() {
       title={`مرحباً، ${me.name}`}
       subtitle="لوحة السائق — رحلاتك وبضائعك"
       actions={
-        <Link href="/me/driver/navigation">
-          <Button size="sm" variant="default">
+        <Button asChild size="sm" variant="default"><Link href="/me/driver/navigation">
             <Navigation className="h-4 w-4 me-1" />الملاحة
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       <Card className="mb-4">
@@ -228,7 +219,7 @@ export default function MeDriver() {
               <RouteIcon className="h-10 w-10 mx-auto opacity-30 mb-2" />لا توجد رحلات مسندة إليك
             </CardContent></Card>
           ) : trips.map((t) => {
-            const tone = TRIP_STATUS[t.status] ?? { label: t.status, tone: "bg-surface-subtle" };
+            const tone = statusLabel("trip", t.status);
             return (
               <Card key={t.id}>
                 <CardHeader className="pb-2">
@@ -270,7 +261,7 @@ export default function MeDriver() {
               <Package className="h-10 w-10 mx-auto opacity-30 mb-2" />لا توجد بوالص مسندة إليك
             </CardContent></Card>
           ) : cargo.map((m) => {
-            const tone = CARGO_STATUS[m.status] ?? { label: m.status, tone: "bg-surface-subtle" };
+            const tone = statusLabel("cargo", m.status);
             return (
               <Card key={m.id}>
                 <CardHeader className="pb-2">
@@ -327,6 +318,16 @@ export default function MeDriver() {
                       disabled={busy === `cargo-${m.id}-delivered`}
                       onClick={() => cargoAdvance(m.id, "delivered")}>تأكيد التسليم</Button>
                   )}
+                  {/* TA-T18-03 — log within-step checkpoints (weighing,
+                      rest, inspection, customs, fueling, (un)loading
+                      milestones) without touching the headline status.
+                      Gated to driver-controlled states only — matches
+                      the backend's CARGO_DRIVER_CHECKPOINT_OPEN_STATES. */}
+                  <CargoCheckpointDialog
+                    manifestId={m.id}
+                    manifestNumber={m.manifestNumber}
+                    disabled={!CARGO_CHECKPOINT_OPEN.has(m.status)}
+                  />
                 </CardContent>
               </Card>
             );

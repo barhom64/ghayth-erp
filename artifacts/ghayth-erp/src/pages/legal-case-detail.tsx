@@ -3,7 +3,7 @@ import { z } from "zod";
 import { useParams } from "wouter";
 import { DetailPageLayout, type ExtraTab } from "@workspace/entity-kit";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { ClientPortalLinkCard } from "@/components/shared/client-portal-link-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -558,7 +558,7 @@ export default function LegalCaseDetail() {
           إغلاق القضية
         </GuardedButton>
       )}
-      <EntityPrintButton entityType="legal_judgment" entityId={id ?? ""} />
+      <PrintButton entityType="legal_judgment" entityId={id ?? ""} />
     </div>
   );
 

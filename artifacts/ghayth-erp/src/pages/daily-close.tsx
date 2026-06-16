@@ -14,16 +14,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 export default function DailyClose() {
   const { scopeQueryString } = useAppContext();
@@ -71,11 +62,9 @@ export default function DailyClose() {
       subtitle={`تحقق من اكتمال جميع العمليات قبل إغلاق اليوم — ${closeDate}`}
       loading={isLoading}
       actions={
-        <Link href="/operations-center">
-          <Button variant="ghost" size="sm" className="gap-1 text-xs">
+        <Button asChild variant="ghost" size="sm" className="gap-1 text-xs"><Link href="/operations-center">
             مركز العمليات <ChevronLeft className="w-3 h-3" />
-          </Button>
-        </Link>
+          </Link></Button>
       }
     >
       {closedToday && (
@@ -187,35 +176,23 @@ export default function DailyClose() {
         </div>
       )}
 
-      <AlertDialog
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
         open={closeMode !== null}
         onOpenChange={(next) => { if (!next) setCloseMode(null); }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {closeMode === "force" ? "تجاوز قسري — إقفال اليوم" : "إقفال اليوم"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {closeMode === "force"
-                ? "ستقوم بالتجاوز القسري وإقفال اليوم رغم وجود بنود غير مكتملة. لا يمكن التراجع عن هذا الإجراء."
-                : "هل أنت متأكد من إقفال اليوم؟ لا يمكن التراجع عن هذا الإجراء."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setCloseMode(null)}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                const force = closeMode === "force";
-                setCloseMode(null);
-                closeMut.mutate({ notes: "", force });
-              }}
-            >
-              {closeMode === "force" ? "تجاوز وإقفال" : "إقفال اليوم"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        variant={closeMode === "force" ? "destructive" : "caution"}
+        title={closeMode === "force" ? "تجاوز قسري — إقفال اليوم" : "إقفال اليوم"}
+        description={closeMode === "force"
+          ? "ستقوم بالتجاوز القسري وإقفال اليوم رغم وجود بنود غير مكتملة. لا يمكن التراجع عن هذا الإجراء."
+          : "هل أنت متأكد من إقفال اليوم؟ لا يمكن التراجع عن هذا الإجراء."}
+        confirmLabel={closeMode === "force" ? "تجاوز وإقفال" : "إقفال اليوم"}
+        pending={closeMut.isPending}
+        onConfirm={() => {
+          const force = closeMode === "force";
+          setCloseMode(null);
+          closeMut.mutate({ notes: "", force });
+        }}
+      />
     </PageShell>
   );
 }

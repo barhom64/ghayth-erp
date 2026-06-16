@@ -18,16 +18,7 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { AlertTriangle, DollarSign, Clock, Zap, XCircle, MinusCircle, Plus } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
@@ -356,36 +347,28 @@ export default function UmrahPenalties() {
         onRowClick={(row) => navigate(`/umrah/penalties/${row.id}`)}
       />
 
-      <AlertDialog open={bulkOpen} onOpenChange={setBulkOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>إعفاء جماعي للغرامات</AlertDialogTitle>
-            <AlertDialogDescription>
-              ستُعفى {selectedIds.length} غرامة. الصفوف بحالة "مدفوع" أو "معفاة" تُتخطى تلقائياً.
-              قيد عكسي مالي يُرحَّل لكل صف ناجح عبر `postPenaltyWaiverGL` المركزي.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            <Label htmlFor="bulk-waive-reason">سبب الإعفاء <span className="text-status-error-foreground">*</span></Label>
-            <Input
-              id="bulk-waive-reason"
-              value={bulkReason}
-              onChange={(e) => setBulkReason(e.target.value)}
-              placeholder="مثال: قرار إداري"
-              autoFocus
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <GuardedButton perm="umrah:approve"
-              onClick={(e: React.MouseEvent) => { e.preventDefault(); handleBulkSubmit(); }}
-              disabled={bulkWaiveMutation.isPending}
-            >
-              {bulkWaiveMutation.isPending ? "جارٍ الإعفاء..." : "تأكيد الإعفاء"}
-            </GuardedButton>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        variant="caution"
+        title="إعفاء جماعي للغرامات"
+        description={`ستُعفى ${selectedIds.length} غرامة. الصفوف بحالة "مدفوع" أو "معفاة" تُتخطى تلقائياً. قيد عكسي مالي يُرحَّل لكل صف ناجح عبر postPenaltyWaiverGL المركزي.`}
+        confirmLabel={bulkWaiveMutation.isPending ? "جاري الإعفاء..." : "تأكيد الإعفاء"}
+        pending={bulkWaiveMutation.isPending}
+        onConfirm={handleBulkSubmit}
+        confirmPerm="umrah:approve"
+      >
+        <div className="space-y-2 py-2">
+          <Label htmlFor="bulk-waive-reason">سبب الإعفاء <span className="text-status-error-foreground">*</span></Label>
+          <Input
+            id="bulk-waive-reason"
+            value={bulkReason}
+            onChange={(e) => setBulkReason(e.target.value)}
+            placeholder="مثال: قرار إداري"
+            autoFocus
+          />
+        </div>
+      </ConfirmActionDialog>
     </PageShell>
   );
 }

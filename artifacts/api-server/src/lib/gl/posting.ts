@@ -21,6 +21,7 @@
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import { logger } from "../logger.js";
 import { checkFinancialPeriodOpen, todayISO } from "../businessHelpers.js";
+import { assertLedgerTruth } from "../financePostingPolicy.js";
 import type { JournalEntryPayload } from "./journal-poster.js";
 
 export type JournalEntryStatus = "draft" | "posted";
@@ -162,6 +163,33 @@ export async function postJournalEntry(
     // journal_lines.accountId is the canonical FK).
     const codeById = new Map(accounts.map((a) => [a.id, a.code]));
 
+    // FIN-INTEGRITY-CONTRACT (#2246 SLICE 1) — عقد صدق دفتر الأستاذ عند الباب الـtyped.
+    // مُنسِّق يُركّب عقد البُعد (enforce وقود 5510 + warn البقية، دون تغيير) +
+    // سيناريو فاتورة المورد (enforce vendorId) + حوكمة القيد اليدوي التشغيلي.
+    // السلوك الصافي مطابق لليوم عدا إنفاذ vendorId لسيناريو فاتورة المورد.
+    const dimContract = assertLedgerTruth({
+      lines: payload.lines.map((l) => ({
+        accountCode: codeById.get(l.accountId) ?? null,
+        vehicleId: l.vehicleId ?? null,
+        propertyId: l.propertyId ?? null,
+        projectId: l.projectId ?? null,
+        vendorId: l.vendorId ?? null,
+        clientId: l.clientId ?? null,
+      })),
+      header: {
+        type: ctx.type ?? null,
+        sourceType: ctx.sourceType ?? null,
+        isManual: ctx.sourceType === "manual_journal" || ctx.type === "manual",
+      },
+      context: { companyId: ctx.companyId, accountRows: accounts },
+    });
+    if (dimContract.warnings.length > 0) {
+      logger.warn(
+        { companyId: ctx.companyId, ref: ctx.ref, warnings: dimContract.warnings },
+        "[dimension-contract] سطور بلا بُعد مطلوب (warn)",
+      );
+    }
+
     // Pre-compute postedBy/postedAt in JS so each $N maps to exactly one
     // column. A previous design reused $5 (createdBy) inside the postedBy
     // CASE branch, which trips pg's parameter-type inference on a real
@@ -248,7 +276,8 @@ export async function postJournalEntry(
            "vehicleId", "propertyId", "contractId", "unitId", "assetId",
            "umrahSeasonId", "umrahAgentId", "productId", "clientId", "vendorId",
            "driverId", "activityType", "templateId",
-           "sourceLineTable", "sourceLineId", "dimensionJson", "branchId"
+           "sourceLineTable", "sourceLineId", "dimensionJson", "branchId",
+           "analyticAccountId"
          ) VALUES (
            $1, $2, $3,
            $4, $5, $6,
@@ -256,7 +285,8 @@ export async function postJournalEntry(
            $12, $13, $14, $15, $16,
            $17, $18, $19, $20, $21,
            $22, $23, $24,
-           $25, $26, $27, $28
+           $25, $26, $27, $28,
+           $29
          )`,
         [
           journalEntryId, line.accountId, accountCode,
@@ -271,6 +301,7 @@ export async function postJournalEntry(
           line.sourceLineTable ?? null, line.sourceLineId ?? null,
           line.dimensionJson ? JSON.stringify(line.dimensionJson) : null,
           lineBranchId,
+          line.analyticAccountId ?? null,
         ],
       );
       balanceDeltas.set(

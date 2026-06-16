@@ -247,7 +247,7 @@ export default function InventoryCostingPage() {
                     disabled={roundingSetup.isPending}
                     className="w-full bg-purple-600 hover:bg-purple-700"
                   >
-                    {roundingSetup.isPending ? "جارٍ الإنشاء..." : "إنشاء حساب التقريب (9999)"}
+                    {roundingSetup.isPending ? "جاري الإنشاء..." : "إنشاء حساب التقريب (9999)"}
                   </GuardedButton>
                 </div>
               )}

@@ -703,8 +703,8 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
         if (!resolved.includes(e.assignmentId)) {
           await rawQuery(
             `UPDATE task_assignees SET "removedAt" = NOW()
-             WHERE "taskId" = $1 AND "assignmentId" = $2 AND "removedAt" IS NULL`,
-            [id, e.assignmentId],
+             WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL`,
+            [id, e.assignmentId, scope.companyId],
           );
         }
       }
@@ -715,8 +715,8 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
           // Update role on the existing active row.
           await rawQuery(
             `UPDATE task_assignees SET role = $1
-             WHERE "taskId" = $2 AND "assignmentId" = $3 AND "removedAt" IS NULL`,
-            [role, id, resolved[i]],
+             WHERE "taskId" = $2 AND "assignmentId" = $3 AND "companyId" = $4 AND "removedAt" IS NULL`,
+            [role, id, resolved[i], scope.companyId],
           );
         } else {
           await rawQuery(
@@ -836,14 +836,14 @@ router.post(
       // concurrency win to chase, just code aesthetics.
       const [existingRow] = await rawQuery<{ id: number }>(
         `SELECT id FROM task_assignees
-         WHERE "taskId" = $1 AND "assignmentId" = $2 AND "removedAt" IS NULL
+         WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL
          LIMIT 1`,
-        [id, assignmentId],
+        [id, assignmentId, scope.companyId],
       );
       if (existingRow) {
         await rawQuery(
-          `UPDATE task_assignees SET role = $1 WHERE id = $2`,
-          [role, existingRow.id],
+          `UPDATE task_assignees SET role = $1 WHERE id = $2 AND "companyId" = $3`,
+          [role, existingRow.id, scope.companyId],
         );
       } else {
         await rawQuery(
@@ -894,8 +894,8 @@ router.delete(
         );
         if (next) {
           await rawQuery(
-            `UPDATE task_assignees SET role = 'primary' WHERE id = $1`,
-            [next.id],
+            `UPDATE task_assignees SET role = 'primary' WHERE id = $1 AND "companyId" = $2`,
+            [next.id, scope.companyId],
           );
           await rawQuery(
             `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,

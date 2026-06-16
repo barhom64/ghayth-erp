@@ -23,7 +23,7 @@ import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "in_progress", label: "جارٍ التقييم" },
+  { value: "in_progress", label: "جاري التقييم" },
   { value: "completed",   label: "مكتمل"        },
   { value: "cancelled",   label: "ملغي"         },
 ];
@@ -74,7 +74,7 @@ export default function Evaluation360Page() {
 
   const kpis = [
     { label: "إجمالي الدورات", value: stats.total, icon: Target, color: "text-status-info-foreground bg-status-info-surface" },
-    { label: "جارٍ التقييم", value: stats.inProgress, icon: RefreshCw, color: "text-status-warning-foreground bg-status-warning-surface" },
+    { label: "جاري التقييم", value: stats.inProgress, icon: RefreshCw, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "مكتملة", value: stats.completed, icon: Award, color: "text-status-success-foreground bg-status-success-surface" },
     { label: "متوسط الأداء", value: stats.avgScore ? `${stats.avgScore}%` : "-", icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
   ];
@@ -151,18 +151,16 @@ export default function Evaluation360Page() {
       header: "السجل",
       render: (v) =>
         v.employeeId ? (
-          <Link href={`/hr/evaluation-360/history/${v.employeeId}`}>
-            <Button
+          <Button asChild
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-xs"
               onClick={(e) => e.stopPropagation()}
               title="عرض تاريخ تقييمات الموظف"
-            >
+            ><Link href={`/hr/evaluation-360/history/${v.employeeId}`}>
               <TrendingUp className="h-3.5 w-3.5 me-1" />
               التاريخ
-            </Button>
-          </Link>
+            </Link></Button>
         ) : null,
     },
   ];

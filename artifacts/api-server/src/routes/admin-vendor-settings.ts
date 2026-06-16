@@ -24,6 +24,12 @@ import {
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { invalidateVendorSettingsCache, getVendorConfig, type VendorSlug } from "../lib/vendorSettings.js";
+import {
+  resolveSystemSmtpConfig,
+  formatFromHeader,
+  scrubSmtpSecrets,
+  smtpTransportOptions,
+} from "../lib/systemSmtp.js";
 import { encryptSecret, isEncrypted } from "../lib/secrets.js";
 import { logger } from "../lib/logger.js";
 
@@ -241,6 +247,91 @@ router.post("/:slug/test", authorize({ feature: "admin", action: "update" }), as
   }
 });
 
+// ─────────────────────── Real SMTP test send (#2137) ──────────────────────
+
+const testSendSchema = z.object({
+  to: z.string().email("صيغة بريد المستلم غير صحيحة").max(300),
+});
+
+/**
+ * POST /smtp/test-send — the REAL proof: resolve through the exact
+ * resolver processEmailQueue uses, verify the login, then deliver an
+ * actual test message to an operator-chosen recipient. The outcome is
+ * persisted on the vendor_secrets row (lastTestAt / lastTestStatus /
+ * lastTestError / lastTestSource — non-secret keys, visible in the UI
+ * card) and audited WITHOUT any secret material.
+ */
+router.post("/smtp/test-send", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(testSendSchema.safeParse(req.body ?? {}));
+
+    const smtp = await resolveSystemSmtpConfig();
+    let ok = false;
+    let message: string;
+    let fromUsed: string | null = null;
+
+    if (!smtp) {
+      message = "لا يوجد إعداد SMTP صالح — اضبط بريد النظام من البطاقة أعلاه وفعّل الحالة، أو وفّر متغيّرات البيئة.";
+    } else {
+      fromUsed = formatFromHeader(smtp);
+      try {
+        const { createTransport } = await import("nodemailer");
+        const transporter = createTransport(smtpTransportOptions(smtp));
+        await transporter.verify();
+        await transporter.sendMail({
+          from: fromUsed,
+          to: body.to,
+          ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
+          subject: "رسالة اختبار من نظام غيث",
+          html: `<p>هذه رسالة اختبار حقيقية من بريد نظام غيث.</p><p>المصدر: ${smtp.source} — ${new Date().toISOString()}</p>`,
+        });
+        ok = true;
+        message = `أُرسلت رسالة اختبار حقيقية إلى ${body.to} من ${fromUsed}.`;
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err);
+        message = `فشل الإرسال الحقيقي: ${scrubSmtpSecrets(raw, smtp)}`;
+      }
+    }
+
+    // Persist the outcome on the row (jsonb merge keeps the secrets
+    // untouched). These keys are NOT in SECRET_KEYS so the UI sees them.
+    await rawExecute(
+      `UPDATE vendor_secrets
+          SET config = COALESCE(config, '{}'::jsonb) || $1::jsonb, "updatedAt" = NOW()
+        WHERE slug = 'smtp'`,
+      [JSON.stringify({
+        lastTestAt: new Date().toISOString(),
+        lastTestStatus: ok ? "ok" : "failed",
+        lastTestError: ok ? null : message,
+        lastTestSource: smtp?.source ?? "none",
+      })],
+    ).catch((e) => logger.warn(e, "[vendor-settings] persisting smtp test outcome failed"));
+    invalidateVendorSettingsCache();
+
+    void emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: ok ? "vendor_settings.smtp.test_send_ok" : "vendor_settings.smtp.test_send_failed",
+      entity: "vendor_secrets", entityId: 0,
+      details: JSON.stringify({ to: body.to.replace(/.(?=.{4})/g, "*"), source: smtp?.source ?? "none", ok }),
+    }).catch((e) => logger.warn(e, "[event] smtp.test_send"));
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "vendor_secrets", entityId: 0,
+      after: { slug: "smtp", testSend: ok ? "ok" : "failed", source: smtp?.source ?? "none" },
+    }).catch((e) => logger.warn(e, "[audit] smtp.test_send"));
+
+    res.status(ok ? 200 : 422).json({
+      ok,
+      message,
+      source: smtp?.source ?? "none",
+      from: fromUsed,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "admin/vendor-settings/smtp/test-send");
+  }
+});
+
 async function runVendorTest(
   slug: VendorSlug,
   config: Record<string, unknown>,
@@ -283,32 +374,32 @@ async function runVendorTest(
     }
 
     case "smtp": {
-      const host = String(config.host ?? "");
-      const port = Number(config.port ?? 0);
-      if (!host || !port) {
-        return { ok: false, message: "host و port كلاهما مطلوب." };
+      // #2137 slice 1: REAL SMTP verify — TCP-only reachability is no
+      // longer accepted as "configured". nodemailer's verify() performs
+      // the full greeting/EHLO/STARTTLS/AUTH handshake against the SAME
+      // resolved config processEmailQueue sends with, so a green check
+      // here means the worker can actually log in — not merely that
+      // something listens on the port.
+      const smtp = await resolveSystemSmtpConfig();
+      if (!smtp) {
+        return { ok: false, message: "لا يوجد إعداد SMTP صالح — اضبط الخادم والمنفذ والمستخدم وكلمة المرور ثم فعّل الحالة." };
       }
-      // Smoke: open a TCP socket to host:port. Confirms reachability;
-      // an actual SMTP HELO is left to the notification engine path
-      // so this stays dependency-free.
-      const net = await import("node:net");
-      return await new Promise((resolve) => {
-        const socket = new net.Socket();
-        const timer = setTimeout(() => {
-          socket.destroy();
-          resolve({ ok: false, message: `لم يستجب ${host}:${port} خلال 5 ثوانٍ.` });
-        }, 5000);
-        socket.connect(port, host, () => {
-          clearTimeout(timer);
-          socket.end();
-          resolve({ ok: true, message: `الاتصال بـ ${host}:${port} ناجح. أكمل اختبار HELO من إعدادات الإشعارات.` });
-        });
-        socket.on("error", (e) => {
-          clearTimeout(timer);
-          socket.destroy();
-          resolve({ ok: false, message: `خطأ الـ TCP: ${e.message}` });
-        });
-      });
+      try {
+        const { createTransport } = await import("nodemailer");
+        await createTransport(smtpTransportOptions(smtp)).verify();
+        return {
+          ok: true,
+          message: `تم تسجيل الدخول إلى ${smtp.host}:${smtp.port} بنجاح (handshake + مصادقة كاملة). جرّب «إرسال بريد اختبار حقيقي» للتأكد النهائي.`,
+          details: { from: formatFromHeader(smtp), configSource: smtp.source },
+        };
+      } catch (err) {
+        const raw = err instanceof Error ? err.message : String(err);
+        return {
+          ok: false,
+          message: `فشلت مصادقة SMTP: ${scrubSmtpSecrets(raw, smtp)}`,
+          details: { host: smtp.host, port: smtp.port, configSource: smtp.source },
+        };
+      }
     }
 
     case "vapid": {

@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText, CheckCircle, Send } from "lucide-react";
 
@@ -59,6 +59,11 @@ interface JournalDetail {
   type: string;
   status: string;
   balancesApplied: boolean;
+  // FIN-CORRECTION (A2): the /finance/journal/:id read returns the canonical
+  // posting axis (migration-311 trigger, via je.*). The DISPLAY badge consumes
+  // it; the action gates below intentionally keep using balancesApplied/
+  // approvalStatus (server-owned posting/approval decisions, untouched).
+  postingStatus: string;
   reversalOfId: number | null;
   reversedById: number | null;
   reversedAt: string | null;
@@ -209,10 +214,10 @@ export default function JournalDetailPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          {je.balancesApplied
+          {je.postingStatus === "posted"
             ? <PageStatusBadge status="active">مُرَحَّل</PageStatusBadge>
-            : <PageStatusBadge status="pending">مسودة</PageStatusBadge>}
-          {je.reversedById && <PageStatusBadge status="reversed" />}
+            : <PageStatusBadge status="pending">غير مُرحَّل</PageStatusBadge>}
+          {(je.reversedById || je.postingStatus === "reversed") && <PageStatusBadge status="reversed" />}
           {je.approvalStatus === "draft" && (
             <GuardedButton
               perm="finance:approve"
@@ -241,7 +246,7 @@ export default function JournalDetailPage() {
               ترحيل
             </GuardedButton>
           )}
-          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} />
+          <PrintButton entityType="journal_entry" entityId={id ?? ""} />
         </div>
       }
     >
@@ -367,9 +372,7 @@ export default function JournalDetailPage() {
       </Card>
 
       <div className="mt-4 flex justify-end">
-        <Link href="/finance/journal">
-          <Button variant="outline" size="sm">العودة لقائمة القيود</Button>
-        </Link>
+        <Button asChild variant="outline" size="sm"><Link href="/finance/journal">العودة لقائمة القيود</Link></Button>
       </div>
     </PageShell>
   );

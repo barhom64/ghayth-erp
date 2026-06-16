@@ -21,6 +21,7 @@ import { ClientContextCard } from "@/components/shared/client-context-card";
 import { TextField, NumberField, FormFieldWrapper, fieldErrorClass } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { ClientSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
+import { ProductSelect } from "@/components/shared/product-select";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
 
 interface TaxCode {
@@ -355,38 +356,28 @@ export default function InvoicesCreate() {
               <div className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-12 md:col-span-3">
                   <Label className="text-xs">المنتج / الخدمة</Label>
-                  <Select
-                    value={line.productId || "_free"}
-                    onValueChange={(v) => {
-                      if (v === "_free") {
+                  <ProductSelect
+                    value={line.productId}
+                    includeFreeOption
+                    allowCreate
+                    placeholder="منتج / خدمة"
+                    onChange={(id, p) => {
+                      if (!id || !p) {
                         updateLine(idx, "productId", "");
                         return;
                       }
-                      const p = products.find((x) => String(x.id) === v);
-                      if (p) {
-                        // Snap description + unitPrice to the catalog
-                        // item; operator can still tweak afterwards.
-                        const updated = [...lines];
-                        updated[idx] = {
-                          ...updated[idx],
-                          productId: v,
-                          description: p.name + (p.sku ? ` (${p.sku})` : ""),
-                          unitPrice: String(p.salePrice ?? p.price ?? updated[idx].unitPrice ?? ""),
-                        };
-                        setLines(updated);
-                      }
+                      // Snap description + unitPrice to the catalog item;
+                      // operator can still tweak afterwards.
+                      const updated = [...lines];
+                      updated[idx] = {
+                        ...updated[idx],
+                        productId: id,
+                        description: p.name + (p.sku ? ` (${p.sku})` : ""),
+                        unitPrice: String(p.sellPrice ?? p.salePrice ?? p.price ?? updated[idx].unitPrice ?? ""),
+                      };
+                      setLines(updated);
                     }}
-                  >
-                    <SelectTrigger className="h-9"><SelectValue placeholder="منتج / خدمة" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_free">— بند حر —</SelectItem>
-                      {products.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>
-                          {p.name}{p.sku ? ` · ${p.sku}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 </div>
                 <div className="col-span-12 md:col-span-3">
                   <Label className="text-xs">الوصف</Label>

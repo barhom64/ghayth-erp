@@ -12,7 +12,7 @@ import {
   PageStatusBadge,
   DataTable,
 } from "@workspace/ui-core";
-import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp, Activity, Radio, Eye, Bot } from "lucide-react";
+import { Car, Wrench, Fuel, Shield, Gauge, MapPin, Pencil, Trash2, X, Check, BookOpen, AlertTriangle, XCircle, Info, Banknote, FileText, TrendingUp, Activity, Radio, Eye, Bot, Users, CalendarClock, Plus } from "lucide-react";
 import { formatDateAr, formatCurrency, formatNumber } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import { EntityObligations } from "@/components/shared/entity-obligations";
@@ -21,7 +21,8 @@ import { EntityFinancialProfile } from "@/components/shared/entity-financial-pro
 import { EntitySubsidiaryAccounts } from "@/components/shared/entity-subsidiary-accounts";
 import { LinkedTasks } from "@/components/shared/linked-tasks";
 import { CheckSquare, Video } from "lucide-react";
-import { GuardedButton } from "@/components/shared/permission-gate";
+import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
+import { VehicleCapabilityMatrixForm } from "@/components/shared/vehicle-capability-matrix-form";
 import {
   DetailPageLayout,
   EntityComments,
@@ -34,11 +35,14 @@ import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 const TABS = [
   { key: "overview", label: "نظرة شاملة", icon: Car },
   { key: "info", label: "المعلومات", icon: Car },
+  { key: "vcm", label: "الملف الفني", icon: Wrench },
   { key: "trips", label: "الرحلات", icon: MapPin },
   { key: "maintenance", label: "الصيانة", icon: Wrench },
   { key: "fuel", label: "الوقود", icon: Fuel },
   { key: "insurance", label: "التأمين", icon: Shield },
   { key: "telematics", label: "التتبع الذكي", icon: Radio },
+  { key: "drivers", label: "السائقون", icon: Users },
+  { key: "prev-maint", label: "جداول الصيانة", icon: CalendarClock },
   { key: "tasks", label: "المهام", icon: CheckSquare },
   { key: "finance", label: "المالية", icon: BookOpen },
 ] as const;
@@ -71,6 +75,9 @@ export default function VehicleDetail() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
+  // #2079 TA-T18-05 — gate the VCM form's save controls on the
+  // existing fleet.vehicles:update action; no new RBAC introduced.
+  const canEditVehicle = usePermission("fleet.vehicles:update");
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
@@ -104,6 +111,73 @@ export default function VehicleDetail() {
     `/fleet/telematics/vehicles/${id}/ai-alerts`,
     telematicsEnabled,
   );
+  // Driver assignments — lazy-loaded on tab open
+  const driversEnabled = !!id && activeTab === "drivers";
+  const { data: driverAssignmentsResp, refetch: refetchDrivers } = useApiQuery<{ data: any[] }>(
+    ["vehicle-driver-assignments", id || ""],
+    `/fleet/vehicles/${id}/driver-assignments`,
+    driversEnabled,
+  );
+  const driverAssignments: any[] = driverAssignmentsResp?.data || [];
+
+  // Maintenance schedules — lazy-loaded on tab open
+  const prevMaintEnabled = !!id && activeTab === "prev-maint";
+  const { data: maintSchedulesResp, refetch: refetchMaintSchedules } = useApiQuery<{ data: any[] }>(
+    ["vehicle-maint-schedules", id || ""],
+    `/fleet/vehicles/${id}/maintenance-schedules`,
+    prevMaintEnabled,
+  );
+  const maintSchedules: any[] = maintSchedulesResp?.data || [];
+
+  // Forms for the new sub-resource tabs
+  const [newAssignment, setNewAssignment] = useState<Record<string, string>>({});
+  const [showAssignForm, setShowAssignForm] = useState(false);
+  const [newSchedule, setNewSchedule] = useState<Record<string, string>>({});
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+
+  const saveAssignment = async () => {
+    try {
+      await apiFetch(`/fleet/vehicles/${id}/driver-assignments`, {
+        method: "POST",
+        body: JSON.stringify({
+          driverId: Number(newAssignment.driverId),
+          assignmentType: newAssignment.assignmentType || "primary",
+          startDate: newAssignment.startDate,
+          endDate: newAssignment.endDate || undefined,
+          reason: newAssignment.reason || undefined,
+        }),
+      });
+      toast({ title: "تم تعيين السائق" });
+      setShowAssignForm(false);
+      setNewAssignment({});
+      refetchDrivers();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
+  const saveSchedule = async () => {
+    try {
+      await apiFetch(`/fleet/vehicles/${id}/maintenance-schedules`, {
+        method: "POST",
+        body: JSON.stringify({
+          scheduleName: newSchedule.scheduleName,
+          intervalType: newSchedule.intervalType || "mileage",
+          intervalValue: Number(newSchedule.intervalValue),
+          nextDueDate: newSchedule.nextDueDate || undefined,
+          nextDueKm: newSchedule.nextDueKm ? Number(newSchedule.nextDueKm) : undefined,
+          notes: newSchedule.notes || undefined,
+        }),
+      });
+      toast({ title: "تم إنشاء جدول الصيانة" });
+      setShowScheduleForm(false);
+      setNewSchedule({});
+      refetchMaintSchedules();
+    } catch (err) {
+      toast({ variant: "destructive", title: "حدث خطأ", description: getErrorMessage(err) });
+    }
+  };
+
   const { hideTabs: registryHideTabs } = useRegistryTabs("vehicle", id || "");
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const vehicleStatusTone = (s: string): "success" | "warning" | "info" | "muted" | "destructive" | "default" => {
@@ -173,11 +247,9 @@ export default function VehicleDetail() {
   const statusLabel = VEHICLE_STATUS_OPTIONS.find(o => o.value === vehicle?.status)?.label || vehicle?.status || "";
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
-      <Link href={`/fleet/${id}/status`}>
-        <Button variant="outline" size="sm" className="gap-1">
+      <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/fleet/${id}/status`}>
           <Pencil className="h-4 w-4" />تغيير الحالة
-        </Button>
-      </Link>
+        </Link></Button>
       <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</Button>
       {deleting ? (
         <div className="flex gap-2">
@@ -330,7 +402,9 @@ export default function VehicleDetail() {
           const count = tab.key === "trips" ? trips.length
             : tab.key === "maintenance" ? maintenance.length
             : tab.key === "fuel" ? fuelLogs.length
-            : tab.key === "insurance" ? insuranceList.length : 0;
+            : tab.key === "insurance" ? insuranceList.length
+            : tab.key === "drivers" ? driverAssignments.length
+            : tab.key === "prev-maint" ? maintSchedules.length : 0;
           return (
             <button
               key={tab.key}
@@ -594,6 +668,42 @@ export default function VehicleDetail() {
           </Card>
         </div>
       )}
+      {activeTab === "vcm" && vehicle && (
+        <VehicleCapabilityMatrixForm
+          vehicleId={vehicle.id}
+          initial={{
+            vehicleType: vehicle.vehicleType ?? null,
+            payloadKg: vehicle.payloadKg ?? null,
+            boxLengthCm: vehicle.boxLengthCm ?? null,
+            boxWidthCm: vehicle.boxWidthCm ?? null,
+            boxHeightCm: vehicle.boxHeightCm ?? null,
+            axleCount: vehicle.axleCount ?? null,
+            tireCount: vehicle.tireCount ?? null,
+            tireSize: vehicle.tireSize ?? null,
+            engineDisplacementCc: vehicle.engineDisplacementCc ?? null,
+            transmissionType: vehicle.transmissionType ?? null,
+            fuelType: vehicle.fuelType ?? null,
+            seatCount: vehicle.seatCount ?? null,
+            hasAc: vehicle.hasAc ?? null,
+            screenCount: vehicle.screenCount ?? null,
+            doorCount: vehicle.doorCount ?? null,
+            upholsteryType: vehicle.upholsteryType ?? null,
+            safetyFeatures: Array.isArray(vehicle.safetyFeatures)
+              ? (vehicle.safetyFeatures as string[]) : null,
+            operatingHours: vehicle.operatingHours ?? null,
+            equipmentAttachments: Array.isArray(vehicle.equipmentAttachments)
+              ? (vehicle.equipmentAttachments as string[]) : null,
+            operationalPayloadKg: vehicle.operationalPayloadKg ?? null,
+            validForPassengers: vehicle.validForPassengers ?? null,
+            validForCargo: vehicle.validForCargo ?? null,
+            operationalPassengerCapacity: vehicle.operationalPassengerCapacity ?? null,
+            vehicleServiceTypes: Array.isArray(vehicle.vehicleServiceTypes)
+              ? (vehicle.vehicleServiceTypes as string[]) : null,
+          }}
+          canEdit={canEditVehicle}
+          onSaved={() => qc.invalidateQueries({ queryKey: ["vehicle-detail", String(id)] })}
+        />
+      )}
       {activeTab === "trips" && (
         <Card>
           <CardHeader><CardTitle className="text-lg flex items-center gap-2"><MapPin className="w-5 h-5" /> الرحلات ({trips.length})</CardTitle></CardHeader>
@@ -712,9 +822,7 @@ export default function VehicleDetail() {
               <CardHeader>
                 <CardTitle className="text-base flex items-center justify-between">
                   <span className="flex items-center gap-2"><Radio className="w-4 h-4 text-status-info-foreground" /> الجهاز والموقع</span>
-                  <Link href={`/fleet/telematics/live-map?vehicleId=${id}`}>
-                    <Button variant="outline" size="sm" className="gap-1"><MapPin className="w-3 h-3" /> الخريطة المباشرة</Button>
-                  </Link>
+                  <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/fleet/telematics/live-map?vehicleId=${id}`}><MapPin className="w-3 h-3" /> الخريطة المباشرة</Link></Button>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
@@ -771,9 +879,7 @@ export default function VehicleDetail() {
             <CardHeader>
               <CardTitle className="text-base flex items-center justify-between">
                 <span className="flex items-center gap-2"><Bot className="w-4 h-4 text-rose-600" /> تنبيهات السلامة الذكية ({(telematicsAlerts?.data || []).length})</span>
-                <Link href="/fleet/telematics/ai-alerts">
-                  <Button variant="outline" size="sm">عرض الكل</Button>
-                </Link>
+                <Button asChild variant="outline" size="sm"><Link href="/fleet/telematics/ai-alerts">عرض الكل</Link></Button>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -798,6 +904,152 @@ export default function VehicleDetail() {
             </CardContent>
           </Card>
         </div>
+      )}
+      {activeTab === "drivers" && id && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2"><Users className="w-5 h-5" /> تعيينات السائقين ({driverAssignments.length})</CardTitle>
+            <GuardedButton perm="fleet.vehicles:update" size="sm" className="gap-1" onClick={() => setShowAssignForm(v => !v)}>
+              <Plus className="w-4 h-4" /> تعيين سائق
+            </GuardedButton>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {showAssignForm && (
+              <div className="border rounded-lg p-4 bg-surface-subtle space-y-3">
+                <p className="text-sm font-medium">تعيين سائق جديد</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">رقم السائق (ID)</label>
+                    <Input value={newAssignment.driverId || ""} onChange={e => setNewAssignment(p => ({ ...p, driverId: e.target.value }))} placeholder="مثال: 12" type="number" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">نوع التعيين</label>
+                    <Select value={newAssignment.assignmentType || "primary"} onValueChange={v => setNewAssignment(p => ({ ...p, assignmentType: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="primary">أساسي</SelectItem>
+                        <SelectItem value="backup">احتياطي</SelectItem>
+                        <SelectItem value="temporary">مؤقت</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">تاريخ البدء</label>
+                    <UnifiedDateInput value={newAssignment.startDate || ""} onChange={v => setNewAssignment(p => ({ ...p, startDate: v }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">تاريخ الانتهاء (اختياري)</label>
+                    <UnifiedDateInput value={newAssignment.endDate || ""} onChange={v => setNewAssignment(p => ({ ...p, endDate: v }))} />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs text-muted-foreground">السبب (اختياري)</label>
+                    <Input value={newAssignment.reason || ""} onChange={e => setNewAssignment(p => ({ ...p, reason: e.target.value }))} placeholder="سبب التعيين" />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => setShowAssignForm(false)}>إلغاء</Button>
+                  <Button size="sm" onClick={saveAssignment} disabled={!newAssignment.driverId || !newAssignment.startDate}>حفظ</Button>
+                </div>
+              </div>
+            )}
+            {driverAssignments.length === 0 && !showAssignForm ? (
+              <p className="text-muted-foreground text-center py-8">لا توجد تعيينات سائقين</p>
+            ) : (
+              <DataTable
+                columns={[
+                  { key: "driverName", header: "السائق", render: (a: any) => <span className="font-medium">{a.driverName || `سائق #${a.driverId}`}</span> },
+                  { key: "assignmentType", header: "النوع", render: (a: any) => {
+                    const labels: Record<string, string> = { primary: "أساسي", backup: "احتياطي", temporary: "مؤقت" };
+                    return <Badge variant="outline">{labels[a.assignmentType] || a.assignmentType}</Badge>;
+                  }},
+                  { key: "startDate", header: "البدء", render: (a: any) => a.startDate ? formatDateAr(a.startDate) : "-" },
+                  { key: "endDate", header: "الانتهاء", render: (a: any) => a.endDate ? formatDateAr(a.endDate) : <span className="text-status-success-foreground text-xs">نشط</span> },
+                  { key: "status", header: "الحالة", render: (a: any) => <PageStatusBadge status={a.status || "active"} /> },
+                  { key: "reason", header: "السبب", render: (a: any) => <span className="text-muted-foreground text-xs">{a.reason || "-"}</span> },
+                ]}
+                data={driverAssignments}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {activeTab === "prev-maint" && id && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg flex items-center gap-2"><CalendarClock className="w-5 h-5" /> جداول الصيانة الوقائية ({maintSchedules.length})</CardTitle>
+            <GuardedButton perm="fleet.vehicles:update" size="sm" className="gap-1" onClick={() => setShowScheduleForm(v => !v)}>
+              <Plus className="w-4 h-4" /> جدول جديد
+            </GuardedButton>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {showScheduleForm && (
+              <div className="border rounded-lg p-4 bg-surface-subtle space-y-3">
+                <p className="text-sm font-medium">إنشاء جدول صيانة وقائية</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs text-muted-foreground">اسم الجدول</label>
+                    <Input value={newSchedule.scheduleName || ""} onChange={e => setNewSchedule(p => ({ ...p, scheduleName: e.target.value }))} placeholder="مثال: تغيير زيت المحرك" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">نوع الفترة</label>
+                    <Select value={newSchedule.intervalType || "mileage"} onValueChange={v => setNewSchedule(p => ({ ...p, intervalType: v }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mileage">كيلومترات</SelectItem>
+                        <SelectItem value="hours">ساعات</SelectItem>
+                        <SelectItem value="days">أيام</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">قيمة الفترة</label>
+                    <Input value={newSchedule.intervalValue || ""} onChange={e => setNewSchedule(p => ({ ...p, intervalValue: e.target.value }))} placeholder="مثال: 5000" type="number" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">الاستحقاق التالي (كم)</label>
+                    <Input value={newSchedule.nextDueKm || ""} onChange={e => setNewSchedule(p => ({ ...p, nextDueKm: e.target.value }))} placeholder="اختياري" type="number" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground">تاريخ الاستحقاق التالي</label>
+                    <UnifiedDateInput value={newSchedule.nextDueDate || ""} onChange={v => setNewSchedule(p => ({ ...p, nextDueDate: v }))} />
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs text-muted-foreground">ملاحظات (اختياري)</label>
+                    <Input value={newSchedule.notes || ""} onChange={e => setNewSchedule(p => ({ ...p, notes: e.target.value }))} placeholder="ملاحظات إضافية" />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" size="sm" onClick={() => setShowScheduleForm(false)}>إلغاء</Button>
+                  <Button size="sm" onClick={saveSchedule} disabled={!newSchedule.scheduleName || !newSchedule.intervalValue}>حفظ</Button>
+                </div>
+              </div>
+            )}
+            {maintSchedules.length === 0 && !showScheduleForm ? (
+              <p className="text-muted-foreground text-center py-8">لا توجد جداول صيانة وقائية</p>
+            ) : (
+              <DataTable
+                columns={[
+                  { key: "scheduleName", header: "الجدول", render: (s: any) => <span className="font-medium">{s.scheduleName}</span> },
+                  { key: "intervalType", header: "الفترة", render: (s: any) => {
+                    const labels: Record<string, string> = { mileage: "كم", hours: "ساعة", days: "يوم" };
+                    return <span className="font-mono">{s.intervalValue} {labels[s.intervalType] || s.intervalType}</span>;
+                  }},
+                  { key: "nextDueDate", header: "الاستحقاق التالي", render: (s: any) => s.nextDueDate ? formatDateAr(s.nextDueDate) : "-" },
+                  { key: "nextDueKm", header: "عداد الاستحقاق", ltr: true, render: (s: any) => s.nextDueKm ? <span className="font-mono">{formatNumber(Number(s.nextDueKm))} km</span> : "-" },
+                  { key: "isActive", header: "الحالة", render: (s: any) => <PageStatusBadge status={s.isActive !== false ? "active" : "inactive"} /> },
+                  { key: "notes", header: "ملاحظات", render: (s: any) => <span className="text-muted-foreground text-xs">{s.notes || "-"}</span> },
+                ]}
+                data={maintSchedules}
+                noToolbar
+                pageSize={0}
+                searchPlaceholder={null}
+              />
+            )}
+          </CardContent>
+        </Card>
       )}
       {activeTab === "tasks" && id && (
         <LinkedTasks entityType="vehicle" entityId={id} />
@@ -904,11 +1156,9 @@ export default function VehicleDetail() {
       actions={
         <div className="flex items-center gap-2">
           {actions}
-          <Link href={`/finance/profitability/vehicle/${id}`}>
-            <Button variant="outline" size="sm" className="gap-1">
+          <Button asChild variant="outline" size="sm" className="gap-1"><Link href={`/finance/profitability/vehicle/${id}`}>
               <TrendingUp className="h-4 w-4" /> الربحية
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton entityType="vehicle" entityId={(id as any) ?? 0} label="طباعة" />
           {id != null && <EntityPnlButton entityType="vehicle" entityId={Number(id)} />}
         </div>

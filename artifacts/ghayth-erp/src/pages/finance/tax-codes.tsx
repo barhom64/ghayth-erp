@@ -173,16 +173,12 @@ export default function TaxCodesPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/wht-categories">
-            <Button variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm"><Link href="/finance/wht-categories">
               <Layers className="h-4 w-4 me-1" />فئات WHT
-            </Button>
-          </Link>
-          <Link href="/finance/vat-filing-readiness">
-            <Button variant="outline" size="sm">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href="/finance/vat-filing-readiness">
               <Receipt className="h-4 w-4 me-1" />جاهزية VAT
-            </Button>
-          </Link>
+            </Link></Button>
           <GuardedButton perm="finance:create" size="sm" asChild>
             <Link href="/finance/tax-codes/create">
               <Plus className="h-4 w-4 me-1" />

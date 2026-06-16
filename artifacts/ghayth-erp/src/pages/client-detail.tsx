@@ -10,7 +10,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -758,13 +758,11 @@ export default function ClientDetail() {
           {client?.isBlacklisted && (
             <Badge variant="destructive" className="text-sm px-3 py-1">قائمة سوداء</Badge>
           )}
-          <Link href={`/clients/${params?.id}/statement`}>
-            <Button size="sm" variant="outline" className="gap-1">
+          <Button asChild size="sm" variant="outline" className="gap-1"><Link href={`/clients/${params?.id}/statement`}>
               <FileSpreadsheet className="h-4 w-4" /> كشف حساب
-            </Button>
-          </Link>
+            </Link></Button>
           {client && (
-            <EntityPrintButton
+            <PrintButton
               entityType="client"
               entityId={client.id ?? params?.id}
 

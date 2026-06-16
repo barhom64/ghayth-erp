@@ -4,7 +4,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SlidersHorizontal, CheckCircle, Settings2 } from "lucide-react";
+import { SlidersHorizontal, CheckCircle, Settings2, Boxes, Truck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { FormShell } from "@workspace/ui-core";
@@ -23,6 +23,10 @@ const systemControlsSchema = z.object({
   system_notifications_enabled: z.boolean(),
   system_attachment_max_size_mb: z.coerce.number().int().nonnegative(),
   system_attachment_max_count: z.coerce.number().int().nonnegative(),
+  warehouse_require_movement_reference: z.boolean(),
+  warehouse_auto_purchase_request_on_min_stock: z.boolean(),
+  warehouse_enforce_lot_fefo: z.boolean(),
+  fleet_bookings_cancelPolicy: z.enum(["guard", "cascade"]),
 });
 type SystemControlsForm = z.infer<typeof systemControlsSchema>;
 
@@ -36,6 +40,10 @@ const KEY_MAP: Record<keyof SystemControlsForm, string> = {
   system_notifications_enabled: "system.notifications_enabled",
   system_attachment_max_size_mb: "system.attachment_max_size_mb",
   system_attachment_max_count: "system.attachment_max_count",
+  warehouse_require_movement_reference: "warehouse.require_movement_reference",
+  warehouse_auto_purchase_request_on_min_stock: "warehouse.auto_purchase_request_on_min_stock",
+  warehouse_enforce_lot_fefo: "warehouse.enforce_lot_fefo",
+  fleet_bookings_cancelPolicy: "fleet.bookings.cancelPolicy",
 };
 
 const SETTINGS_GROUPS = [
@@ -57,6 +65,30 @@ const SETTINGS_GROUPS = [
       { name: "system_notifications_enabled" as const, label: "تفعيل الإشعارات", type: "toggle" as const },
       { name: "system_attachment_max_size_mb" as const, label: "حجم الملف الأقصى (ميجابايت)", type: "number" as const },
       { name: "system_attachment_max_count" as const, label: "عدد الملفات الأقصى لكل طلب", type: "number" as const },
+    ],
+  },
+  {
+    title: "سياسات المستودع",
+    icon: Boxes,
+    items: [
+      { name: "warehouse_require_movement_reference" as const, label: "إلزام مرجع لكل حركة مخزون (لا حركة بلا سبب)", type: "toggle" as const },
+      { name: "warehouse_auto_purchase_request_on_min_stock" as const, label: "طلب شراء تلقائي عند بلوغ الحد الأدنى", type: "toggle" as const },
+      { name: "warehouse_enforce_lot_fefo" as const, label: "إلزام FEFO ومنع صرف الدفعات المنتهية/المستدعاة (للأصناف ذات تتبّع الدفعات)", type: "toggle" as const },
+    ],
+  },
+  {
+    title: "سياسات الأسطول",
+    icon: Truck,
+    items: [
+      {
+        name: "fleet_bookings_cancelPolicy" as const,
+        label: "سياسة إلغاء الحجز عند وجود أوامر توزيع نشطة",
+        type: "select" as const,
+        options: [
+          { value: "guard", label: "حماية — امنع الإلغاء حتى تُلغى أوامر التوزيع أولًا (افتراضي)" },
+          { value: "cascade", label: "تتالٍ — ألغِ أوامر التوزيع والرحلات وحرِّر المركبة/السائق تلقائيًا" },
+        ],
+      },
     ],
   },
 ];
@@ -81,6 +113,10 @@ export function SystemControlsTab() {
     system_notifications_enabled: (controls["system.notifications_enabled"] as boolean) ?? true,
     system_attachment_max_size_mb: Number(controls["system.attachment_max_size_mb"] ?? 5),
     system_attachment_max_count: Number(controls["system.attachment_max_count"] ?? 10),
+    warehouse_require_movement_reference: (controls["warehouse.require_movement_reference"] as boolean) ?? false,
+    warehouse_auto_purchase_request_on_min_stock: (controls["warehouse.auto_purchase_request_on_min_stock"] as boolean) ?? true,
+    warehouse_enforce_lot_fefo: (controls["warehouse.enforce_lot_fefo"] as boolean) ?? false,
+    fleet_bookings_cancelPolicy: controls["fleet.bookings.cancelPolicy"] === "cascade" ? "cascade" : "guard",
   };
   const remountKey = JSON.stringify(defaults);
 
@@ -128,6 +164,8 @@ export function SystemControlsTab() {
                   <span className="text-sm">{item.label}</span>
                   {item.type === "toggle" ? (
                     <ToggleControl name={item.name} />
+                  ) : item.type === "select" ? (
+                    <SelectControl name={item.name} options={item.options} />
                   ) : (
                     <NumberControl name={item.name} />
                   )}
@@ -178,5 +216,31 @@ function NumberControl({ name }: { name: keyof SystemControlsForm }) {
       min={0}
       {...register(name, { valueAsNumber: true })}
     />
+  );
+}
+
+// Inline dropdown bound to an enum form field. A native <select> keeps it a
+// real form control (react-hook-form `register` binds directly), matching the
+// same-row inline layout used by Toggle/NumberControl rather than FormShell's
+// grid.
+function SelectControl({
+  name,
+  options,
+}: {
+  name: keyof SystemControlsForm;
+  options: { value: string; label: string }[];
+}) {
+  const { register } = useFormContext<SystemControlsForm>();
+  return (
+    <select
+      className="text-sm border rounded-md px-2 py-1 bg-background max-w-[65%]"
+      {...register(name)}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }

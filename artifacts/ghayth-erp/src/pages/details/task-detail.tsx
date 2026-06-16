@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRoute } from "wouter";
 import { z } from "zod";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, getErrorMessage } from "@/lib/api";
 import {
   DetailPageLayout,
   EntityComments,
@@ -9,10 +9,12 @@ import {
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit, CheckCircle2, Clock, User, MapPin, FileText } from "lucide-react";
+import { Edit, CheckCircle2, Clock, User, MapPin, FileText, Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import { EntityTags } from "@/components/shared/entity-tags";
@@ -67,6 +69,9 @@ export default function TaskDetail() {
   const [, params] = useRoute("/tasks/:id");
   const id = params?.id ? Number(params.id) : null;
   const [editOpen, setEditOpen] = useState(false);
+  const [showAddAssignee, setShowAddAssignee] = useState(false);
+  const [newAssigneeId, setNewAssigneeId] = useState("");
+  const [assigneeRole, setAssigneeRole] = useState("member");
   const { toast } = useToast();
   const { extraTabs: registryExtraTabs, hideTabs: registryHideTabs } = useRegistryTabs("task", id ?? 0);
 
@@ -75,6 +80,38 @@ export default function TaskDetail() {
     `/tasks/${id}`,
     !!id,
   );
+  const { data: assigneesResp, refetch: refetchAssignees } = useApiQuery<any>(
+    ["task-assignees", String(id)],
+    `/tasks/${id}/assignees`,
+    !!id,
+  );
+  const assigneesList: any[] = assigneesResp?.data || assigneesResp || [];
+
+  const addAssignee = async () => {
+    if (!newAssigneeId || !id) return;
+    try {
+      await apiFetch(`/tasks/${id}/assignees`, {
+        method: "POST",
+        body: JSON.stringify({ employeeId: Number(newAssigneeId), role: assigneeRole }),
+      });
+      toast({ title: "تم إضافة المُعيَّن" });
+      setNewAssigneeId(""); setShowAddAssignee(false);
+      refetch(); refetchAssignees();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الإضافة", description: getErrorMessage(err) });
+    }
+  };
+
+  const removeAssignee = async (assignmentId: number) => {
+    if (!id) return;
+    try {
+      await apiFetch(`/tasks/${id}/assignees/${assignmentId}`, { method: "DELETE" });
+      toast({ title: "تم إزالة المُعيَّن" });
+      refetch();
+    } catch (err) {
+      toast({ variant: "destructive", title: "فشل الإزالة", description: getErrorMessage(err) });
+    }
+  };
 
   const completeMut = useApiMutation<any, { status: string }>(
     id ? `/tasks/${id}` : "",
@@ -134,13 +171,30 @@ export default function TaskDetail() {
       </Card>
 
       <Card>
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-2">
             <User className="h-4 w-4 text-muted-foreground" />
             المُعيَّن إليه
           </CardTitle>
+          <GuardedButton perm="tasks:update" size="sm" variant="ghost" className="h-7 w-7 p-0"
+            onClick={() => setShowAddAssignee(v => !v)}>
+            <Plus className="h-3 w-3" />
+          </GuardedButton>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
+          {showAddAssignee && (
+            <div className="border rounded p-2 space-y-2 bg-surface-subtle">
+              <div className="flex gap-2">
+                <Input className="h-7 text-xs flex-1" placeholder="رقم الموظف (ID)" value={newAssigneeId}
+                  onChange={e => setNewAssigneeId(e.target.value)} type="number" />
+                <select className="h-7 border rounded px-1 text-xs" value={assigneeRole} onChange={e => setAssigneeRole(e.target.value)}>
+                  <option value="primary">رئيسي</option>
+                  <option value="member">عضو</option>
+                </select>
+                <Button size="sm" className="h-7 px-2 text-xs" onClick={addAssignee} disabled={!newAssigneeId}>إضافة</Button>
+              </div>
+            </div>
+          )}
           {/* Multi-assignee team — backend returns task.assignees[] with
               role='primary' for the accountable owner + role='member' for
               the rest. Falls back to legacy single-assignee rendering when
@@ -156,8 +210,9 @@ export default function TaskDetail() {
                 {task!.assignees.map((a: any) => (
                   <li
                     key={a.id ?? a.assignmentId}
-                    className="flex items-center gap-2"
+                    className="flex items-center justify-between gap-2"
                   >
+                    <div className="flex items-center gap-2">
                     {a.role === "primary" ? (
                       <span className="text-[10px] font-medium bg-primary text-primary-foreground rounded px-1.5 py-0.5">
                         رئيسي
@@ -170,6 +225,11 @@ export default function TaskDetail() {
                     <span className="font-medium">
                       {a.employeeName ?? `#${a.assignmentId}`}
                     </span>
+                    </div>
+                    <GuardedButton perm="tasks:update" size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeAssignee(a.assignmentId ?? a.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </GuardedButton>
                   </li>
                 ))}
               </ul>
@@ -245,7 +305,7 @@ export default function TaskDetail() {
               تعليم كمكتملة
             </GuardedButton>
           )}
-          <EntityPrintButton
+          <PrintButton
             entityType="task"
             entityId={id ?? 0}
            />

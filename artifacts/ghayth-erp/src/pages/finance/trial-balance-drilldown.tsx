@@ -433,11 +433,9 @@ function AccountDrillDown({
             <TrendingDown className="w-3 h-3 text-status-danger-foreground" />
             <span>أعلى دائن: {formatCurrency(peakCredit)}</span>
           </div>
-          <Link href={`/finance/account-recon-workpaper?accountCode=${code}`}>
-            <Button variant="outline" size="sm" className="h-7 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-7 text-xs"><Link href={`/finance/account-recon-workpaper?accountCode=${code}`}>
               تسوية هذا الحساب
-            </Button>
-          </Link>
+            </Link></Button>
         </div>
       </div>
       <div className="border rounded max-h-80 overflow-y-auto">
@@ -475,9 +473,7 @@ function AccountDrillDown({
                   {formatCurrency(e.runningBalance)}
                 </td>
                 <td className="py-1.5 px-2">
-                  <Link href={`/finance/journal/${e.id}`}>
-                    <Button variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><ExternalLink className="w-3 h-3" /></Button>
-                  </Link>
+                  <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-6 w-6"><Link href={`/finance/journal/${e.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
                 </td>
               </tr>
             ))}

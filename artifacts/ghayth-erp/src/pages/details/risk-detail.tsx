@@ -10,7 +10,7 @@ import {
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -430,7 +430,7 @@ export default function RiskDetail() {
       actions={
         <>
           {risk && (
-            <EntityPrintButton
+            <PrintButton
               entityType="risk"
               entityId={id ?? 0}
              />

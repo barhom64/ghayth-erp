@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
-import { LOAN_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -476,13 +476,13 @@ router.post("/loans", authorize({ feature: "hr.loans", action: "create" }), asyn
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/approve — اعتماد السلفة + توليد جدول الأقساط
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
+router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "approve" }), async (req, res) => {
   try {
     const b = zodParse(approvalDecisionSchema.safeParse(req.body ?? {}));
     const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!LOAN_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.loans", "approve")) {
       throw new ForbiddenError(
         "صلاحية اعتماد السلف محصورة بالمدير أو HR أو المدير المالي أو المالك",
         {
@@ -647,11 +647,11 @@ router.patch("/loans/:id/approve", authorize({ feature: "hr.loans", action: "upd
 // ═══════════════════════════════════════════════════════════════════════════════
 // PATCH /hr/loans/:id/reject — رفض السلفة
 // ═══════════════════════════════════════════════════════════════════════════════
-router.patch("/loans/:id/reject", authorize({ feature: "hr.loans", action: "update" }), async (req, res) => {
+router.patch("/loans/:id/reject", authorize({ feature: "hr.loans", action: "reject" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!LOAN_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.loans", "reject")) {
       throw new ForbiddenError("صلاحية رفض السلف محصورة بالمدير أو HR أو المدير المالي أو المالك");
     }
 

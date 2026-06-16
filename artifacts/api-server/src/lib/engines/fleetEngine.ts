@@ -48,8 +48,8 @@ class FleetEngineImpl implements DomainEngine {
     fuelLog: { id: number; vehicleId: number; amount: number; driverId?: number; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fuel_expense", "debit", "5510"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, fuelLog.vehicleId);
 
@@ -77,8 +77,8 @@ class FleetEngineImpl implements DomainEngine {
     maintenance: { id: number; vehicleId: number; totalCost: number; type?: string; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5520"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, maintenance.vehicleId);
@@ -107,8 +107,8 @@ class FleetEngineImpl implements DomainEngine {
     insurance: { id: number; vehicleId: number; premium: number; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_prepaid_insurance", "debit", "1350"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_prepaid_insurance", "debit", "1172"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, insurance.vehicleId);
@@ -137,8 +137,8 @@ class FleetEngineImpl implements DomainEngine {
     violation: { id: number; vehicleId: number; driverId?: number; amount: number; description?: string }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5290"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5560"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2150"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, violation.vehicleId);
@@ -167,8 +167,8 @@ class FleetEngineImpl implements DomainEngine {
     violation: { id: number; vehicleId?: number; amount: number }
   ) {
     const [payableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -195,8 +195,8 @@ class FleetEngineImpl implements DomainEngine {
     vehicle: { id: number; purchasePrice: number; plateNumber: string; make?: string; model?: string }
   ) {
     const [assetCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1510"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_purchase_cash", "credit", "1100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_purchase_cash", "credit", "1111"),
     ]);
 
     const vName = `${vehicle.plateNumber} ${vehicle.make || ""} ${vehicle.model || ""}`.trim();
@@ -330,8 +330,8 @@ class FleetEngineImpl implements DomainEngine {
     if (trip.totalCost <= 0) return null;
 
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_expense", "debit", "6300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_expense", "debit", "5140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2150"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -454,6 +454,391 @@ class FleetEngineImpl implements DomainEngine {
   }
 
   /**
+   * #TA-T18 finance-boundary — maintenance cost → Accounting Candidate.
+   * Owner's rule: transport NEVER posts GL directly. Completing a
+   * maintenance ticket queues an EXPENSE candidate the accountant
+   * reviews + materialises (postMaintenanceGL runs at materialise-time,
+   * not on completion). Mirrors createCargoBillingCandidate; revenue is
+   * NULL (pure expense), suggestedCost carries the amount. Idempotent on
+   * (company, sourceType, sourceId).
+   */
+  async createMaintenanceExpenseCandidate(
+    ctx: FleetGLContext,
+    maintenance: { id: number; vehicleId: number; cost: number; type?: string | null; description?: string | null; sourceRef?: string | null }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const cost = Number(maintenance.cost) || 0;
+    if (cost <= 0) return null;
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "serviceType", "serviceDate",
+           "vehicleId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue", "suggestedCost",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'maintenance', $3, $4,
+           'maintenance', CURRENT_DATE,
+           $5,
+           1, 'service',
+           'completed',
+           NULL, $6,
+           $7,
+           $8
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'maintenance' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        maintenance.id,
+        maintenance.sourceRef ?? `MAINT-${maintenance.id}`,
+        maintenance.vehicleId,
+        cost,
+        maintenance.description ?? null,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #TA-T18 finance-boundary — fuel cost → Accounting Candidate.
+   * Logging a fuel entry queues an EXPENSE candidate (no direct GL);
+   * the accountant materialises it (postFuelExpenseGL runs then).
+   */
+  async createFuelExpenseCandidate(
+    ctx: FleetGLContext,
+    fuel: { id: number; vehicleId: number; cost: number; description?: string | null; sourceRef?: string | null }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const cost = Number(fuel.cost) || 0;
+    if (cost <= 0) return null;
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId", "sourceType", "sourceId", "sourceRef",
+           "serviceType", "serviceDate", "vehicleId",
+           quantity, "unitOfMeasure", "operationalStatus",
+           "suggestedRevenue", "suggestedCost", notes, "createdBy"
+         )
+         VALUES (
+           $1, $2, 'fuel', $3, $4,
+           'fuel', CURRENT_DATE, $5,
+           1, 'service', 'completed',
+           NULL, $6, $7, $8
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'fuel' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [ctx.companyId, ctx.branchId || null, fuel.id, fuel.sourceRef ?? `FUEL-${fuel.id}`, fuel.vehicleId, cost, fuel.description ?? null, ctx.createdBy]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #TA-T18 finance-boundary — insurance premium → Accounting Candidate.
+   * Recording a policy queues an EXPENSE candidate (no direct GL); the
+   * accountant materialises it (postInsuranceGL runs then).
+   */
+  async createInsuranceExpenseCandidate(
+    ctx: FleetGLContext,
+    insurance: { id: number; vehicleId: number; cost: number; description?: string | null; sourceRef?: string | null }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const cost = Number(insurance.cost) || 0;
+    if (cost <= 0) return null;
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId", "sourceType", "sourceId", "sourceRef",
+           "serviceType", "serviceDate", "vehicleId",
+           quantity, "unitOfMeasure", "operationalStatus",
+           "suggestedRevenue", "suggestedCost", notes, "createdBy"
+         )
+         VALUES (
+           $1, $2, 'insurance', $3, $4,
+           'insurance', CURRENT_DATE, $5,
+           1, 'policy', 'completed',
+           NULL, $6, $7, $8
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'insurance' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [ctx.companyId, ctx.branchId || null, insurance.id, insurance.sourceRef ?? `INS-${insurance.id}`, insurance.vehicleId, cost, insurance.description ?? null, ctx.createdBy]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #1812 — rental close → Accounting Candidate (الإيراد عند الإغلاق).
+   * Mirrors createCargoBillingCandidate for the third transport leg.
+   * Fired from the rental /return endpoint after the contract flips
+   * to `completed`. The candidate carries:
+   *
+   *   • quantity = rental days (startDate → actualEndDate inclusive
+   *     of the first day) + unitOfMeasure 'day', so the accountant
+   *     can recognise the revenue over the rental DURATION (التأجير
+   *     على مدى المدة) rather than as a single-day event.
+   *   • suggestedRevenue = totalAmount + overageAmount (the overage
+   *     is itemised in notes so it can become a separate invoice line).
+   *   • serviceDate = actualEndDate — the operational close date.
+   *
+   * Idempotent on (companyId, 'fleet_rental_contract', contractId):
+   * re-firing the return transition is a no-op once the candidate
+   * exists. NO journal entry is posted here — the accountant
+   * materializes from the finance side, same as cargo.
+   */
+  async createRentalBillingCandidate(
+    ctx: FleetGLContext,
+    contract: {
+      id: number;
+      ref?: string | null;
+      clientId: number;
+      vehicleId: number;
+      driverId?: number | null;
+      startDate: string;
+      actualEndDate: string;
+      totalAmount?: number | null;
+      overageAmount?: number | null;
+      notes?: string | null;
+    }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const baseRevenue = Number(contract.totalAmount) || 0;
+    const overage = Number(contract.overageAmount) || 0;
+    const revenue = baseRevenue + overage;
+    // A zero-value contract (courtesy loan, internal use) is a pure
+    // operational record — no handoff needed.
+    if (revenue <= 0) return null;
+
+    // Rental days: difference + 1 so a same-day rent-and-return counts
+    // as one day. Falls back to 1 on unparsable dates.
+    const start = new Date(contract.startDate);
+    const end = new Date(contract.actualEndDate);
+    const rentalDays =
+      Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())
+        ? 1
+        : Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+
+    const periodNote =
+      `إيجار مركبة للفترة ${contract.startDate} → ${contract.actualEndDate} (${rentalDays} يوم)` +
+      (overage > 0 ? ` — يشمل زائد إرجاع ${overage} (بند منفصل مقترح)` : "") +
+      (contract.notes ? `\n${contract.notes}` : "");
+
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "customerId", "serviceType", "serviceDate",
+           "vehicleId", "driverId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'fleet_rental_contract', $3, $4,
+           $5, 'rental', COALESCE($6::date, CURRENT_DATE),
+           $7, $8,
+           $9, 'day',
+           'returned',
+           $10,
+           $11,
+           $12
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'fleet_rental_contract' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        contract.id,
+        contract.ref ?? `RENT-${contract.id}`,
+        contract.clientId,
+        contract.actualEndDate,
+        contract.vehicleId,
+        contract.driverId ?? null,
+        rentalDays,
+        revenue,
+        periodNote,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (!row.existed) {
+      eventBus.emit("fleet.rental.billing_candidate.created", {
+        companyId: ctx.companyId,
+        contractId: contract.id,
+        candidateId: row.id,
+      });
+    }
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #1812 / #2079 TA-T18-01 — passenger booking close → Accounting
+   * Candidate (إيراد رحلة الركاب يصل طابور المحاسب).
+   * Mirrors createCargoBillingCandidate + createRentalBillingCandidate
+   * for the passenger leg. Fired from the booking PATCH when status
+   * transitions to `completed` AND tripFamily = 'passenger'. The
+   * candidate carries:
+   *
+   *   • quantity = passengerCount + unitOfMeasure 'pax', so the
+   *     accountant prices by head count (umrah groups, charter trips,
+   *     daily passenger runs).
+   *   • suggestedRevenue is NOT set here — passenger pricing is rule-
+   *     driven downstream (transport_price_rules + pricingEngine on
+   *     the service-line side), unlike cargo/rental where the trip
+   *     row already carries the agreed amount. The candidate signals
+   *     «جاهز للتسعير» and the accountant materialises it through
+   *     the existing pricing pipeline.
+   *   • serviceDate = current Riyadh date (booking row carries no
+   *     completedAt column; the operational close moment IS now).
+   *
+   * Idempotent on (companyId, 'transport_booking_passenger', bookingId):
+   * re-firing the completed transition is a no-op once the candidate
+   * exists. NO journal entry is posted here — the accountant
+   * materialises from the finance side, same boundary as cargo + rental.
+   *
+   * Skip cases (return null without inserting):
+   *   • passengerCount <= 0 — pure operational record (internal
+   *     transfer / equipment booking misclassified at intake), no
+   *     billable headcount.
+   *   • tripFamily != 'passenger' — guard against accidental calls
+   *     from cargo bookings (those go through createCargoBillingCandidate).
+   */
+  async createPassengerBillingCandidate(
+    ctx: FleetGLContext,
+    booking: {
+      id: number;
+      bookingNumber: string;
+      tripFamily: string | null;
+      customerId: number | null;
+      passengerCount: number | null;
+      fromLocationText: string | null;
+      toLocationText: string | null;
+      vehicleId?: number | null;
+      driverId?: number | null;
+      notes?: string | null;
+    }
+  ): Promise<{ id: number; created: boolean } | null> {
+    if (booking.tripFamily !== "passenger") return null;
+    const pax = Number(booking.passengerCount) || 0;
+    if (pax <= 0) return null;
+
+    const route =
+      booking.fromLocationText && booking.toLocationText
+        ? `${booking.fromLocationText} → ${booking.toLocationText}`
+        : (booking.fromLocationText ?? booking.toLocationText ?? "بدون مسار");
+    const note =
+      `نقل ركاب — حجز ${booking.bookingNumber}، ${pax} راكب على المسار ${route}` +
+      (booking.notes ? `\n${booking.notes}` : "");
+
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "customerId", "serviceType", "serviceDate",
+           "routeFrom", "routeTo",
+           "vehicleId", "driverId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'transport_booking_passenger', $3, $4,
+           $5, 'passenger', CURRENT_DATE,
+           $6, $7,
+           $8, $9,
+           $10, 'pax',
+           'completed',
+           $11,
+           $12
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'transport_booking_passenger' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        booking.id,
+        booking.bookingNumber,
+        booking.customerId,
+        booking.fromLocationText,
+        booking.toLocationText,
+        booking.vehicleId ?? null,
+        booking.driverId ?? null,
+        pax,
+        note,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    if (!row.existed) {
+      eventBus.emit("fleet.passenger.billing_candidate.created", {
+        companyId: ctx.companyId,
+        bookingId: booking.id,
+        candidateId: row.id,
+      });
+    }
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
    * Post the financial impact of a delivered cargo manifest in ONE
    * balanced journal entry. A road-freight shipment has two money
    * flows that net to a single balanced JE:
@@ -487,10 +872,10 @@ class FleetEngineImpl implements DomainEngine {
     if (revenue <= 0 && cost <= 0) return null;
 
     const [arCode, revenueCode, costCode, payableCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4300"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5310"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2100"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1131"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2150"),
     ]);
 
     const lines: JournalEntryLine[] = [];
@@ -533,9 +918,9 @@ class FleetEngineImpl implements DomainEngine {
     }
   ) {
     const [assetAccountCode, depreciationAccountCode, accDepreciationAccountCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1510"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "6100"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_acc_depreciation", "credit", "1590"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_vehicle_asset", "debit", "1210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_depreciation", "debit", "5710"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_acc_depreciation", "credit", "1211"),
     ]);
 
     eventBus.emit("finance.fixed_asset.requested", {

@@ -83,7 +83,7 @@ transportIntegrationRouter.get(
                      AND b."deletedAt" IS NULL
                 ) AS "existingBookings"
            FROM umrah_groups g
-                LEFT JOIN umrah_seasons s ON s.id = g."seasonId" AND s."companyId" = g."companyId"
+                LEFT JOIN umrah_seasons s ON s.id = g."seasonId" AND s."companyId" = g."companyId" AND s."deletedAt" IS NULL
           WHERE g."companyId" = $1
             AND g."deletedAt" IS NULL
             AND COALESCE(g."mutamerCount", 0) > 0
@@ -109,8 +109,8 @@ transportIntegrationRouter.get(
         endDate: string | null;
         existingBookings: number;
       }>(
-        `SELECT c.id, c."contractNumber",
-                c."customerId",
+        `SELECT c.id, c."ref" AS "contractNumber",
+                c."clientId" AS "customerId",
                 cl.name AS "customerName",
                 c."startDate", c."endDate",
                 (
@@ -120,7 +120,7 @@ transportIntegrationRouter.get(
                      AND b."deletedAt" IS NULL
                 ) AS "existingBookings"
            FROM fleet_rental_contracts c
-                LEFT JOIN clients cl ON cl.id = c."customerId" AND cl."companyId" = c."companyId"
+                LEFT JOIN clients cl ON cl.id = c."clientId" AND cl."companyId" = c."companyId" AND cl."deletedAt" IS NULL
           WHERE c."companyId" = $1
             AND c."deletedAt" IS NULL
             AND c.status IN ('active', 'pending')
@@ -196,7 +196,7 @@ transportIntegrationRouter.post(
                   s."startDate" AS "seasonStartDate",
                   s."endDate"   AS "seasonEndDate"
              FROM umrah_groups g
-                  LEFT JOIN umrah_seasons s ON s.id = g."seasonId" AND s."companyId" = g."companyId"
+                  LEFT JOIN umrah_seasons s ON s.id = g."seasonId" AND s."companyId" = g."companyId" AND s."deletedAt" IS NULL
             WHERE g.id = $1 AND g."companyId" = $2 AND g."deletedAt" IS NULL`,
           [groupId, scope.companyId],
         );
@@ -343,20 +343,20 @@ transportIntegrationRouter.get(
                 b."fromLocationText", b."toLocationText",
                 (
                   SELECT MIN(d."scheduledStartAt") FROM transport_dispatch_orders d
-                         JOIN transport_booking_lines l ON l.id = d."bookingLineId"
+                         JOIN transport_booking_lines l ON l.id = d."bookingLineId" AND l."deletedAt" IS NULL
                    WHERE l."bookingId" = b.id
                      AND d.status NOT IN ('declined', 'cancelled')
                 ) AS "scheduledStart",
                 (
                   SELECT MAX(d."scheduledEndAt") FROM transport_dispatch_orders d
-                         JOIN transport_booking_lines l ON l.id = d."bookingLineId"
+                         JOIN transport_booking_lines l ON l.id = d."bookingLineId" AND l."deletedAt" IS NULL
                    WHERE l."bookingId" = b.id
                      AND d.status NOT IN ('declined', 'cancelled')
                 ) AS "scheduledEnd",
                 b."requestedPickupDate"::text AS "requestedPickupDate",
                 b.status
            FROM transport_bookings b
-                LEFT JOIN clients cl ON cl.id = b."customerId" AND cl."companyId" = b."companyId"
+                LEFT JOIN clients cl ON cl.id = b."customerId" AND cl."companyId" = b."companyId" AND cl."deletedAt" IS NULL
           WHERE b."companyId" = $1
             AND b."deletedAt" IS NULL
             AND b.status IN ('approved', 'scheduled', 'dispatched', 'in_progress')
@@ -484,7 +484,7 @@ transportIntegrationRouter.post(
                     b."transportServiceType",
                     (
                       SELECT COUNT(*)::int FROM transport_dispatch_orders d
-                             JOIN transport_booking_lines l ON l.id = d."bookingLineId"
+                             JOIN transport_booking_lines l ON l.id = d."bookingLineId" AND l."deletedAt" IS NULL
                        WHERE l."bookingId" = b.id
                          AND d.status NOT IN ('declined', 'cancelled')
                     ) AS "existingDispatchOrders"

@@ -67,12 +67,26 @@ export interface HrCreateScaffoldProps {
   /** When set, all sensitive content + the save button hide behind a permission gate. */
   sensitivePerm?: string | string[];
   /**
-   * H3 — assignment selector slot (required when follows="assignment").
-   * The caller renders their own assignment picker (single-employee
-   * single-assignment shops just emit the activeAssignmentId from
-   * /employees; multi-assignment shops render a dropdown). The
-   * scaffold owns the section header + the "follows requires this"
-   * gate but stays ignorant of the picker shape.
+   * The selected employee row (from the caller's /employees list).
+   * When follows="assignment" and no custom assignmentSelectorSlot is
+   * given, the scaffold renders its built-in auto-bind badge from this
+   * row: «تعيين #N · فرع · مسمى — مُحدَّد تلقائياً», or a blocker card
+   * when the employee has no active assignment. Single-assignment
+   * shops therefore pass ONLY this prop; multi-assignment shops
+   * override via assignmentSelectorSlot.
+   */
+  selectedEmployee?: {
+    activeAssignmentId?: number | string | null;
+    assignmentId?: number | string | null;
+    branchName?: string | null;
+    jobTitle?: string | null;
+  } | null;
+  /**
+   * H3 — OPTIONAL custom assignment selector (multi-assignment shops
+   * render a dropdown that writes into assignmentId). When omitted,
+   * the scaffold's DefaultAssignmentBadge takes over using
+   * selectedEmployee + assignmentId. The scaffold owns the section
+   * header + the "follows requires this" gate either way.
    */
   assignmentSelectorSlot?: React.ReactNode;
   /** H4 — operation fields. The caller renders form rows here. */
@@ -100,6 +114,7 @@ export function HrCreateScaffold({
   assignmentId,
   contextSection,
   sensitivePerm,
+  selectedEmployee,
   assignmentSelectorSlot,
   detailsSlot,
   historicalContextSlot,
@@ -142,11 +157,18 @@ export function HrCreateScaffold({
         </>
       )}
 
-      {/* H3 — اختيار التعيين (مشروط على follows="assignment") */}
+      {/* H3 — اختيار التعيين (مشروط على follows="assignment").
+          Default: the scaffold's own auto-bind badge (single-assignment
+          shops); multi-assignment shops override via the slot. */}
       {employeeId && needAssignments && (
         <>
           <SectionHeader icon={<Briefcase className="w-4 h-4" />} label="٣. التعيين" />
-          {assignmentSelectorSlot ?? <MissingAssignmentSlotNotice />}
+          {assignmentSelectorSlot ?? (
+            <DefaultAssignmentBadge
+              employee={selectedEmployee}
+              assignmentId={assignmentId}
+            />
+          )}
         </>
       )}
 
@@ -190,7 +212,7 @@ export function HrCreateScaffold({
           </Badge>
         )}
         <Button onClick={onSubmit} disabled={!canSubmit}>
-          {saving ? "جارٍ الحفظ..." : saveLabel}
+          {saving ? "جاري الحفظ..." : saveLabel}
         </Button>
       </div>
     </div>
@@ -222,21 +244,44 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
   );
 }
 
-function MissingAssignmentSlotNotice() {
+/**
+ * Built-in H3 body for single-assignment shops (the default — Wave-1/B
+ * group 2 moved this here from the per-form copies in group 1). Shows
+ * which assignment the record will bind to, or a blocker card when the
+ * selected employee has no active assignment. Multi-assignment shops
+ * override via assignmentSelectorSlot with a real dropdown.
+ */
+function DefaultAssignmentBadge({
+  employee,
+  assignmentId,
+}: {
+  employee?: HrCreateScaffoldProps["selectedEmployee"];
+  assignmentId?: string;
+}) {
+  const id = assignmentId || employee?.activeAssignmentId || employee?.assignmentId;
+  if (!id) {
+    return (
+      <Card>
+        <CardContent className="flex items-start gap-2 p-3 text-sm text-amber-700">
+          <AlertTriangle className="w-4 h-4 mt-0.5" />
+          <div>
+            <p className="font-medium">لا يوجد تعيين فعّال لهذا الموظف.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              هذه العملية تتبع التعيين — لا يمكن تسجيلها بدون تعيين قائم.
+              راجع ملف الموظف لإضافة تعيين أو ابدأ بإجراء «نقل/تكليف» أولاً.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
-    <Card>
-      <CardContent className="flex items-start gap-2 p-3 text-sm text-amber-700">
-        <AlertTriangle className="w-4 h-4 mt-0.5" />
-        <div>
-          <p className="font-medium">هذه العملية تتبع التعيين.</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            النموذج لم يمرّر <code>assignmentSelectorSlot</code> رغم أن
-            <code>follows="assignment"</code>. مرّر محدّد التعيين الذي يكتب
-            في <code>assignmentId</code>.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
+      <span>تعيين #{String(id)}</span>
+      {employee?.branchName && <span>· فرع: {employee.branchName}</span>}
+      {employee?.jobTitle && <span>· {employee.jobTitle}</span>}
+      <span className="ms-auto text-emerald-600">مُحدَّد تلقائياً</span>
+    </div>
   );
 }
 

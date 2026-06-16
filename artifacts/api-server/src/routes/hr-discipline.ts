@@ -15,7 +15,7 @@
 
 import { Router } from "express";
 import type { PoolClient } from "pg";
-import { HR_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -767,7 +767,10 @@ router.post("/memos", authorize({ feature: "hr.discipline", action: "create" }),
 });
 
 // Step 1: Employee justification
-router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
+// authz: تقديم التبرير عملية كتابة (انتقال حالة pending_employee → pending_manager)؛
+// تُحكم بـ"update" لا "list". دور الموظف يملك hr.discipline:update@self عبر توسعة
+// hr:self (autoMigrate.actionMap)، فالموظف لا يُحجب، والتحقّق الحقيقي owner/HR أدناه.
+router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -778,7 +781,7 @@ router.post("/memos/:id/justify", authorize({ feature: "hr.discipline", action: 
 
     // authorisation: الموظف نفسه أو HR/GM/Owner
     const isOwnerOfMemo = scope.activeAssignmentId === memo.assignmentId;
-    const isHR = HR_ROLES.includes(scope.role);
+    const isHR = scopeCan(scope, "hr.discipline", "update");
     if (!isOwnerOfMemo && !isHR) {
       throw new ForbiddenError("لا تملك صلاحية تقديم التبرير على هذا المحضر");
     }
@@ -1091,13 +1094,23 @@ router.post("/memos/:id/cancel", authorize({ feature: "hr.discipline", action: "
 // ─────────────────────────────────────────────────────────────────────────────
 // APPEAL — استئناف الموظف على قرار الجزاء
 // ─────────────────────────────────────────────────────────────────────────────
-router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "list" }), async (req, res) => {
+// authz: الاستئناف عملية كتابة (انتقال approved → appeal_pending)؛ تُحكم بـ"update"
+// لا "list". أُضيف تحقّق الملكية (owner/HR) المفقود سابقًا — كان أي حامل لرؤية
+// الانضباط يستطيع الاستئناف على أي محضر.
+router.post("/memos/:id/appeal", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { reason } = zodParse(appealSchema.safeParse(req.body));
     const memo = await getMemo(scope.companyId, id);
     if (!memo) throw new NotFoundError("المحضر غير موجود");
+
+    // authorisation: صاحب المحضر نفسه أو HR/GM/Owner (مطابقة لمسار التبرير justify).
+    const isOwnerOfMemo = scope.activeAssignmentId === memo.assignmentId;
+    const isHR = scopeCan(scope, "hr.discipline", "update");
+    if (!isOwnerOfMemo && !isHR) {
+      throw new ForbiddenError("لا تملك صلاحية تقديم استئناف على هذا المحضر");
+    }
 
     await applyTransition({
       entity: "hr_inquiry_memos",
@@ -1372,7 +1385,7 @@ router.get("/auto-detection/settings", authorize({ feature: "hr.discipline", act
 router.put("/auto-detection/settings", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.discipline", "update")) {
       throw new ForbiddenError("غير مصرح بتعديل إعدادات الرصد التلقائي");
     }
     const body: Partial<AutoDetectionSettings> = zodParse(autoDetectionSettingsSchema.safeParse(req.body));
@@ -1401,7 +1414,7 @@ router.put("/auto-detection/settings", authorize({ feature: "hr.discipline", act
 router.post("/auto-detection/run", authorize({ feature: "hr.discipline", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    if (!HR_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.discipline", "update")) {
       throw new ForbiddenError("غير مصرح بتشغيل الرصد التلقائي");
     }
     const body = zodParse(autoDetectionRunSchema.safeParse(req.body));

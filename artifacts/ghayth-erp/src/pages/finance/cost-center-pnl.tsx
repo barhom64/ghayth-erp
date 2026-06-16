@@ -276,11 +276,9 @@ export default function CostCenterPnlPage() {
       key: "_actions",
       header: "تفاصيل",
       render: (r) => (
-        <Link href={`/finance/journal?costCenter=${encodeURIComponent(r.costCenter)}&startDate=${startDate}&endDate=${endDate}`}>
-          <Button variant="ghost" size="sm" className="h-7 text-xs">
+        <Button asChild variant="ghost" size="sm" className="h-7 text-xs"><Link href={`/finance/journal?costCenter=${encodeURIComponent(r.costCenter)}&startDate=${startDate}&endDate=${endDate}`}>
             القيود <ChevronRight className="h-3 w-3 ms-1" />
-          </Button>
-        </Link>
+          </Link></Button>
       ),
     },
   ];
@@ -288,7 +286,7 @@ export default function CostCenterPnlPage() {
   return (
     <PageShell
       title="مقارنة ربحية مراكز التكلفة"
-      subtitle="P&L لكل مركز تكلفة في فترة واحدة — أي مركز رابح / خاسر / يحتاج تدخل"
+      subtitle="قائمة دخل لكل مركز تكلفة في فترة واحدة — أي مركز رابح / خاسر / يحتاج تدخل"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { href: "/finance/cost-centers", label: "مراكز التكلفة" },

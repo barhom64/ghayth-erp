@@ -8,6 +8,7 @@ import {
   MUTAMER_HEADER_MAP,
   VOUCHER_HEADER_MAP,
   suggestColumnMapping,
+  normalizeImportRows,
 } from "../../src/lib/umrahImportEngine.js";
 
 /**
@@ -189,5 +190,53 @@ describe("wizard — column-mapping panel uses SearchableSelect with grouped opt
     expect(WIZARD).toContain("data-testid={`mapping-suggestion-${h}`}");
     expect(WIZARD).toContain("✓ تطابق دقيق");
     expect(WIZARD).toContain("💡 اقتراح:");
+  });
+});
+
+describe("engine — normalizeImportRows agent / count header resolution", () => {
+  // Regression: a vendor data file used NUSK terminology ("الوكيل
+  // الرئيسي" / "الوكيل الفرعي") and "إجمالي المعتمرين" instead of the
+  // dictionary's "اسم الوكيل" / "اسم المكتب" / "عدد المعتمرين". The
+  // exact (trim-only) matcher silently dropped those columns, leaving
+  // agentId/subAgentId NULL and mutamerCount 0 after import. Both the
+  // new aliases AND the folded matcher must keep these resolving.
+  it("maps main-agent / sub-agent terminology on mutamer rows", () => {
+    const [row] = normalizeImportRows(
+      [{ "الوكيل الرئيسي": "شركة الوكيل", "الوكيل الفرعي": "مكتب فرعي" }],
+      "mutamers",
+    );
+    expect(row.agentName).toBe("شركة الوكيل");
+    expect(row.subAgentName).toBe("مكتب فرعي");
+  });
+
+  it("maps pilgrim-count + agent variants on voucher rows", () => {
+    const [row] = normalizeImportRows(
+      [{ "إجمالي المعتمرين": "42", "الوكيل الرئيسي": "وكيل", "المكتب": "فرع" }],
+      "vouchers",
+    );
+    expect(row.mutamerCount).toBe("42");
+    expect(row.agentName).toBe("وكيل");
+    expect(row.subAgentName).toBe("فرع");
+  });
+
+  it("folds hamza / alif-maksura / tatweel spelling variants", () => {
+    // "إجمالى المعتمرين" (alif-maksura) + tatweel'd agent header — no
+    // exact dictionary key exists for these, only the folded matcher
+    // resolves them.
+    const [row] = normalizeImportRows(
+      [{ "إجمالى المعتمرين": "7", "الوكيـل الرئيسـي": "و" }],
+      "vouchers",
+    );
+    expect(row.mutamerCount).toBe("7");
+    expect(row.agentName).toBe("و");
+  });
+
+  it("operator custom mapping still overrides the dictionary", () => {
+    const [row] = normalizeImportRows(
+      [{ "عمود مخصص": "قيمة" }],
+      "mutamers",
+      { "عمود مخصص": "agentName" },
+    );
+    expect(row.agentName).toBe("قيمة");
   });
 });

@@ -19,9 +19,7 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
               <Building className="w-4 h-4 text-emerald-500" />
               وحداتي العقارية
             </CardTitle>
-            <Link href="/properties">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">عرض <ChevronLeft className="w-3 h-3" /></Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/properties">عرض <ChevronLeft className="w-3 h-3" /></Link></Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-2 text-center">
@@ -45,9 +43,7 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
               <Car className="w-4 h-4 text-status-info" />
               أسطولي
             </CardTitle>
-            <Link href="/fleet">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">عرض <ChevronLeft className="w-3 h-3" /></Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/fleet">عرض <ChevronLeft className="w-3 h-3" /></Link></Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-2 text-center">
@@ -71,9 +67,7 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
               <Scale className="w-4 h-4 text-indigo-500" />
               القضايا
             </CardTitle>
-            <Link href="/legal/cases">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">عرض <ChevronLeft className="w-3 h-3" /></Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/legal/cases">عرض <ChevronLeft className="w-3 h-3" /></Link></Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-2 text-center">
@@ -96,9 +90,7 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
               <Users className="w-4 h-4 text-teal-500" />
               الموظفون
             </CardTitle>
-            <Link href="/employees">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">عرض <ChevronLeft className="w-3 h-3" /></Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/employees">عرض <ChevronLeft className="w-3 h-3" /></Link></Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-2 text-center">
@@ -121,9 +113,7 @@ export function RoleEntitiesGrid({ roleEntities, role }: RoleEntitiesGridProps) 
               <Receipt className="w-4 h-4 text-status-warning" />
               الفواتير
             </CardTitle>
-            <Link href="/finance/invoices">
-              <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">عرض <ChevronLeft className="w-3 h-3" /></Button>
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="text-xs gap-1 h-7"><Link href="/finance/invoices">عرض <ChevronLeft className="w-3 h-3" /></Link></Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-2 text-center">

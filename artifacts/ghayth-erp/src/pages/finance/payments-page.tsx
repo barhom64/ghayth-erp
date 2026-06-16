@@ -70,24 +70,18 @@ export default function PaymentsPage() {
       loading={isLoading}
       actions={
         <div className="flex gap-2">
-          <Link href="/finance/payment-run">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/payment-run">
               <Send className="h-3.5 w-3.5 ml-1" />
               دفعة جماعية
-            </Button>
-          </Link>
-          <Link href="/finance/ap-payment-calendar">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ap-payment-calendar">
               <Calendar className="h-3.5 w-3.5 ml-1" />
               تقويم الدفعات
-            </Button>
-          </Link>
-          <Link href="/finance/ap-aging">
-            <Button variant="outline" size="sm" className="h-8 text-xs">
+            </Link></Button>
+          <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/ap-aging">
               <Clock className="h-3.5 w-3.5 ml-1" />
               تقادم الموردين
-            </Button>
-          </Link>
+            </Link></Button>
           <PrintButton
             entityType="report_finance_payments"
             entityId="list"

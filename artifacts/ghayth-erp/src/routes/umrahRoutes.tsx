@@ -7,6 +7,7 @@ const UmrahAgents = lazy(() => import("@/pages/umrah/agents"));
 const UmrahSeasons = lazy(() => import("@/pages/umrah/seasons"));
 const UmrahAccommodations = lazy(() => import("@/pages/umrah/accommodations"));
 const UmrahPenalties = lazy(() => import("@/pages/umrah/penalties"));
+const UmrahRefundRequests = lazy(() => import("@/pages/umrah/refund-requests"));
 const UmrahPayments = lazy(() => import("@/pages/umrah/payments"));
 const UmrahInvoices = lazy(() => import("@/pages/umrah/invoices"));
 const UmrahImportWizard = lazy(() => import("@/pages/umrah/import-wizard"));
@@ -16,6 +17,10 @@ const PilgrimDetail = lazy(() => import("@/pages/umrah/pilgrim-detail"));
 const UmrahPackages = lazy(() => import("@/pages/umrah/packages"));
 const UmrahTransport = lazy(() => import("@/pages/umrah/transport"));
 const UmrahTransportDetail = lazy(() => import("@/pages/details/umrah-transport-detail"));
+// U-02b M4 (#2080) — operational page for the unified Service Contract
+// path (POST /umrah/groups/:id/transport-requests). Not yet linked from
+// the sidebar/tabs/calendar; M5 owns that switchover.
+const UmrahTransportRequests = lazy(() => import("@/pages/umrah/transport-requests"));
 const UmrahAgentDetail = lazy(() => import("@/pages/details/umrah-agent-detail"));
 const UmrahSeasonDetail = lazy(() => import("@/pages/details/umrah-season-detail"));
 const UmrahPackageDetail = lazy(() => import("@/pages/details/umrah-package-detail"));
@@ -96,6 +101,7 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/accommodations", component: UmrahAccommodations, module: "operations" },
   { path: "/umrah/seasons/:id", component: UmrahSeasonDetail, module: "operations" },
   { path: "/umrah/penalties", component: UmrahPenalties, module: "operations" },
+  { path: "/umrah/refund-requests", component: UmrahRefundRequests, module: "operations" },
   { path: "/umrah/penalties/:id", component: UmrahPenaltyDetail, module: "operations" },
   { path: "/umrah/invoices", component: UmrahInvoices, module: "operations" },
   { path: "/umrah/invoices/:id", component: UmrahInvoiceDetail, module: "operations" },
@@ -103,6 +109,9 @@ export const umrahRoutes: { path: string; component: any; module?: ModuleType }[
   { path: "/umrah/packages/:id", component: UmrahPackageDetail, module: "operations" },
   { path: "/umrah/transport", component: UmrahTransport, module: "operations" },
   { path: "/umrah/transport/:id", component: UmrahTransportDetail, module: "operations" },
+  // U-02b M4 — new operational entry for the unified contract path.
+  // Reachable by URL only at this stage; sidebar/tab integration is M5.
+  { path: "/umrah/transport-requests", component: UmrahTransportRequests, module: "operations" },
   // Wave 5 routes
   { path: "/umrah/sub-agents", component: UmrahSubAgents, module: "operations" },
   { path: "/umrah/sub-agents/:id", component: UmrahSubAgentDetail, module: "operations" },

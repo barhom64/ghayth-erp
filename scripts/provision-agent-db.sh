@@ -138,7 +138,85 @@ is_post_cutoff() {
     [ "$(printf '%s\n%s\n' "$CUTOFF" "$1" | sort -V | tail -1)" = "$1" ]
 }
 
-marked=0; applied=0
+# SEED_REPLAY_ALLOWLIST — pre-cutoff migrations whose effects DO NOT live in
+# the schema dump (because pg_dump --schema-only excludes table data). These
+# are pure INSERTs into reference tables, all idempotent (ON CONFLICT DO
+# NOTHING / IF NOT EXISTS), so re-applying them on top of the baseline is
+# safe and necessary — without them a fresh agent DB has no numbering
+# schemes, no GL operation mappings, no default approval chains, etc., and
+# every business journey 422s on the first write.
+#
+# Curated list — bump it when a new pre-cutoff seed-bearing migration
+# lands. Append-only; never remove.
+SEED_REPLAY_ALLOWLIST=(
+  "034_hr_discipline_regulation.sql"
+  "035_inventory_projects_gl_accounts.sql"
+  "036_three_way_match.sql"
+  "110_rbac_v2_role_templates.sql"
+  "133_seed_approval_chains.sql"
+  "141_admin_assign_all_rbac_roles.sql"
+  "172_print_engine_seed.sql"
+  "205_tax_codes_system.sql"
+  "213_unified_numbering_center.sql"
+  "214_numbering_priority_2_schemes.sql"
+  "215_numbering_client_code_scheme.sql"
+  "217_numbering_full_coverage.sql"
+  "220_numbering_align_issue_timing.sql"
+  "221_message_log_outbound_queue.sql"
+  "227_numbering_payment_run_scheme.sql"
+  "228_numbering_store_order_scheme.sql"
+  "230_numbering_inquiry_memo_scheme.sql"
+  "231_numbering_customer_advance_scheme.sql"
+  "232_numbering_umrah_invoicing_schemes.sql"
+  "250_activate_approval_chains.sql"
+  "253_seed_notification_templates_full_bilingual.sql"
+  "254_seed_company_gl_operation_mappings.sql"
+  "256_seed_default_allocation_rules_per_company.sql"
+  "256_seed_notification_routing_rules.sql"
+  "256_seed_payroll_gl_operation_mappings.sql"
+  "257_seed_custody_voucher_allocation_rules.sql"
+  "257_seed_properties_gl_operation_mappings.sql"
+  "258_seed_standard_functional_roles.sql"
+  "270_attendance_per_category.sql"
+  "274_org_model_foundation.sql"
+  "278_default_hr_role_templates.sql"
+  "289_seed_project_gl_mappings.sql"
+  "291_seed_purchase_grni_mapping.sql"
+  "312_seed_finance_intent_account_mappings.sql"
+  # 336 is POST-cutoff (applied at step 4) but, like 312, CROSS JOINs
+  # `companies` which is empty at step 4 — so its 1190 insert + AP intent
+  # mappings land on 0 rows there. Replay it here, after companies seed, so
+  # the vendor AP anchors actually exist on a clean install. Idempotent
+  # (ON CONFLICT DO NOTHING / fill-empty-only). On a real api-server boot
+  # (migrate.ts) the DB already has companies, so this ordering gap is
+  # provision-harness-only. #2140 slice 2-أ.
+  "336_vendor_ap_accounting_anchors.sql"
+  # 338 is POST-cutoff (applied at step 4) but, like 336, CROSS JOINs
+  # `companies` AND resolves account codes against chart_of_accounts —
+  # so at step 4 (empty companies + no COA) its asset-anchor intent
+  # mappings (asset_disposal_cash, asset_impairment_loss,
+  # asset_revaluation_*, …) resolve to NULL and seed 0 rows. Replay it
+  # here, after the company-defaults seed populates the COA (incl. the
+  # 1291/3600/5850/5860 fixed-asset accounts), so `resolved_code IS NOT
+  # NULL` holds and the intents actually land. Idempotent (ON CONFLICT
+  # DO NOTHING). Provision-harness-only — a real boot already has
+  # companies + COA before 338 runs. #2140 slice 5-a.
+  "338_fixed_assets_anchors.sql"
+  # 377 corrects the asset_disposal_cash anchor (1100 control-parent →
+  # 1111 main-cash leaf). It MUST replay AFTER 338 (which creates the
+  # asset_disposal_cash row during this same 5b pass) — array order is
+  # preserved by the replay loop, so this entry stays below 338.
+  # Idempotent UPDATE scoped to one operationType. #2140 slice 5-a.
+  "377_fix_asset_disposal_cash_anchor.sql"
+)
+is_replay_seed() {
+  for s in "${SEED_REPLAY_ALLOWLIST[@]}"; do
+    [ "$s" = "$1" ] && return 0
+  done
+  return 1
+}
+
+marked=0; applied=0; replayed=0
 for mig in $(ls "$MIGRATIONS_DIR"/*.sql | sort -V); do
   [ -f "$mig" ] || continue
   fn="$(basename "$mig")"
@@ -147,12 +225,18 @@ for mig in $(ls "$MIGRATIONS_DIR"/*.sql | sort -V); do
     PGPASSWORD="$DB_PASSWORD" psql "$APP_DSN" -v ON_ERROR_STOP=1 -q -f "$mig"
     applied=$((applied + 1))
   else
+    if is_replay_seed "$fn"; then
+      # Seeds dump can't carry — re-applied idempotently so reference
+      # rows the business journeys depend on actually exist.
+      PGPASSWORD="$DB_PASSWORD" psql "$APP_DSN" -v ON_ERROR_STOP=0 -q -f "$mig" >/dev/null 2>&1 || true
+      replayed=$((replayed + 1))
+    fi
     marked=$((marked + 1))
   fi
   PGPASSWORD="$DB_PASSWORD" psql "$APP_DSN" -q -c \
     "INSERT INTO schema_migrations(filename) VALUES ('${fn}') ON CONFLICT DO NOTHING;" >/dev/null
 done
-say "schema_migrations: ${marked} baseline-marked, ${applied} post-cutoff applied"
+say "schema_migrations: ${marked} baseline-marked (${replayed} seeds replayed), ${applied} post-cutoff applied"
 
 # 5. seed reference rows + deterministic admin + company defaults + an open
 # fiscal period (so GL posting is unblocked). Reuses the same SQL files
@@ -175,6 +259,23 @@ seed "seed-admin-user.sql"
 seed "seed-aldiyaa-albayan.sql"
 seed "seed-aldiyaa-company-defaults.sql"
 seed "seed-financial-periods.sql"
+
+# 5b. Replay per-company seeds NOW (after companies exist) — the
+# SEED_REPLAY_ALLOWLIST migrations include CROSS JOINs on `companies`
+# that produced 0 rows when run at step 4 against an empty DB. Re-run
+# them idempotently so reference rows (numbering schemes, GL operation
+# mappings, allocation rules, etc.) actually land per-company.
+say "replaying per-company seed-bearing migrations after company seeds..."
+post_company_replayed=0
+for s in "${SEED_REPLAY_ALLOWLIST[@]}"; do
+  mig_path="$MIGRATIONS_DIR/$s"
+  [ -f "$mig_path" ] || continue
+  PGPASSWORD="$DB_PASSWORD" psql "$APP_DSN" -v ON_ERROR_STOP=0 -q -f "$mig_path" >/dev/null 2>&1 || true
+  post_company_replayed=$((post_company_replayed + 1))
+done
+ns_ct="$(PGPASSWORD="$DB_PASSWORD" psql "$APP_DSN" -tAc "SELECT count(*) FROM numbering_schemes;" | tr -d '[:space:]')"
+am_ct="$(PGPASSWORD="$DB_PASSWORD" psql "$APP_DSN" -tAc "SELECT count(*) FROM accounting_mappings;" | tr -d '[:space:]')"
+say "post-company seed replay: ${post_company_replayed} seeds — numbering_schemes=${ns_ct}, accounting_mappings=${am_ct}"
 
 # 6. final invariants — fail loudly rather than print a false "ready". Asserts
 # the head-of-main contract actually landed: admin login row, an open fiscal

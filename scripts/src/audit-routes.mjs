@@ -52,6 +52,20 @@ const ALLOWLIST = new Set([
   // /finance redirect stub → /finance/accounts. Not in any routes file,
   // so visiting /finance directly 404s today. Keep until router decides.
   "pages/finance.tsx",
+  // GAP_MATRIX P1 — duplicate eliminated: /settings/print-templates now
+  // redirects to /admin/print-templates (canonical). File kept for reference.
+  "pages/settings/print-templates.tsx",
+  // GAP_MATRIX P1 — BI wrapper pages (bi-dashboards/bi-kpis/bi-reports) created
+  // a dual-nav structure alongside bi.tsx in-page tabs. Routes now redirect to /bi.
+  // Files kept as reference until the tabs content is merged into bi.tsx.
+  "pages/bi-dashboards.tsx",
+  "pages/bi-kpis.tsx",
+  "pages/bi-reports.tsx",
+  // HR-REV-2 PR1 (ADR-HR-02) — /hr/organization and /hr/organization/structure
+  // now redirect to /hr/org-tree (canonical org-tree page). Files kept for
+  // reference until their content is fully merged into org-tree as tabs.
+  "pages/hr/organization.tsx",
+  "pages/hr/organization-structure.tsx",
 ]);
 
 const SOURCE_EXTS = [".ts", ".tsx", ".js", ".jsx"];
@@ -137,6 +151,10 @@ async function main() {
   for (const file of pageFiles) {
     const key = pageKey(file);
     if (ALLOWLIST.has(key)) continue;
+    // Vitest specs colocated with their page (pages/foo.test.tsx) are
+    // discovered by the test runner, never imported by a routes file —
+    // they are not routable pages, so the orphan rule doesn't apply.
+    if (key.endsWith(".test.ts") || key.endsWith(".test.tsx")) continue;
     if (!importedSet.has(file)) orphans.push(key);
   }
 
