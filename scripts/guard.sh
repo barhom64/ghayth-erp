@@ -170,6 +170,15 @@ run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
 # statically, before merge. Pure-logic fixtures first, then the live scan.
 run_step "check:redirect-targets:tests" node scripts/src/check-redirect-targets.test.mjs
 run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
+# RAWQUERY-PARAM-ARITY: a Postgres parameterized statement must be bound with
+# exactly max($N) values. Catches the 08P01 "bind message supplies N parameters,
+# but prepared statement requires M" class statically — e.g. the umrah
+# /calendar/events overstay 500, where a query referenced only $1,$2 while
+# sharing the 3-element `baseParams` its siblings filled via BETWEEN $2 AND $3.
+# Pure-logic fixtures first (no DB), then the live scan; vetted FPs in
+# scripts/rawquery-param-arity-allowlist.txt.
+run_step "check:rawquery-param-arity:tests" node scripts/src/check-rawquery-param-arity.test.mjs
+run_step "check:rawquery-param-arity" node scripts/src/check-rawquery-param-arity.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
 # Fourth of the four originally-dormant guards from PR #574 — finally
