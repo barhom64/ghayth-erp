@@ -1,4 +1,5 @@
 import { handleRouteError, ValidationError, NotFoundError, ForbiddenError,
+  ConflictError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
@@ -666,6 +667,23 @@ router.delete("/branches/:id", authorize({ feature: "settings", action: "update"
     const branchId = parseId(req.params.id, "id");
     const scope = req.scope!;
 
+    // Optional: move the active employees + open purchase orders that
+    // would otherwise block the disable to this target branch first, so
+    // the operator can retire an old branch in one step (e.g. after
+    // consolidating into a new branch). When omitted, the blockers below
+    // are surfaced so the caller can pick a destination.
+    const reassignRaw = (req.body?.reassignToBranchId ?? req.body?.reassignTo) as unknown;
+    const reassignToBranchId =
+      reassignRaw === undefined || reassignRaw === null || reassignRaw === ""
+        ? null
+        : Number(reassignRaw);
+    if (
+      reassignToBranchId !== null &&
+      (!Number.isInteger(reassignToBranchId) || reassignToBranchId <= 0)
+    ) {
+      throw new ValidationError("الفرع البديل غير صالح");
+    }
+
     const [beforeBranch] = await rawQuery<Record<string, unknown>>(
       `SELECT * FROM branches WHERE id=$1 AND "companyId"=$2`,
       [branchId, scope.companyId],
@@ -673,6 +691,22 @@ router.delete("/branches/:id", authorize({ feature: "settings", action: "update"
     if (!beforeBranch) throw new NotFoundError("الفرع غير موجود");
     if ((beforeBranch.status as string | null) === "inactive") {
       throw new ValidationError("الفرع مُعطَّل مسبقاً");
+    }
+
+    // Validate the reassignment target up front: it must be a different,
+    // active branch owned by the same company.
+    if (reassignToBranchId !== null) {
+      if (reassignToBranchId === branchId) {
+        throw new ValidationError("لا يمكن نقل البيانات إلى نفس الفرع المراد تعطيله");
+      }
+      const [target] = await rawQuery<{ id: number; status: string | null }>(
+        `SELECT id, status FROM branches WHERE id=$1 AND "companyId"=$2`,
+        [reassignToBranchId, scope.companyId],
+      );
+      if (!target) throw new ValidationError("الفرع البديل غير موجود في شركتك");
+      if ((target.status as string | null) === "inactive") {
+        throw new ValidationError("الفرع البديل مُعطَّل — اختر فرعاً نشطاً");
+      }
     }
 
     const [activeEmployees] = await rawQuery<CountRow>(
@@ -683,30 +717,62 @@ router.delete("/branches/:id", authorize({ feature: "settings", action: "update"
       `SELECT COUNT(*) AS cnt FROM purchase_orders WHERE "branchId" = $1 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [branchId, scope.companyId],
     );
+    const empCount = Number(activeEmployees?.cnt ?? 0);
+    const poCount = Number(openOrders?.cnt ?? 0);
 
     const blockers: string[] = [];
-    if (Number(activeEmployees?.cnt ?? 0) > 0) {
-      blockers.push(`يوجد ${activeEmployees.cnt} موظف نشط مرتبط بهذا الفرع — أعد إسنادهم أولاً`);
+    if (empCount > 0) {
+      blockers.push(`يوجد ${empCount} موظف نشط مرتبط بهذا الفرع — أعد إسنادهم أولاً`);
     }
-    if (Number(openOrders?.cnt ?? 0) > 0) {
-      blockers.push(`يوجد ${openOrders.cnt} أمر شراء مفتوح مرتبط بهذا الفرع — أغلقها أو حوّلها`);
+    if (poCount > 0) {
+      blockers.push(`يوجد ${poCount} أمر شراء مفتوح مرتبط بهذا الفرع — أغلقها أو حوّلها`);
     }
-    if (blockers.length > 0) {
-      throw new ValidationError("لا يمكن تعطيل الفرع — يوجد بيانات نشطة مرتبطة", { meta: { blockers } });
+    // Blocked and no destination supplied → tell the caller exactly what's
+    // in the way and that it can be cleared by reassigning to another branch.
+    if (blockers.length > 0 && reassignToBranchId === null) {
+      throw new ConflictError("لا يمكن تعطيل الفرع — يوجد بيانات نشطة مرتبطة", {
+        meta: { blockers, canReassign: true },
+      });
     }
 
-    await rawExecute(
-      `UPDATE branches SET status='inactive' WHERE id=$1 AND "companyId"=$2`,
-      [branchId, scope.companyId],
-    );
+    // Move the blocking active data to the destination branch (if any) and
+    // disable the source branch atomically.
+    await withTransaction(async () => {
+      if (reassignToBranchId !== null) {
+        if (empCount > 0) {
+          await rawExecute(
+            `UPDATE employee_assignments SET "branchId" = $1 WHERE "branchId" = $2 AND status = 'active' AND "companyId" = $3`,
+            [reassignToBranchId, branchId, scope.companyId],
+          );
+        }
+        if (poCount > 0) {
+          await rawExecute(
+            `UPDATE purchase_orders SET "branchId" = $1 WHERE "branchId" = $2 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $3 AND "deletedAt" IS NULL`,
+            [reassignToBranchId, branchId, scope.companyId],
+          );
+        }
+      }
+      await rawExecute(
+        `UPDATE branches SET status='inactive' WHERE id=$1 AND "companyId"=$2`,
+        [branchId, scope.companyId],
+      );
+    });
+
+    const reassigned = reassignToBranchId !== null && (empCount > 0 || poCount > 0);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId, action: "settings.deleted",
       entity: "branches", entityId: branchId,
       before: beforeBranch,
       after: { ...beforeBranch, status: "inactive" },
     }).catch((e) => logger.error(e, "settings background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch", mode: "soft-disable" }) }).catch((e) => logger.error(e, "settings background task failed"));
-    res.json({ success: true, mode: "soft-disable" });
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "settings.deleted", entity: "settings", entityId: branchId, details: JSON.stringify({ key: "branch", mode: "soft-disable", reassignToBranchId, reassigned }) }).catch((e) => logger.error(e, "settings background task failed"));
+    res.json({
+      success: true,
+      mode: "soft-disable",
+      reassignedTo: reassigned ? reassignToBranchId : null,
+      movedEmployees: reassignToBranchId !== null ? empCount : 0,
+      movedPurchaseOrders: reassignToBranchId !== null ? poCount : 0,
+    });
   } catch (err) { handleRouteError(err, res, "settings"); }
 });
 
