@@ -56,9 +56,12 @@ router.get("/cycle-counts", authorize({ feature: "warehouse.inventory", action: 
   try {
     const scope = req.scope!;
     // warehouse_cycle_counts has no branchId column — company-level cascade only.
+    // disableBranchScope (not just enforceBranchScope:false) so an explicit
+    // ?branchIds= filter doesn't silently fall through to the joined warehouse's
+    // branch (cc has no branch of its own; this is intentionally company-level).
     const { where, params } = buildScopedWhere(scope, parseScopeFilters(req), {
       companyColumn: 'cc."companyId"',
-      enforceBranchScope: false,
+      disableBranchScope: true,
     });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT cc.*, w.name AS "warehouseName",

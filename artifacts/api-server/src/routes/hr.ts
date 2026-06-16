@@ -8123,7 +8123,17 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
     const offsetParam = paramIdx++;
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT ed.*, e.name AS "employeeName"
+      // computedStatus derives expiry health from "expiryDate" vs today (Riyadh)
+      // so the client never has to recompute it: expired / expiring_soon (≤30d)
+      // / valid. daysToExpiry is signed (negative = already past).
+      `SELECT ed.*, e.name AS "employeeName",
+              (ed."expiryDate" - CURRENT_DATE) AS "daysToExpiry",
+              CASE
+                WHEN ed."expiryDate" IS NULL THEN 'valid'
+                WHEN ed."expiryDate" < CURRENT_DATE THEN 'expired'
+                WHEN ed."expiryDate" <= CURRENT_DATE + INTERVAL '30 days' THEN 'expiring_soon'
+                ELSE 'valid'
+              END AS "computedStatus"
        FROM employee_documents ed
        JOIN employees e ON e.id=ed."employeeId"
        ${where}
@@ -8160,6 +8170,71 @@ router.post("/employee-documents", authorize({ feature: "hr.employees", action: 
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة الموظف" });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
+});
+
+router.patch("/employee-documents/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2 AND status != 'deleted'`,
+      [id, scope.companyId]
+    );
+    if (!before) throw new NotFoundError("وثيقة الموظف غير موجودة");
+    // Partial update — only the fields the editor sends are touched. employeeId
+    // is intentionally NOT editable (a document belongs to one employee).
+    const b = zodParse(employeeDocumentSchema.partial().safeParse(req.body)) as any;
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    const setField = (col: string, val: unknown) => { sets.push(`"${col}"=$${idx++}`); params.push(val); };
+    if (b.documentType !== undefined) { setField("type", b.documentType); setField("name", b.documentType); }
+    if (b.documentNumber !== undefined) setField("number", b.documentNumber || null);
+    if (b.issueDate !== undefined) setField("issueDate", b.issueDate || null);
+    if (b.expiryDate !== undefined) setField("expiryDate", b.expiryDate || null);
+    if (b.notes !== undefined) setField("notes", b.notes || null);
+    if (sets.length === 0) throw new ValidationError("لا توجد حقول للتحديث");
+    sets.push(`"updatedAt"=NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE employee_documents SET ${sets.join(", ")} WHERE id=$${idx++} AND "companyId"=$${idx++}`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_documents", entityId: id,
+      before: { type: before.type, number: before.number, expiryDate: before.expiryDate },
+      after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json(row || { id, message: "تم تحديث وثيقة الموظف" });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
+});
+
+router.delete("/employee-documents/:id", authorize({ feature: "hr.employees", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2 AND status != 'deleted'`,
+      [id, scope.companyId]
+    );
+    if (!before) throw new NotFoundError("وثيقة الموظف غير موجودة");
+    // Hard delete — the table's status CHECK only allows valid/expired/
+    // expiring_soon (no 'deleted' state) and there is no deletedAt column, so
+    // a soft delete isn't representable. The audit log below preserves the
+    // record of what was removed.
+    await rawExecute(
+      `DELETE FROM employee_documents WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "employee_documents", entityId: id,
+      before: { employeeId: before.employeeId, type: before.type, number: before.number },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ id, message: "تم حذف وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
