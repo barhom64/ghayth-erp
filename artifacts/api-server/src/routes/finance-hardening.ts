@@ -944,26 +944,32 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
     const { ref: bodyRef, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
     // Numbering center (Issue #1141) — bank-guarantee ref from authority.
     // Body-supplied ref is preserved for legacy imports only.
-    let issuedBg: Awaited<ReturnType<typeof issueNumber>> | null = null;
     let ref = bodyRef;
-    if (!ref) {
-      issuedBg = await issueNumber({
-        companyId: scope.companyId,
-        branchId: branchId ?? scope.branchId ?? null,
-        moduleKey: "finance",
-        entityKey: "bank_guarantee",
-        entityTable: "bank_guarantees",
-        actorId: scope.userId,
-        expectedTiming: "on_draft",
-      });
-      ref = issuedBg.number;
-    }
-    const { insertId } = await rawExecute(
-      `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
-    );
-    assertInsert(insertId, "bank_guarantees");
+    // Atomic: issue the number and INSERT the guarantee in one transaction so a
+    // failed INSERT can't leave an issued-but-orphaned number. issueNumber's own
+    // (reentrant) withTransaction joins this one via a savepoint.
+    const { insertId, issuedBg } = await withTransaction(async () => {
+      let issuedBg: Awaited<ReturnType<typeof issueNumber>> | null = null;
+      if (!ref) {
+        issuedBg = await issueNumber({
+          companyId: scope.companyId,
+          branchId: branchId ?? scope.branchId ?? null,
+          moduleKey: "finance",
+          entityKey: "bank_guarantee",
+          entityTable: "bank_guarantees",
+          actorId: scope.userId,
+          expectedTiming: "on_draft",
+        });
+        ref = issuedBg.number;
+      }
+      const { insertId } = await rawExecute(
+        `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
+      );
+      assertInsert(insertId, "bank_guarantees");
+      return { insertId, issuedBg };
+    });
     if (issuedBg) {
       await rawExecute(
         `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
@@ -1475,25 +1481,30 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
     // Numbering center (Issue #1141) — project ref from authority.
     // The `projects.ref` column was added in migration 217.
     let projectRef = bodyRef;
-    let issuedProj: Awaited<ReturnType<typeof issueNumber>> | null = null;
-    if (!projectRef) {
-      issuedProj = await issueNumber({
-        companyId: scope.companyId,
-        branchId: scope.branchId ?? null,
-        moduleKey: "projects",
-        entityKey: "project",
-        entityTable: "projects",
-        actorId: scope.userId,
-        expectedTiming: "on_draft",
-      });
-      projectRef = issuedProj.number;
-    }
-    const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
-    );
-    assertInsert(insertId, "projects");
+    // Atomic: issue the number and INSERT the project together (see the
+    // bank-guarantees handler above — reentrant withTransaction via savepoint).
+    const { insertId, issuedProj } = await withTransaction(async () => {
+      let issuedProj: Awaited<ReturnType<typeof issueNumber>> | null = null;
+      if (!projectRef) {
+        issuedProj = await issueNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          moduleKey: "projects",
+          entityKey: "project",
+          entityTable: "projects",
+          actorId: scope.userId,
+          expectedTiming: "on_draft",
+        });
+        projectRef = issuedProj.number;
+      }
+      const { insertId } = await rawExecute(
+        `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
+      );
+      assertInsert(insertId, "projects");
+      return { insertId, issuedProj };
+    });
     if (issuedProj) {
       await rawExecute(
         `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
