@@ -935,7 +935,7 @@ export const allNavSections: NavSection[] = [
           { label: "استيراد البيانات (إداري)", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
-          { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
+          { label: "سجل تدقيق النظام", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
           { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         ]},
       ]},
@@ -966,7 +966,7 @@ export const allNavSections: NavSection[] = [
         { label: "الشركات", path: "/settings/companies", icon: Building2, perm: "settings:write" },
         { label: "الأقسام", path: "/settings/departments", icon: Network, perm: "settings:write" },
         { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
-        { label: "سجل المراجعة", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
+        { label: "سجل مراجعة الإعدادات", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
       ]},
     ],
   },

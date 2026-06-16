@@ -170,15 +170,13 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
     path: "/admin/logs",
     canonicalLabel: "سجل تدقيق النظام",
     aliases: ["سجل المراجعة", "سجل التدقيق"],
-    ownerDecision: true,
-    note: "INVENTORY §2 — disambiguates from /settings/audit-log.",
+    note: "INVENTORY §2 — applied slice 8 (owner-decided). Distinct from /settings/audit-log.",
   },
   {
     path: "/settings/audit-log",
     canonicalLabel: "سجل مراجعة الإعدادات",
     aliases: ["سجل المراجعة"],
-    ownerDecision: true,
-    note: "INVENTORY §2 — disambiguates from /admin/logs.",
+    note: "INVENTORY §2 — applied slice 8 (owner-decided). Distinct from /admin/logs.",
   },
   {
     path: "/umrah/import",
@@ -199,10 +197,9 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   },
   {
     path: "/warehouse/suppliers",
-    canonicalLabel: "موردو المستودع",
-    aliases: ["الموردون", "الموردين"],
-    ownerDecision: true,
-    note: "INVENTORY §2 — warehouse suppliers, distinct from finance vendors.",
+    canonicalLabel: "الموردون",
+    aliases: ["موردو المستودع", "الموردين"],
+    note: "INVENTORY §2 — owner kept «الموردون» for both lists; section context (المالية vs المستودع) disambiguates. No rename.",
   },
 
   // ── §7 — redirect destinations referenced by stale quick actions ──
