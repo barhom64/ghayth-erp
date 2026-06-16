@@ -353,7 +353,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
          WHERE "entityType" = 'employee' AND "companyId" = $${govCompanyIdx}
          GROUP BY "entityId"
        )
-       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status, e."activationStatus",
               ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
@@ -504,8 +504,8 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       // 'inactive' is the only CHECK-allowed pending-ish status (migration
       // 084); it gates the employee until the activation flow flips it.
       const empRes = await client.query(
-        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status)
-         VALUES ($1, $2, $3, $4, $5, 'inactive')
+        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status, "activationStatus")
+         VALUES ($1, $2, $3, $4, $5, 'inactive', 'pending_activation')
          RETURNING id`,
         [name, phone || null, finalEmpNumber, nationalId || null, nationality || null]
       );
@@ -1629,11 +1629,17 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, status } = req.query as Record<string, string | undefined>;
+    const { employeeId, status, ownerRole, mandatory } = req.query as Record<string, string | undefined>;
     const conditions = [`ot."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
     if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
+    // HR-REV-3 (#2222) — per-owner queue: each owning department (الأسطول/
+    // الوثائق/الرواتب…) can pull just the activation tasks routed to it.
+    if (ownerRole) { params.push(ownerRole); conditions.push(`ot."ownerRole" = $${params.length}`); }
+    // mandatory=true|false narrows to the gating items (or the optional ones).
+    if (mandatory === "true") { conditions.push(`ot.mandatory IS NOT FALSE`); }
+    else if (mandatory === "false") { conditions.push(`ot.mandatory IS FALSE`); }
     interface OnboardingTaskRow extends Record<string, unknown> {
       id: number;
       companyId: number;
@@ -1670,14 +1676,47 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
       completedAt?: string | null;
       completedBy?: number | null;
     }
-    const [row] = await rawQuery<OnboardingTaskRow>(
-      `UPDATE onboarding_tasks SET status = $1,
-       "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
-       "completedBy" = $2
-       WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
-      [status, scope.activeAssignmentId, id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("المهمة غير موجودة");
+    // The task update + the activation auto-gate touch two tables, so they run
+    // in one transaction (rawQuery auto-joins the ambient tx) — a failure on the
+    // employees UPDATE must not leave the task flipped on its own.
+    const row = await withTransaction(async () => {
+      const [r] = await rawQuery<OnboardingTaskRow>(
+        `UPDATE onboarding_tasks SET status = $1,
+         "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
+         "completedBy" = $2
+         WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
+        [status, scope.activeAssignmentId, id, scope.companyId]
+      );
+      if (!r) throw new NotFoundError("المهمة غير موجودة");
+
+      // HR-REV-3 §1 auto-gate — once every MANDATORY task for this hire is done,
+      // advance a still-pending_activation employee to ready_for_hr_review so HR
+      // knows the distributed plan is complete. Only flips from pending_activation
+      // (never overrides a later state); reversible if a task is re-opened.
+      if (status === "completed") {
+        const [pending] = await rawQuery<{ cnt: number }>(
+          `SELECT COUNT(*)::int AS cnt FROM onboarding_tasks
+            WHERE "employeeId" = $1 AND "companyId" = $2 AND mandatory IS NOT FALSE
+              AND status NOT IN ('completed','skipped')`,
+          [r.employeeId, scope.companyId]
+        );
+        if (pending && pending.cnt === 0) {
+          // Tenant scope via the employee's assignment (employees.companyId is
+          // not populated on quick-activate; the assignment carries the tenant).
+          await rawQuery(
+            `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
+              WHERE id = $1 AND "activationStatus" = 'pending_activation'
+                AND EXISTS (
+                  SELECT 1 FROM employee_assignments ea
+                  WHERE ea."employeeId" = employees.id AND ea."companyId" = $2
+                )`,
+            [r.employeeId, scope.companyId]
+          );
+        }
+      }
+      return r;
+    });
+
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: id,
@@ -2301,6 +2340,33 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
           field: "departmentId",
           fix: "اختر قسماً موجوداً في الشركة.",
         });
+      }
+    }
+
+    // HR-REV-3 (#2222) — activation ready-gate. Flipping a quick-activated
+    // employee (inactive/pending/onboarding) to active is only allowed once
+    // every MANDATORY onboarding task is completed or skipped — so activation
+    // can't bypass the distributed plan's owning roles. Re-activating a
+    // suspended/terminated employee is exempt (it carries no onboarding plan).
+    const PENDING_ACTIVATION = ["inactive", "pending", "onboarding"];
+    if (status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status)) {
+      const [gate] = await rawQuery<{ remaining: number }>(
+        `SELECT COUNT(*)::int AS remaining FROM onboarding_tasks
+          WHERE "employeeId" = $1 AND "companyId" = $2
+            AND mandatory IS NOT FALSE
+            AND status NOT IN ('completed','skipped')`,
+        [id, scope.companyId]
+      );
+      const remaining = Number(gate?.remaining ?? 0);
+      if (remaining > 0) {
+        throw new ValidationError(
+          `لا يمكن التفعيل: ${remaining} بند إلزامي في خطة التهيئة لم يكتمل بعد`,
+          {
+            field: "status",
+            fix: "أكمل البنود الإلزامية في «لوحة قيد التفعيل» قبل تفعيل الموظف.",
+            meta: { remainingMandatory: remaining },
+          }
+        );
       }
     }
 

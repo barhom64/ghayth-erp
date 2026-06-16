@@ -2543,7 +2543,9 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
   }
 }
 
-invoicesRouter.patch("/invoices/:id/approve", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "approved"));
+// PATCH /invoices/:id/approve was retired (#1715): it approved WITHOUT GL
+// posting and the FE never called it. Approval now goes through
+// POST /invoices/:id/approve (GL-posting). reject/return keep the PATCH verb.
 invoicesRouter.patch("/invoices/:id/reject", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "rejected"));
 invoicesRouter.patch("/invoices/:id/return", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "returned"));
 

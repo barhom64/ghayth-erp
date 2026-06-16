@@ -50,6 +50,7 @@ d("Wave-2 H2: applyJournalEntryBalances refuses to post into a closed period", (
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -69,6 +70,7 @@ d("Wave-2 H2: applyJournalEntryBalances refuses to post into a closed period", (
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -216,6 +218,7 @@ d("Wave-2 H4: reverseAccountBalances refuses to move balances when the entry's p
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -231,6 +234,7 @@ d("Wave-2 H4: reverseAccountBalances refuses to move balances when the entry's p
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -375,6 +379,7 @@ d("Wave-2 C1: financial statements filter by balancesApplied, not status='posted
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -386,6 +391,7 @@ d("Wave-2 C1: financial statements filter by balancesApplied, not status='posted
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -490,6 +496,11 @@ d("Wave-2 C2: gl/posting stamps createdAt with the accounting date, not NOW() (#
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  // 2026-06-16 — journal_entries.postedBy is a FK to users(id). After
+  // #2504 made the fixture find-or-create (so userId ≠ assignmentId
+  // when the rows are re-used across runs), passing assignmentId to
+  // postJournalEntry's `createdBy` breaks the FK. Switch to userId.
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -505,6 +516,7 @@ d("Wave-2 C2: gl/posting stamps createdAt with the accounting date, not NOW() (#
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -560,7 +572,7 @@ d("Wave-2 C2: gl/posting stamps createdAt with the accounting date, not NOW() (#
       const { journalEntryId } = await postJournalEntry(payload, {
         companyId,
         branchId,
-        createdBy: assignmentId,
+        createdBy: userId,
         ref: "JE-C2-BACKDATED",
         date: "2025-06-15",
         type: "fx_revaluation",
@@ -614,7 +626,7 @@ d("Wave-2 C2: gl/posting stamps createdAt with the accounting date, not NOW() (#
     const { journalEntryId } = await postJournalEntry(payload, {
       companyId,
       branchId,
-      createdBy: assignmentId,
+      createdBy: userId,
       ref: "JE-C2-NODATE",
       type: "manual",
       status: "posted",
@@ -646,6 +658,7 @@ d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -660,6 +673,7 @@ d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -711,7 +725,7 @@ d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {
           await financialEngine.postJournalEntry({
             companyId,
             branchId,
-            createdBy: assignmentId,
+            createdBy: userId,
             ref,
             description: "wave2-c3 forced-failure expense",
             type: "expense",
@@ -769,7 +783,7 @@ d("Wave-2 C3: expense entry + approval chain are atomic (#885)", () => {
       await financialEngine.postJournalEntry({
         companyId,
         branchId,
-        createdBy: assignmentId,
+        createdBy: userId,
         ref,
         description: "wave2-c3 positive control",
         type: "expense",
@@ -985,6 +999,7 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -1000,6 +1015,7 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -1037,7 +1053,7 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
       await createJournalEntry({
         companyId,
         branchId,
-        createdBy: assignmentId,
+        createdBy: userId,
         ref: "JE-888-IMBAL",
         description: "wave2-888 imbalanced",
         lines: [
@@ -1066,7 +1082,7 @@ d("Wave-2 #888: createJournalEntry rejects imbalanced entries instead of silent 
     await createJournalEntry({
       companyId,
       branchId,
-      createdBy: assignmentId,
+      createdBy: userId,
       ref: "JE-888-BAL",
       description: "wave2-888 balanced",
       lines: [
@@ -1101,6 +1117,7 @@ d("Wave-2 H3: appendRoundingAdjustment moves chart_of_accounts.currentBalance fo
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -1114,6 +1131,7 @@ d("Wave-2 H3: appendRoundingAdjustment moves chart_of_accounts.currentBalance fo
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -1212,6 +1230,7 @@ d("Year-end closing entry: dated {year}-12-31 even when December is closed", () 
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -1225,6 +1244,7 @@ d("Year-end closing entry: dated {year}-12-31 even when December is closed", () 
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -1259,7 +1279,7 @@ d("Year-end closing entry: dated {year}-12-31 even when December is closed", () 
       const { journalId } = await financialEngine.postJournalEntry({
         companyId,
         branchId,
-        createdBy: assignmentId,
+        createdBy: userId,
         ref: "YE-2025",
         description: "قيد إقفال السنة المالية 2025 — صافي الدخل 0.00",
         type: "closing",
@@ -1313,7 +1333,7 @@ d("Year-end closing entry: dated {year}-12-31 even when December is closed", () 
       financialEngine.postJournalEntry({
         companyId,
         branchId,
-        createdBy: assignmentId,
+        createdBy: userId,
         ref: "NOT-YE-2025",
         description: "tries to bypass period gate via skipPeriodCheck",
         type: "expense",
@@ -1357,6 +1377,7 @@ d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical 
   let companyId: number;
   let branchId: number;
   let assignmentId: number;
+  let userId: number;
 
   beforeAll(async () => {
     const rawdb = await import("../../src/lib/rawdb.js");
@@ -1374,6 +1395,7 @@ d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical 
     companyId = fx.companyA.id;
     branchId = fx.companyA.branchId;
     assignmentId = fx.companyA.assignmentId;
+    userId = fx.companyA.userId;
   });
 
   beforeEach(async () => {
@@ -1418,7 +1440,7 @@ d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical 
       const pathAResult = await financialEngine.postJournalEntry({
         companyId,
         branchId,
-        createdBy: assignmentId,
+        createdBy: userId,
         ref: "RC1-PATH-A",
         description,
         type: "manual",
@@ -1444,7 +1466,7 @@ d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical 
       const pathBResult = await pathBPost(payload, {
         companyId,
         branchId,
-        createdBy: assignmentId,
+        createdBy: userId,
         ref: "RC1-PATH-B",
         date,
         type: "manual",
@@ -1545,7 +1567,7 @@ d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical 
 
     // Path A — first post writes, second returns alreadyExists.
     const a1 = await financialEngine.postJournalEntry({
-      companyId, branchId, createdBy: assignmentId,
+      companyId, branchId, createdBy: userId,
       ref: "RC1-IDEM-A", description: "RC-1 idem A",
       type: "manual", sourceType: "rc1_idem", sourceId: 10,
       sourceKey: "finance:rc1:idem-path-a",
@@ -1555,7 +1577,7 @@ d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical 
       ],
     });
     const a2 = await financialEngine.postJournalEntry({
-      companyId, branchId, createdBy: assignmentId,
+      companyId, branchId, createdBy: userId,
       ref: "RC1-IDEM-A-RETRY", description: "RC-1 idem A retry",
       type: "manual", sourceType: "rc1_idem", sourceId: 10,
       sourceKey: "finance:rc1:idem-path-a", // same key
@@ -1576,14 +1598,14 @@ d("RC-1: Path A ↔ Path B produce equivalent ledger state for the same logical 
       ],
     });
     const b1 = await pathBPost(payload, {
-      companyId, branchId, createdBy: assignmentId,
+      companyId, branchId, createdBy: userId,
       ref: "RC1-IDEM-B", type: "manual",
       sourceType: "rc1_idem", sourceId: 20,
       sourceKey: "finance:rc1:idem-path-b",
       status: "posted",
     });
     const b2 = await pathBPost(payload, {
-      companyId, branchId, createdBy: assignmentId,
+      companyId, branchId, createdBy: userId,
       ref: "RC1-IDEM-B-RETRY", type: "manual",
       sourceType: "rc1_idem", sourceId: 20,
       sourceKey: "finance:rc1:idem-path-b", // same key
