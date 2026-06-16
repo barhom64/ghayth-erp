@@ -126,7 +126,12 @@ d("CI Guard #2197 — parent-account posting prevention", () => {
   });
 
   it("assertPostableAccount throws on a non-existent code", async () => {
-    await expect(assertPostableAccount(COMPANY, "9999")).rejects.toThrow(/غير موجود/i);
+    // 2026-06-15: "9999" was the old "definitely absent" sentinel, but
+    // the company COA now seeds 9999 (فروقات التقريب / Rounding
+    // Differences) as a real postable account — in BOTH the production
+    // DEFAULT_CHART_OF_ACCOUNTS and the Al-Diyaa seed. Use a code that
+    // genuinely doesn't exist anywhere in the chart.
+    await expect(assertPostableAccount(COMPANY, "8888")).rejects.toThrow(/غير موجود/i);
   });
 
   // ── preflightAccountCodes ─────────────────────────────────────────────────
@@ -151,8 +156,10 @@ d("CI Guard #2197 — parent-account posting prevention", () => {
     expect(parentRow).toBeDefined();
 
     const [badMapping] = await rawQuery<{ id: number }>(
-      `INSERT INTO accounting_mappings ("companyId","operationType","debitAccountId","creditAccountId","isActive")
-       VALUES ($1,'ci_guard_bad_debit_2197',$2,(SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$3 AND "deletedAt" IS NULL LIMIT 1),true)
+      // operationLabel is NOT NULL on accounting_mappings — supply it
+      // (the test predates the constraint).
+      `INSERT INTO accounting_mappings ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","isActive")
+       VALUES ($1,'ci_guard_bad_debit_2197','CI guard bad-debit #2197',$2,(SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$3 AND "deletedAt" IS NULL LIMIT 1),true)
        RETURNING id`,
       [COMPANY, parentRow.id, LEAF_CASH2]
     );
@@ -175,8 +182,9 @@ d("CI Guard #2197 — parent-account posting prevention", () => {
     );
 
     const [badMapping] = await rawQuery<{ id: number }>(
-      `INSERT INTO accounting_mappings ("companyId","operationType","debitAccountId","creditAccountId","isActive")
-       VALUES ($1,'ci_guard_bad_credit_2197',(SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "deletedAt" IS NULL LIMIT 1),$3,true)
+      // operationLabel is NOT NULL on accounting_mappings — supply it.
+      `INSERT INTO accounting_mappings ("companyId","operationType","operationLabel","debitAccountId","creditAccountId","isActive")
+       VALUES ($1,'ci_guard_bad_credit_2197','CI guard bad-credit #2197',(SELECT id FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "deletedAt" IS NULL LIMIT 1),$3,true)
        RETURNING id`,
       [COMPANY, LEAF_CASH, parentRow.id]
     );

@@ -1505,7 +1505,7 @@ router.post("/suppliers/:id/items", authorize({ feature: "warehouse.inventory", 
     );
     assertInsert(insertId, "supplier_items");
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM supplier_items WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM supplier_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [insertId, scope.companyId],
     );
     res.status(201).json(row);

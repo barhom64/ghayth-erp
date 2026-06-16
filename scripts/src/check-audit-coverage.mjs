@@ -147,6 +147,8 @@ function scanFile(file, mountMap, isAuditedByMiddleware) {
         line: i + 1,
         hasAudit:
           /createAuditLog\s*\(/.test(win) ||
+          /auditFromRequest\s*\(/.test(win) ||
+          /auditMutation\s*\(/.test(win) ||
           /emitEvent\s*\(/.test(win) ||
           isAuditedByMiddleware(joined),
       });

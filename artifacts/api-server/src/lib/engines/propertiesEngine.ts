@@ -156,7 +156,7 @@ class PropertiesEngineImpl implements DomainEngine {
    *
    * Account codes resolve through `resolveAccountCode`, so an
    * operator's `accounting_mappings` row beats the engine's
-   * fallbacks (1140 receivable / 2160 payable / 2200 VAT).
+   * fallbacks (1131 owner receivable / 2150 accrued-expenses payable / 2131 VAT).
    *
    * Idempotency: `guardTable=maintenance_requests` + `guardId=id`
    * AND a `sourceKey` that DIFFERS from the company-paid path
@@ -195,7 +195,7 @@ class PropertiesEngineImpl implements DomainEngine {
 
     const [receivableCode, payableCode, vatCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "property_owner_receivable", "debit", "1131"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2160"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_maintenance_payable", "credit", "2150"),
       financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
     ]);
 
