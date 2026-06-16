@@ -474,6 +474,29 @@ function buildConfig(env: RawEnv): AppConfig {
     ]),
   );
 
+  // Public base URL used to build absolute, user-facing links (password
+  // reset / invitation / account activation in #2137, QR-verify links in
+  // print). Precedence:
+  //   1. PUBLIC_BASE_URL — explicit operator override.
+  //   2. REPLIT_DEPLOYMENT_URL — set automatically on Replit deploys.
+  //   3. The first configured CORS origin — this is the frontend origin
+  //      the browser actually reaches the system on, which is exactly
+  //      where the /reset-password and /activate routes live. CORS_ORIGINS
+  //      is a fatal-required setting in production (see validation below),
+  //      so this fallback is always populated there. An https origin is
+  //      preferred over a bare-http/localhost one when both are present.
+  // No domain is ever hardcoded; when nothing is configured the value
+  // stays empty and the auth flow's operational gate refuses to email a
+  // broken link.
+  const corsBaseFallback =
+    corsOrigins.find((o) => o.startsWith("https://")) ?? corsOrigins[0] ?? "";
+  const publicBaseUrl = (
+    env.PUBLIC_BASE_URL ||
+    env.REPLIT_DEPLOYMENT_URL ||
+    corsBaseFallback ||
+    ""
+  ).replace(/\/$/, "");
+
   return {
     nodeEnv,
     isProduction: nodeEnv === "production",
@@ -495,7 +518,7 @@ function buildConfig(env: RawEnv): AppConfig {
 
     corsOrigins,
     replitDevDomain: env.REPLIT_DEV_DOMAIN,
-    publicBaseUrl: (env.PUBLIC_BASE_URL || env.REPLIT_DEPLOYMENT_URL || "").replace(/\/$/, ""),
+    publicBaseUrl,
 
     redis: {
       url: env.REDIS_URL,
@@ -770,6 +793,21 @@ function collectEnvIssues(cfg: AppConfig, raw: NodeJS.ProcessEnv): EnvIssue[] {
         "No CORS origins are configured in production — every browser request " +
         "from the frontend will be rejected.",
       hint: "Set CORS_ORIGINS to a comma-separated list of allowed origins (no trailing slash).",
+    });
+  }
+
+  if (prod && !cfg.publicBaseUrl) {
+    // Reachable only if CORS_ORIGINS held no usable origin (the fatal
+    // check above normally prevents this). Without a base URL, every
+    // user-facing link email (password reset / invitation / activation)
+    // hits the operational gate and is refused.
+    issues.push({
+      key: "PUBLIC_BASE_URL",
+      severity: "warn",
+      message:
+        "No public base URL could be resolved (PUBLIC_BASE_URL unset and no usable " +
+        "CORS origin) — password-reset, invitation and activation link emails will be refused.",
+      hint: "Set PUBLIC_BASE_URL to the frontend origin (e.g. https://app.example.com), or ensure CORS_ORIGINS lists it.",
     });
   }
 

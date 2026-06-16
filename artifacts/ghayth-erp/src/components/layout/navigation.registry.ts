@@ -954,7 +954,12 @@ export const allNavSections: NavSection[] = [
       { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 50, children: [
         { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 50, perm: "print_jobs:read" },
         { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 50, perm: "print:reprint:approve" },
-        { label: "قوالب الطباعة", path: "/settings/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
+        // Two entry points to the SAME page (/admin/print-templates) for two
+        // distinct perm audiences: settings users (L70 + templates:read) and
+        // admins (L90 + admin:*). The settings entry now lands directly instead
+        // of bouncing through the /settings/print-templates redirect alias (that
+        // route stays mounted in settingsRoutes for old bookmarks).
+        { label: "قوالب الطباعة", path: "/admin/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
         { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
       ]},
