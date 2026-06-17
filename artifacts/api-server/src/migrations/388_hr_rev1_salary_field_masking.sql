@@ -1,5 +1,5 @@
 -- ===========================================================================
--- 387_hr_rev1_salary_field_masking.sql
+-- 388_hr_rev1_salary_field_masking.sql
 -- ---------------------------------------------------------------------------
 -- WHAT:    seed rbac_field_policies on feature hr.employees for the HR roles
 --          that read employee files WITHOUT a compensation mandate, so salary /

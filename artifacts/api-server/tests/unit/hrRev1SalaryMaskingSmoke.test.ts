@@ -11,11 +11,11 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const MIG = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/migrations/387_hr_rev1_salary_field_masking.sql"),
+  join(REPO_ROOT, "artifacts/api-server/src/migrations/388_hr_rev1_salary_field_masking.sql"),
   "utf8",
 );
 
-describe("HR-REV-1 — salary masking migration 387", () => {
+describe("HR-REV-1 — salary masking migration 388", () => {
   it("seeds into rbac_field_policies on feature hr.employees, idempotently", () => {
     expect(MIG).toMatch(/INSERT INTO rbac_field_policies \(role_id, feature_key, field_name, mode\)/);
     expect(MIG).toMatch(/ON CONFLICT \(role_id, feature_key, field_name\) DO NOTHING/);
