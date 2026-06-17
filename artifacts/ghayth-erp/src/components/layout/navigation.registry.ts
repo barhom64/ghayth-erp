@@ -844,7 +844,9 @@ export const allNavSections: NavSection[] = [
       { label: "مركز الطلبات", path: "/requests", icon: ClipboardCheck, module: "requests", children: [
         { label: "تقديم طلب", path: "/requests", icon: ClipboardCheck },
         { label: "أنواع الطلبات", path: "/requests/types", icon: ListTodo },
-        { label: "سير العمل", path: "/requests/workflows", icon: GitBranch },
+        // «سير العمل» (/requests/workflows) dropped from the sidebar: its `workflows`
+        // table has no executor (the live approval engine is approval_chains), so it
+        // surfaced a non-functional feature. Route kept reachable (off-sidebar).
       ]},
       { label: "المستندات", path: "/documents", icon: FileText, module: "documents", children: [
         { label: "جميع المستندات", path: "/documents", icon: FileText },

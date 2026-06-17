@@ -102,6 +102,8 @@ const INTENTIONAL_OFF_SIDEBAR = new Set([
   // (hr/org-tree links org-memberships for team/committee CRUD).
   "/admin/org-model",
   "/admin/org-memberships",
+  // «سير العمل» — workflows table has no executor; dropped from sidebar, route kept.
+  "/requests/workflows",
 ]);
 
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
