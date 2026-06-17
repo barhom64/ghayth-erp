@@ -42,6 +42,22 @@ describe("Employees — endpoint registration", () => {
     expect(SRC).toContain('router.get("/documents",');
     expect(SRC).toContain('router.post("/obligations/seed",');
   });
+
+  // HR-REV-4 — completes the job-titles CRUD (was GET/POST/PATCH only).
+  it("registers DELETE /job-titles/:id gated on hr.employees:delete", () => {
+    expect(SRC).toContain('router.delete("/job-titles/:id",');
+    const s = section('router.delete("/job-titles/:id",', 400);
+    expect(s).toContain('authorize({ feature: "hr.employees", action: "delete" })');
+  });
+
+  it("DELETE /job-titles/:id soft-deletes (isActive=FALSE), is company-scoped, and 404s when missing", () => {
+    const s = fullHandler('router.delete("/job-titles/:id",');
+    expect(s).toContain('"isActive" = FALSE');
+    expect(s).toContain('"companyId" = $2');
+    expect(s).toMatch(/result\.affectedRows === 0/);
+    expect(s).toContain("NotFoundError");
+    expect(s).toContain("createAuditLog");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
