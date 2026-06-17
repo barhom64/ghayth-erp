@@ -320,7 +320,7 @@ export default function PropertyMaintenanceDetail() {
       </DialogContent>
     </Dialog>
     {item && id && (
-      <EntityEditDialog<MaintenanceEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل طلب الصيانة"

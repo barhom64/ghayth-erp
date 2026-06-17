@@ -271,7 +271,7 @@ export default function LegalJudgmentDetail() {
       }
     />
     {judgment && judgment.caseId && id && (
-      <EntityEditDialog<JudgmentEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل الحكم"

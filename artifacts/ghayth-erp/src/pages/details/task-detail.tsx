@@ -324,7 +324,7 @@ export default function TaskDetail() {
       overview={overview}
     />
     {task && id && (
-      <EntityEditDialog<TaskEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل المهمة"

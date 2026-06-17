@@ -138,7 +138,7 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
               لا بيانات للموسم المحدد.
             </p>
           )}
-          <DataTable<ProfitabilityRow>
+          <DataTable
             data={rows}
             rowKey={(r) => { const rowKey = (r as any)[idColumn] ?? `${r.name}`; return String(rowKey); }}
             noToolbar

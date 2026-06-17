@@ -275,7 +275,7 @@ export default function ComplianceDetail() {
       }
     />
     {compliance && id && (
-      <EntityEditDialog<ComplianceEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل سجل الامتثال"

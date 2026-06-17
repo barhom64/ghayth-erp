@@ -167,7 +167,7 @@ export default function ReprintApprovalsPage() {
                 },
               ];
               return (
-                <DataTable<ReprintRequest>
+                <DataTable
                   data={data?.items ?? []}
                   rowKey={(r) => String(r.id)}
                   columns={cols}

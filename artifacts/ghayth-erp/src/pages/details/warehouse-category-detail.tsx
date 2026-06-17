@@ -197,7 +197,7 @@ export default function WarehouseCategoryDetail() {
       />
     )}
     {category && id && (
-      <EntityEditDialog<CategoryEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل التصنيف"
