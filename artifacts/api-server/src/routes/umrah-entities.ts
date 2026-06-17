@@ -1704,13 +1704,13 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
         [id, scope.companyId]
       ),
       rawQuery(
-        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
-        [id]
+        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2 ORDER BY "tierOrder"`,
+        [id, scope.companyId]
       ),
       rawQuery(
         `SELECT * FROM employee_commission_calculations
-         WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
-        [id]
+         WHERE "planId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
+        [id, scope.companyId]
       ),
     ]);
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
@@ -1820,7 +1820,7 @@ router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "upd
           [id, scope.companyId]
         )).rows;
         if (!owned) throw new NotFoundError("خطة العمولة غير موجودة");
-        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1`, [id]);
+        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2`, [id, scope.companyId]);
         for (let i = 0; i < b.tiers.length; i++) {
           const t = b.tiers[i];
           await client.query(
@@ -1942,8 +1942,8 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");
     const rows = await rawQuery(
-      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id LIMIT 1000`,
-      [id]
+      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 AND "companyId" = $2 ORDER BY id LIMIT 1000`,
+      [id, scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List batch changes"); }

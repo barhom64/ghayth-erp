@@ -101,6 +101,3 @@ routes/rbacV2.ts:rbac_user_roles
 
 # ── [TIGHTER] umrah: commission / import reads keyed on a plan or import batch
 # validated vs companyId in the same handler.
-routes/umrah-entities.ts:employee_commission_calculations
-routes/umrah-entities.ts:employee_commission_tiers
-routes/umrah-entities.ts:umrah_import_changes
