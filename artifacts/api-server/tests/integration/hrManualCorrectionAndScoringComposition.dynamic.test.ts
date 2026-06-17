@@ -74,8 +74,8 @@ d("HR manual correction + scoring composition (#1799 §K)", () => {
     ids.employeeId = emp.id as number;
 
     const [u] = await rawQuery(
-      `INSERT INTO users (email, role, "employeeId", status)
-       VALUES ($1, 'employee', $2, 'active') RETURNING id`,
+      `INSERT INTO users (email, role, "employeeId", "isActive", "passwordHash")
+       VALUES ($1, 'employee', $2, TRUE, 'TEST_HASH') RETURNING id`,
       [`scoring-u-${ids.companyId}@smoke.local`, ids.employeeId]
     );
     ids.userId = u.id as number;
