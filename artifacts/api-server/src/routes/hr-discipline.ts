@@ -977,14 +977,15 @@ router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", acti
             const period = `${incDate.getFullYear()}-${String(incDate.getMonth() + 1).padStart(2, "0")}`;
             await client.query(
               `INSERT INTO attendance_deductions
-                 ("companyId","assignmentId",type,minutes,amount,period,status)
-               VALUES ($1,$2,'penalty',$3,$4,$5,'pending_payroll')`,
+                 ("companyId","assignmentId",type,minutes,amount,period,status,"memoId")
+               VALUES ($1,$2,'penalty',$3,$4,$5,'pending_payroll',$6)`,
               [
                 scope.companyId,
                 memo.assignmentId,
                 memo.incidentDurationMinutes ?? 0,
                 totalDeduction,
                 period,
+                id,
               ]
             );
           }
@@ -1198,27 +1199,17 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
           const totalApplied =
             Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0);
           if (totalApplied > 0) {
-            const rawIncDate = memo.incidentDate as unknown as string | Date;
-            const incDate = rawIncDate instanceof Date ? rawIncDate : new Date(rawIncDate);
-            const period = `${incDate.getFullYear()}-${String(incDate.getMonth() + 1).padStart(2, "0")}`;
-            // Discriminate on `minutes` too (the gm-decision insert stamps it
-            // with incidentDurationMinutes): two penalties in the same period
-            // with the same amount but different durations (e.g. a 45-min late
-            // vs an absence priced equally) no longer collide. ctid LIMIT 1
-            // still cancels exactly one row. NB: rows carry no memoId, so a
-            // true duplicate (same amount AND same minutes) can still match the
-            // sibling — a memoId FK on attendance_deductions would close that
-            // last gap (left for a migration).
+            // Reverse exactly the row this memo's gm-decision created (migration
+            // 385 added the memoId link). No heuristic match: a precise memoId
+            // means two same-amount penalties in one period can never collide.
+            // Still scoped by companyId + type + pending_payroll so a row already
+            // swept into a payroll run ('deducted_in_payroll') is left for a
+            // payroll adjustment, not silently cancelled here.
             await client.query(
               `UPDATE attendance_deductions SET status = 'cancelled'
-                WHERE ctid IN (
-                  SELECT ctid FROM attendance_deductions
-                   WHERE "companyId" = $1 AND "assignmentId" = $2
-                     AND type = 'penalty' AND status = 'pending_payroll'
-                     AND period = $3 AND amount = $4 AND minutes = $5
-                   LIMIT 1
-                )`,
-              [scope.companyId, memo.assignmentId, period, totalApplied, memo.incidentDurationMinutes ?? 0]
+                WHERE "memoId" = $1 AND "companyId" = $2
+                  AND type = 'penalty' AND status = 'pending_payroll'`,
+              [id, scope.companyId]
             );
           }
         }
