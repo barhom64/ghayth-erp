@@ -1146,6 +1146,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           accountCode: string;
           amount: number;
           costCenter: string | null;
+          costCenterId: number | null;
           activityType: string | null;
           projectId: number | null;
           vehicleId: number | null;
@@ -1200,6 +1201,9 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               accountCode: acct,
               amount: amt,
               costCenter: cc != null ? String(cc) : null,
+              // Numeric FK — when set (e.g. a pinned trip cost-center), the
+              // enricher keeps it instead of deriving from vehicleId.
+              costCenterId: cc != null ? Number(cc) : null,
               activityType: ln.activityType,
               projectId: dims.projectId,
               vehicleId: dims.vehicleId,
@@ -1253,7 +1257,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           } else {
             buckets.set(fallbackKey, {
               accountCode: invRevenueCode, amount: diff,
-              costCenter: null, activityType: null, projectId: null,
+              costCenter: null, costCenterId: null, activityType: null, projectId: null,
               vehicleId: null, propertyId: null, employeeId: null,
               driverId: null, contractId: null, productId: null,
               unitId: null, assetId: null,
@@ -1267,6 +1271,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           revenueLines.push({
             accountCode: b.accountCode, debit: 0, credit: b.amount,
             costCenter: b.costCenter ?? undefined,
+            costCenterId: b.costCenterId ?? undefined,
             activityType: b.activityType ?? undefined,
             projectId: b.projectId ?? undefined,
             vehicleId: b.vehicleId ?? undefined,
