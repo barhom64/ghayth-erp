@@ -83,7 +83,7 @@ export interface AccountResolution {
 const FALLBACK_CODE: Record<AccountPurpose, string> = {
   fx_revaluation_ar:        "1131",
   fx_revaluation_ap:        "2111",
-  fx_revaluation_gain:      "4900",
+  fx_revaluation_gain:      "4950",
   fx_revaluation_loss:      "5900",
   realized_fx_gain:         "4910",
   realized_fx_loss:         "5910",
