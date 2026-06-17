@@ -170,7 +170,7 @@ export const allNavSections: NavSection[] = [
       // org structure, transfers, documents, contracts, letters, exit
       { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
-        { label: "وظائف التوظيف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
+        { label: "التوظيف والاستقطاب", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
         { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
         { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
@@ -223,7 +223,7 @@ export const allNavSections: NavSection[] = [
       // this just keeps «نظهرَ ثم 403» out of the UX. السعودة + WPS
       // children stay on their own permissions so finance/payroll
       // personas can still reach them.
-      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
+      { label: "المخالفات والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
         perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
         children: [
         // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
@@ -352,7 +352,7 @@ export const allNavSections: NavSection[] = [
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
         { label: "طلبات الشراء", path: "/finance/purchase-requests", icon: ClipboardList },
         { label: "أوامر الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
-        { label: "الموردين", path: "/finance/vendors", icon: Users },
+        { label: "الموردون", path: "/finance/vendors", icon: Users },
         { label: "مستندات الموردين", path: "/finance/vendor-documents", icon: FileText },
         { label: "منضدة التسوية", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
         { label: "كشف حساب مورد للطباعة", path: "/finance/vendor-statement-print", icon: Printer },
@@ -649,7 +649,7 @@ export const allNavSections: NavSection[] = [
         { label: "المخزون والحركات", path: "/warehouse/movements", icon: Activity, children: [
           { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
           { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
-          { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
+          { label: "الموردون", path: "/warehouse/suppliers", icon: Users },
           { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
         ]},
         // 2) الدفعات والتسلسلات والجرد المتقدّم — صفحة قشرة بتبويبات

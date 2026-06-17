@@ -102,9 +102,9 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   },
   {
     path: "/finance/reports/zatca",
-    canonicalLabel: "مركز تقارير ZATCA",
-    aliases: ["ZATCA Reports Hub", "تقارير الضرائب والمخزون", "تقارير زاتكا والمخزون"],
-    note: "INVENTORY §8.أ — applied slice 12. Kept 'ZATCA' (proper noun); Arabised 'Reports Hub'.",
+    canonicalLabel: "مركز تقارير الفوترة الإلكترونية",
+    aliases: ["مركز تقارير ZATCA", "ZATCA Reports Hub", "تقارير الضرائب والمخزون", "تقارير زاتكا والمخزون"],
+    note: "INVENTORY §8.أ — slice 12 kept 'ZATCA'; §12 (Jun 17) fully Arabised to «الفوترة الإلكترونية» to keep the registry Latin-free. 'ZATCA' kept as a search alias.",
   },
 
   // ── §1.أ — same path carrying more than one menu label ──
@@ -197,8 +197,8 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   },
   {
     path: "/warehouse/advanced",
-    canonicalLabel: "عمليات متقدّمة (دفعات/تسلسلات/جرد/ABC)",
-    aliases: ["الدفعات", "الأرقام التسلسلية", "الجرد الدوري", "تصنيف ABC"],
+    canonicalLabel: "عمليات متقدّمة (دفعات/تسلسلات/جرد/تصنيف أ ب ج)",
+    aliases: ["الدفعات", "الأرقام التسلسلية", "الجرد الدوري", "تصنيف ABC", "تصنيف أ ب ج"],
     note: "CROSS_MODULE_DUPLICATION_AUDIT — tab-shell that supersets /warehouse/{lots,serials,cycle-counts,abc}; their standalone nav entries were removed (owner «keep shell, remove siblings»), kept here as command-palette search aliases.",
   },
 
