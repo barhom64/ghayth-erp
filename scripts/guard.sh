@@ -139,6 +139,15 @@ run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:button-nesting:tests" node scripts/src/check-button-nesting.test.mjs
 run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
+  # setState INSIDE useMemo: a render-phase side effect. With an unstable
+  # callback and/or a setState that always builds a new reference it becomes an
+  # infinite render loop that wedges the tab — invisible to typecheck/build/lint,
+  # only manifests at runtime (the /finance/reports/is-trend incident). OFFLINE
+  # source scan flagging a BARE setter (excludes Date/DOM mutators like
+  # `.setHours(`) at the TOP level of a useMemo callback (excludes setters inside
+  # returned-JSX event handlers). Pure-logic fixtures guard the detector.
+  run_step "check:usememo-setstate:tests" node scripts/src/check-usememo-setstate.test.mjs
+  run_step "check:usememo-setstate" node scripts/src/check-usememo-setstate.mjs
 # Duplicate basenames within a single frontend artifact's src/ (e.g. two
 # policies-tab.tsx) — copy-paste components that drift apart and resolve
 # imports to the wrong copy. OFFLINE filename scan; baseline in

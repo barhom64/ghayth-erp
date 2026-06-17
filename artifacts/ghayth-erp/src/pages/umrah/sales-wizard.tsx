@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -79,16 +79,20 @@ export default function UmrahSalesWizard() {
   // Hydrate the local prices map whenever the server returns groups.
   // We only seed inputs that haven't been touched yet — operator edits stick.
   const groups = wizardQ.data?.groups ?? [];
-  useMemo(() => {
+  // Side effect (seeding local price inputs) belongs in useEffect, never
+  // useMemo — a setState in the render phase is the infinite-loop footgun.
+  useEffect(() => {
     if (!groups.length) return;
     setPrices((prev) => {
+      let changed = false;
       const next = { ...prev };
       for (const g of groups) {
         if (next[g.id] === undefined && g.suggestedPrice != null) {
           next[g.id] = String(g.suggestedPrice);
+          changed = true;
         }
       }
-      return next;
+      return changed ? next : prev;
     });
   }, [groups]);
 
