@@ -85,12 +85,12 @@ export const allNavSections: NavSection[] = [
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
+        { label: "مساحتي", path: "/my-space", icon: User },
         { label: "صندوق الأعمال", path: "/work-inbox", icon: ListChecks },
         // PR-9 (#2077) — رفيق الميدان. The page itself checks the
         // category-policy eligibility; non-field categories see the
         // «فئتك لا تخضع للتتبع» banner and never get a location prompt.
         { label: "رفيق الميدان", path: "/my/field-companion", icon: MapPin },
-        { label: "مساحتي", path: "/my-space", icon: User },
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
       ]},
