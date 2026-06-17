@@ -127,7 +127,7 @@ export default function JournalManualCreatePage() {
                 <Input required value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="وصف القيد اليدوي" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">التاريخ</label>
+                <label className="block text-sm font-medium mb-1">تاريخ القيد</label>
                 <DatePicker value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
               </div>
               {/* #2230 — mirror the journal-create exemplar: multi-branch users

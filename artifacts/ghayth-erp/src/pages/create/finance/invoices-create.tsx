@@ -257,7 +257,7 @@ export default function InvoicesCreate() {
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <AutoField label="رقم الفاتورة" value={autoNumberRef.current} />
-        <FormFieldWrapper label="التاريخ" required>
+        <FormFieldWrapper label="تاريخ الفاتورة" required>
           <DatePicker value={form.date} onChange={(v) => setForm({ ...form, date: v })} />
         </FormFieldWrapper>
       </div>

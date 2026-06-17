@@ -282,7 +282,7 @@ export default function VouchersCreate() {
       <CreationDateField />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <AutoField label="رقم السند" value={autoNumberRef.current} />
-        <FormFieldWrapper label="التاريخ" required>
+        <FormFieldWrapper label="تاريخ السند" required>
           <DatePicker value={form.date} onChange={(v) => setField("date", v)} />
         </FormFieldWrapper>
       </div>
