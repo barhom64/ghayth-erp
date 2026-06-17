@@ -36,10 +36,11 @@ describe("Insurance-premium page — exists + wired", () => {
     expect(PAGE_SRC).toMatch(/general_expense/);
     expect(PAGE_SRC).toMatch(/fleet_cash_source/);
   });
-  it("uses entity pickers for the vendor + medical insured party", () => {
-    expect(PAGE_SRC).toMatch(/import \{ VendorSelect, EmployeeSelect \} from "@\/components\/shared\/entity-selects"/);
+  it("uses entity pickers for the vendor + insured party (employee / unit)", () => {
+    expect(PAGE_SRC).toMatch(/from "@\/components\/shared\/entity-selects"/);
     expect(PAGE_SRC).toMatch(/<VendorSelect/);
     expect(PAGE_SRC).toMatch(/<EmployeeSelect/);
+    expect(PAGE_SRC).toMatch(/<UnitSelect/);
   });
   it("registered in router + nav", () => {
     expect(ROUTES_SRC).toMatch(/const InsurancePremium = lazy\(\(\) => import\("@\/pages\/finance\/insurance-premium"\)\)/);

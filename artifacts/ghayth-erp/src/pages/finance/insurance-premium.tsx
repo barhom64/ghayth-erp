@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { VendorSelect, EmployeeSelect } from "@/components/shared/entity-selects";
+import { VendorSelect, EmployeeSelect, UnitSelect } from "@/components/shared/entity-selects";
 import { PageShell } from "@workspace/ui-core";
 import { ShieldCheck, Info, ChevronDown } from "lucide-react";
 
@@ -30,8 +30,8 @@ import { ShieldCheck, Info, ChevronDown } from "lucide-react";
  */
 
 const KIND_ENTITY: Record<string, { entityType: string; idLabel: string }> = {
-  property: { entityType: "property", idLabel: "معرّف العقار / الوحدة" },
-  medical:  { entityType: "employee", idLabel: "معرّف الموظف" },
+  property: { entityType: "property", idLabel: "العقار / الوحدة المؤمَّنة" },
+  medical:  { entityType: "employee", idLabel: "الموظف المؤمَّن" },
 };
 
 export default function InsurancePremiumPage() {
@@ -129,16 +129,12 @@ export default function InsurancePremiumPage() {
                   allowCreate={false}
                 />
               ) : (
-                <>
-                  <Label>{KIND_ENTITY[form.kind].idLabel}</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    value={form.insuredEntityId}
-                    onChange={(e) => set("insuredEntityId", e.target.value)}
-                    placeholder="رقم العقار/الوحدة"
-                  />
-                </>
+                <UnitSelect
+                  label={KIND_ENTITY[form.kind].idLabel}
+                  value={form.insuredEntityId}
+                  onChange={(v) => set("insuredEntityId", v)}
+                  allowCreate={false}
+                />
               )}
             </div>
             <div className="space-y-1.5">
