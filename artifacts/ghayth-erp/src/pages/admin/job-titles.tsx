@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, X, Pencil, Wallet } from "lucide-react";
+import { Plus, X, Pencil, Wallet, Trash2 } from "lucide-react";
 
 // ════════════════════════════════════════════════════════════════════════════
 // قوالب المسميات الوظيفية — كل مسمّى = قالب دور (#1413 §6، الخطة الجذرية §3 م2)
@@ -94,6 +94,17 @@ export default function JobTitlesPage() {
     }
   };
 
+  const remove = async (id: number) => {
+    if (!confirm("هل تريد حذف هذا المسمّى الوظيفي؟ (سيُعطَّل ولن يظهر للموظفين الجدد)")) return;
+    try {
+      await apiFetch(`/employees/job-titles/${id}`, { method: "DELETE" });
+      toast({ title: "تم حذف المسمّى" });
+      refetch();
+    } catch (err: any) {
+      toast({ title: err?.message || "تعذّر الحذف", variant: "destructive" });
+    }
+  };
+
   const columns: DataTableColumn<JobTitle>[] = [
     { key: "name", header: "المسمّى الوظيفي", render: (r) => <span className="font-medium">{r.name}</span> },
     { key: "category", header: "الفئة", render: (r) => r.category || "—" },
@@ -111,9 +122,14 @@ export default function JobTitlesPage() {
     {
       key: "actions", header: "",
       render: (r) => (
-        <GuardedButton perm="hr.employees:update" variant="ghost" size="sm" className="h-7 px-2" onClick={() => open(r)}>
-          <Pencil className="h-3.5 w-3.5 me-1" /> تعديل
-        </GuardedButton>
+        <div className="flex gap-1">
+          <GuardedButton perm="hr.employees:update" variant="ghost" size="sm" className="h-7 px-2" onClick={() => open(r)}>
+            <Pencil className="h-3.5 w-3.5 me-1" /> تعديل
+          </GuardedButton>
+          <GuardedButton perm="hr.employees:delete" variant="ghost" size="sm" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => remove(r.id)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </GuardedButton>
+        </div>
       ),
     },
   ];

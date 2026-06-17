@@ -33,10 +33,11 @@ describe("#1812 — dispatch → booking_line cascade (shared helper)", () => {
     expect(CASCADE).toMatch(/closed:\s*null/);
   });
 
-  it("decline puts the line BACK to pending (not declined)", () => {
-    // The line is re-pickable by another driver — declining doesn't
-    // cancel the operational need.
-    expect(CASCADE).toMatch(/declined:\s*"pending"/);
+  it("decline puts the line BACK to open / awaiting-dispatch (not declined)", () => {
+    // The line is re-pickable by another driver — declining doesn't cancel the
+    // operational need. 'open' is the valid awaiting-dispatch booking-line state
+    // ('pending' is a dispatch-ORDER status, rejected by the line CHECK).
+    expect(CASCADE).toMatch(/declined:\s*"open"/);
   });
 
   it("UPDATE transport_booking_lines fires on the caller's transaction client", () => {

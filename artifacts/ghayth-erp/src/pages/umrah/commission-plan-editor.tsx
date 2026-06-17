@@ -21,7 +21,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, currentMonthPaddedRiyadh, currentYearRiyadh } from "@/lib/formatters";
 import { ArrowRight, Plus, Save, Trash2, Calculator, AlertCircle } from "lucide-react";
 
 // Simulator schema. Its FormShell is independent because the
@@ -182,7 +182,7 @@ export default function UmrahCommissionPlanEditor() {
       notes: "",
     };
   })();
-  const remountKey = isEditMode ? (loadQ.data?.data?.id ?? "loading") : "new";
+  const remountKey = isEditMode ? (planId ?? "loading") : "new";
 
   // Split into two static mutations — POST for create, PATCH for
   // edit — so the wiring audit can see each URL + method as a literal
@@ -227,24 +227,7 @@ export default function UmrahCommissionPlanEditor() {
   const [simResult, setSimResult] = useState<any>(null);
   const [simBusy, setSimBusy] = useState(false);
 
-  const runSim = async (values: SimForm) => {
-    if (!planRowId) {
-      toast({ variant: "destructive", title: "يرجى حفظ الخطة أولاً قبل التشغيل التجريبي" });
-      return;
-    }
-    setSimBusy(true);
-    try {
-      const res: any = await apiFetch(`/umrah/commission-plans/${planRowId}/simulate`, {
-        method: "POST",
-        body: JSON.stringify(values),
-      });
-      setSimResult(res?.data ?? res);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: err?.message ?? "تعذّر التشغيل التجريبي" });
-    } finally {
-      setSimBusy(false);
-    }
-  };
+  useEffect(() => { setSimResult(null); }, [planRowId]);
 
   const employees = employeesQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
@@ -325,35 +308,14 @@ export default function UmrahCommissionPlanEditor() {
             </TabsContent>
 
             <TabsContent value="simulator">
-              {/* Independent FormShell — its inputs aren't part of the plan. */}
               <Card>
                 <CardContent className="p-4 space-y-4">
-                  {!planRowId && (
-                    <div className="flex items-start gap-2 p-3 bg-status-warning-surface border border-status-warning-surface rounded text-sm">
-                      <AlertCircle className="h-4 w-4 text-status-warning-foreground shrink-0 mt-0.5" />
-                      <span className="text-status-warning-foreground">يرجى حفظ الخطة أولاً قبل التشغيل التجريبي.</span>
-                    </div>
-                  )}
-                  <FormShell
-                    schema={simSchema}
-                    defaultValues={{
-                      totalMutamers: 0,
-                      avgProfitPerVisa: 0,
-                      salesPercent: 0,
-                      avgSalePrice: 0,
-                    }}
-                    submitLabel={simBusy ? "جاري التشغيل..." : "تشغيل المحاكاة"}
-                    onSubmit={async (values) => {
-                      await runSim(values);
-                    }}
-                  >
-                    <FormGrid cols={2}>
-                      <FormNumberField name="totalMutamers" label="عدد المعتمرين" />
-                      <FormNumberField name="avgProfitPerVisa" label="متوسط الربح / تأشيرة" />
-                      <FormNumberField name="salesPercent" label="نسبة المبيعات (%)" />
-                      <FormNumberField name="avgSalePrice" label="متوسط سعر البيع" />
-                    </FormGrid>
-                  </FormShell>
+                  <SimulatorTab
+                    planRowId={planRowId}
+                    simBusy={simBusy}
+                    setSimBusy={setSimBusy}
+                    setSimResult={setSimResult}
+                  />
 
                   {simResult && (
                     <div className="rounded border bg-muted/20 p-4 space-y-3">
@@ -430,7 +392,7 @@ function BasicTab({
         ]}
       />
       <FormTextField name="planName" label="اسم الخطة" required placeholder="مثال: خطة مندوب مبيعات 1447" />
-      <FormNumberField name="baseSalary" label="الراتب الأساسي" required />
+      <BaseSalaryField />
       <FormSelectField
         name="commissionType"
         label="نوع العمولة"
@@ -666,5 +628,142 @@ function ExcludedMonthsTab() {
         })}
       </div>
     </>
+  );
+}
+
+function SimulatorTab({
+  planRowId,
+  simBusy,
+  setSimBusy,
+  setSimResult,
+}: {
+  planRowId: number | undefined;
+  simBusy: boolean;
+  setSimBusy: (b: boolean) => void;
+  setSimResult: (r: any) => void;
+}) {
+  const { toast } = useToast();
+  const { getValues: getPlanValues } = useFormContext<PlanForm>();
+
+  const runSim = async (values: SimForm) => {
+    setSimBusy(true);
+    try {
+      const month = Number(currentMonthPaddedRiyadh());
+      const year = currentYearRiyadh();
+      let res: any;
+      if (!planRowId) {
+        const live = getPlanValues();
+        if (!live.employeeId || !live.seasonId) {
+          toast({
+            variant: "destructive",
+            title: "أكمل المعلومات الأساسية أولاً",
+            description: "اختر الموظف والموسم في تبويب «المعلومات الأساسية» ثم شغّل المحاكاة.",
+          });
+          return;
+        }
+        res = await apiFetch(`/umrah/commission-plans/simulate`, {
+          method: "POST",
+          body: JSON.stringify({
+            plan: {
+              seasonId: Number(live.seasonId),
+              employeeId: Number(live.employeeId),
+              commissionType: live.commissionType,
+              percentageRate: live.percentageRate ?? null,
+              fixedAmount: live.fixedAmount ?? null,
+              conditionType: live.conditionType ?? "none",
+              minProfitPerVisa: live.minProfitPerVisa ?? null,
+              minSalesPercent: live.minSalesPercent ?? null,
+              minAvgPrice: live.minAvgPrice ?? null,
+              excludedMonths: live.excludedMonths ?? [],
+              assignmentId: live.assignmentId ?? null,
+            },
+            tiers: (live.tiers ?? []).map((t) => ({
+              fromCount: Number(t.fromCount),
+              toCount: t.toCount === null || t.toCount === undefined ? null : Number(t.toCount),
+              bonusPerUnit: Number(t.bonusPerUnit),
+              isCumulative: !!t.isCumulative,
+              tierOrder: Number(t.tierOrder),
+            })),
+            month, year,
+            ...values,
+          }),
+        });
+      } else {
+        res = await apiFetch(`/umrah/commission-plans/${planRowId}/simulate`, {
+          method: "POST",
+          body: JSON.stringify({ month, year, ...values }),
+        });
+      }
+      setSimResult(res?.data ?? res);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err?.message ?? "تعذّر التشغيل التجريبي" });
+    } finally {
+      setSimBusy(false);
+    }
+  };
+
+  return (
+    <>
+      {!planRowId && (
+        <div className="flex items-start gap-2 p-3 bg-status-info-surface border border-status-info-surface rounded text-sm" data-testid="simulator-create-mode-hint">
+          <AlertCircle className="h-4 w-4 text-status-info-foreground shrink-0 mt-0.5" />
+          <span className="text-status-info-foreground">
+            وضع المحاكاة قبل الحفظ — يتم تشغيل المحاكاة على بيانات النموذج الحالية. احفظ الخطة لاحقاً لتسجيل النتيجة.
+          </span>
+        </div>
+      )}
+      <FormShell
+        schema={simSchema}
+        defaultValues={{
+          totalMutamers: 0,
+          avgProfitPerVisa: 0,
+          salesPercent: 0,
+          avgSalePrice: 0,
+        }}
+        submitLabel={simBusy ? "جاري التشغيل..." : "تشغيل المحاكاة"}
+        onSubmit={async (values) => {
+          await runSim(values);
+        }}
+      >
+        <FormGrid cols={2}>
+          <FormNumberField name="totalMutamers" label="عدد المعتمرين" />
+          <FormNumberField name="avgProfitPerVisa" label="متوسط الربح / تأشيرة" />
+          <FormNumberField name="salesPercent" label="نسبة المبيعات (%)" />
+          <FormNumberField name="avgSalePrice" label="متوسط سعر البيع" />
+        </FormGrid>
+      </FormShell>
+    </>
+  );
+}
+
+function BaseSalaryField() {
+  const { setValue, formState } = useFormContext<PlanForm>();
+  const employeeId = useWatch<PlanForm, "employeeId">({ name: "employeeId" });
+  const assignmentId = useWatch<PlanForm, "assignmentId">({ name: "assignmentId" });
+  const enabled = !!employeeId && employeeId > 0;
+  const assignmentsQ = useApiQuery<{ data: any[] }>(
+    ["umrah-employee-assignments", String(employeeId ?? "")],
+    `/umrah/employees/${employeeId}/assignments`,
+    enabled,
+  );
+  const assignments = assignmentsQ.data?.data ?? [];
+  const selected = assignmentId
+    ? assignments.find((a: any) => String(a.id) === String(assignmentId))
+    : null;
+  useEffect(() => {
+    if (selected && typeof selected.salary === "number" && !formState.dirtyFields.baseSalary) {
+      setValue("baseSalary", Number(selected.salary), { shouldDirty: false });
+    }
+  }, [selected?.id, selected?.salary, setValue, formState.dirtyFields.baseSalary]);
+  const hint = selected && typeof selected.salary === "number"
+    ? `مأخوذ تلقائياً من HR — تعيين #${selected.id}`
+    : enabled && assignments.length === 0
+      ? "لا يوجد تعيين HR — أدخل الراتب يدوياً"
+      : "اختر تعيين العمرة ليُملأ الراتب تلقائياً";
+  return (
+    <div className="space-y-1">
+      <FormNumberField name="baseSalary" label="الراتب الأساسي" required />
+      <p className="text-[11px] text-muted-foreground pe-1" data-testid="base-salary-hint">{hint}</p>
+    </div>
   );
 }
