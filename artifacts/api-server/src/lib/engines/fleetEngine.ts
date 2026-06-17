@@ -873,7 +873,7 @@ class FleetEngineImpl implements DomainEngine {
 
     const [arCode, revenueCode, costCode, payableCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1131"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4153"),
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5140"),
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2150"),
     ]);

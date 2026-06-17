@@ -84,6 +84,31 @@ describe("#1733 Pricing — route surface", () => {
     expect(block).toMatch(/finance\.transport_billing\.batch\.ready/);
   });
 
+  it("invoice-batch endpoint creates a real draft invoice + lines + links (Step-2)", () => {
+    const block = PRICING_ROUTE.match(
+      /\/transport\/invoice-batches[\s\S]+?Build invoice batch error:/,
+    )?.[0]!;
+    // Real invoice document, numbered via the central authority with the same
+    // scheme as finance POST /invoices — keeps audit:numbering-coverage in-file.
+    expect(block).toContain("INSERT INTO invoices");
+    expect(block).toMatch(/issueNumber\(/);
+    expect(block).toContain('entityTable: "invoices"');
+    expect(block).toContain('expectedTiming: "on_draft"');
+    // Revenue routed per line by service type → 4151/4152/4153.
+    expect(block).toContain("resolveTransportRevenueAccount");
+    expect(block).toContain("INSERT INTO invoice_lines");
+    // The deferred B#1 flip now happens with the REAL invoiceId + the junction.
+    expect(block).toMatch(/"billingStatus" = 'invoiced'/);
+    expect(block).toContain('"invoiceId"');
+    expect(block).toContain("INSERT INTO transport_invoice_links");
+  });
+
+  it("cargo manifest GL posts freight revenue to the 4153 leaf (Step-2 repoint)", () => {
+    const fleetEngine = read("lib/engines/fleetEngine.ts");
+    expect(fleetEngine).toMatch(/"cargo_freight_revenue",\s*"credit",\s*"4153"/);
+    expect(fleetEngine).not.toMatch(/"cargo_freight_revenue",\s*"credit",\s*"4150"/);
+  });
+
   it("router is mounted with fleet module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("transportPricingRouter");
     // #1959: gated by the path-conditional fleet+financial transportPathGate.
