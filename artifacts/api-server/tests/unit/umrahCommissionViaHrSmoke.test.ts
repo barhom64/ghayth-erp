@@ -49,8 +49,8 @@ describe("§5 — CR account routing branches on viaHr", () => {
     expect(ENGINE).toMatch(/viaHr\s*\?\s*getAccountCodeFromMapping\(plan\.companyId, "salary_payable",\s*"credit", "2120"\)/);
   });
 
-  it("viaHr=false (legacy) credits commission_payable (fallback 2150) — preserves the split-payable contract", () => {
-    expect(ENGINE).toMatch(/getAccountCodeFromMapping\(plan\.companyId, "commission_payable",\s*"credit", "2150"\)/);
+  it("viaHr=false (legacy) credits commission_payable (fallback 2155) — preserves the split-payable contract", () => {
+    expect(ENGINE).toMatch(/getAccountCodeFromMapping\(plan\.companyId, "commission_payable",\s*"credit", "2155"\)/);
   });
 
   it("DR commission_expense (6200) is unchanged — only the payable side switches per the operator's instruction", () => {
