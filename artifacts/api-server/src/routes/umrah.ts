@@ -2251,6 +2251,7 @@ router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "upda
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.penalty.waived_bulk", entity: "umrah_penalties", entityId: 0,
+      after: { successCount: successIds.length, totalAmount, reason: body.reason, skipped: skipped.length, errors: errors.length },
       details: JSON.stringify({ successCount: successIds.length, totalAmount, reason: body.reason, skipped: skipped.length, errors: errors.length }),
     }).catch((e) => logger.error(e, "bulk waive bg"));
 
