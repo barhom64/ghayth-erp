@@ -2040,10 +2040,11 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
       );
       const [deptAbsent] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(DISTINCT lr."employeeId") AS cnt FROM hr_leave_requests lr
-         JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId" AND ea."departmentId" = $1
-         WHERE lr.status = 'approved' AND lr."startDate" <= $2 AND lr."endDate" >= $3
-           AND lr."employeeId" != $4 AND lr."deletedAt" IS NULL`,
-        [assignment.departmentId, endDate, startDate, scope.employeeId]
+         JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId"
+           AND ea."companyId" = $1 AND ea."departmentId" = $2
+         WHERE lr.status = 'approved' AND lr."startDate" <= $3 AND lr."endDate" >= $4
+           AND lr."employeeId" != $5 AND lr."deletedAt" IS NULL`,
+        [scope.companyId, assignment.departmentId, endDate, startDate, scope.employeeId]
       );
       const totalDept = Number(deptTotal?.cnt ?? 1);
       const absentDept = Number(deptAbsent?.cnt ?? 0);

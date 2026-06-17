@@ -93,14 +93,14 @@ export function BookingSourceContextPanel({ sourceContext }: Props) {
           </div>
           {/* Deep-link to the source module so operator can drill down. */}
           {source === "umrah_group" && (
-            <Link href={`/umrah/groups/${entity.id}`}>
+            <Link href={`/umrah/groups/${entity.id}`} asChild>
               <a className="text-xs text-status-info-foreground hover:underline flex items-center gap-1">
                 فتح المجموعة <ExternalLink className="h-3 w-3" />
               </a>
             </Link>
           )}
           {(source === "customer_request" || source === "contract_schedule") && (
-            <Link href={`/clients/${(entity as CustomerEntity).id}`}>
+            <Link href={`/clients/${(entity as CustomerEntity).id}`} asChild>
               <a className="text-xs text-status-info-foreground hover:underline flex items-center gap-1">
                 فتح ملف العميل <ExternalLink className="h-3 w-3" />
               </a>

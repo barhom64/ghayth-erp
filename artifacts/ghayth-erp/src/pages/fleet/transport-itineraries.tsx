@@ -216,7 +216,7 @@ export default function TransportItineraries() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {rows.map((it) => (
-                <Link key={it.id} href={`/fleet/transport/itineraries/${it.id}`}>
+                <Link key={it.id} href={`/fleet/transport/itineraries/${it.id}`} asChild>
                   <a className="block p-3 rounded-md border hover:bg-surface-subtle">
                     <div className="flex items-start justify-between mb-1">
                       <div className="flex items-center gap-2 font-medium">

@@ -87,18 +87,6 @@ routes/hr.ts:system_evaluations
 
 # ── [TIGHTER] "my data" self-service — every read keyed by the caller's own
 # assignmentId / assignedTo / createdBy (scope.activeAssignmentId).
-routes/mySpace.ts:attendance
-routes/mySpace.ts:attendance_deductions
-routes/mySpace.ts:employee_monthly_attendance
-routes/mySpace.ts:employee_violations
-routes/mySpace.ts:hr_employee_loans
-routes/mySpace.ts:hr_exit_requests
-routes/mySpace.ts:hr_overtime_requests
-routes/mySpace.ts:journal_entries
-routes/mySpace.ts:notifications
-routes/mySpace.ts:payroll_runs
-routes/mySpace.ts:shifts
-routes/mySpace.ts:tasks
 
 # ── [TIGHTER] projects / properties / store: lookup joins keyed on a parent
 # (project / order / unit) validated vs companyId in the same handler.

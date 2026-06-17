@@ -149,7 +149,7 @@ export default function AttendancePolicyPage() {
                 الإعدادات أعلاه هي سياسة الشركة الافتراضية. يمكنك تجاوزها لكل فئة موظفين (سائق، ميداني، مكتبي، …) من صفحة overrides المخصصة.
               </p>
             </div>
-            <Link href="/hr/attendance-categories">
+            <Link href="/hr/attendance-categories" asChild>
               <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline text-sm whitespace-nowrap">
                 إدارة الـoverrides
                 <ArrowLeft className="h-3.5 w-3.5" />

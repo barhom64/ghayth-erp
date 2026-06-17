@@ -58,6 +58,13 @@ describe("SMS inbound webhook wiring", () => {
     expect(mountPos).toBeLessThan(authPos);
   });
 
+  it("mounts the WhatsApp/PBX public webhook router BEFORE authMiddleware too", () => {
+    const mountPos = idx.indexOf("communicationsPublicWebhookRouter)");
+    const authPos = idx.indexOf("router.use(authMiddleware)");
+    expect(mountPos).toBeGreaterThan(-1);
+    expect(mountPos).toBeLessThan(authPos);
+  });
+
   it("lands inbound SMS in message_log (not communications_log) so it reaches the inbox", () => {
     const route = readFileSync(join(import.meta.dirname!, "../../src/routes/communications-sms-webhook.ts"), "utf8");
     expect(route).toContain("INSERT INTO message_log");

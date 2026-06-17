@@ -17,15 +17,17 @@ const COMM_ROUTE = readFileSync(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Communications endpoints exist", () => {
-  it("WhatsApp webhook endpoints (GET + POST) exist", () => {
-    expect(COMM_ROUTE).toContain('router.get("/whatsapp/webhook"');
-    expect(COMM_ROUTE).toContain('router.post("/whatsapp/webhook"');
+  it("WhatsApp webhook endpoints (GET + POST) exist on the public webhook router", () => {
+    // Anonymous inbound — registered on publicWebhookRouter (mounted before
+    // authMiddleware) so Meta can actually reach them.
+    expect(COMM_ROUTE).toContain('publicWebhookRouter.get("/whatsapp/webhook"');
+    expect(COMM_ROUTE).toContain('publicWebhookRouter.post("/whatsapp/webhook"');
   });
 
-  it("PBX endpoints (incoming, completed, status) exist", () => {
-    expect(COMM_ROUTE).toContain('router.post("/pbx/incoming"');
-    expect(COMM_ROUTE).toContain('router.post("/pbx/completed"');
-    expect(COMM_ROUTE).toContain('router.post("/pbx/status"');
+  it("PBX endpoints (incoming, completed, status) exist on the public webhook router", () => {
+    expect(COMM_ROUTE).toContain('publicWebhookRouter.post("/pbx/incoming"');
+    expect(COMM_ROUTE).toContain('publicWebhookRouter.post("/pbx/completed"');
+    expect(COMM_ROUTE).toContain('publicWebhookRouter.post("/pbx/status"');
   });
 
   it("Communications log CRUD endpoints exist", () => {
@@ -280,7 +282,7 @@ describe("Validation schemas and checks", () => {
   });
 
   it("POST /pbx/status validates callId is present", () => {
-    const idx = COMM_ROUTE.indexOf('router.post("/pbx/status"');
+    const idx = COMM_ROUTE.indexOf('publicWebhookRouter.post("/pbx/status"');
     const section = COMM_ROUTE.slice(idx, idx + 3000);
     expect(section).toContain("zodParse(pbxStatusSchema.safeParse");
     expect(section).toContain("callId");
