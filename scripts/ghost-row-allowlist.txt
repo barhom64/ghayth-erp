@@ -142,9 +142,18 @@ routes/finance-algorithms.ts:journal_lines
 routes/finance-algorithms.ts:store_products
 routes/finance-algorithms.ts:subsidiary_accounts
 routes/finance-algorithms.ts:warehouse_categories
+# chart_of_accounts: cost-center P&L / revenue-expense sums join COA by
+# accountCode only to read coa.type for the revenue/expense CASE — same
+# balance-enrichment exception as finance-hardening:chart_of_accounts (filtering
+# coa."deletedAt" would drop a soft-deleted account's posted lines). The lines
+# are filtered (jl."deletedAt" IS NULL).
 routes/finance-cost-centers.ts:chart_of_accounts
+# cost_centers: this table's soft-delete is STATUS-based (UPDATE ... SET
+# status='deleted'); its "deletedAt" column is vestigial (never written — 0 rows
+# set it). Every cost_centers read here already filters `status != 'deleted'`,
+# so soft-deleted cost centres are correctly excluded. The guard flags it only
+# because the column exists; a "deletedAt" IS NULL predicate would be a no-op.
 routes/finance-cost-centers.ts:cost_centers
-routes/finance-cost-centers.ts:journal_lines
 # chart_of_accounts: consolidated balance-sheet / P&L sums join COA by accountCode
 # purely to read coa.type for the asset/liability/equity/revenue/expense CASE.
 # Adding coa."deletedAt" IS NULL would DROP any posted line whose account was
@@ -161,9 +170,19 @@ routes/finance-hardening.ts:chart_of_accounts
 # warehouse_products enrichment exceptions below. Every other table in this
 # file stays enforced.
 routes/finance-purchase.ts:store_products
+# chart_of_accounts: the trial-balance / P&L / financial-statement queries join
+# COA by accountCode only to read coa.type (and code/name) for the
+# revenue/expense/asset/liability/equity CASE buckets. Filtering coa."deletedAt"
+# would null the type for a soft-deleted account and DROP its posted lines from
+# the statement totals (understating / unbalancing them). Lines are filtered
+# (jl."deletedAt" IS NULL + je.balancesApplied). Same enrichment exception as
+# finance-hardening:chart_of_accounts.
 routes/finance-reports.ts:chart_of_accounts
-routes/finance-reports.ts:employees
-routes/finance-reports.ts:financial_periods
+# purchase_orders: the supplier paid-total sums join purchase_orders only to
+# resolve po."supplierId" for a SUM over supplier_payment_allocations of ACTUAL
+# posted payments (spa + je already filter deletedAt + balancesApplied).
+# Filtering po."deletedAt" would drop real payments made against a since-deleted
+# PO and understate the supplier's paid total — enrichment-only, keep.
 routes/finance-reports.ts:purchase_orders
 routes/fleet-telematics.ts:fleet_drivers
 routes/fleet-telematics.ts:fleet_telematics_devices
