@@ -262,6 +262,9 @@ export default function ExpensesCreate() {
   // center (department id) and a percentage; the backend splits the expense
   // DR into one balanced leg per row. Empty = single-line (legacy) behaviour.
   const [ccDist, setCcDist] = useState<{ costCenterId: string; percentage: string }[]>([]);
+  // #2230 — multi-cost-center distribution is rare; keep it collapsed until the
+  // operator opens it (or a restored draft already carries rows).
+  const [ccOpen, setCcOpen] = useState(false);
   const ccRows = ccDist.filter((r) => r.costCenterId && r.percentage);
   const ccPctTotal = ccRows.reduce((s, r) => s + (Number(r.percentage) || 0), 0);
   const ccBalanced = ccRows.length === 0 || Math.abs(ccPctTotal - 100) < 0.01;
@@ -869,10 +872,17 @@ export default function ExpensesCreate() {
         {/* #1715 — multi cost-center distribution. Optional; when used, the
             expense DR is split into one balanced leg per cost center. */}
         <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Split className="h-4 w-4" />
-            <h3 className="font-semibold text-sm text-muted-foreground">توزيع على عدة مراكز تكلفة (اختياري)</h3>
-          </div>
+          <button
+            type="button"
+            onClick={() => setCcOpen((v) => !v)}
+            className="flex items-center justify-between w-full text-sm font-semibold text-muted-foreground"
+          >
+            <span className="flex items-center gap-2">
+              <Split className="h-4 w-4" /> توزيع على عدة مراكز تكلفة (اختياري)
+            </span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${ccOpen ? "rotate-180" : ""}`} />
+          </button>
+          {(ccOpen || ccRows.length > 0) && (<>
           <p className="text-xs text-muted-foreground">
             وزّع المصروف على أكثر من مركز تكلفة بالنسبة المئوية. عند الاستخدام يُقسَّم الطرف المدين تلقائيًا إلى سطر متوازن لكل مركز،
             ويجب أن يساوي مجموع النسب 100%. اتركه فارغًا لتسجيل المصروف على مركز التكلفة الواحد أعلاه.
@@ -917,6 +927,7 @@ export default function ExpensesCreate() {
               </span>
             )}
           </div>
+          </>)}
         </div>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
