@@ -111,6 +111,14 @@ describe("Employees — companyId scoping", () => {
     expect(s).toContain("enforceBranchScope: true");
   });
 
+  it("GET /:id/finance-summary scopes the employee via an assignment, not companyId IS NULL", () => {
+    const s = fullHandler('router.get("/:id/finance-summary",');
+    // employees.companyId is intentionally NULL; the old `OR companyId IS NULL`
+    // fallback matched any tenant's employee. Must require an assignment row.
+    expect(s).not.toMatch(/"companyId" = \$2 OR "companyId" IS NULL/);
+    expect(s).toMatch(/EXISTS \([\s\S]*?employee_assignments ea[\s\S]*?ea\."companyId" = \$2/);
+  });
+
   it("POST / create derives effectiveCompanyId from scope.allowedCompanies", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("effectiveCompanyId");
