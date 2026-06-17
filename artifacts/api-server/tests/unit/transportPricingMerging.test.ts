@@ -109,6 +109,25 @@ describe("#1733 Pricing — route surface", () => {
     expect(fleetEngine).not.toMatch(/"cargo_freight_revenue",\s*"credit",\s*"4150"/);
   });
 
+  it("batch handler stamps the trip cost-center (sub-CC under the vehicle) on each line (Step-3)", () => {
+    const block = PRICING_ROUTE.match(
+      /\/transport\/invoice-batches[\s\S]+?Build invoice batch error:/,
+    )?.[0]!;
+    // Trip id is lifted from the line, and the trip CC is minted under the vehicle CC.
+    expect(block).toContain('"tripId"');
+    expect(block).toMatch(/createCostCenterForEntity\([\s\S]{0,60}?"trip"/);
+    expect(block).toContain('parentEntityType: "vehicle"');
+    // The resolved cost-center is stamped on the invoice line (no longer hard-null).
+    expect(block).toContain("p.costCenterId");
+  });
+
+  it("cost-center generator supports the trip sub-center type (Step-3)", () => {
+    const cc = read("lib/costCenterAutoCreate.ts");
+    expect(cc).toMatch(/\|\s*"trip"/);                              // union member
+    expect(cc).toMatch(/trip:\s*"TR"/);                            // code prefix
+    expect(cc).toMatch(/trip:\s*"auto-created on transport trip/); // audit reason
+  });
+
   it("router is mounted with fleet module + financial guards", () => {
     expect(ROUTES_INDEX).toContain("transportPricingRouter");
     // #1959: gated by the path-conditional fleet+financial transportPathGate.
