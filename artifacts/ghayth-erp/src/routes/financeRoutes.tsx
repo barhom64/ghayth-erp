@@ -16,6 +16,7 @@ const DeferredRevenue = lazy(() => import("@/pages/finance/deferred-revenue"));
 const SubsidiaryAccountFailures = lazy(() => import("@/pages/finance/subsidiary-account-failures"));
 const MisparentedSubsidiaries = lazy(() => import("@/pages/finance/misparented-subsidiaries"));
 const Cip = lazy(() => import("@/pages/finance/cip"));
+const ClassificationCenter = lazy(() => import("@/pages/finance/classification-center"));
 const DailyCloseChecklist = lazy(() => import("@/pages/finance/daily-close-checklist"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
@@ -439,6 +440,7 @@ export const financeRoutes = [
   { path: "/finance/subsidiary-account-failures", component: SubsidiaryAccountFailures },
   { path: "/finance/datafix/misparented-subsidiaries", component: MisparentedSubsidiaries },
   { path: "/finance/cip", component: Cip },
+  { path: "/finance/classification-center", component: ClassificationCenter },
   { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },

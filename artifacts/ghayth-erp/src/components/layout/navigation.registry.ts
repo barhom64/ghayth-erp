@@ -493,6 +493,7 @@ export const allNavSections: NavSection[] = [
         { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
         { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
         { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
+        { label: "مركز التصنيف", path: "/finance/classification-center", icon: Layers },
         { label: "فشل الحسابات الفرعية", path: "/finance/subsidiary-account-failures", icon: ShieldAlert },
         { label: "تشخيص أبوّة الحسابات", path: "/finance/datafix/misparented-subsidiaries", icon: GitBranch },
         { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
