@@ -37,7 +37,10 @@ export async function cascadeDispatchToBooking(
     executing:  "in_progress",
     completed:  "completed",
     cancelled:  "cancelled",
-    declined:   "pending",
+    // Refused → the line returns to awaiting-dispatch. 'open' is the valid
+    // pre-dispatch booking-line state; 'pending' is a dispatch-ORDER status and
+    // is NOT in the transport_booking_lines CHECK (writing it 500s the decline).
+    declined:   "open",
     notified:   null,   // intermediate driver-side state — no line change
     closed:     null,   // operational close is a finance handoff; line stays completed
   };
