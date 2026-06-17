@@ -89,6 +89,15 @@ const pushUnsubscribeSchema = z.object({
 
 const router = Router();
 
+// Inbound webhooks (WhatsApp + PBX) are ANONYMOUS — the external provider
+// (Meta / the PBX vendor) carries no ERP JWT, so these handlers verify their
+// own signatures and must be mounted BEFORE authMiddleware. They register on
+// this separate router (helpers below stay in scope) which index.ts mounts on
+// the public surface; the default `router` keeps the authenticated routes.
+// Before this split they sat behind authMiddleware and were unreachable —
+// every inbound WhatsApp message / PBX call event got 401'd at the door.
+export const publicWebhookRouter = Router();
+
 // WhatsApp credentials — env values used as the initial cached value;
 // the live read in the route bodies goes through getCachedVendorConfigSync
 // so a UI-driven update via /admin/vendor-settings takes effect after the
@@ -218,7 +227,7 @@ async function sendWhatsAppMessage(to: string, message: string): Promise<boolean
   }
 }
 
-router.get("/whatsapp/webhook", (req, res) => {
+publicWebhookRouter.get("/whatsapp/webhook", (req, res) => {
   try {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -232,7 +241,7 @@ router.get("/whatsapp/webhook", (req, res) => {
   } catch (err) { handleRouteError(err, res, "WhatsApp webhook verify error:"); }
 });
 
-router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
+publicWebhookRouter.post("/whatsapp/webhook", async (req, res): Promise<void> => {
   try {
     // NF-COMM-01 — reject forged inbound payloads before any processing.
     // Meta retries on non-2xx so we still need to respond 200 to *valid*
@@ -358,7 +367,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/pbx/incoming", async (req, res): Promise<void> => {
+publicWebhookRouter.post("/pbx/incoming", async (req, res): Promise<void> => {
   try {
     // RD3-01 — reject forged inbound payloads before any processing.
     if (!verifyPbxSignature(req)) {
@@ -452,7 +461,7 @@ router.post("/pbx/incoming", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/pbx/completed", async (req, res): Promise<void> => {
+publicWebhookRouter.post("/pbx/completed", async (req, res): Promise<void> => {
   try {
     // RD3-01 — same signature gate as /pbx/incoming.
     if (!verifyPbxSignature(req)) {
@@ -531,7 +540,7 @@ router.post("/pbx/completed", async (req, res): Promise<void> => {
   }
 });
 
-router.post("/pbx/status", async (req, res): Promise<void> => {
+publicWebhookRouter.post("/pbx/status", async (req, res): Promise<void> => {
   try {
     // RD3-01 — same signature gate as /pbx/incoming.
     if (!verifyPbxSignature(req)) {
