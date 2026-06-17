@@ -31,8 +31,8 @@ class UmrahEngineImpl implements DomainEngine {
   ) {
     const [arCode, revenueCode, penaltyCode, commissionCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_agent_receivable", "debit", "1210"),
-      financialEngine.resolveAccountCode(ctx.companyId, "umrah_revenue", "credit", "4200"),
-      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_revenue", "credit", "4130"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4930"),
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_commission", "debit", "5240"),
     ]);
 
@@ -131,7 +131,7 @@ class UmrahEngineImpl implements DomainEngine {
   ) {
     const [receivableCode, revenueCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_receivable", "debit", "1220"),
-      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4930"),
     ]);
 
     const result = await financialEngine.postJournalEntry({
@@ -183,7 +183,7 @@ class UmrahEngineImpl implements DomainEngine {
   ) {
     const [receivableCode, revenueCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_receivable", "debit", "1220"),
-      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4210"),
+      financialEngine.resolveAccountCode(ctx.companyId, "umrah_penalty_revenue", "credit", "4930"),
     ]);
 
     return financialEngine.postJournalEntry({
