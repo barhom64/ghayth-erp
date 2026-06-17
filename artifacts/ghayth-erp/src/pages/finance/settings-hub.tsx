@@ -147,7 +147,7 @@ const CARDS: SettingsCard[] = [
 
   // ── Periods & close ──────────────────────────────────────────
   {
-    href: "/finance/fiscal-periods",
+    href: "/finance/fiscal-periods-v2",
     title: "الفترات المالية",
     description: "تقفيل/فتح الفترات الشهرية — يمنع الترحيل في فترات مقفلة. مع سياسة قفل بعد الإقرار الضريبي.",
     icon: Calendar,
