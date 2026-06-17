@@ -158,10 +158,6 @@ routes/finance-hardening.ts:employees
 routes/finance-hardening.ts:financial_periods
 routes/finance-hardening.ts:journal_lines
 routes/finance-hardening.ts:suppliers
-routes/finance-journal.ts:chart_of_accounts
-routes/finance-journal.ts:cost_centers
-routes/finance-journal.ts:journal_lines
-routes/finance-journal.ts:subsidiary_accounts
 # store_products: enrichment name-lookup for historical PO line items. The
 # SELECT only builds an id→name display map; filtering "deletedAt" IS NULL
 # would blank a since-deleted product's name on old purchase orders (the
