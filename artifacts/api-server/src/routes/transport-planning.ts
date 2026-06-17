@@ -1222,11 +1222,15 @@ transportPlanningRouter.post(
                 "remainingMeters" = COALESCE($6, "remainingMeters"),
                 "updatedAt" = NOW()
           WHERE "dispatchOrderId" = $7 AND "companyId" = $8
-            AND status NOT IN ('ended', 'cancelled')`,
+            AND status NOT IN ('ended', 'cancelled')
+            AND "driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $9 AND fd."companyId" = $8 AND fd."deletedAt" IS NULL
+            )`,
         [
           b.lat, b.lng, b.speedKmh ?? null, b.heading ?? null,
           b.etaSeconds ?? null, b.remainingMeters ?? null,
-          dispatchOrderId, scope.companyId,
+          dispatchOrderId, scope.companyId, scope.userId,
         ],
       );
       if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة لهذه المهمة");
@@ -1278,8 +1282,12 @@ transportPlanningRouter.post(
                 status = $1,
                 "updatedAt" = NOW()
           WHERE "dispatchOrderId" = $2 AND "companyId" = $3
-            AND status NOT IN ('ended', 'cancelled')`,
-        [m.status, dispatchOrderId, scope.companyId],
+            AND status NOT IN ('ended', 'cancelled')
+            AND "driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $4 AND fd."companyId" = $3 AND fd."deletedAt" IS NULL
+            )`,
+        [m.status, dispatchOrderId, scope.companyId, scope.userId],
       );
       if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة لهذه المهمة");
 
@@ -1309,8 +1317,12 @@ transportPlanningRouter.post(
                 "endedAt" = NOW(),
                 "updatedAt" = NOW()
           WHERE "dispatchOrderId" = $1 AND "companyId" = $2
-            AND status NOT IN ('ended', 'cancelled')`,
-        [dispatchOrderId, scope.companyId],
+            AND status NOT IN ('ended', 'cancelled')
+            AND "driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
+            )`,
+        [dispatchOrderId, scope.companyId, scope.userId],
       );
       if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة");
 
