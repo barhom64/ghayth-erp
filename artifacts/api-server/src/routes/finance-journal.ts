@@ -1941,21 +1941,26 @@ journalRouter.post("/expenses/:id/request-attachment", authorize({ feature: "fin
     );
     if (!exp) throw new NotFoundError("المصروف غير موجود");
 
-    await rawExecute(
-      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
-       VALUES ('expense',$1,'request_attachment',$2,$3,$4)`,
-      [expenseId, String(notes).trim(), scope.userId, scope.companyId]
-    );
+    // Atomic: record the approval action and flip the expense status together,
+    // so a failure between them can't leave an action row with the wrong state
+    // (or a returned expense with no audit-trail action).
+    await withTransaction(async () => {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+         VALUES ('expense',$1,'request_attachment',$2,$3,$4)`,
+        [expenseId, String(notes).trim(), scope.userId, scope.companyId]
+      );
 
-    // Move it back to "returned" so the submitter sees it needs work — reuses
-    // the SAME state the approve handler's return path lands on. Guarded to the
-    // pending family so we never re-open a decided expense.
-    await rawExecute(
-      `UPDATE journal_entries SET status = 'returned'
-        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'
-          AND status IN ('draft','pending_approval','returned','pending')`,
-      [expenseId, scope.companyId]
-    );
+      // Move it back to "returned" so the submitter sees it needs work — reuses
+      // the SAME state the approve handler's return path lands on. Guarded to the
+      // pending family so we never re-open a decided expense.
+      await rawExecute(
+        `UPDATE journal_entries SET status = 'returned'
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'
+            AND status IN ('draft','pending_approval','returned','pending')`,
+        [expenseId, scope.companyId]
+      );
+    });
 
     await createAuditLog({
       companyId: scope.companyId,

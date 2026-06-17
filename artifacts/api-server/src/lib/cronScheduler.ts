@@ -28,6 +28,7 @@ import {
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
+import { getVendorConfig } from "./vendorSettings.js";
 import {
   TASK_SLA_REMINDER_SETTING_KEY,
   resolveTaskSlaReminderConfig,
@@ -2318,6 +2319,18 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
 }
 
 async function processSmsQueue(): Promise<string> {
+  // Platform-wide SMS credentials from the vendor_secrets hub
+  // (/admin/vendor-settings → SMS card). Resolved ONCE per run and used
+  // only as a FALLBACK: a company's own system_settings SMS keys (read in
+  // the query below) always take precedence, so existing per-company
+  // configs are unaffected. This is what lets SMS be configured from the
+  // same UI as Email + WhatsApp instead of the UI-less system_settings.
+  const vendorSms = await getVendorConfig("sms").catch(() => null);
+  const vc = vendorSms?.active ? vendorSms.config : {};
+  const vendorSid = typeof vc.accountSid === "string" ? vc.accountSid : "";
+  const vendorToken = typeof vc.authToken === "string" ? vc.authToken : "";
+  const vendorFrom = typeof vc.fromNumber === "string" ? vc.fromNumber : "";
+
   // Phase 4 contract slice 6: read from outbound_queue. See
   // processEmailQueue for the rationale.
   const pending = await rawQuery<Record<string, unknown>>(
@@ -2368,21 +2381,27 @@ async function processSmsQueue(): Promise<string> {
   };
 
   for (const sms of pending) {
+    // Per-company system_settings creds win; fall back to the platform-wide
+    // vendor_secrets 'sms' card when a company has none of its own.
+    const accountSid = (typeof sms.accountSid === "string" && sms.accountSid) ? sms.accountSid : vendorSid;
+    const authToken = (typeof sms.authToken === "string" && sms.authToken) ? sms.authToken : vendorToken;
+    const fromNumber = (typeof sms.fromNumber === "string" && sms.fromNumber) ? sms.fromNumber : vendorFrom;
+
     if (sms.channelEnabled === "false") {
       await updateBothSms(sms, { errorMessage: "قناة SMS معطلة — سيتم الإرسال عند التفعيل" }, false);
       skipped++;
       continue;
     }
-    if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
+    if (!accountSid || !authToken || !fromNumber) {
       await updateBothSms(sms, { errorMessage: "بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات" }, false);
       skipped++;
       continue;
     }
 
     try {
-      const credentials = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString("base64");
+      const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
       const resp = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`,
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
         {
           method: "POST",
           headers: {
@@ -2391,7 +2410,7 @@ async function processSmsQueue(): Promise<string> {
           },
           body: new URLSearchParams({
             To: sms.recipientPhone as string,
-            From: sms.fromNumber as string,
+            From: fromNumber as string,
             Body: sms.message as string,
           }).toString(),
         }

@@ -977,14 +977,15 @@ router.post("/memos/:id/gm-decision", authorize({ feature: "hr.discipline", acti
             const period = `${incDate.getFullYear()}-${String(incDate.getMonth() + 1).padStart(2, "0")}`;
             await client.query(
               `INSERT INTO attendance_deductions
-                 ("companyId","assignmentId",type,minutes,amount,period,status)
-               VALUES ($1,$2,'penalty',$3,$4,$5,'pending_payroll')`,
+                 ("companyId","assignmentId",type,minutes,amount,period,status,"memoId")
+               VALUES ($1,$2,'penalty',$3,$4,$5,'pending_payroll',$6)`,
               [
                 scope.companyId,
                 memo.assignmentId,
                 memo.incidentDurationMinutes ?? 0,
                 totalDeduction,
                 period,
+                id,
               ]
             );
           }
@@ -1176,17 +1177,41 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
       },
       after: { status: newStatus, decision, comment, memoNumber: memo.memoNumber },
       onApply: async (_row, client) => {
-        if (decision === "accepted" && memo.violationId) {
-          await applyTransition({
-            entity: "employee_violations",
-            id: memo.violationId as number,
-            scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-            action: "hr.violation.appeal_accepted",
-            fromStates: ["approved"],
-            toState: "appeal_accepted",
-            extraWhere: `"deletedAt" IS NULL`,
-            client,
-          });
+        if (decision === "accepted") {
+          if (memo.violationId) {
+            await applyTransition({
+              entity: "employee_violations",
+              id: memo.violationId as number,
+              scope: { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
+              action: "hr.violation.appeal_accepted",
+              fromStates: ["approved"],
+              toState: "appeal_accepted",
+              extraWhere: `"deletedAt" IS NULL`,
+              client,
+            });
+          }
+          // Reverse the payroll deduction the GM approval inserted. Without
+          // this, an accepted appeal still leaves a `pending_payroll` row that
+          // the payroll cycle picks up — the employee is docked despite winning
+          // the appeal. We only touch rows not yet swept into a run
+          // (status='pending_payroll'); 'deducted_in_payroll' rows are already
+          // settled and must be handled by a payroll adjustment, not here.
+          const totalApplied =
+            Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0);
+          if (totalApplied > 0) {
+            // Reverse exactly the row this memo's gm-decision created (migration
+            // 386 added the memoId link). No heuristic match: a precise memoId
+            // means two same-amount penalties in one period can never collide.
+            // Still scoped by companyId + type + pending_payroll so a row already
+            // swept into a payroll run ('deducted_in_payroll') is left for a
+            // payroll adjustment, not silently cancelled here.
+            await client.query(
+              `UPDATE attendance_deductions SET status = 'cancelled'
+                WHERE "memoId" = $1 AND "companyId" = $2
+                  AND type = 'penalty' AND status = 'pending_payroll'`,
+              [id, scope.companyId]
+            );
+          }
         }
         await logMemoEvent({
           memoId: id, companyId: scope.companyId, actorId: scope.userId, client,

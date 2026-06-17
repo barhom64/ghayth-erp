@@ -144,7 +144,7 @@ recurringRouter.get("/recurring-journals/:id", authorize({ feature: "finance.rec
     const history = await rawQuery<RecurringRunHistoryRow>(
       `SELECT rr.*, je.ref AS "journalRef", je.description AS "journalDescription"
        FROM recurring_journal_runs rr
-       LEFT JOIN journal_entries je ON je.id = rr."journalEntryId"
+       LEFT JOIN journal_entries je ON je.id = rr."journalEntryId" AND je."deletedAt" IS NULL
        WHERE rr."recurringJournalId" = $1 AND rr."companyId" = $2
        ORDER BY rr."createdAt" DESC LIMIT 50`,
       [id, scope.companyId]

@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Plus, FileText } from "lucide-react";
+import { CONTRACT_TYPES, hrLabel } from "@/lib/hr-type-maps";
 import { formatDateAr } from "@/lib/formatters";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
@@ -45,13 +46,6 @@ const CONTRACT_STATUS_MAP: Record<string, { label: string; color: string }> = {
   signed: { label: "موقّع", color: "bg-purple-100 text-purple-700" },
   active: { label: "نشط", color: "bg-status-success-surface text-status-success-foreground" },
   terminated: { label: "منتهي", color: "bg-status-error-surface text-status-error-foreground" },
-};
-
-const CONTRACT_TYPE_MAP: Record<string, string> = {
-  full_time: "دوام كامل",
-  part_time: "دوام جزئي",
-  contract: "عقد مؤقت",
-  probation: "فترة تجربة",
 };
 
 const STATUS_OPTIONS = [
@@ -133,7 +127,7 @@ export default function ContractsPage() {
   const columns: DataTableColumn<any>[] = [
     { key: "ref", header: "رقم العقد", sortable: true, searchable: true, render: (r: any) => <span className="font-mono text-sm">{r.ref}</span> },
     { key: "employeeName", header: "الموظف", sortable: true, searchable: true, render: (r: any) => <span className="font-medium">{r.employeeName}</span> },
-    { key: "contractType", header: "نوع العقد", sortable: true, render: (r: any) => CONTRACT_TYPE_MAP[r.contractType] || r.contractType },
+    { key: "contractType", header: "نوع العقد", sortable: true, render: (r: any) => hrLabel(CONTRACT_TYPES, r.contractType) },
     { key: "startDate", header: "تاريخ البداية", sortable: true, render: (r: any) => <span className="text-sm text-muted-foreground">{r.startDate ? formatDateAr(r.startDate) : "—"}</span> },
     { key: "endDate", header: "تاريخ النهاية", sortable: true, render: (r: any) => <span className="text-sm text-muted-foreground">{r.endDate ? formatDateAr(r.endDate) : "—"}</span> },
     { key: "approvalStatus", header: "حالة الاعتماد", sortable: true, render: (r: any) => <StatusBadge value={r.approvalStatus} map={APPROVAL_STATUS_MAP} /> },
