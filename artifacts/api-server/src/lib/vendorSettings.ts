@@ -31,6 +31,7 @@ export type VendorSlug =
   | "pbx-webhook"
   | "whatsapp"
   | "smtp"
+  | "sms"
   | "vapid"
   | "siem"
   | "zatca"
@@ -106,6 +107,12 @@ function envFallback(slug: VendorSlug): Record<string, string> {
         from: appConfig.smtp.from ?? "",
         secure: String(appConfig.smtp.secure ?? false),
       };
+    case "sms":
+      // SMS historically had no env support (config lived only in the
+      // per-company system_settings table). No env fallback today; the
+      // operator configures it via the vendor-settings card, and the cron
+      // worker still honours per-company system_settings overrides first.
+      return {};
     case "vapid":
       return {
         publicKey: appConfig.vapid.publicKey ?? "",
@@ -226,6 +233,8 @@ export async function ensureVendorSecretsSeed(): Promise<void> {
         'disabled', '{"accessToken":"","verifyToken":"","phoneId":"","appSecret":""}'::jsonb),
        ('smtp', 'Email (SMTP)', 'SMTP relay used by notificationEngine for outbound email.',
         'disabled', '{"host":"","port":"587","user":"","password":"","from":"","secure":"false"}'::jsonb),
+       ('sms', 'SMS (Twilio)', 'Twilio credentials for outbound SMS. Per-company system_settings override this platform-wide default.',
+        'disabled', '{"accountSid":"","authToken":"","fromNumber":""}'::jsonb),
        ('vapid', 'Web Push (VAPID)', 'VAPID keys used by lib/notificationService for browser push notifications.',
         'disabled', '{"publicKey":"","privateKey":"","subject":"mailto:admin@ghayth.app"}'::jsonb),
        ('siem', 'SIEM forwarder', 'Optional webhook RBAC violations get mirrored to.',
@@ -242,6 +251,6 @@ export async function ensureVendorSecretsSeed(): Promise<void> {
  * without depending on the request's timing. Called from app boot.
  */
 export async function warmVendorSettingsCache(): Promise<void> {
-  const slugs: VendorSlug[] = ["pbx-webhook", "whatsapp", "smtp", "vapid", "siem", "zatca", "microsoft365"];
+  const slugs: VendorSlug[] = ["pbx-webhook", "whatsapp", "smtp", "sms", "vapid", "siem", "zatca", "microsoft365"];
   await Promise.all(slugs.map((s) => getVendorConfig(s)));
 }
