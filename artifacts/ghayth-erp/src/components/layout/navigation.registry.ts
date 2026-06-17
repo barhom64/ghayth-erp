@@ -302,6 +302,7 @@ export const allNavSections: NavSection[] = [
         { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart },
         { label: "إطفاء المصروفات المقدمة", path: "/finance/amortization", icon: CalendarClock },
         { label: "الإيراد المؤجل", path: "/finance/deferred-revenue", icon: TrendingUp },
+        { label: "تسجيل قسط تأمين", path: "/finance/insurance", icon: ShieldCheck },
       ]},
       // (2) الحسابات والقيود
       // F-2 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ②) — فُكّت «الحسابات والقيود»
