@@ -87,12 +87,13 @@ routes/hr.ts:system_evaluations
 # ── [TIGHTER] "my data" self-service — every read keyed by the caller's own
 # assignmentId / assignedTo / createdBy (scope.activeAssignmentId).
 
-# ── [TIGHTER] projects / properties / store: lookup joins keyed on a parent
-# (project / order / unit) validated vs companyId in the same handler.
+# ── [TIGHTER] projects: employees is the tenant-by-ASSIGNMENT table (an
+# employee may be assigned across companies), so a flat employees."companyId" =
+# scope predicate could wrongly blank a cross-company-assigned task's assignee
+# NAME — it's a LEFT-JOIN display only, keyed by a project validated upstream.
+# Kept (skipped per the multi-company caveat). project_resources / rental_contracts
+# / property_units now carry an explicit companyId predicate (defense-in-depth).
 routes/projects.ts:employees
-routes/projects.ts:project_resources
-routes/properties.ts:property_units
-routes/properties.ts:rental_contracts
 
 # ── [TIGHTER] RBAC: dependency/notification reads keyed on an id validated vs
 # companyId in the same handler (role/jit request locked & company-checked).
