@@ -37,6 +37,7 @@ import {
 import { issueNumber } from "../lib/numberingService.js";
 import { getDefaultTaxCode, computeTaxFromTaxCode } from "../lib/taxCodes.js";
 import { resolveTransportRevenueAccount } from "../lib/transportRevenueAccounts.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import type { TransportServiceType } from "../lib/transportEnums.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
@@ -385,10 +386,10 @@ transportPricingRouter.post(
           billingStatus: string; lineTotal: string | null;
           unitPrice: string | null; quantity: string;
           serviceType: string; vehicleId: number | null; driverId: number | null;
-          routeFrom: string | null; routeTo: string | null;
+          routeFrom: string | null; routeTo: string | null; tripId: number | null;
         }>(
           `SELECT id, "customerId", "billingStatus", "lineTotal", "unitPrice", quantity,
-                  "serviceType", "vehicleId", "driverId", "routeFrom", "routeTo"
+                  "serviceType", "vehicleId", "driverId", "routeFrom", "routeTo", "tripId"
              FROM transport_service_lines
             WHERE id = ANY($1::int[]) AND "companyId" = $2
             FOR UPDATE`,
@@ -442,7 +443,8 @@ transportPricingRouter.post(
           id: number; quantity: string; unitPrice: string | null;
           net: number; vat: number; gross: number;
           accountCode: string; taxCode: string | null;
-          vehicleId: number | null; driverId: number | null; description: string;
+          vehicleId: number | null; driverId: number | null;
+          costCenterId: number | null; description: string;
         }> = [];
         let subtotal = 0;
         let vatTotal = 0;
@@ -466,11 +468,29 @@ transportPricingRouter.post(
           }
           subtotal = roundTo2(subtotal + net);
           vatTotal = roundTo2(vatTotal + vat);
+
+          // Cost-center dimension (Step-3): the trip is a SUB-cost-center nested
+          // under the vehicle's cost-center (via cost_centers.parentId), so
+          // revenue is tracked per-trip and rolls up to the vehicle. We stamp it
+          // on the line; the explicit costCenterId then survives approval (the
+          // enricher will NOT override it). Falls back to null — the enricher
+          // then derives the vehicle CC — when the line has no trip/vehicle.
+          // createCostCenterForEntity is reentrant inside this tx and returns
+          // null on failure (non-fatal: the line still posts to the vehicle CC).
+          let costCenterId: number | null = null;
+          if (l.tripId != null && l.vehicleId != null) {
+            const tripCC = await createCostCenterForEntity(
+              scope.companyId, "trip", l.tripId, `رحلة نقل رقم ${l.tripId}`,
+              { parentEntityType: "vehicle", parentEntityId: l.vehicleId, actorUserId: scope.userId },
+            );
+            costCenterId = tripCC?.id ?? null;
+          }
+
           const route = [l.routeFrom, l.routeTo].filter(Boolean).join(" ← ");
           prepared.push({
             id: l.id, quantity: l.quantity, unitPrice: l.unitPrice,
             net, vat, gross: roundTo2(net + vat), accountCode, taxCode,
-            vehicleId: l.vehicleId, driverId: l.driverId,
+            vehicleId: l.vehicleId, driverId: l.driverId, costCenterId,
             description: [rev.label, route].filter(Boolean).join(" — "),
           });
         }
@@ -528,7 +548,7 @@ transportPricingRouter.post(
              RETURNING id`,
             [
               invoiceId, p.description, p.quantity, p.unitPrice, p.net, p.vat, p.gross,
-              null, p.accountCode, null, null,
+              null, p.accountCode, p.costCenterId, null,
               null, p.vehicleId, null, null, null,
               null, p.driverId, null, null, null,
               null, p.taxCode, false, null, "resolved",

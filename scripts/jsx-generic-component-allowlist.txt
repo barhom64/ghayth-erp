@@ -1,0 +1,9 @@
+# jsx-generic-component-allowlist.txt
+#
+# Pre-existing files rendering a component with an explicit `<any>` JSX
+# type argument (`<DataTable<any> …>`), which breaks the Replit dev
+# preview (global Babel parse-error overlay). De-allowlist by dropping
+# the `<any>` generic (T is inferred from columns/data) and pruning the
+# line here.
+#
+# Baseline captured: 0 file(s).

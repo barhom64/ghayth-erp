@@ -74,7 +74,7 @@ export function UmrahTabsNav() {
           const active = isActive(tab, location);
           const Icon = tab.icon;
           return (
-            <Link key={tab.href} href={tab.href}>
+            <Link key={tab.href} href={tab.href} asChild>
               <a
                 data-testid={`umrah-tab-${tab.href.replace(/\//g, "-").replace(/^-/, "")}`}
                 className={cn(
@@ -118,7 +118,7 @@ export function UmrahTabsNav() {
                 const active = isActive(tab, location);
                 const Icon = tab.icon;
                 return (
-                  <Link key={tab.href} href={tab.href}>
+                  <Link key={tab.href} href={tab.href} asChild>
                     <a
                       data-testid={`umrah-monitoring-item-${tab.href.replace(/\//g, "-").replace(/^-/, "")}`}
                       onClick={() => setMonitoringOpen(false)}
@@ -138,7 +138,7 @@ export function UmrahTabsNav() {
         </div>
 
         {/* زر ⚙ منفصل لصفحة إعدادات العمرة (كانت route مخفي) */}
-        <Link href="/umrah/settings">
+        <Link href="/umrah/settings" asChild>
           <a
             data-testid="umrah-tab-settings-gear"
             title="إعدادات العمرة"

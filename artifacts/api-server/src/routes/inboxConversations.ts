@@ -502,9 +502,10 @@ router.post("/:id/link", authorize({ feature: "communications", action: "update"
     const [revived] = await rawQuery<{ id: number }>(
       `UPDATE conversation_links SET "deletedAt" = NULL, "linkedBy" = $4, "createdAt" = now()
         WHERE "conversationId" = $1 AND "relatedType" = $2 AND "relatedId" = $3
+          AND "companyId" = $5
           AND "deletedAt" IS NOT NULL
         RETURNING id`,
-      [id, body.relatedType, body.relatedId, scope.userId],
+      [id, body.relatedType, body.relatedId, scope.userId, scope.companyId],
     );
     if (!revived) {
       await rawExecute(

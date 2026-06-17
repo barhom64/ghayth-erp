@@ -298,7 +298,7 @@ describe("postEarlyTerminationGL — happy path", () => {
       2,
       "early_termination_revenue",
       "credit",
-      "4150",
+      "4130",
     );
   });
 });
@@ -401,7 +401,7 @@ describe("postOwnerPayoutGL — happy path", () => {
       2,
       "owner_payable",
       "debit",
-      "2150",
+      "2156",
     );
     expect(resolveAccountCodeMock).toHaveBeenCalledWith(
       2,

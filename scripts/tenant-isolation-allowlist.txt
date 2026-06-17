@@ -65,7 +65,6 @@ routes/fleet.ts:fleet_gps_tracking
 routes/finance-algorithms.ts:cip_costs
 
 # ── [TIGHTER] inbox: conversation_links keyed by a conversation validated upstream.
-routes/inboxConversations.ts:conversation_links
 
 # ── [TIGHTER] HR self-service & company-scoped joins (scope.employeeId /
 # activeAssignmentId / userId, or joined through a companyId-scoped driver row).
@@ -87,26 +86,14 @@ routes/hr.ts:system_evaluations
 
 # ── [TIGHTER] "my data" self-service — every read keyed by the caller's own
 # assignmentId / assignedTo / createdBy (scope.activeAssignmentId).
-routes/mySpace.ts:attendance
-routes/mySpace.ts:attendance_deductions
-routes/mySpace.ts:employee_monthly_attendance
-routes/mySpace.ts:employee_violations
-routes/mySpace.ts:hr_employee_loans
-routes/mySpace.ts:hr_exit_requests
-routes/mySpace.ts:hr_overtime_requests
-routes/mySpace.ts:journal_entries
-routes/mySpace.ts:notifications
-routes/mySpace.ts:payroll_runs
-routes/mySpace.ts:shifts
-routes/mySpace.ts:tasks
 
-# ── [TIGHTER] projects / properties / store: lookup joins keyed on a parent
-# (project / order / unit) validated vs companyId in the same handler.
+# ── [TIGHTER] projects: employees is the tenant-by-ASSIGNMENT table (an
+# employee may be assigned across companies), so a flat employees."companyId" =
+# scope predicate could wrongly blank a cross-company-assigned task's assignee
+# NAME — it's a LEFT-JOIN display only, keyed by a project validated upstream.
+# Kept (skipped per the multi-company caveat). project_resources / rental_contracts
+# / property_units now carry an explicit companyId predicate (defense-in-depth).
 routes/projects.ts:employees
-routes/projects.ts:project_resources
-routes/properties.ts:property_units
-routes/properties.ts:rental_contracts
-routes/store.ts:store_products
 
 # ── [TIGHTER] RBAC: dependency/notification reads keyed on an id validated vs
 # companyId in the same handler (role/jit request locked & company-checked).
