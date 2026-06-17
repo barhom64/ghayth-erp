@@ -65,7 +65,6 @@ routes/fleet.ts:fleet_gps_tracking
 routes/finance-algorithms.ts:cip_costs
 
 # ── [TIGHTER] inbox: conversation_links keyed by a conversation validated upstream.
-routes/inboxConversations.ts:conversation_links
 
 # ── [TIGHTER] HR self-service & company-scoped joins (scope.employeeId /
 # activeAssignmentId / userId, or joined through a companyId-scoped driver row).
@@ -94,7 +93,6 @@ routes/projects.ts:employees
 routes/projects.ts:project_resources
 routes/properties.ts:property_units
 routes/properties.ts:rental_contracts
-routes/store.ts:store_products
 
 # ── [TIGHTER] RBAC: dependency/notification reads keyed on an id validated vs
 # companyId in the same handler (role/jit request locked & company-checked).
