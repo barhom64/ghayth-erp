@@ -74,9 +74,6 @@ routes/umrah.ts:umrah_seasons
 # already present in main. Per-table entries keep enforcement live for
 # every OTHER table in the same file, so new regressions still fail.
 # As the legacy-report cleanup lands fixes, remove the matching lines.
-routes/accounting-engine.ts:chart_of_accounts
-routes/accounting-engine.ts:journal_entry_templates
-routes/accounting-engine.ts:subsidiary_accounts
 routes/actionCenter.ts:employees
 routes/actionCenter.ts:journal_lines
 routes/actionCenter.ts:umrah_groups
