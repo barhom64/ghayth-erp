@@ -237,8 +237,10 @@ describe("#1733 Booking + Dispatch — state machines", () => {
     );
     expect(cancelBlock).toMatch(/"acceptedAt" = NULL, "startedAt" = NULL/);
     expect(cancelBlock).toMatch(/driver_navigation_sessions[\s\S]{0,120}status = 'cancelled'/);
-    // the operational need survives: line back to 'pending', not 'cancelled'.
-    expect(cancelBlock).toMatch(/transport_booking_lines[\s\S]{0,120}status = 'pending'/);
+    // the operational need survives: line back to 'open' (awaiting re-dispatch),
+    // not 'cancelled'. ('open' is the valid line state; 'pending' is a dispatch-
+    // order status, rejected by the transport_booking_lines CHECK.)
+    expect(cancelBlock).toMatch(/transport_booking_lines[\s\S]{0,120}status = 'open'/);
     expect(cancelBlock).not.toMatch(/cascadeDispatchToBooking[\s\S]{0,80}target: "cancelled"/);
   });
 

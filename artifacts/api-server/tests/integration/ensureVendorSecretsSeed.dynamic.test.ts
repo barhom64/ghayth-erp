@@ -21,7 +21,9 @@ const dbReady =
 
 const d = dbReady ? describe : describe.skip;
 
-const CANONICAL_SLUGS = ["pbx-webhook", "whatsapp", "smtp", "vapid", "siem", "zatca"];
+// 'sms' joined the boot-seed when SMS config moved into the vendor_secrets
+// hub (out of the UI-less per-company system_settings table).
+const CANONICAL_SLUGS = ["pbx-webhook", "whatsapp", "smtp", "sms", "vapid", "siem", "zatca"];
 
 d("ensureVendorSecretsSeed — boot-time vendor card guarantee", () => {
   let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
@@ -40,7 +42,7 @@ d("ensureVendorSecretsSeed — boot-time vendor card guarantee", () => {
     await ensureVendorSecretsSeed().catch(() => undefined);
   });
 
-  it("seeds the six canonical slugs from an empty table", async () => {
+  it("seeds the seven canonical slugs from an empty table", async () => {
     await rawExecute(`DELETE FROM vendor_secrets`);
     await ensureVendorSecretsSeed();
     const rows = await rawQuery<{ slug: string; status: string }>(

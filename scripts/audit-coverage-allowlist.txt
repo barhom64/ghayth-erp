@@ -209,3 +209,4 @@ PUT /rbac/v2/roles/:id/grants
 PUT /rbac/v2/roles/:id/grants/simple
 PUT /warehouse/pricing/rules/:id
 PUT /warehouse/saudi/wps/credentials/:bankCode
+POST /umrah/commission-plans/simulate
