@@ -400,7 +400,7 @@ export default function ExpensesCreate() {
       accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
       amount: form.amount ? null : "المبلغ مطلوب",
       branchId: form.branchId ? null : "الفرع مطلوب",
-      costCenter: form.costCenter ? null : "مركز التكلفة مطلوب",
+      costCenter: (form.costCenter || allocTarget.target !== "none") ? null : "مركز التكلفة مطلوب — أو اربط المصروف بسيناريو أعلاه",
       attachmentUrl: attachmentRequired && !form.attachmentUrl ? "المرفق إلزامي — هذا النوع من العمليات يتطلب إرفاق مستند داعم" : null,
     });
     if (firstError) {
@@ -790,10 +790,13 @@ export default function ExpensesCreate() {
               onChange={(v) => setForm({ ...form, departmentId: v })}
               label="القسم / الإدارة"
             />
+            {/* #2230 — when the expense is linked to a scenario, its dimensions
+                (vehicle / property / project / …) attribute the cost, so a
+                manual department cost-center is OPTIONAL (not required). */}
             <CostCenterSelect
               value={form.costCenter}
               onChange={(v) => setForm({ ...form, costCenter: v })}
-              required
+              required={allocTarget.target === "none"}
             />
             <ProjectSelect
               value={form.projectId}
