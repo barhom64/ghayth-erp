@@ -42,8 +42,8 @@ class HREngineImpl implements DomainEngine {
     const [salaryExpense, allowanceExpense, deductionAccount, salaryPayable] =
       await Promise.all([
         financialEngine.resolveAccountCode(ctx.companyId, "salary_expense", "debit", "5210"),
-        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "5820"),
-        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2120"),
+        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "5220"),
+        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2150"),
         financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       ]);
 
@@ -148,7 +148,7 @@ class HREngineImpl implements DomainEngine {
     const [eosExpense, leaveExpense, settlementPayable] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "eos_expense", "debit", "5260"),
       financialEngine.resolveAccountCode(ctx.companyId, "leave_settlement_expense", "debit", "5270"),
-      financialEngine.resolveAccountCode(ctx.companyId, "settlement_payable", "credit", "2140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "settlement_payable", "credit", "2120"),
     ]);
 
     const lines = [];
@@ -339,7 +339,7 @@ class HREngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5230"),
       financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2140"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2150"),
       financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2132"),
       // Umrah commission expense — seeded by migration 288 to 5240
       // (المكافآت والحوافز); the fallback matches the seed.

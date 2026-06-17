@@ -95,7 +95,7 @@ const FALLBACK_CODE: Record<AccountPurpose, string> = {
   cogs_default:             "5100",
   salary_expense:           "5200",
   salary_payable:           "2120",
-  salary_deductions_payable:"2210",
+  salary_deductions_payable:"2150",
 };
 
 /**

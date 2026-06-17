@@ -204,7 +204,7 @@ export async function calculateCommissionForPlan(
         getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "6200"),
         viaHr
           ? getAccountCodeFromMapping(plan.companyId, "salary_payable",      "credit", "2120")
-          : getAccountCodeFromMapping(plan.companyId, "commission_payable",  "credit", "2150"),
+          : getAccountCodeFromMapping(plan.companyId, "commission_payable",  "credit", "2155"),
       ]);
 
       const payableDescription = viaHr

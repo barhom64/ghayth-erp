@@ -27,7 +27,7 @@ class LegalEngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "legal_expense", "debit", "5920"),
-      financialEngine.resolveAccountCode(ctx.companyId, "legal_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_payable", "credit", "2111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -84,7 +84,7 @@ class LegalEngineImpl implements DomainEngine {
 
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "legal_settlement_expense", "debit", "5910"),
-      financialEngine.resolveAccountCode(ctx.companyId, "legal_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_payable", "credit", "2111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -166,7 +166,7 @@ class LegalEngineImpl implements DomainEngine {
     }
 
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "legal_payable", "debit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_payable", "debit", "2111"),
       financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1111"),
     ]);
     return financialEngine.postJournalEntry({
@@ -202,7 +202,7 @@ class LegalEngineImpl implements DomainEngine {
     const [feeExpenseCode, vatReceivableCode, apCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "legal_fee", "debit", "5920"),
       financialEngine.resolveAccountCode(ctx.companyId, "vat_input", "debit", "1180"),
-      financialEngine.resolveAccountCode(ctx.companyId, "legal_fee_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "legal_fee_payable", "credit", "2111"),
     ]);
 
     return financialEngine.postJournalEntry({
