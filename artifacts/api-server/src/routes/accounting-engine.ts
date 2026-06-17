@@ -95,8 +95,8 @@ export async function validateAccountingMapping(
             da.code AS "debitCode", da.name AS "debitName",
             ca.code AS "creditCode", ca.name AS "creditName"
      FROM accounting_mappings am
-     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
-     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
+     LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
+     LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
      WHERE am."companyId" = $1 AND am."operationType" = $2 AND am."isActive" = true`,
     [companyId, operationType]
   );
@@ -137,8 +137,8 @@ router.get("/accounting-mappings", authorize({ feature: "finance.accounting_engi
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
        WHERE am."companyId" = $1
        ORDER BY am."operationType" ASC
        LIMIT 500`,
@@ -197,8 +197,8 @@ router.get("/accounting-mappings/:operationType", authorize({ feature: "finance.
               da.code AS "debitCode", da.name AS "debitName",
               ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, req.params.operationType]
     );
@@ -261,8 +261,8 @@ router.put("/accounting-mappings/:operationType", authorize({ feature: "finance.
     const [updated] = await rawQuery<Record<string, unknown>>(
       `SELECT am.*, da.code AS "debitCode", da.name AS "debitName", ca.code AS "creditCode", ca.name AS "creditName"
        FROM accounting_mappings am
-       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId"
-       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId"
+       LEFT JOIN chart_of_accounts da ON da.id = am."debitAccountId" AND da."deletedAt" IS NULL
+       LEFT JOIN chart_of_accounts ca ON ca.id = am."creditAccountId" AND ca."deletedAt" IS NULL
        WHERE am."companyId" = $1 AND am."operationType" = $2`,
       [scope.companyId, operationType]
     );
@@ -315,7 +315,7 @@ router.get("/journal-templates", authorize({ feature: "finance.accounting_engine
       const allLines = await rawQuery<Record<string, unknown>>(
         `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
          FROM journal_entry_template_lines tl
-         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
+         LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2 AND ca."deletedAt" IS NULL
          WHERE tl."templateId" = ANY($1::int[])
          ORDER BY tl."templateId", tl."sortOrder", tl.id`,
         [templateIds, scope.companyId]
@@ -367,13 +367,13 @@ router.post("/journal-templates", authorize({ feature: "finance.accounting_engin
     });
 
     const [template] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [result, scope.companyId]
+      `SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [result, scope.companyId]
     );
     if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<Record<string, unknown>>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2 AND ca."deletedAt" IS NULL
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [result, scope.companyId]
     );
@@ -398,7 +398,7 @@ router.get("/journal-templates/:id", authorize({ feature: "finance.accounting_en
     template.lines = await rawQuery<Record<string, unknown>>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2 AND ca."deletedAt" IS NULL
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [id, scope.companyId],
     );
@@ -446,12 +446,12 @@ router.put("/journal-templates/:id", authorize({ feature: "finance.accounting_en
       }
     });
 
-    const [template] = await rawQuery<Record<string, unknown>>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [template] = await rawQuery<Record<string, unknown>>(`SELECT * FROM journal_entry_templates WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!template) throw new NotFoundError("القالب غير موجود");
     template.lines = await rawQuery<Record<string, unknown>>(
       `SELECT tl.*, ca.code AS "accountCode", ca.name AS "accountName"
        FROM journal_entry_template_lines tl
-       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2
+       LEFT JOIN chart_of_accounts ca ON ca.id = tl."accountId" AND ca."companyId" = $2 AND ca."deletedAt" IS NULL
        WHERE tl."templateId" = $1 ORDER BY tl."sortOrder" LIMIT 500`,
       [id, scope.companyId]
     );
@@ -500,7 +500,7 @@ router.get("/subsidiary-accounts", authorize({ feature: "finance.accounting_engi
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2", ca."currentBalance"
        FROM subsidiary_accounts sa
-       JOIN chart_of_accounts ca ON ca.id = sa."accountId"
+       JOIN chart_of_accounts ca ON ca.id = sa."accountId" AND ca."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        ORDER BY sa."entityType", sa."entityId"
        LIMIT 500`,
@@ -521,8 +521,8 @@ router.get("/subsidiary-accounts/entity/:entityType/:entityId", authorize({ feat
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType2",
               ca."currentBalance", ca."allowPosting"
        FROM subsidiary_accounts sa
-       JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-       WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3 AND sa."isActive" = true
+       JOIN chart_of_accounts ca ON ca.id = sa."accountId" AND ca."deletedAt" IS NULL
+       WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."entityType" = $2 AND sa."entityId" = $3 AND sa."isActive" = true
        ORDER BY sa."accountType" LIMIT 500`,
       [scope.companyId, entityType, entityId]
     );
@@ -550,8 +550,8 @@ router.post("/subsidiary-accounts", authorize({ feature: "finance.accounting_eng
 
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName"
-       FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-       WHERE sa.id = $1 AND sa."companyId" = $2`,
+       FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId" AND ca."deletedAt" IS NULL
+       WHERE sa.id = $1 AND sa."companyId" = $2 AND sa."deletedAt" IS NULL`,
       [insertId, scope.companyId]
     );
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "subsidiary_accounts", entityId: insertId, after: row }).catch((e) => logger.error(e, "accounting-engine background task failed"));
@@ -568,7 +568,7 @@ router.delete("/subsidiary-accounts/:id", authorize({ feature: "finance.accounti
     const id = parseId(req.params.id, "id");
     requireFinance(scope);
     const [before] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2`,
+      `SELECT * FROM subsidiary_accounts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [id, scope.companyId]
     );
     await rawExecute(
