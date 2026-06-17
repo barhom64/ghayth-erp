@@ -161,7 +161,12 @@ export default function AdminVendorSettings() {
   const { data, isLoading, error, refetch } = useApiQuery<{ data: VendorRow[] }>(
     ["vendor-settings"], "/admin/vendor-settings",
   );
-  const vendors = data?.data ?? [];
+  // WhatsApp + push (VAPID) are configured/read from «قنوات الاتصال»
+  // (system_settings) + env at runtime, and ZATCA from «هيئة الزكاة» (zatca_settings).
+  // Their vendor_secrets rows here are dead duplicates, so they're hidden to avoid a
+  // misleading second config surface that the runtime never reads.
+  const MOVED_SLUGS = new Set(["whatsapp", "vapid", "zatca"]);
+  const vendors = (data?.data ?? []).filter((v) => !MOVED_SLUGS.has(v.slug));
 
   return (
     <PageShell
@@ -170,7 +175,7 @@ export default function AdminVendorSettings() {
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "إعدادات المزوّدات الخارجية" },
       ]}
-      subtitle="كل التكاملات الخارجية في مكان واحد — PBX، WhatsApp، Email، Push، SIEM، ZATCA. الأسرار مشفّرة في DB، تُقرأ من البيئة عند فقدان السجل."
+      subtitle="أسرار التكاملات الخلفية — PBX والبريد وSIEM. مشفّرة في DB، وتُقرأ من البيئة عند فقدان السجل."
       actions={
         <Button variant="outline" size="sm" onClick={() => refetch()}>
           <RefreshCw className="w-4 h-4 me-1" />تحديث
@@ -182,6 +187,9 @@ export default function AdminVendorSettings() {
           {vendors.map((v) => (
             <VendorCard key={v.slug} vendor={v} onChange={refetch} />
           ))}
+          <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            واتساب والإشعارات الفورية تُضبط من «قنوات الاتصال» في الإعدادات، وهيئة الزكاة من تبويب «هيئة الزكاة والضريبة» — هذه الصفحة للأسرار الخلفية فقط.
+          </div>
           {vendors.length === 0 && (
             <Card>
               <CardContent className="p-8 text-center text-sm text-muted-foreground">
