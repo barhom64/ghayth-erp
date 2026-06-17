@@ -670,6 +670,16 @@ async function resolveSubsidiaryParent(
   return byCode.rows[0] ?? null;
 }
 
+// Per-subsidiary accountUsage so auto-created leaves are classified the same
+// way the create route classifies a manual account (#1715). Without it the
+// leaf lands accountUsage=null and the payment-method money-account filter
+// (cash → custody / cash_box) can't surface auto-created custody accounts.
+const SUBSIDIARY_ACCOUNT_USAGE: Record<string, string> = {
+  custody: "custody", receivable: "receivable", payable: "payable",
+  advance: "receivable", revenue: "revenue",
+  fuel: "operating_expense", maintenance: "operating_expense", depreciation: "operating_expense",
+};
+
 export async function createSubsidiaryAccountsForEntity(
   companyId: number,
   entityType: "employee" | "client" | "vendor" | "vehicle" | "driver" | "property" | "umrah_agent",
@@ -763,15 +773,16 @@ export async function createSubsidiaryAccountsForEntity(
           accountId = existingAcc.id;
         } else {
           const { rows: [newAcc] } = await client.query(
-            `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting", "isAnalytical", "isActive")
+            `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", "accountUsage", level, "allowPosting", "isAnalytical", "isActive")
              VALUES ($1,$2,$3,$4,
                (SELECT type FROM chart_of_accounts WHERE id = $5),
                $5,
                $6,
+               $7,
                (SELECT level + 1 FROM chart_of_accounts WHERE id = $5),
                true, true, true)
              RETURNING id`,
-            [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id, parentAccount.code]
+            [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id, parentAccount.code, SUBSIDIARY_ACCOUNT_USAGE[acc.accountType] ?? null]
           );
           accountId = newAcc.id;
         }

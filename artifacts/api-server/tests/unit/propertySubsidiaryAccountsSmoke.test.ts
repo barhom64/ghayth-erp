@@ -55,5 +55,20 @@ describe("subsidiary leaf INSERT — stamps parentCode so dimensional substituti
     expect(subInsert![0]).toMatch(/INSERT INTO chart_of_accounts/);
     expect(subInsert![0]).toMatch(/"parentCode"/);
     expect(subInsert![0]).toMatch(/parentAccount\.code/);
+    expect(subInsert![0]).toMatch(/"accountUsage"/);
+  });
+});
+
+describe("subsidiary leaf accountUsage — auto-created leaves are classified (payment-method filter)", () => {
+  it("maps money/ledger accountTypes to a valid accountUsage bucket", () => {
+    const map = ENGINE.match(/SUBSIDIARY_ACCOUNT_USAGE[\s\S]*?\};/);
+    expect(map).toBeTruthy();
+    expect(map![0]).toMatch(/custody:\s*"custody"/);
+    expect(map![0]).toMatch(/receivable:\s*"receivable"/);
+    expect(map![0]).toMatch(/payable:\s*"payable"/);
+  });
+  it("the INSERT stamps accountUsage from the map (so custody leaves filter under cash payments)", () => {
+    const subInsert = ENGINE.match(/const \{ rows: \[newAcc\] \} = await client\.query\([\s\S]*?\);/);
+    expect(subInsert![0]).toMatch(/SUBSIDIARY_ACCOUNT_USAGE\[acc\.accountType\]/);
   });
 });
