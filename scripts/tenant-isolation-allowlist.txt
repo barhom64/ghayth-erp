@@ -62,7 +62,6 @@ routes/fleet-telematics.ts:fleet_video_channels
 routes/fleet.ts:fleet_gps_tracking
 
 # ── [TIGHTER] finance: cip_costs keyed by a CIP id validated vs companyId upstream.
-routes/finance-algorithms.ts:cip_costs
 
 # ── [TIGHTER] inbox: conversation_links keyed by a conversation validated upstream.
 
@@ -97,8 +96,6 @@ routes/projects.ts:employees
 
 # ── [TIGHTER] RBAC: dependency/notification reads keyed on an id validated vs
 # companyId in the same handler (role/jit request locked & company-checked).
-routes/rbacV2.ts:rbac_jit_requests
-routes/rbacV2.ts:rbac_user_roles
 
 # ── [TIGHTER] umrah: commission / import reads keyed on a plan or import batch
 # validated vs companyId in the same handler.
