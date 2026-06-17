@@ -133,14 +133,27 @@ routes/execDashboard.ts:journal_lines
 routes/execDashboard.ts:umrah_pilgrims
 routes/execDashboard.ts:umrah_seasons
 routes/execDashboard.ts:umrah_violations
-routes/finance-algorithms.ts:chart_of_accounts
+# cip_costs: the cost-count CTE already filters `"deletedAt" IS NULL`, but the
+# scanner flags it because the same statement also references
+# construction_in_progress (2 tables) — with 2+ refs it requires an
+# alias-qualified predicate, and qualifying it (cip_costs cpc) breaks the
+# cipListNPlusOneFix unit test that asserts the exact CTE SQL. The read is
+# correctly filtered; this is a scanner false-positive, kept as-is.
 routes/finance-algorithms.ts:cip_costs
-routes/finance-algorithms.ts:construction_in_progress
-routes/finance-algorithms.ts:invoices
-routes/finance-algorithms.ts:journal_entries
-routes/finance-algorithms.ts:journal_lines
+# chart_of_accounts: balance / subsidiary-balance / transaction-detail queries
+# join COA by accountCode (or by id to resolve a subsidiary's own account) for
+# coa.type/code/name enrichment. Filtering coa."deletedAt" would null the type
+# (dropping a soft-deleted account's posted lines from balance buckets) or drop
+# the subsidiary row entirely. Lines are filtered (jl."deletedAt" IS NULL).
+# Same enrichment exception as finance-hardening:chart_of_accounts.
+routes/finance-algorithms.ts:chart_of_accounts
+# store_products: spend-by-product report LEFT JOINs store_products only for
+# MAX(p.name) display of historical invoice lines; filtering "deletedAt" would
+# blank a since-deleted product's name. Same as finance-purchase:store_products.
 routes/finance-algorithms.ts:store_products
-routes/finance-algorithms.ts:subsidiary_accounts
+# warehouse_categories: inventory-valuation report LEFT JOINs the category only
+# for c.name display; filtering "deletedAt" would blank a since-deleted
+# category's name while the product (and its stock value) stays. Enrichment-only.
 routes/finance-algorithms.ts:warehouse_categories
 # chart_of_accounts: cost-center P&L / revenue-expense sums join COA by
 # accountCode only to read coa.type for the revenue/expense CASE — same
