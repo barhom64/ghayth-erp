@@ -145,12 +145,15 @@ routes/finance-algorithms.ts:warehouse_categories
 routes/finance-cost-centers.ts:chart_of_accounts
 routes/finance-cost-centers.ts:cost_centers
 routes/finance-cost-centers.ts:journal_lines
-routes/finance-hardening.ts:bank_guarantees
+# chart_of_accounts: consolidated balance-sheet / P&L sums join COA by accountCode
+# purely to read coa.type for the asset/liability/equity/revenue/expense CASE.
+# Adding coa."deletedAt" IS NULL would DROP any posted line whose account was
+# later soft-deleted, understating totals and unbalancing the balance sheet
+# (assets != liabilities + equity). The lines themselves are filtered
+# (jl."deletedAt" IS NULL + je.balancesApplied); the account-delete guard also
+# refuses to delete an account that still carries journal lines. Enrichment-only
+# exception, same class as the warehouse_products joins below.
 routes/finance-hardening.ts:chart_of_accounts
-routes/finance-hardening.ts:employees
-routes/finance-hardening.ts:financial_periods
-routes/finance-hardening.ts:journal_lines
-routes/finance-hardening.ts:suppliers
 # store_products: enrichment name-lookup for historical PO line items. The
 # SELECT only builds an id→name display map; filtering "deletedAt" IS NULL
 # would blank a since-deleted product's name on old purchase orders (the
