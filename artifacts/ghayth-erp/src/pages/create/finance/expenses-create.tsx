@@ -265,6 +265,8 @@ export default function ExpensesCreate() {
   // #2230 — multi-cost-center distribution is rare; keep it collapsed until the
   // operator opens it (or a restored draft already carries rows).
   const [ccOpen, setCcOpen] = useState(false);
+  // #2230 — VAT is rare on a typical expense; keep its fields collapsed.
+  const [taxOpen, setTaxOpen] = useState(false);
   const ccRows = ccDist.filter((r) => r.costCenterId && r.percentage);
   const ccPctTotal = ccRows.reduce((s, r) => s + (Number(r.percentage) || 0), 0);
   const ccBalanced = ccRows.length === 0 || Math.abs(ccPctTotal - 100) < 0.01;
@@ -723,10 +725,23 @@ export default function ExpensesCreate() {
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <h3 className="font-semibold text-sm text-muted-foreground">المبالغ والضريبة</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
             <NumberField label={isFuelScenario ? "المبلغ (لتر × سعر — تلقائي)" : "المبلغ (ريال)"} required value={form.amount}
               onChange={(v) => setForm({ ...form, amount: v })} min={0} step={0.01} placeholder="0.00"
               disabled={isFuelScenario} />
+            {/* #2230 — VAT is optional/rare on a typical expense; keep it behind a
+                toggle that opens automatically once a tax code is selected. */}
+            <button
+              type="button"
+              onClick={() => setTaxOpen((v) => !v)}
+              className="flex items-center justify-between text-sm font-semibold text-muted-foreground border rounded-md px-3 h-10"
+            >
+              <span>ضريبة القيمة المضافة (اختياري){form.taxCodeId ? " — مُفعّلة" : ""}</span>
+              <ChevronDown className={`h-4 w-4 transition-transform ${(taxOpen || form.taxCodeId) ? "rotate-180" : ""}`} />
+            </button>
+          </div>
+          {(taxOpen || form.taxCodeId) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormFieldWrapper label="رمز الضريبة">
               <Select value={form.taxCodeId || "_none"} onValueChange={handleTaxCodeChange}>
                 <SelectTrigger><SelectValue placeholder="— بدون ضريبة —" /></SelectTrigger>
@@ -756,6 +771,7 @@ export default function ExpensesCreate() {
             {/* #1945 — «التصنيف الضريبي» اليدوي أُزيل: يُشتق تلقائيًا من رمز
                 الضريبة المختار (TAX_TYPE_TO_CATEGORY) فلا يتكرر مع رمز الضريبة. */}
           </div>
+          )}
           {effectiveRate > 0 && Number(form.amount) > 0 && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
               <span className="px-2 py-1 rounded bg-muted">
