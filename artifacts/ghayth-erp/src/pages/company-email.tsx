@@ -1,5 +1,5 @@
 /**
- * Company Email ("بريد الشركة") — per-company outbound SMTP (migration 388).
+ * Company Email ("بريد الشركة") — per-company outbound SMTP (migration 389).
  *
  * Lets a company admin set THEIR OWN outbound mailbox with structured fields
  * (host/port/user/password/from/…) + a real connectivity test, instead of the

@@ -113,7 +113,7 @@ function fromShape(raw: Record<string, unknown>, source: SystemSmtpConfig["sourc
  */
 export async function resolveSystemSmtpConfig(companyId?: number | null): Promise<SystemSmtpConfig | null> {
   // 0. Per-company mailbox ("بريد الشركة") — a vendor_secrets row whose
-  //    "companyId" matches the caller (migration 388). An ACTIVE company row
+  //    "companyId" matches the caller (migration 389). An ACTIVE company row
   //    OVERRIDES the platform default; a company with no row falls through to
   //    the platform mailbox below, so behaviour is unchanged for everyone who
   //    hasn't set one. This is the only step that depends on companyId.

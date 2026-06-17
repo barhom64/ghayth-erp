@@ -1,4 +1,4 @@
-// Per-company SMTP override ("بريد الشركة" — migration 388).
+// Per-company SMTP override ("بريد الشركة" — migration 389).
 //
 // Proves over a live Postgres that resolveSystemSmtpConfig honours a
 // company's own active vendor_secrets row (companyId = X) OVER the platform
@@ -16,7 +16,7 @@ const dbReady =
 
 const d = dbReady ? describe : describe.skip;
 
-d("per-company SMTP override (migration 388)", () => {
+d("per-company SMTP override (migration 389)", () => {
   let rawQuery: typeof import("../../src/lib/rawdb.js").rawQuery;
   let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
   let resolveSystemSmtpConfig: typeof import("../../src/lib/systemSmtp.js").resolveSystemSmtpConfig;

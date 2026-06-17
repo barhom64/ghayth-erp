@@ -333,7 +333,7 @@ router.post("/smtp/test-send", authorize({ feature: "admin", action: "update" })
   }
 });
 
-// ─────────────────── Per-company SMTP ("بريد الشركة") — migration 388 ───────
+// ─────────────────── Per-company SMTP ("بريد الشركة") — migration 389 ───────
 // A company admin manages THEIR OWN outbound mailbox. scope.companyId scopes
 // every read/write, so no one touches another tenant's row or the platform
 // default. When status='active', resolveSystemSmtpConfig (step 0) makes this

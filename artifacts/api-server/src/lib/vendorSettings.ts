@@ -157,7 +157,7 @@ export async function getVendorConfig(slug: VendorSlug): Promise<VendorConfig> {
   let result: VendorConfig;
   try {
     const [row] = await rawQuery<{ status: string; config: Record<string, unknown> }>(
-      // Platform row only — per-company overrides (migration 388) are read
+      // Platform row only — per-company overrides (migration 389) are read
       // via getCompanyVendorConfig, never through this platform resolver.
       `SELECT status, config FROM vendor_secrets WHERE slug = $1 AND "companyId" IS NULL LIMIT 1`,
       [slug],
@@ -190,7 +190,7 @@ export async function getVendorConfig(slug: VendorSlug): Promise<VendorConfig> {
 
 /**
  * Per-company variant of a vendor secret — a `vendor_secrets` row whose
- * "companyId" matches the caller (migration 388). Used for per-company
+ * "companyId" matches the caller (migration 389). Used for per-company
  * overrides such as "بريد الشركة" (per-company SMTP). NOT cached (the
  * platform cache is keyed by slug only); per-company reads are rare
  * (queue worker, send path) and already gated by their own callers.

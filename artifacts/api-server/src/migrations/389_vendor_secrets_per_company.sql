@@ -1,4 +1,4 @@
--- 388_vendor_secrets_per_company.sql
+-- 389_vendor_secrets_per_company.sql
 -- Per-company vendor secrets — starting with per-company SMTP ("بريد الشركة").
 --
 -- Adds a nullable "companyId" so a slug can have ONE platform row
