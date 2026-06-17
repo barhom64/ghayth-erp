@@ -131,11 +131,17 @@ export default function TransportServiceLines() {
     if (!selected.length || !batchCustomerId) return;
     setBatchLoading(true);
     try {
-      await apiFetch("/transport/invoice-batches", {
-        method: "POST",
-        body: JSON.stringify({ serviceLineIds: selected, customerId: batchCustomerId }),
+      const res = await apiFetch<{ invoiceId: number; ref: string; lineCount: number; total: number }>(
+        "/transport/invoice-batches",
+        {
+          method: "POST",
+          body: JSON.stringify({ serviceLineIds: selected, customerId: batchCustomerId }),
+        },
+      );
+      toast({
+        title: "تم إنشاء فاتورة النقل",
+        description: `فاتورة ${res.ref} — ${res.lineCount} بند بإجمالي ${formatCurrency(res.total)} (مسودة بانتظار الاعتماد)`,
       });
-      toast({ title: "تم إنشاء دفعة الفوترة", description: `${selected.length} بند → فاتورة` });
       setSelected([]);
       setBatchCustomerId(null);
       refetch();
