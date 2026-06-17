@@ -55,4 +55,12 @@ describe("SMS provider unification (vendor_secrets hub)", () => {
     expect(s).toContain('key: "authToken"');
     expect(s).toContain('key: "fromNumber"');
   });
+
+  it("vendor-settings test endpoint has a Twilio connectivity probe for sms", () => {
+    const s = read(join(apiSrc, "routes", "admin-vendor-settings.ts"));
+    expect(s).toMatch(/case "sms":/);
+    // Validates creds via a GET on the Account resource — never sends an SMS.
+    expect(s).toContain("api.twilio.com/2010-04-01/Accounts/");
+    expect(s).toContain("Account SID و Auth Token");
+  });
 });
