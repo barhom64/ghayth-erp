@@ -60,6 +60,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "careersPortal.ts",
   "clientPortal.ts",
   "communications.ts",
+  // communications-sms-webhook.ts: anonymous Twilio inbound webhook
+  // (mounted BEFORE authMiddleware — no req.scope exists, so
+  // buildScopedWhere is inapplicable). Tenant is RESOLVED from the inbound
+  // AccountSid/To, and every read/write is then keyed by that resolved
+  // companyId. Manual scope is correct here.
+  "communications-sms-webhook.ts",
   "correspondence.ts",
   "digital-signature.ts",
   "documents.ts",
@@ -329,9 +335,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // — 4 read-only journey/recovery/pricing-drift routes carved verbatim
       // out of umrah-entities.ts. Same aggregate shape and same allowlist
       // justification as the parent.
-      total: 127,
+      // +1 total/manualOnly: routes/communications-sms-webhook.ts — anonymous
+      // Twilio SMS inbound webhook (no req.scope; tenant resolved from the
+      // inbound payload, then keyed by the resolved companyId). Allowlisted.
+      total: 128,
       helperUsers: 39,
-      manualOnly: 85,
+      manualOnly: 86,
     });
   });
 });

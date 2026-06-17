@@ -37,6 +37,7 @@ import crmRouter from "./crm.js";
 import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
+import communicationsSmsWebhookRouter from "./communications-sms-webhook.js";
 import inboxRouter from "./inbox.js";
 import inboxConversationsRouter from "./inboxConversations.js";
 import mailboxesRouter from "./mailboxes.js";
@@ -232,6 +233,13 @@ router.use("/pdpl", pdplRouter);
 // vendor doesn't need an ERP JWT. The router enforces per-IP rate limit,
 // timestamp window, and timing-safe signature compare inside.
 router.use("/webhooks/cmsv6", fleetTelematicsWebhookRouter);
+
+// SMS inbound webhook (Twilio). Anonymous surface, X-Twilio-Signature-verified
+// inside the router. Mounted BEFORE authMiddleware so Twilio (which carries no
+// ERP JWT) can reach it; only POST /communications/sms/webhook is defined here,
+// every other /communications/* path falls through to the authenticated
+// communicationsRouter mounted later.
+router.use("/communications", communicationsSmsWebhookRouter);
 
 router.get("/settings/display", async (req, res) => {
   try {
