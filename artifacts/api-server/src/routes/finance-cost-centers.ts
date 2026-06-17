@@ -119,7 +119,7 @@ router.get("/cost-centers/tree", authorize({ feature: "finance.cost_centers", ac
                   COUNT(DISTINCT je.id)::int                     AS "jeCount",
                   MAX(je.date)                                   AS "lastActivityAt"
              FROM journal_lines jl
-             JOIN journal_entries je ON je.id = jl."journalId"
+             JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
             WHERE je."companyId" = $1
               AND je."deletedAt" IS NULL
               AND jl."costCenterId" = t.id
@@ -344,7 +344,7 @@ router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers",
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM tree t
-           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id AND jl."deletedAt" IS NULL
            LEFT JOIN journal_entries je
                   ON je.id = jl."journalId"
                  AND je."companyId" = $1
@@ -413,7 +413,7 @@ router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers",
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM tree t
-           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id AND jl."deletedAt" IS NULL
            LEFT JOIN journal_entries je
                   ON je.id = jl."journalId"
                  AND je."companyId" = $1
@@ -725,6 +725,7 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
                     AND EXISTS (
                       SELECT 1 FROM journal_lines jl
                        WHERE jl."journalId" = je.id
+                         AND jl."deletedAt" IS NULL
                          AND jl."departmentId" = d.id
                     )
                   ORDER BY je."createdAt" ASC LIMIT 1) AS "branchId"
@@ -848,7 +849,7 @@ router.get("/journal-lines/dimensional-coverage", authorize({ feature: "finance.
                 COALESCE(jl."projectId", jl."contractId", jl."vehicleId",
                          jl."departmentId", jl."branchId") AS any_dim
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
           WHERE je."companyId" = $1
             AND je."deletedAt" IS NULL
        )
@@ -910,7 +911,7 @@ router.get("/dormant-entities", authorize({ feature: "finance.cost_centers", act
            SELECT MAX(je.date) AS "lastActivityAt",
                   COUNT(DISTINCT je.id)::int AS "jeCount"
              FROM journal_lines jl
-             JOIN journal_entries je ON je.id = jl."journalId"
+             JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
             WHERE je."companyId" = cc."companyId"
               AND je."deletedAt" IS NULL
               AND jl."costCenterId" = cc.id
@@ -950,7 +951,7 @@ router.get("/dormant-entities", authorize({ feature: "finance.cost_centers", act
            SELECT MAX(je.date) AS "lastActivityAt",
                   COUNT(DISTINCT je.id)::int AS "jeCount"
              FROM journal_lines jl
-             JOIN journal_entries je ON je.id = jl."journalId"
+             JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
             WHERE je."companyId" = sa."companyId"
               AND je."deletedAt" IS NULL
               AND jl."accountCode" = coa.code
@@ -1131,7 +1132,7 @@ router.get("/cost-centers/:id/pnl", authorize({ feature: "finance.cost_centers",
          COUNT(DISTINCT je.id) FILTER (WHERE jl."costCenterId" = $1)::int AS "selfEntries",
          COUNT(DISTINCT je.id) FILTER (WHERE jl."costCenterId" = ANY($3::int[]))::int AS "rolledEntries"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId"
+       JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts ca
               ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
        WHERE je."companyId" = $2
@@ -1167,7 +1168,7 @@ router.get("/cost-centers/:id/pnl", authorize({ feature: "finance.cost_centers",
               COALESCE(SUM(jl.debit), 0) AS debit,
               COALESCE(SUM(jl.credit), 0) AS credit
          FROM journal_entries je
-         JOIN journal_lines jl ON jl."journalId" = je.id
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
         WHERE je."companyId" = $1
           AND je."deletedAt" IS NULL
           AND je.date BETWEEN $2 AND $3
@@ -1253,7 +1254,7 @@ router.get("/cost-centers/:id/series", authorize({ feature: "finance.cost_center
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $4
@@ -1359,7 +1360,7 @@ router.get("/cost-centers/:id/yoy", authorize({ feature: "finance.cost_centers",
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $6
@@ -1374,7 +1375,7 @@ router.get("/cost-centers/:id/yoy", authorize({ feature: "finance.cost_centers",
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $6
@@ -1657,7 +1658,7 @@ router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.co
                            THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
          COUNT(DISTINCT je.id)::int AS entries
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId"
+       JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts ca
               ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
        WHERE je."companyId" = $1
@@ -1679,7 +1680,7 @@ router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.co
               COALESCE(SUM(jl.debit), 0) AS debit,
               COALESCE(SUM(jl.credit), 0) AS credit
          FROM journal_entries je
-         JOIN journal_lines jl ON jl."journalId" = je.id
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
         WHERE je."companyId" = $1
           AND je."deletedAt" IS NULL
           AND je.date BETWEEN $2 AND $3
@@ -1759,7 +1760,7 @@ router.get("/entity-pnl/:entityType/:entityId/series", authorize({ feature: "fin
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $1
@@ -1867,7 +1868,7 @@ router.get("/entity-pnl/:entityType/:entityId/yoy", authorize({ feature: "financ
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $1
@@ -1882,7 +1883,7 @@ router.get("/entity-pnl/:entityType/:entityId/yoy", authorize({ feature: "financ
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $1
@@ -2022,7 +2023,7 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $1
@@ -2071,7 +2072,7 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $1
