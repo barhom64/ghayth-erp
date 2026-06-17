@@ -37,6 +37,7 @@
     "check:duplicate-migrations": "node scripts/src/check-duplicate-migrations.mjs",
     "check:button-nesting": "node scripts/src/check-button-nesting.mjs",
     "check:usememo-setstate": "node scripts/src/check-usememo-setstate.mjs",
+    "check:register-limiter-misuse": "node scripts/src/check-register-limiter-misuse.mjs",
     "check:dup-filenames": "node scripts/src/check-dup-filenames.mjs",
     "check:audit-coverage": "node scripts/src/check-audit-coverage.mjs",
     "check:lazy-table-swallow": "node scripts/src/check-lazy-table-swallow.mjs",
