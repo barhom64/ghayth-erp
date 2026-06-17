@@ -1781,8 +1781,19 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
       internalEmail: string | null;
       email: string | null;
     }>(
-      `SELECT id, "personalEmail", "internalEmail", email
-         FROM employees WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
+      // Tenant scope via the assignment, NOT the `OR companyId IS NULL`
+      // fallback: employees.companyId is intentionally left NULL (the tenant
+      // lives on employee_assignments), so the old fallback matched an
+      // employee row from ANY company. Require an assignment in the caller's
+      // company instead — true tenant isolation, defense-in-depth behind the
+      // authorize(resource) gate.
+      `SELECT e.id, e."personalEmail", e."internalEmail", e.email
+         FROM employees e
+        WHERE e.id = $1 AND e."deletedAt" IS NULL
+          AND EXISTS (
+            SELECT 1 FROM employee_assignments ea
+             WHERE ea."employeeId" = e.id AND ea."companyId" = $2
+          )`,
       [id, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
