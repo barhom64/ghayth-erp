@@ -276,8 +276,11 @@ export const allNavSections: NavSection[] = [
       { label: "إعدادات الموارد البشرية", path: "/hr/attendance-policy", icon: Settings, module: "hr", children: [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
-        { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
-        { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
+        // /admin/org-model + /admin/org-memberships removed from the sidebar:
+        // the legal_entities/positions/teams overlay (migration 274) is a parallel
+        // org model consumed nowhere outside org.ts — the load-bearing structure is
+        // companies/branches/departments (settings). Kept URL-reachable (off-sidebar)
+        // because hr/org-tree still links org-memberships for team/committee CRUD.
         { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
         { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
         { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },

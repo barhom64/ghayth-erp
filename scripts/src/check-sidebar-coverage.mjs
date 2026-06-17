@@ -97,6 +97,11 @@ const INTENTIONAL_OFF_SIDEBAR = new Set([
   "/settings/resolved",
   "/settings/zatca",
   "/settings/gov",
+  // Parallel org-model overlay (legal_entities/positions/teams) retired from the
+  // sidebar as a duplicate of companies/branches/departments; kept URL-reachable
+  // (hr/org-tree links org-memberships for team/committee CRUD).
+  "/admin/org-model",
+  "/admin/org-memberships",
 ]);
 
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
