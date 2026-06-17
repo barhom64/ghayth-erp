@@ -457,6 +457,39 @@ async function runVendorTest(
       }
     }
 
+    case "sms": {
+      const accountSid = String(config.accountSid ?? "");
+      const authToken = String(config.authToken ?? "");
+      const fromNumber = String(config.fromNumber ?? "");
+      if (!accountSid || !authToken) {
+        return { ok: false, message: "Account SID و Auth Token كلاهما مطلوب." };
+      }
+      if (fromNumber && !/^\+[1-9]\d{6,14}$/.test(fromNumber)) {
+        return { ok: false, message: "رقم المرسل يجب أن يكون بصيغة E.164 (مثل +14155552671)." };
+      }
+      // GET the Account resource — validates SID + token via Basic auth
+      // WITHOUT sending an SMS (no cost, no side effect). 200 = valid,
+      // 401 = bad credentials. Mirrors the WhatsApp probe; 8s timeout.
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 8000);
+        const creds = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+        const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}.json`, {
+          headers: { Authorization: `Basic ${creds}` },
+          signal: ctrl.signal,
+        });
+        clearTimeout(t);
+        if (!r.ok) {
+          const text = await r.text().catch(() => "");
+          return { ok: false, message: `Twilio رفض: HTTP ${r.status} (تحقّق من Account SID و Auth Token).`, details: { body: text.slice(0, 200) } };
+        }
+        const data = (await r.json().catch(() => null)) as { friendly_name?: string; status?: string } | null;
+        return { ok: true, message: "Twilio يستجيب — Account SID و Auth Token صالحان.", details: { friendlyName: data?.friendly_name, status: data?.status } };
+      } catch (err) {
+        return { ok: false, message: `الاتصال فشل: ${(err as Error)?.message ?? String(err)}` };
+      }
+    }
+
     default:
       return { ok: false, message: `لا يوجد اختبار محدّد لهذا الـ slug: ${String(slug)}` };
   }
