@@ -840,6 +840,7 @@ export const allNavSections: NavSection[] = [
       { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
         { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
         { label: "الصناديق المتصلة", path: "/mailboxes", icon: Send },
+        { label: "بريد الشركة", path: "/company-email", icon: Mail, perm: "admin:update" },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
         // Phase 5: communications dashboard is admin-only — non-managers
         // get redirected to /inbox automatically. Sidebar hides it for
