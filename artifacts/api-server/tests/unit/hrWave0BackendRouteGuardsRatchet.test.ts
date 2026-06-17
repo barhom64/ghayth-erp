@@ -150,12 +150,13 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // HR-REV-3 (#2222) added 1 (POST /employees/quick-activate, gated). 223→224.
     // HR-REV-8 (#2222) added 1 (POST /recruitment/applications/:id/hire, gated). 224→225.
     // HR-REV-9 (#2222) added 2 (PATCH+DELETE /hr/employee-documents/:id, gated). 225→227.
-    expect(ALL_REGISTRATIONS.length).toBe(227);
+    // HR-REV-4 (#2222) added 1 (DELETE /employees/job-titles/:id, gated). 227→228.
+    expect(ALL_REGISTRATIONS.length).toBe(228);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(227);
+    expect(gated).toBe(228);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
@@ -165,7 +166,8 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
       // PR-4 (#2077) added 2 (scoring/recompute + scoring/history);
       // PR-8 (#2077) added 3 (lifecycle/status + /history + /transitions).
       // HR-REV-3 (#2222) added 1 (POST /quick-activate, gated). 18→19.
-      "employees.ts": 19,
+      // HR-REV-4 (#2222) added DELETE /job-titles/:id (gated). 19→20.
+      "employees.ts": 20,
       // main merged 4 endpoints (121→125); PR-9 (#2077) added the
       // field-ping eligibility mirror (125→126). HR-REV-9 (#2222) added
       // PATCH+DELETE /employee-documents/:id (126→128). All gated.

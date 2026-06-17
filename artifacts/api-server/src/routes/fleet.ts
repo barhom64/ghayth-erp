@@ -4209,18 +4209,30 @@ router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action
     if (!vehicleRow) {
       throw new ValidationError("المركبة غير موجودة", { field: "vehicleId", fix: "اختر مركبة مسجلة" });
     }
+    let driverEmployeeId: number | null = null;
     if (b.driverId) {
-      const [driverRow] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      const [driverRow] = await rawQuery<{ id: number; employeeId: number | null }>(
+        `SELECT id, "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.driverId, scope.companyId]
       );
       if (!driverRow) {
         throw new ValidationError("السائق غير موجود", { field: "driverId", fix: "اختر سائقاً مسجلاً في النظام" });
       }
+      driverEmployeeId = driverRow.employeeId ?? null;
     }
     // "company" (default) = company pays the fine → GL expense.
     // "driver" = fine liability shifted to driver → payroll deduction in current period.
     const liability: 'company' | 'driver' = b.liability === 'driver' ? 'driver' : 'company';
+    // Guard the silent-drop: a driver-liability fine can only be docked if the
+    // driver is linked to an employee record. Without this the deduction step
+    // skips quietly — no GL (liability isn't company), no payroll row, no error
+    // — and the fine vanishes from both ledgers. Fail fast at validation time.
+    if (liability === 'driver' && fineAmount > 0 && driverEmployeeId == null) {
+      throw new ValidationError(
+        "السائق غير مرتبط بسجل موظف — لا يمكن حسم الغرامة من راتبه",
+        { field: "driverId", fix: "اربط السائق بموظف، أو غيّر المسؤولية إلى «الشركة» لترحيلها كمصروف." }
+      );
+    }
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_traffic_violations

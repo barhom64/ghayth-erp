@@ -2088,7 +2088,7 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
       // The old `accountCode = '1100'` filter dropped bank/other-cash payments
       // entirely (DR 1110 or a tenant-mapped account); the payment JE has
       // exactly one debit leg, so SUM(debit) is the amount for ANY cash account.
-      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
+      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
       rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
     ]);
     res.json(maskFields(req, { ...invoice, lines, payments, journalEntries }));
@@ -2583,6 +2583,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
          JOIN journal_entries je ON je.id = cm."journalId"
         WHERE cm."companyId" = $1
           AND to_char(cm."memoDate", 'YYYY-MM') = $2
+          AND cm."deletedAt" IS NULL
           AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true
           AND je."reversedById" IS NULL`,
@@ -2594,6 +2595,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
          JOIN journal_entries je ON je.id = dm."journalId"
         WHERE dm."companyId" = $1
           AND to_char(dm."memoDate", 'YYYY-MM') = $2
+          AND dm."deletedAt" IS NULL
           AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true
           AND je."reversedById" IS NULL`,
@@ -2607,6 +2609,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
           AND je."balancesApplied" = true
           AND je."reversedById" IS NULL
         WHERE je."companyId" = $1
+          AND jl."deletedAt" IS NULL
           AND jl."accountCode" = $3
           AND to_char(je."createdAt", 'YYYY-MM') = $2`,
       [scope.companyId, targetPeriod, inputVatCode]
@@ -3066,7 +3069,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     // cogsReversalWarnings is non-fatal — flagged when a restored lot's
     // status drifted between sale and return (quarantine / recalled /
     // expired / disposed / qc-rejected / lot deleted). UI should
@@ -3771,7 +3774,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
       details: JSON.stringify({ memoId, amount: chargeAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM debit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM debit_memos WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: chargeAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
   } catch (err) {
     handleRouteError(err, res, "Debit memo error:");
@@ -3787,14 +3790,14 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices
     try {
       creditMemos = await rawQuery<Record<string, unknown>>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalEntryId", "createdAt"
-           FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
+           FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
     } catch (e) { logger.warn(e, "credit_memos table may not exist yet"); }
     try {
       debitMemos = await rawQuery<Record<string, unknown>>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "createdAt"
-           FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
+           FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
     } catch (e) { logger.warn(e, "debit_memos table may not exist yet"); }
@@ -4485,7 +4488,7 @@ invoicesRouter.get("/dunning/preview", authorize({ feature: "finance.collection"
        LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$2
          AND i.status NOT IN ('paid','cancelled')
-         AND COALESCE(i."deletedAt",NULL) IS NULL
+         AND i."deletedAt" IS NULL
          AND i."dueDate" IS NOT NULL
          AND i."dueDate"::date < $1::date
          AND ($1::date - i."dueDate"::date) >= $3
@@ -4670,6 +4673,7 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
               COALESCE(SUM("vatAmount"), 0) AS total
        FROM credit_memos
        WHERE "companyId" = $1
+         AND "deletedAt" IS NULL
          AND "memoDate" >= make_date($2, 1, 1) AND "memoDate" < make_date($2 + 1, 1, 1)
        GROUP BY to_char("memoDate", 'YYYY-MM')`,
       [scope.companyId, thisYear]
@@ -4679,7 +4683,7 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
               COALESCE(SUM(jl.debit), 0) AS total
        FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je."balancesApplied" = true
-       WHERE je."companyId" = $1 AND jl."accountCode" = $3
+       WHERE je."companyId" = $1 AND jl."deletedAt" IS NULL AND jl."accountCode" = $3
          AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
        GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear, inputVatCode]

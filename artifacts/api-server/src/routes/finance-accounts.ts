@@ -196,9 +196,9 @@ async function assertValidAccountParent(
 ): Promise<void> {
   const ancestry = await rawQuery<{ code: string; type: string }>(
     `WITH RECURSIVE ancestry AS (
-       SELECT code, "parentCode", type, 1 AS depth
-         FROM chart_of_accounts
-        WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL
+       SELECT ca.code, ca."parentCode", ca.type, 1 AS depth
+         FROM chart_of_accounts ca
+        WHERE ca."companyId" = $1 AND ca.code = $2 AND ca."deletedAt" IS NULL
        UNION ALL
        SELECT c.code, c."parentCode", c.type, a.depth + 1
          FROM chart_of_accounts c
@@ -618,7 +618,7 @@ accountsRouter.patch("/accounts/:id", authorize({ feature: "finance.accounts", a
         const [typeUsage] = await rawQuery<JournalCountRow>(
           `SELECT COUNT(*) AS cnt FROM journal_lines jl
            JOIN journal_entries je ON je.id = jl."journalId"
-           WHERE jl."accountCode" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
+           WHERE jl."accountCode" = $1 AND jl."deletedAt" IS NULL AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
           [existing.code, scope.companyId],
         );
         if (Number(typeUsage?.cnt ?? 0) > 0) {
@@ -700,7 +700,7 @@ accountsRouter.delete("/accounts/:id", authorize({ feature: "finance.accounts", 
     const [journalUsage] = await rawQuery<JournalCountRow>(
       `SELECT COUNT(*) AS cnt FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId"
-       WHERE jl."accountCode" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
+       WHERE jl."accountCode" = $1 AND jl."deletedAt" IS NULL AND je."companyId" = $2 AND je."deletedAt" IS NULL`,
       [existing.code, scope.companyId]
     );
     if (Number(journalUsage?.cnt ?? 0) > 0) {
@@ -834,7 +834,7 @@ accountsRouter.post("/journal", authorize({ feature: "finance.accounts", action:
     const [createdJournal] = await rawQuery<JournalEntryWithLinesRow>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -926,7 +926,7 @@ accountsRouter.get("/summary", authorize({ feature: "finance.accounts", action: 
     );
     const [exp] = await rawQuery<ExpenseSummaryRow>(
       `SELECT COUNT(*) AS count, COALESCE(SUM(jl.debit),0) AS total
-       FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id
+       FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND jl."accountCode" LIKE '5%' AND je."deletedAt" IS NULL AND je."balancesApplied" = true`,
       [scope.companyId]
     );
@@ -1031,7 +1031,7 @@ accountsRouter.post("/tax-codes", authorize({ feature: "finance.accounts", actio
       ]
     );
     const newId = insRes.insertId;
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2`, [newId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [newId, scope.companyId]);
 
     // The tax-codes module caches per (companyId, code) — invalidate
     // so subsequent calls see the new row immediately.
@@ -1088,7 +1088,7 @@ accountsRouter.patch("/tax-codes/:id", authorize({ feature: "finance.accounts", 
     const { clearTaxCodeCache } = await import("../lib/taxCodes.js");
     clearTaxCodeCache(scope.companyId);
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM tax_codes WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "tax_codes", entityId: id, after: row,
@@ -1199,7 +1199,7 @@ accountsRouter.post("/wht-categories", authorize({ feature: "finance.accounts", 
        p.payableAccountId ?? null, p.description ?? null, p.isActive ?? true]
     );
     const newId = insRes.insertId;
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2`, [newId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [newId, scope.companyId]);
 
     const { clearWhtCache } = await import("../lib/withholdingTax.js");
     clearWhtCache(scope.companyId);
@@ -1249,7 +1249,7 @@ accountsRouter.patch("/wht-categories/:id", authorize({ feature: "finance.accoun
     const { clearWhtCache } = await import("../lib/withholdingTax.js");
     clearWhtCache(scope.companyId);
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM wht_categories WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "wht_categories", entityId: id, after: row,
@@ -1412,7 +1412,7 @@ accountsRouter.post("/allocation-rules", authorize({ feature: "finance.accounts"
     );
     const newId = insRes.insertId;
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM accounting_allocation_rules WHERE id = $1 AND "companyId" = $2`, [newId, scope.companyId]
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [newId, scope.companyId]
     );
 
     createAuditLog({
@@ -1482,7 +1482,7 @@ accountsRouter.patch("/allocation-rules/:id", authorize({ feature: "finance.acco
     if (updRes.affectedRows === 0) throw new NotFoundError("قاعدة التوجيه غير موجودة");
 
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM accounting_allocation_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]
+      `SELECT * FROM accounting_allocation_rules WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]
     );
 
     createAuditLog({
