@@ -309,6 +309,40 @@ export const VIOLATION_STATUS: Record<string, { label: string; color: string }> 
   cancelled:            { label: "ملغي",             color: "bg-gray-100 text-muted-foreground border-border" },
 };
 
+// ── أنواع التأشيرات ─────────────────────────────────────────────────
+export const VISA_TYPES: Record<string, string> = {
+  work: "عمل",
+  visit: "زيارة",
+  transit: "مرور",
+  hajj: "حج",
+  umrah: "عمرة",
+  family: "تابع / عائلة",
+  student: "طالب",
+};
+
+// ── أنواع العقود ────────────────────────────────────────────────────
+export const CONTRACT_TYPES: Record<string, string> = {
+  full_time: "دوام كامل",
+  part_time: "دوام جزئي",
+  contract: "عقد مؤقت",
+  probation: "فترة تجربة",
+  freelance: "عمل حر",
+};
+
+// ── حالات الإقامة ───────────────────────────────────────────────────
+export const IQAMA_STATUS: Record<string, string> = {
+  active: "سارية",
+  expired: "منتهية",
+  renewal_pending: "قيد التجديد",
+  cancelled: "ملغاة",
+};
+
+/** Resolve a label from a map, falling back to the raw value then a dash. */
+export function hrLabel(map: Record<string, string>, value: string | null | undefined): string {
+  if (!value) return "-";
+  return map[value] ?? value;
+}
+
 // ── أسماء الأشهر بالعربي ────────────────────────────────────────────
 export const MONTHS_AR = [
   "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",

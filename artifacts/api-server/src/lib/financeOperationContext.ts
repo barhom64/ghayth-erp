@@ -22,6 +22,14 @@
 
 import type { AccountUsage } from "./financeAccountClassifier.js";
 import { ValidationError } from "./errorHandler.js";
+// FIN-SUB-05 (#2101) — the voucher direction/label maps live in the single
+// canonical source (lib/api-zod/src/financeDirectionMaps.ts) shared with the
+// ghayth-erp form UX. We import them here and re-export under the legacy BE
+// name so existing importers don't break. Pure move — zero semantic change.
+import {
+  ACCOUNT_TYPE_LABELS,
+  VOUCHER_COUNTER_ACCOUNT_TYPES,
+} from "@workspace/api-zod/financeDirectionMaps";
 
 export type FinanceOperationType =
   | "expense" | "receipt" | "payment" | "invoice" | "vendor_invoice"
@@ -124,31 +132,12 @@ const FORBIDDEN_TRANSFER_SOURCE_USAGES: AccountUsage[] = [
 //     (e.g. invoice_payment clears AR → asset; deposit creates a liability);
 //   • an unknown/legacy operationType falls back to the direction invariant:
 //     قبض never lands on a مصروف account, صرف never lands on an إيراد account.
-// Mirrored for the form UX in ghayth-erp/src/lib/finance/scenario-model.ts
-// (VOUCHER_COUNTER_ACCOUNT_TYPES) — the backend stays the enforcement point.
-export const VOUCHER_OPERATION_COUNTER_TYPES: Record<string, string[]> = {
-  // receipt direction (قبض)
-  receipt: ["revenue"],
-  rent: ["revenue"],
-  invoice_payment: ["asset"],          // تسوية ذمم العميل
-  deposit: ["liability"],              // ضمان مقبوض = التزام
-  refund: ["expense", "revenue"],      // استرداد مصروف سابق أو ردّ إيراد
-  // payment direction (صرف)
-  payment: ["expense"],
-  vendor_invoice: ["liability", "expense"], // سداد ذمم مورد أو مصروف مباشر
-  salary: ["expense"],
-  advance: ["asset"],                  // سلفة موظف = ذمة مدينة
-  legal_fee: ["expense"],
-  purchase: ["expense", "asset"],      // مشتريات مصروفة أو مخزون/أصل
-  custody: ["asset"],                  // عهدة = أصل بيد الموظف
-  insurance: ["expense", "asset"],     // مصروف أو مدفوع مقدماً
-  maintenance: ["expense"],
-};
-
-const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  asset: "أصول/ذمم", liability: "التزامات", equity: "حقوق ملكية",
-  revenue: "إيراد", expense: "مصروف",
-};
+// Mirrored for the form UX in ghayth-erp/src/lib/finance/scenario-model.ts —
+// both sides now consume @workspace/api-zod/financeDirectionMaps; the backend
+// stays the enforcement point. The canonical map is named
+// VOUCHER_COUNTER_ACCOUNT_TYPES; we re-export it under the legacy BE name
+// VOUCHER_OPERATION_COUNTER_TYPES so existing importers don't break.
+export { VOUCHER_COUNTER_ACCOUNT_TYPES as VOUCHER_OPERATION_COUNTER_TYPES };
 
 /**
  * Assert a finance operation context is internally consistent and legal:
@@ -208,13 +197,19 @@ export async function assertOperationValid(ctx: FinanceOperationContext): Promis
       [ctx.companyId, ca.accountCode],
     );
     if (acc) {
-      const allowed = ca.operationKey ? VOUCHER_OPERATION_COUNTER_TYPES[ca.operationKey] : undefined;
+      const allowed = ca.operationKey ? VOUCHER_COUNTER_ACCOUNT_TYPES[ca.operationKey] : undefined;
       const dirLabel = ca.direction === "receipt" ? "سند قبض" : "سند صرف";
+      // `acc.type` comes from the DB as a raw string; the shared maps are
+      // strongly typed (AccountTypeKey). Look the label up through a loose
+      // string view so an unknown/legacy DB type falls back to the raw string
+      // — identical runtime behaviour to the pre-unification BE code.
+      const labelOf = (t: string): string =>
+        (ACCOUNT_TYPE_LABELS as Record<string, string>)[t] ?? t;
       if (allowed) {
-        if (!allowed.includes(acc.type)) {
+        if (!(allowed as string[]).includes(acc.type)) {
           throw new ValidationError(
-            `${dirLabel} (${ca.operationKey}) يتوقع حساب ${allowed.map((t) => ACCOUNT_TYPE_LABELS[t] ?? t).join(" أو ")} — ` +
-            `«${ca.accountCode} ${acc.name}» حساب ${ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}`,
+            `${dirLabel} (${ca.operationKey}) يتوقع حساب ${allowed.map((t) => labelOf(t)).join(" أو ")} — ` +
+            `«${ca.accountCode} ${acc.name}» حساب ${labelOf(acc.type)}`,
             {
               field: "accountCode",
               fix: "اختر حساباً من النوع المتوقع لهذا النوع من السندات أو غيّر نوع العملية",

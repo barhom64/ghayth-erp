@@ -414,17 +414,17 @@ transportPricingRouter.post(
         }
         const total = lines.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0);
 
-        // Flip every line to invoiced and emit the merged-batch event.
-        // The finance side listens for `finance.transport_billing.batch.ready`
-        // and creates the actual invoice row + invoice_lines from this
-        // payload. The transport_invoice_links junction is written there
-        // once the invoiceId exists.
-        await tx.query(
-          `UPDATE transport_service_lines
-              SET "billingStatus" = 'invoiced', "updatedAt" = NOW()
-            WHERE id = ANY($1::int[]) AND "companyId" = $2`,
-          [b.serviceLineIds, scope.companyId],
-        );
+        // INTERIM (transport-review B#1 — leak stop): the batched customer-invoice
+        // feature is NOT yet built. Nothing consumes the
+        // `finance.transport_billing.batch.ready` event below, so the line-flip
+        // that used to live here marked these lines 'invoiced' while NO invoice /
+        // invoice_lines / GL / invoiceId was ever created — silently writing off
+        // the revenue. Until the real invoicing path lands (it must create the
+        // invoice + transport_invoice_links and flip with the REAL invoiceId), we
+        // deliberately do NOT flip: the lines stay in the accountant queue
+        // (ready_for_accounting / under_review), visible and not falsely billed.
+        // The FOR UPDATE lock + same-customer validation above are retained as the
+        // guard skeleton for that future implementation.
         return { total, lineCount: lines.length };
       });
 

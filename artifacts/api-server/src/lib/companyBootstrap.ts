@@ -37,6 +37,15 @@ export async function bootstrapCompany(
     await createDefaultChartOfAccounts(client, companyId);
     await createDefaultRoles(client, companyId);
     await createDefaultNumberingPrefixes(client, companyId);
+    // 2026-06-16 — every new tenant needs the per-module numbering_schemes
+    // rows + the canonical default department, or the first invoice /
+    // employee / ticket POST 404s. The migrations seed these only for
+    // companies that existed AT migration time; companies created later
+    // (incl. via this bootstrap) used to miss them. Clone from a known
+    // template tenant (the lowest-id company that already has schemes)
+    // and stamp the canonical default department.
+    await createDefaultNumberingSchemes(client, companyId);
+    await createDefaultDepartment(client, companyId, branchId);
     await createDefaultPenaltyLadder(client, companyId);
     await createDefaultSettings(client, companyId, companyName);
 
@@ -334,6 +343,15 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "4130", name: "إيرادات الخدمات", nameEn: "Service Revenue", type: "revenue", level: 3, parentCode: "4100" },
   { code: "4140", name: "إيرادات المشاريع والمقاولات", nameEn: "Project Revenue", type: "revenue", level: 3, parentCode: "4100" },
   { code: "4150", name: "إيرادات النقل والأسطول", nameEn: "Fleet/Transport Revenue", type: "revenue", level: 3, parentCode: "4100" },
+  // Step 1 of transport customer-invoicing — per-service-type revenue leaves.
+  // 4150 is deliberately kept POSTABLE for now: three live paths still fall
+  // back to it (cargo_freight_revenue, fleet_rental_revenue,
+  // early_termination_revenue). Step 2 repoints those to the leaves and flips
+  // 4150 to a non-postable rollup parent (so check:postable-fallbacks moves
+  // atomically). See lib/transportRevenueAccounts.ts + migration 387.
+  { code: "4151", name: "إيراد نقل المعتمرين", nameEn: "Umrah Transport Revenue", type: "revenue", level: 4, parentCode: "4150" },
+  { code: "4152", name: "إيراد نقل الركاب", nameEn: "Passenger Transport Revenue", type: "revenue", level: 4, parentCode: "4150" },
+  { code: "4153", name: "إيراد نقل البضائع", nameEn: "Freight Revenue", type: "revenue", level: 4, parentCode: "4150" },
 
   { code: "4900", name: "إيرادات أخرى", nameEn: "Other Income", type: "revenue", level: 2, parentCode: "4000", allowPosting: false },
   { code: "4910", name: "فوائد ومرابحات بنكية", nameEn: "Bank Interest", type: "revenue", level: 3, parentCode: "4900" },
@@ -363,6 +381,13 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "5270", name: "الإجازات وتذاكر السفر", nameEn: "Leave & Air Tickets", type: "expense", level: 3, parentCode: "5200" },
   { code: "5280", name: "التدريب والتطوير", nameEn: "Training & Development", type: "expense", level: 3, parentCode: "5200" },
   { code: "5290", name: "مصروفات توظيف ورسوم عمالة", nameEn: "Recruitment & Labor Fees", type: "expense", level: 3, parentCode: "5200" },
+  // #2303 — payroll deduction contra-expense leaves. Late / absence /
+  // violation amounts withheld from salary are CREDITED here (reducing net
+  // employee cost) instead of bundling into the generic deductions-payable
+  // clearing (2150). Late/absence = salary not earned; violations = penalty.
+  { code: "5215", name: "استقطاعات التأخير", nameEn: "Late Deductions", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5216", name: "استقطاعات الغياب", nameEn: "Absence Deductions", type: "expense", level: 3, parentCode: "5200" },
+  { code: "5217", name: "استقطاعات المخالفات", nameEn: "Violation Deductions", type: "expense", level: 3, parentCode: "5200" },
 
   // 53xx مصروفات إدارية وعمومية
   { code: "5300", name: "المصروفات الإدارية والعمومية", nameEn: "G&A Expenses", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
@@ -483,6 +508,67 @@ async function createDefaultNumberingPrefixes(client: pg.PoolClient, companyId: 
       [p.key, p.value, companyId]
     );
   }
+}
+
+/**
+ * Clone every numbering_schemes row that exists for the template
+ * tenant (the lowest-id company that has rows) into the new company.
+ * The migrations under `SEED_REPLAY_ALLOWLIST` seed schemes for
+ * companies that existed at migration time; companies created via
+ * this bootstrap need their own copy or every numbered write
+ * (sales_invoice, journal_entry, support_ticket, umrah_group, ...)
+ * returns 404 "لا توجد سياسة ترقيم لـ <module>.<entity> في الشركة #N".
+ *
+ * Idempotent: ON CONFLICT DO NOTHING on (companyId, moduleKey, entityKey).
+ */
+async function createDefaultNumberingSchemes(client: pg.PoolClient, companyId: number) {
+  // Pick the lowest-id company that actually has schemes as the
+  // template. We avoid hard-coding company 1 because in test setups
+  // the seeded tenant may live at a different id.
+  const tplResult = await client.query<{ companyId: number }>(
+    `SELECT MIN("companyId") AS "companyId"
+       FROM numbering_schemes
+      WHERE "companyId" <> $1`,
+    [companyId],
+  );
+  const templateCompanyId = tplResult.rows[0]?.companyId;
+  if (!templateCompanyId) {
+    // No template at all (very fresh DB). Skip — the migration replay
+    // will fill schemes for the seeded companies; this bootstrap is
+    // for SUBSEQUENT companies that need an existing template.
+    return;
+  }
+  await client.query(
+    `INSERT INTO numbering_schemes
+       ("companyId", "moduleKey", "entityKey", "displayNameAr", "displayNameEn",
+        prefix, pattern, "padLength", "resetPolicy", "scopePolicy",
+        "issueTiming", "manualEditPolicy", "requiresReasonOnManualEdit",
+        "lockAfterStatuses")
+     SELECT $1, "moduleKey", "entityKey", "displayNameAr", "displayNameEn",
+            prefix, pattern, "padLength", "resetPolicy", "scopePolicy",
+            "issueTiming", "manualEditPolicy", "requiresReasonOnManualEdit",
+            "lockAfterStatuses"
+       FROM numbering_schemes
+      WHERE "companyId" = $2
+     ON CONFLICT ("companyId", "moduleKey", "entityKey") DO NOTHING`,
+    [companyId, templateCompanyId],
+  );
+}
+
+/**
+ * Stamp the canonical default department on a fresh tenant. The
+ * employee creation flow accepts a `department` string and resolves
+ * it against this table; without the default row, every first POST
+ * 422s with "القسم 'الإدارة العامة' غير موجود".
+ */
+async function createDefaultDepartment(client: pg.PoolClient, companyId: number, branchId: number) {
+  await exec(
+    client,
+    `INSERT INTO departments ("companyId", "branchId", name, slug, status)
+     VALUES ($1, $2, 'الإدارة العامة', 'general-management', 'active')
+     ON CONFLICT DO NOTHING`,
+    [companyId, branchId],
+  );
 }
 
 async function createDefaultPenaltyLadder(client: pg.PoolClient, companyId: number) {

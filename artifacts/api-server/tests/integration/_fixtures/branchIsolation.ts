@@ -45,88 +45,132 @@ export interface BranchIsolationFixture {
 export async function setupBranchIsolationFixture(): Promise<BranchIsolationFixture> {
   assertTestDatabase();
 
+  // 2026-06-16 — find-or-create for the fixture's own companies, then
+  // SCOPED cleanup of child rows only. The previous TRUNCATE …
+  // companies … RESTART IDENTITY CASCADE wiped EVERY company's rows
+  // (incl. the provisioned Al-Diyaa finance company id=2 + full COA),
+  // making finance dynamic tests scheduled after this fixture fail
+  // with "1111 غير موجود". Switching to DELETE companies isn't
+  // viable either: hundreds of FK constraints target `companies` and
+  // not all carry ON DELETE CASCADE (e.g. user_activity_log).
+  //
+  // The robust solution is find-or-create: each call reuses the
+  // fixture's own 'BranchIso A/B' company rows if they already exist
+  // (from a prior call in the same vitest process), and wipes only
+  // their child data so each test starts with a known seed. The
+  // companies themselves stay put, so FK-protected siblings
+  // (user_activity_log, audit, accounting_mappings, …) are never
+  // disturbed.
+  const FIXTURE_COMPANY_NAMES = ["BranchIso A", "BranchIso B"];
+  // upsert companies first — INSERT ON CONFLICT requires a unique
+  // index on `name`, which doesn't exist; use the find-or-create
+  // pattern explicitly.
+  async function findOrCreateCompany(name: string): Promise<number> {
+    const [row] = await rawQuery<{ id: number }>(
+      `SELECT id FROM companies WHERE name = $1 LIMIT 1`, [name],
+    );
+    if (row) return row.id;
+    const [created] = await rawQuery<{ id: number }>(
+      `INSERT INTO companies (name, status) VALUES ($1, 'active') RETURNING id`, [name],
+    );
+    return created.id;
+  }
+  const companyAId = await findOrCreateCompany("BranchIso A");
+  const companyBId = await findOrCreateCompany("BranchIso B");
+
+  // Wipe child rows ONLY for these two companies. companies + branches
+  // tied to other tenants (the Al-Diyaa finance baseline, the
+  // twoCompanies fixture, …) are untouched.
+  const FIXTURE_COMPANY_IDS = [companyAId, companyBId];
+  const inFix = `"companyId" = ANY($1)`;
   await rawExecute(
-    `TRUNCATE TABLE
-       refresh_tokens, requests, documents, tasks, projects, clients,
-       employee_assignments, users, employees, branches, companies
-     RESTART IDENTITY CASCADE`,
-    []
+    `DELETE FROM refresh_tokens WHERE "userId" IN (
+       SELECT u.id FROM users u JOIN employees e ON e.id = u."employeeId"
+        WHERE e."companyId" = ANY($1))`,
+    [FIXTURE_COMPANY_IDS],
   );
+  for (const tbl of ["requests", "documents", "tasks", "projects", "clients", "employee_assignments"]) {
+    await rawExecute(`DELETE FROM ${tbl} WHERE ${inFix}`, [FIXTURE_COMPANY_IDS]);
+  }
+  // 2026-06-16 — DO NOT DELETE users/employees/branches. FK
+  // constraints (journal_entries.postedBy, user_activity_log.userId,
+  // etc.) block. Each INSERT below switches to find-or-create.
 
   const passwordHash = await hashPassword("test-password-1234");
 
+  // find-or-create helpers — keyed on uniqueness markers so repeat
+  // in-process calls reuse the rows and avoid FK collisions.
+  async function fcBranch(companyId: number, branchName: string): Promise<number> {
+    const [row] = await rawQuery<{ id: number }>(
+      `SELECT id FROM branches WHERE "companyId" = $1 AND name = $2 LIMIT 1`,
+      [companyId, branchName],
+    );
+    if (row) return row.id;
+    const [created] = await rawQuery<{ id: number }>(
+      `INSERT INTO branches ("companyId", name, status) VALUES ($1, $2, 'active') RETURNING id`,
+      [companyId, branchName],
+    );
+    return created.id;
+  }
+  async function fcEmployee(empName: string, email: string): Promise<number> {
+    const [row] = await rawQuery<{ id: number }>(
+      `SELECT id FROM employees WHERE email = $1 LIMIT 1`, [email],
+    );
+    if (row) return row.id;
+    const [created] = await rawQuery<{ id: number }>(
+      `INSERT INTO employees (name, email) VALUES ($1, $2) RETURNING id`, [empName, email],
+    );
+    return created.id;
+  }
+  async function fcAssignment(employeeId: number, companyId: number, branchId: number, jobTitle: string, role: string): Promise<number> {
+    const [row] = await rawQuery<{ id: number }>(
+      `SELECT id FROM employee_assignments
+        WHERE "employeeId" = $1 AND "companyId" = $2 AND "branchId" = $3 AND status = 'active'
+        LIMIT 1`,
+      [employeeId, companyId, branchId],
+    );
+    if (row) return row.id;
+    const [created] = await rawQuery<{ id: number }>(
+      `INSERT INTO employee_assignments
+         ("employeeId", "companyId", "branchId", "jobTitle", role, "isPrimary", status)
+       VALUES ($1, $2, $3, $4, $5, TRUE, 'active') RETURNING id`,
+      [employeeId, companyId, branchId, jobTitle, role],
+    );
+    return created.id;
+  }
+  async function fcUser(employeeId: number, email: string): Promise<number> {
+    const [row] = await rawQuery<{ id: number }>(
+      `SELECT id FROM users WHERE "employeeId" = $1 LIMIT 1`, [employeeId],
+    );
+    if (row) return row.id;
+    const [created] = await rawQuery<{ id: number }>(
+      `INSERT INTO users ("employeeId", email, "passwordHash", "isActive")
+       VALUES ($1, $2, $3, TRUE) RETURNING id`,
+      [employeeId, email, passwordHash],
+    );
+    return created.id;
+  }
+
   // ── Company A with two branches ──
-  const [{ id: companyAId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO companies (name, status) VALUES ('Company A', 'active') RETURNING id`,
-    []
-  );
-  const [{ id: branchA1Id }] = await rawQuery<{ id: number }>(
-    `INSERT INTO branches ("companyId", name, status) VALUES ($1, 'Branch A1', 'active') RETURNING id`,
-    [companyAId]
-  );
-  const [{ id: branchA2Id }] = await rawQuery<{ id: number }>(
-    `INSERT INTO branches ("companyId", name, status) VALUES ($1, 'Branch A2', 'active') RETURNING id`,
-    [companyAId]
-  );
+  const branchA1Id = await fcBranch(companyAId, "Branch A1");
+  const branchA2Id = await fcBranch(companyAId, "Branch A2");
 
   // Owner of Company A
-  const [{ id: ownerEmpA }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employees (name, email) VALUES ('Owner A', 'owner-a@test.local') RETURNING id`,
-    []
-  );
-  const [{ id: ownerAssignA }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employee_assignments
-       ("employeeId", "companyId", "branchId", "jobTitle", role, "isPrimary", status)
-     VALUES ($1, $2, $3, 'Owner', 'owner', TRUE, 'active') RETURNING id`,
-    [ownerEmpA, companyAId, branchA1Id]
-  );
-  const [{ id: ownerUserA }] = await rawQuery<{ id: number }>(
-    `INSERT INTO users ("employeeId", email, "passwordHash", "isActive")
-     VALUES ($1, 'owner-a@test.local', $2, TRUE) RETURNING id`,
-    [ownerEmpA, passwordHash]
-  );
+  const ownerEmpA = await fcEmployee("Owner A", "owner-a@test.local");
+  const ownerAssignA = await fcAssignment(ownerEmpA, companyAId, branchA1Id, "Owner", "owner");
+  const ownerUserA = await fcUser(ownerEmpA, "owner-a@test.local");
 
   // Branch manager of Company A, scoped to branchA1 only
-  const [{ id: mgrEmpId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employees (name, email) VALUES ('BranchMgr A1', 'mgr-a1@test.local') RETURNING id`,
-    []
-  );
-  const [{ id: mgrAssignId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employee_assignments
-       ("employeeId", "companyId", "branchId", "jobTitle", role, "isPrimary", status)
-     VALUES ($1, $2, $3, 'Branch Manager', 'branch_manager', TRUE, 'active') RETURNING id`,
-    [mgrEmpId, companyAId, branchA1Id]
-  );
-  const [{ id: mgrUserId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO users ("employeeId", email, "passwordHash", "isActive")
-     VALUES ($1, 'mgr-a1@test.local', $2, TRUE) RETURNING id`,
-    [mgrEmpId, passwordHash]
-  );
+  const mgrEmpId = await fcEmployee("BranchMgr A1", "mgr-a1@test.local");
+  const mgrAssignId = await fcAssignment(mgrEmpId, companyAId, branchA1Id, "Branch Manager", "branch_manager");
+  const mgrUserId = await fcUser(mgrEmpId, "mgr-a1@test.local");
 
-  // ── Company B with one branch ──
-  const [{ id: companyBId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO companies (name, status) VALUES ('Company B', 'active') RETURNING id`,
-    []
-  );
-  const [{ id: branchB1Id }] = await rawQuery<{ id: number }>(
-    `INSERT INTO branches ("companyId", name, status) VALUES ($1, 'Branch B1', 'active') RETURNING id`,
-    [companyBId]
-  );
-  const [{ id: ownerEmpB }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employees (name, email) VALUES ('Owner B', 'owner-b@test.local') RETURNING id`,
-    []
-  );
-  const [{ id: ownerAssignB }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employee_assignments
-       ("employeeId", "companyId", "branchId", "jobTitle", role, "isPrimary", status)
-     VALUES ($1, $2, $3, 'Owner', 'owner', TRUE, 'active') RETURNING id`,
-    [ownerEmpB, companyBId, branchB1Id]
-  );
-  const [{ id: ownerUserB }] = await rawQuery<{ id: number }>(
-    `INSERT INTO users ("employeeId", email, "passwordHash", "isActive")
-     VALUES ($1, 'owner-b@test.local', $2, TRUE) RETURNING id`,
-    [ownerEmpB, passwordHash]
-  );
+  // ── Company B with one branch (companyBId is reused from
+  //    find-or-create above; no new INSERT needed) ──
+  const branchB1Id = await fcBranch(companyBId, "Branch B1");
+  const ownerEmpB = await fcEmployee("Owner B", "owner-b@test.local");
+  const ownerAssignB = await fcAssignment(ownerEmpB, companyBId, branchB1Id, "Owner", "owner");
+  const ownerUserB = await fcUser(ownerEmpB, "owner-b@test.local");
 
   // ── Seed rows for isolation tests ──
   // Clients (one per company)

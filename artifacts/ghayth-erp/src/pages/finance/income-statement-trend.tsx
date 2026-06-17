@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
@@ -79,7 +79,11 @@ function MonthQuery({ year, month, onData }: { year: number; month: number; onDa
     ["is-month", r.key],
     `/finance/reports/income-statement?startDate=${r.start}&endDate=${r.end}`,
   );
-  useMemo(() => onData(r.key, data ?? null, isLoading), [r.key, data, isLoading, onData]);
+  // Side effects (pushing query results up to the parent) MUST live in
+  // useEffect, never useMemo. A setState inside useMemo re-fires on every
+  // render and — with an unstable callback + a new-array setState — produces
+  // an infinite render loop that wedges the whole tab.
+  useEffect(() => { onData(r.key, data ?? null, isLoading); }, [r.key, data, isLoading, onData]);
   return null;
 }
 
@@ -96,17 +100,30 @@ export default function IncomeStatementTrendPage() {
     })
   );
 
-  // Re-sync buckets when monthCount changes
-  useMemo(() => {
+  // Re-sync buckets when monthCount changes. MUST be useEffect — a setState
+  // inside useMemo is a render-phase side effect.
+  useEffect(() => {
     setBuckets(monthDefs.map((m) => {
       const r = monthRange(m.year, m.month);
       return { key: r.key, label: r.label, startDate: r.start, endDate: r.end, data: null, loading: true };
     }));
   }, [monthDefs]);
 
-  const onMonthData = (key: string, d: IncomeStatementResp | null, loading: boolean) => {
-    setBuckets((prev) => prev.map((b) => b.key === key ? { ...b, data: d, loading } : b));
-  };
+  // Stable callback (deps: none — only uses the stable setBuckets) so the
+  // off-screen MonthQuery children's effect deps don't change every render.
+  // Bail out (return prev) when nothing actually changed so we don't spawn a
+  // new array reference and re-render forever.
+  const onMonthData = useCallback((key: string, d: IncomeStatementResp | null, loading: boolean) => {
+    setBuckets((prev) => {
+      const idx = prev.findIndex((b) => b.key === key);
+      if (idx === -1) return prev;
+      const b = prev[idx];
+      if (b.data === d && b.loading === loading) return prev;
+      const next = prev.slice();
+      next[idx] = { ...b, data: d, loading };
+      return next;
+    });
+  }, []);
 
   // ── Build the merged row map: account code → amount[] per month
   const { revenueRows, expenseRows, totalsRow, netRow, allLoaded } = useMemo(() => {

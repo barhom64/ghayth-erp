@@ -28,6 +28,7 @@ import {
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
+import { getVendorConfig } from "./vendorSettings.js";
 import {
   TASK_SLA_REMINDER_SETTING_KEY,
   resolveTaskSlaReminderConfig,
@@ -2318,6 +2319,18 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
 }
 
 async function processSmsQueue(): Promise<string> {
+  // Platform-wide SMS credentials from the vendor_secrets hub
+  // (/admin/vendor-settings → SMS card). Resolved ONCE per run and used
+  // only as a FALLBACK: a company's own system_settings SMS keys (read in
+  // the query below) always take precedence, so existing per-company
+  // configs are unaffected. This is what lets SMS be configured from the
+  // same UI as Email + WhatsApp instead of the UI-less system_settings.
+  const vendorSms = await getVendorConfig("sms").catch(() => null);
+  const vc = vendorSms?.active ? vendorSms.config : {};
+  const vendorSid = typeof vc.accountSid === "string" ? vc.accountSid : "";
+  const vendorToken = typeof vc.authToken === "string" ? vc.authToken : "";
+  const vendorFrom = typeof vc.fromNumber === "string" ? vc.fromNumber : "";
+
   // Phase 4 contract slice 6: read from outbound_queue. See
   // processEmailQueue for the rationale.
   const pending = await rawQuery<Record<string, unknown>>(
@@ -2368,21 +2381,27 @@ async function processSmsQueue(): Promise<string> {
   };
 
   for (const sms of pending) {
+    // Per-company system_settings creds win; fall back to the platform-wide
+    // vendor_secrets 'sms' card when a company has none of its own.
+    const accountSid = (typeof sms.accountSid === "string" && sms.accountSid) ? sms.accountSid : vendorSid;
+    const authToken = (typeof sms.authToken === "string" && sms.authToken) ? sms.authToken : vendorToken;
+    const fromNumber = (typeof sms.fromNumber === "string" && sms.fromNumber) ? sms.fromNumber : vendorFrom;
+
     if (sms.channelEnabled === "false") {
       await updateBothSms(sms, { errorMessage: "قناة SMS معطلة — سيتم الإرسال عند التفعيل" }, false);
       skipped++;
       continue;
     }
-    if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
+    if (!accountSid || !authToken || !fromNumber) {
       await updateBothSms(sms, { errorMessage: "بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات" }, false);
       skipped++;
       continue;
     }
 
     try {
-      const credentials = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString("base64");
+      const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
       const resp = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`,
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
         {
           method: "POST",
           headers: {
@@ -2391,7 +2410,7 @@ async function processSmsQueue(): Promise<string> {
           },
           body: new URLSearchParams({
             To: sms.recipientPhone as string,
-            From: sms.fromNumber as string,
+            From: fromNumber as string,
             Body: sms.message as string,
           }).toString(),
         }
@@ -4701,7 +4720,72 @@ async function inboxTaskSlaReminderScan(): Promise<string> {
   return `inbox SLA reminders: ${first} first, ${final} final`;
 }
 
+// آلية منع التفاقم: تستنزف تلقائياً تراكم "فشل القيد المالي" غير المحلول لكل
+// شركة بإعادة استدعاء الترحيل الأصلي عبر retryPostingFailure (idempotent بمفتاح
+// المصدر). أي فشل قابل لإعادة المحاولة (مثل فواتير نسك التي تعطّلت بسبب رمز
+// الحساب 5201/2101) يُرحَّل ويُغلق السجل تلقائياً، فلا يتضخّم الرصيد ولا يقفل
+// النظام بوابة المنع المالي (postingFailuresGuard). يستثني الأنواع غير القابلة
+// لإعادة المحاولة الآلية (تُعالَج يدوياً) ويعمل ضمن دفعات محدودة لكل شركة حتى لا
+// يثقل قاعدة البيانات. يعمل بحدود أمان: لا يلمس السجلات المحلولة مسبقاً، ويُغلق
+// السجل فقط عند نجاح الترحيل فعلياً (result.ok && result.supported).
+async function financialPostingFailureAutoRetry(): Promise<string> {
+  const { retryPostingFailure, UNSUPPORTED_RETRY_SOURCE_TYPES } = await import("./postingFailureRetry.js");
+  const PER_COMPANY_CAP = 500; // bounded drain per run so the cron stays cheap
+  const PAGE = 100;
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let totalResolved = 0, totalStillFailing = 0, totalProcessed = 0;
+  let companiesTouched = 0;
+
+  for (const company of companies) {
+    let cursor = 0;
+    let processedForCompany = 0;
+    let resolvedForCompany = 0;
+    // Walk the retryable backlog one bounded window at a time (cursor by id so
+    // a head of still-failing rows can't stall later resolvable ones), capped
+    // at PER_COMPANY_CAP rows per run.
+    while (processedForCompany < PER_COMPANY_CAP) {
+      const limit = Math.min(PAGE, PER_COMPANY_CAP - processedForCompany);
+      const batch = await rawQuery<{ id: number; sourceType: string; sourceId: number | null }>(
+        `SELECT id, "sourceType", "sourceId" FROM financial_posting_failures
+          WHERE "companyId" = $1 AND resolved = false AND id > $2
+            AND "sourceType" <> ALL($3::text[])
+            AND "sourceId" IS NOT NULL AND "sourceId" > 0
+          ORDER BY id ASC LIMIT $4`,
+        [company.id, cursor, UNSUPPORTED_RETRY_SOURCE_TYPES as unknown as string[], limit],
+      );
+      if (batch.length === 0) break;
+
+      for (const f of batch) {
+        cursor = f.id;
+        processedForCompany++;
+        totalProcessed++;
+        // userId 0 = النظام (آلية تلقائية) — مطابق لنمط resolvedBy في المهام الآلية.
+        const result = await retryPostingFailure(
+          { companyId: company.id, branchId: 0, userId: 0 },
+          { sourceType: f.sourceType, sourceId: f.sourceId },
+        );
+        if (result.ok && result.supported) {
+          await rawExecute(
+            `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = 0
+              WHERE id = $1 AND "companyId" = $2 AND resolved = false`,
+            [f.id, company.id],
+          );
+          resolvedForCompany++;
+          totalResolved++;
+        } else if (result.supported) {
+          totalStillFailing++;
+        }
+      }
+      if (batch.length < limit) break;
+    }
+    if (resolvedForCompany > 0 || processedForCompany > 0) companiesTouched++;
+  }
+
+  return `financial_posting_failure_auto_retry: processed ${totalProcessed} across ${companiesTouched} company(ies) — resolved ${totalResolved}, stillFailing ${totalStillFailing}`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "financial_posting_failure_auto_retry", description: "آلية منع التفاقم — إعادة ترحيل تراكم فشل القيد المالي تلقائياً وإغلاق السجلات الناجحة لكل شركة", schedule: "*/15 * * * *", handler: financialPostingFailureAutoRetry },
   { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
   { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
   { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
