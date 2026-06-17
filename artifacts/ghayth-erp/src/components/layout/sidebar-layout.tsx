@@ -229,6 +229,32 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
   const filteredNavItems = filteredSections.flatMap(s => s.items);
 
+  // Tree-structure ancestor / descendant map for the accordion. Pre-2026-06 the
+  // accordion used URL-prefix matching to decide "is A an ancestor of B?", which
+  // broke whenever a parent's path wasn't a prefix of its child's path — e.g.
+  // الأسطول → /fleet had a sub-entry «اللوحات والسائق» → /module-dashboards?tab=fleet.
+  // Clicking the sub-entry computed "no ancestors" and collapsed /fleet, hiding
+  // the very entry that was just clicked, so visually nothing opened. The maps
+  // below are built from the actual nav tree, so structural parents stay open
+  // regardless of how their URLs are shaped.
+  const { ancestorsByPath, descendantsByPath } = React.useMemo(() => {
+    const ancestors = new Map<string, string[]>();
+    const descendants = new Map<string, Set<string>>();
+    const walk = (items: NavItem[], trail: string[]) => {
+      for (const item of items) {
+        ancestors.set(item.path, [...trail]);
+        for (const a of trail) {
+          let bucket = descendants.get(a);
+          if (!bucket) { bucket = new Set(); descendants.set(a, bucket); }
+          bucket.add(item.path);
+        }
+        if (item.children) walk(item.children, [...trail, item.path]);
+      }
+    };
+    walk(filteredNavItems, []);
+    return { ancestorsByPath: ancestors, descendantsByPath: descendants };
+  }, [filteredSections]);
+
   useEffect(() => {
     // Accordion-style auto-expand: when the route changes, find which
     // parent items lead to the active path and open only them. Anything
@@ -275,18 +301,23 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
 
     const toggleExpand = (path: string) => {
     // Accordion behavior: opening an item closes every sibling/cousin
-    // that isn't an ancestor of the newly-opened path. Ancestors stay
+    // that isn't a tree-ancestor of the newly-opened path. Ancestors stay
     // open so the navigation tree to the active node remains visible.
     //
-    // - close X: drop X and any of its descendants from the expanded set.
-    // - open X: keep only ancestors of X (paths that are a strict prefix
-    //   of X), then add X. Anything unrelated collapses.
+    // - close X: drop X and any of its tree-descendants from the expanded set.
+    // - open X: keep only X's tree-ancestors, then add X. Anything unrelated
+    //   collapses. Ancestry is resolved against the nav tree (see
+    //   ancestorsByPath above), not URL-prefix matching — a child whose path
+    //   isn't a string-prefix of its parent's path (e.g. الأسطول /fleet →
+    //   اللوحات والسائق /module-dashboards?tab=fleet) used to slip through.
     setExpandedItems((prev) => {
       if (prev.includes(path)) {
-        return prev.filter((p) => p !== path && !p.startsWith(path + "/"));
+        const descendants = descendantsByPath.get(path);
+        return prev.filter((p) => p !== path && !(descendants && descendants.has(p)));
       }
-      const ancestors = prev.filter((p) => path.startsWith(p + "/"));
-      return [...ancestors, path];
+      const ancestorSet = new Set(ancestorsByPath.get(path) ?? []);
+      const keptAncestors = prev.filter((p) => ancestorSet.has(p));
+      return [...keptAncestors, path];
     });
   };
 
