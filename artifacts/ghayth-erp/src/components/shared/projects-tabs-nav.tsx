@@ -24,7 +24,7 @@ export function ProjectsTabsNav() {
             : tab.match.some((m) => location === m || location.startsWith(`${m}/`));
           const Icon = tab.icon;
           return (
-            <Link key={tab.href} href={tab.href}>
+            <Link key={tab.href} href={tab.href} asChild>
               <a
                 className={cn(
                   "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
