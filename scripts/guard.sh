@@ -133,12 +133,45 @@ run_step "check:duplicate-migrations" node scripts/src/check-duplicate-migration
 # db/schema_pre.sql (fresh installs never re-run pre-cutoff migrations, so a
 # stale dump silently 500s clean environments — the 2026-06 inbox incident).
 run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
+# Pre-cutoff SEED drift — a pre-cutoff migration's INSERT/seed rows silently
+# never land on a fresh install (those migrations are pre-marked applied
+# without running, and the schema dump is data-free) unless the rows also ship
+# in db/seed.sql or are re-seeded by a post-cutoff migration. The notification-
+# routing incident (#886) was one instance of this class. OFFLINE scan (no DB),
+# so it runs unconditionally; baseline in scripts/seed-drift-allowlist.txt
+# captures today's known-safe (runtime-bootstrapped / data-migration) cases so
+# the guard only blocks NEW drift — most importantly a dump refresh that
+# advances the cutoff past a seed-bearing migration. Pure-logic fixtures guard
+# the detector.
+run_step "check:seed-drift:tests" node scripts/src/check-seed-drift.test.mjs
+run_step "check:seed-drift"   node scripts/src/check-seed-drift.mjs
+# Seed-replay list sync — two hand-curated lists track which PRE-cutoff
+# migrations carry reference DATA a schema-only dump can't reproduce:
+# provision-agent-db.sh's SEED_REPLAY_ALLOWLIST (harness replays them) and
+# scripts/seed-drift-allowlist.txt (the seed-drift guard's reviewed baseline).
+# They overlap heavily but are edited independently, so a new seed-bearing
+# pre-cutoff migration can be added to one and forgotten in the other —
+# re-opening the silent-missing-data gap #889 closed. OFFLINE cross-check (no
+# DB); baseline in scripts/seed-replay-sync-allowlist.txt captures today's
+# intentional divergences so the guard only blocks NEW drift. Pure-logic
+# fixtures guard the detector.
+run_step "check:seed-replay-sync:tests" node scripts/src/check-seed-replay-sync.test.mjs
+run_step "check:seed-replay-sync" node scripts/src/check-seed-replay-sync.mjs
 # Invalid interactive-element nesting: <Link><Button> renders <a><button>,
 # which is invalid HTML and breaks keyboard / screen-reader semantics.
 # OFFLINE source scan; baseline in scripts/button-nesting-allowlist.txt,
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:button-nesting:tests" node scripts/src/check-button-nesting.test.mjs
 run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
+# setState INSIDE useMemo: a render-phase side effect. With an unstable
+# callback and/or a setState that always builds a new reference it becomes an
+# infinite render loop that wedges the tab — invisible to typecheck/build/lint,
+# only manifests at runtime (the /finance/reports/is-trend incident). OFFLINE
+# source scan flagging a BARE setter (excludes Date/DOM mutators like
+# `.setHours(`) at the TOP level of a useMemo callback (excludes setters inside
+# returned-JSX event handlers). Pure-logic fixtures guard the detector.
+run_step "check:usememo-setstate:tests" node scripts/src/check-usememo-setstate.test.mjs
+run_step "check:usememo-setstate" node scripts/src/check-usememo-setstate.mjs
 # Duplicate basenames within a single frontend artifact's src/ (e.g. two
 # policies-tab.tsx) — copy-paste components that drift apart and resolve
 # imports to the wrong copy. OFFLINE filename scan; baseline in
