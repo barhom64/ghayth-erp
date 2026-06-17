@@ -66,7 +66,10 @@ export default function ClientsCreate() {
         toast({ title: "تم إضافة العميل بنجاح" });
       }
       clearDraft();
-      setLocation("/clients");
+      // Land on the new client's record so it's immediately visible — removes
+      // the "I added a client and can't find it" ambiguity (the list is also
+      // newest-first now, but going straight to the detail is unambiguous).
+      setLocation(newClient?.id ? `/clients/${newClient.id}` : "/clients");
     } catch (err: any) {
       setApiError(err);
       toast({ variant: "destructive", title: "حدث خطأ أثناء إضافة العميل", description: err?.message });

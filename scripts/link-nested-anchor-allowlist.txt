@@ -1,0 +1,10 @@
+# link-nested-anchor-allowlist.txt
+#
+# Pre-existing files where a wouter `<Link>` (without `asChild`) directly
+# wraps an `<a>`, rendering invalid nested `<a><a>`. These are accepted
+# baseline offenders; the guard only fails on a file NOT listed here.
+# Regenerate with:
+#   node scripts/src/check-link-nested-anchor.mjs --write-allowlist
+# As files are fixed (add `asChild` to the <Link>), prune their line.
+#
+# Baseline captured: 0 file(s).

@@ -54,10 +54,12 @@ describe("finance-invoices.ts bucket carries umrah dimensions", () => {
   });
 
   it("revenueLines.push() passes both umrah dims to the JE engine", () => {
-    const pushMatch = INVOICES.match(/revenueLines\.push\(\{[\s\S]{0,800}?\} as any\)/);
+    const pushMatch = INVOICES.match(/revenueLines\.push\(\{[\s\S]{0,1000}?\} as any\)/);
     expect(pushMatch).not.toBeNull();
     expect(pushMatch![0]).toContain("umrahSeasonId: b.umrahSeasonId");
     expect(pushMatch![0]).toContain("umrahAgentId: b.umrahAgentId");
+    // Step-3: explicit numeric cost-center propagated to the JE line.
+    expect(pushMatch![0]).toContain("costCenterId: b.costCenterId");
   });
 
   it("fallback bucket key has the right slot count (no collision)", () => {

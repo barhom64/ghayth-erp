@@ -119,7 +119,7 @@ export default function FleetCargoPage() {
       key: "trip",
       header: "الرحلة",
       render: (m) => m.linkedTripId
-        ? <Link href={`/fleet/trips/${m.linkedTripId}`}><a className="text-status-info-foreground underline text-xs" onClick={(e) => e.stopPropagation()}>#{m.linkedTripId}</a></Link>
+        ? <Link href={`/fleet/trips/${m.linkedTripId}`} asChild><a className="text-status-info-foreground underline text-xs" onClick={(e) => e.stopPropagation()}>#{m.linkedTripId}</a></Link>
         : <span className="text-xs text-muted-foreground">غير مربوطة</span>,
     },
   ];

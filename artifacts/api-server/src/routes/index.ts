@@ -37,6 +37,8 @@ import crmRouter from "./crm.js";
 import intelligenceRouter from "./intelligence.js";
 import automationRouter from "./automation.js";
 import communicationsRouter from "./communications.js";
+import { publicWebhookRouter as communicationsPublicWebhookRouter } from "./communications.js";
+import communicationsSmsWebhookRouter from "./communications-sms-webhook.js";
 import inboxRouter from "./inbox.js";
 import inboxConversationsRouter from "./inboxConversations.js";
 import mailboxesRouter from "./mailboxes.js";
@@ -232,6 +234,20 @@ router.use("/pdpl", pdplRouter);
 // vendor doesn't need an ERP JWT. The router enforces per-IP rate limit,
 // timestamp window, and timing-safe signature compare inside.
 router.use("/webhooks/cmsv6", fleetTelematicsWebhookRouter);
+
+// SMS inbound webhook (Twilio). Anonymous surface, X-Twilio-Signature-verified
+// inside the router. Mounted BEFORE authMiddleware so Twilio (which carries no
+// ERP JWT) can reach it; only POST /communications/sms/webhook is defined here,
+// every other /communications/* path falls through to the authenticated
+// communicationsRouter mounted later.
+router.use("/communications", communicationsSmsWebhookRouter);
+
+// WhatsApp + PBX inbound webhooks. Same rationale as the SMS webhook above:
+// Meta / the PBX vendor carry no ERP JWT, and each handler verifies its own
+// signature, so these must be reachable BEFORE authMiddleware. Previously they
+// were registered on the authenticated communications router and got 401'd —
+// inbound WhatsApp messages and PBX call events never reached the system.
+router.use("/communications", communicationsPublicWebhookRouter);
 
 router.get("/settings/display", async (req, res) => {
   try {

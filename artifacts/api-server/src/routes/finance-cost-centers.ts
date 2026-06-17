@@ -119,7 +119,7 @@ router.get("/cost-centers/tree", authorize({ feature: "finance.cost_centers", ac
                   COUNT(DISTINCT je.id)::int                     AS "jeCount",
                   MAX(je.date)                                   AS "lastActivityAt"
              FROM journal_lines jl
-             JOIN journal_entries je ON je.id = jl."journalId"
+             JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
             WHERE je."companyId" = $1
               AND je."deletedAt" IS NULL
               AND jl."costCenterId" = t.id
@@ -275,6 +275,196 @@ router.get("/cost-centers", authorize({ feature: "finance.cost_centers", action:
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) { handleRouteError(err, res, "List cost centers error"); }
+});
+
+// NOTE: this STATIC route MUST stay registered before `/cost-centers/:id`
+// below — Express matches in registration order, so if `:id` came first it
+// would capture "ranking" as the id param and 422 with "معرف غير صالح: id".
+// Guarded by scripts/src/check-route-shadowing.mjs.
+router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const q = req.query as Record<string, string | undefined>;
+    const metric = String(q.metric ?? "expense");
+    if (!CC_RANKING_METRICS.has(metric)) {
+      throw new ValidationError(`المقياس غير مدعوم: ${metric}`, { field: "metric" });
+    }
+
+    // Clamp limit [5, 100] — cheap correlated tree-rollups, but
+    // still don't want to invite 10k-row scans.
+    const limit = Math.max(5, Math.min(100, Number(q.limit) > 0 ? Number(q.limit) : 20));
+    const from = q.dateFrom || "1970-01-01";
+    const to = q.dateTo || "2099-12-31";
+    const direction = q.direction === "asc" ? "ASC" : "DESC";
+
+    // Optional `rootId` narrows the ranking to a subtree (e.g. just
+    // projects under one branch's CC).
+    const rootId = q.rootId && Number(q.rootId) > 0 ? Number(q.rootId) : null;
+
+    const orderCol: Record<string, string> = {
+      revenue: "revenue",
+      expense: "expense",
+      net:     "net",
+      entries: "entries",
+    };
+
+    // Per-CC rollup via a recursive CTE that produces (cc_id,
+    // descendant_id) pairs. Each CC then aggregates over all its
+    // descendant JE lines in one swoop.
+    //
+    // The OPTIONAL filter `rootId` restricts the top-level set
+    // (defaults to ALL CCs in the tenant — `parentId IS NULL` would
+    // only show roots, which isn't what we want for ranking).
+    const rows = await rawQuery<{
+      ccId: number;
+      ccCode: string | null;
+      ccName: string;
+      revenue: string;
+      expense: string;
+      entries: number;
+    }>(
+      `WITH RECURSIVE tree AS (
+         SELECT id AS root_id, id AS desc_id
+           FROM cost_centers
+          WHERE "companyId" = $1
+            AND status != 'deleted'
+            ${rootId ? `AND id = ${rootId}` : ""}
+         UNION ALL
+         SELECT t.root_id, cc.id
+           FROM cost_centers cc
+           JOIN tree t ON cc."parentId" = t.desc_id
+          WHERE cc."companyId" = $1
+            AND cc.status != 'deleted'
+       ),
+       per_cc AS (
+         SELECT t.root_id AS cc_id,
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM tree t
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id AND jl."deletedAt" IS NULL
+           LEFT JOIN journal_entries je
+                  ON je.id = jl."journalId"
+                 AND je."companyId" = $1
+                 AND je."deletedAt" IS NULL
+                 AND je.date BETWEEN $2 AND $3
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          GROUP BY t.root_id
+       )
+       SELECT cc.id AS "ccId",
+              cc.code AS "ccCode",
+              cc.name AS "ccName",
+              p.revenue,
+              p.expense,
+              (p.revenue - p.expense) AS net,
+              p.entries
+         FROM per_cc p
+         JOIN cost_centers cc ON cc.id = p.cc_id
+                              AND cc."companyId" = $1
+                              AND cc.status != 'deleted'
+        ORDER BY ${orderCol[metric]} ${direction} NULLS LAST, cc.id ASC
+        LIMIT ${limit}`,
+      [scope.companyId, from, to],
+    );
+
+    // OPTIONAL: prior-period rollup for the same CCs. Same shape as
+    // the entity-ranking includePrior path — each top-N CC gets a
+    // matching aggregate over the prior calendar-year window so the
+    // frontend can render anomaly badges without N round-trips.
+    //
+    // Uses ANY($::int[]) over the top-N ids — one query, no N+1.
+    // Each row reaggregates over the FULL descendant subtree of THAT
+    // cc (same recursive CTE shape).
+    let priorRows: Array<{ ccId: number; revenue: number; expense: number; net: number; entries: number }> = [];
+    if (q.includePrior === "true" && rows.length > 0) {
+      const shiftYear = (iso: string): string => {
+        const [yStr, m, d] = iso.split("-");
+        return `${Number(yStr) - 1}-${m}-${d}`;
+      };
+      const priorFrom = shiftYear(from);
+      const priorTo = shiftYear(to);
+      const ids = rows.map((r) => r.ccId);
+      const priorAgg = await rawQuery<{
+        ccId: number;
+        revenue: string;
+        expense: string;
+        entries: number;
+      }>(
+        `WITH RECURSIVE tree AS (
+           SELECT id AS root_id, id AS desc_id
+             FROM cost_centers
+            WHERE "companyId" = $1
+              AND status != 'deleted'
+              AND id = ANY($4::int[])
+           UNION ALL
+           SELECT t.root_id, cc.id
+             FROM cost_centers cc
+             JOIN tree t ON cc."parentId" = t.desc_id
+            WHERE cc."companyId" = $1
+              AND cc.status != 'deleted'
+         )
+         SELECT t.root_id AS "ccId",
+                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
+                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
+                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
+                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
+                COUNT(DISTINCT je.id)::int AS entries
+           FROM tree t
+           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id AND jl."deletedAt" IS NULL
+           LEFT JOIN journal_entries je
+                  ON je.id = jl."journalId"
+                 AND je."companyId" = $1
+                 AND je."deletedAt" IS NULL
+                 AND je.date BETWEEN $2 AND $3
+           LEFT JOIN chart_of_accounts ca
+                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
+          GROUP BY t.root_id`,
+        [scope.companyId, priorFrom, priorTo, ids],
+      );
+      priorRows = priorAgg.map((r) => ({
+        ccId: r.ccId,
+        revenue: Number(r.revenue),
+        expense: Number(r.expense),
+        net: Number(r.revenue) - Number(r.expense),
+        entries: Number(r.entries),
+      }));
+    }
+
+    const priorByCc = new Map(priorRows.map((p) => [p.ccId, p]));
+
+    res.json({
+      metric,
+      direction: direction.toLowerCase(),
+      dateFrom: from,
+      dateTo: to,
+      limit,
+      rootId,
+      includePrior: q.includePrior === "true",
+      rows: rows.map((r) => {
+        const prior = priorByCc.get(r.ccId) ?? null;
+        return {
+          ccId: r.ccId,
+          ccCode: r.ccCode,
+          ccName: r.ccName,
+          revenue: Number(r.revenue),
+          expense: Number(r.expense),
+          net: Number(r.revenue) - Number(r.expense),
+          entries: Number(r.entries),
+          prior: prior
+            ? {
+                revenue: prior.revenue,
+                expense: prior.expense,
+                net: prior.net,
+                entries: prior.entries,
+              }
+            : null,
+        };
+      }),
+    });
+  } catch (err) { handleRouteError(err, res, "Cost-centre ranking error"); }
 });
 
 router.get("/cost-centers/:id", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
@@ -535,6 +725,7 @@ router.post("/cost-centers/backfill", authorize({ feature: "finance.cost_centers
                     AND EXISTS (
                       SELECT 1 FROM journal_lines jl
                        WHERE jl."journalId" = je.id
+                         AND jl."deletedAt" IS NULL
                          AND jl."departmentId" = d.id
                     )
                   ORDER BY je."createdAt" ASC LIMIT 1) AS "branchId"
@@ -658,7 +849,7 @@ router.get("/journal-lines/dimensional-coverage", authorize({ feature: "finance.
                 COALESCE(jl."projectId", jl."contractId", jl."vehicleId",
                          jl."departmentId", jl."branchId") AS any_dim
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
           WHERE je."companyId" = $1
             AND je."deletedAt" IS NULL
        )
@@ -720,7 +911,7 @@ router.get("/dormant-entities", authorize({ feature: "finance.cost_centers", act
            SELECT MAX(je.date) AS "lastActivityAt",
                   COUNT(DISTINCT je.id)::int AS "jeCount"
              FROM journal_lines jl
-             JOIN journal_entries je ON je.id = jl."journalId"
+             JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
             WHERE je."companyId" = cc."companyId"
               AND je."deletedAt" IS NULL
               AND jl."costCenterId" = cc.id
@@ -760,7 +951,7 @@ router.get("/dormant-entities", authorize({ feature: "finance.cost_centers", act
            SELECT MAX(je.date) AS "lastActivityAt",
                   COUNT(DISTINCT je.id)::int AS "jeCount"
              FROM journal_lines jl
-             JOIN journal_entries je ON je.id = jl."journalId"
+             JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
             WHERE je."companyId" = sa."companyId"
               AND je."deletedAt" IS NULL
               AND jl."accountCode" = coa.code
@@ -941,7 +1132,7 @@ router.get("/cost-centers/:id/pnl", authorize({ feature: "finance.cost_centers",
          COUNT(DISTINCT je.id) FILTER (WHERE jl."costCenterId" = $1)::int AS "selfEntries",
          COUNT(DISTINCT je.id) FILTER (WHERE jl."costCenterId" = ANY($3::int[]))::int AS "rolledEntries"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId"
+       JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts ca
               ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
        WHERE je."companyId" = $2
@@ -977,7 +1168,7 @@ router.get("/cost-centers/:id/pnl", authorize({ feature: "finance.cost_centers",
               COALESCE(SUM(jl.debit), 0) AS debit,
               COALESCE(SUM(jl.credit), 0) AS credit
          FROM journal_entries je
-         JOIN journal_lines jl ON jl."journalId" = je.id
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
         WHERE je."companyId" = $1
           AND je."deletedAt" IS NULL
           AND je.date BETWEEN $2 AND $3
@@ -1063,7 +1254,7 @@ router.get("/cost-centers/:id/series", authorize({ feature: "finance.cost_center
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $4
@@ -1169,7 +1360,7 @@ router.get("/cost-centers/:id/yoy", authorize({ feature: "finance.cost_centers",
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $6
@@ -1184,7 +1375,7 @@ router.get("/cost-centers/:id/yoy", authorize({ feature: "finance.cost_centers",
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $6
@@ -1239,192 +1430,6 @@ router.get("/cost-centers/:id/yoy", authorize({ feature: "finance.cost_centers",
 // shallow depth (3-5 levels). Limit caps at 100.
 // ─────────────────────────────────────────────────────────────────────────────
 const CC_RANKING_METRICS = new Set(["revenue", "expense", "net", "entries"]);
-
-router.get("/cost-centers/ranking", authorize({ feature: "finance.cost_centers", action: "view" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const q = req.query as Record<string, string | undefined>;
-    const metric = String(q.metric ?? "expense");
-    if (!CC_RANKING_METRICS.has(metric)) {
-      throw new ValidationError(`المقياس غير مدعوم: ${metric}`, { field: "metric" });
-    }
-
-    // Clamp limit [5, 100] — cheap correlated tree-rollups, but
-    // still don't want to invite 10k-row scans.
-    const limit = Math.max(5, Math.min(100, Number(q.limit) > 0 ? Number(q.limit) : 20));
-    const from = q.dateFrom || "1970-01-01";
-    const to = q.dateTo || "2099-12-31";
-    const direction = q.direction === "asc" ? "ASC" : "DESC";
-
-    // Optional `rootId` narrows the ranking to a subtree (e.g. just
-    // projects under one branch's CC).
-    const rootId = q.rootId && Number(q.rootId) > 0 ? Number(q.rootId) : null;
-
-    const orderCol: Record<string, string> = {
-      revenue: "revenue",
-      expense: "expense",
-      net:     "net",
-      entries: "entries",
-    };
-
-    // Per-CC rollup via a recursive CTE that produces (cc_id,
-    // descendant_id) pairs. Each CC then aggregates over all its
-    // descendant JE lines in one swoop.
-    //
-    // The OPTIONAL filter `rootId` restricts the top-level set
-    // (defaults to ALL CCs in the tenant — `parentId IS NULL` would
-    // only show roots, which isn't what we want for ranking).
-    const rows = await rawQuery<{
-      ccId: number;
-      ccCode: string | null;
-      ccName: string;
-      revenue: string;
-      expense: string;
-      entries: number;
-    }>(
-      `WITH RECURSIVE tree AS (
-         SELECT id AS root_id, id AS desc_id
-           FROM cost_centers
-          WHERE "companyId" = $1
-            AND status != 'deleted'
-            ${rootId ? `AND id = ${rootId}` : ""}
-         UNION ALL
-         SELECT t.root_id, cc.id
-           FROM cost_centers cc
-           JOIN tree t ON cc."parentId" = t.desc_id
-          WHERE cc."companyId" = $1
-            AND cc.status != 'deleted'
-       ),
-       per_cc AS (
-         SELECT t.root_id AS cc_id,
-                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
-                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
-                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
-                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
-                COUNT(DISTINCT je.id)::int AS entries
-           FROM tree t
-           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
-           LEFT JOIN journal_entries je
-                  ON je.id = jl."journalId"
-                 AND je."companyId" = $1
-                 AND je."deletedAt" IS NULL
-                 AND je.date BETWEEN $2 AND $3
-           LEFT JOIN chart_of_accounts ca
-                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
-          GROUP BY t.root_id
-       )
-       SELECT cc.id AS "ccId",
-              cc.code AS "ccCode",
-              cc.name AS "ccName",
-              p.revenue,
-              p.expense,
-              (p.revenue - p.expense) AS net,
-              p.entries
-         FROM per_cc p
-         JOIN cost_centers cc ON cc.id = p.cc_id
-                              AND cc."companyId" = $1
-                              AND cc.status != 'deleted'
-        ORDER BY ${orderCol[metric]} ${direction} NULLS LAST, cc.id ASC
-        LIMIT ${limit}`,
-      [scope.companyId, from, to],
-    );
-
-    // OPTIONAL: prior-period rollup for the same CCs. Same shape as
-    // the entity-ranking includePrior path — each top-N CC gets a
-    // matching aggregate over the prior calendar-year window so the
-    // frontend can render anomaly badges without N round-trips.
-    //
-    // Uses ANY($::int[]) over the top-N ids — one query, no N+1.
-    // Each row reaggregates over the FULL descendant subtree of THAT
-    // cc (same recursive CTE shape).
-    let priorRows: Array<{ ccId: number; revenue: number; expense: number; net: number; entries: number }> = [];
-    if (q.includePrior === "true" && rows.length > 0) {
-      const shiftYear = (iso: string): string => {
-        const [yStr, m, d] = iso.split("-");
-        return `${Number(yStr) - 1}-${m}-${d}`;
-      };
-      const priorFrom = shiftYear(from);
-      const priorTo = shiftYear(to);
-      const ids = rows.map((r) => r.ccId);
-      const priorAgg = await rawQuery<{
-        ccId: number;
-        revenue: string;
-        expense: string;
-        entries: number;
-      }>(
-        `WITH RECURSIVE tree AS (
-           SELECT id AS root_id, id AS desc_id
-             FROM cost_centers
-            WHERE "companyId" = $1
-              AND status != 'deleted'
-              AND id = ANY($4::int[])
-           UNION ALL
-           SELECT t.root_id, cc.id
-             FROM cost_centers cc
-             JOIN tree t ON cc."parentId" = t.desc_id
-            WHERE cc."companyId" = $1
-              AND cc.status != 'deleted'
-         )
-         SELECT t.root_id AS "ccId",
-                COALESCE(SUM(CASE WHEN ca.type = 'revenue'
-                                  THEN jl.credit - jl.debit ELSE 0 END), 0) AS revenue,
-                COALESCE(SUM(CASE WHEN ca.type IN ('expense','cost_of_sales')
-                                  THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
-                COUNT(DISTINCT je.id)::int AS entries
-           FROM tree t
-           LEFT JOIN journal_lines jl ON jl."costCenterId" = t.desc_id
-           LEFT JOIN journal_entries je
-                  ON je.id = jl."journalId"
-                 AND je."companyId" = $1
-                 AND je."deletedAt" IS NULL
-                 AND je.date BETWEEN $2 AND $3
-           LEFT JOIN chart_of_accounts ca
-                  ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
-          GROUP BY t.root_id`,
-        [scope.companyId, priorFrom, priorTo, ids],
-      );
-      priorRows = priorAgg.map((r) => ({
-        ccId: r.ccId,
-        revenue: Number(r.revenue),
-        expense: Number(r.expense),
-        net: Number(r.revenue) - Number(r.expense),
-        entries: Number(r.entries),
-      }));
-    }
-
-    const priorByCc = new Map(priorRows.map((p) => [p.ccId, p]));
-
-    res.json({
-      metric,
-      direction: direction.toLowerCase(),
-      dateFrom: from,
-      dateTo: to,
-      limit,
-      rootId,
-      includePrior: q.includePrior === "true",
-      rows: rows.map((r) => {
-        const prior = priorByCc.get(r.ccId) ?? null;
-        return {
-          ccId: r.ccId,
-          ccCode: r.ccCode,
-          ccName: r.ccName,
-          revenue: Number(r.revenue),
-          expense: Number(r.expense),
-          net: Number(r.revenue) - Number(r.expense),
-          entries: Number(r.entries),
-          prior: prior
-            ? {
-                revenue: prior.revenue,
-                expense: prior.expense,
-                net: prior.net,
-                entries: prior.entries,
-              }
-            : null,
-        };
-      }),
-    });
-  } catch (err) { handleRouteError(err, res, "Cost-centre ranking error"); }
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DIMENSIONAL-ROUTING HEALTH — the operator's «هل النظام المالي
@@ -1653,7 +1658,7 @@ router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.co
                            THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
          COUNT(DISTINCT je.id)::int AS entries
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId"
+       JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts ca
               ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
        WHERE je."companyId" = $1
@@ -1675,7 +1680,7 @@ router.get("/entity-pnl/:entityType/:entityId", authorize({ feature: "finance.co
               COALESCE(SUM(jl.debit), 0) AS debit,
               COALESCE(SUM(jl.credit), 0) AS credit
          FROM journal_entries je
-         JOIN journal_lines jl ON jl."journalId" = je.id
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
         WHERE je."companyId" = $1
           AND je."deletedAt" IS NULL
           AND je.date BETWEEN $2 AND $3
@@ -1755,7 +1760,7 @@ router.get("/entity-pnl/:entityType/:entityId/series", authorize({ feature: "fin
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $1
@@ -1863,7 +1868,7 @@ router.get("/entity-pnl/:entityType/:entityId/yoy", authorize({ feature: "financ
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $1
@@ -1878,7 +1883,7 @@ router.get("/entity-pnl/:entityType/:entityId/yoy", authorize({ feature: "financ
                                 THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
               COUNT(DISTINCT je.id)::int AS entries
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          LEFT JOIN chart_of_accounts ca
                 ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
         WHERE je."companyId" = $1
@@ -2018,7 +2023,7 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $1
@@ -2067,7 +2072,7 @@ router.get("/entity-ranking", authorize({ feature: "finance.cost_centers", actio
                                   THEN jl.debit - jl.credit ELSE 0 END), 0) AS expense,
                 COUNT(DISTINCT je.id)::int AS entries
            FROM journal_lines jl
-           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
            LEFT JOIN chart_of_accounts ca
                   ON ca."companyId" = je."companyId" AND ca.code = jl."accountCode"
           WHERE je."companyId" = $1
