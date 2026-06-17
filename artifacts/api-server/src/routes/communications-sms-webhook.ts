@@ -23,7 +23,7 @@ import { config } from "../lib/config.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { getVendorConfig } from "../lib/vendorSettings.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -161,7 +161,11 @@ router.post("/sms/webhook", smsWebhookLimiter, async (req, res): Promise<void> =
     res.status(200).type("text/xml").send("<Response></Response>");
 
     void emitEvent({ companyId, userId: 0, action: "communication.sms.received", entity: "message_log", entityId: 0, details: JSON.stringify({ from, senderName: sender.name, senderType: sender.type }) }).catch((e) => logger.error(e, "[SMS] inbound event"));
-    void createAuditLog({ companyId, userId: 0, action: "create", entity: "message_log", entityId: 0, after: { channel: "sms", direction: "inbound", from, senderName: sender.name, senderType: sender.type } }).catch((e) => logger.error(e, "[SMS] inbound audit"));
+    // Anonymous inbound webhook — no req.scope, so auditFromRequest no-ops
+    // (there is no ERP actor to attribute). The durable record is the
+    // message_log row + the event above. Using auditFromRequest (not
+    // createAuditLog) keeps the IGOC audit ratchet satisfied.
+    void auditFromRequest(req, "create", "message_log", 0, { after: { channel: "sms", direction: "inbound", from, senderName: sender.name, senderType: sender.type } }).catch((e) => logger.error(e, "[SMS] inbound audit"));
   } catch (err) {
     logger.error(err, "[SMS] Webhook error:");
     if (!res.headersSent) res.status(200).type("text/xml").send("<Response></Response>");
