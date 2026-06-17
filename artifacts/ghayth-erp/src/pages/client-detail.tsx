@@ -104,7 +104,7 @@ function ClientRelationshipCard<T extends { id: number | string }>({
         ) : (
           <div className="space-y-2">
             {items.map((item) => (
-              <Link key={item.id} href={hrefFor(item)}>
+              <Link key={item.id} href={hrefFor(item)} asChild>
                 <a className="block p-3 rounded-md border hover:bg-muted/30 transition">
                   {renderItem(item)}
                 </a>

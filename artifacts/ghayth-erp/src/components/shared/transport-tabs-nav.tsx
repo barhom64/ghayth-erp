@@ -37,7 +37,7 @@ export function TransportTabsNav() {
           const isActive = location === tab.href || location.startsWith(`${tab.href}/`);
           const Icon = tab.icon;
           return (
-            <Link key={tab.href} href={tab.href}>
+            <Link key={tab.href} href={tab.href} asChild>
               <a
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",

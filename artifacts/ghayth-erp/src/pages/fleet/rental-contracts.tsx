@@ -233,7 +233,7 @@ export default function RentalContractsPage() {
                 ) : rows.map((r) => (
                   <tr key={r.id} className="border-t hover:bg-surface-subtle">
                     <td className="px-3 py-2 font-mono text-xs">
-                      <Link href={`/fleet/rental-contracts/${r.id}`}>
+                      <Link href={`/fleet/rental-contracts/${r.id}`} asChild>
                         <a className="text-status-info-foreground hover:underline">
                           {r.ref ?? `#${r.id}`}
                         </a>

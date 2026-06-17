@@ -86,7 +86,7 @@ describe("umrah tabs nav — restructure", () => {
 
   it("settings gear is a separate icon link to /umrah/settings (was hidden before)", () => {
     expect(TABS).toContain('data-testid="umrah-tab-settings-gear"');
-    expect(TABS).toMatch(/<Link href="\/umrah\/settings">/);
+    expect(TABS).toMatch(/<Link href="\/umrah\/settings"[^>]*>/);
   });
 
   it("isActive helper is a pure function — used by every renderable", () => {
