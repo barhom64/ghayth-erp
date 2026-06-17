@@ -16,11 +16,11 @@ const SRC = readFileSync(
   "utf8",
 );
 const MIGRATION = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/migrations/385_attendance_deduction_memo_link.sql"),
+  join(REPO_ROOT, "artifacts/api-server/src/migrations/386_attendance_deduction_memo_link.sql"),
   "utf8",
 );
 
-describe("HR-REV-7 — memoId link (migration 385)", () => {
+describe("HR-REV-7 — memoId link (migration 386)", () => {
   it("migration adds a nullable memoId column + partial index, additive", () => {
     expect(MIGRATION).toMatch(/ADD COLUMN IF NOT EXISTS "memoId" INTEGER/);
     expect(MIGRATION).toMatch(/CREATE INDEX IF NOT EXISTS idx_attendance_deductions_memo_live/);
@@ -53,7 +53,7 @@ describe("HR-REV-7 — appeal acceptance reverses the payroll deduction", () => 
     expect(APPEAL_BLOCK).toMatch(/AND type = 'penalty' AND status = 'pending_payroll'/);
   });
 
-  it("targets the exact row via the memoId link (migration 385), not a heuristic", () => {
+  it("targets the exact row via the memoId link (migration 386), not a heuristic", () => {
     expect(APPEAL_BLOCK).toMatch(/WHERE "memoId" = \$1 AND "companyId" = \$2/);
     // the old amount/minutes heuristic must be gone
     expect(APPEAL_BLOCK).not.toMatch(/amount = \$4 AND minutes = \$5/);

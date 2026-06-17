@@ -1200,7 +1200,7 @@ router.post("/memos/:id/appeal-decision", authorize({ feature: "hr.discipline", 
             Number(memo.appliedDeductionAmount ?? 0) + Number(memo.appliedExtraDeduction ?? 0);
           if (totalApplied > 0) {
             // Reverse exactly the row this memo's gm-decision created (migration
-            // 385 added the memoId link). No heuristic match: a precise memoId
+            // 386 added the memoId link). No heuristic match: a precise memoId
             // means two same-amount penalties in one period can never collide.
             // Still scoped by companyId + type + pending_payroll so a row already
             // swept into a payroll run ('deducted_in_payroll') is left for a
