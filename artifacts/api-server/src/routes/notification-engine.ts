@@ -186,11 +186,11 @@ router.get("/routing-rules", authorize({ feature: "admin", action: "update" }), 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT r.*, fc.name AS "fallbackChainName"
+      `SELECT DISTINCT ON (r."eventCategory") r.*, fc.name AS "fallbackChainName"
        FROM notification_routing_rules r
        LEFT JOIN notification_fallback_chains fc ON fc.id = r."fallbackChainId"
        WHERE r."companyId" = $1 OR r."companyId" IS NULL
-       ORDER BY r."companyId" DESC NULLS LAST, r."eventCategory"`,
+       ORDER BY r."eventCategory", r."companyId" DESC NULLS LAST`,
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
@@ -794,6 +794,106 @@ router.get("/delivery-log", authorize({ feature: "admin", action: "update" }), a
     );
 
     res.json(maskFields(req, { data: rows, total: countResult[0]?.count ?? 0, page, limit }));
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
+  }
+});
+
+// Suppressions = notification_delivery_log rows the engine wrote with
+// status='suppressed' (channel='none') when a dispatch was silently dropped —
+// a company opt-out, quiet hours, or per-user preferences. recordSuppression()
+// stores the reason + eventCategory in metadata, so we surface them here for
+// the admin "الإشعارات المحجوبة" tab. Company-scoped, paginated; `all=1`
+// returns the full filtered set (capped) for CSV export.
+router.get("/suppressions", authorize({ feature: "admin", action: "list" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const exportAll = req.query.all === "1";
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = exportAll ? 5000 : Math.min(parseInt(req.query.limit as string) || 20, 200);
+    const offset = (page - 1) * limit;
+    const reason = req.query.reason as string;
+    const from = req.query.from as string;
+    const to = req.query.to as string;
+
+    let where = `"companyId" = $1 AND status = 'suppressed'`;
+    const params: (string | number)[] = [scope.companyId];
+    if (reason) {
+      params.push(reason);
+      where += ` AND metadata->>'suppressionReason' = $${params.length}`;
+    }
+    if (from) {
+      params.push(from);
+      where += ` AND "createdAt"::date >= $${params.length}::date`;
+    }
+    if (to) {
+      params.push(to);
+      where += ` AND "createdAt"::date <= $${params.length}::date`;
+    }
+
+    const countResult = await rawQuery<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM notification_delivery_log WHERE ${where}`, params
+    );
+
+    params.push(limit, offset);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT id, recipient, "templateKey", subject, body,
+              metadata->>'suppressionReason' AS reason,
+              metadata->>'eventCategory' AS "eventCategory",
+              "createdAt"
+       FROM notification_delivery_log
+       WHERE ${where}
+       ORDER BY "createdAt" DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    res.json(maskFields(req, { data: rows, total: countResult[0]?.count ?? 0, page, limit }));
+  } catch (err) {
+    handleRouteError(err, res, "Notification engine error:");
+  }
+});
+
+// Suppression summary for the date window (reason filter intentionally NOT
+// applied — the cards compare reasons against each other). Returns the total,
+// a per-reason breakdown, and a per-(category, reason) breakdown for the
+// stacked bars.
+router.get("/suppressions/summary", authorize({ feature: "admin", action: "list" }), async (req: Request, res: Response) => {
+  try {
+    const scope = req.scope!;
+    const from = req.query.from as string;
+    const to = req.query.to as string;
+
+    let where = `"companyId" = $1 AND status = 'suppressed'`;
+    const params: (string | number)[] = [scope.companyId];
+    if (from) {
+      params.push(from);
+      where += ` AND "createdAt"::date >= $${params.length}::date`;
+    }
+    if (to) {
+      params.push(to);
+      where += ` AND "createdAt"::date <= $${params.length}::date`;
+    }
+
+    const totalRes = await rawQuery<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM notification_delivery_log WHERE ${where}`, params
+    );
+    const byReason = await rawQuery<{ reason: string | null; count: number }>(
+      `SELECT metadata->>'suppressionReason' AS reason, COUNT(*)::int AS count
+         FROM notification_delivery_log WHERE ${where}
+        GROUP BY metadata->>'suppressionReason'
+        ORDER BY count DESC`, params
+    );
+    const byCategory = await rawQuery<{ eventCategory: string | null; reason: string | null; count: number }>(
+      `SELECT metadata->>'eventCategory' AS "eventCategory",
+              metadata->>'suppressionReason' AS reason,
+              COUNT(*)::int AS count
+         FROM notification_delivery_log WHERE ${where}
+        GROUP BY metadata->>'eventCategory', metadata->>'suppressionReason'
+        ORDER BY count DESC`, params
+    );
+
+    res.json(maskFields(req, { data: { total: totalRes[0]?.count ?? 0, byReason, byCategory } }));
   } catch (err) {
     handleRouteError(err, res, "Notification engine error:");
   }
