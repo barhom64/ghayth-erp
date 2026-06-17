@@ -325,6 +325,7 @@ export const CONTRACT_TYPES: Record<string, string> = {
   full_time: "دوام كامل",
   part_time: "دوام جزئي",
   contract: "عقد مؤقت",
+  probation: "فترة تجربة",
   freelance: "عمل حر",
 };
 

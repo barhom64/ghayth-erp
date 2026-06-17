@@ -548,15 +548,21 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       const assignmentId = assignRes.rows[0].id;
 
       // ── Create the onboarding tasks from the job-category profile ──
-      const dueDateOnboarding = new Date();
-      dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const task of buildActivationPlan(resolvedCategory)) {
+      // Due date = 7 days from *Riyadh* today. Anchoring on the noon-UTC of
+      // todayISO() (the tenant-local date) keeps the +7 a stable calendar
+      // offset; a raw `new Date()` would be the UTC date and roll a day early
+      // in the evening Riyadh hours (Task #400 class).
+      const dueDateOnboarding = new Date(`${todayISO()}T12:00:00Z`);
+      dueDateOnboarding.setUTCDate(dueDateOnboarding.getUTCDate() + 7);
+      const activationPlan = buildActivationPlan(resolvedCategory);
+      for (const task of activationPlan) {
         await client.query(
           `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
            VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
           [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
+      const onboardingTaskCount = activationPlan.length;
 
       // ── Record the lifecycle event (state → onboarding) ──
       // offer_accepted is the event that maps to the onboarding state
@@ -583,10 +589,10 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
         ]
       );
 
-      return { empId, assignmentId };
+      return { empId, assignmentId, onboardingTaskCount };
     });
 
-    const { empId, assignmentId } = result;
+    const { empId, assignmentId, onboardingTaskCount } = result;
 
     // ── Event log ──
     await emitEvent({
@@ -594,7 +600,7 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       action: "employee.quick_activated", entity: "employees", entityId: empId,
       details: JSON.stringify({
         empNumber: finalEmpNumber, assignmentId, jobTitle: effectiveJobTitle,
-        status: "inactive", onboardingTasks: 4,
+        status: "inactive", onboardingTasks: onboardingTaskCount,
         context: {
           companyId: scope.companyId,
           branchId: scope.branchId ?? null,
@@ -615,7 +621,7 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       impersonationSourceUser: scope.impersonationSourceUser ?? null,
       after: {
         name, empNumber: finalEmpNumber, jobTitle: effectiveJobTitle,
-        status: "inactive", assignmentId, onboardingTasksCreated: 4,
+        status: "inactive", assignmentId, onboardingTasksCreated: onboardingTaskCount,
       },
     });
 
@@ -624,7 +630,7 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       empNumber: finalEmpNumber,
       assignmentId,
       status: "inactive",
-      onboardingTasksCreated: 4,
+      onboardingTasksCreated: onboardingTaskCount,
     });
   } catch (err) {
     handleRouteError(err, res, "Quick-activate employee error:");
@@ -1208,15 +1214,19 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       );
 
       // ── Step 7: Create the onboarding tasks from the job-category profile ──
-      const dueDateOnboarding = new Date();
-      dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const task of buildActivationPlan(resolvedCategory)) {
+      // Due date = 7 days from Riyadh today (noon-UTC anchor keeps the offset
+      // stable; a raw new Date() would be the UTC date — Task #400 class).
+      const dueDateOnboarding = new Date(`${todayISO()}T12:00:00Z`);
+      dueDateOnboarding.setUTCDate(dueDateOnboarding.getUTCDate() + 7);
+      const activationPlan = buildActivationPlan(resolvedCategory);
+      for (const task of activationPlan) {
         await client.query(
           `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
            VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
           [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
+      const onboardingTaskCount = activationPlan.length;
 
       // ── Step 8: Auto-create user account ──
       // Login email priority: explicit internalEmail > legacy email.
@@ -1431,10 +1441,10 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         ).catch((e) => logger.error(e, "employees background task failed"));
       }
 
-      return { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail };
+      return { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail, onboardingTaskCount };
     });
 
-    const { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail } = result;
+    const { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail, onboardingTaskCount } = result;
     let accountInviteWarning: string | null = null;
 
     // ── Step 8: Notify manager and HR ──
@@ -1455,7 +1465,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     createNotification({
       companyId: scope.companyId, assignmentId: hrTargetId,
       type: "employee_created", title: "تم إضافة موظف جديد — مطلوب متابعة HR",
-      body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح. تم إنشاء ${4} مهام تهيئة. يرجى مراجعة ملف الموظف.`,
+      body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح. تم إنشاء ${onboardingTaskCount} مهام تهيئة. يرجى مراجعة ملف الموظف.`,
       priority: "high", refType: "employee", refId: empId,
     }).catch((e) => logger.error(e, "employees background task failed"));
     if (hrTargetId !== scope.activeAssignmentId) {
@@ -1529,7 +1539,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       action: "employee.created", entity: "employees", entityId: empId,
       details: JSON.stringify({
         empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary,
-        onboardingTasks: 4, probationDays: Number(probationDays),
+        onboardingTasks: onboardingTaskCount, probationDays: Number(probationDays),
         // PR-1 (#2077) — institutional binding in the event so audit
         // dashboards can answer «who got bound to project X this month?»
         positionId: positionId ? Number(positionId) : null,
@@ -1622,7 +1632,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     res.status(201).json({
       ...employee,
       assignmentId,
-      onboardingTasksCreated: 4,
+      onboardingTasksCreated: onboardingTaskCount,
       // PR-1 (#2077) — surface the institutional binding so the
       // post-create success card can render «الموظف مرتبط بـ …».
       institutional: {
@@ -1944,6 +1954,28 @@ router.patch("/job-titles/:id", authorize({ feature: "hr.employees", action: "up
     }).catch(() => undefined);
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "update job_title"); }
+});
+
+router.delete("/job-titles/:id", authorize({ feature: "hr.employees", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Soft delete — mirrors the org.ts catalog pattern (positions/teams/…):
+    // job_titles has an isActive flag and no deletedAt column, and existing
+    // assignments keep their jobTitleId FK, so we deactivate rather than drop.
+    // System titles (companyId IS NULL) are shared and must not be touched.
+    const result = await rawExecute(
+      `UPDATE job_titles SET "isActive" = FALSE, "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("المسمّى الوظيفي غير موجود أو غير قابل للحذف");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "job_titles", entityId: id,
+    }).catch(() => undefined);
+    res.json({ ok: true, isActive: false });
+  } catch (err) { handleRouteError(err, res, "delete job_title"); }
 });
 
 router.get("/documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {

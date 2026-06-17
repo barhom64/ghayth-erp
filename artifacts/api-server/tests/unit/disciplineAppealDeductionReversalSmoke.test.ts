@@ -35,9 +35,11 @@ describe("HR-REV-7 — appeal acceptance reverses the payroll deduction", () => 
     expect(APPEAL_BLOCK).toMatch(/AND type = 'penalty' AND status = 'pending_payroll'/);
   });
 
-  it("matches by company/assignment/period/amount and reverses exactly one row", () => {
+  it("matches by company/assignment/period/amount/minutes and reverses exactly one row", () => {
     expect(APPEAL_BLOCK).toMatch(/"companyId" = \$1 AND "assignmentId" = \$2/);
-    expect(APPEAL_BLOCK).toMatch(/AND period = \$3 AND amount = \$4/);
+    // minutes discriminator (incidentDurationMinutes) narrows same-amount collisions
+    expect(APPEAL_BLOCK).toMatch(/AND period = \$3 AND amount = \$4 AND minutes = \$5/);
+    expect(APPEAL_BLOCK).toMatch(/memo\.incidentDurationMinutes \?\? 0/);
     expect(APPEAL_BLOCK).toMatch(/SELECT ctid FROM attendance_deductions[\s\S]*?LIMIT 1/);
   });
 
