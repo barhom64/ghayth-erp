@@ -68,8 +68,12 @@ routes/finance-algorithms.ts:cip_costs
 
 # ── [TIGHTER] HR self-service & company-scoped joins (scope.employeeId /
 # activeAssignmentId / userId, or joined through a companyId-scoped driver row).
+# hr-wps:employees kept — employees is the tenant-by-ASSIGNMENT table (an
+# employee may belong across companies); the read is a LEFT-JOIN name display on
+# WPS lines whose run is scope-scoped, so a flat employees.companyId predicate
+# could blank a cross-company name. (wps_runs now carries an explicit companyId
+# predicate on its skipped-entries UPDATE.)
 routes/hr-wps.ts:employees
-routes/hr-wps.ts:wps_runs
 routes/hr.ts:anonymous_upward_reviews
 routes/hr.ts:attendance
 routes/hr.ts:employee_assignments
