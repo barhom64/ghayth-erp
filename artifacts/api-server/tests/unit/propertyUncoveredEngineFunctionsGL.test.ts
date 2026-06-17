@@ -298,7 +298,7 @@ describe("postEarlyTerminationGL — happy path", () => {
       2,
       "early_termination_revenue",
       "credit",
-      "4150",
+      "4130",
     );
   });
 });

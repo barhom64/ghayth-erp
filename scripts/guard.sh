@@ -139,6 +139,15 @@ run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:button-nesting:tests" node scripts/src/check-button-nesting.test.mjs
 run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
+# Component rendered in JSX with an explicit `<any>` generic (`<DataTable<any> …>`):
+# the Replit dev-metadata Babel plugin mangles it into an unparseable opening tag,
+# Vite pushes the transform error to every client as a GLOBAL error overlay, and a
+# single offending lazily-loaded file freezes the ENTIRE dev preview (every route
+# shows the red overlay). typecheck/build/lint all pass — invisible until you open
+# the preview. OFFLINE source scan; baseline in scripts/jsx-generic-component-allowlist.txt,
+# fails only on a NEW offender. Pure-logic fixtures guard the detector.
+run_step "check:jsx-generic-component:tests" node scripts/src/check-jsx-generic-component.test.mjs
+run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-component.mjs
   # setState INSIDE useMemo: a render-phase side effect. With an unstable
   # callback and/or a setState that always builds a new reference it becomes an
   # infinite render loop that wedges the tab — invisible to typecheck/build/lint,

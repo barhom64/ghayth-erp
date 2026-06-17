@@ -296,7 +296,7 @@ export default function PaymentRunPage() {
             <Card>
               <CardContent className="p-4">
                 <h3 className="text-sm font-semibold mb-3">آخر دفعات تنفيذية ({history.length})</h3>
-                <DataTable<any>
+                <DataTable
                   data={history.slice(0, 20)}
                   rowKey={(row) => String(row.id)}
                   noToolbar
