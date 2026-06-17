@@ -342,36 +342,40 @@ export default function SettingsPage() {
       <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="general">عام</TabsTrigger>
-          <TabsTrigger value="branches">الفروع</TabsTrigger>
-          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
-          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          {/* الهوية والتنظيم */}
           <TabsTrigger value="companies">الشركات</TabsTrigger>
-          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="branches">الفروع</TabsTrigger>
+          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
+          {/* الحوكمة والإجراءات */}
           <TabsTrigger value="controls">التحكم</TabsTrigger>
-          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
+          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="numbering">الترقيم</TabsTrigger>
+          {/* المالية والامتثال */}
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
-          <TabsTrigger value="audit">التدقيق</TabsTrigger>
-          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
           <TabsTrigger value="zatca">هيئة الزكاة والضريبة</TabsTrigger>
           <TabsTrigger value="gov">التكاملات الحكومية</TabsTrigger>
+          {/* النظام والمراقبة */}
+          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="audit">التدقيق</TabsTrigger>
+          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings /></TabsContent>
-        <TabsContent value="branches"><BranchesTab /></TabsContent>
-        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
-        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
-        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="branches"><BranchesTab /></TabsContent>
+        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
+        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
-        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
+        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="numbering"><NumberingTab /></TabsContent>
         <TabsContent value="accounting"><AccountingMappingsTab /></TabsContent>
-        <TabsContent value="audit"><AuditLogTab /></TabsContent>
-        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
         <TabsContent value="gov"><GovIntegrationsTab /></TabsContent>
+        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="audit"><AuditLogTab /></TabsContent>
+        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
       </Tabs>
     </PageShell>
   );
