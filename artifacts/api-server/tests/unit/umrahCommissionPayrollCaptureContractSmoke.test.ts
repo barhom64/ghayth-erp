@@ -87,9 +87,9 @@ describe("U-06-P1 §B — commission engine routes CR via HR when commission_via
     );
   });
 
-  it("legacy split mode (commission_via_hr='false') CRs to commission_payable (2150)", () => {
+  it("legacy split mode (commission_via_hr='false') CRs to commission_payable (2155)", () => {
     expect(ENGINE).toMatch(
-      /getAccountCodeFromMapping\([\s\S]{0,150}?['"]commission_payable['"][\s\S]{0,150}?['"]credit['"][\s\S]{0,80}?['"]2150['"]/,
+      /getAccountCodeFromMapping\([\s\S]{0,150}?['"]commission_payable['"][\s\S]{0,150}?['"]credit['"][\s\S]{0,80}?['"]2155['"]/,
     );
   });
 });

@@ -138,7 +138,7 @@ class FleetEngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5560"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2157"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, violation.vehicleId);
@@ -167,7 +167,7 @@ class FleetEngineImpl implements DomainEngine {
     violation: { id: number; vehicleId?: number; amount: number }
   ) {
     const [payableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2157"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
@@ -331,7 +331,7 @@ class FleetEngineImpl implements DomainEngine {
 
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_expense", "debit", "5140"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -875,7 +875,7 @@ class FleetEngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1131"),
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4153"),
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5140"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2111"),
     ]);
 
     const lines: JournalEntryLine[] = [];
