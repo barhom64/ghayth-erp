@@ -725,6 +725,22 @@ export async function createSubsidiaryAccountsForEntity(
       accountsToCreate.push(
         { accountType: "revenue", parentCode: "4130", suffix: "إيراد عمرة", parentIntent: { type: "revenue", keywords: ["إيرادات الخدمات", "عمرة"] } }
       );
+    } else if (entityType === "property") {
+      // Per-property subsidiary accounts (mirrors the vehicle pattern,
+      // #1594): each property gets its OWN postable leaf under the standard
+      // property control parents so rent / maintenance / depreciation /
+      // tenant-receivable post per-unit and roll up to the parent for
+      // consolidated reporting. The JE-post-time substitution enricher
+      // already routes propertyId-tagged lines to these (propertyId →
+      // "property" in SUBSTITUTION_ENTITY_ORDER); before this case the
+      // leaves never existed, so a tagged line had nothing to swap to.
+      // Parents absent on a minimal COA are skipped + tracked (#2091).
+      accountsToCreate.push(
+        { accountType: "receivable",   parentCode: "1132", suffix: "ذمم مستأجر", parentIntent: { type: "asset",   keywords: ["عملاء العقارات"] } },
+        { accountType: "revenue",      parentCode: "4120", suffix: "إيراد إيجار", parentIntent: { type: "revenue", keywords: ["إيرادات الإيجارات"] } },
+        { accountType: "maintenance",  parentCode: "5610", suffix: "صيانة",       parentIntent: { type: "expense", keywords: ["صيانة المباني"] } },
+        { accountType: "depreciation", parentCode: "5740", suffix: "إهلاك",       parentIntent: { type: "expense", keywords: ["إهلاك المباني"] } }
+      );
     }
 
     // #2091 — track WHY any expected account couldn't be opened (a control
@@ -747,14 +763,15 @@ export async function createSubsidiaryAccountsForEntity(
           accountId = existingAcc.id;
         } else {
           const { rows: [newAcc] } = await client.query(
-            `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", level, "allowPosting", "isAnalytical", "isActive")
+            `INSERT INTO chart_of_accounts ("companyId", code, name, "nameEn", type, "parentId", "parentCode", level, "allowPosting", "isAnalytical", "isActive")
              VALUES ($1,$2,$3,$4,
                (SELECT type FROM chart_of_accounts WHERE id = $5),
                $5,
+               $6,
                (SELECT level + 1 FROM chart_of_accounts WHERE id = $5),
                true, true, true)
              RETURNING id`,
-            [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id]
+            [companyId, newCode, `${entityName} - ${acc.suffix}`, `${entityName} - ${acc.suffix}`, parentAccount.id, parentAccount.code]
           );
           accountId = newAcc.id;
         }
