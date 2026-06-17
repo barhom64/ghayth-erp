@@ -343,6 +343,15 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "4130", name: "إيرادات الخدمات", nameEn: "Service Revenue", type: "revenue", level: 3, parentCode: "4100" },
   { code: "4140", name: "إيرادات المشاريع والمقاولات", nameEn: "Project Revenue", type: "revenue", level: 3, parentCode: "4100" },
   { code: "4150", name: "إيرادات النقل والأسطول", nameEn: "Fleet/Transport Revenue", type: "revenue", level: 3, parentCode: "4100" },
+  // Step 1 of transport customer-invoicing — per-service-type revenue leaves.
+  // 4150 is deliberately kept POSTABLE for now: three live paths still fall
+  // back to it (cargo_freight_revenue, fleet_rental_revenue,
+  // early_termination_revenue). Step 2 repoints those to the leaves and flips
+  // 4150 to a non-postable rollup parent (so check:postable-fallbacks moves
+  // atomically). See lib/transportRevenueAccounts.ts + migration 387.
+  { code: "4151", name: "إيراد نقل المعتمرين", nameEn: "Umrah Transport Revenue", type: "revenue", level: 4, parentCode: "4150" },
+  { code: "4152", name: "إيراد نقل الركاب", nameEn: "Passenger Transport Revenue", type: "revenue", level: 4, parentCode: "4150" },
+  { code: "4153", name: "إيراد نقل البضائع", nameEn: "Freight Revenue", type: "revenue", level: 4, parentCode: "4150" },
 
   { code: "4900", name: "إيرادات أخرى", nameEn: "Other Income", type: "revenue", level: 2, parentCode: "4000", allowPosting: false },
   { code: "4910", name: "فوائد ومرابحات بنكية", nameEn: "Bank Interest", type: "revenue", level: 3, parentCode: "4900" },

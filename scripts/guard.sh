@@ -139,6 +139,15 @@ run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:button-nesting:tests" node scripts/src/check-button-nesting.test.mjs
 run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
+  # setState INSIDE useMemo: a render-phase side effect. With an unstable
+  # callback and/or a setState that always builds a new reference it becomes an
+  # infinite render loop that wedges the tab — invisible to typecheck/build/lint,
+  # only manifests at runtime (the /finance/reports/is-trend incident). OFFLINE
+  # source scan flagging a BARE setter (excludes Date/DOM mutators like
+  # `.setHours(`) at the TOP level of a useMemo callback (excludes setters inside
+  # returned-JSX event handlers). Pure-logic fixtures guard the detector.
+  run_step "check:usememo-setstate:tests" node scripts/src/check-usememo-setstate.test.mjs
+  run_step "check:usememo-setstate" node scripts/src/check-usememo-setstate.mjs
 # Duplicate basenames within a single frontend artifact's src/ (e.g. two
 # policies-tab.tsx) — copy-paste components that drift apart and resolve
 # imports to the wrong copy. OFFLINE filename scan; baseline in
@@ -170,6 +179,18 @@ run_step "check:utc-time-drift" node scripts/src/check-utc-time-drift.mjs
 # statically, before merge. Pure-logic fixtures first, then the live scan.
 run_step "check:redirect-targets:tests" node scripts/src/check-redirect-targets.test.mjs
 run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
+# TABS-NAV COVERAGE: every tab in components/shared/*-tabs-nav.tsx must point at
+# a real mounted route — a dead tab silently 404s (companion to the sidebar +
+# redirect-target nav guards). Pure-logic fixtures first, then the live scan.
+run_step "check:tabs-coverage:tests" node scripts/src/check-tabs-coverage.test.mjs
+run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
+# SIDEBAR COVERAGE: every mounted route must be reachable from the left sidebar
+# (navigation.registry.ts) or be legitimately off-sidebar (detail / create /
+# redirect-stub / allowlisted); and no nav entry may be a dead link or a
+# create/edit page in the drawer. Third nav guard (sidebar + tabs +
+# redirect-targets). Pure-logic fixtures first, then the live scan.
+run_step "check:sidebar-coverage:tests" node scripts/src/check-sidebar-coverage.test.mjs
+run_step "check:sidebar-coverage" node scripts/src/check-sidebar-coverage.mjs --strict
 # RAWQUERY-PARAM-ARITY: a Postgres parameterized statement must be bound with
 # exactly max($N) values. Catches the 08P01 "bind message supplies N parameters,
 # but prepared statement requires M" class statically — e.g. the umrah
@@ -179,6 +200,15 @@ run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
 # scripts/rawquery-param-arity-allowlist.txt.
 run_step "check:rawquery-param-arity:tests" node scripts/src/check-rawquery-param-arity.test.mjs
 run_step "check:rawquery-param-arity" node scripts/src/check-rawquery-param-arity.mjs
+# SCOPED-BRANCH-QUALIFIED: a buildScopedWhere call that alias-qualifies its
+# companyColumn (the multi-table/aliased-FROM case) MUST also qualify its
+# branchColumn or set disableBranchScope:true. A qualified company + bare
+# default `"branchId"` is the warehouse-advanced (42702 ambiguous-column 500)
+# and warehouse-cycle-counts (wrong-table scoping) class. Offline static scan;
+# pure-logic fixtures first, then the live scan; vetted FPs in
+# scripts/scoped-branch-qualified-allowlist.txt.
+run_step "check:scoped-branch-qualified:tests" node scripts/src/check-scoped-branch-qualified.test.mjs
+run_step "check:scoped-branch-qualified" node scripts/src/check-scoped-branch-qualified.mjs
 run_step "check:workflow-pnpm-filters" node scripts/src/check-workflow-pnpm-filters.mjs
 run_step "check:workflow-silent-failures" node scripts/src/check-workflow-silent-failures.mjs
 # Fourth of the four originally-dormant guards from PR #574 — finally
