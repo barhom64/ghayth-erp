@@ -38,6 +38,6 @@ describe("CIP page — exists + wired to the engine", () => {
   it("registered in router + nav", () => {
     expect(ROUTES_SRC).toMatch(/const Cip = lazy\(\(\) => import\("@\/pages\/finance\/cip"\)\)/);
     expect(ROUTES_SRC).toMatch(/\{ path: "\/finance\/cip", component: Cip \}/);
-    expect(NAV_SRC).toMatch(/label: "الأعمال الرأسمالية \(CIP\)", path: "\/finance\/cip"/);
+    expect(NAV_SRC).toMatch(/label: "الأعمال الرأسمالية تحت التنفيذ", path: "\/finance\/cip"/);
   });
 });
