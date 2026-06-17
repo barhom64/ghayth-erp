@@ -379,6 +379,7 @@ export const allNavSections: NavSection[] = [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
         { label: "سجل الأصول التحليلي", path: "/finance/fixed-asset-register", icon: BarChart3 },
         { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
+        { label: "الأعمال الرأسمالية (CIP)", path: "/finance/cip", icon: Building2 },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
         { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
         { label: "تقرير العهد", path: "/finance/custodies/report", icon: FileBarChart },
