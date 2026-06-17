@@ -263,7 +263,7 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
           </FormShell>
         </CardContent></Card>
       )}
-      <DataTable<any>
+      <DataTable
         data={Array.isArray(items) ? items : []}
         rowKey={(row) => String(row.id)}
         columns={[
@@ -415,8 +415,8 @@ function ResolvedSettingsTab() {
         وراثة الإعدادات (نظام ← شركة ← فرع)
       </h3>
       <p className="text-sm text-muted-foreground">يعرض القيمة الفعلية لكل إعداد ومصدرها — القيم الأقرب (فرع) تتغلب على القيم الأعلى (شركة/نظام)</p>
-      <DataTable<any>
-        data={items}
+      <DataTable
+        data={items as any[]}
         rowKey={(row) => String(row.key)}
         columns={[
           { key: "key", header: "المفتاح", render: (s) => <span className="font-mono text-xs">{s.key}</span> },
@@ -526,8 +526,8 @@ function AuditLogTab() {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">سجل التدقيق</h3>
-      <DataTable<any>
-        data={items}
+      <DataTable
+        data={items as any[]}
         rowKey={(row) => String(row.id)}
         columns={[
           { key: "userName", header: "المستخدم", render: (log) => log.userName || "-" },

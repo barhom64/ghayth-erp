@@ -100,6 +100,8 @@ describe("link 3 — bucket key + value include all 4 dim families", () => {
     expect(block).toContain("propertyId: number | null");
     expect(block).toContain("umrahSeasonId: number | null");
     expect(block).toContain("umrahAgentId: number | null");
+    // Step-3: numeric cost-center FK propagated to the JE (explicit CC wins).
+    expect(block).toContain("costCenterId: number | null");
   });
 
   it("bucket key array includes all 4 dim accessors so different dims → different buckets", () => {
@@ -119,6 +121,7 @@ describe("link 3 — bucket key + value include all 4 dim families", () => {
     expect(setMatch![0]).toContain("propertyId: dims.propertyId");
     expect(setMatch![0]).toContain("umrahSeasonId: dims.umrahSeasonId");
     expect(setMatch![0]).toContain("umrahAgentId: dims.umrahAgentId");
+    expect(setMatch![0]).toContain("costCenterId: cc != null ? Number(cc) : null");
   });
 });
 
@@ -126,12 +129,15 @@ describe("link 3 — bucket key + value include all 4 dim families", () => {
 
 describe("link 4 — revenueLines.push() forwards all 4 dim families to the JE engine", () => {
   it("the push payload spreads bucket.vehicleId / propertyId / umrahSeasonId / umrahAgentId", () => {
-    const pushMatch = INVOICES.match(/revenueLines\.push\(\{[\s\S]{0,800}?\} as any\)/);
+    const pushMatch = INVOICES.match(/revenueLines\.push\(\{[\s\S]{0,1000}?\} as any\)/);
     expect(pushMatch).not.toBeNull();
     expect(pushMatch![0]).toContain("vehicleId: b.vehicleId");
     expect(pushMatch![0]).toContain("propertyId: b.propertyId");
     expect(pushMatch![0]).toContain("umrahSeasonId: b.umrahSeasonId");
     expect(pushMatch![0]).toContain("umrahAgentId: b.umrahAgentId");
+    // Step-3: the explicit numeric cost-center flows to the JE line so the
+    // enricher won't override it with a vehicleId-derived CC.
+    expect(pushMatch![0]).toContain("costCenterId: b.costCenterId");
   });
 });
 
