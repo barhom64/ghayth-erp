@@ -639,9 +639,9 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
 
   // GL: Debit Accounts Receivable, Credit Umrah Revenue + Penalty Revenue + VAT — BLOCKING
   const [arCode, revCode, penaltyRevCode] = await Promise.all([
-    getAccountCodeFromMapping(scope.companyId, "umrah_invoice_ar", "debit", "1200"),
-    getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4200"),
-    getAccountCodeFromMapping(scope.companyId, "umrah_penalty_revenue", "credit", "4210"),
+    getAccountCodeFromMapping(scope.companyId, "umrah_invoice_ar", "debit", "1131"),
+    getAccountCodeFromMapping(scope.companyId, "umrah_invoice_revenue", "credit", "4130"),
+    getAccountCodeFromMapping(scope.companyId, "umrah_penalty_revenue", "credit", "4930"),
   ]);
   // Every GL line on an Umrah sales invoice carries the agent + season +
   // CLIENT dimensions so revenue/AR drill by agent-season-client is
@@ -725,7 +725,7 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     // sub-ledger that the VAT reconciliation report — which sums by
     // accountCode = vat_output — never saw, understating reported VAT
     // payable by the entire umrah sales volume.
-    const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2300");
+    const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2131");
     glLines.push({ accountCode: vatPayableCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${ref}`, ...umrahDims });
   }
   await createGuardedJournalEntry({
@@ -1053,7 +1053,7 @@ export async function registerPayment(scope: Scope, input: RegisterPaymentInput)
   // GL: payment journal — BLOCKING (financial integrity)
   const [cashCode, arPayCode] = await Promise.all([
     getAccountCodeFromMapping(scope.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
-    getAccountCodeFromMapping(scope.companyId, "invoice_payment_ar", "credit", "1200"),
+    getAccountCodeFromMapping(scope.companyId, "invoice_payment_ar", "credit", "1131"),
   ]);
   // Carry umrahAgentId on both legs so AR aging by agent stays drillable
   // from the GL (financial-integrity audit gap #5). umrahSeasonId is not
