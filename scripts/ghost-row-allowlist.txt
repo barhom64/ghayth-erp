@@ -136,11 +136,6 @@ routes/execDashboard.ts:journal_lines
 routes/execDashboard.ts:umrah_pilgrims
 routes/execDashboard.ts:umrah_seasons
 routes/execDashboard.ts:umrah_violations
-routes/finance-accounts.ts:accounting_allocation_rules
-routes/finance-accounts.ts:chart_of_accounts
-routes/finance-accounts.ts:journal_lines
-routes/finance-accounts.ts:tax_codes
-routes/finance-accounts.ts:wht_categories
 routes/finance-algorithms.ts:chart_of_accounts
 routes/finance-algorithms.ts:cip_costs
 routes/finance-algorithms.ts:construction_in_progress
