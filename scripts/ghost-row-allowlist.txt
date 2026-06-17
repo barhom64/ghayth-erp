@@ -158,10 +158,6 @@ routes/finance-hardening.ts:employees
 routes/finance-hardening.ts:financial_periods
 routes/finance-hardening.ts:journal_lines
 routes/finance-hardening.ts:suppliers
-routes/finance-invoices.ts:credit_memos
-routes/finance-invoices.ts:debit_memos
-routes/finance-invoices.ts:invoices
-routes/finance-invoices.ts:journal_lines
 routes/finance-journal.ts:chart_of_accounts
 routes/finance-journal.ts:cost_centers
 routes/finance-journal.ts:journal_lines
