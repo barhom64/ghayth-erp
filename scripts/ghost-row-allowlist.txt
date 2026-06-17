@@ -136,11 +136,6 @@ routes/execDashboard.ts:journal_lines
 routes/execDashboard.ts:umrah_pilgrims
 routes/execDashboard.ts:umrah_seasons
 routes/execDashboard.ts:umrah_violations
-routes/finance-accounts.ts:accounting_allocation_rules
-routes/finance-accounts.ts:chart_of_accounts
-routes/finance-accounts.ts:journal_lines
-routes/finance-accounts.ts:tax_codes
-routes/finance-accounts.ts:wht_categories
 routes/finance-algorithms.ts:chart_of_accounts
 routes/finance-algorithms.ts:cip_costs
 routes/finance-algorithms.ts:construction_in_progress
@@ -163,25 +158,21 @@ routes/finance-hardening.ts:employees
 routes/finance-hardening.ts:financial_periods
 routes/finance-hardening.ts:journal_lines
 routes/finance-hardening.ts:suppliers
-routes/finance-invoices.ts:credit_memos
-routes/finance-invoices.ts:debit_memos
-routes/finance-invoices.ts:invoices
-routes/finance-invoices.ts:journal_lines
 routes/finance-journal.ts:chart_of_accounts
 routes/finance-journal.ts:cost_centers
 routes/finance-journal.ts:journal_lines
 routes/finance-journal.ts:subsidiary_accounts
-routes/finance-purchase.ts:purchase_orders
+# store_products: enrichment name-lookup for historical PO line items. The
+# SELECT only builds an id→name display map; filtering "deletedAt" IS NULL
+# would blank a since-deleted product's name on old purchase orders (the
+# product was valid when the PO was raised). Same rationale as the
+# warehouse_products enrichment exceptions below. Every other table in this
+# file stays enforced.
 routes/finance-purchase.ts:store_products
-routes/finance-purchase.ts:suppliers
-routes/finance-recurring.ts:journal_entries
 routes/finance-reports.ts:chart_of_accounts
 routes/finance-reports.ts:employees
 routes/finance-reports.ts:financial_periods
 routes/finance-reports.ts:purchase_orders
-routes/finance-vendor-contracts.ts:vendor_contracts
-routes/finance-vendors.ts:journal_lines
-routes/finance-vendors.ts:suppliers
 routes/fleet-telematics.ts:fleet_drivers
 routes/fleet-telematics.ts:fleet_telematics_devices
 routes/fleet-telematics.ts:fleet_trips
