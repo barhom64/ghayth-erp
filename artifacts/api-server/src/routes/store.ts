@@ -350,7 +350,7 @@ router.get("/orders/:id", authorize({ feature: "store", action: "view" }), async
       [id, scope.companyId]
     );
     if (!row) throw new NotFoundError("الطلب غير موجود");
-    const orderItems = await rawQuery<StoreOrderItemRow>(`SELECT oi.*, sp.name AS "productNameFromCatalog" FROM store_order_items oi LEFT JOIN store_products sp ON sp.id = oi."productId" WHERE oi."orderId" = $1 ORDER BY oi.id LIMIT 500`, [row.id]);
+    const orderItems = await rawQuery<StoreOrderItemRow>(`SELECT oi.*, sp.name AS "productNameFromCatalog" FROM store_order_items oi LEFT JOIN store_products sp ON sp.id = oi."productId" AND sp."companyId" = $2 WHERE oi."orderId" = $1 ORDER BY oi.id LIMIT 500`, [row.id, scope.companyId]);
     let parsedItems: unknown[] = [];
     try { parsedItems = typeof row.items === 'string' ? JSON.parse(row.items) : (Array.isArray(row.items) ? row.items : []); } catch (e) { logger.warn(e, "store order items JSON parse fallback"); }
     row.items = orderItems.length > 0 ? orderItems : parsedItems;
@@ -470,9 +470,9 @@ async function postStoreOrderGl(scope: any, order: any) {
   const orderItems = await rawQuery<StoreOrderGlItemRow>(
     `SELECT oi."productId", oi.quantity, oi."unitPrice", sp."costPrice"
      FROM store_order_items oi
-     LEFT JOIN store_products sp ON sp.id = oi."productId"
+     LEFT JOIN store_products sp ON sp.id = oi."productId" AND sp."companyId" = $2
      WHERE oi."orderId" = $1`,
-    [order.id]
+    [order.id, scope.companyId]
   );
 
   let totalCogs = 0;
