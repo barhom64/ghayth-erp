@@ -343,12 +343,12 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "4130", name: "إيرادات الخدمات", nameEn: "Service Revenue", type: "revenue", level: 3, parentCode: "4100" },
   { code: "4140", name: "إيرادات المشاريع والمقاولات", nameEn: "Project Revenue", type: "revenue", level: 3, parentCode: "4100" },
   { code: "4150", name: "إيرادات النقل والأسطول", nameEn: "Fleet/Transport Revenue", type: "revenue", level: 3, parentCode: "4100" },
-  // Step 1 of transport customer-invoicing — per-service-type revenue leaves.
-  // 4150 is deliberately kept POSTABLE for now: three live paths still fall
-  // back to it (cargo_freight_revenue, fleet_rental_revenue,
-  // early_termination_revenue). Step 2 repoints those to the leaves and flips
-  // 4150 to a non-postable rollup parent (so check:postable-fallbacks moves
-  // atomically). See lib/transportRevenueAccounts.ts + migration 387.
+  // Per-service-type transport revenue leaves (Phase-1). 4150 stays POSTABLE:
+  // cargo now posts to 4153 (Step-2 repoint in fleetEngine), but
+  // fleet_rental_revenue (routes/fleet.ts) and early_termination_revenue
+  // (propertiesEngine — a separate latent mis-mapping, tracked apart) still
+  // fall back to 4150, so it cannot become a non-postable parent yet. See
+  // lib/transportRevenueAccounts.ts + migration 387.
   { code: "4151", name: "إيراد نقل المعتمرين", nameEn: "Umrah Transport Revenue", type: "revenue", level: 4, parentCode: "4150" },
   { code: "4152", name: "إيراد نقل الركاب", nameEn: "Passenger Transport Revenue", type: "revenue", level: 4, parentCode: "4150" },
   { code: "4153", name: "إيراد نقل البضائع", nameEn: "Freight Revenue", type: "revenue", level: 4, parentCode: "4150" },
