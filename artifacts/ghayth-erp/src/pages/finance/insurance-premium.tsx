@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { VendorSelect, EmployeeSelect } from "@/components/shared/entity-selects";
 import { PageShell } from "@workspace/ui-core";
 import { ShieldCheck, Info, ChevronDown } from "lucide-react";
 
@@ -111,7 +112,7 @@ export default function InsurancePremiumPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label>نوع التأمين</Label>
-              <Select value={form.kind} onValueChange={(v) => set("kind", v)}>
+              <Select value={form.kind} onValueChange={(v) => setForm((f) => ({ ...f, kind: v, insuredEntityId: "" }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="property">تأمين عقاري</SelectItem>
@@ -120,14 +121,25 @@ export default function InsurancePremiumPage() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>{KIND_ENTITY[form.kind].idLabel}</Label>
-              <Input
-                type="number"
-                inputMode="numeric"
-                value={form.insuredEntityId}
-                onChange={(e) => set("insuredEntityId", e.target.value)}
-                placeholder="رقم الجهة المؤمّنة"
-              />
+              {form.kind === "medical" ? (
+                <EmployeeSelect
+                  label={KIND_ENTITY[form.kind].idLabel}
+                  value={form.insuredEntityId}
+                  onChange={(v) => set("insuredEntityId", v)}
+                  allowCreate={false}
+                />
+              ) : (
+                <>
+                  <Label>{KIND_ENTITY[form.kind].idLabel}</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    value={form.insuredEntityId}
+                    onChange={(e) => set("insuredEntityId", e.target.value)}
+                    placeholder="رقم العقار/الوحدة"
+                  />
+                </>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>قيمة القسط</Label>
@@ -152,13 +164,11 @@ export default function InsurancePremiumPage() {
               <Input type="date" value={form.endDate} onChange={(e) => set("endDate", e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>معرّف المورّد (اختياري)</Label>
-              <Input
-                type="number"
-                inputMode="numeric"
+              <VendorSelect
+                label="المورّد / جهة التأمين (اختياري)"
                 value={form.vendorId}
-                onChange={(e) => set("vendorId", e.target.value)}
-                placeholder="جهة التأمين"
+                onChange={(v) => set("vendorId", v)}
+                allowCreate={false}
               />
             </div>
             <div className="flex items-center gap-2 pt-6">
