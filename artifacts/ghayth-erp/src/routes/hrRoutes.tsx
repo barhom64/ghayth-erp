@@ -124,7 +124,6 @@ const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
 const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
 const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
 // Phase 2 wiring — orphan pages with existing backends.
-const AccrualsMonthly = lazy(() => import("@/pages/hr/accruals-monthly"));
 const WpsSettings = lazy(() => import("@/pages/hr/saudi-compliance/wps/settings"));
 
 export const hrRoutes = [
@@ -222,7 +221,9 @@ export const hrRoutes = [
   { path: "/hr/org-tree", component: OrgTree, subKey: "employees" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
-  { path: "/hr/accruals/monthly", component: AccrualsMonthly, subKey: "payroll" },
+  // /hr/accruals already previews AND posts the same POST /hr/accruals/monthly;
+  // the standalone run-only page was a functional duplicate (CROSS_MODULE audit 🔴).
+  { path: "/hr/accruals/monthly", component: redirectTo("/hr/accruals"), subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
   { path: "/hr/transfers/:id/edit", component: TransfersEdit, subKey: "employees" },
   { path: "/hr/transfers/:id", component: TransferDetail, subKey: "employees" },

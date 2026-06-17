@@ -259,7 +259,6 @@ export const allNavSections: NavSection[] = [
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
         { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
-        { label: "ترحيل الاستحقاقات الشهرية", path: "/hr/accruals/monthly", icon: ListChecks, subKey: "payroll" },
         { label: "نظام حماية الأجور", path: "/hr/wps", icon: Send, subKey: "payroll" },
       ]},
 
