@@ -34,6 +34,7 @@ import NotFound from "@/pages/not-found";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const PrintVerify = lazy(() => import("@/pages/print-verify"));
+const ResetPassword = lazy(() => import("@/pages/reset-password"));
 // Standalone /driver-portal/* retired (#1354) — drivers now log in
 // via the regular /login and land on /me/driver (dashboard auto-
 // redirects them based on user.role === "driver").
@@ -163,6 +164,14 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      {/* Public password-reset landing page — reached from the emailed reset
+          link (carries ?token=...). Unauthenticated; the backing
+          POST /api/auth/reset-password is anonymous + rate-limited. */}
+      <Route path="/reset-password">
+        <Suspense fallback={<PageLoader />}>
+          <ResetPassword />
+        </Suspense>
+      </Route>
       {/* B1 + B3 — first-time setup. Unauthenticated. The page guards
           itself against double-setup by probing /auth/setup-state on
           mount and redirecting to /login if any company exists. */}
