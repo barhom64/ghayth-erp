@@ -99,7 +99,7 @@ export default function HR() {
   // dashboard tiles need. Kept alongside the granular queries below as a
   // fallback (some domains expose extra fields the stats roll-up
   // doesn't carry).
-  const statsQ = useApiQuery<any>(["hr-stats", scopeQueryString], `/hr/stats${scopeSuffix}`);
+  const statsQ = useApiQuery<any>(["hr-stats", scopeQueryString], `/hr/stats?${scopeQueryString || ""}`);
   const hrStats = statsQ.data ?? {};
   // unused-fallback: kept for visibility while we cut over per-tile.
   void hrStats;
