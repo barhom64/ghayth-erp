@@ -2450,8 +2450,8 @@ router.post("/:id/close", authorize({ feature: "projects.list", action: "update"
     try {
       const teamRows = await rawQuery<{ employeeId: number }>(
         `SELECT DISTINCT pr."employeeId" FROM project_resources pr
-         WHERE pr."projectId" = $1 AND pr."employeeId" IS NOT NULL`,
-        [projectId]
+         WHERE pr."projectId" = $1 AND pr."companyId" = $2 AND pr."employeeId" IS NOT NULL`,
+        [projectId, scope.companyId]
       );
       const managerRow = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
