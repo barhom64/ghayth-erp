@@ -2056,7 +2056,7 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: id, details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: id, after: { id }, details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json({ message: "تم تسجيل الدفعة", newPaidAmount: newPaid, status: newStatus });
   } catch (err) {
@@ -4227,6 +4227,7 @@ invoicesRouter.post("/customer-receipts", authorize({ feature: "finance.invoices
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "finance.payment.received", entity: "journal_entries", entityId: result.journalId,
+      after: { voucherId: result.journalId, clientId: body.clientId, amount: body.amount },
       details: JSON.stringify({ voucherId: result.journalId, clientId: body.clientId, amount: body.amount, applied: result.applied.length, leftover: result.leftover }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 

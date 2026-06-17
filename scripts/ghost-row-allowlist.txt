@@ -148,10 +148,6 @@ routes/finance-algorithms.ts:warehouse_categories
 routes/finance-cost-centers.ts:chart_of_accounts
 routes/finance-cost-centers.ts:cost_centers
 routes/finance-cost-centers.ts:journal_lines
-routes/finance-custodies.ts:chart_of_accounts
-routes/finance-custodies.ts:employees
-routes/finance-custodies.ts:journal_lines
-routes/finance-custodies.ts:subsidiary_accounts
 routes/finance-hardening.ts:bank_guarantees
 routes/finance-hardening.ts:chart_of_accounts
 routes/finance-hardening.ts:employees
