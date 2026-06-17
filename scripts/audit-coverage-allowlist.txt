@@ -85,6 +85,7 @@ POST /admin/permissions/explain
 POST /admin/pricing/resolve
 POST /admin/pricing/rules
 POST /admin/vendor-settings/:slug/test
+POST /admin/vendor-settings/company/smtp/test
 POST /documents/:id/acls
 POST /documents/:id/ocr/rerun
 POST /documents/ocr/extractions/:id/confirm

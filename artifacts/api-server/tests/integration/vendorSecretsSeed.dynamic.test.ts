@@ -50,7 +50,14 @@ d("vendor_secrets seed backfill (migration 340) — orphaned-seed regression gua
   const backfillSql = readFileSync(
     join(import.meta.dirname!, "..", "..", "src", "migrations", "340_vendor_secrets_seed_backfill.sql"),
     "utf8",
-  );
+  )
+    // Migration 388 replaced UNIQUE(slug) with partial unique indexes (per-company
+    // vendor secrets). In a REAL bootstrap migration 340 runs BEFORE 388, while the
+    // full UNIQUE(slug) still exists, so the file itself is correct. This test
+    // re-runs 340 against the HEAD schema (388 already applied), so we retarget the
+    // conflict to the post-388 platform partial index — exactly what the platform
+    // boot-seed (ensureVendorSecretsSeed) now uses.
+    .replace(/ON CONFLICT \(slug\) DO NOTHING/gi, 'ON CONFLICT (slug) WHERE "companyId" IS NULL DO NOTHING');
 
   beforeAll(async () => {
     request = (await import("supertest")).default;
