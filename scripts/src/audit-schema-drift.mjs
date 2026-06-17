@@ -92,6 +92,12 @@ const BUILTIN_IDENTIFIERS = new Set([
   // (inbox_task_sla_reminder_scan).
   "slaReminderSentAt",
   "slaFinalReminderSentAt",
+  // Notification opt-out skip counter — present in live DB (added via
+  // migration 366_notification_opt_out_skips, explicitly above the dump
+  // baseline cutoff 297 so it is not in the committed schema dump). Consumed
+  // by GET /opt-outs in admin-notification-routing.ts. ("skipCount" is read
+  // as a COALESCE alias so it's already exempt.)
+  "lastSkippedAt",
 ]);
 
 async function walk(dir, acc = []) {
