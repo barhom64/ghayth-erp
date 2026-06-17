@@ -913,9 +913,8 @@ export const allNavSections: NavSection[] = [
           { label: "إنشاء سريع وصلاحيات", path: "/admin/user-onboarding", icon: UserPlus, perm: ["admin:update"], permMode: "any" },
           { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
           { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
-          { label: "مُركّب الأدوار", path: "/admin/roles-simple", icon: Shield, perm: "admin.roles:update" },
           { label: "قوالب المسميات الوظيفية", path: "/admin/job-titles", icon: Shield, perm: "hr.employees:update" },
-          { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+          { label: "الأدوار", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
         ]},
         { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
           { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },

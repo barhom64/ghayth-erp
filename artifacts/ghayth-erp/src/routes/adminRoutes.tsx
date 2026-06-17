@@ -55,6 +55,10 @@ const AdminOrgMemberships = lazy(() => import("@/pages/admin/org-memberships"));
 const AdminSubscription = lazy(() => import("@/pages/admin/subscription"));
 const RedirectToHrAttendanceCategories = redirectTo("/hr/attendance-categories");
 const RedirectToHrScoringWeights      = redirectTo("/hr/scoring-weights");
+// /admin/roles-simple rendered the SAME RbacSimpleEditor as the canonical
+// /admin/roles — two identical menu entries for one editor. Kept reachable for
+// bookmarks but redirected; its «مُركّب الأدوار» nav entry was removed.
+const RedirectToAdminRoles            = redirectTo("/admin/roles");
 
 export const adminRoutes = [
   { path: "/admin/expiring-docs", component: AdminExpiringDocs },
@@ -84,7 +88,7 @@ export const adminRoutes = [
   { path: "/admin/posting-failures", component: AdminPostingFailures },
   { path: "/admin/lifecycle-monitor", component: AdminLifecycleMonitor },
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
-  { path: "/admin/roles-simple", component: RbacSimpleEditor },
+  { path: "/admin/roles-simple", component: RedirectToAdminRoles },
   { path: "/admin/job-titles", component: AdminJobTitles },
   { path: "/assistant", component: AssistantAsk },
   { path: "/admin/gl-reconciliation", component: AdminGlReconciliation },
