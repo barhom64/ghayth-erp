@@ -148,6 +148,14 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
   # returned-JSX event handlers). Pure-logic fixtures guard the detector.
   run_step "check:usememo-setstate:tests" node scripts/src/check-usememo-setstate.test.mjs
   run_step "check:usememo-setstate" node scripts/src/check-usememo-setstate.mjs
+  # The strict account-creation limiter (registerLimiter, max 5/hour) must never
+  # gate a GET probe. /api/auth/setup-state is polled on every login-page mount;
+  # gating it with the registration budget 429s the probe under modest/shared-IP
+  # load (no e2e bypass) — breaking first-run detection + spraying console errors
+  # (the runtime audit recorded ~79 setup-state 4xx). OFFLINE source scan of the
+  # auth router; pure-logic fixtures guard the detector.
+  run_step "check:register-limiter-misuse:tests" node scripts/src/check-register-limiter-misuse.test.mjs
+  run_step "check:register-limiter-misuse" node scripts/src/check-register-limiter-misuse.mjs
 # Duplicate basenames within a single frontend artifact's src/ (e.g. two
 # policies-tab.tsx) — copy-paste components that drift apart and resolve
 # imports to the wrong copy. OFFLINE filename scan; baseline in
