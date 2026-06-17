@@ -310,14 +310,24 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
 
 
 
-// Multiple routes (/settings/branches, /settings/departments, ...) share this
-// component. Without this seed, every routed URL would land on the "general"
-// tab — same broken-tab pattern fixed on bi / governance / legal.
+// Every tab gets a deep-path so it's directly reachable (URL + nav + search),
+// not only by a manual click inside /settings. The component reads `location`
+// and opens the matching tab.
 const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/branches": "branches",
+  "/settings/letterhead": "letterhead",
   "/settings/departments": "departments",
   "/settings/companies": "companies",
+  "/settings/channels": "channels",
+  "/settings/controls": "controls",
+  "/settings/workflows": "workflows",
+  "/settings/approvals": "approvals",
+  "/settings/numbering": "numbering",
+  "/settings/accounting": "accounting",
   "/settings/audit-log": "audit",
+  "/settings/resolved": "resolved",
+  "/settings/zatca": "zatca",
+  "/settings/gov": "gov",
 };
 
 export default function SettingsPage() {

@@ -83,6 +83,20 @@ const SUPERSEDED_BY_SHELL = new Set([
 const INTENTIONAL_OFF_SIDEBAR = new Set([
   "/finance/expenses/multi-line", // create variant — reuses ExpensesCreate, opened from the expenses list
   "/my/work-queue",               // back-compat redirect shell (wouter setLocation → /work-inbox)
+  // Settings-hub tab deep-paths: each opens a tab of /settings by URL / command
+  // palette / search without adding a separate sidebar entry (the hub is one
+  // page). branches/companies/departments/audit-log DO have sidebar entries; the
+  // rest are deep-link-only so the sidebar stays uncluttered.
+  "/settings/letterhead",
+  "/settings/channels",
+  "/settings/controls",
+  "/settings/workflows",
+  "/settings/approvals",
+  "/settings/numbering",
+  "/settings/accounting",
+  "/settings/resolved",
+  "/settings/zatca",
+  "/settings/gov",
 ]);
 
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
