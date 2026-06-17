@@ -32,6 +32,11 @@ describe("Classification-center page — exists + wired", () => {
     expect(PAGE_SRC).toMatch(/\/finance\/classification-center\/analytic-accounts\?status=needs_linking/);
     expect(PAGE_SRC).toMatch(/\/finance\/classification-center\/posting-failures/);
   });
+  it("links analytic accounts (PATCH) and classifies failures (POST)", () => {
+    expect(PAGE_SRC).toMatch(/\/finance\/classification-center\/analytic-accounts\/\$\{body\.id\}\/link/);
+    expect(PAGE_SRC).toMatch(/\/finance\/classification-center\/posting-failures\/\$\{body\.id\}\/classify/);
+    expect(PAGE_SRC).toMatch(/"PATCH"/);
+  });
   it("registered in router + nav", () => {
     expect(ROUTES_SRC).toMatch(/const ClassificationCenter = lazy\(\(\) => import\("@\/pages\/finance\/classification-center"\)\)/);
     expect(ROUTES_SRC).toMatch(/\{ path: "\/finance\/classification-center", component: ClassificationCenter \}/);

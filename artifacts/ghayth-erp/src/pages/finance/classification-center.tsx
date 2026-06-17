@@ -1,9 +1,17 @@
-import { useApiQuery } from "@/lib/api";
+import { useState } from "react";
+import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Link2, AlertTriangle, Tags } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { GuardedButton } from "@/components/shared/permission-gate";
+import { Link2, AlertTriangle, Tags, Tag, Pencil } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import {
   DataTable,
@@ -53,6 +61,17 @@ interface PostingFailure {
   createdAt: string;
 }
 
+const FAILURE_CATEGORIES = [
+  "parent_account", "missing_mapping", "missing_party", "missing_config",
+  "unlinked_analytic", "period_closed", "unbalanced_entry", "other",
+] as const;
+const FAILURE_LABEL: Record<string, string> = {
+  parent_account: "حساب أب مفقود", missing_mapping: "تعيين مفقود", missing_party: "طرف مفقود",
+  missing_config: "إعداد مفقود", unlinked_analytic: "تحليلي غير مربوط", period_closed: "فترة مُقفلة",
+  unbalanced_entry: "قيد غير متوازن", other: "أخرى",
+};
+const LINK_STATUSES = ["active", "needs_linking", "closed", "archived"] as const;
+
 export default function ClassificationCenterPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
@@ -75,6 +94,41 @@ export default function ClassificationCenterPage() {
   const analytic: AnalyticAccount[] = (analyticQ.data?.data || []) as AnalyticAccount[];
   const failures: PostingFailure[] = (failuresQ.data?.data || []) as PostingFailure[];
   const byCategory: Array<{ category: string; count: number }> = summary.postingFailuresByCategory || [];
+
+  const [linkFor, setLinkFor] = useState<AnalyticAccount | null>(null);
+  const [linkForm, setLinkForm] = useState({ status: "active", partyRole: "", partyId: "", seasonId: "", reason: "" });
+  const [classifyFor, setClassifyFor] = useState<PostingFailure | null>(null);
+  const [classifyForm, setClassifyForm] = useState({ failureCategory: "other", failureReason: "", suggestedFix: "" });
+
+  const linkMut = useApiMutation<unknown, { id: number } & Record<string, unknown>>(
+    (body) => `/finance/classification-center/analytic-accounts/${body.id}/link`,
+    "PATCH",
+    [["classification-center"]],
+    { successMessage: "تم ربط الحساب التحليلي" },
+  );
+  const classifyMut = useApiMutation<unknown, { id: number } & Record<string, unknown>>(
+    (body) => `/finance/classification-center/posting-failures/${body.id}/classify`,
+    "POST",
+    [["classification-center"]],
+    { successMessage: "تم تصنيف الإخفاق" },
+  );
+
+  const submitLink = () => {
+    if (!linkFor) return;
+    const b: { id: number } & Record<string, unknown> = { id: linkFor.id, status: linkForm.status };
+    if (linkForm.partyRole.trim()) b.partyRole = linkForm.partyRole.trim();
+    if (Number(linkForm.partyId) > 0) b.partyId = Number(linkForm.partyId);
+    if (Number(linkForm.seasonId) > 0) b.seasonId = Number(linkForm.seasonId);
+    if (linkForm.reason.trim()) b.reason = linkForm.reason.trim();
+    linkMut.mutate(b, { onSuccess: () => setLinkFor(null) });
+  };
+  const submitClassify = () => {
+    if (!classifyFor) return;
+    const b: { id: number } & Record<string, unknown> = { id: classifyFor.id, failureCategory: classifyForm.failureCategory };
+    if (classifyForm.failureReason.trim()) b.failureReason = classifyForm.failureReason.trim();
+    if (classifyForm.suggestedFix.trim()) b.suggestedFix = classifyForm.suggestedFix.trim();
+    classifyMut.mutate(b, { onSuccess: () => setClassifyFor(null) });
+  };
 
   if (summaryQ.isLoading) return <LoadingSpinner />;
   if (summaryQ.isError) return <ErrorState />;
@@ -115,6 +169,18 @@ export default function ClassificationCenterPage() {
       sortable: true,
       render: (r) => <span className="text-xs text-muted-foreground">{formatDateAr(r.createdAt)}</span>,
     },
+    {
+      key: "_link",
+      header: "",
+      render: (r) => (
+        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <GuardedButton perm="finance:create" variant="ghost" size="icon" title="ربط الحساب"
+            onClick={() => { setLinkForm({ status: "active", partyRole: r.partyRole || "", partyId: r.partyId ? String(r.partyId) : "", seasonId: r.seasonId ? String(r.seasonId) : "", reason: "" }); setLinkFor(r); }}>
+            <Link2 className="h-4 w-4 text-amber-600" />
+          </GuardedButton>
+        </div>
+      ),
+    },
   ];
 
   const failureCols: DataTableColumn<PostingFailure>[] = [
@@ -152,6 +218,18 @@ export default function ClassificationCenterPage() {
       header: "التاريخ",
       sortable: true,
       render: (r) => <span className="text-xs text-muted-foreground">{formatDateAr(r.createdAt)}</span>,
+    },
+    {
+      key: "_classify",
+      header: "",
+      render: (r) => (
+        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <GuardedButton perm="finance:create" variant="ghost" size="icon" title="تصنيف الإخفاق"
+            onClick={() => { setClassifyForm({ failureCategory: r.failureCategory || "other", failureReason: r.failureReason || "", suggestedFix: r.suggestedFix || "" }); setClassifyFor(r); }}>
+            <Tag className="h-4 w-4 text-status-info-foreground" />
+          </GuardedButton>
+        </div>
+      ),
     },
   ];
 
@@ -207,7 +285,7 @@ export default function ClassificationCenterPage() {
         </TabsList>
 
         <TabsContent value="analytic" className="mt-3 space-y-2">
-          <p className="text-xs text-muted-foreground">الربط بطرف/موسم يُدار حالياً من الواجهة الخلفية — أداة الربط ضمن الواجهة قادمة.</p>
+          <p className="text-xs text-muted-foreground">اربط كل حساب تحليلي بطرفه/موسمه من زر الربط في صفّه.</p>
           <DataTable
             columns={analyticCols}
             data={analytic}
@@ -221,7 +299,7 @@ export default function ClassificationCenterPage() {
         </TabsContent>
 
         <TabsContent value="failures" className="mt-3 space-y-2">
-          <p className="text-xs text-muted-foreground">تصنيف الإخفاق وإصلاحه يُدار حالياً من الواجهة الخلفية — أداة التصنيف ضمن الواجهة قادمة.</p>
+          <p className="text-xs text-muted-foreground">صنِّف كل إخفاق وسجِّل الإصلاح المقترح من زر التصنيف في صفّه.</p>
           <DataTable
             columns={failureCols}
             data={failures}
@@ -234,6 +312,82 @@ export default function ClassificationCenterPage() {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Link analytic account */}
+      <Dialog open={!!linkFor} onOpenChange={(o) => !o && setLinkFor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>ربط الحساب التحليلي — {linkFor?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>الحالة</Label>
+                <Select value={linkForm.status} onValueChange={(v) => setLinkForm({ ...linkForm, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {LINK_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>دور الطرف</Label>
+                <Input value={linkForm.partyRole} onChange={(e) => setLinkForm({ ...linkForm, partyRole: e.target.value })} placeholder="tenant / supplier ..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>معرّف الطرف</Label>
+                <Input type="number" value={linkForm.partyId} onChange={(e) => setLinkForm({ ...linkForm, partyId: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>معرّف الموسم (اختياري)</Label>
+                <Input type="number" value={linkForm.seasonId} onChange={(e) => setLinkForm({ ...linkForm, seasonId: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>سبب الربط (اختياري)</Label>
+              <Textarea rows={2} value={linkForm.reason} onChange={(e) => setLinkForm({ ...linkForm, reason: e.target.value })} />
+            </div>
+            {linkMut.isError && <p className="text-sm text-destructive">{getErrorMessage(linkMut.error)}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkFor(null)}>إلغاء</Button>
+            <GuardedButton perm="finance:create" onClick={submitLink} disabled={linkMut.isPending}>
+              {linkMut.isPending ? "جارٍ الربط..." : "ربط"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Classify posting failure */}
+      <Dialog open={!!classifyFor} onOpenChange={(o) => !o && setClassifyFor(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>تصنيف الإخفاق — {classifyFor?.sourceType} #{classifyFor?.sourceId}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>التصنيف</Label>
+              <Select value={classifyForm.failureCategory} onValueChange={(v) => setClassifyForm({ ...classifyForm, failureCategory: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FAILURE_CATEGORIES.map((c) => <SelectItem key={c} value={c}>{FAILURE_LABEL[c]}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>السبب (اختياري)</Label>
+              <Textarea rows={2} value={classifyForm.failureReason} onChange={(e) => setClassifyForm({ ...classifyForm, failureReason: e.target.value })} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>الإصلاح المقترح (اختياري)</Label>
+              <Textarea rows={2} value={classifyForm.suggestedFix} onChange={(e) => setClassifyForm({ ...classifyForm, suggestedFix: e.target.value })} />
+            </div>
+            {classifyMut.isError && <p className="text-sm text-destructive">{getErrorMessage(classifyMut.error)}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClassifyFor(null)}>إلغاء</Button>
+            <GuardedButton perm="finance:create" onClick={submitClassify} disabled={classifyMut.isPending}>
+              {classifyMut.isPending ? "جارٍ التصنيف..." : "تصنيف"}
+            </GuardedButton>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
