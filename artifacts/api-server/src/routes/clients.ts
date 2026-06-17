@@ -171,7 +171,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
               "totalRevenue", "expectedRevenue", "isBlacklisted", "createdAt"
        FROM clients
        WHERE ${where}
-       ORDER BY name ASC
+       ORDER BY "createdAt" DESC, name ASC
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
