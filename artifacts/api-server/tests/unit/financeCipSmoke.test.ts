@@ -31,6 +31,10 @@ describe("CIP page — exists + wired to the engine", () => {
     expect(PAGE_SRC).toMatch(/\/finance\/cip\/\$\{body\.id\}\/capitalize/);
     expect(PAGE_SRC).toMatch(/capitalizationDate: todayLocal\(\)/);
   });
+  it("creates a project (POST /finance/cip) and adds cost lines (POST .../:id/costs)", () => {
+    expect(PAGE_SRC).toMatch(/useApiMutation<\{ data: unknown \}, Record<string, unknown>>\(\s*"\/finance\/cip"/);
+    expect(PAGE_SRC).toMatch(/\/finance\/cip\/\$\{body\.cipId\}\/costs/);
+  });
   it("registered in router + nav", () => {
     expect(ROUTES_SRC).toMatch(/const Cip = lazy\(\(\) => import\("@\/pages\/finance\/cip"\)\)/);
     expect(ROUTES_SRC).toMatch(/\{ path: "\/finance\/cip", component: Cip \}/);
