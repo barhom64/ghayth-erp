@@ -339,7 +339,11 @@ class PropertiesEngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "rent_receivable", "debit", "1132"),
-      financialEngine.resolveAccountCode(ctx.companyId, "early_termination_revenue", "credit", "4150"),
+      // Service revenue (4130) — aligns with migration 342's accounting_mappings
+      // seed. An early-termination penalty is property service income, NOT fleet
+      // revenue; the prior "4150" (Fleet/Transport Revenue) fallback mis-classified
+      // it for tenants lacking the seeded mapping.
+      financialEngine.resolveAccountCode(ctx.companyId, "early_termination_revenue", "credit", "4130"),
     ]);
 
     const clientId = termination.tenantId ?? undefined;

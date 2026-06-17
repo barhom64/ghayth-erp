@@ -139,6 +139,15 @@ run_step "check:dump-drift"   node scripts/src/check-dump-drift.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:button-nesting:tests" node scripts/src/check-button-nesting.test.mjs
 run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
+# Component rendered in JSX with an explicit `<any>` generic (`<DataTable<any> …>`):
+# the Replit dev-metadata Babel plugin mangles it into an unparseable opening tag,
+# Vite pushes the transform error to every client as a GLOBAL error overlay, and a
+# single offending lazily-loaded file freezes the ENTIRE dev preview (every route
+# shows the red overlay). typecheck/build/lint all pass — invisible until you open
+# the preview. OFFLINE source scan; baseline in scripts/jsx-generic-component-allowlist.txt,
+# fails only on a NEW offender. Pure-logic fixtures guard the detector.
+run_step "check:jsx-generic-component:tests" node scripts/src/check-jsx-generic-component.test.mjs
+run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-component.mjs
   # setState INSIDE useMemo: a render-phase side effect. With an unstable
   # callback and/or a setState that always builds a new reference it becomes an
   # infinite render loop that wedges the tab — invisible to typecheck/build/lint,
@@ -148,6 +157,30 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
   # returned-JSX event handlers). Pure-logic fixtures guard the detector.
   run_step "check:usememo-setstate:tests" node scripts/src/check-usememo-setstate.test.mjs
   run_step "check:usememo-setstate" node scripts/src/check-usememo-setstate.mjs
+  # The strict account-creation limiter (registerLimiter, max 5/hour) must never
+  # gate a GET probe. /api/auth/setup-state is polled on every login-page mount;
+  # gating it with the registration budget 429s the probe under modest/shared-IP
+  # load (no e2e bypass) — breaking first-run detection + spraying console errors
+  # (the runtime audit recorded ~79 setup-state 4xx). OFFLINE source scan of the
+  # auth router; pure-logic fixtures guard the detector.
+  run_step "check:register-limiter-misuse:tests" node scripts/src/check-register-limiter-misuse.test.mjs
+  run_step "check:register-limiter-misuse" node scripts/src/check-register-limiter-misuse.mjs
+# ROUTE SHADOWING: a static route registered AFTER a `:param` route on the same
+# method+prefix is unreachable — Express captures the literal segment as the
+# param value (the /cost-centers/ranking -> /:id with id="ranking" 422 «معرف غير
+# صالح: id» incident). OFFLINE source scan; baseline in
+# scripts/route-shadowing-allowlist.txt, fails only on a NEW shadow. Pure-logic
+# fixtures guard the detector.
+run_step "check:route-shadowing:tests" node scripts/src/check-route-shadowing.test.mjs
+run_step "check:route-shadowing" node scripts/src/check-route-shadowing.mjs
+# SCOPE-SUFFIX GLUE: `scopeSuffix` (the multi-filter query fragment) must be
+# concatenated with the separator its in-scope definition uses — a `&`-prefixed
+# suffix appended to a bare path yields `/hr/stats&companyIds=1` which the router
+# 404s (the runtime-audit /api/hr/stats&companyIds incident); a `?`-prefixed
+# suffix appended after an existing `?` yields a double query string. OFFLINE
+# separator-aware source scan. Pure-logic fixtures guard the detector.
+run_step "check:scope-suffix-glue:tests" node scripts/src/check-scope-suffix-glue.test.mjs
+run_step "check:scope-suffix-glue" node scripts/src/check-scope-suffix-glue.mjs
 # Duplicate basenames within a single frontend artifact's src/ (e.g. two
 # policies-tab.tsx) — copy-paste components that drift apart and resolve
 # imports to the wrong copy. OFFLINE filename scan; baseline in

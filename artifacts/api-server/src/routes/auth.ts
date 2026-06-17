@@ -204,6 +204,27 @@ const registerLimiter = rateLimit({
   store: makeRateLimitStore("auth:register"),
 });
 
+// Dedicated limiter for the PUBLIC GET /setup-state boot probe. It MUST NOT
+// reuse `registerLimiter` (max 5/hour): the login page polls /setup-state on
+// every mount, so a strict account-creation budget — shared across all
+// visitors behind one egress IP and lacking the automated-suite bypass —
+// 429s the probe after a handful of page loads, breaking first-run detection
+// and spraying console errors across the app. A read-only COUNT(*) probe that
+// leaks nothing needs only light bot-deterrence, plus the same non-prod e2e
+// bypass loginLimiter/refreshLimiter carry so the runtime audit / Playwright
+// walks don't trip it.
+const setupStateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة بعد دقيقة" },
+  validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("auth:setup-state"),
+  skip: (req) =>
+    !config.isProduction && req.headers["x-e2e-test"] === "1",
+});
+
 router.post("/register", registerLimiter, async (_req, res) => {
   emitEvent({ companyId: 0, userId: 0, action: "auth.register", entity: "users", entityId: 0 }).catch((e) => logger.error(e, "auth background task failed"));
   createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "users", entityId: 0, after: { blocked: true, reason: "self_registration_not_permitted" } }).catch((e) => logger.error(e, "auth background task failed"));
@@ -220,7 +241,7 @@ router.post("/register", registerLimiter, async (_req, res) => {
 // (login as usual), and neither leaks anything sensitive. Rate-limited
 // to deter bots that would otherwise probe to figure out if a fresh
 // install exists.
-router.get("/setup-state", registerLimiter, async (_req, res) => {
+router.get("/setup-state", setupStateLimiter, async (_req, res) => {
   try {
     const [row] = await rawQuery<{ companyCount: string }>(
       `SELECT COUNT(*)::text AS "companyCount" FROM companies`,

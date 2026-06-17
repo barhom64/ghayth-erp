@@ -193,6 +193,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
       `SELECT MAX("endDate")::text AS "endDate"
          FROM financial_periods
         WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
           AND "yearEndClosed" = true
           AND "endDate" < $2`,
       [scope.companyId, asOfStr]
@@ -466,7 +467,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
     let sections: Record<string, any> = {};
 
     if (entityType === "employee") {
-      const [emp] = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, ea.id AS "assignmentId" FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e.id = $2 LIMIT 1`, [scope.companyId, id]);
+      const [emp] = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, ea.id AS "assignmentId" FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e.id = $2 AND e."deletedAt" IS NULL LIMIT 1`, [scope.companyId, id]);
       if (!emp) { res.json({ movements: [], summary: {}, sections: {} }); return; }
       const assignmentId = emp.assignmentId;
 
@@ -1218,7 +1219,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       const [emp] = await rawQuery<Record<string, unknown>>(
         `SELECT e.name, ea.id AS aid FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
-         WHERE e.id = $2 LIMIT 1`,
+         WHERE e.id = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [scope.companyId, (Number(entityId) || 0)]
       );
       entityName = (emp?.name as string | undefined) || "";
