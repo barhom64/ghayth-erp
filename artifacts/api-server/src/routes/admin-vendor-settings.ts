@@ -97,6 +97,7 @@ router.get("/", authorize({ feature: "admin", action: "list" }), async (req, res
     }>(
       `SELECT id, slug, name, description, status, config, "createdAt", "updatedAt"
          FROM vendor_secrets
+        WHERE "companyId" IS NULL
         ORDER BY slug ASC`,
     );
     // For each row, also report whether the env fallback would
@@ -125,7 +126,7 @@ router.get("/:slug", authorize({ feature: "admin", action: "list" }), async (req
       status: string; config: Record<string, unknown>; createdAt: string; updatedAt: string;
     }>(
       `SELECT id, slug, name, description, status, config, "createdAt", "updatedAt"
-         FROM vendor_secrets WHERE slug = $1`,
+         FROM vendor_secrets WHERE slug = $1 AND "companyId" IS NULL`,
       [slug],
     );
     if (!row) throw new NotFoundError("الإعداد غير موجود");
@@ -157,7 +158,7 @@ router.patch("/:slug", authorize({ feature: "admin", action: "update" }), async 
     const body = zodParse(updateSchema.safeParse(req.body ?? {}));
 
     const [existing] = await rawQuery<{ id: number; config: Record<string, unknown> | null }>(
-      `SELECT id, config FROM vendor_secrets WHERE slug = $1`,
+      `SELECT id, config FROM vendor_secrets WHERE slug = $1 AND "companyId" IS NULL`,
       [slug],
     );
     if (!existing) throw new NotFoundError("الإعداد غير موجود");
@@ -196,7 +197,7 @@ router.patch("/:slug", authorize({ feature: "admin", action: "update" }), async 
     params.push(slug);
 
     const [row] = await rawQuery(
-      `UPDATE vendor_secrets SET ${sets.join(", ")} WHERE slug = $${idx} RETURNING *`,
+      `UPDATE vendor_secrets SET ${sets.join(", ")} WHERE slug = $${idx} AND "companyId" IS NULL RETURNING *`,
       params,
     );
     invalidateVendorSettingsCache();
@@ -329,6 +330,108 @@ router.post("/smtp/test-send", authorize({ feature: "admin", action: "update" })
     });
   } catch (err) {
     handleRouteError(err, res, "admin/vendor-settings/smtp/test-send");
+  }
+});
+
+// ─────────────────── Per-company SMTP ("بريد الشركة") — migration 388 ───────
+// A company admin manages THEIR OWN outbound mailbox. scope.companyId scopes
+// every read/write, so no one touches another tenant's row or the platform
+// default. When status='active', resolveSystemSmtpConfig (step 0) makes this
+// row OVERRIDE the platform mailbox for this company only.
+
+router.get("/company/smtp", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [row] = await rawQuery<{ id: number; status: string; config: Record<string, unknown> }>(
+      `SELECT id, status, config FROM vendor_secrets WHERE slug = 'smtp' AND "companyId" = $1`,
+      [scope.companyId],
+    );
+    res.json(maskFields(req, {
+      data: row
+        ? { configured: true, status: row.status, config: maskConfigForResponse(row.config) }
+        : { configured: false, status: "disabled", config: {} },
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/vendor-settings/company-smtp/get");
+  }
+});
+
+const companySmtpSchema = z.object({
+  status: z.enum(["active", "disabled"]).optional(),
+  config: z.record(z.unknown()).optional(),
+});
+
+router.patch("/company/smtp", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const body = zodParse(companySmtpSchema.safeParse(req.body ?? {}));
+    const [existing] = await rawQuery<{ id: number; config: Record<string, unknown> | null }>(
+      `SELECT id, config FROM vendor_secrets WHERE slug = 'smtp' AND "companyId" = $1`,
+      [scope.companyId],
+    );
+
+    let finalConfig: Record<string, unknown> = (existing?.config ?? {}) as Record<string, unknown>;
+    if (body.config !== undefined) {
+      // Encrypt secrets; restore masked ("*****") secret keys from the prior
+      // row so a GET→PATCH round-trip never overwrites a real value.
+      const { safe, preserved } = prepareConfigForStorage(body.config);
+      const prior = (existing?.config ?? {}) as Record<string, unknown>;
+      for (const k of preserved) if (prior[k] !== undefined) safe[k] = prior[k];
+      finalConfig = safe;
+    }
+
+    if (existing) {
+      await rawExecute(
+        `UPDATE vendor_secrets SET config = $1::jsonb, status = COALESCE($2, status), "updatedAt" = NOW()
+           WHERE id = $3 AND "companyId" = $4`,
+        [JSON.stringify(finalConfig), body.status ?? null, existing.id, scope.companyId],
+      );
+    } else {
+      await rawExecute(
+        `INSERT INTO vendor_secrets (slug, name, description, status, config, "companyId")
+         VALUES ('smtp', $1, 'بريد صادر خاص بالشركة — يتقدّم على بريد النظام.', $2, $3::jsonb, $4)`,
+        [`بريد الشركة #${scope.companyId}`, body.status ?? "disabled", JSON.stringify(finalConfig), scope.companyId],
+      );
+    }
+    invalidateVendorSettingsCache();
+
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: existing ? "update" : "create", entity: "vendor_secrets", entityId: existing?.id ?? 0,
+      after: { slug: "smtp", scope: "company", status: body.status, config: body.config ? "[masked]" : undefined },
+    }).catch((e) => logger.warn(e, "[audit] company_smtp.updated"));
+    void emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "vendor_settings.company_smtp.updated", entity: "vendor_secrets", entityId: existing?.id ?? 0,
+      details: JSON.stringify({ status: body.status }),
+    }).catch((e) => logger.warn(e, "[event] company_smtp.updated"));
+
+    res.json({ ok: true });
+  } catch (err) {
+    handleRouteError(err, res, "admin/vendor-settings/company-smtp/update");
+  }
+});
+
+router.post("/company/smtp/test", authorize({ feature: "admin", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    // resolveSystemSmtpConfig(companyId) returns the company row first (step 0),
+    // so this verifies the company's own mailbox end-to-end (full SMTP login).
+    const smtp = await resolveSystemSmtpConfig(scope.companyId);
+    if (!smtp) {
+      res.status(422).json({ ok: false, message: "لا يوجد إعداد SMTP صالح لهذه الشركة — اضبط الحقول وفعّل الحالة." });
+      return;
+    }
+    try {
+      const { createTransport } = await import("nodemailer");
+      await createTransport(smtpTransportOptions(smtp)).verify();
+      res.json({ ok: true, message: `تم تسجيل الدخول إلى ${smtp.host}:${smtp.port} بنجاح.`, source: smtp.source });
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      res.status(422).json({ ok: false, message: `فشلت مصادقة SMTP: ${scrubSmtpSecrets(raw, smtp)}`, source: smtp.source });
+    }
+  } catch (err) {
+    handleRouteError(err, res, "admin/vendor-settings/company-smtp/test");
   }
 });
 

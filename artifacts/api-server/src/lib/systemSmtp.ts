@@ -28,7 +28,7 @@
 import { rawQuery } from "./rawdb.js";
 import { logger } from "./logger.js";
 import { decryptSecret, isEncrypted } from "./secrets.js";
-import { getVendorConfig } from "./vendorSettings.js";
+import { getVendorConfig, getCompanyVendorConfig } from "./vendorSettings.js";
 import { config as appConfig } from "./config.js";
 
 export interface SystemSmtpConfig {
@@ -112,6 +112,23 @@ function fromShape(raw: Record<string, unknown>, source: SystemSmtpConfig["sourc
  * (never a secret, never a stack).
  */
 export async function resolveSystemSmtpConfig(companyId?: number | null): Promise<SystemSmtpConfig | null> {
+  // 0. Per-company mailbox ("بريد الشركة") — a vendor_secrets row whose
+  //    "companyId" matches the caller (migration 388). An ACTIVE company row
+  //    OVERRIDES the platform default; a company with no row falls through to
+  //    the platform mailbox below, so behaviour is unchanged for everyone who
+  //    hasn't set one. This is the only step that depends on companyId.
+  if (companyId) {
+    try {
+      const company = await getCompanyVendorConfig("smtp", companyId);
+      if (company.active) {
+        const cfg = fromShape(company.config, "db");
+        if (cfg) return cfg;
+      }
+    } catch (err) {
+      logger.warn(err, "[systemSmtp] per-company vendor_secrets read failed — trying platform");
+    }
+  }
+
   // 1. Operator-managed platform mailbox (vendor_secrets, decrypted by
   //    vendorSettings). Only counts when the row itself is the source —
   //    getVendorConfig's own env fallback is handled in step 3 so the
