@@ -300,6 +300,7 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة المدير المالي", path: "/finance/cfo-cockpit", icon: BarChart3 },
         { label: "فحص الإغلاق اليومي", path: "/finance/daily-close-checklist", icon: ListChecks },
         { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart },
+        { label: "إطفاء المصروفات المقدمة", path: "/finance/amortization", icon: CalendarClock },
       ]},
       // (2) الحسابات والقيود
       // F-2 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ②) — فُكّت «الحسابات والقيود»
