@@ -20,8 +20,8 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
     const [attendance] = await rawQuery<Record<string, unknown>>(
       `SELECT id, date, "checkIn", "checkOut", "lateMinutes", status
        FROM attendance
-       WHERE "assignmentId" = $1 AND date = $2 AND "deletedAt" IS NULL`,
-      [scope.activeAssignmentId, today]
+       WHERE "assignmentId" = $1 AND date = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [scope.activeAssignmentId, today, scope.companyId]
     ).catch((e) => { logger.error(e, "my-space attendance error:"); return [null]; });
 
     let leaveBalances: any[] = [];
@@ -79,10 +79,10 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
         safe(rawQuery<Record<string, unknown>>(
           `SELECT je.id, 'salary_advance' AS type, 'سلفة راتب' AS title, je.status, je."createdAt"
            FROM journal_entries je
-           WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
+           WHERE je."createdBy" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
              AND je.status IN ('draft','pending_approval')
            ORDER BY je."createdAt" DESC LIMIT 5`,
-          [scope.activeAssignmentId]
+          [scope.activeAssignmentId, scope.companyId]
         ), []),
         safe(rawQuery<Record<string, unknown>>(
           `SELECT ol.id, 'letter' AS type, ol.type AS title, ol.status, ol."createdAt"
@@ -94,31 +94,31 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
         safe(rawQuery<Record<string, unknown>>(
           `SELECT je.id, 'custody' AS type, je.description AS title, je.status, je."createdAt"
            FROM journal_entries je
-           WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
+           WHERE je."createdBy" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
              AND je.status IN ('draft','pending_approval')
            ORDER BY je."createdAt" DESC LIMIT 5`,
-          [scope.activeAssignmentId]
+          [scope.activeAssignmentId, scope.companyId]
         ), []),
         safe(rawQuery<Record<string, unknown>>(
           `SELECT id, 'loan' AS type, CONCAT('سلفة ', "loanNumber") AS title, status, "createdAt"
            FROM hr_employee_loans
-           WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
+           WHERE "assignmentId" = $1 AND "companyId" = $2 AND status IN ('pending') AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 5`,
-          [scope.activeAssignmentId]
+          [scope.activeAssignmentId, scope.companyId]
         ), []),
         safe(rawQuery<Record<string, unknown>>(
           `SELECT id, 'overtime' AS type, CONCAT('وقت إضافي ', "requestNumber") AS title, status, "createdAt"
            FROM hr_overtime_requests
-           WHERE "assignmentId" = $1 AND status IN ('pending') AND "deletedAt" IS NULL
+           WHERE "assignmentId" = $1 AND "companyId" = $2 AND status IN ('pending') AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 5`,
-          [scope.activeAssignmentId]
+          [scope.activeAssignmentId, scope.companyId]
         ), []),
         safe(rawQuery<Record<string, unknown>>(
           `SELECT id, 'exit' AS type, CONCAT('نهاية خدمة #', id) AS title, status, "createdAt"
            FROM hr_exit_requests
-           WHERE "assignmentId" = $1 AND status = 'pending' AND "deletedAt" IS NULL
+           WHERE "assignmentId" = $1 AND "companyId" = $2 AND status = 'pending' AND "deletedAt" IS NULL
            ORDER BY "createdAt" DESC LIMIT 5`,
-          [scope.activeAssignmentId]
+          [scope.activeAssignmentId, scope.companyId]
         ), []),
       ]);
 
@@ -217,24 +217,24 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
                 pr.status
          FROM payroll_lines pl
          JOIN payroll_runs pr ON pr.id = pl."runId"
-         WHERE pl."assignmentId" = $1 AND pl."deletedAt" IS NULL AND pr."deletedAt" IS NULL
+         WHERE pl."assignmentId" = $1 AND pr."companyId" = $2 AND pl."deletedAt" IS NULL AND pr."deletedAt" IS NULL
          ORDER BY pr.period DESC LIMIT 1`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.companyId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
         `SELECT id, title, status, priority, "scheduledDate"
          FROM tasks
-         WHERE "assignedTo" = $1 AND "scheduledDate" = $2 AND status NOT IN ('completed','cancelled')
+         WHERE "assignedTo" = $1 AND "scheduledDate" = $2 AND "companyId" = $3 AND status NOT IN ('completed','cancelled')
            AND "deletedAt" IS NULL
          ORDER BY priority DESC LIMIT 10`,
-        [scope.activeAssignmentId, today]
+        [scope.activeAssignmentId, today, scope.companyId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
         `SELECT id, type, title, body, priority, "isRead", "createdAt"
          FROM notifications
-         WHERE "assignmentId" = $1
+         WHERE "assignmentId" = $1 AND "companyId" = $2
          ORDER BY "createdAt" DESC LIMIT 10`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.companyId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
         // Pre-aggregate journal_lines debit sums once via CTE instead
@@ -251,35 +251,35 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
                 je.status, je."createdAt"
          FROM journal_entries je
          LEFT JOIN cust_debit cd ON cd."journalId" = je.id
-         WHERE je."createdBy" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
+         WHERE je."createdBy" = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%'
            AND je.status IN ('approved','draft','pending_approval')
          ORDER BY je."createdAt" DESC LIMIT 10`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.companyId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
         `SELECT id, type, description, severity, deduction, period, "createdAt"
          FROM employee_violations
-         WHERE "assignmentId" = $1 AND "deletedAt" IS NULL
+         WHERE "assignmentId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 5`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.companyId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
         `SELECT id, "loanNumber", "loanType", amount, "remainingAmount",
                 "installmentAmount", "installmentCount", "paidAmount", status, "createdAt"
          FROM hr_employee_loans
-         WHERE "assignmentId" = $1 AND status IN ('active','pending') AND "deletedAt" IS NULL
+         WHERE "assignmentId" = $1 AND "companyId" = $2 AND status IN ('active','pending') AND "deletedAt" IS NULL
          ORDER BY "createdAt" DESC LIMIT 5`,
-        [scope.activeAssignmentId]
+        [scope.activeAssignmentId, scope.companyId]
       ), []),
       safe((async () => {
         const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
           `SELECT s.name, s."startTime", s."endTime", s.days
            FROM employee_shift_assignments esa
            JOIN shifts s ON s.id = esa."shiftId"
-           WHERE esa."assignmentId" = $1
+           WHERE esa."assignmentId" = $1 AND s."companyId" = $3
              AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
            ORDER BY esa.id DESC LIMIT 1`,
-          [scope.activeAssignmentId, today]
+          [scope.activeAssignmentId, today, scope.companyId]
         );
         if (shiftAssignment) return shiftAssignment;
         const [defaultShift] = await rawQuery<Record<string, unknown>>(
@@ -294,8 +294,8 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
       safe(rawQuery<Record<string, unknown>>(
         `SELECT "presentDays", "absentDays", "lateDays", "totalLateMinutes", "totalDeduction"
          FROM employee_monthly_attendance
-         WHERE "assignmentId" = $1 AND period = $2`,
-        [scope.activeAssignmentId, period]
+         WHERE "assignmentId" = $1 AND period = $2 AND "companyId" = $3`,
+        [scope.activeAssignmentId, period, scope.companyId]
       ), []),
       safe(rawQuery<Record<string, unknown>>(
         `SELECT id, action, entity AS "entityType", "entityId", reason AS description, "createdAt"
@@ -316,9 +316,9 @@ router.get("/", authorize({ feature: "my_space", action: "view" }), async (req, 
         `SELECT id, title, 'task' AS "itemType", "scheduledDate" AS deadline, status
          FROM tasks
          WHERE "assignedTo" = $1 AND status NOT IN ('completed','cancelled')
-           AND "scheduledDate" < $2 AND "deletedAt" IS NULL
+           AND "scheduledDate" < $2 AND "companyId" = $3 AND "deletedAt" IS NULL
          ORDER BY "scheduledDate" ASC LIMIT 10`,
-        [scope.activeAssignmentId, today]
+        [scope.activeAssignmentId, today, scope.companyId]
       ), []),
       rawQuery<Record<string, unknown>>(
         `SELECT lr.id, lt.name AS title, 'leave_request' AS "itemType", lr."createdAt" AS deadline, lr.status
@@ -517,9 +517,10 @@ router.get("/attendance", authorize({ feature: "my_space", action: "view" }), as
        ) v ON TRUE
        WHERE a."assignmentId" = $1
          AND TO_CHAR(a.date, 'YYYY-MM') = $2
+         AND a."companyId" = $3
          AND a."deletedAt" IS NULL
        ORDER BY a.date DESC`,
-      [scope.activeAssignmentId, monthStr]
+      [scope.activeAssignmentId, monthStr, scope.companyId]
     );
 
     const [monthlyStats] = await rawQuery<Record<string, unknown>>(
@@ -529,8 +530,8 @@ router.get("/attendance", authorize({ feature: "my_space", action: "view" }), as
               COALESCE("totalDeduction", 0) AS "totalDeduction",
               COALESCE("overtimeMinutes", 0) AS "overtimeMinutes"
        FROM employee_monthly_attendance
-       WHERE "assignmentId" = $1 AND period = $2`,
-      [scope.activeAssignmentId, monthStr]
+       WHERE "assignmentId" = $1 AND period = $2 AND "companyId" = $3`,
+      [scope.activeAssignmentId, monthStr, scope.companyId]
     );
 
     res.json(maskFields(req, { data: rows, total: rows.length, monthly: monthlyStats ?? null }));
