@@ -30,7 +30,14 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import {
+  createAuditLog, emitEvent, checkFinancialPeriodOpen,
+  getCompanyVatRate, computeVat, roundTo2, todayISO,
+} from "../lib/businessHelpers.js";
+import { issueNumber } from "../lib/numberingService.js";
+import { getDefaultTaxCode, computeTaxFromTaxCode } from "../lib/taxCodes.js";
+import { resolveTransportRevenueAccount } from "../lib/transportRevenueAccounts.js";
+import type { TransportServiceType } from "../lib/transportEnums.js";
 import { logger } from "../lib/logger.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { resolveTransportPrice } from "../lib/fleet/pricingEngine.js";
@@ -359,10 +366,6 @@ transportPricingRouter.post(
 const invoiceBatchSchema = z.object({
   serviceLineIds: z.array(z.coerce.number().int().positive()).min(1).max(200),
   customerId: z.coerce.number().int().positive(),
-  // The actual invoice row is created downstream by the finance side
-  // (which knows about invoice numbering, ZATCA, etc.). This endpoint
-  // links the service lines and emits an event with the line totals so
-  // the finance side can pick up the work.
   notes: z.string().max(1000).optional(),
 });
 
@@ -381,8 +384,11 @@ transportPricingRouter.post(
           id: number; customerId: number | null;
           billingStatus: string; lineTotal: string | null;
           unitPrice: string | null; quantity: string;
+          serviceType: string; vehicleId: number | null; driverId: number | null;
+          routeFrom: string | null; routeTo: string | null;
         }>(
-          `SELECT id, "customerId", "billingStatus", "lineTotal", "unitPrice", quantity
+          `SELECT id, "customerId", "billingStatus", "lineTotal", "unitPrice", quantity,
+                  "serviceType", "vehicleId", "driverId", "routeFrom", "routeTo"
              FROM transport_service_lines
             WHERE id = ANY($1::int[]) AND "companyId" = $2
             FOR UPDATE`,
@@ -412,27 +418,153 @@ transportPricingRouter.post(
             );
           }
         }
-        const total = lines.reduce((s, l) => s + Number(l.lineTotal ?? 0), 0);
+        // ── Build the customer invoice (transport-review Phase-1 Step-2) ──
+        // Revenue is recognized per service line on its own invoice line, with
+        // the account routed by SERVICE TYPE (umrah/passenger/freight →
+        // 4151/4152/4153) via the Step-1 helper. The invoice lands as a DRAFT
+        // (like every invoice in the system); the accountant approves it and the
+        // standard approve path posts the GL — crediting each line's pinned
+        // accountCode + VAT — so no GL code lives here.
+        const periodCheck = await checkFinancialPeriodOpen(scope.companyId, todayISO());
+        if (!periodCheck.open) {
+          throw new ConflictError(
+            `لا يمكن إنشاء فاتورة في فترة مالية مُقفلة: ${periodCheck.periodName ?? ""}`,
+            { field: "date", fix: "اطلب من المدير المالي فتح الفترة المالية المناسبة" },
+          );
+        }
 
-        // INTERIM (transport-review B#1 — leak stop): the batched customer-invoice
-        // feature is NOT yet built. Nothing consumes the
-        // `finance.transport_billing.batch.ready` event below, so the line-flip
-        // that used to live here marked these lines 'invoiced' while NO invoice /
-        // invoice_lines / GL / invoiceId was ever created — silently writing off
-        // the revenue. Until the real invoicing path lands (it must create the
-        // invoice + transport_invoice_links and flip with the REAL invoiceId), we
-        // deliberately do NOT flip: the lines stay in the accountant queue
-        // (ready_for_accounting / under_review), visible and not falsely billed.
-        // The FOR UPDATE lock + same-customer validation above are retained as the
-        // guard skeleton for that future implementation.
-        return { total, lineCount: lines.length };
+        const { financialEngine } = await import("../lib/engines/index.js");
+        const defaultTaxCode = await getDefaultTaxCode(scope.companyId);
+        const companyVatRate = await getCompanyVatRate(scope.companyId);
+
+        // Resolve revenue account + VAT split per line; accumulate the header.
+        const prepared: Array<{
+          id: number; quantity: string; unitPrice: string | null;
+          net: number; vat: number; gross: number;
+          accountCode: string; taxCode: string | null;
+          vehicleId: number | null; driverId: number | null; description: string;
+        }> = [];
+        let subtotal = 0;
+        let vatTotal = 0;
+        for (const l of lines) {
+          const net = roundTo2(Number(l.lineTotal));
+          const rev = resolveTransportRevenueAccount(l.serviceType as TransportServiceType);
+          const accountCode = await financialEngine.resolveAccountCode(
+            scope.companyId, rev.purpose, "credit", rev.defaultCode,
+          );
+          let vat: number;
+          let taxCode: string | null;
+          if (defaultTaxCode) {
+            const split = await computeTaxFromTaxCode({
+              companyId: scope.companyId, amount: net, taxInclusive: false, taxCode: defaultTaxCode.code,
+            });
+            vat = split.tax;
+            taxCode = defaultTaxCode.code;
+          } else {
+            vat = computeVat(net, companyVatRate);
+            taxCode = null;
+          }
+          subtotal = roundTo2(subtotal + net);
+          vatTotal = roundTo2(vatTotal + vat);
+          const route = [l.routeFrom, l.routeTo].filter(Boolean).join(" ← ");
+          prepared.push({
+            id: l.id, quantity: l.quantity, unitPrice: l.unitPrice,
+            net, vat, gross: roundTo2(net + vat), accountCode, taxCode,
+            vehicleId: l.vehicleId, driverId: l.driverId,
+            description: [rev.label, route].filter(Boolean).join(" — "),
+          });
+        }
+        const grandTotal = roundTo2(subtotal + vatTotal);
+        const headerVatRate = defaultTaxCode?.rate ?? companyVatRate;
+
+        // Central numbering authority (#1141) — same scheme as finance POST /invoices.
+        const issued = await issueNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          moduleKey: "finance",
+          entityKey: "sales_invoice",
+          entityTable: "invoices",
+          actorId: scope.userId,
+          expectedTiming: "on_draft",
+        });
+
+        const invRes = await tx.query<{ id: number }>(
+          `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
+                  subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
+                  "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
+                  "taxCode","taxInclusive","discountAmount","discountPercent")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+           RETURNING id`,
+          [
+            scope.companyId, scope.branchId ?? null, b.customerId, issued.number,
+            `دفعة فوترة نقل — ${lines.length} بند`,
+            subtotal, Number(headerVatRate), vatTotal, grandTotal, null, scope.activeAssignmentId, b.notes ?? null,
+            true, "388", "S", null, null,
+            defaultTaxCode?.code ?? null, false, 0, 0,
+          ],
+        );
+        const invoiceId = invRes.rows[0]!.id;
+
+        // Link the numbering assignment back to the new invoice id (audit drill-down).
+        await tx.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [invoiceId, issued.assignmentId],
+        );
+
+        // One invoice line per service line; flip the line to invoiced with the
+        // REAL invoiceId/invoiceLineId, and write the transport_invoice_links
+        // junction (uq_transport_invoice_link_service is the idempotency backstop).
+        for (const p of prepared) {
+          const lineRes = await tx.query<{ id: number }>(
+            `INSERT INTO invoice_lines (
+               "invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross",
+               "accountId","accountCode","costCenterId","activityType",
+               "projectId","vehicleId","propertyId","unitId","assetId",
+               "employeeId","driverId","contractId","umrahSeasonId","umrahAgentId",
+               "productId","taxCode","taxInclusive","allocationRuleId","allocationStatus",
+               "dimensionJson","manualOverrideReason"
+             )
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
+             RETURNING id`,
+            [
+              invoiceId, p.description, p.quantity, p.unitPrice, p.net, p.vat, p.gross,
+              null, p.accountCode, null, null,
+              null, p.vehicleId, null, null, null,
+              null, p.driverId, null, null, null,
+              null, p.taxCode, false, null, "resolved",
+              null, null,
+            ],
+          );
+          const invoiceLineId = lineRes.rows[0]!.id;
+
+          await tx.query(
+            `UPDATE transport_service_lines
+                SET "billingStatus" = 'invoiced', "invoiceId" = $1,
+                    "invoiceLineId" = $2, "updatedAt" = NOW()
+              WHERE id = $3 AND "companyId" = $4`,
+            [invoiceId, invoiceLineId, p.id, scope.companyId],
+          );
+          await tx.query(
+            `INSERT INTO transport_invoice_links
+               ("companyId","serviceLineId","invoiceId","invoiceLineId","appliedUnitPrice","linkedBy")
+             VALUES ($1,$2,$3,$4,$5,$6)`,
+            [scope.companyId, p.id, invoiceId, invoiceLineId, p.unitPrice, scope.userId],
+          );
+        }
+
+        return {
+          invoiceId, ref: issued.number,
+          total: grandTotal, subtotal, vatTotal, lineCount: lines.length,
+        };
       });
 
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
         action: "finance.transport_billing.batch.ready",
-        entity: "transport_service_lines", entityId: 0,
+        entity: "invoices", entityId: result.invoiceId,
         details: JSON.stringify({
+          invoiceId: result.invoiceId,
+          ref: result.ref,
           customerId: b.customerId,
           serviceLineIds: b.serviceLineIds,
           total: result.total,
@@ -443,11 +575,15 @@ transportPricingRouter.post(
 
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
-        action: "approve", entity: "transport_service_lines", entityId: b.serviceLineIds[0]!,
-        after: { customerId: b.customerId, lineCount: result.lineCount, total: result.total },
+        action: "create", entity: "invoices", entityId: result.invoiceId,
+        after: { ref: result.ref, customerId: b.customerId, lineCount: result.lineCount, total: result.total },
       }).catch((e) => logger.error(e, "invoice batch audit failed"));
 
-      res.status(201).json({ ok: true, lineCount: result.lineCount, total: result.total });
+      res.status(201).json({
+        ok: true, invoiceId: result.invoiceId, ref: result.ref,
+        lineCount: result.lineCount, subtotal: result.subtotal,
+        vatAmount: result.vatTotal, total: result.total,
+      });
     } catch (err) {
       handleRouteError(err, res, "Build invoice batch error:");
     }
