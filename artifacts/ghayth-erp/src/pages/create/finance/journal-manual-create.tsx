@@ -4,7 +4,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useAppContext } from "@/contexts/app-context";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CostCenterSelect } from "@/components/shared/entity-selects";
+import { BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -37,6 +37,7 @@ export default function JournalManualCreatePage() {
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_journal_manual_create", {
     description: "",
     date: todayLocal(),
+    branchId: "",
     costCenter: "",
     notes: "",
     lines: [emptyLine(), emptyLine()],
@@ -92,6 +93,9 @@ export default function JournalManualCreatePage() {
     createMutation.mutate({
       ...form,
       date: form.date || undefined,
+      // #2230 — multi-branch users must pick a branch (backend returns
+      // BRANCH_REQUIRED); single-branch users auto-derive from scope.
+      branchId: form.branchId ? Number(form.branchId) : undefined,
       lines: form.lines.map((l) => ({
         accountCode: l.accountCode,
         description: l.description,
@@ -126,6 +130,15 @@ export default function JournalManualCreatePage() {
                 <label className="block text-sm font-medium mb-1">التاريخ</label>
                 <DatePicker value={form.date} onChange={v => setForm(f => ({ ...f, date: v }))} />
               </div>
+              {/* #2230 — mirror the journal-create exemplar: multi-branch users
+                  must pick a branch (backend BRANCH_REQUIRED); single-branch
+                  auto-derives from scope. Was missing → manual journals failed. */}
+              <BranchSelect
+                value={form.branchId ?? ""}
+                onChange={(v) => setForm(f => ({ ...f, branchId: String(v ?? "") }))}
+                label="الفرع"
+                allowCreate={false}
+              />
               <CostCenterSelect
                 value={form.costCenter}
                 onChange={(v) => setForm(f => ({ ...f, costCenter: v }))}
