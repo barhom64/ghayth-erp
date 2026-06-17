@@ -589,7 +589,7 @@ export const allNavSections: NavSection[] = [
           { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon, perm: "fleet.telematics.video:list" },
           { label: "أجهزة التسجيل المتنقلة", path: "/fleet/telematics/devices", icon: HardDrive, perm: "fleet.telematics.devices:list" },
           { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert, perm: "fleet.telematics.sync:list" },
-          { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings, perm: "fleet.telematics.configure:list" },
+          { label: "إعدادات منصة التتبع", path: "/fleet/telematics/settings", icon: Settings, perm: "fleet.telematics.configure:list" },
         ]},
         // 5) النقل والإرسال — دورة الحجز ← الإرسال ← المسارات.
         // النقل والمواصلات (#1812) — كانت هذه الصفحات مركّبة لكن بلا مدخل في
