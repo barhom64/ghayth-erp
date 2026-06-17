@@ -387,10 +387,12 @@ describe("Employees — audit, events, and obligations", () => {
     expect(s).toContain('entityKey: "employee_code"');
   });
 
-  it("POST / creates 4 onboarding tasks for the new employee", () => {
+  it("POST / creates the onboarding tasks and reports the real plan count", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("INSERT INTO onboarding_tasks");
-    expect(s).toContain("onboardingTasksCreated: 4");
+    // count comes from the activation plan length, not a hard-coded literal
+    expect(s).toContain("onboardingTasksCreated: onboardingTaskCount");
+    expect(s).not.toContain("onboardingTasksCreated: 4");
   });
 
   it("POST / creates the user account with an invitation link, never a raw temp password (#2137)", () => {
