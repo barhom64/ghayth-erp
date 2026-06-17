@@ -386,7 +386,7 @@ export default function LegalContractDetail() {
       </DialogContent>
     </Dialog>
     {contract && id && (
-      <EntityEditDialog<ContractEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل العقد"

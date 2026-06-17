@@ -414,7 +414,7 @@ export default function AdminAiPromptDetailPage() {
       </PageStateWrapper>
 
       {prompt && id && (
-        <EntityEditDialog<PromptEditForm>
+        <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
           title="تعديل Prompt"

@@ -191,7 +191,7 @@ export default function FleetCargoPage() {
             </Select>
             <Button variant="outline" size="sm" onClick={() => refetch()}>تحديث</Button>
           </div>
-          <DataTable<ManifestRow>
+          <DataTable
             columns={columns}
             onSortedDataChange={setPrintRows}
             data={rows}
