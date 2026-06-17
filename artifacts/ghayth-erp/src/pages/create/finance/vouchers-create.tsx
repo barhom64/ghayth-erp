@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
+import { useAppContext } from "@/contexts/app-context";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency , todayLocal } from "@/lib/formatters";
 import { amountTaxSplit } from "@/lib/tax-math";
@@ -112,7 +113,14 @@ export default function VouchersCreate() {
     autoDescription: true,
     beneficiaryType: "",
   };
-  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", INITIAL_FORM);
+  // #2230 — single-branch users shouldn't re-pick a branch; default it from
+  // the active scope (mirrors purchase-orders-create). Multi-branch users
+  // still pick it, and the backend stays the guard.
+  const { selectedBranchId } = useAppContext();
+  const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_vouchers_create", {
+    ...INITIAL_FORM,
+    branchId: selectedBranchId ? String(selectedBranchId) : "",
+  });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // #1715 PR-4: master «ربط السند بـ» field shared with expenses.
   const [allocTarget, setAllocTarget] = useState<AllocationTargetValue>(EMPTY_ALLOCATION_TARGET);
