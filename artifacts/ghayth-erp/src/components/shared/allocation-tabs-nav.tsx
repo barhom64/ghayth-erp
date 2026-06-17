@@ -93,7 +93,7 @@ export function AllocationTabsNav() {
             );
             const Icon = tab.icon;
             return (
-              <Link key={tab.href} href={tab.href}>
+              <Link key={tab.href} href={tab.href} asChild>
                 <a
                   className={cn(
                     "inline-flex items-center gap-2 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap",
