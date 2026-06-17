@@ -2450,8 +2450,10 @@ router.post("/trips/:id/cancel", authorize({ feature: "fleet.trips", action: "up
         // accept/start stamps cleared; driverId/vehicleId are NOT NULL columns
         // so they linger as the last assignment until the order is re-notified
         // or reassigned via the assignment endpoint), its live navigation
-        // session is cancelled, and the booking line returns to "pending"
-        // (re-pickable). The booking itself is left unchanged — mirroring the
+        // session is cancelled, and the booking line returns to "open"
+        // (re-pickable; 'open' is the valid awaiting-dispatch booking-line
+        // state — 'pending' is a dispatch-ORDER status, not a line one).
+        // The booking itself is left unchanged — mirroring the
         // driver-decline flow. A silent no-op for ad-hoc trips or orders already
         // terminal. Runs on the transition client → atomic with the cancel.
         const tripSourceKey = typeof row.sourceKey === "string" ? row.sourceKey : "";
@@ -2483,7 +2485,7 @@ router.post("/trips/:id/cancel", authorize({ feature: "fleet.trips", action: "up
             );
             await client.query(
               `UPDATE transport_booking_lines
-                  SET status = 'pending', "updatedAt" = NOW()
+                  SET status = 'open', "updatedAt" = NOW()
                 WHERE id = $1 AND "companyId" = $2`,
               [disp.bookingLineId, scope.companyId],
             );
