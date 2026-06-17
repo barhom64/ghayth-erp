@@ -185,7 +185,7 @@ vendorContractsRouter.post(
       }).catch((e) => logger.error(e, "[audit] vendor_contract.created"));
 
       const [row] = await rawQuery<VendorContractRow>(
-        `SELECT * FROM vendor_contracts WHERE id = $1 AND "companyId" = $2`,
+        `SELECT * FROM vendor_contracts WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
         [insertId, scope.companyId]
       );
       res.status(201).json(row ?? { id: insertId, ...body });
