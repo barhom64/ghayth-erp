@@ -246,7 +246,7 @@ export default function UmrahSubAgentDetail() {
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">الوكيل الرئيسي</p>
               {sa?.agentId ? (
-                <Link href={`/umrah/agents/${sa.agentId}`}>
+                <Link href={`/umrah/agents/${sa.agentId}`} asChild>
                   <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                     {sa.agentName || `وكيل #${sa.agentId}`}
                     <ExternalLink className="h-3 w-3" />
@@ -259,7 +259,7 @@ export default function UmrahSubAgentDetail() {
             <div>
               <p className="text-xs text-muted-foreground mb-0.5">العميل المرتبط</p>
               {sa?.clientId ? (
-                <Link href={`/clients/${sa.clientId}`}>
+                <Link href={`/clients/${sa.clientId}`} asChild>
                   <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                     {sa.clientName || `عميل #${sa.clientId}`}
                     <ExternalLink className="h-3 w-3" />
@@ -335,7 +335,7 @@ export default function UmrahSubAgentDetail() {
                 <FileText className="h-3.5 w-3.5" />
                 كشف حساب PDF
               </Button>
-              <Link href={`/umrah/pricing?subAgentId=${sa.id}`}>
+              <Link href={`/umrah/pricing?subAgentId=${sa.id}`} asChild>
                 <a>
                   <Button size="sm" variant="outline">
                     عرض تسعير الوكيل
