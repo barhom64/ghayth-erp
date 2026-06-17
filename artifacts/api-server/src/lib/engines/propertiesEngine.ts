@@ -445,7 +445,7 @@ class PropertiesEngineImpl implements DomainEngine {
   ) {
     const [cashCode, ownerPayableCode, commissionCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "property_cash", "debit", "1111"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_owner_payable", "credit", "2156"),
       financialEngine.resolveAccountCode(ctx.companyId, "property_management_commission", "credit", "4130"),
     ]);
 
@@ -545,7 +545,7 @@ class PropertiesEngineImpl implements DomainEngine {
     ] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "property_sale_receivable", "debit", "1131"),
       financialEngine.resolveAccountCode(ctx.companyId, "property_building_asset", "credit", "1240"),
-      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_gain", "credit", "4910"),
+      financialEngine.resolveAccountCode(ctx.companyId, "property_sale_gain", "credit", "4920"),
       financialEngine.resolveAccountCode(ctx.companyId, "property_sale_loss", "debit", "5810"),
       financialEngine.resolveAccountCode(ctx.companyId, "vat_output", "credit", "2131"),
     ]);
@@ -773,7 +773,7 @@ class PropertiesEngineImpl implements DomainEngine {
     }
   ) {
     const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "owner_payable", "debit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "owner_payable", "debit", "2156"),
       financialEngine.resolveAccountCode(ctx.companyId, "cash", "credit", "1111"),
     ]);
 

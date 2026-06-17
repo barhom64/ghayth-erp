@@ -1039,7 +1039,7 @@ export function registerEventListeners() {
         const comm = Number(runTotals?.comm) || 0;
         if (comm > 0) {
           const [commPayableCode, salaryPayableCode] = await Promise.all([
-            getAccountCodeFromMapping(payload.companyId, "commission_payable", "debit", "2150"),
+            getAccountCodeFromMapping(payload.companyId, "commission_payable", "debit", "2155"),
             getAccountCodeFromMapping(payload.companyId, "salary_payable", "credit", "2120"),
           ]);
           await createGuardedJournalEntry({
@@ -1919,7 +1919,7 @@ export function registerEventListeners() {
         try {
           const [expenseCode, payableCode] = await Promise.all([
             getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
-            getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150"),
+            getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2155"),
           ]);
           await createGuardedJournalEntry({
             companyId: payload.companyId,
