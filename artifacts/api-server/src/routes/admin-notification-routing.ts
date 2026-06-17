@@ -43,18 +43,86 @@ router.get("/rules", authorize({ feature: "admin", action: "list" }), async (req
   try {
     const cid = req.scope!.companyId;
     const rows = await rawQuery(
-      `SELECT r.id, r."eventCategory", r.channels, r.priority, r."isActive",
-              r.description, r."fallbackChainId", r."createdAt", r."updatedAt",
-              fc.name AS "fallbackChainName"
-         FROM notification_routing_rules r
-         LEFT JOIN notification_fallback_chains fc ON fc.id = r."fallbackChainId"
-        WHERE r."companyId" = $1 OR r."companyId" IS NULL
-        ORDER BY r."isActive" DESC, r."eventCategory" ASC`,
+      `SELECT eff.* FROM (
+         SELECT DISTINCT ON (r."eventCategory")
+                r.id, r."eventCategory", r."companyId",
+                (r."companyId" IS NULL) AS "isInherited",
+                r.channels, r.priority, r."isActive",
+                r.description, r."fallbackChainId", r."createdAt", r."updatedAt",
+                fc.name AS "fallbackChainName"
+           FROM notification_routing_rules r
+           LEFT JOIN notification_fallback_chains fc ON fc.id = r."fallbackChainId"
+          WHERE r."companyId" = $1 OR r."companyId" IS NULL
+          ORDER BY r."eventCategory", r."companyId" DESC NULLS LAST
+       ) eff
+       ORDER BY eff."isActive" DESC, eff."eventCategory" ASC`,
       [cid],
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (err) {
     handleRouteError(err, res, "admin/notification-routing/rules/list");
+  }
+});
+
+// Opt-outs = company-scoped routing rules with isActive=false (the tenant has
+// explicitly disabled the category). Each row carries the per-company skip
+// counter (how many dispatches the engine suppressed because of the opt-out)
+// via a LEFT JOIN on notification_opt_out_skips (companyId, eventCategory).
+router.get("/opt-outs", authorize({ feature: "admin", action: "list" }), async (req, res) => {
+  try {
+    const cid = req.scope!.companyId;
+    const rows = await rawQuery(
+      `SELECT r.id, r."eventCategory", r."companyId",
+              r.channels, r.priority, r."isActive", r.description,
+              r."fallbackChainId", r."createdAt", r."updatedAt",
+              COALESCE(s."skipCount", 0)::text AS "skipCount",
+              s."lastSkippedAt"
+         FROM notification_routing_rules r
+         LEFT JOIN notification_opt_out_skips s
+           ON s."companyId" = r."companyId" AND s."eventCategory" = r."eventCategory"
+        WHERE r."companyId" = $1 AND r."isActive" = false
+        ORDER BY r."eventCategory" ASC`,
+      [cid],
+    );
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) {
+    handleRouteError(err, res, "admin/notification-routing/opt-outs/list");
+  }
+});
+
+// Re-enable an opt-out: flip the company-scoped routing rule (isActive=false)
+// back to active — the exact inverse of the opt-out the /opt-outs tab shows.
+// Company-scoped so a tenant can only re-enable its own rows; a shared GLOBAL
+// default (companyId IS NULL) is never touched here.
+router.post("/opt-outs/:id/re-enable", authorize({ feature: "admin", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery<{ id: number; eventCategory: string }>(
+      `UPDATE notification_routing_rules
+          SET "isActive" = true, "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2 AND "isActive" = false
+        RETURNING id, "eventCategory"`,
+      [id, scope.companyId],
+    );
+    if (rows.length === 0) {
+      throw new NotFoundError("لم يتم العثور على إلغاء اشتراك نشط لإعادة تفعيله");
+    }
+    void emitEvent({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "notification_routing.opt_out.reenabled",
+      entity: "notification_routing_rules", entityId: id,
+      details: JSON.stringify({ eventCategory: rows[0]!.eventCategory }),
+    }).catch((e) => logger.warn(e, "[event] opt-out.reenabled"));
+    void createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "update", entity: "notification_routing_rules", entityId: id,
+      after: { isActive: true },
+    }).catch((e) => logger.warn(e, "[audit] opt-out.reenabled"));
+
+    res.json({ success: true, id, eventCategory: rows[0]!.eventCategory });
+  } catch (err) {
+    handleRouteError(err, res, "admin/notification-routing/opt-outs/re-enable");
   }
 });
 
