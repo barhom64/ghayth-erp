@@ -542,7 +542,7 @@ function PerformanceWidget({ employeeId, latestScore, activeSignals }: {
             {/* PR-4 (#2077) — link to the dedicated score detail page
                 where HR sees full rationale per dimension + raw counters
                 + history + the on-demand recompute button. */}
-            <Link href={`/hr/employees/${employeeId}/score`}>
+            <Link href={`/hr/employees/${employeeId}/score`} asChild>
               <a className="text-xs text-status-info-foreground hover:underline ms-auto" data-testid="link-employee-score-detail">
                 تفصيل كامل ←
               </a>
@@ -1916,7 +1916,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               <div className="text-center py-6 border-t border-dashed">
                 <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
                 <p className="text-muted-foreground text-sm">لا توجد وثائق مرفقة لهذا الموظف</p>
-                <p className="text-xs text-muted-foreground mt-1">يمكنك إضافة الوثائق من <Link href="/hr/documents"><a className="text-primary hover:underline">إدارة وثائق الموارد البشرية</a></Link></p>
+                <p className="text-xs text-muted-foreground mt-1">يمكنك إضافة الوثائق من <Link href="/hr/documents" asChild><a className="text-primary hover:underline">إدارة وثائق الموارد البشرية</a></Link></p>
               </div>
             ) : (
               <div className="space-y-2 border-t pt-3">
@@ -1931,7 +1931,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                   </div>
                 ))}
                 {documents.length > 5 && (
-                  <Link href="/hr/documents">
+                  <Link href="/hr/documents" asChild>
                     <a className="text-xs text-primary hover:underline flex items-center gap-1 mt-2">
                       عرض كل الوثائق ({documents.length}) <ArrowUpRight className="h-3 w-3" />
                     </a>
@@ -1951,7 +1951,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 <Award className="h-5 w-5" />
                 التقييم المؤسسي
               </span>
-              <Link href={`/hr/employees/${id}/score`}>
+              <Link href={`/hr/employees/${id}/score`} asChild>
                 <a className="text-xs text-primary hover:underline flex items-center gap-1">
                   التفصيل الكامل <ArrowUpRight className="h-3 w-3" />
                 </a>
@@ -2053,7 +2053,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 {activityRows.length > 10 && (
                   <p className="text-xs text-muted-foreground text-center mt-2">
                     عرض 10 من {activityRows.length} سجلًا — افتح
-                    <Link href={`/audit-logs?entity=employees&entityId=${id}`}>
+                    <Link href={`/audit-logs?entity=employees&entityId=${id}`} asChild>
                       <a className="text-primary hover:underline mx-1">سجل التدقيق الكامل</a>
                     </Link>
                   </p>

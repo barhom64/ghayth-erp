@@ -148,6 +148,16 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:jsx-generic-component:tests" node scripts/src/check-jsx-generic-component.test.mjs
 run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-component.mjs
+# Nested anchors: a wouter <Link> WITHOUT `asChild` directly wrapping <a>
+# renders <a><a> (the OUTER <a> carries href+onClick, the author's INNER <a>
+# carries content but no href). Invalid HTML — React logs a validateDOMNesting
+# / hydration warning and the browser un-nests them, stripping the click
+# target's href/onClick and breaking tab/link navigation. typecheck/build/lint
+# all pass — invisible until you open the page. OFFLINE source scan; baseline in
+# scripts/link-nested-anchor-allowlist.txt, fails only on a NEW offender.
+# Pure-logic fixtures guard the detector.
+run_step "check:link-nested-anchor:tests" node scripts/src/check-link-nested-anchor.test.mjs
+run_step "check:link-nested-anchor" node scripts/src/check-link-nested-anchor.mjs
   # setState INSIDE useMemo: a render-phase side effect. With an unstable
   # callback and/or a setState that always builds a new reference it becomes an
   # infinite render loop that wedges the tab — invisible to typecheck/build/lint,
