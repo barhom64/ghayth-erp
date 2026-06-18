@@ -24,6 +24,7 @@ import {
   createNotification,
   emitEvent,
   createAuditLog,
+  auditFromRequest,
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
@@ -1077,9 +1078,9 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     if (earlyDepartureMinutes > 0) {
       const [approvedExcuse] = await rawQuery<Record<string, unknown>>(
         `SELECT id, "estimatedMinutes" FROM hr_excuse_requests
-         WHERE "companyId" = $1 AND "assignmentId" = $2 AND "excuseDate" = $3 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
+         WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
          LIMIT 1`,
-        [scope.companyId, scope.activeAssignmentId, today]
+        [scope.activeAssignmentId, today]
       ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
@@ -1310,8 +1311,8 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
           fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
         });
       case "forbidden":
-        throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
-          fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
+        throw new ForbiddenError("لا توجد سياسة تتبع فعّالة لهذا الموظف", {
+          fix: "يتطلب التتبع الميداني سياسة تتبع صريحة ومفعّلة لهذا الموظف. تواصل مع المسؤول لتفعيل سياسة التتبع.",
           meta: { categoryKey: r.categoryKey, trackingFrequencySeconds: r.freq },
         });
       case "throttled":
@@ -1329,11 +1330,16 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
   }
 });
 
-router.get("/attendance/field-track", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
+router.get("/attendance/field-track", authorize({ feature: "hr.attendance.tracking_view", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { assignmentId, date } = req.query as { assignmentId?: string; date?: string };
     const day = date || todayISO();
+    // Per-policy viewer restriction: an empty/NULL allowedViewerRoles means
+    // "any tracking_view holder", otherwise the caller's active role must be a
+    // member. scope.role is the always-populated active role (reflects any
+    // role-picker downgrade); NULL viewerRole never satisfies a restricted policy.
+    const viewerRole = scope.role ?? null;
 
     // Two modes:
     //   - assignmentId set  → one employee's full breadcrumb for the day
@@ -1352,10 +1358,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
           WHERE ftp."assignmentId" = $1
             AND ftp."companyId" = $2
             AND ftp."capturedAt"::date = $3::date
+            AND EXISTS (
+              SELECT 1 FROM employee_tracking_policies etp
+               WHERE etp."companyId" = ftp."companyId"
+                 AND etp."employeeId" = ea."employeeId"
+                 AND etp."deletedAt" IS NULL
+                 AND etp."trackingEnabled" = TRUE
+                 AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+                 AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+                 AND (
+                   jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                   OR etp."allowedViewerRoles" ? $4
+                 )
+            )
           ORDER BY ftp."capturedAt" ASC
           LIMIT 5000`,
-        [aid, scope.companyId, day],
+        [aid, scope.companyId, day, viewerRole],
       );
+      // Location is a sensitive view — audit every breadcrumb read.
+      await auditFromRequest(req, "tracking.view", "field_tracking_points", aid, {
+        after: { mode: "breadcrumb", date: day, points: points.length },
+      });
       res.json(maskFields(req, { data: points, total: points.length, mode: "breadcrumb", date: day }));
       return;
     }
@@ -1371,10 +1394,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
          JOIN employees e ON e.id = ea."employeeId"
         WHERE ftp."companyId" = $1
           AND ftp."capturedAt"::date = $2::date
+          AND EXISTS (
+            SELECT 1 FROM employee_tracking_policies etp
+             WHERE etp."companyId" = ftp."companyId"
+               AND etp."employeeId" = ea."employeeId"
+               AND etp."deletedAt" IS NULL
+               AND etp."trackingEnabled" = TRUE
+               AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+               AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+               AND (
+                 jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                 OR etp."allowedViewerRoles" ? $3
+               )
+          )
         ORDER BY ftp."assignmentId", ftp."capturedAt" DESC
         LIMIT 2000`,
-      [scope.companyId, day],
+      [scope.companyId, day, viewerRole],
     );
+    // Live map is a sensitive multi-employee location view — audit it.
+    await auditFromRequest(req, "tracking.view", "field_tracking_points", 0, {
+      after: { mode: "live", date: day, points: latest.length },
+    });
     res.json(maskFields(req, { data: latest, total: latest.length, mode: "live", date: day }));
   } catch (err) {
     handleRouteError(err, res, "Field track error:");
@@ -1900,9 +1940,9 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     } else {
       const [usedRow] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
-         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND status IN ('approved','pending')
-           AND EXTRACT(YEAR FROM "startDate") = $4 AND "deletedAt" IS NULL`,
-        [scope.companyId, scope.employeeId, leaveTypeId, year]
+         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
+           AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
+        [scope.employeeId, leaveTypeId, year]
       );
       // Saudi Labor Law Article 109: 21 days during the first 5 years
       // of service, 30 days after 5 years. Auto-upgrade based on the
@@ -1941,9 +1981,9 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     // ── Validation 3: No overlapping requests ──
     const [overlap] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_leave_requests
-       WHERE "companyId" = $1 AND "employeeId" = $2 AND status IN ('pending','approved')
-         AND "startDate" <= $3 AND "endDate" >= $4 AND "deletedAt" IS NULL`,
-      [scope.companyId, scope.employeeId, endDate, startDate]
+       WHERE "employeeId" = $1 AND status IN ('pending','approved')
+         AND "startDate" <= $2 AND "endDate" >= $3 AND "deletedAt" IS NULL`,
+      [scope.employeeId, endDate, startDate]
     );
     if (overlap) {
       throw new ConflictError("يوجد طلب إجازة متداخل في هذه الفترة", {
@@ -2013,8 +2053,8 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     if (leaveType.oncePerCareer) {
       const [prevHajj] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM hr_leave_requests
-         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND status = 'approved' AND "deletedAt" IS NULL`,
-        [scope.companyId, scope.employeeId, leaveTypeId]
+         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
+        [scope.employeeId, leaveTypeId]
       );
       if (prevHajj) {
         throw new ConflictError(
@@ -4654,8 +4694,8 @@ router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "
       `SELECT esa.*, s.name AS "shiftName", s."startTime", s."endTime",
               e.name AS "employeeName", e."empNumber"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $1
-       JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $1
+       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN employee_assignments ea ON ea.id = esa."assignmentId"
        JOIN employees e ON e.id = ea."employeeId"
        WHERE s."companyId" = $1
        ORDER BY esa."startDate" DESC LIMIT 200`,
@@ -8301,8 +8341,8 @@ router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "c
 
     const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_excuse_requests
-       WHERE "companyId" = $1 AND "assignmentId" = $2 AND "excuseDate" = $3 AND status != 'rejected'`,
-      [scope.companyId, effectiveAssignmentId, excuseDate]
+       WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status != 'rejected'`,
+      [effectiveAssignmentId, excuseDate]
     );
     if (existing) throw new ConflictError("يوجد طلب استئذان مسجل لنفس اليوم");
 
