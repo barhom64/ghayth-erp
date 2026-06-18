@@ -29,9 +29,9 @@
 | Phase 15 — الإشعارات متعدّدة القنوات | 212 إشعار (64 آخر 24س) · `outbound_queue`=11 (email، فشل صريح: SMTP غير مُهيّأ بالتطوير — DLQ يعمل) |
 | Phase 16 — حدود المعدّل تحت الضغط | تسجيل دخول 16× بلا علامة E2E → **10×403 ثمّ 6×429**، أوّل حظر عند المحاولة 11 (loginLimiter=10/دقيقة) |
 | Phase 17 — مهام cron | 100 مهمّة مُسجَّلة · تشغيل 10 تمثيلية → كلها 200/success · `cron_logs` نمت **بالضبط +10** · عمل فعلي (تنبيهات/تدقيق ذاتي/KPI) |
-| Phase 18 — التقارير ببيانات مصدر | trial-balance · income-statement · balance-sheet · bi/(overview,kpis,dashboards,ceo,daily,bottleneck) · umrah/dashboard — كلها 200 ببيانات |
+| Phase 18 — التقارير ببيانات مصدر | **مُتحقَّق 200 ببيانات**: trial-balance (179 صف) · income-statement · balance-sheet · bi/(overview,kpis,dashboards 3421B,ceo-dashboard,admin-reports/daily,operations/bottleneck) · umrah/dashboard · support/tickets (6) · hr/employees-status · finance/invoices (0 صف). _ملاحظة أمينة: 8 مسارات dashboard خمّنها الهارنس خطأً أعادت 404 (ليست المسارات الأساسية)_ |
 | Phase 19 — حالات سير العمل | `approval_requests` {معلّق3/مقبول1/مرفوض1} · `journal_entries` {مسودّة2/بانتظار اعتماد2} — توزيعات آلة-حالات حقيقية |
-| Phase 20 — رحلات E2E الكاملة | 59 اختبار Playwright × 18 ملف (auth · dashboard · persona-* · rbac · admin-* · import-csv-upload) — _النتيجة تُطوى عند الاكتمال_ |
+| Phase 20 — رحلات E2E الكاملة | 18 ملف / 59 اختبار Playwright — **لم تكتمل في هذه الجلسة** (الحزمة مبوّبة على CI المعزول `e2e.yml`؛ تتعلّق ad-hoc ضدّ التطوير الحيّ)؛ **لا يُدَّعى 59/59**؛ الرحلات المكافئة مُثبتة على طبقة HTTP/DB |
 
 ---
 
@@ -258,9 +258,14 @@
 - `cron_logs` نمت **بالضبط +10** (89694 → 89704) — لا تشغيل وهمي.
 - عمل فعلي مُسجَّل: `daily_smart_alert_scan` أطلق تنبيهَين · `daily_self_audit` وجد 5 مخالفات عبر 3 شركات · `daily_kpi_snapshot` حفظ 5 موظّفين.
 
-### 9.6 Phase 18 — التقارير ببيانات مصدر — مُنفَّذ
+### 9.6 Phase 18 — التقارير ببيانات مصدر — مُنفَّذ (بدقّة)
 
-كلها **200** ببيانات فعلية: `finance/reports/trial-balance` · `income-statement` · `balance-sheet` · `bi/overview` · `bi/kpis` · `bi/dashboards` (3421 بايت) · `bi/ceo-dashboard` · `bi/admin-reports/daily` · `bi/operations/bottleneck` · `umrah/dashboard` · `support/tickets` (6 صفوف) · `hr/employees-status`.
+**نقاط أعادت 200 ببيانات فعلية (مُتحقَّقة):**
+- `finance/reports/trial-balance` → 200، **179 صف** · `income-statement` → 200 · `balance-sheet` → 200
+- `bi/overview` → 200 · `bi/kpis` → 200 · `bi/dashboards` → 200 (**3421 بايت**) · `bi/ceo-dashboard` → 200 (528B) · `bi/admin-reports/daily` → 200 (245B) · `bi/operations/bottleneck` → 200 (115B)
+- `umrah/dashboard` → 200 (570B) · `support/tickets` → 200 (**6 صفوف**) · `hr/employees-status` → 200 · `finance/invoices` → 200 (0 صف — فارغ صالح)
+
+**ملاحظة أمينة (عقد الأمانة):** الهارنس `qa-phase13-20.mjs` جرّب أيضًا 8 مسارات dashboard بتخمينات خاطئة أعادت **404** (`/api/bi/dashboard` · `/api/finance/dashboard` · `/api/hr/dashboard` · `/api/fleet/dashboard` · `/api/warehouse/dashboard` · `/api/properties/dashboard` · `/api/dashboard/overview` · `/api/finance/reports/general-ledger`). هذه **تخمينات مسار خاطئة من الهارنس، ليست المسارات الأساسية ولا تُحسب أعطالًا** — المسارات الأساسية الصحيحة (bi/* أعلاه) أعادت 200. (المصدر: `/tmp/qa-phase13-20.json` للمالية/الدعم/HR + إعادة تحقّق حيّة بـcurl لـbi/* وumrah/dashboard.)
 
 ### 9.7 Phase 19 — حالات سير العمل — مُنفَّذ
 
