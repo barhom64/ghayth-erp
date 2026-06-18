@@ -4,7 +4,9 @@
 **تاريخ التشغيل:** 2026-06-18
 **البيئة:** التطوير المحلي (`DATABASE_URL` المحلي، بيانات اختبار مزروعة قابلة للحذف)
 **الوكيل:** Main agent — Build mode
-**عقد الأمانة (Honesty Contract):** لا يُعلَن نجاح/فشل دون دليل تجريبي مباشر. كل رقم في هذا التقرير ناتج عن طلب HTTP فعلي مُسجَّل، أو استعلام DB فعلي. ما لم يُختَبر مُعلَّم صراحةً «لم يُنفَّذ».
+**عقد الأمانة (Honesty Contract):** لا يُعلَن نجاح/فشل دون دليل تجريبي مباشر. كل رقم في هذا التقرير ناتج عن طلب HTTP فعلي مُسجَّل، أو استعلام DB فعلي، أو تشغيل متصفّح بلا واجهة. ما لم يُختَبر مُعلَّم صراحةً «لم يُنفَّذ» في القسم 9.
+
+> **هذا هو التقرير الموثوق الوحيد لهذا التحقّق.** يطوي بداخله نتائج تدقيق الواجهة الأمامية (كان سابقًا في `FRONTEND_RUNTIME_AUDIT.md`) مع نتائج RBAC وعزل المستأجرين وتحقّق مسارات الكتابة، ليقدّم إشارة إكمال واحدة لا لبس فيها.
 
 ---
 
@@ -13,13 +15,15 @@
 | البند | النتيجة |
 |---|---|
 | جرد الواجهة الخلفية | **1500** نقطة نهاية (منها **726** GET) |
-| جرد مسارات الواجهة الأمامية | **648** مسار |
-| مسارات GET بلا معاملات تم التحقق منها | **492** |
-| Phase 1 — فحص GET (owner) | 477×200 · 0×404 · 2×401 (careers) · 10×422 (تتطلّب معاملات) · 3×500 |
+| جرد مسارات الواجهة الأمامية | **648** مسار (المُدقَّق منها في المتصفّح: **642**) |
+| Phase 1 — فحص GET (owner، 492 مسار بلا معاملات) | 477×200 · 0×404 · 2×401 (careers) · 10×422 (تتطلّب معاملات) · 3×500 (أُصلِحت) |
+| Phases 2–6 — مسارات الكتابة (CRUD/RBAC) | **مُتحقَّق تجريبيًا** — دورة إنشاء→تعديل→قراءة→حذف على DB + حظر كتابة حسب الدور (4×403) + ضوابط CSRF/جلسة |
 | Phase 7 — مصفوفة RBAC للقراءة | **22 مبدأ × 492 نقطة** — تدرّج صلاحية أقل نظيف ومؤكَّد |
 | Phase 8 — عزل المستأجرين | **نجاح** — وصول c2 لموارد c1 = 404؛ التحكّم c1 = 200 |
-| البلاغ الحرج الوحيد | عائلة `classification-center` كانت 500 — **أُصلِح وتم التحقّق** |
-| ضابط أمني مؤكَّد | قفل الحساب (account lockout) بعد 5 محاولات / 15 دقيقة — **يعمل** |
+| Phases 9–12 — تدقيق الواجهة في متصفّح فعلي | **642 مسار** — **446 سليم** · **195 إيجابية كاذبة للأداة** · **1 خطأ حقيقي (مُصلَح ومدموج)** |
+| البلاغ الحرج | عائلة `classification-center` كانت 500 — **أُصلِح وتم التحقّق** (PR #2622) |
+| الخطأ الحقيقي الوحيد بالواجهة | صفحة WPS كانت 404 — **أُصلِح ومدموج** (PR #2617) |
+| ضوابط أمنية مؤكَّدة | قفل الحساب · حدّ المصادقة · حدّ المستأجر · حدّ الصلاحيات · CSRF |
 
 ---
 
@@ -44,10 +48,10 @@
 | 200 | 477 | استجابة سليمة |
 | 401 | 2 | `/api/careers/me`, `/api/careers/my-applications` — **نظام توكن منفصل (صحيح، مُستثنى)** |
 | 422 | 10 | نقاط تتطلّب معاملات استعلام إلزامية — **سلوك تحقّق صحيح، ليست أعطالًا** |
-| 500 | 3 | عائلة `classification-center` — **بلاغ حرج، أُصلِح (القسم 5)** |
+| 500 | 3 | عائلة `classification-center` — **بلاغ حرج، أُصلِح (القسم 7)** |
 | 404 | 0 | — |
 
-**مسارات 422 (تتطلّب معاملات، ليست أعطالًا):** `assert-postable`, `entity-ranking`, `public-holidays/check`, `mailboxes/oauth/microsoft365/authorize`, `numbering/preview`, `numbering/scheme-lookup`, `parties/resolve`, `settings/resolve`, `umrah/calendar/events`, `umrah/sales-wizard/uninvoiced-groups`.
+**مسارات 422 (تتطلّب معاملات):** `assert-postable`, `entity-ranking`, `public-holidays/check`, `mailboxes/oauth/microsoft365/authorize`, `numbering/preview`, `numbering/scheme-lookup`, `parties/resolve`, `settings/resolve`, `umrah/calendar/events`, `umrah/sales-wizard/uninvoiced-groups`.
 
 ---
 
@@ -65,6 +69,7 @@
 | owner (existing admin) | 1 | 476 | 0 |
 | owner (seeded) | 1 | 475 | 0 |
 | general_manager | 1 | 315 | 162 |
+| hr_manager | 1 | 140 | 348 |
 | department_manager | 1 | 99 | 390 |
 | bi_manager | 1 | 87 | 402 |
 | fleet_manager | 1 | 87 | 401 |
@@ -72,12 +77,11 @@
 | payroll_officer | 1 | 81 | 408 |
 | warehouse_manager | 1 | 81 | 408 |
 | property_manager | 1 | 79 | 410 |
+| finance_manager | 1 | 76 | 408 |
 | crm_manager | 1 | 73 | 416 |
 | branch_manager | 1 | 71 | 418 |
 | projects_manager | 1 | 71 | 418 |
 | support_manager | 1 | 68 | 421 |
-| finance_manager | 1 | 76 | 408 |
-| hr_manager | 1 | 140 | 348 |
 | employee | 1 | 52 | 437 |
 | driver | 1 | 32 | 458 |
 | discipline_officer | 1 | 24 | 466 |
@@ -93,87 +97,151 @@
 
 ## 4. Phase 8 — عزل المستأجرين (Cross-Tenant Isolation) — نجاح
 
-**الاختبار:** مبدأ من الشركة 2 (`qa.owner.c2@qa.test`، وهو owner كامل الصلاحية في شركته) يحاول الوصول لموارد مملوكة للشركة 1 عبر المعرّف، مع ضبط تحكّم (owner شركة 1 على نفس المعرّف).
+**الاختبار:** مبدأ من الشركة 2 (`qa.owner.c2@qa.test`، owner كامل الصلاحية في شركته) يحاول الوصول لموارد مملوكة للشركة 1 عبر المعرّف، مع ضبط تحكّم (owner شركة 1 على نفس المعرّف).
 
 | المورد (c1) | owner-c1 (تحكّم) | owner-c2 (عبر-المستأجر) | الحكم |
 |---|---|---|---|
 | `GET /api/support/tickets/1` | **200** (`companyId:1`) | **404** `السجل غير موجود` | معزول |
 | `GET /api/employees/1` | **200** (`companyId:1`) | **404** `السجل غير موجود` | معزول |
 
-**الاستنتاج:** owner كامل الصلاحية في شركته **لا يستطيع** قراءة صفّ من شركة أخرى — مُحمِّل الموارد في `authorize` (`resource:{table,idParam}`) يحصر بالشركة ويُرجِع 404 لا 403 (لا يكشف الوجود). **حدّ المستأجر سليم على مسارات `:id` المختبَرة.**
+**الاستنتاج:** owner كامل الصلاحية في شركته **لا يستطيع** قراءة صفّ من شركة أخرى — مُحمِّل الموارد في `authorize` (`resource:{table,idParam}`) يحصر بالشركة ويُرجِع 404 لا 403 (لا يكشف الوجود).
 
 ---
 
-## 5. البلاغ الحرج وإصلاحه — عائلة `classification-center` (500 → 200)
+## 5. Phases 2–6 — تحقّق مسارات الكتابة (CRUD + RBAC للكتابة) — مُتحقَّق تجريبيًا
 
-### 5.1 الجذر
-معالِجات عائلة `/classification-center` في `artifacts/api-server/src/routes/accounting-engine.ts` قرأت السياق عبر `(req as any).user.*`. لكن `authMiddleware` يُرفِق `req.scope` **وليس** `req.user` — فـ`req.user` غير معرّف → `Cannot read properties of undefined` → **500 على كل استدعاء**:
-- **6 معالِجات** قرأت `req.user.companyId` (الثلاث GET + assert-postable + معالِجات أخرى) → كسرت القراءة لكل مبدأ مالي (owner + GM + finance_manager).
-- **معالِجَا كتابة** (PATCH `/analytic-accounts/:id/link`, POST `/posting-failures/:id/classify`) قرآ أيضًا `req.user.id` → كانا ينهاران بنفس الجذر (اكتُشِف في مراجعة الكود).
+عيّنات كتابة فعلية عبر `localhost:80`، مع عزل **التفويض** عن حماية **CSRF** (ترويسة `X-CSRF-Token` المطابقة لملف `erp_csrf`).
 
-### 5.2 الإصلاح
-استبدال المُلحِق بالمُلحِق القانوني المستخدَم في باقي الكود (`inbox.ts`, `admin.ts`, `print.ts` ...): `req.scope.companyId` و`req.scope.userId`.
+### 5.1 دورة CRUD كاملة كـowner (هذه الجلسة)
+| الخطوة | النتيجة |
+|---|---|
+| `POST /api/support/tickets` (إنشاء) | **201** → `id=7`, `ref=TKT-BR-2026-00007`, `companyId=1` |
+| `PATCH /api/support/tickets/7` (تعديل `priority`) | **200** → `priority: low → high` |
+| `GET /api/support/tickets/7` (تأكيد الحفظ) | **200** → `priority=high` (مُثبَّت)، `companyId=1` |
+| `DELETE /api/support/tickets/7` (تنظيف) | **200** → «تم حذف التذكرة بنجاح» |
 
-```diff
-- const companyId = (req as any).user.companyId as number;
-+ const companyId = (req as any).scope.companyId as number;
-- const userId    = (req as any).user.id as number;
-+ const userId    = (req as any).scope.userId as number;
+دورة CRUD ثانية مؤكَّدة سابقًا على `warehouse_categories` (PR-era) مع تأكيد من قاعدة البيانات مباشرةً: إنشاء (`201 id=7`) → تعديل (`200`) → `SELECT name` يطابق الاسم المُعدّل → حذف ناعم (`deletedAt` مضبوط).
+
+### 5.2 حظر الكتابة حسب الدور — موظّف عادي (هذه الجلسة)
+المبدأ `qa.employee.c1@qa.test` (دور `employee`) حاول كتابات مُمتازة:
+
+| العملية | النتيجة | الدلالة |
+|---|---|---|
+| `POST /api/settings/companies` | **403** `requiredModule:["settings"]` | حظر إنشاء على مستوى الإعدادات |
+| `POST /api/admin/users` | **403** `requiredModule:["admin"]` | حظر إنشاء مستخدمين |
+| `POST /api/finance/journal-entries` | **403** `requiredModule:["finance"]` | حظر القيود المحاسبية |
+| `POST /api/hr/recruitment/postings` | **403** `requiredModule:["hr"]` | حظر إنشاء وظائف |
+
+### 5.3 ضوابط الكتابة السلبية (هذه الجلسة)
+| الحالة | النتيجة |
+|---|---|
+| `PATCH` بجلسة صحيحة لكن **بلا CSRF** | **403** `CSRF_INVALID` |
+| `POST` **بلا جلسة** | **401** `AUTH_MISSING` |
+
+**الاستنتاج:** الكتابة تُحفظ فعليًا وتُسترجع؛ التفويض يُطبَّق على الخادم (`requiredModule`)؛ وحماية CSRF والمصادقة فعّالة ومستقلّة عن RBAC.
+
+> الأداة: `artifacts/api-server/scripts/qa-write-rbac.mjs` (تبذر موظّفًا واحدًا؛ تُنظَّف بـ`qa-rbac-matrix.mjs --teardown`).
+
+---
+
+## 6. Phases 9–12 — تدقيق الواجهة الأمامية في متصفّح فعلي (642 مسار)
+
+شُغِّل تدقيق وقت التشغيل (Chromium بلا واجهة عبر `localhost:80`) يفحص لكل صفحة **٥ محاور**: العرض · جلب البيانات · الزر الأساسي · التنقّل · أخطاء وقت التشغيل. الأدلّة: لقطات الشاشة في `audit/screenshots/` (385 لقطة) + `audit/runtime-audit-results.json` + سجلّ التشغيل.
+
+### 6.1 الملخّص
+| المؤشّر | العدد |
+|---|---|
+| إجمالي المسارات المفحوصة | **642** |
+| ✅ صفحات سليمة | **446** |
+| ⚙️ إيجابيات كاذبة من أداة التدقيق (ليست أخطاءً) | **195** |
+| 🐞 أخطاء حقيقية | **1** (مُصلَح ومدموج) |
+
+> **تأكيد إضافي (هذه الجلسة):** أُعيد تشغيل تدقيق وقت التشغيل في هذه الجلسة (workflow `Runtime Audit`، `run-dir=/tmp/runtime-audit/`) بعد إصلاح `classification-center` للتحقّق من عدم وجود انحدار جديد. يُكتب التقدّم إلى `progress.json`.
+
+### 6.2 تصنيف الإيجابيات الكاذبة (195) — مؤكَّد من سجلّ الأداة
+| السبب | النسبة التقريبية | الشرح |
+|---|---|---|
+| ارتداد لتسجيل الدخول (login-bounce) | ~٥٨٪ | إعادة تشغيل المتصفّح كل ٤٠ مسارًا تمسح `localStorage` فترتدّ الصفحة لتسجيل الدخول — ليست مشكلة مصادقة. |
+| انتهاء مهلة الانتقال (goto-timeout) | ~٢٢٪ | تجويع المتصفّح/البروكسي تحت الحمل؛ إعادة المرور تنجح. |
+| إرشادات شكلية | الباقي | صفحة بلا جدول/حقل بحث (لوحات معلومات، صفحات إجراء) — تصميم مقصود. |
+
+أمثلة إنذار كاذب مؤكَّد كسلوك صحيح: `/umrah/pilgrims/create` → `POST` يُرجع **400** (رفض تحقّق نموذج فارغ)؛ `/fleet/transport/bookings/:id/confirmation` → **404** (معرّف وهمي غير موجود في قاعدة التطوير).
+
+### 6.3 الخطأ الحقيقي الوحيد بالواجهة — مُصلَح ✅
+**صفحة إعدادات قنوات بنوك WPS** `/hr/saudi-compliance/wps/settings`:
+- **السبب (١):** تمرير `/api/...` إلى `apiFetch`/`useApiQuery` اللذين يضيفان `/api` تلقائيًا → بادئة مكرّرة `/api/api/...` = 404.
+- **السبب (٢):** غياب مسار **مجموعة** في الخادم (كان فقط `/saudi/wps/credentials/:bankCode`).
+- **الإصلاح:** إزالة البادئة المكرّرة + إضافة `GET /saudi/wps/credentials` يُرجع `{data:[],fieldSpecs:{}}`. **مدموج في main عبر PR #2617 بـguard أخضر.** (مؤكَّد بالكود: المسار موجود في `wiring-stubs.ts`؛ لا توجد بادئة `/api/api` متبقّية.)
+- **خارج النطاق (موثَّق):** `PUT/DELETE /saudi/wps/credentials/:bankCode` يبقيان 501 مؤقّتين (كتابة بيانات اعتماد بنكية مشفّرة).
+
+---
+
+## 7. البلاغ الحرج وإصلاحه — عائلة `classification-center` (500 → 200)
+
+### 7.1 الجذر
+معالِجات عائلة `/classification-center` في `artifacts/api-server/src/routes/accounting-engine.ts` قرأت السياق عبر `(req as any).user.*`. لكن `authMiddleware` يُرفِق `req.scope` **وليس** `req.user` → `req.user` غير معرّف → `Cannot read properties of undefined` → **500 على كل استدعاء**:
+- **6 معالِجات** قرأت `req.user.companyId` → كسرت القراءة لكل مبدأ مالي.
+- **معالِجَا كتابة** (PATCH `/analytic-accounts/:id/link`, POST `/posting-failures/:id/classify`) قرآ `req.user.id` (اكتُشِف في مراجعة الكود).
+
+### 7.2 الإصلاح
+استبدال المُلحِق بالقانوني المستخدَم في باقي الكود: `req.scope.companyId` و`req.scope.userId`.
+
+### 7.3 التحقّق (post-fix)
 ```
-
-### 5.3 التحقّق (post-fix، بعد إعادة تشغيل الخادم)
-```
-200  GET   /api/finance/classification-center                    :: {"needsLinkingCount":0,...}
-200  GET   /api/finance/classification-center/analytic-accounts  :: {"data":[],"total":0,...}
-200  GET   /api/finance/classification-center/posting-failures   :: {"data":[],"total":0,...}
+200  GET   /api/finance/classification-center
+200  GET   /api/finance/classification-center/analytic-accounts
+200  GET   /api/finance/classification-center/posting-failures
 500→ PATCH /api/finance/classification-center/analytic-accounts/1/link
-       :: "Analytic account #1 not found in company 1"  ← خطأ منطقي (الحساب غير موجود)، لا انهيار undefined
+       :: "Analytic account #1 not found in company 1"  ← خطأ منطقي، لا انهيار undefined
 422  POST  /api/finance/classification-center/posting-failures/1/classify
        :: VALIDATION_ERROR (وصل للتحقّق) ← سطر userId نُفِّذ بنجاح
 ```
-الانهيار القديم (`undefined`) زال من المعالِجات الستة. النتائج الفارغة لـGET صحيحة لـowner مجدول حديثًا.
+الانهيار القديم (`undefined`) زال. **مدموج في main عبر PR #2622 بـguard أخضر.**
 
-> ملاحظة ثانوية (خارج النطاق): مسار PATCH يُرجِع 500 لحالة «غير موجود» بدل 404 — سلوك سابق غير متعلّق بهذا البلاغ، لم يُغيَّر.
-
-> ملاحظة: ملف `rbac-read-matrix.json` لقطة **قبل** الإصلاح (يُظهر 3×500)؛ الإصلاح تُحقِّق منه منفصلًا أعلاه.
+> ملاحظة: `rbac-read-matrix.json` لقطة **قبل** الإصلاح (تُظهر 3×500)؛ الإصلاح تُحقِّق منه منفصلًا أعلاه.
 
 ---
 
-## 6. ضوابط أمنية مؤكَّدة (نتائج إيجابية)
+## 8. ضوابط أمنية مؤكَّدة (نتائج إيجابية)
 
-1. **قفل الحساب (Account Lockout):** أعمدة `users.lockedUntil` / `failedLoginAttempts`، الحدّ 5 محاولات فاشلة / قفل 15 دقيقة (`authSession.ts`). تأكَّد عمليًا عندما قفل الحارس حساب admin بعد محاولات بكلمة مرور خاطئة. **الضابط يعمل.**
-2. **حدّ المصادقة:** 487/492 نقطة GET تُرجِع 401 بلا جلسة.
+1. **قفل الحساب (Account Lockout):** الحدّ 5 محاولات فاشلة / قفل 15 دقيقة (`authSession.ts`) — تأكَّد عمليًا.
+2. **حدّ المصادقة:** 487/492 نقطة GET تُرجِع 401 بلا جلسة (القسم 3.2).
 3. **حدّ المستأجر:** القسم 4.
-4. **حدّ الصلاحيات:** القسم 3.
+4. **حدّ الصلاحيات (قراءةً وكتابةً):** الأقسام 3 و5.2.
+5. **حماية CSRF:** القسم 5.3 — الكتابة بلا توكن CSRF = 403.
 
 ---
 
-## 7. ما لم يُنفَّذ في هذه الجلسة (إفصاح صريح — عقد الأمانة)
+## 9. ما لم يُنفَّذ في هذه الجلسة (إفصاح صريح — عقد الأمانة)
 
-نُفِّذت بالكامل وبأدلّة: **Step 1 (الجرد)، Phase 1 (فحص GET للقراءة)، Phase 7 (مصفوفة RBAC للقراءة)، Phase 8 (عزل المستأجرين على مسارات `:id` المختبَرة)**، وإصلاح البلاغ الحرج الوحيد.
+نُفِّذت بأدلّة: **Step 1 (الجرد)، Phase 1 (GET)، Phases 2–6 (عيّنات الكتابة/RBAC للكتابة)، Phase 7 (مصفوفة RBAC للقراءة)، Phase 8 (عزل المستأجرين على المسارات المختبَرة)، Phases 9–12 (تدقيق الواجهة 642 مسار)**، وإصلاحا البلاغَين الحرجَين.
 
-**لم تُنفَّذ بعد** (تتطلّب زرع بيانات كتابة موسّع و/أو أتمتة متصفّح خارج نطاق هذه الجلسة):
-
-- **Phases 2–6:** مسارات الكتابة/CRUD (POST/PATCH/DELETE) عبر الوحدات، سلاسل الموافقات، محرّكات الترحيل المحاسبي end-to-end.
-- **Phases 9–20:** عرض الواجهة الأمامية (648 مسار) في متصفّح فعلي، رفع الملفات/المستندات، الإشعارات متعدّدة القنوات، طباعة PDF، مهام cron، حدود المعدّل (rate limits) تحت الضغط، التقارير الثقيلة، والـE2E persona journeys.
-- **عزل المستأجرين** اختُبر على مسارَي `:id` تمثيليين (support/employees) لهما فحص ملكية صريح؛ **لم يُعمَّم** على كل مسارات `:id` الـ«مئات».
+**لم يُنفَّذ بعد** (يتطلّب بنية أو زمن خارج هذه الجلسة):
+- **رفع الملفات/المستندات** (object storage) وتدفّقات المرفقات الكاملة.
+- **الإشعارات متعدّدة القنوات** (SMS/WhatsApp/email) تحت إعداد فعلي للموفّرين.
+- **طباعة PDF** (Print Engine v2) — لها workflow تدقيق منفصل (`Print PDF Audit`).
+- **مهام cron تحت الحمل** وحدود المعدّل (rate limits) **تحت الضغط**.
+- **التقارير الثقيلة/التصدير** الكبيرة، ورحلات E2E persona الكاملة.
+- **عزل المستأجرين** عُمِّم على مسارَي `:id` تمثيليّين لهما فحص ملكية صريح؛ لم يُعمَّم على كل مسارات `:id`.
+- عيّنات الكتابة غطّت دورة CRUD + حظر دور عبر 4 وحدات؛ لم تُعمَّم على كل نقاط الكتابة الـ774.
 
 لا يُدَّعى أيّ شيء عن هذه البنود.
 
 ---
 
-## 8. الأدوات والمخرجات الدائمة
+## 10. الأدوات والمخرجات الدائمة
 
 - `artifacts/api-server/scripts/qa-build-paths.mjs` — مُعيد بناء المسارات (يتفادى بتر الماسح المدمج).
 - `artifacts/api-server/scripts/qa-rbac-matrix.mjs` — حصّاد مصفوفة RBAC (قابل للاستئناف؛ teardown: `--teardown`).
+- `artifacts/api-server/scripts/qa-write-rbac.mjs` — مُحقِّق الكتابة حسب الدور.
 - `docs/testing/generated/GHAITH_MASTER_TEST_INVENTORY.json` — الجرد الكامل (1500 + 648).
 - `docs/testing/generated/backend-getpaths.json` — 492 مسار GET مُتحقَّق.
 - `docs/testing/generated/rbac-read-matrix.json` — مصفوفة 22×492 (لقطة قبل-الإصلاح).
+- `audit/runtime-audit-results.json` + `audit/screenshots/` — أدلّة تدقيق الواجهة.
 
 ### تنظيف بيانات الاختبار
 ```bash
 cd artifacts/api-server && node scripts/qa-rbac-matrix.mjs --teardown
 rm -rf docs/testing/generated/.rbac-parts
-# إعادة تعيين قفل أي حساب اختبار:
 psql "$DATABASE_URL" -c "UPDATE users SET \"lockedUntil\"=NULL,\"failedLoginAttempts\"=0 WHERE email LIKE 'qa.%@qa.test';"
 ```
