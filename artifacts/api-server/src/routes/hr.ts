@@ -24,6 +24,7 @@ import {
   createNotification,
   emitEvent,
   createAuditLog,
+  auditFromRequest,
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
@@ -1310,8 +1311,8 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
           fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
         });
       case "forbidden":
-        throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
-          fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
+        throw new ForbiddenError("لا توجد سياسة تتبع فعّالة لهذا الموظف", {
+          fix: "يتطلب التتبع الميداني سياسة تتبع صريحة ومفعّلة لهذا الموظف. تواصل مع المسؤول لتفعيل سياسة التتبع.",
           meta: { categoryKey: r.categoryKey, trackingFrequencySeconds: r.freq },
         });
       case "throttled":
@@ -1329,11 +1330,16 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
   }
 });
 
-router.get("/attendance/field-track", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
+router.get("/attendance/field-track", authorize({ feature: "hr.attendance.tracking_view", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { assignmentId, date } = req.query as { assignmentId?: string; date?: string };
     const day = date || todayISO();
+    // Per-policy viewer restriction: an empty/NULL allowedViewerRoles means
+    // "any tracking_view holder", otherwise the caller's active role must be a
+    // member. scope.role is the always-populated active role (reflects any
+    // role-picker downgrade); NULL viewerRole never satisfies a restricted policy.
+    const viewerRole = scope.role ?? null;
 
     // Two modes:
     //   - assignmentId set  → one employee's full breadcrumb for the day
@@ -1352,10 +1358,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
           WHERE ftp."assignmentId" = $1
             AND ftp."companyId" = $2
             AND ftp."capturedAt"::date = $3::date
+            AND EXISTS (
+              SELECT 1 FROM employee_tracking_policies etp
+               WHERE etp."companyId" = ftp."companyId"
+                 AND etp."employeeId" = ea."employeeId"
+                 AND etp."deletedAt" IS NULL
+                 AND etp."trackingEnabled" = TRUE
+                 AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+                 AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+                 AND (
+                   jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                   OR etp."allowedViewerRoles" ? $4
+                 )
+            )
           ORDER BY ftp."capturedAt" ASC
           LIMIT 5000`,
-        [aid, scope.companyId, day],
+        [aid, scope.companyId, day, viewerRole],
       );
+      // Location is a sensitive view — audit every breadcrumb read.
+      await auditFromRequest(req, "tracking.view", "field_tracking_points", aid, {
+        after: { mode: "breadcrumb", date: day, points: points.length },
+      });
       res.json(maskFields(req, { data: points, total: points.length, mode: "breadcrumb", date: day }));
       return;
     }
@@ -1371,10 +1394,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
          JOIN employees e ON e.id = ea."employeeId"
         WHERE ftp."companyId" = $1
           AND ftp."capturedAt"::date = $2::date
+          AND EXISTS (
+            SELECT 1 FROM employee_tracking_policies etp
+             WHERE etp."companyId" = ftp."companyId"
+               AND etp."employeeId" = ea."employeeId"
+               AND etp."deletedAt" IS NULL
+               AND etp."trackingEnabled" = TRUE
+               AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+               AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+               AND (
+                 jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                 OR etp."allowedViewerRoles" ? $3
+               )
+          )
         ORDER BY ftp."assignmentId", ftp."capturedAt" DESC
         LIMIT 2000`,
-      [scope.companyId, day],
+      [scope.companyId, day, viewerRole],
     );
+    // Live map is a sensitive multi-employee location view — audit it.
+    await auditFromRequest(req, "tracking.view", "field_tracking_points", 0, {
+      after: { mode: "live", date: day, points: latest.length },
+    });
     res.json(maskFields(req, { data: latest, total: latest.length, mode: "live", date: day }));
   } catch (err) {
     handleRouteError(err, res, "Field track error:");

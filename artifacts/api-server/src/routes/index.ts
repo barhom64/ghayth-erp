@@ -74,6 +74,7 @@ import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
 import myFieldTrackingRouter from "./myFieldTracking.js";
+import employeeTrackingPolicyRouter from "./employeeTrackingPolicy.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
@@ -392,6 +393,7 @@ router.use("/clients", requireModule("crm", "finance"), clientsRouter);
 // request, regardless of which sub-router handles it. See umrah notes below.
 router.use("/hr", hrUserLimiter);
 router.use("/hr", requireModule("hr"), hrRouter);
+router.use("/hr", requireModule("hr"), employeeTrackingPolicyRouter);
 router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);
 router.use("/hr", requireModule("hr"), overtimeRouter);
