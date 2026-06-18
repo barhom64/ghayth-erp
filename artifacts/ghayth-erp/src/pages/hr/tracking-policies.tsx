@@ -215,11 +215,11 @@ export default function TrackingPoliciesPage() {
       subtitle="تفعيل وإدارة تتبع الموقع الجغرافي لكل موظف — التتبع لا يبدأ إلا بسياسة فعّالة هنا"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "سياسات التتبع" }]}
       actions={
-        <Link href="/hr/attendance/field-tracking">
-          <Button variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/hr/attendance/field-tracking">
             <MapPin className="h-4 w-4 ml-1" /> الخريطة الحية
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       }
     >
       <HrTabsNav />
