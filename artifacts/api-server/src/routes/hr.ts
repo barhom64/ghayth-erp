@@ -1078,9 +1078,9 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     if (earlyDepartureMinutes > 0) {
       const [approvedExcuse] = await rawQuery<Record<string, unknown>>(
         `SELECT id, "estimatedMinutes" FROM hr_excuse_requests
-         WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
+         WHERE "companyId" = $1 AND "assignmentId" = $2 AND "excuseDate" = $3 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
          LIMIT 1`,
-        [scope.activeAssignmentId, today]
+        [scope.companyId, scope.activeAssignmentId, today]
       ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
@@ -1940,9 +1940,9 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     } else {
       const [usedRow] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
-         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
-           AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
-        [scope.employeeId, leaveTypeId, year]
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND status IN ('approved','pending')
+           AND EXTRACT(YEAR FROM "startDate") = $4 AND "deletedAt" IS NULL`,
+        [scope.companyId, scope.employeeId, leaveTypeId, year]
       );
       // Saudi Labor Law Article 109: 21 days during the first 5 years
       // of service, 30 days after 5 years. Auto-upgrade based on the
@@ -1981,9 +1981,9 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     // ── Validation 3: No overlapping requests ──
     const [overlap] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_leave_requests
-       WHERE "employeeId" = $1 AND status IN ('pending','approved')
-         AND "startDate" <= $2 AND "endDate" >= $3 AND "deletedAt" IS NULL`,
-      [scope.employeeId, endDate, startDate]
+       WHERE "companyId" = $1 AND "employeeId" = $2 AND status IN ('pending','approved')
+         AND "startDate" <= $3 AND "endDate" >= $4 AND "deletedAt" IS NULL`,
+      [scope.companyId, scope.employeeId, endDate, startDate]
     );
     if (overlap) {
       throw new ConflictError("يوجد طلب إجازة متداخل في هذه الفترة", {
@@ -2053,8 +2053,8 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     if (leaveType.oncePerCareer) {
       const [prevHajj] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM hr_leave_requests
-         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
-        [scope.employeeId, leaveTypeId]
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND status = 'approved' AND "deletedAt" IS NULL`,
+        [scope.companyId, scope.employeeId, leaveTypeId]
       );
       if (prevHajj) {
         throw new ConflictError(
@@ -4694,8 +4694,8 @@ router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "
       `SELECT esa.*, s.name AS "shiftName", s."startTime", s."endTime",
               e.name AS "employeeName", e."empNumber"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
-       JOIN employee_assignments ea ON ea.id = esa."assignmentId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $1
+       JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $1
        JOIN employees e ON e.id = ea."employeeId"
        WHERE s."companyId" = $1
        ORDER BY esa."startDate" DESC LIMIT 200`,
@@ -8341,8 +8341,8 @@ router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "c
 
     const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_excuse_requests
-       WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status != 'rejected'`,
-      [effectiveAssignmentId, excuseDate]
+       WHERE "companyId" = $1 AND "assignmentId" = $2 AND "excuseDate" = $3 AND status != 'rejected'`,
+      [scope.companyId, effectiveAssignmentId, excuseDate]
     );
     if (existing) throw new ConflictError("يوجد طلب استئذان مسجل لنفس اليوم");
 
