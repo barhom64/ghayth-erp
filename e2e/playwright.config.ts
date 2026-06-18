@@ -22,6 +22,12 @@ import { defineConfig, devices } from "@playwright/test";
 const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:80";
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:80";
 
+// In the Replit env a system Chromium ships via REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+// so the suite runs without a separate `playwright install` (whose pinned
+// headless-shell revision isn't in the nix bundle). Falls back to Playwright's
+// own managed browser (e.g. in CI) when the var is unset.
+const CHROMIUM_EXECUTABLE = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+
 export default defineConfig({
   testDir: "./tests",
   // double-click-idempotency.spec.ts (Task #244, merged via PR #1165) needs
@@ -37,7 +43,13 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 5_000 },
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  // Single worker in CI: all persona specs authenticate as the SAME admin
+  // account, and the server rotates refresh tokens per-user. Two parallel
+  // workers logging in as that account invalidate each other's session
+  // mid-test (proven: /api/employees + /api/properties + /api/exec-dashboard
+  // all 401 within 1s → SPA bounces to /login), which flakes the longest
+  // multi-page navigations. Serializing removes the cross-worker contention.
+  workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [["github"], ["html"]] : "list",
   use: {
     baseURL: BASE_URL,
@@ -51,6 +63,9 @@ export default defineConfig({
       // when api-server respects E2E_TEST=1 in its env.
       "X-E2E-Test": "1",
     },
+    ...(CHROMIUM_EXECUTABLE
+      ? { launchOptions: { executablePath: CHROMIUM_EXECUTABLE } }
+      : {}),
   },
   projects: [
     {
