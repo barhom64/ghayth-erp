@@ -1,0 +1,77 @@
+name: Ghayth Claude Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: 'مهمة الوكيل المطلوبة'
+        required: true
+        default: 'راجع نظام غيث وفق CLAUDE.md، وافحص التعريب والروابط والتكرار وRBAC وAudit/Event، ولا تصلح إلا الآمن.'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+jobs:
+  claude-agent:
+    name: Ghayth Claude safe agent
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'issues' && contains(github.event.issue.body, '@claude'))
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify Claude API key
+        run: |
+          if [ -z "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "ANTHROPIC_API_KEY secret is missing. Add it in GitHub Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Run Claude Code Agent
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          direct_prompt: |
+            أنت تعمل داخل مستودع نظام غيث.
+
+            التزم حرفيًا بملف CLAUDE.md الموجود في جذر المستودع.
+
+            نطاق العمل الافتراضي:
+            - فحص التعريب في الواجهات.
+            - فحص الصفحات غير المربوطة أو الروابط المكسورة.
+            - فحص التكرار الواضح.
+            - فحص حدود المسارات وفق مبدأ المسار القائد والمسار الخادم.
+            - فحص RBAC وAudit/Event عند أي إجراء تشغيلي.
+            - فحص الاختبارات والحراسة المتاحة.
+
+            قواعد التنفيذ:
+            - لا تعدل على main مباشرة.
+            - لا تضف migrations.
+            - لا تحذف ملفات تشغيلية.
+            - لا تغير منطق الأعمال.
+            - لا تنقل منطق مسار إلى مسار آخر.
+            - أصلح فقط الإصلاحات الآمنة قليلة المخاطر.
+            - أي قرار معماري أو تشغيلي كبير ارفعه كتقرير فقط.
+            - افتح PR مستقل إذا أجريت أي تعديل.
+
+            إذا كان التشغيل يدويًا عبر workflow_dispatch، فهذه هي مهمة إبراهيم:
+            ${{ github.event.inputs.prompt }}
