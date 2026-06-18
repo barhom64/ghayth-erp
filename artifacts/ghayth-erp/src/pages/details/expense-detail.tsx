@@ -874,7 +874,7 @@ export default function ExpenseDetail() {
         onOpenChange={(o) => !o && setPreviewAttachment(null)}
       />
       {expense && id && (
-        <EntityEditDialog<ExpenseEditForm>
+        <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
           title="تعديل وصف المصروف"

@@ -235,7 +235,7 @@ export default function WarehouseSupplierDetail() {
       }
     />
     {supplier && id && (
-      <EntityEditDialog<SupplierEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل المورد"

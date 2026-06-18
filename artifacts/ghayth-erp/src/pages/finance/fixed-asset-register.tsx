@@ -413,7 +413,7 @@ export default function FixedAssetRegisterPage() {
               <CardTitle className="text-base">السجل التفصيلي ({filtered.length})</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <DataTable<FixedAsset>
+              <DataTable
                 data={filtered}
                 rowKey={(a) => String(a.id)}
                 noToolbar

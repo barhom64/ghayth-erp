@@ -348,7 +348,7 @@ export default function PrintTemplatesPage() {
           <CardTitle>القوالب المتاحة ({rows.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable<PrintTemplateRow>
+          <DataTable
             columns={cols}
             data={rows}
             rowKey={(r) => String(r.id)}

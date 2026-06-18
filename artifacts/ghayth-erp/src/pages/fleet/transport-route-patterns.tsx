@@ -540,7 +540,7 @@ export default function TransportRoutePatternsPage() {
               التوليد يستخدم endpoint مادي قائم — لا route جديد ولا migration في هذا الـPR.
             </p>
           </div>
-          <DataTable<RoutePatternRow>
+          <DataTable
             columns={columns}
             data={rows}
             searchPlaceholder="ابحث بالرمز أو الاسم…"
