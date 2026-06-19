@@ -72,6 +72,12 @@ run_step "audit:route-doubling" node scripts/src/audit-route-doubling.mjs
 run_step "gate:tabs"          pnpm -s run gate:tabs
 run_step "gate:quick-actions" pnpm -s run gate:quick-actions
 run_step "gate:nav"           pnpm -s run gate:nav
+#   gate:labels        — fails on a DUPLICATE sidebar label (same Arabic name on
+#                        two different pages → looks like a duplicated feature),
+#                        a Latin label leaking back after Arabisation, or a label
+#                        that drifted from navigation.canonical-map.ts. Stops the
+#                        label-mismatch / duplication defects from recurring.
+run_step "gate:labels"        pnpm -s run gate:labels
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a

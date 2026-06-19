@@ -163,8 +163,8 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   {
     path: "/admin/logs",
     canonicalLabel: "سجل تدقيق النظام",
-    aliases: ["سجل المراجعة", "سجل التدقيق"],
-    note: "INVENTORY §2 — applied slice 8 (owner-decided). Distinct from /settings/audit-log.",
+    aliases: ["سجل المراجعة", "سجل التدقيق", "سجلات التدقيق"],
+    note: "INVENTORY §2 — applied slice 8 (owner-decided). Distinct from /settings/audit-log. «سجلات التدقيق» is the group-leader category label.",
   },
   {
     path: "/settings/audit-log",
@@ -206,7 +206,7 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   {
     path: "/hr/violations",
     canonicalLabel: "المخالفات والجزاءات",
-    aliases: ["نظرة عامة على المخالفات", "الامتثال والجزاءات", "إدارة المخالفات"],
+    aliases: ["نظرة عامة على المخالفات", "الامتثال والجزاءات", "إدارة المخالفات", "المحاضر التأديبية"],
     redirectFrom: ["/hr/violations/management"],
     groupLeader: true,
     note: "INVENTORY §7 — quick action 'إدارة المخالفات' targets the redirect.",
