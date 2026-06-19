@@ -44,7 +44,7 @@ describe("Contract route structure", () => {
 
 describe("Contract creation", () => {
   it("validates input with Zod createContractSchema", () => {
-    expect(CONTRACTS_ROUTE).toContain("createContractSchema.parse(req.body)");
+    expect(CONTRACTS_ROUTE).toContain("createContractSchema.safeParse(req.body)");
   });
 
   it("requires hr:create permission", () => {
