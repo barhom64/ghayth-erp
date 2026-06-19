@@ -91,6 +91,7 @@ export function UmrahFinanceHygieneCard() {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table className="w-full text-xs" data-testid="umrah-finance-hygiene-buckets">
           <tbody>
             {entries.map(([key, meta]) => {
@@ -124,6 +125,7 @@ export function UmrahFinanceHygieneCard() {
             })}
           </tbody>
         </table>
+        </div>
       </CardContent>
     </Card>
   );

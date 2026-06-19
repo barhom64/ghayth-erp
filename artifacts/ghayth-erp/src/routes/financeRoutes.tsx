@@ -159,7 +159,7 @@ const JournalQuickTemplates = lazy(() => import("@/pages/create/finance/journal-
 const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
-const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
+const IntercompanyConsolidation = lazy(() => import("@/pages/finance/intercompany-consolidation"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
 const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
@@ -414,7 +414,10 @@ export const financeRoutes = [
   { path: "/finance/journal-manual/:id", component: JournalManualDetail, minRoleLevel: 70 },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
-  { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
+  { path: "/finance/intercompany/consolidation", component: IntercompanyConsolidation },
+  // عرض «القوائم الموحدة» للقراءة فقط (GET فقط في الخلفية — لا إنشاء/ترحيل).
+  // المسار القديم بلاحقة /create مُضلِّل لعرضٍ لا يُنشئ شيئًا؛ يُعاد توجيهه (لا 404 للروابط القديمة).
+  { path: "/finance/intercompany/consolidation/create", component: redirectTo("/finance/intercompany/consolidation") },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/cash-calendar", component: CashCalendar },
   { path: "/finance/cash-13week", component: Cash13Week },

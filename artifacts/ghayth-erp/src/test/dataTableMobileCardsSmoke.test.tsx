@@ -57,4 +57,25 @@ describe("DataTable — responsive mobile cards", () => {
     render(<DataTable columns={columns} data={[]} pageSize={0} searchPlaceholder={null} />);
     expect(screen.queryByTestId("data-table-mobile-cards")).toBeNull();
   });
+
+  it("clicking inside row extras does NOT fire onRowClick (extras outside the click area)", async () => {
+    mobile.value = true;
+    const onRowClick = vi.fn();
+    render(
+      <DataTable
+        columns={columns}
+        data={[data[0]]}
+        pageSize={0}
+        searchPlaceholder={null}
+        onRowClick={onRowClick}
+        renderRowExtras={() => <button data-testid="extra-btn">تفاصيل</button>}
+      />,
+    );
+    // a field value IS inside the click area → fires onRowClick
+    screen.getByText("أحمد").click();
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+    // the extras button is OUTSIDE → must NOT fire onRowClick again
+    screen.getByTestId("extra-btn").click();
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+  });
 });

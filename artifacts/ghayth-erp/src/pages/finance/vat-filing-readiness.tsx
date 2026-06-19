@@ -354,7 +354,7 @@ export default function VatFilingReadinessPage() {
               {/* Calculation breakdown */}
               <div className="border rounded p-3 bg-muted/30 text-sm">
                 <div className="font-semibold mb-2">معادلة الحساب</div>
-                <table className="w-full">
+                <div className="overflow-x-auto"><table className="w-full">
                   <tbody>
                     <tr className="border-b">
                       <td className="py-1">ضريبة المخرجات (output VAT) — مجموع VAT على فواتير المبيعات + إشعارات مدينة − إشعارات دائنة</td>
@@ -371,7 +371,7 @@ export default function VatFilingReadinessPage() {
                       </td>
                     </tr>
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </CardContent>
           </Card>
