@@ -169,10 +169,6 @@ POST /org/teams
 POST /print/render
 POST /print/reprint-requests
 POST /rbac/v2/admin/sync-all-roles
-POST /rbac/v2/jit/:id/approve
-POST /rbac/v2/jit/:id/cancel
-POST /rbac/v2/jit/:id/reject
-POST /rbac/v2/jit/request
 POST /rbac/v2/roles/:id/clone
 POST /rbac/v2/simulate
 POST /rbac/v2/sod
