@@ -119,17 +119,30 @@ jobs:
         run: pnpm --filter @workspace/api-server run build
 
       - name: Load DB schema
-        # Regression guard: the refactor dropped the explicit schema load on the
-        # assumption that an empty-DB boot self-applies everything. But the app
-        # queries `system_settings` (timezone) during boot, before migrations
-        # create it → "relation system_settings does not exist" floods the log
-        # and the suite fails. Loading the full dump first (db/schema.sql)
-        # restores the previously-green behaviour; the app's idempotent
-        # boot-migrations then run cleanly on top.
+        # The refactor dropped the schema load betting on an empty-DB self-migrate;
+        # but the app queries `system_settings` during boot and the boot-migration
+        # runner re-applies migrations that conflict with a fresh DB. Load the dump
+        # the same robust way guard.yml does:
+        #   - the `psql -f db/schema.sql` wrapper can't be used in CI — schema_pre.sql
+        #     opens with `\restrict <token>` which blocks the wrapper's later
+        #     `\ir schema_post.sql`, leaving FKs/indexes unloaded. So load the two
+        #     halves as separate (unrestricted) psql invocations.
+        #   - then mark every migration as already-applied so api-server's boot
+        #     runner doesn't re-run them on a baseline that already has the columns
+        #     ("relation roles does not exist" / duplicate-key on a loaded schema).
         run: |
-          psql "$DATABASE_URL" -c "SELECT version();"
-          psql "$DATABASE_URL" -f db/schema.sql
-          echo "::notice::schema load OK — $(psql -tA "$DATABASE_URL" -c "SELECT count(*) FROM pg_tables WHERE schemaname='public'") tables"
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/schema_pre.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema_post.sql > /tmp/schema_post.log 2>&1 || true
+          expected_fks=$(grep -c 'FOREIGN KEY' db/schema_post.sql)
+          actual_fks=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_constraint c JOIN pg_class r ON c.conrelid=r.oid JOIN pg_namespace n ON r.relnamespace=n.oid WHERE c.contype='f' AND n.nspname='public';")
+          echo "::notice::schema loaded — $actual_fks FKs (dump declares $expected_fks)"
+          if [ "$actual_fks" -lt "$expected_fks" ]; then echo "FK shortfall — schema_post.log:"; cat /tmp/schema_post.log; exit 1; fi
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (filename text PRIMARY KEY, applied_at timestamptz DEFAULT NOW());"
+          for mig in artifacts/api-server/src/migrations/*.sql; do
+            [ -f "$mig" ] || continue
+            psql "$DATABASE_URL" -q -c "INSERT INTO schema_migrations(filename) VALUES ('$(basename "$mig")') ON CONFLICT DO NOTHING;"
+          done
 
       - name: Start api-server
         env:
@@ -166,7 +179,10 @@ jobs:
           # Mimic the Replit shared proxy: route /api/* to api-server (8080)
           # and everything else to the Vite preview (5173) on localhost:80.
           npm install -g http-proxy@1.18.1
-          node -e "
+          # `node -e` resolves modules from the local node_modules, not the global
+          # prefix, so point NODE_PATH at the global root or `require('http-proxy')`
+          # fails with MODULE_NOT_FOUND despite the -g install.
+          NODE_PATH="$(npm root -g)" node -e "
             const http = require('http');
             const httpProxy = require('http-proxy');
             const api = httpProxy.createProxyServer({ target: 'http://localhost:8080' });

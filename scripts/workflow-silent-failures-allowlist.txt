@@ -23,6 +23,12 @@ e2e.yml:or-true:echo "=== proxy.log (tail) ===";       tail -200 /tmp/proxy.log 
 # started) or the PID already exited (graceful shutdown).
 e2e.yml:or-true:[ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
 
+# e2e.yml: schema_post load uses ON_ERROR_STOP=0 because the dump's trailing
+# `\unrestrict` line errors when the session isn't in restricted mode
+# (harmless — all DDL above already executed). The FK-count assertion right
+# after exits 1 if the load actually fell short, so it's structurally re-checked.
+e2e.yml:or-true:psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema_post.sql > /tmp/schema_post.log 2>&1 || true
+
 # guard.yml: schema_post load uses ON_ERROR_STOP=0 because the dump's
 # trailing `\unrestrict` line errors when the session isn't in restricted
 # mode (harmless — all DDL above it has already executed). The next
