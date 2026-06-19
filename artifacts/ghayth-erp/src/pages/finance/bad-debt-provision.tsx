@@ -346,7 +346,7 @@ export default function BadDebtProvisionPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-xs text-muted-foreground">
                     <th className="text-start py-2 px-2">الحساب</th>
@@ -370,7 +370,7 @@ export default function BadDebtProvisionPage() {
                     </td>
                   </tr>
                 </tbody>
-              </table>
+              </table></div>
               <div className="mt-3 text-[11px] text-muted-foreground flex items-start gap-2 bg-status-info-surface p-2 rounded">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-status-info-foreground" />
                 <div>

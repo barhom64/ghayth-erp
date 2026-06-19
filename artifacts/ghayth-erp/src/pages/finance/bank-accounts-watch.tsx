@@ -334,7 +334,7 @@ export default function BankAccountsWatchPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-start py-2 px-2">التاريخ</th>
@@ -375,7 +375,7 @@ export default function BankAccountsWatchPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
           )}
