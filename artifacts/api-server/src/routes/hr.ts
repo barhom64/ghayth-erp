@@ -618,11 +618,11 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s.id, s."startTime", s."endTime", s.days, s."shiftType", s."remoteAllowed", s."flexStartEarliest", s."flexStartLatest"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $3
        WHERE esa."assignmentId" = $1
          AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
        ORDER BY esa.id DESC LIMIT 1`,
-      [scope.activeAssignmentId, today]
+      [scope.activeAssignmentId, today, scope.companyId]
     );
     let shift = shiftAssignment;
     if (!shift) {
@@ -1002,11 +1002,11 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s."endTime", s."startTime"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $3
        WHERE esa."assignmentId" = $1
          AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
        ORDER BY esa.id DESC LIMIT 1`,
-      [scope.activeAssignmentId, today]
+      [scope.activeAssignmentId, today, scope.companyId]
     );
     if (shiftAssignment) {
       shift = shiftAssignment;
