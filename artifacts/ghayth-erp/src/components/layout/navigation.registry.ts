@@ -362,21 +362,23 @@ export const allNavSections: NavSection[] = [
         { label: "عقود الموردين", path: "/finance/contracts", icon: FileSignature },
         { label: "متابعة عقود الموردين", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
-      { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
+      { label: "النقد والخزينة", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "مراقبة البنوك", path: "/finance/bank-accounts-watch", icon: Banknote },
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "ورقة عمل تسوية حساب", path: "/finance/account-recon-workpaper", icon: FileSignature },
-        { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
-        { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
-        { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
-        { label: "مخصص ديون مشكوك فيها", path: "/finance/bad-debt-provision", icon: TrendingUp },
-        { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
         { label: "تقويم النقدية", path: "/finance/cash-calendar", icon: Calendar },
         { label: "توقعات النقد (13 أسبوع)", path: "/finance/cash-13week", icon: TrendingUp },
         { label: "حاسبة الوضع النقدي", path: "/finance/cash-position-calculator", icon: Calculator },
+      ]},
+      { label: "الذمم والعملاء", path: "/finance/customer-statement-print", icon: Users, module: "finance", children: [
+        { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
+        { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
+        { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
+        { label: "ورقة عمل مخصص الديون", path: "/finance/bad-debt-provision", icon: TrendingUp },
+        { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
       ]},
       { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
@@ -413,7 +415,7 @@ export const allNavSections: NavSection[] = [
       // والتقارير» المتضخّمة (34 مدخلاً تخلط الضرائب بالتقارير) إلى مجموعتين:
       // الضرائب/الزكاة، والتقارير/التحليلات. إعادة تجميع فقط — لم يتغيّر أي مسار
       // أو صلاحية أو تسمية ابن (بوّابة check-sidebar-coverage تبقى خضراء).
-      { label: "الضرائب والزكاة", path: "/finance/tax", icon: Scale, module: "finance", children: [
+      { label: "الزكاة والضريبة", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
         { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
         { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
