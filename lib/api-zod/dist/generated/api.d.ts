@@ -99,6 +99,7 @@ export declare const GetMeResponse: zod.ZodObject<{
     name: string;
     role: string;
     companyId: number;
+    salary?: string | null | undefined;
     status?: string | undefined;
     email?: string | null | undefined;
     phone?: string | null | undefined;
@@ -106,7 +107,6 @@ export declare const GetMeResponse: zod.ZodObject<{
     photoUrl?: string | null | undefined;
     jobTitle?: string | null | undefined;
     jobTitleId?: number | null | undefined;
-    salary?: string | null | undefined;
     branchId?: number | null | undefined;
     companyName?: string | null | undefined;
     branchName?: string | null | undefined;
@@ -118,6 +118,7 @@ export declare const GetMeResponse: zod.ZodObject<{
     name: string;
     role: string;
     companyId: number;
+    salary?: string | null | undefined;
     status?: string | undefined;
     email?: string | null | undefined;
     phone?: string | null | undefined;
@@ -125,7 +126,6 @@ export declare const GetMeResponse: zod.ZodObject<{
     photoUrl?: string | null | undefined;
     jobTitle?: string | null | undefined;
     jobTitleId?: number | null | undefined;
-    salary?: string | null | undefined;
     branchId?: number | null | undefined;
     companyName?: string | null | undefined;
     branchName?: string | null | undefined;
@@ -575,12 +575,12 @@ export declare const ListEmployeesResponse: zod.ZodObject<{
         id: number;
         name: string;
         role: string;
+        salary?: string | null | undefined;
         email?: string | null | undefined;
         phone?: string | null | undefined;
         empNumber?: string | null | undefined;
         jobTitle?: string | null | undefined;
         jobTitleId?: number | null | undefined;
-        salary?: string | null | undefined;
         branchId?: number | null | undefined;
         branchName?: string | null | undefined;
         activeAssignmentId?: number | null | undefined;
@@ -593,12 +593,12 @@ export declare const ListEmployeesResponse: zod.ZodObject<{
         id: number;
         name: string;
         role: string;
+        salary?: string | null | undefined;
         email?: string | null | undefined;
         phone?: string | null | undefined;
         empNumber?: string | null | undefined;
         jobTitle?: string | null | undefined;
         jobTitleId?: number | null | undefined;
-        salary?: string | null | undefined;
         branchId?: number | null | undefined;
         branchName?: string | null | undefined;
         activeAssignmentId?: number | null | undefined;
@@ -618,12 +618,12 @@ export declare const ListEmployeesResponse: zod.ZodObject<{
         id: number;
         name: string;
         role: string;
+        salary?: string | null | undefined;
         email?: string | null | undefined;
         phone?: string | null | undefined;
         empNumber?: string | null | undefined;
         jobTitle?: string | null | undefined;
         jobTitleId?: number | null | undefined;
-        salary?: string | null | undefined;
         branchId?: number | null | undefined;
         branchName?: string | null | undefined;
         activeAssignmentId?: number | null | undefined;
@@ -641,12 +641,12 @@ export declare const ListEmployeesResponse: zod.ZodObject<{
         id: number;
         name: string;
         role: string;
+        salary?: string | null | undefined;
         email?: string | null | undefined;
         phone?: string | null | undefined;
         empNumber?: string | null | undefined;
         jobTitle?: string | null | undefined;
         jobTitleId?: number | null | undefined;
-        salary?: string | null | undefined;
         branchId?: number | null | undefined;
         branchName?: string | null | undefined;
         activeAssignmentId?: number | null | undefined;
@@ -677,9 +677,9 @@ export declare const CreateEmployeeBody: zod.ZodObject<{
     phone: string;
     jobTitle: string;
     hireDate: string;
+    salary?: number | undefined;
     email?: string | undefined;
     role?: string | undefined;
-    salary?: number | undefined;
     nationalId?: string | undefined;
     gender?: string | undefined;
     nationality?: string | undefined;
@@ -689,9 +689,9 @@ export declare const CreateEmployeeBody: zod.ZodObject<{
     phone: string;
     jobTitle: string;
     hireDate: string;
+    salary?: number | undefined;
     email?: string | undefined;
     role?: string | undefined;
-    salary?: number | undefined;
     nationalId?: string | undefined;
     gender?: string | undefined;
     nationality?: string | undefined;
@@ -716,13 +716,13 @@ export declare const CreateEmployeeResponse: zod.ZodObject<{
 }, "strip", zod.ZodTypeAny, {
     id: number;
     jobTitle: string;
+    salary?: string | null | undefined;
     status?: string | null | undefined;
     email?: string | null | undefined;
     name?: string | null | undefined;
     phone?: string | null | undefined;
     empNumber?: string | null | undefined;
     role?: string | null | undefined;
-    salary?: string | null | undefined;
     branchId?: number | null | undefined;
     branchName?: string | null | undefined;
     assignmentId?: number | null | undefined;
@@ -732,13 +732,13 @@ export declare const CreateEmployeeResponse: zod.ZodObject<{
 }, {
     id: number;
     jobTitle: string;
+    salary?: string | null | undefined;
     status?: string | null | undefined;
     email?: string | null | undefined;
     name?: string | null | undefined;
     phone?: string | null | undefined;
     empNumber?: string | null | undefined;
     role?: string | null | undefined;
-    salary?: string | null | undefined;
     branchId?: number | null | undefined;
     branchName?: string | null | undefined;
     assignmentId?: number | null | undefined;
@@ -814,6 +814,7 @@ export declare const GetEmployeeResponse: zod.ZodObject<{
     jobTitle: string;
     companyId: number;
     createdAt: string;
+    salary?: string | null | undefined;
     status?: string | null | undefined;
     email?: string | null | undefined;
     name?: string | null | undefined;
@@ -822,7 +823,6 @@ export declare const GetEmployeeResponse: zod.ZodObject<{
     photoUrl?: string | null | undefined;
     jobTitleId?: number | null | undefined;
     role?: string | null | undefined;
-    salary?: string | null | undefined;
     branchId?: number | null | undefined;
     branchName?: string | null | undefined;
     iqamaNumber?: string | null | undefined;
@@ -867,6 +867,7 @@ export declare const GetEmployeeResponse: zod.ZodObject<{
     jobTitle: string;
     companyId: number;
     createdAt: string;
+    salary?: string | null | undefined;
     status?: string | null | undefined;
     email?: string | null | undefined;
     name?: string | null | undefined;
@@ -875,7 +876,6 @@ export declare const GetEmployeeResponse: zod.ZodObject<{
     photoUrl?: string | null | undefined;
     jobTitleId?: number | null | undefined;
     role?: string | null | undefined;
-    salary?: string | null | undefined;
     branchId?: number | null | undefined;
     branchName?: string | null | undefined;
     iqamaNumber?: string | null | undefined;
@@ -3405,13 +3405,13 @@ export declare const GetPropertyUnitResponse: zod.ZodObject<{
     maintenance: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
     timeline: zod.ZodArray<zod.ZodRecord<zod.ZodString, zod.ZodUnknown>, "many">;
 }, "strip", zod.ZodTypeAny, {
+    maintenance: Record<string, unknown>[];
     id: number;
     companyId: number;
     contracts: Record<string, unknown>[];
     timeline: Record<string, unknown>[];
     unitNumber: string;
     payments: Record<string, unknown>[];
-    maintenance: Record<string, unknown>[];
     status?: string | null | undefined;
     type?: string | null | undefined;
     branchId?: number | null | undefined;
@@ -3441,13 +3441,13 @@ export declare const GetPropertyUnitResponse: zod.ZodObject<{
     insurancePolicy?: string | null | undefined;
     insuranceExpiry?: string | null | undefined;
 }, {
+    maintenance: Record<string, unknown>[];
     id: number;
     companyId: number;
     contracts: Record<string, unknown>[];
     timeline: Record<string, unknown>[];
     unitNumber: string;
     payments: Record<string, unknown>[];
-    maintenance: Record<string, unknown>[];
     status?: string | null | undefined;
     type?: string | null | undefined;
     branchId?: number | null | undefined;
