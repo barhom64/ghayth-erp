@@ -165,7 +165,7 @@ export default function AllocationResultsPage() {
 
   return (
     <PageShell
-      title="سجل توجيه البنود (Allocation Audit Trail)"
+      title="سجل توجيه البنود"
       subtitle="نتائج التوجيه المحاسبي — أي بند تم توجيهه، بأي قاعدة، إلى أي حساب ومركز تكلفة، ومن قام بالتجاوز اليدوي"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

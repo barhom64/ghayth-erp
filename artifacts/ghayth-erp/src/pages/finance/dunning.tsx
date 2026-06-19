@@ -209,7 +209,7 @@ export default function DunningPage() {
 
   return (
     <PageShell
-      title="متابعة تحصيل الذمم (Dunning)"
+      title="متابعة تحصيل الذمم"
       subtitle="إرسال تذكيرات تدريجية للعملاء المتأخرين عن السداد — 5 مراحل من تذكير ودي إلى إحالة قانونية"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

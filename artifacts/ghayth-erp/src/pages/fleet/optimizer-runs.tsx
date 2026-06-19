@@ -56,7 +56,7 @@ export default function OptimizerRunsPage() {
 
   return (
     <PageShell
-      title="مُحسِّن الإسناد (Fleet Optimizer)"
+      title="مُحسِّن الإسناد"
       subtitle="خطط دفعية اقتراحية لإسناد الحجوزات على الأسطول — TA-T18-VRP Phase 2"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "مُحسِّن الإسناد" }]}
     >

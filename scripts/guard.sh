@@ -78,6 +78,10 @@ run_step "gate:nav"           pnpm -s run gate:nav
 #                        that drifted from navigation.canonical-map.ts. Stops the
 #                        label-mismatch / duplication defects from recurring.
 run_step "gate:labels"        pnpm -s run gate:labels
+#   gate:nav-titles    — fails if a PageShell page title leaks English, so page
+#                        titles stay Arabic like the sidebar (established acronyms
+#                        WPS / ZATCA / WHT / PDPL / … are allow-listed).
+run_step "gate:nav-titles"    pnpm -s run gate:nav-titles
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a

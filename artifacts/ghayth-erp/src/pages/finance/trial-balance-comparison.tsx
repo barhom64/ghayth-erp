@@ -259,7 +259,7 @@ export default function TbComparisonPage() {
 
   return (
     <PageShell
-      title="مقارنة ميزان المراجعة (Trial Balance Comparison)"
+      title="مقارنة ميزان المراجعة"
       subtitle="مقارنة جنباً إلى جنب بين فترتين — لكل حساب: الرصيد الحالي vs السابق + الفرق ونسبته"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

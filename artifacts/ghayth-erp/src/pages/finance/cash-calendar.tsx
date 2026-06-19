@@ -165,7 +165,7 @@ export default function CashCalendarPage() {
 
   return (
     <PageShell
-      title="تقويم السيولة (Cash Calendar)"
+      title="تقويم السيولة"
       subtitle="تنبؤ يومي للسيولة 90 يوم — جواب على «هل ستكفي السيولة للالتزامات القادمة؟»"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
