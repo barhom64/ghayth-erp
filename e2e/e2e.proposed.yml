@@ -59,7 +59,12 @@ permissions:
 jobs:
   e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45-min budget (was 30). The 30-min cap was too tight ONLY because the
+    # browser-install step hung (see "Install Playwright Chromium" below); once
+    # that is fixed the real run is build(~2m)+install(~1m, 0 when cached)+
+    # suite(~3-5m). 45 mirrors audit-runtime.yml's headroom (60) more closely
+    # and leaves room for the retry(2) budget without ever silently capping.
+    timeout-minutes: 45
 
     services:
       postgres:
@@ -114,10 +119,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Cache Playwright browsers
+        # Skips the ~170MB Chromium download on re-runs. Keyed on the pinned
+        # Playwright version so a version bump busts the cache automatically.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-1.59.1
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       - name: Install Playwright Chromium
         # REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE is unset in CI, so the e2e
-        # config falls back to Playwright's own managed browser — install it
-        # (with OS deps) via the package's install-browsers script.
+        # config falls back to Playwright's own managed browser.
+        #
+        # ⚠️ INCIDENT FIX (2026-06-19): the install-browsers script previously
+        # ran `playwright install --with-deps chromium`. The `--with-deps`
+        # path shells out to `apt-get` and HUNG for 29m on a GitHub-hosted
+        # ubuntu-latest runner — the job was SIGKILL'd at the 30-min cap and
+        # the Playwright suite NEVER RAN (proven empirically: the run's
+        # "Install Playwright browsers" step = 29.15m / cancelled, "Run
+        # Playwright tests" = skipped). The script now runs
+        # `playwright install chromium` WITHOUT `--with-deps`: the
+        # ubuntu-latest image already ships the Chromium runtime libraries
+        # (the same image audit-runtime.yml runs headless Chromium on), so the
+        # apt step is unnecessary. A step-level timeout makes any future
+        # install stall fail FAST and visibly instead of eating the whole job.
+        timeout-minutes: 10
         run: pnpm --filter @workspace/e2e run install-browsers
 
       - name: Build ghayth-erp frontend
