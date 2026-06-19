@@ -70,7 +70,7 @@ interface Integration {
   maxRetries: number;
 }
 
-async function getActiveIntegration(companyId: number, channel: string): Promise<Integration | null> {
+export async function getActiveIntegration(companyId: number, channel: string): Promise<Integration | null> {
   const [row] = await rawQuery<Integration>(
     `SELECT * FROM integrations WHERE "companyId"=$1 AND type=$2 AND status='active' LIMIT 1`,
     [companyId, channel]

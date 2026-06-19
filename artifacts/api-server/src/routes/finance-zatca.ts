@@ -766,6 +766,16 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance.zatc
     });
     void clearedInvoiceB64;
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.invoice_submitted",
+      entity: "invoices",
+      entityId: id,
+      after: { status: submissionStatus, uuid, logId: logRow.id, environment: settings.environment },
+    }).catch((e) => logger.error(e, "finance-zatca invoice-submit audit failed"));
+
     res.json({
       message: submissionStatus === "accepted"
         ? "تم إرسال الفاتورة بنجاح إلى ZATCA"
@@ -866,6 +876,16 @@ zatcaRouter.post("/zatca/expense/:id/submit", authorize({ feature: "finance.zatc
           submissionStatus, settings.environment, scope.activeAssignmentId]
       );
     });
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.expense_submitted",
+      entity: "journal_entries",
+      entityId: id,
+      after: { status: submissionStatus, uuid, environment: settings.environment },
+    }).catch((e) => logger.error(e, "finance-zatca expense-submit audit failed"));
 
     res.json({
       message: simulatedSuccess ? "تم إرسال بيانات المصروف بنجاح (محاكاة sandbox)" : "تم تسجيل طلب الإرسال",
@@ -979,6 +999,15 @@ zatcaRouter.patch("/zatca/invoice/:id", authorize({ feature: "finance.zatca", ac
       params
     );
     if (!row) { throw new NotFoundError("الفاتورة غير موجودة"); return; }
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.invoice_updated",
+      entity: "invoices",
+      entityId: id,
+      after: { fields: sets.length },
+    }).catch((e) => logger.error(e, "finance-zatca invoice-patch audit failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "ZATCA invoice patch error:");
@@ -1010,6 +1039,15 @@ zatcaRouter.patch("/zatca/expense/:id", authorize({ feature: "finance.zatca", ac
       params
     );
     if (!row) { throw new NotFoundError("المصروف غير موجود"); return; }
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.expense_updated",
+      entity: "journal_entries",
+      entityId: id,
+      after: { fields: sets.length },
+    }).catch((e) => logger.error(e, "finance-zatca expense-patch audit failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "ZATCA expense patch error:");
