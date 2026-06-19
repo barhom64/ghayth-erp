@@ -43,7 +43,6 @@ DELETE /warehouse/saudi/wps/credentials/:bankCode
 PATCH /admin/zatca/missing-tax-numbers/:id
 PATCH /documents/zatca/missing-tax-numbers/:id
 PATCH /finance/budgets/:id/approve
-PATCH /finance/classification-center/analytic-accounts/:id/link
 PATCH /finance/commitments/:id/approve
 PATCH /finance/financial-requests/:id/approve
 PATCH /finance/journal-manual/:id/approve
@@ -95,7 +94,6 @@ POST /finance/bank-guarantees/:id/release
 POST /finance/cip/:id/costs
 POST /finance/customer-advances
 POST /finance/customer-advances/:id/apply
-POST /finance/dunning/send
 POST /finance/fiscal-periods-v2/:id/close
 POST /finance/fiscal-periods-v2/:id/lock
 POST /finance/fiscal-periods-v2/:id/reopen
