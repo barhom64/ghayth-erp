@@ -190,7 +190,7 @@ correspondenceRouter.get("/:id", authorize({ feature: "communications", action: 
 correspondenceRouter.post("/", authorize({ feature: "communications", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const data = createSchema.parse(req.body);
+    const data = zodParse(createSchema.safeParse(req.body));
     // Numbering center (#1141 closure) — atomic issue + INSERT + linkback.
     const atomic = await withTransaction(async () => {
       const issued = await issueCorrespondenceNumber(
