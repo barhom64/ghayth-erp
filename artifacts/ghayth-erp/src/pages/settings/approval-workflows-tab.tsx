@@ -15,11 +15,20 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 
+// chainType keys MUST match what the runtime resolver queries (e.g. the leave
+// engine reads WHERE chainType='leaves') and the HR approval-chain-definitions
+// editor — otherwise chains created here are silently never applied. The previous
+// keys (leave/purchase_request/expense/general_request) matched no resolver, so
+// every chain configured in this tab was dead. Aligned to the canonical set.
 const entityTypes = [
-  { value: "leave", label: "الإجازات" },
-  { value: "purchase_request", label: "طلبات الشراء" },
-  { value: "expense", label: "المصروفات" },
-  { value: "general_request", label: "الطلبات العامة" },
+  { value: "leaves", label: "الإجازات" },
+  { value: "purchases", label: "المشتريات" },
+  { value: "expenses", label: "المصروفات" },
+  { value: "advances", label: "السلف" },
+  { value: "letters", label: "الخطابات الرسمية" },
+  { value: "loans", label: "القروض" },
+  { value: "overtime", label: "العمل الإضافي" },
+  { value: "exit", label: "إخلاء الطرف" },
 ];
 
 // Old: minAmount tracked as plain number, maxAmount as `number | null`
@@ -28,7 +37,7 @@ const entityTypes = [
 // bound" — the submit handler maps 0 → null when sending to the API.
 const approvalChainSchema = z
   .object({
-    chainType: z.enum(["leave", "purchase_request", "expense", "general_request"]),
+    chainType: z.enum(["leaves", "purchases", "expenses", "advances", "letters", "loans", "overtime", "exit"]),
     name: z.string().trim(),
     minAmount: z.coerce.number({ invalid_type_error: "أدخل رقمًا" }).min(0, "الحد الأدنى لا يقل عن 0"),
     maxAmount: z.coerce.number({ invalid_type_error: "أدخل رقمًا" }).min(0, "الحد الأقصى لا يقل عن 0"),
@@ -39,7 +48,7 @@ const approvalChainSchema = z
   );
 type ApprovalChainForm = z.infer<typeof approvalChainSchema>;
 const defaultApprovalChain: ApprovalChainForm = {
-  chainType: "leave",
+  chainType: "leaves",
   name: "",
   minAmount: 0,
   maxAmount: 0,
