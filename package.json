@@ -50,6 +50,7 @@
     "check:tenant-isolation": "node scripts/src/check-tenant-isolation.mjs",
     "check:tx-coverage": "node scripts/src/check-tx-coverage.mjs",
     "check:gl-swallow": "node scripts/src/check-gl-swallow.mjs",
+    "check:ledger-no-physical-delete": "node scripts/src/check-ledger-no-physical-delete.mjs",
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
