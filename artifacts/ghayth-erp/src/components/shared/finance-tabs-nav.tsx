@@ -15,7 +15,7 @@ const TABS = [
   { href: "/finance/expenses", label: "المصروفات", icon: CreditCard, match: ["/finance/expenses"] },
   { href: "/finance/budget", label: "الميزانية", icon: Wallet, match: ["/finance/budget"] },
   { href: "/finance/purchase-orders", label: "المشتريات", icon: ShoppingCart, match: ["/finance/purchase-orders", "/finance/purchase-requests"] },
-  { href: "/finance/receivables", label: "التحصيل", icon: Receipt, match: ["/finance/receivables"] },
+  { href: "/finance/receivables", label: "المقبوضات", icon: Receipt, match: ["/finance/receivables"] },
   { href: "/finance/customer-advances", label: "دفعات مقدمة", icon: Coins, match: ["/finance/customer-advances"] },
   { href: "/finance/commitments", label: "الالتزامات", icon: ClipboardList, match: ["/finance/commitments"] },
   { href: "/finance/financial-requests", label: "الطلبات المالية", icon: HandCoins, match: ["/finance/financial-requests"] },
@@ -30,8 +30,8 @@ const TABS = [
   { href: "/finance/wht-categories", label: "فئات الاستقطاع", icon: Receipt, match: ["/finance/wht-categories"] },
   { href: "/finance/reports/zatca", label: "تقارير الزكاة والضريبة", icon: Boxes, match: ["/finance/reports/zatca", "/finance/reports/vat-reconciliation", "/finance/reports/wht-summary", "/finance/reports/cogs-summary", "/finance/reports/inventory-valuation", "/finance/reports/inventory-turnover", "/finance/reports/lot-expiry-alerts", "/finance/reports/negative-stock", "/finance/reports/gl-integrity-gaps", "/finance/reports/unmapped-lines"] },
   { href: "/finance/reports", label: "التقارير", icon: BarChart3, match: ["/finance/reports"] },
-  // التأصيل المالي — نظرة موحّدة على ربط الكيانات بالحسابات + مراكز التكلفة
-  { href: "/finance/dimensional-routing", label: "التأصيل المالي", icon: Network, match: ["/finance/dimensional-routing", "/finance/subsidiary-accounts", "/finance/cost-centers"] },
+  // التوجيه البُعدي — نظرة موحّدة على ربط الكيانات بالحسابات + مراكز التكلفة
+  { href: "/finance/dimensional-routing", label: "التوجيه البُعدي", icon: Network, match: ["/finance/dimensional-routing", "/finance/subsidiary-accounts", "/finance/cost-centers"] },
 ];
 
 export function FinanceTabsNav() {

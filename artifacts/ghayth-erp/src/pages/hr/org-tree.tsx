@@ -133,7 +133,7 @@ export default function OrgTreePage() {
 
   return (
     <PageShell
-      title="الشجرة التنظيمية"
+      title="الهيكل التنظيمي"
       subtitle="الهيكل الموحد: شركة ← فرع ← إدارة ← قسم ← فريق. اللجنة والمشروع ومركز التكلفة ارتباطات تشغيلية فوق الشجرة، ليست داخلها."
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },

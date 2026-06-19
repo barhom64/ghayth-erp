@@ -341,7 +341,7 @@ export default function UmrahExemptPilgrims() {
 
   return (
     <PageShell
-      title="المعتمرون المستثنون من مسح التأخّر"
+      title="المعتمرون المعفون من مسح التأخّر"
       subtitle="تقرير امتثال — يعرض من تم استثناؤه ومن أصدر الاستثناء ومتى"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "استثناءات التأخّر" }]}
       actions={

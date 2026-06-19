@@ -210,7 +210,7 @@ export const allNavSections: NavSection[] = [
         { label: "صندوق موافقات الموارد البشرية", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
-        { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
+        { label: "طلبات الاستئذان", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
         { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
       ]},
 
@@ -475,7 +475,7 @@ export const allNavSections: NavSection[] = [
         { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
         { label: "متابعة التحصيل", path: "/finance/dunning", icon: Bell },
         { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
-        { label: "الديون المعدومة", path: "/finance/bad-debt", icon: ShieldAlert },
+        { label: "مخصص الديون المشكوك فيها", path: "/finance/bad-debt", icon: ShieldAlert },
       ]},
       // F6 (audit) — العملات الأجنبية: rates + revaluation + history في
       // مجموعة واحدة بدلاً من تركها كلها off-sidebar.
