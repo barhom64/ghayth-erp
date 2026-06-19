@@ -207,7 +207,7 @@ export const allNavSections: NavSection[] = [
       // Services Catalog landing
       { label: "الطلبات", path: "/hr/services", icon: ClipboardCheck, module: "hr", children: [
         { label: "خدمات الموارد البشرية", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
-        { label: "صندوق وارد الموارد البشرية", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
+        { label: "صندوق موافقات الموارد البشرية", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
         { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
@@ -420,7 +420,7 @@ export const allNavSections: NavSection[] = [
         { label: "فئات ضريبة الاستقطاع", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
         { label: "جاهزية الفوترة الإلكترونية", path: "/finance/vat-filing-readiness", icon: FileCheck },
-        { label: "مركز تقارير الفوترة الإلكترونية", path: "/finance/reports/zatca", icon: FileCheck },
+        { label: "مركز تقارير الزكاة والضريبة", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "فواتير الأفراد موجَّهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
         { label: "عملاء بلا رقم ضريبي", path: "/finance/zatca/missing-tax", icon: AlertTriangle },
         { label: "تسوية ضريبة القيمة المضافة", path: "/finance/reports/vat-reconciliation", icon: Scale },

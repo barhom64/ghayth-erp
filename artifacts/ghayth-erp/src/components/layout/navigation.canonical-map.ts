@@ -102,9 +102,9 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   },
   {
     path: "/finance/reports/zatca",
-    canonicalLabel: "مركز تقارير الفوترة الإلكترونية",
-    aliases: ["مركز تقارير ZATCA", "ZATCA Reports Hub", "تقارير الضرائب والمخزون", "تقارير زاتكا والمخزون"],
-    note: "INVENTORY §8.أ — slice 12 kept 'ZATCA'; §12 (Jun 17) fully Arabised to «الفوترة الإلكترونية» to keep the registry Latin-free. 'ZATCA' kept as a search alias.",
+    canonicalLabel: "مركز تقارير الزكاة والضريبة",
+    aliases: ["مركز تقارير الفوترة الإلكترونية", "مركز تقارير ZATCA", "ZATCA Reports Hub", "تقارير الضرائب والمخزون", "تقارير زاتكا والمخزون"],
+    note: "INVENTORY §8.أ — Arabised Latin-free; §12 finalised to «الزكاة والضريبة» to match the «هيئة الزكاة والضريبة» settings tab and the tax+inventory scope (broader than e-invoicing). 'ZATCA' / 'الفوترة الإلكترونية' kept as search aliases.",
   },
 
   // ── §1.أ — same path carrying more than one menu label ──
