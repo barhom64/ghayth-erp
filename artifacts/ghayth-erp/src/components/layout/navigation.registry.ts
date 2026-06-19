@@ -513,7 +513,7 @@ export const allNavSections: NavSection[] = [
       { label: "المشاريع والمهام", path: "/projects", icon: Activity, module: "operations", children: [
         { label: "قائمة المشاريع", path: "/projects?tab=list", icon: Target },
         { label: "مخطط غانت", path: "/projects/gantt", icon: BarChart2 },
-        { label: "المخاطر", path: "/projects/risks", icon: ShieldAlert },
+        { label: "مخاطر المشاريع", path: "/projects/risks", icon: ShieldAlert },
         // "مهام المشاريع" → /projects/tasks removed: it rendered the GENERAL
         // operations Tasks page (the `tasks` table), mislabelling operations work
         // as project tasks. Per-project tasks (project_tasks) live in the project
@@ -777,7 +777,7 @@ export const allNavSections: NavSection[] = [
         ]},
         // 6) الالتزام والمخالفات.
         { label: "الالتزام والمخالفات", path: "/umrah/compliance", icon: FileCheck, children: [
-          { label: "الامتثال", path: "/umrah/compliance", icon: FileCheck },
+          { label: "امتثال العمرة", path: "/umrah/compliance", icon: FileCheck },
           { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
           { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
         ]},
@@ -878,9 +878,9 @@ export const allNavSections: NavSection[] = [
       { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
         { label: "نظرة عامة", path: "/governance", icon: Shield },
         { label: "السياسات", path: "/governance/policies", icon: FileCheck },
-        { label: "المخاطر", path: "/governance/risks", icon: AlertTriangle },
+        { label: "مخاطر الحوكمة", path: "/governance/risks", icon: AlertTriangle },
         { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
-        { label: "الامتثال", path: "/governance/compliance", icon: CheckCircle },
+        { label: "الامتثال المؤسسي", path: "/governance/compliance", icon: CheckCircle },
         { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
       ]},
       { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 50 },
@@ -934,8 +934,8 @@ export const allNavSections: NavSection[] = [
           { label: "سجل الكيانات", path: "/admin/system-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "سجل النطاقات", path: "/admin/domain-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
-        { label: "السياسات والحوكمة", path: "/admin/policy-engine", icon: Shield, children: [
-          { label: "محرك السياسات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
+        { label: "حوكمة الصلاحيات", path: "/admin/policy-engine", icon: Shield, children: [
+          { label: "محرك سياسات الصلاحيات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
           { label: "تجاوزات الموافقات", path: "/admin/approval-overrides", icon: Bell, perm: "admin:update" },
           { label: "حماية البيانات الشخصية", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "التوقيع الرقمي", path: "/admin/digital-signature", icon: FileSignature, perm: ["admin:list", "admin:view"], permMode: "any" },
