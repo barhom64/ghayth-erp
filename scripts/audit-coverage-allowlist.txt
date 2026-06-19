@@ -37,7 +37,6 @@
 DELETE /admin/governance/event-dlq/:id
 DELETE /admin/pricing/rules/:id
 DELETE /admin/saudi/wps/credentials/:bankCode
-DELETE /documents/:id/acls/:aclId
 DELETE /documents/pricing/rules/:id
 DELETE /documents/saudi/wps/credentials/:bankCode
 DELETE /finance/pricing/rules/:id
@@ -87,13 +86,11 @@ POST /admin/pricing/resolve
 POST /admin/pricing/rules
 POST /admin/vendor-settings/:slug/test
 POST /admin/vendor-settings/company/smtp/test
-POST /documents/:id/acls
 POST /documents/:id/ocr/rerun
 POST /documents/ocr/extractions/:id/confirm
 POST /documents/ocr/extractions/:id/reject
 POST /documents/pricing/resolve
 POST /documents/pricing/rules
-POST /documents/retention/backfill
 POST /events/outbox/drain
 POST /finance/:id/ocr/rerun
 POST /finance/bank-guarantees/:id/cancel
