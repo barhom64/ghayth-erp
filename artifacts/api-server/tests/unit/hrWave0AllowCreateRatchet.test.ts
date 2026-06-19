@@ -62,7 +62,7 @@ describe("HR-Wave-0 / 0.4 — buildEntitySelect defaults + plumbing", () => {
     // #2134 strengthened the handler: the created entity is ALSO injected
     // into the options locally (mergeEntityOptions) so it renders instantly,
     // before the refetch lands and regardless of the 500-row preload window.
-    expect(ENTITY_SELECTS_SRC).toMatch(/const newId = String\(row\?\.id \|\| ""\);/);
+    expect(ENTITY_SELECTS_SRC).toMatch(/const newId = String\(row\?\.\[config\.getValueField \|\| "id"\]/);
     expect(ENTITY_SELECTS_SRC).toMatch(/onChange\(newId\);/);
     expect(ENTITY_SELECTS_SRC).toMatch(/setCreatedOptions\(/);
     expect(ENTITY_SELECTS_SRC).toMatch(/refetch\(\);/);
