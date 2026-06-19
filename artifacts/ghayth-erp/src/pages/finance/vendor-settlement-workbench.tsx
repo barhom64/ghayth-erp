@@ -393,7 +393,7 @@ export default function VendorSettlementWorkbenchPage() {
                     </CardHeader>
                     {isOpen && (
                       <CardContent className="pt-0">
-                        <table className="w-full text-sm">
+                        <div className="overflow-x-auto"><table className="w-full text-sm">
                           <thead>
                             <tr className="border-b text-xs text-muted-foreground">
                               <th className="text-start py-2 px-2 w-24">النوع</th>
@@ -432,7 +432,7 @@ export default function VendorSettlementWorkbenchPage() {
                               </tr>
                             ))}
                           </tbody>
-                        </table>
+                        </table></div>
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                           {v.supplierId && (
                             <Button asChild size="sm" variant="outline"><Link href={`/finance/payment-run?supplierId=${v.supplierId}`}>

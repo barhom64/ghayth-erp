@@ -152,7 +152,7 @@ export default function UmrahCostsReport() {
               لا فواتير نُسك تطابق الفلاتر.
             </p>
           ) : (
-            <table className="w-full text-sm" data-testid="costs-table">
+            <div className="overflow-x-auto"><table className="w-full text-sm" data-testid="costs-table">
               <thead className="bg-muted/40">
                 <tr>
                   <th className="p-2 text-start sticky right-0 bg-muted/40">{dimensionLabel}</th>
@@ -197,7 +197,7 @@ export default function UmrahCostsReport() {
                   </td>
                 </tr>
               </tfoot>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>

@@ -38,6 +38,7 @@
     "check:duplicate-migrations": "node scripts/src/check-duplicate-migrations.mjs",
     "check:button-nesting": "node scripts/src/check-button-nesting.mjs",
     "check:jsx-generic-component": "node scripts/src/check-jsx-generic-component.mjs",
+    "check:responsive-tables": "node scripts/src/check-responsive-tables.mjs",
     "check:link-nested-anchor": "node scripts/src/check-link-nested-anchor.mjs",
     "check:usememo-setstate": "node scripts/src/check-usememo-setstate.mjs",
     "check:register-limiter-misuse": "node scripts/src/check-register-limiter-misuse.mjs",

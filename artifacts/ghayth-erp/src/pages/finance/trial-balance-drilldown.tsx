@@ -323,7 +323,7 @@ export default function TrialBalanceDrilldownPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-xs text-muted-foreground">
                         <th className="text-start py-2 px-2 w-6"></th>
@@ -386,7 +386,7 @@ export default function TrialBalanceDrilldownPage() {
                         <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(typeBalance)}</td>
                       </tr>
                     </tfoot>
-                  </table>
+                  </table></div>
                 </CardContent>
               </Card>
             );
@@ -439,7 +439,7 @@ function AccountDrillDown({
         </div>
       </div>
       <div className="border rounded max-h-80 overflow-y-auto">
-        <table className="w-full text-xs">
+        <div className="overflow-x-auto"><table className="w-full text-xs">
           <thead className="sticky top-0 bg-background border-b">
             <tr className="text-muted-foreground">
               <th className="text-start py-1.5 px-2">التاريخ</th>
@@ -478,7 +478,7 @@ function AccountDrillDown({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );
