@@ -138,11 +138,11 @@ jobs:
           actual_fks=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_constraint c JOIN pg_class r ON c.conrelid=r.oid JOIN pg_namespace n ON r.relnamespace=n.oid WHERE c.contype='f' AND n.nspname='public';")
           echo "::notice::schema loaded — $actual_fks FKs (dump declares $expected_fks)"
           if [ "$actual_fks" -lt "$expected_fks" ]; then echo "FK shortfall — schema_post.log:"; cat /tmp/schema_post.log; exit 1; fi
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE TABLE IF NOT EXISTS schema_migrations (filename text PRIMARY KEY, applied_at timestamptz DEFAULT NOW());"
-          for mig in artifacts/api-server/src/migrations/*.sql; do
-            [ -f "$mig" ] || continue
-            psql "$DATABASE_URL" -q -c "INSERT INTO schema_migrations(filename) VALUES ('$(basename "$mig")') ON CONFLICT DO NOTHING;"
-          done
+          # NOTE: unlike guard.yml we do NOT pre-mark migrations as applied. The
+          # dump is a point-in-time baseline that lags newer migrations (e.g.
+          # `vendor_secrets.companyId`), so the booting api-server MUST run its
+          # idempotent migrations (ADD COLUMN IF NOT EXISTS / ON CONFLICT) on top
+          # of the loaded schema to add any post-dump columns the runtime queries.
 
       - name: Start api-server
         env:
