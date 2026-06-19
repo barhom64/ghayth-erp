@@ -397,7 +397,7 @@ export default function WhtFilingWorkbenchPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-xs text-muted-foreground">
                         <th className="text-start py-2 px-2">الفئة</th>
@@ -435,7 +435,7 @@ export default function WhtFilingWorkbenchPage() {
                         </td>
                       </tr>
                     </tfoot>
-                  </table>
+                  </table></div>
                 </CardContent>
               </Card>
 
@@ -493,7 +493,7 @@ export default function WhtFilingWorkbenchPage() {
                           </div>
                           {isOpen && (
                             <div className="border-t bg-muted/10 p-2">
-                              <table className="w-full text-xs">
+                              <div className="overflow-x-auto"><table className="w-full text-xs">
                                 <thead>
                                   <tr className="border-b text-muted-foreground">
                                     <th className="text-start py-1 px-2">تاريخ</th>
@@ -526,7 +526,7 @@ export default function WhtFilingWorkbenchPage() {
                                     </tr>
                                   ))}
                                 </tbody>
-                              </table>
+                              </table></div>
                             </div>
                           )}
                         </div>

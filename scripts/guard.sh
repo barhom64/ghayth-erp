@@ -148,6 +148,13 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:jsx-generic-component:tests" node scripts/src/check-jsx-generic-component.test.mjs
 run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-component.mjs
+# Responsive tables: a raw <table> not inside an overflow scroll container
+# clips/breaks the layout on phone widths (the 2026-06 mobile pass wrapped
+# every offender). OFFLINE source scan; empty baseline in
+# scripts/responsive-tables-allowlist.txt — fails on any NEW unwrapped table.
+# Pure-logic fixtures guard the detector.
+run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
+run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
 # Nested anchors: a wouter <Link> WITHOUT `asChild` directly wrapping <a>
 # renders <a><a> (the OUTER <a> carries href+onClick, the author's INNER <a>
 # carries content but no href). Invalid HTML — React logs a validateDOMNesting

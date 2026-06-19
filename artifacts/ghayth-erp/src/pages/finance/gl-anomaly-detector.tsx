@@ -313,7 +313,7 @@ export default function GlAnomalyDetectorPage() {
                     </CardHeader>
                     {isOpen && (
                       <CardContent className="pt-0">
-                        <table className="w-full text-xs">
+                        <div className="overflow-x-auto"><table className="w-full text-xs">
                           <thead>
                             <tr className="border-b text-muted-foreground">
                               <th className="text-start py-1 px-2">الحساب</th>
@@ -351,7 +351,7 @@ export default function GlAnomalyDetectorPage() {
                               </tr>
                             )}
                           </tfoot>
-                        </table>
+                        </table></div>
                         <div className="flex justify-end mt-3">
                           <Button asChild variant="outline" size="sm"><Link href={`/finance/journal/${je.id}`}>
                               <ExternalLink className="w-3 h-3 ml-1" />

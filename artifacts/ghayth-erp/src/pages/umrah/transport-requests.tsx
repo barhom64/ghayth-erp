@@ -317,7 +317,7 @@ export default function UmrahTransportRequestsPage() {
                 لا توجد طلبات نقل مرتبطة بهذه المجموعة عبر العقد الموحّد بعد.
               </p>
             ) : (
-              <table
+              <div className="overflow-x-auto"><table
                 className="w-full text-sm"
                 data-testid="transport-requests-table"
               >
@@ -362,7 +362,7 @@ export default function UmrahTransportRequestsPage() {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </CardContent>
         </Card>

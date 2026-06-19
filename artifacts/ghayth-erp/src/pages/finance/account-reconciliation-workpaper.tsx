@@ -379,7 +379,7 @@ export default function AccountReconciliationWorkpaperPage() {
                     </div>
 
                     {list.length > 0 && (
-                      <table className="w-full text-sm">
+                      <div className="overflow-x-auto"><table className="w-full text-sm">
                         <thead>
                           <tr className="text-xs text-muted-foreground border-b">
                             <th className="text-start py-1 px-2 w-32">المرجع</th>
@@ -438,7 +438,7 @@ export default function AccountReconciliationWorkpaperPage() {
                             <td></td>
                           </tr>
                         </tfoot>
-                      </table>
+                      </table></div>
                     )}
                   </div>
                 );

@@ -281,7 +281,7 @@ export default function VendorStatementPrintPage() {
               <CardTitle className="text-base">حركة الحساب — {label}</CardTitle>
             </CardHeader>
             <CardContent className="pt-0">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-xs text-muted-foreground">
                     <th className="text-start py-2 px-2 w-24">التاريخ</th>
@@ -343,7 +343,7 @@ export default function VendorStatementPrintPage() {
                     <td className="print:hidden"></td>
                   </tr>
                 </tfoot>
-              </table>
+              </table></div>
             </CardContent>
           </Card>
 
@@ -356,7 +356,7 @@ export default function VendorStatementPrintPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-start py-2 px-2">السطل</th>
@@ -395,7 +395,7 @@ export default function VendorStatementPrintPage() {
                       <td className="py-2 px-2 text-end tabular-nums">100%</td>
                     </tr>
                   </tfoot>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
           )}
