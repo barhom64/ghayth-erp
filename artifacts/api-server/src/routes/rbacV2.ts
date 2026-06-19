@@ -1237,6 +1237,11 @@ router.post("/jit/request", async (req, res) => {
       [scope.userId, scope.companyId, body.featureKey, body.action, body.scope, body.justification, body.requestedMinutes]
     );
     assertInsert(insertId, "rbac_jit_requests");
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.requested", entity: "rbac_jit_requests", entityId: insertId,
+      after: { featureKey: body.featureKey, action: body.action, scope: body.scope, requestedMinutes: body.requestedMinutes },
+    }).catch(() => undefined);
     res.status(201).json({ id: insertId, status: "pending" });
   } catch (err) {
     handleRouteError(err, res, "create JIT request");
@@ -1322,6 +1327,12 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
 
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.approved", entity: "rbac_jit_requests", entityId: id,
+      reason: body.reason || undefined,
+    }).catch(() => undefined);
+
     // Notify the requester so they don't have to refresh the JIT page
     // to find out. We look up their active assignment ID to feed
     // createNotification (which keys on assignmentId, not userId).
@@ -1382,6 +1393,12 @@ router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "upda
       [scope.companyId, scope.userId, JSON.stringify({ jitId: id }), body.reason || null]
     ).catch(() => undefined);
 
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.rejected", entity: "rbac_jit_requests", entityId: id,
+      reason: body.reason || undefined,
+    }).catch(() => undefined);
+
     // Notify the requester of the rejection.
     void (async () => {
       const asgRes = await rawQuery<{ id: number }>(
@@ -1425,6 +1442,10 @@ router.post("/jit/:id/cancel", async (req, res) => {
       [id, scope.userId, scope.companyId]
     );
     if (!affectedRows) throw new NotFoundError("طلب JIT غير موجود أو لا يمكن إلغاؤه");
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.cancelled", entity: "rbac_jit_requests", entityId: id,
+    }).catch(() => undefined);
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "cancel JIT");

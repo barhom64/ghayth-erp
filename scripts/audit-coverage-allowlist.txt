@@ -165,10 +165,6 @@ POST /org/team-memberships
 POST /org/teams
 POST /print/render
 POST /print/reprint-requests
-POST /rbac/v2/jit/:id/approve
-POST /rbac/v2/jit/:id/cancel
-POST /rbac/v2/jit/:id/reject
-POST /rbac/v2/jit/request
 POST /rbac/v2/simulate
 POST /scheduled-reports
 POST /umrah/agent-invoices/:id/record-payment
