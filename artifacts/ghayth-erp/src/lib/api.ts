@@ -89,7 +89,39 @@ function inferCodeFromStatus(status: number): string {
   return "UNKNOWN";
 }
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+// API origin resolution. On the web the bundle is served from the same
+// origin as the API, so a relative `${BASE_URL}/api` is correct. Inside a
+// Capacitor native app the bundle is served from https://localhost (Android)
+// / capacitor://localhost (iOS), so a relative `/api` would hit the app
+// itself — every request must target the absolute server origin instead.
+// VITE_API_ORIGIN is baked at build time (e.g. https://hr.door.sa). Without
+// it on native we fall back to the relative base and log loudly, since the
+// data layer cannot work.
+function resolveApiBase(): string {
+  const cap = (globalThis as any)?.Capacitor;
+  if (cap && typeof cap.isNativePlatform === "function" && cap.isNativePlatform()) {
+    const origin = (import.meta as any).env?.VITE_API_ORIGIN as string | undefined;
+    if (origin) return origin.replace(/\/$/, "");
+    // eslint-disable-next-line no-console
+    console.error(
+      "[api] running natively but VITE_API_ORIGIN is unset — API calls will fail. " +
+        "Build with VITE_API_ORIGIN=https://your-server.",
+    );
+  }
+  return import.meta.env.BASE_URL.replace(/\/$/, "");
+}
+
+const BASE = resolveApiBase();
+
+/**
+ * The resolved API origin — native-aware (absolute server origin inside a
+ * Capacitor app, relative same-origin base on the web). Every direct
+ * `fetch(...)` to the API MUST build its URL from this (or use apiUrl /
+ * apiFetch), never from `import.meta.env.BASE_URL` directly, or it will hit
+ * the app bundle (https://localhost) instead of the server in the native app.
+ * Enforced by scripts/src/check-api-base.mjs.
+ */
+export const API_BASE = BASE;
 
 /**
  * Build a full API URL respecting Vite's BASE_URL — for direct browser

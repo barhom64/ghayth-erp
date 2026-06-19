@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 import "@/styles/login.css";
 import { GhaythLogo } from "@/components/shared/ghayth-logo";
 import { useAuth } from "@/lib/auth";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, API_BASE } from "@/lib/api";
 import { notifyRateLimited } from "@/lib/rate-limit-toast";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { formatDateAr } from "@/lib/formatters";
@@ -45,7 +45,7 @@ const MONTH_NAMES = [
   "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
 ];
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_BASE;
 
 const loginSchema = z.object({
   email: z.string().email("بريد إلكتروني غير صالح"),
