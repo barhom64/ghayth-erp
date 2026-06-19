@@ -11,19 +11,17 @@
 # ignore. Adding to this file is a code-review red flag — prefer to
 # fix the underlying step.
 
-# e2e.yml: idempotent service teardown in `if: always()` block at the
-# end of the e2e job. `kill` is allowed to fail if the PID file is
-# missing (server never started) or if the PID has already exited
-# (graceful shutdown). Same pattern as audit-runtime / refresh-deck-shots.
-e2e.yml:or-true:[ -f api-server.pid ] && kill "$(cat api-server.pid)" 2>/dev/null || true
-e2e.yml:or-true:[ -f frontend.pid ] && kill "$(cat frontend.pid)" 2>/dev/null || true
+# e2e.yml: failure-diagnostics log tail (`if: failure()` step). `tail` exits 1
+# when the log file was never created (a server that failed before writing) —
+# tolerating it lets all three tails run so the full diagnostic dump prints.
+e2e.yml:or-true:echo "=== api-server.log (tail) ==="; tail -200 /tmp/api-server.log || true
+e2e.yml:or-true:echo "=== ghayth-erp.log (tail) ==="; tail -200 /tmp/ghayth-erp.log || true
+e2e.yml:or-true:echo "=== proxy.log (tail) ===";       tail -200 /tmp/proxy.log     || true
 
-# e2e.yml: failure-diagnostics dump (`if: failure()`). The
-# `ps -ef | grep <pattern>` chain exits 1 when no processes match — a
-# normal state for an early-failure debug step where the servers may
-# never have started. Tolerating it lets the rest of the diagnostics
-# (tail logs / list dist dirs) keep running.
-e2e.yml:or-true:ps -ef | grep -E "node|vite|psql" | grep -v grep || true
+# e2e.yml: idempotent service teardown in the `if: always()` Stop-services
+# block. `kill` is allowed to fail if the PID file is missing (server never
+# started) or the PID already exited (graceful shutdown).
+e2e.yml:or-true:[ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
 
 # guard.yml: schema_post load uses ON_ERROR_STOP=0 because the dump's
 # trailing `\unrestrict` line errors when the session isn't in restricted
