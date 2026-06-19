@@ -9,8 +9,9 @@
 ## 1) هرم المراجع الملزم
 
 1. **دستور غيث v3 المعتمد**
-   - الملف: `docs/governance/GHAYTH_CONSTITUTION_V3_APPROVED.md`
+   - الملف (المصدر القانوني الوحيد): `docs/ghayth-constitution.md`
    - الوظيفة: طبقة 0. يحكم القبول والرفض.
+   - ملاحظة: `docs/governance/GHAYTH_CONSTITUTION_V3_APPROVED.md` مؤشِّر فقط لهذا المصدر، لا نسخة قانونية.
 
 2. **العقيدة الحاكمة التشغيلية**
    - الملف: `docs/governance/غيث_العقيدة_الحاكمة.md`
