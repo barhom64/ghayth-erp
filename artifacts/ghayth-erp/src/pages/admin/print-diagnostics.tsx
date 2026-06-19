@@ -381,7 +381,7 @@ export default function PrintDiagnosticsPage() {
             <p className="text-xs text-muted-foreground mb-2">
               هذه القوالب لها htmlContent فارغ أو قصير جداً. الـ Print Engine سيتجاوزها تلقائياً للـ universal preset (Phase 1113)، لكن الأفضل تعديلها أو حذفها.
             </p>
-            <DataTable<TemplateRowFull> columns={templateCols} data={flaggedTemplates} rowKey={(r) => String(r.id)} />
+            <DataTable columns={templateCols} data={flaggedTemplates} rowKey={(r) => String(r.id)} />
           </CardContent>
         </Card>
       )}
@@ -394,7 +394,7 @@ export default function PrintDiagnosticsPage() {
           <p className="text-xs text-muted-foreground mb-2">
             هذه القوالب تُستخدم تلقائياً عند الطباعة. اضغط "إعادة ضبط" لحذف الإسناد والرجوع للقالب الجاهز.
           </p>
-          <DataTable<AssignmentRow>
+          <DataTable
             columns={assignmentCols}
             data={asnItems}
             rowKey={(r) => String(r.id)}
@@ -408,7 +408,7 @@ export default function PrintDiagnosticsPage() {
           <CardTitle className="text-sm">آخر 30 محاولة طباعة</CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable<PrintJobRow>
+          <DataTable
             columns={jobsCols}
             data={jobItems}
             rowKey={(r) => String(r.id)}

@@ -81,6 +81,15 @@ export const FEATURE_CATALOG: FeatureDefinition[] = [
     availableActions: ["view", "create"], availableScopes: ["self"],
     selfService: true, displayOrder: 121 },
 
+  // Tracking Eligibility Contract — viewing an employee's GPS location is a
+  // dedicated, audited permission, separate from generic attendance access.
+  { key: "hr.attendance.tracking_view", parentKey: "hr.attendance", moduleKey: "hr", labelAr: "عرض موقع التتبع",
+    availableActions: ["view", "list"], availableScopes: ALL_SCOPES, displayOrder: 122 },
+
+  // Managing (enable/disable/update) per-employee tracking policies.
+  { key: "hr.attendance.tracking_manage", parentKey: "hr.attendance", moduleKey: "hr", labelAr: "إدارة سياسات التتبع",
+    availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES, displayOrder: 123 },
+
   { key: "hr.leaves", parentKey: "hr", moduleKey: "hr", labelAr: "الإجازات",
     availableActions: ALL_ACTIONS, availableScopes: ALL_SCOPES,
     approvableActions: ["approve"], displayOrder: 130 },

@@ -1629,7 +1629,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       [empId, scope.companyId]
     );
 
-    res.status(201).json({
+    res.status(201).json(maskFields(req, {
       ...employee,
       assignmentId,
       onboardingTasksCreated: onboardingTaskCount,
@@ -1653,7 +1653,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           : "تم ربط الحساب الموجود بالموظف.",
         inviteWarning: accountInviteWarning,
       } : null,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Create employee error:");
   }

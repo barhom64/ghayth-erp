@@ -153,7 +153,7 @@ export default function JournalManualPage() {
 
   return (
     <>
-      <ListPage<JournalManualRow>
+      <ListPage
         title="القيود اليدوية"
         subtitle="إنشاء ومتابعة دورة اعتماد القيود اليدوية (مسودة ← مراجعة ← اعتماد ← ترحيل)"
         breadcrumbs={[

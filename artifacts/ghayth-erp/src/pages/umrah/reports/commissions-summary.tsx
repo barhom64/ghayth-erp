@@ -255,7 +255,7 @@ export default function CommissionsSummaryReport() {
             </p>
           </div>
           <div data-testid="commissions-recent-empty">
-          <DataTable<SummaryResp["recent"][number]>
+          <DataTable
             data={data?.recent ?? []}
             rowKey={(r) => String(r.id)}
             noToolbar
@@ -316,7 +316,7 @@ function BreakdownRows({
   type BreakdownRow = typeof rows[number] & { pct: number };
   const rowsWithPct: BreakdownRow[] = rows.map((r) => ({ ...r, pct: totalCount > 0 ? Math.round((r.count / totalCount) * 100) : 0 }));
   return (
-    <DataTable<BreakdownRow>
+    <DataTable
       data={rowsWithPct}
       rowKey={(r) => r.key}
       noToolbar

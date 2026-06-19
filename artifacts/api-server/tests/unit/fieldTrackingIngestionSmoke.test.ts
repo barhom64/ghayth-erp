@@ -79,15 +79,15 @@ describe("Field ingestion route — POST /hr/attendance/field-ping", () => {
     expect(SERVICE_SRC).toMatch(/lng:\s*z\.coerce\.number\(\)\.min\(-180\)\.max\(180\)/);
   });
 
-  it("resolves the per-category policy to gate tracking", () => {
-    expect(HR_SRC).toMatch(/resolveAttendancePolicy\(\{[\s\S]*?assignmentId:\s*scope\.activeAssignmentId/);
+  it("resolves the explicit per-employee tracking policy to gate tracking", () => {
+    // Eligibility derives from an explicit active policy, NOT the
+    // attendance category / role.
+    expect(SERVICE_SRC).toMatch(/getActiveTrackingPolicy\(scope\.companyId, assignment\.employeeId\)/);
   });
 
-  it("rejects categories with trackingFrequencySeconds <= 0 (office/manager/executive)", () => {
-    // Policy gate moved to the shared service; the route maps the
-    // "forbidden" result to ForbiddenError (same Arabic copy).
-    expect(SERVICE_SRC).toMatch(/const freq = policy\?\.trackingFrequencySeconds \?\? 0/);
-    expect(SERVICE_SRC).toMatch(/if \(freq <= 0\)/);
+  it("rejects employees with NO active tracking policy (eligibility derives from policy, not role/category)", () => {
+    expect(SERVICE_SRC).toMatch(/if \(!policy\)/);
+    expect(SERVICE_SRC).toMatch(/return \{ kind: "forbidden", categoryKey: assignment\.categoryKey/);
     expect(HR_SRC).toMatch(/case "forbidden":[\s\S]{0,200}ForbiddenError/);
   });
 
@@ -119,9 +119,11 @@ describe("Field read route — GET /hr/attendance/field-track", () => {
   });
 
   it("both modes scope to the caller's company", () => {
-    // Two company-scoped WHEREs in the handler block.
-    const handler = HR_SRC.slice(HR_SRC.indexOf('router.get("/attendance/field-track"'));
-    const occurrences = handler.slice(0, 3000).match(/ftp\."companyId" = \$/g) ?? [];
+    // Two company-scoped WHEREs in the handler block (breadcrumb + live mode).
+    const start = HR_SRC.indexOf('router.get("/attendance/field-track"');
+    const next = HR_SRC.indexOf("router.get(", start + 10);
+    const handler = HR_SRC.slice(start, next === -1 ? undefined : next);
+    const occurrences = handler.match(/ftp\."companyId" = \$/g) ?? [];
     expect(occurrences.length).toBeGreaterThanOrEqual(2);
   });
 });

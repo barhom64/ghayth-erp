@@ -51,6 +51,7 @@ const AttendanceReports = lazy(() => import("@/pages/hr/attendance-reports"));
 // الموحّدة، و/hr/leaves/management يُعاد توجيهه إليها. HR-REV-2)
 const ApprovalChains = lazy(() => import("@/pages/hr/approval-chains"));
 const FieldTracking = lazy(() => import("@/pages/hr/field-tracking"));
+const TrackingPolicies = lazy(() => import("@/pages/hr/tracking-policies"));
 const QRScanner = lazy(() => import("@/pages/hr/qr-scanner"));
 const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
@@ -141,6 +142,7 @@ export const hrRoutes = [
   // "field-tracking" and "qr-scanner" as an id and shadow these pages.
   { path: "/hr/attendance/reports", component: AttendanceReports, subKey: "attendance" },
   { path: "/hr/attendance/field-tracking", component: FieldTracking, subKey: "attendance" },
+  { path: "/hr/attendance/tracking-policies", component: TrackingPolicies, subKey: "attendance" },
   { path: "/hr/attendance/qr-scanner", component: QRScanner, subKey: "attendance" },
   // ":id/edit" precedes ":id" — defensive ordering (see route-shadowing fix).
   { path: "/hr/attendance/:id/edit", component: AttendanceEdit, subKey: "attendance" },

@@ -165,7 +165,7 @@ export default function FleetTelematicsSensors() {
               ) : isError ? (
                 <ErrorState />
               ) : (
-                <DataTable<SensorReadingRow>
+                <DataTable
                   columns={columns}
                   data={rows}
                   onRetry={refetch}

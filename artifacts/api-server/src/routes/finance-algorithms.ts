@@ -2065,8 +2065,8 @@ financeAlgorithmsRouter.get("/cip/:id", authorize({ feature: "finance.algorithms
     );
     if (!cip) throw new NotFoundError("مشروع CIP غير موجود");
     const costs = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM cip_costs WHERE "cipId"=$1 AND "deletedAt" IS NULL ORDER BY "costDate" ASC, id ASC`,
-      [id]
+      `SELECT * FROM cip_costs WHERE "cipId"=$1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "costDate" ASC, id ASC`,
+      [id, scope.companyId]
     );
     res.json({ ...cip, costs });
   } catch (err) {
