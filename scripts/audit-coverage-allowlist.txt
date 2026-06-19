@@ -98,7 +98,6 @@ POST /finance/:id/ocr/rerun
 POST /finance/bank-guarantees/:id/cancel
 POST /finance/bank-guarantees/:id/release
 POST /finance/cip/:id/costs
-POST /finance/classification-center/posting-failures/:id/classify
 POST /finance/customer-advances
 POST /finance/customer-advances/:id/apply
 POST /finance/dunning/send
