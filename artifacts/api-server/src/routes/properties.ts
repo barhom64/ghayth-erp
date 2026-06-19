@@ -19,7 +19,7 @@ import { issueNumber } from "../lib/numberingService.js";
 import { getPropertyUnitStatusImpact } from "../lib/impactPreview.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
-import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
+import { createCostCenterForEntity, ensureCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { propertiesEngine } from "../lib/engines/index.js";
 import { registerEntityParty } from "../lib/partyService.js";
 import { getEjarReader, isValidEjarFormat } from "../lib/ejarContractReader.js";
@@ -626,11 +626,15 @@ router.post("/units", authorize({ feature: "properties.units", action: "create" 
     // #1715 (owner feedback) — consistent entity-provisioning policy: every
     // trackable entity gets a cost centre for per-entity P&L. The unit's CC
     // nests under its building's CC when the building has one.
-    createCostCenterForEntity(
+    // Batch 6 — GUARANTEED (awaited) cost-centre link before the 201, not
+    // fire-and-forget: the unit must never reach its first posting with a null
+    // cost-centre dimension. Idempotent + never throws, so the unit create
+    // still succeeds on a CC hiccup (logs a non-silent LINK_GAP marker).
+    await ensureCostCenterForEntity(
       scope.companyId, "unit", insertId,
       `${unitNumber}${b.buildingName ? ` — ${b.buildingName}` : ""}`,
       { parentEntityType: b.buildingId ? "property" : null, parentEntityId: b.buildingId ?? null, actorUserId: scope.userId },
-    ).catch((e) => logger.error(e, "properties background task failed"));
+    );
 
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create unit error:"); }
