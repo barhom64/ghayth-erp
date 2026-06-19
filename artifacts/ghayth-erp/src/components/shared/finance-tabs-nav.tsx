@@ -28,7 +28,7 @@ const TABS = [
   // الـ tabs الجديدة من حملة الإصلاح المالي (هـ سعادة المحامي إبراهيم):
   { href: "/finance/tax-codes", label: "رموز الضريبة", icon: Percent, match: ["/finance/tax-codes"] },
   { href: "/finance/wht-categories", label: "فئات الاستقطاع", icon: Receipt, match: ["/finance/wht-categories"] },
-  { href: "/finance/reports/zatca", label: "تقارير زاتكا والمخزون", icon: Boxes, match: ["/finance/reports/zatca", "/finance/reports/vat-reconciliation", "/finance/reports/wht-summary", "/finance/reports/cogs-summary", "/finance/reports/inventory-valuation", "/finance/reports/inventory-turnover", "/finance/reports/lot-expiry-alerts", "/finance/reports/negative-stock", "/finance/reports/gl-integrity-gaps", "/finance/reports/unmapped-lines"] },
+  { href: "/finance/reports/zatca", label: "تقارير الزكاة والضريبة", icon: Boxes, match: ["/finance/reports/zatca", "/finance/reports/vat-reconciliation", "/finance/reports/wht-summary", "/finance/reports/cogs-summary", "/finance/reports/inventory-valuation", "/finance/reports/inventory-turnover", "/finance/reports/lot-expiry-alerts", "/finance/reports/negative-stock", "/finance/reports/gl-integrity-gaps", "/finance/reports/unmapped-lines"] },
   { href: "/finance/reports", label: "التقارير", icon: BarChart3, match: ["/finance/reports"] },
   // التأصيل المالي — نظرة موحّدة على ربط الكيانات بالحسابات + مراكز التكلفة
   { href: "/finance/dimensional-routing", label: "التأصيل المالي", icon: Network, match: ["/finance/dimensional-routing", "/finance/subsidiary-accounts", "/finance/cost-centers"] },

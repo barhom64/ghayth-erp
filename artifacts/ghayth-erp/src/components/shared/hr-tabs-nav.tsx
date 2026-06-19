@@ -29,7 +29,7 @@ const TABS = [
     match: ["/hr/services", "/hr/approvals", "/hr/leaves", "/hr/overtime", "/hr/excuse-requests"],
   },
   {
-    href: "/hr/violations", label: "الامتثال والجزاءات", icon: Scale,
+    href: "/hr/violations", label: "المخالفات والجزاءات", icon: Scale,
     match: ["/hr/violations", "/hr/discipline", "/hr/saudization", "/hr/saudi-compliance"],
   },
   {

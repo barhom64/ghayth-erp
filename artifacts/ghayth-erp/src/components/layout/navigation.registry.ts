@@ -184,7 +184,7 @@ export const allNavSections: NavSection[] = [
         // و«العلاقات» إلى org-tree كتبويبات ثم retire الصفحتين.
         { label: "الهيكل التنظيمي", path: "/hr/org-tree", icon: Network, subKey: "organization" },
         { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
-        { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
+        { label: "وثائق المنشأة والموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
         { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
         { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, subKey: "employees" },
         { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
@@ -193,7 +193,7 @@ export const allNavSections: NavSection[] = [
       // 3. النشاط والحضور — gathers shifts + attendance + tracking
       // (previously 2 separate top-level entries)
       { label: "النشاط والحضور", path: "/hr/attendance", icon: Clock, module: "hr", children: [
-        { label: "السجل اليومي", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
+        { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
         // HR-REV-2 §4.6 — «تقارير الحضور» تعيش في مجموعة «التقارير» الموحّدة
         // (التي صُمِّمت لتجميع تقارير الحضور/الأداء/الرواتب)؛ أُزيل المكرّر هنا.
         { label: "التتبع الحي (الميداني)", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
@@ -380,7 +380,7 @@ export const allNavSections: NavSection[] = [
       ]},
       { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
-        { label: "سجل الأصول التحليلي", path: "/finance/fixed-asset-register", icon: BarChart3 },
+        { label: "سجل الأصول الثابتة", path: "/finance/fixed-asset-register", icon: BarChart3 },
         { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
         { label: "الأعمال الرأسمالية تحت التنفيذ", path: "/finance/cip", icon: Building2 },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
@@ -419,7 +419,7 @@ export const allNavSections: NavSection[] = [
         { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
         { label: "فئات ضريبة الاستقطاع", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
-        { label: "جاهزية الفوترة الإلكترونية", path: "/finance/vat-filing-readiness", icon: FileCheck },
+        { label: "جاهزية إقرار ضريبة القيمة المضافة", path: "/finance/vat-filing-readiness", icon: FileCheck },
         { label: "مركز تقارير الزكاة والضريبة", path: "/finance/reports/zatca", icon: FileCheck },
         { label: "فواتير الأفراد موجَّهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
         { label: "عملاء بلا رقم ضريبي", path: "/finance/zatca/missing-tax", icon: AlertTriangle },
@@ -926,7 +926,7 @@ export const allNavSections: NavSection[] = [
           { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
-          { label: "مراقبة الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "كتالوج الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "صندوق الأحداث الصادرة", path: "/admin/outbox", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تتبّع الرحلات الحيّة", path: "/admin/journeys", icon: GitBranch, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مراقبة دورة الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
