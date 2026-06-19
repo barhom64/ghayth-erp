@@ -3,6 +3,7 @@ import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/shared/searchable-select";
 import { useToast } from "@/hooks/use-toast";
 
 export interface DepartmentFormValues {
@@ -13,11 +14,32 @@ export interface DepartmentFormValues {
   status: string;
 }
 
+/** The department row the create/edit endpoints return. */
+export interface DepartmentRow {
+  id: number;
+  name: string;
+}
+
+/** Minimal shapes the form's entity dropdowns consume. */
+interface BranchOption {
+  id: number;
+  name: string;
+}
+interface DepartmentOption {
+  id: number;
+  name: string;
+}
+interface EmployeeOption {
+  id: number;
+  name: string;
+  empNumber?: string;
+}
+
 const EMPTY: DepartmentFormValues = { name: "", branchId: "", parentId: "", managerId: "", status: "active" };
 
 export interface DepartmentFormProps {
   /** Called with the freshly-created department row after a successful create. */
-  onCreated?: (created: any) => void;
+  onCreated?: (created: DepartmentRow) => void;
   /** Called after any successful save (create OR edit) — host refetch/reset. */
   onSaved?: () => void;
   /** Called when the operator cancels (إلغاء). */
@@ -49,12 +71,12 @@ export function DepartmentForm({
 
   // Same query keys as the tab + selector so React Query shares one cache
   // entry (no duplicate network round-trips).
-  const { data: branchesResp } = useApiQuery<any>(["settings-branches"], "/settings/branches");
-  const { data: deptResp } = useApiQuery<any>(["settings-departments"], "/settings/departments");
-  const { data: employeesResp } = useApiQuery<any>(["employees-list-deps"], "/employees?limit=500");
-  const branches: any[] = asList(branchesResp);
-  const departments: any[] = asList(deptResp);
-  const employees: any[] = asList(employeesResp);
+  const { data: branchesResp } = useApiQuery<{ data: BranchOption[] }>(["settings-branches"], "/settings/branches");
+  const { data: deptResp } = useApiQuery<{ data: DepartmentOption[] }>(["settings-departments"], "/settings/departments");
+  const { data: employeesResp } = useApiQuery<{ data: EmployeeOption[] }>(["employees-list-deps"], "/employees?limit=500");
+  const branches = asList<BranchOption>(branchesResp);
+  const departments = asList<DepartmentOption>(deptResp);
+  const employees = asList<EmployeeOption>(employeesResp);
 
   const submit = async () => {
     if (!form.name.trim()) {
@@ -74,14 +96,18 @@ export function DepartmentForm({
         await apiFetch(`/settings/departments/${editingId}`, { method: "PUT", body: JSON.stringify(payload) });
         toast({ title: "تم تحديث القسم" });
       } else {
-        const res: any = await createMut.mutateAsync(payload);
-        const row = res?.data && res.data.id ? res.data : res;
+        const res = (await createMut.mutateAsync(payload)) as { data?: DepartmentRow } & Partial<DepartmentRow>;
+        const row = (res?.data && res.data.id ? res.data : res) as DepartmentRow;
         toast({ title: "تم إنشاء القسم" });
         onCreated?.(row);
       }
       onSaved?.();
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "فشل الحفظ", description: err?.message });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "فشل الحفظ",
+        description: err instanceof Error ? err.message : undefined,
+      });
     } finally {
       setSubmitting(false);
     }
@@ -101,50 +127,43 @@ export function DepartmentForm({
         </div>
         <div>
           <Label className="text-xs">الفرع</Label>
-          <select
-            data-testid="select-dept-branch"
-            className="w-full h-10 border rounded-md px-2 text-sm"
+          {/* حقل مرتبط بكيان حي → اختيار ببحث ذكي (الدستور §5/3)، لا قائمة صمّاء. */}
+          <SearchableSelect
+            testId="select-dept-branch"
             value={form.branchId}
-            onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-          >
-            <option value="">— كل الفروع —</option>
-            {branches.map((b: any) => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
+            onValueChange={(v) => setForm({ ...form, branchId: v })}
+            options={branches.map((b) => ({ value: String(b.id), label: b.name }))}
+            placeholder="— كل الفروع —"
+          />
         </div>
         <div>
           <Label className="text-xs">القسم الأب (اختياري)</Label>
-          <select
-            data-testid="select-dept-parent"
-            className="w-full h-10 border rounded-md px-2 text-sm"
+          <SearchableSelect
+            testId="select-dept-parent"
             value={form.parentId}
-            onChange={(e) => setForm({ ...form, parentId: e.target.value })}
-          >
-            <option value="">— جذر —</option>
-            {departments
-              .filter((d: any) => d.id !== editingId) /* prevent self-parent */
-              .map((d: any) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-          </select>
+            onValueChange={(v) => setForm({ ...form, parentId: v })}
+            options={departments
+              .filter((d) => d.id !== editingId) /* prevent self-parent */
+              .map((d) => ({ value: String(d.id), label: d.name }))}
+            placeholder="— جذر —"
+          />
         </div>
         <div>
           <Label className="text-xs">مدير القسم</Label>
-          <select
-            data-testid="select-dept-manager"
-            className="w-full h-10 border rounded-md px-2 text-sm"
+          <SearchableSelect
+            testId="select-dept-manager"
             value={form.managerId}
-            onChange={(e) => setForm({ ...form, managerId: e.target.value })}
-          >
-            <option value="">— بدون —</option>
-            {employees.map((e: any) => (
-              <option key={e.id} value={e.id}>{e.name} {e.empNumber ? `(${e.empNumber})` : ""}</option>
-            ))}
-          </select>
+            onValueChange={(v) => setForm({ ...form, managerId: v })}
+            options={employees.map((e) => ({
+              value: String(e.id),
+              label: e.empNumber ? `${e.name} (${e.empNumber})` : e.name,
+            }))}
+            placeholder="— بدون —"
+          />
         </div>
         <div>
           <Label className="text-xs">الحالة</Label>
+          {/* تعداد ثابت (نشط/غير نشط) وليس حقلًا مرتبطًا بكيان → قائمة بسيطة كافية؛ §5/3 لا ينطبق. */}
           <select
             data-testid="select-dept-status"
             className="w-full h-10 border rounded-md px-2 text-sm"
