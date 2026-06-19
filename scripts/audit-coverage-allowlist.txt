@@ -26,8 +26,12 @@
 #      • PATCH /finance/commitments/:id/approve        → applyTransition
 #      • PATCH /finance/financial-requests/:id/approve → applyTransition
 #      • PATCH /finance/receivables/:id/approve        → applyTransition
+#      • POST /finance/payment-run/execute             → emitEvent("payment_run.executed") L~2185 + per-PO applyTransition (both beyond window)
 #    (applyTransition lives in lib/lifecycleEngine.ts; it writes an event_logs
 #     row AND calls createAuditLog inside the transition transaction.)
+#
+# ── Non-mutating tombstone (kept; returns HTTP 410, performs no write — no audit needed):
+#      • POST /finance/fiscal-periods/:period/close    → 410 Gone, redirects to fiscal-periods-v2/:id/close
 #
 # Baseline captured: 199 unaudited write endpoint(s).
 DELETE /admin/governance/event-dlq/:id
@@ -125,7 +129,6 @@ POST /finance/ocr/extractions/:id/reject
 POST /finance/payment-run/execute
 POST /finance/pricing/resolve
 POST /finance/pricing/rules
-POST /finance/vendor-invoices
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
 POST /fleet/rental-contracts/:id/payments
