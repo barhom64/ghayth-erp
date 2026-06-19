@@ -1016,6 +1016,13 @@ router.patch("/classification-center/analytic-accounts/:id/link", authorize({ fe
       },
     });
 
+    createAuditLog({
+      companyId, userId,
+      action: "finance.analytic_account.linked", entity: "analytic_accounts", entityId: id,
+      after: { partyId: body.partyId, seasonId: body.seasonId, contractId: body.contractId, status: body.status },
+      reason: body.reason,
+    }).catch((e) => logger.error(e, "accounting-engine analytic-link audit failed"));
+
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "Link analytic account error:");

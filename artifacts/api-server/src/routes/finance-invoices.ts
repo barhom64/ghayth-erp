@@ -4615,9 +4615,16 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }
 
+    const sentCount = results.filter(r => r.status === "sent").length;
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.dunning.sent", entity: "dunning_letters", entityId: scope.companyId,
+      after: { sent: sentCount, total: results.length, sentVia },
+    }).catch((e) => logger.error(e, "finance-invoices dunning audit failed"));
+
     res.status(201).json({
       total: results.length,
-      sent: results.filter(r => r.status === "sent").length,
+      sent: sentCount,
       skipped: results.filter(r => r.status === "skipped").length,
       results,
     });
