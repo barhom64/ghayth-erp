@@ -133,7 +133,7 @@ export default function JournalManualCreatePage() {
             </div>
 
             <div className="rounded-xl border overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead className="bg-surface-subtle">
                   <tr>
                     <th className="px-3 py-2 text-right">رمز الحساب</th>
@@ -191,7 +191,7 @@ export default function JournalManualCreatePage() {
                     <td></td>
                   </tr>
                 </tfoot>
-              </table>
+              </table></div>
             </div>
 
             {!isBalanced && totalDebit > 0 && (

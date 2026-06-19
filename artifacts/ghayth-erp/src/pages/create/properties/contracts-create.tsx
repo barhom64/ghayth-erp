@@ -481,7 +481,7 @@ export default function ContractsCreate() {
             </CardHeader>
             <CardContent>
               <div className="max-h-64 overflow-y-auto">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead className="bg-surface-subtle sticky top-0">
                     <tr>
                       <th className="text-start p-2">#</th>
@@ -504,7 +504,7 @@ export default function ContractsCreate() {
                       <td className="p-2 text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</td>
                     </tr>
                   </tfoot>
-                </table>
+                </table></div>
               </div>
             </CardContent>
           </Card>
