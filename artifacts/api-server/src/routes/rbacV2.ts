@@ -243,7 +243,7 @@ router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete"
     if (!role) return void res.status(404).json({ error: "الدور غير موجود" });
     if (role.is_system) return void res.status(403).json({ error: "لا يمكن حذف الأدوار النظامية" });
 
-    const [{ count }] = await rawQuery<{ count: string }>(`SELECT COUNT(*)::text AS count FROM rbac_user_roles WHERE role_id = $1`, [id]);
+    const [{ count }] = await rawQuery<{ count: string }>(`SELECT COUNT(*)::text AS count FROM rbac_user_roles WHERE role_id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (Number(count) > 0) return void res.status(409).json({ error: `الدور مرتبط بـ ${count} مستخدم — افصلهم أولاً` });
 
     await rawExecute(`DELETE FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
@@ -1265,7 +1265,7 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
     // createNotification (which keys on assignmentId, not userId).
     void (async () => {
       const [{ rows: [j] }, asgRes] = await Promise.all([
-        rawQuery<Record<string, unknown>>(`SELECT "userId", feature_key, action, requested_minutes FROM rbac_jit_requests WHERE id = $1`, [id])
+        rawQuery<Record<string, unknown>>(`SELECT "userId", feature_key, action, requested_minutes FROM rbac_jit_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId])
           .then((rows) => ({ rows })),
         rawQuery<{ id: number }>(
           `SELECT ea.id FROM employee_assignments ea
