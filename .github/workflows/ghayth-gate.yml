@@ -23,7 +23,7 @@ jobs:
           node-version: "20"
       - name: تشغيل سكربتات التدقيق (بلا قاعدة بيانات)
         run: |
-          SCRIPTS="audit-domain-boundaries audit-stop-ship audit-event-bus check-frontend-backend-wiring check-duplicate-migrations audit-api-consumption check-no-physical-delete check-ledger-posting-single-path"
+          SCRIPTS="audit-domain-boundaries audit-stop-ship audit-event-bus check-frontend-backend-wiring check-duplicate-migrations audit-api-consumption check-no-physical-delete check-ledger-posting-single-path check-ledger-immutability"
           FAILED=0
           for s in $SCRIPTS; do
             f="scripts/src/$s.mjs"
