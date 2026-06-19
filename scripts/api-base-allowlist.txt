@@ -1,0 +1,9 @@
+# api-base-allowlist.txt
+#
+# Pre-existing files with a native-breaking API URL (relative
+# import.meta.env.BASE_URL or hardcoded fetch("/api…")). Accepted
+# baseline; the guard fails only on a file NOT listed here. Regenerate:
+#   node scripts/src/check-api-base.mjs --write-allowlist
+# Migrate each to `${API_BASE}/api/…` (import { API_BASE } from "@/lib/api").
+#
+# Baseline captured: 0 file(s).
