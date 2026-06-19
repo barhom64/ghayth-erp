@@ -402,8 +402,52 @@ psql "$DATABASE_URL" -c "UPDATE users SET \"lockedUntil\"=NULL,\"failedLoginAtte
 | #1978 | fleet: متابعة تدقيق (#1812) | صالح | rebase + guard |
 | #1771 | comms: ملاحظات داخلية على المحادثات | صالح | rebase + guard |
 
-### 11.6 تصنيف الجاهزية (Readiness Verdict)
+### 11.6 حادثة e2e على GitHub Actions: timeout 30m — السبب الجذري والإصلاح (2026-06-19)
 
-> **جاهز Pilot قوي جدًا، وينقص تفعيل حماية e2e يدويًا.**
+ثبّت المالك `.github/workflows/e2e.yml` على GitHub وشغّله، فـ**فشل بـ timeout (الوظيفة أُلغيت عند 30m20s)** — لا بفشل اختبار. فحصتُ تشغيلات Actions الفعلية عبر الـAPI (لا تخمين) فظهر السبب الجذري بدقّة:
 
-السبب الأمين: الحزمة الفنية خضراء ومدموجة و`guard` يحرس main، لكن بوّابة `e2e` **مُعَدّة لا مُنفَّذة** — تثبيتها كفحص GitHub مطلوب يتطلّب صلاحية `workflows` + إدارة لا يملكها الموصّل (أُثبت تجريبيًا بـ403). لا يُستخدم وصف «جاهز بالكامل/Production من ناحية الحماية» حتى يُكمل المالك خطوات 11.4 ويصبح `e2e` ظاهرًا ومطلوبًا على main.
+**التشغيلات الملغاة:**
+- run #8772 (push/main, sha `b3ff798e`) — `cancelled` بعد 30.3m — https://github.com/barhom64/ghayth-erp/actions/runs/27800636012
+- run #8771 (workflow_dispatch/main, sha `fb04ed1c`) — `cancelled` بعد 30.3m — https://github.com/barhom64/ghayth-erp/actions/runs/27800503867
+
+**تفكيك زمن الخطوات (من Actions API — الدليل الحاسم):**
+
+| # | الخطوة | الزمن | النتيجة |
+|---|---|---|---|
+| 3 | Checkout | 0.03m | ✅ |
+| 6 | Install dependencies | 0.05m | ✅ |
+| 7 | Load DB schema (441 جدول) | 0.12m | ✅ |
+| 8 | Build api-server | 0.02m | ✅ |
+| 9 | Build frontend | 0.53m | ✅ |
+| **10** | **Install Playwright browsers** | **29.15m** | **❌ cancelled (علِق)** |
+| 13 | **Run Playwright tests** | 0.00m | **⏭️ skipped — لم تُشغَّل إطلاقًا** |
+
+**السبب الجذري (مُثبَت):** سكربت `install-browsers` كان `playwright install --with-deps chromium`. الجزء `--with-deps` يستدعي `apt-get` الذي **علِق 29 دقيقة** على عداء ubuntu-latest حتى قُتِل عند سقف 30m — **قبل أن تبدأ أي اختبارات**. أي أن مجموعة E2E نفسها لم تكن السبب (محليًا 59/59 في 2.8m)؛ السبب خطوة تثبيت المتصفّح وحدها. للمقارنة: `audit-runtime.yml` (وظيفة CI القائمة التي تشغّل Chromium headless على نفس صورة العداء) لا تستخدم `--with-deps` إطلاقًا وتعمل بـ `timeout-minutes: 60`.
+
+**الإصلاح المطبَّق (هذا الـPR):**
+1. `e2e/package.json` → `install-browsers` صار `playwright install chromium` (حُذف `--with-deps`): صورة ubuntu-latest تشحن مكتبات Chromium الزمنية أصلًا، فلا حاجة لخطوة apt المعلِّقة. **يُشحَن عبر الـPR** ⇒ إن كانت خطوة الworkflow تستدعي هذا السكربت، يُصلَح تلقائيًا دون لمس YAML.
+2. `e2e/e2e.proposed.yml` (مصدر-الحقيقة): إضافة `actions/cache` لمتصفّحات Playwright (يتخطّى التنزيل في الإعادات) + `timeout-minutes: 10` على خطوة التثبيت (تفشل سريعًا وبوضوح بدل ابتلاع الميزانية) + رفع ميزانية الوظيفة `timeout-minutes` من 30 إلى 45 + توثيق الحادثة في التعليقات.
+
+**ما لا أستطيع فعله بنفسي (حدّ الصلاحيات):** لا أستطيع دفع `.github/workflows/e2e.yml` (PUT يُرجِع 403 — الموصّل بلا صلاحية `workflows`؛ مُعاد إثباته هذه الجلسة). لذا **إن كانت خطوة «Install Playwright browsers» في الworkflow المثبَّت تكتب الأمر سطرًا مباشرًا** بدل استدعاء سكربت npm، يجب أن يطبّق المالك يدويًا التعديل التالي على `.github/workflows/e2e.yml`:
+
+```diff
+       - name: Install Playwright browsers
+-        run: playwright install --with-deps chromium      # أو ما يعادله مع --with-deps
++        timeout-minutes: 10
++        run: pnpm --filter @workspace/e2e run install-browsers   # صار بلا --with-deps
+```
+(واختياريًا: ارفع `timeout-minutes` للوظيفة إلى 45، وأضف خطوة `actions/cache` كما في `e2e/e2e.proposed.yml`.)
+
+**التحقّق التجريبي القادم:** يفتح هذا الـPR تشغيل e2e تلقائيًا على فرعه (المحفّز `pull_request`). إن كانت الخطوة تستدعي السكربت ⇒ سيلتقط الإصلاح وينبغي أن يخضرّ؛ إن بقي يعلّق ⇒ ذلك يثبت أن الأمر مكتوب سطرًا مباشرًا والمالك يطبّق تعديل الـdiff أعلاه. النتيجة الفعلية تُسجَّل بعد التشغيل.
+
+### 11.7 تصنيف الجاهزية (Readiness Verdict)
+
+> **النظام جاهز Pilot قوي تقنيًا، لكنه ليس «جاهزًا بالكامل من ناحية الحماية» حتى يخضرّ e2e على GitHub Actions ثم يُضاف كفحص مطلوب.**
+
+الحالة الأمينة بعد الحادثة:
+- ✅ الحزمة الفنية خضراء محليًا (59/59) ومدموجة في main، و`guard` يحرس main كفحص مطلوب.
+- ✅ workflow الـe2e **مثبَّت** على GitHub الآن (لم يعُد ناقصًا).
+- ❌ لكنه **لم ينجح بعد على GitHub Actions** — فشل بـ timeout بسبب تعليق تثبيت المتصفّح (القسم 11.6). الإصلاح مُعَدّ في هذا الـPR، وينتظر إمّا الالتقاط التلقائي (إن كانت الخطوة سكربت-المصدر) أو تطبيق المالك لتعديل سطر واحد على الworkflow.
+- ⛔ **لا يُضاف `e2e` إلى الفحوص المطلوبة** حتى ينجح مرّة واحدة على Actions — إضافته الآن (وهو أحمر) ستُجمّد كل الدمج.
+
+لا أُعلِن «جاهز للإنتاج/الحماية كاملة» قبل تشغيل e2e أخضر مُثبَت على GitHub Actions.
