@@ -18,7 +18,7 @@
  * `direct-pdf-generation` lint rule (docs/architecture/print-platform.md).
  */
 
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, ApiError, API_BASE } from "@/lib/api";
 
 export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel" | "csv";
 
@@ -136,7 +136,7 @@ export async function previewDocument(input: {
   // Preview returns the bytes directly (not base64), since it bypasses
   // the audit envelope. We hit the endpoint with fetch directly because
   // apiFetch parses JSON by default.
-  const res = await fetch(`/api/print/preview`, {
+  const res = await fetch(`${API_BASE}/api/print/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-csrf-token": readCsrf() ?? "" },
     credentials: "include",
@@ -187,7 +187,7 @@ export async function downloadDocument(input: PrintRenderInput): Promise<void> {
  * if it exists.
  */
 export async function verifyDocument(jobId: string): Promise<PrintVerifyResponse> {
-  const res = await fetch(`/api/print/verify/${encodeURIComponent(jobId)}`);
+  const res = await fetch(`${API_BASE}/api/print/verify/${encodeURIComponent(jobId)}`);
   const body = (await res.json().catch(() => ({}))) as PrintVerifyResponse;
   return body;
 }

@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { API_BASE } from "@/lib/api";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { TextField } from "@/components/shared/form-field-wrapper";
 
-const BASE = "";
+const BASE = API_BASE;
 
 function formatSize(bytes: number) {
   if (!bytes) return "0 B";
