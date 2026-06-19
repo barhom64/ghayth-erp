@@ -14,7 +14,7 @@ const TABS = [
   // because operators reach for it before the trip exists.
   { href: "/fleet/transport/bookings", label: "النقل", icon: Clipboard, match: ["/fleet/transport"] },
   { href: "/fleet/trips", label: "الرحلات", icon: Navigation, match: ["/fleet/trips"] },
-  { href: "/fleet/cargo", label: "نقل البضائع", icon: Package, match: ["/fleet/cargo"] },
+  { href: "/fleet/cargo", label: "الشحن والبضائع", icon: Package, match: ["/fleet/cargo"] },
   // #2079 TA-T18-13 (FIX-12) — rental was orphaned from the in-page
   // fleet tabs even after TA-T18-09 split it onto its own
   // `fleet.rentals` feature. Surfacing it next to cargo so the

@@ -53,7 +53,7 @@ const PRIMARY_TABS: Tab[] = [
 const MONITORING_TABS: Tab[] = [
   { href: "/umrah/compliance", label: "لوحة الامتثال", icon: AlertTriangle, match: ["/umrah/compliance"] },
   { href: "/umrah/daily-runsheet", label: "كشف اليوم", icon: ClipboardList, match: ["/umrah/daily-runsheet"] },
-  { href: "/umrah/exempt-pilgrims", label: "المستثنون", icon: Shield, match: ["/umrah/exempt-pilgrims"] },
+  { href: "/umrah/exempt-pilgrims", label: "المعفون", icon: Shield, match: ["/umrah/exempt-pilgrims"] },
   { href: "/umrah/reconciliation", label: "المطابقة", icon: Scale, match: ["/umrah/reconciliation"] },
 ];
 
