@@ -127,7 +127,7 @@ export default function IntercompanyPage() {
       loading={isLoading}
       actions={
         <>
-          <Link href="/finance/intercompany/consolidation/create">
+          <Link href="/finance/intercompany/consolidation">
             <GuardedButton perm="finance:create" variant="outline">
               <Layers className="h-4 w-4 ml-2" />
               القوائم الموحدة

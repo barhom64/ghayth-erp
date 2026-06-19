@@ -4,7 +4,7 @@ import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
-export default function IntercompanyConsolidationCreatePage() {
+export default function IntercompanyConsolidationPage() {
   const { scopeQueryString } = useAppContext();
   const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
