@@ -93,7 +93,7 @@ jobs:
             exit 0
           fi
           BASE="origin/${{ github.base_ref }}"
-          git fetch origin "${{ github.base_ref }}" >/dev/null 2>&1 || true
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
           echo "::group::حكم المجلس متعدد النماذج"
           node scripts/src/council.mjs --range "$BASE..HEAD" --title "PR #${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}"
           echo "::endgroup::"
