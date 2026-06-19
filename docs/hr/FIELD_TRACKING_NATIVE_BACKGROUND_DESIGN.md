@@ -102,5 +102,51 @@ if (Capacitor.isNativePlatform()) {
 ---
 
 ## 6. حالة التنفيذ
-- ✅ **الأساس backend** (هذا الـPR): التوكن المحدود + الحارس المركزي + endpoint الإصدار + اختبارات.
-- ⏳ **طبقة Capacitor + الجسر**: PR لاحق (يتطلب بيئة بناء جوال).
+- ✅ **الأساس backend**: التوكن المحدود + الحارس المركزي + endpoint الإصدار + اختبارات.
+- ✅ **تحسين المتصفح**: `field-companion.tsx` يستخدم Wake Lock (يمنع قفل الشاشة) + تحذير عند إخفاء الصفحة. يعمل للموظف المتعاون الذي يُبقي الصفحة مفتوحة.
+- ✅ **جسر Capacitor (كود)**: `lib/field-tracking-native.ts` — خامل على الويب (dynamic import بـ@vite-ignore)، ينشط داخل التطبيق الأصلي فيرسل الموقع الخلفي إلى `/my/field/ping` بتوكن Bearer. `field-companion` يجرّب الأصلي أولاً ثم يسقط لمسار المتصفح.
+- ✅ **`capacitor.config.ts`**: جاهز (appId `sa.door.ghayth`، webDir `dist`).
+- ⏳ **بناء التطبيق الأصلي**: الخطوات أدناه — تُنفَّذ على Replit/ماك/أندرويد ستوديو.
+
+---
+
+## 7. خطوات البناء على الجوال (تُنفَّذ خارج هذه البيئة)
+
+```bash
+# 1) تثبيت Capacitor + plugin التتبع الخلفي (MIT مجاني)
+cd artifacts/ghayth-erp
+pnpm add @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios \
+         @capacitor-community/background-geolocation
+
+# 2) بناء الويب ثم توليد المشاريع الأصلية
+pnpm build                       # ينتج dist/ (webDir في capacitor.config.ts)
+npx cap add android
+npx cap add ios                  # iOS يتطلب ماك + Xcode
+npx cap sync
+
+# 3) أصل الـAPI للتطبيق الأصلي (الحزمة محلية، فالمسار النسبي لا يكفي)
+#    اضبط قبل البناء:  VITE_API_ORIGIN=https://hr.door.sa
+
+# 4) الأذونات الأصلية
+#    android/app/src/main/AndroidManifest.xml:
+#      <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+#      <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+#      <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+#      <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+#    ios/App/App/Info.plist:
+#      NSLocationAlwaysAndWhenInUseUsageDescription / NSLocationWhenInUseUsageDescription
+#      UIBackgroundModes → location
+
+# 5) التشغيل/البناء
+npx cap open android             # Android Studio → Run/Build APK
+npx cap open ios                 # Xcode → Run/Archive
+```
+
+> **ملاحظة Replit:** بيئة الجوال على Replit تكفي لبناء **أندرويد** (الأقوى
+> للتتبع الخلفي). iOS يتطلب ماك + Xcode + حساب Apple Developer لمراجعة
+> «الموقع: دائمًا».
+
+### بعد التثبيت — لا تغيير على الكود
+`field-tracking-native.ts` يكتشف وجود `window.Capacitor` تلقائيًا. فور بناء
+التطبيق وتثبيت الـplugin، يتحوّل `field-companion` للمسار الأصلي بلا أي
+تعديل إضافي — الكود جاهز ومنتظِر الطبقة الأصلية.
