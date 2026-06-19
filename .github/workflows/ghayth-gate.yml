@@ -1,0 +1,99 @@
+# بوابة غيث — تطبّق فحوص الدستور والتدقيق + المجلس متعدد النماذج على كل دفع و PR.
+# المسار في المستودع: .github/workflows/ghayth-gate.yml
+#
+# الأسرار المطلوبة (يضيفها المالك في: Settings → Secrets and variables → Actions):
+#   - OPENROUTER_API_KEY : لتشغيل المجلس الرباعي (الطبقة 2). إن غاب → يُتخطّى المجلس بوضوح.
+#   - DATABASE_URL (اختياري) : لتشغيل فحوص قاعدة البيانات الحيّة.
+name: ghayth-gate
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master, "claude/**"]
+
+jobs:
+  constitution-audits:
+    name: constitution-audits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: تشغيل سكربتات التدقيق (بلا قاعدة بيانات)
+        run: |
+          SCRIPTS="audit-domain-boundaries audit-stop-ship audit-event-bus check-frontend-backend-wiring check-duplicate-migrations audit-api-consumption"
+          FAILED=0
+          for s in $SCRIPTS; do
+            f="scripts/src/$s.mjs"
+            if [ -f "$f" ]; then
+              echo "▶ $s"
+              if ! node "$f"; then echo "❌ فشل: $s"; FAILED=1; fi
+            else
+              echo "⏭ غير موجود (تخطّي): $s"
+            fi
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "🚫 بوابة الدستور: فشل فحص واحد أو أكثر."
+            exit 1
+          fi
+          echo "✅ كل فحوص التدقيق مرّت."
+
+  db-audits:
+    name: db-audits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: تشغيل فحوص قاعدة البيانات (إن وُجد DATABASE_URL)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "⏭ DATABASE_URL غير مهيّأ — تخطّي فحوص قاعدة البيانات."
+            exit 0
+          fi
+          SCRIPTS="check-schema-drift check-ghost-rows check-sql-ambiguity"
+          FAILED=0
+          for s in $SCRIPTS; do
+            f="scripts/src/$s.mjs"
+            if [ -f "$f" ]; then
+              echo "▶ $s"
+              if ! node "$f"; then echo "❌ فشل: $s"; FAILED=1; fi
+            else
+              echo "⏭ غير موجود: $s"
+            fi
+          done
+          if [ "$FAILED" -ne 0 ]; then echo "🚫 فشل فحص قاعدة بيانات."; exit 1; fi
+          echo "✅ فحوص قاعدة البيانات مرّت."
+
+  # الطبقة 2 من ghayth-review: المجلس متعدد النماذج (GPT + Gemini + Grok + Claude)
+  # على diff الـPR. غير حاجب (informational): يطبع الحكم في سجل Actions؛ القرار
+  # النهائي للمالك. إن غاب المفتاح → يُتخطّى بوضوح (لا مجلس وهمي).
+  council-review:
+    name: council-review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: المجلس متعدد النماذج على diff الـPR
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if [ -z "$OPENROUTER_API_KEY" ]; then
+            echo "⏭ OPENROUTER_API_KEY غير مهيّأ — المجلس منقوص، يُتخطّى هنا."
+            exit 0
+          fi
+          BASE="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" >/dev/null 2>&1 || true
+          echo "::group::حكم المجلس متعدد النماذج"
+          node scripts/src/council.mjs --range "$BASE..HEAD" --title "PR #${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}"
+          echo "::endgroup::"
