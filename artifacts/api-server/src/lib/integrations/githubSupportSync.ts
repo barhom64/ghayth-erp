@@ -65,6 +65,7 @@ export function buildIssueBody(
   ticket: Pick<SupportTicketRow, "id" | "ref" | "category" | "priority" | "status" | "description" | "slaDeadline">,
   reporter: string,
   ghaythBaseUrl: string,
+  mentionAssistant: boolean,
 ): string {
   const lines: (string | null)[] = [
     `**التذكرة:** ${ticket.ref ?? ticket.id}`,
@@ -78,6 +79,11 @@ export function buildIssueBody(
     ticket.description ?? "—",
     "",
     `🔗 التذكرة في غيث: ${ghaythBaseUrl}/support/${ticket.id}`,
+    // @claude يُفعّل وكيل ghayth-claude-agent للتحقيق التلقائي في البلاغ
+    // («الدعم الفني = الفريق + المساعد الذكي»). يُعطَّل عبر config.mentionClaude=false.
+    mentionAssistant
+      ? "\n@claude هذا بلاغ دعم تقني من نظام غيث — رجاءً حقّق في المشكلة، بيّن السبب المحتمل، واقترح إصلاحًا."
+      : null,
     "",
     "—",
     "_أُنشئ تلقائيًا من نظام غيث للدعم الفني._",
@@ -152,12 +158,13 @@ export async function syncTicketToGithub(payload: EventPayload): Promise<void> {
     }
   }
 
-  const baseUrl = String(integration.config.ghaythBaseUrl ?? "https://hr.door.sa");
+  const baseUrl = String(integration.config.ghaythBaseUrl ?? "https://erp.door.sa");
+  const mentionAssistant = integration.config.mentionClaude !== false; // افتراضي: نعم — يصل البلاغ للمساعد الذكي
   const issue = await createGithubIssue(
     repo,
     token,
     `[دعم #${ticket.ref ?? ticket.id}] ${ticket.title}`,
-    buildIssueBody(ticket, reporter, baseUrl),
+    buildIssueBody(ticket, reporter, baseUrl, mentionAssistant),
     ["support", `priority:${ticket.priority ?? "medium"}`, `category:${ticket.category ?? "—"}`],
   );
 
