@@ -82,6 +82,9 @@ run_step "gate:labels"        pnpm -s run gate:labels
 #                        titles stay Arabic like the sidebar (established acronyms
 #                        WPS / ZATCA / WHT / PDPL / … are allow-listed).
 run_step "gate:nav-titles"    pnpm -s run gate:nav-titles
+#   gate:subtabs       — fails if a page's in-page sub-tab (<TabsTrigger>) leaks
+#                        English; keeps the SECOND horizontal menu layer Arabic.
+run_step "gate:subtabs"       pnpm -s run gate:subtabs
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a
