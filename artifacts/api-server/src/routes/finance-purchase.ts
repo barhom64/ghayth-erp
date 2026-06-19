@@ -3459,6 +3459,12 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     });
     markIdempotencyReplay(req, res, vinvAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_invoice.created", entity: "vendor_invoices", entityId: invoiceId ?? 0,
+      after: { ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-invoice-create audit failed"));
+
     res.status(201).json({ invoiceId, ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId, status: "approved" });
   } catch (err) {
     handleRouteError(err, res, "Vendor invoice create error:");
