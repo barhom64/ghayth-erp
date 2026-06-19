@@ -1,0 +1,9 @@
+# responsive-tables-allowlist.txt
+#
+# Pre-existing files with a raw <table> not wrapped in an overflow
+# scroll container. Accepted baseline offenders; the guard fails only
+# on a file NOT listed here. Regenerate with:
+#   node scripts/src/check-responsive-tables.mjs --write-allowlist
+# As tables are wrapped (or moved to <DataTable>), prune their line.
+#
+# Baseline captured: 0 file(s).

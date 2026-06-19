@@ -409,7 +409,7 @@ export default function Vendor360SheetPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-start py-2 px-2">العنوان</th>
@@ -449,7 +449,7 @@ export default function Vendor360SheetPage() {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
           )}
@@ -464,7 +464,7 @@ export default function Vendor360SheetPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-start py-2 px-2">المرجع</th>
@@ -489,7 +489,7 @@ export default function Vendor360SheetPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
           )}
@@ -504,7 +504,7 @@ export default function Vendor360SheetPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-start py-2 px-2">التاريخ</th>
@@ -529,7 +529,7 @@ export default function Vendor360SheetPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
           )}

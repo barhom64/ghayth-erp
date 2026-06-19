@@ -680,7 +680,7 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-surface-subtle">
                   <th className="text-start p-2">الفحص</th>
@@ -706,7 +706,7 @@ export default function AdminMonitoring() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}
@@ -720,7 +720,7 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-surface-subtle">
                   <th className="text-start p-2">من</th>
@@ -737,7 +737,7 @@ export default function AdminMonitoring() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}

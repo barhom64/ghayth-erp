@@ -333,7 +333,7 @@ export default function CustomerAdvancesPage() {
                 </CardHeader>
                 {isOpen && (
                   <CardContent className="pt-0">
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto"><table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-xs text-muted-foreground">
                           <th className="text-start py-2 px-2">المرجع</th>
@@ -382,7 +382,7 @@ export default function CustomerAdvancesPage() {
                           );
                         })}
                       </tbody>
-                    </table>
+                    </table></div>
                     {g.clientId && (
                       <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                         <Button asChild size="sm" variant="outline"><Link href={`/finance/customer-360-sheet?clientId=${g.clientId}`}>

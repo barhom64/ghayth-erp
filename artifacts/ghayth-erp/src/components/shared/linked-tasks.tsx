@@ -41,6 +41,7 @@ export function LinkedTasks({ entityType, entityId }: LinkedTasksProps) {
         ) : tasks.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">لا توجد مهام مرتبطة</p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-surface-subtle">
@@ -78,6 +79,7 @@ export function LinkedTasks({ entityType, entityId }: LinkedTasksProps) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </CardContent>
     </Card>
