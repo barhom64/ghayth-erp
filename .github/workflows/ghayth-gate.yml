@@ -70,30 +70,7 @@ jobs:
           if [ "$FAILED" -ne 0 ]; then echo "🚫 فشل فحص قاعدة بيانات."; exit 1; fi
           echo "✅ فحوص قاعدة البيانات مرّت."
 
-  # الطبقة 2 من ghayth-review: المجلس متعدد النماذج (GPT + Gemini + Grok + Claude)
-  # على diff الـPR. غير حاجب (informational): يطبع الحكم في سجل Actions؛ القرار
-  # النهائي للمالك. إن غاب المفتاح → يُتخطّى بوضوح (لا مجلس وهمي).
-  council-review:
-    name: council-review
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - name: المجلس متعدد النماذج على diff الـPR
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: |
-          if [ -z "$OPENROUTER_API_KEY" ]; then
-            echo "⏭ OPENROUTER_API_KEY غير مهيّأ — المجلس منقوص، يُتخطّى هنا."
-            exit 0
-          fi
-          BASE="origin/${{ github.base_ref }}"
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          echo "::group::حكم المجلس متعدد النماذج"
-          node scripts/src/council.mjs --range "$BASE..HEAD" --title "PR #${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}"
-          echo "::endgroup::"
+# ملاحظة: الطبقة 2 (المجلس) ليست وظيفة CI. المجلس يعيش في مهارة ghayth-review
+# ويؤدّيه Claude بأدوار متعددة (عدسات + رئيس) على كل تغيير داخل Claude Code —
+# مجانًا، بلا أي مفتاح API. السكربت scripts/src/council.mjs يبقى خاملًا في
+# المستودع لمسار OpenRouter المستقبلي، لكن لا يُستدعى من CI.
