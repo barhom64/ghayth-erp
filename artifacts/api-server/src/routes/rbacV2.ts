@@ -1188,7 +1188,7 @@ const jitDecisionSchema = z.object({
 router.post("/jit/request", async (req, res) => {
   try {
     const scope = req.scope!;
-    const body = jitRequestSchema.parse(req.body);
+    const body = zodParse(jitRequestSchema.safeParse(req.body));
 
     // Validate against the feature catalog: feature must exist, action
     // must be in availableActions, and scope must be in availableScopes.
