@@ -80,6 +80,10 @@ const OFF_SIDEBAR_ALLOWLIST = new Set([
   // only for old bookmarks, and is pinned as a redirect shell by
   // platformWave2Pr4OrphansCleanupSmoke + hr015_016_017Smoke.
   "/my/work-queue",
+  // عرض «القوائم الموحدة» للمعاملات البينية — قراءة فقط (الخلفية GET فقط، لا إنشاء).
+  // يُفتح من زر «القوائم الموحدة» على /finance/intercompany، لا من القائمة. كان
+  // مسبقًا تحت لاحقة /create المُضلِّلة فصُنّف تلقائيًا؛ بعد إسقاط اللاحقة يحتاج إدراجًا صريحًا.
+  "/finance/intercompany/consolidation",
 ]);
 
 /** Strip a trailing query string / hash so nav paths compare to route paths. */

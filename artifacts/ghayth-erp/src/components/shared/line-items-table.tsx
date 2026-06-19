@@ -86,6 +86,7 @@ export function LineItemsTable<T>({
   return (
     <div className={cn("space-y-2", className)} dir="rtl">
       <div className="rounded-xl border overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-surface-subtle">
             <tr>
@@ -127,6 +128,7 @@ export function LineItemsTable<T>({
             {renderTotals?.()}
           </tbody>
         </table>
+        </div>
       </div>
 
       <Button

@@ -262,6 +262,7 @@ export function CreditMemoDialog({
                 </Badge>
               </p>
               <div className="text-xs">
+                <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="text-muted-foreground bg-muted/50">
                     <tr>
@@ -287,6 +288,7 @@ export function CreditMemoDialog({
                     </tr>
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           </div>
