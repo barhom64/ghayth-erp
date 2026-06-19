@@ -31,7 +31,7 @@
 | Phase 17 — مهام cron | 100 مهمّة مُسجَّلة · تشغيل 10 تمثيلية → كلها 200/success · `cron_logs` نمت **بالضبط +10** · عمل فعلي (تنبيهات/تدقيق ذاتي/KPI) |
 | Phase 18 — التقارير ببيانات مصدر | **مُتحقَّق 200 ببيانات**: trial-balance (179 صف) · income-statement · balance-sheet · bi/(overview,kpis,dashboards 3421B,ceo-dashboard,admin-reports/daily,operations/bottleneck) · umrah/dashboard · support/tickets (6) · hr/employees-status · finance/invoices (0 صف). _ملاحظة أمينة: 8 مسارات dashboard خمّنها الهارنس خطأً أعادت 404 (ليست المسارات الأساسية)_ |
 | Phase 19 — حالات سير العمل | `approval_requests` {معلّق3/مقبول1/مرفوض1} · `journal_entries` {مسودّة2/بانتظار اعتماد2} — توزيعات آلة-حالات حقيقية |
-| Phase 20 — رحلات E2E الكاملة | 18 ملف / 59 اختبار Playwright — **لم تكتمل في هذه الجلسة** (الحزمة مبوّبة على CI المعزول `e2e.yml`؛ تتعلّق ad-hoc ضدّ التطوير الحيّ)؛ **لا يُدَّعى 59/59**؛ الرحلات المكافئة مُثبتة على طبقة HTTP/DB |
+| Phase 20 — رحلات E2E الكاملة | 18 ملف / 59 اختبار Playwright — **✅ 59/59 نجاح · 0 فشل · 0 flaky · 2.8 دقيقة · 0× HTTP 500** (مُثبَت تجريبيًا عبر الهارنس المعزول `E2E Isolated Run`: `E2E_EXIT=0`, `59 passed (2.8m) using 1 worker`). الإصلاحات مدموجة في main عبر **PR #2626** (SHA `3e26a22`) بعد اجتياز `guard` ومراجعة المعمار. تفصيل حالة الحماية في القسم 11 |
 
 ---
 
@@ -311,3 +311,99 @@ cd artifacts/api-server && node scripts/qa-rbac-matrix.mjs --teardown
 rm -rf docs/testing/generated/.rbac-parts
 psql "$DATABASE_URL" -c "UPDATE users SET \"lockedUntil\"=NULL,\"failedLoginAttempts\"=0 WHERE email LIKE 'qa.%@qa.test';"
 ```
+
+---
+
+## 11. حالة حماية main بعد الاختبارات (Protection Status)
+
+**آخر تحديث:** 2026-06-18 · **الوكيل:** Main agent — Build mode · **عقد الأمانة سارٍ:** كل ادّعاء أدناه مدعوم بطلب GitHub API فعلي مُسجَّل في هذه الجلسة.
+
+### 11.1 إثبات أن main يحوي PR #2626 والحزمة خضراء
+
+| البند | الدليل التجريبي | النتيجة |
+|---|---|---|
+| PR #2626 مدموج | `GET /repos/barhom64/ghayth-erp/pulls/2626` → `state=closed, merged=true` | ✅ مدموج |
+| SHA الدمج = رأس main | `merge_commit_sha = 3e26a222c5894896436d065ee8bd63c0a3c3b86b` = `GET /commits/main` HEAD | ✅ مطابق |
+| حزمة E2E خضراء | الهارنس المعزول `E2E Isolated Run`: `/tmp/e2e_isolated/e2e.exit = E2E_EXIT=0` · `Running 59 tests using 1 worker → 59 passed (2.8m)` | ✅ 59/59 · 0 فشل · 0 flaky |
+| لا أخطاء خادم | `grep -c " 500 " /tmp/e2e_isolated/api.log` = **0** | ✅ 0× HTTP 500 |
+| `workers:1` في CI مقصود وموثَّق | `e2e/playwright.config.ts` سطر 46–52: تعليق يشرح سباق دوران refresh-token لحساب الأدمن المشترك بين العمّال المتوازين | ✅ مقصود |
+| مساعد login يفشل بصدق | `e2e/tests/_helpers/login.ts`: حلقة محاولتين تُعيد فقط عند ارتداد `/login` النادر، وترمي استثناءً عند فشل المحاولتين — لا تُخفي عطلًا حقيقيًا (أقرّه المعمار: PASS) | ✅ لا إخفاء |
+| لا عيب منتج مُخفى بحيلة اختبار | مراجعة المعمار (includeGitDiff) على الملفات الثمانية: **PASS** صريح، «لا إخفاء لأي خطأ منتج» | ✅ |
+
+### 11.2 الحدّ الصلب للصلاحيات — لماذا لم تُؤتمت الحماية
+
+تطبيق GitHub المربوط عبر موصّل Replit **يفتقر صلاحية `workflows`** (وعلى الأرجح صلاحية الإدارة على الـrulesets). أُثبت ذلك تجريبيًا في هذه الجلسة، لا تخمينًا:
+
+| المحاولة | الطلب | النتيجة |
+|---|---|---|
+| قراءة مجلد الworkflows | `GET /contents/.github/workflows?ref=main` | **403** |
+| إنشاء فرع اختبار | `POST /git/refs` (`agent/e2e-workflow-install` من رأس main) | 201 ✅ (لإثبات أن الكتابة العادية تعمل) |
+| **كتابة ملف الworkflow** | `PUT /contents/.github/workflows/e2e.yml` | **403 (محجوب بـ Cloudflare/GitHub)** ← هذا هو الحدّ |
+| تنظيف فرع الاختبار | `DELETE /git/refs/heads/agent/e2e-workflow-install` | 204 ✅ (لم يبقَ أثر) |
+
+**الخلاصة:** يمكنني إنشاء فروع وملفات عادية، لكن **أي ملف تحت `.github/workflows/` محجوب بـ 403**. لذا لا يمكن تثبيت `e2e.yml` على main برمجيًا، ولا يظهر فحص `e2e` على GitHub، وبالتالي **لا يجوز ولا يمكن** إضافته للفحوص المطلوبة بعد. إضافته قبل ظهوره على main ستُجمّد **كل** عمليات الدمج المستقبلية.
+
+### 11.3 حالة الحماية الحالية (مقروءة من الـruleset فعليًا)
+
+`GET /repos/barhom64/ghayth-erp/rulesets` →
+
+- **`main-protection`** (id `16281889`) — الإنفاذ: **active**. القواعد: `deletion` (محظور) · `non_fast_forward` · `pull_request` (PR إلزامي) · **`required_status_checks` = [`guard`]** · `required_linear_history`.
+- `no-branch-creation` (id `16422006`) — **معطّل**.
+
+| سؤال الحماية | الإجابة الأمينة |
+|---|---|
+| هل workflow الـe2e مثبَّت على main؟ | **لا** — محجوب بـ 403 (صلاحية workflows مفقودة) |
+| هل e2e ظاهر كفحص GitHub؟ | **لا** (لن يظهر قبل تثبيت الملف وتشغيله مرّة) |
+| هل e2e مطلوب للدمج؟ | **لا** (مُعَدّ كمصدر-حقيقة `e2e/e2e.proposed.yml` فقط) |
+| هل `guard` ما يزال مطلوبًا؟ | **نعم** — الفحص المطلوب الوحيد، سليم لم يُمَسّ |
+| هل الحماية القائمة محفوظة؟ | **نعم** — لم تُضعَّف ولم تُحذَف أي قاعدة |
+| هل أُجري PR/اختبار تحقّق للحماية؟ | جزئيًا — تحقّق إنفاذ الـruleset بالقراءة المباشرة؛ تحقّق «لا يمكن الدمج بدون e2e» يتعذّر قبل وجود الفحص |
+| ما المتبقّي يدويًا؟ | تثبيت `e2e.yml` + إضافته للفحوص المطلوبة (خطوات 11.4) |
+
+### 11.4 خطوات المالك اليدوية الدقيقة (مطلوبة لإكمال الحماية)
+
+**الملف المصدر (جاهز ومدموج على main):** `e2e/e2e.proposed.yml`
+**الوجهة:** `.github/workflows/e2e.yml`
+المحتوى المطلوب = كتلة `e2e.proposed.yml` بدءًا من سطر `name: e2e` حتى نهاية الملف (احذف فقط كتلة التعليق التوضيحي الأولى أسطر 1–46). اسم الـworkflow `name: e2e` ⇒ **اسم الفحص الذي سيظهر على GitHub هو `e2e`** (اسم الوظيفة `e2e` أيضًا).
+
+**الخطوة 1 — تثبيت الملف (تحتاج صلاحية `workflows`):** أيٌّ مما يلي:
+- عبر واجهة GitHub: `Add file → Create new file` باسم `.github/workflows/e2e.yml`، الصق المحتوى أعلاه، Commit عبر PR إلى main، انتظر `guard` يصبح أخضر، ثم Squash-merge.
+- أو ادفعه من جهاز/توكن يحمل صلاحية `workflows` OAuth.
+
+**الخطوة 2 — تشغيله مرّة على main:** بعد الدمج، شغّله من تبويب Actions (`workflow_dispatch` متاح) أو سيُشغَّل تلقائيًا على أوّل push/PR. تأكّد من: النتيجة `success`، 59/59، 0 فشل، 0 flaky، 0× HTTP 500. سجّل: رابط التشغيل، run id، المدّة.
+
+**الخطوة 3 — إضافته للفحوص المطلوبة (تحتاج صلاحية إدارة):**
+1. GitHub → المستودع `barhom64/ghayth-erp`.
+2. `Settings → Rules → Rulesets` (أو `Settings → Branches`).
+3. افتح الـruleset النشط **`main-protection`** (id `16281889`).
+4. ضمن **Require status checks to pass** أضف الفحص باسمه الحرفي: **`e2e`** — **مع إبقاء `guard` كما هو**.
+5. Save.
+6. تحقّق بـ PR تجريبي بسيط أن الدمج محظور حتى ينجح `e2e` + `guard` معًا.
+
+> ⚠️ **تحذير حرج:** لا تُضِف `e2e` للفحوص المطلوبة **قبل** أن يكون قد ظهر ونجح على main مرّة واحدة على الأقل. الفحص المطلوب غير الموجود لا يصبح أخضر أبدًا ⇒ سيُجمّد **كل** الدمج.
+
+### 11.5 إعادة فحص الـPRs المفتوحة (15 PR — لم يُدمَج أيٌّ منها أعمى)
+
+سياسة: **لا دمج أعمى.** كلّها متخلّفة عن main وتحتاج rebase + `guard` أخضر (و`e2e` لاحقًا) قبل أي دمج. التصنيف من قراءة فعلية للملفات:
+
+| PR | العنوان | التصنيف | التوصية |
+|---|---|---|---|
+| **#2614** | de-flake login + حارس bare-root `goto("/")` | **ليس مكرَّرًا لـ#2626** — يلمس `auth.spec`/`dashboard.spec`/`idempotency.spec` + حارس guard.sh جديد، لا `login.ts`. حالة `behind` | قيّم المالك: rebase + guard؛ تحقّق أن `login.ts` (#2626) يجتاز حارس `check-e2e-login-pattern` الجديد قبل الدمج |
+| **#2610** | hr-wps: شرط `companyId` على UPDATE | **ما يزال صالحًا** — تعزيز عزل مستأجر دفاعي صغير (2 ملف) | rebase + guard (+ e2e) ثم دمج |
+| **#2608** | rbacV2/finance: شروط `companyId` دفاعية | **ما يزال صالحًا** — نفس صنف #2610 | rebase + guard (+ e2e) ثم دمج |
+| **#2583** | finance: تجربة إدخال المصروفات (#2230) | **ذو قيمة** — ميزة + 8 اختبارات smoke (13 ملف). `behind` | rebase + إعادة اختبار + مراجعة المالك قبل الدمج |
+| **#2580** | "vigilant pasteur" | **نطاق مُحدَّد الآن:** حزمة كبيرة (48 ملف، +4082) — صفحات finance فرعية (amortization/CIP/classification-center/deferred-revenue/insurance-premium/misparented) + خريطة تنقّل canonical + حواس guard جديدة | **قرار المالك** — كبيرة وعالية المخاطر؛ لا دمج دون مراجعة + guard + e2e |
+| #2560 | finance: محوّل product-revenue | صالح، refactor | rebase + guard، قرار المالك |
+| #2531 | org: روابط مؤسسية في إنشاء الموظف | صالح | rebase + guard |
+| #2520/#2516/#2515 | umrah-routes U-07 نحت (مراحل 4/3/2) | سلسلة refactor متتالية | دمج بالترتيب بعد guard، قرار المالك |
+| #2021 | deps: تحديث pnpm-lock لـyaml@2.9.0 | تحقّق إن ما زال لازمًا بعد main الحالي | قد يكون قديمًا — قرار المالك |
+| #2009 | mobile-deploy `/mobile/` | **[محظور]** ينتظر PR الأساس | يبقى محظورًا |
+| #1992 | mobile: تصحيح حقول 4 أقسام كتابة | صالح | rebase + guard |
+| #1978 | fleet: متابعة تدقيق (#1812) | صالح | rebase + guard |
+| #1771 | comms: ملاحظات داخلية على المحادثات | صالح | rebase + guard |
+
+### 11.6 تصنيف الجاهزية (Readiness Verdict)
+
+> **جاهز Pilot قوي جدًا، وينقص تفعيل حماية e2e يدويًا.**
+
+السبب الأمين: الحزمة الفنية خضراء ومدموجة و`guard` يحرس main، لكن بوّابة `e2e` **مُعَدّة لا مُنفَّذة** — تثبيتها كفحص GitHub مطلوب يتطلّب صلاحية `workflows` + إدارة لا يملكها الموصّل (أُثبت تجريبيًا بـ403). لا يُستخدم وصف «جاهز بالكامل/Production من ناحية الحماية» حتى يُكمل المالك خطوات 11.4 ويصبح `e2e` ظاهرًا ومطلوبًا على main.
