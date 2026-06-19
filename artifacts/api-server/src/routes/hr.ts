@@ -5136,17 +5136,17 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
       const totalBankPayout = Math.max(0, totalNet);
 
-      const [updatedRun] = await rawQuery<Record<string, unknown>>(
-        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
-        [status, id, scope.companyId, existing.status]
+      // HR-002 (atomicity) — flip the run to 'posted' AND post its payment JE
+      // in ONE transaction (reentrant withTransaction) so a GL failure can
+      // never leave the run posted-without-entry, nor a status flip without a
+      // settlement. Returns null when no row matched the expected status (a
+      // concurrent post / vanished run) → same 404 as before; no JE is posted.
+      const { hrEngine } = await import("../lib/engines/index.js");
+      const updatedRun = await hrEngine.postPayrollRunWithGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        { runId: id, period, totalBankPayout, fromStatus: existing.status as string }
       );
       if (!updatedRun) throw new NotFoundError("دورة الرواتب غير موجودة");
-
-      const { hrEngine } = await import("../lib/engines/index.js");
-      await hrEngine.postPayrollPostGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
-        { runId: id, period, totalBankPayout }
-      );
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)
       try {
