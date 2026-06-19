@@ -69,9 +69,10 @@ export function expectedDimensionForAccount(code: string | null | undefined): Ex
 // ضيّقًا وآمنًا ويتوسّع صنفًا صنفًا (ratchet) فور التحقق/إصلاح مسار الإدخال.
 //   • enforce → يُرفَض الترحيل إن غاب البُعد.
 //   • warn    → يُسجَّل تحذير فقط (بلا رفض) — لا تعطيل إنتاج.
-// **أول إنفاذ: وقود المركبة (5510 + أوراقه الفرعية)** — المسار الآلي (fleetEngine)
-// والمصروف المربوط بمركبة يضعان vehicleId؛ فلا يُرفَض إلا «وقود بلا مركبة».
-// التحويل إلى enforce لصنف آخر = تغيير mode سطرٍ واحد هنا (بعد إصلاح إدخاله).
+// **الإنفاذ الحالي: صنف المركبة كاملًا (55xx + 5710)** — المسار الآلي (fleetEngine)
+// والمصروف المربوط بمركبة يضعان vehicleId؛ فيُرفَض أي مصروف/إهلاك مركبة بلا مركبة.
+// التحويل إلى enforce لصنف آخر = تغيير mode سطرٍ واحد هنا (بعد تأكيد تسريب الصنف = 0
+// عبر تقرير /reports/ledger-truth — انظر plans/dimension-enforcement-2026-06-19.md).
 export type DimensionEnforcementMode = "enforce" | "warn";
 
 export interface DimensionEnforcementRule {
@@ -84,8 +85,7 @@ export interface DimensionEnforcementRule {
 
 // تُفحص بالترتيب؛ أول قاعدة مطابقة تفوز (فالأخصّ قبل الأعمّ).
 export const DIMENSION_ENFORCEMENT_RULES: DimensionEnforcementRule[] = [
-  { test: (c) => c === "5510", dimension: "vehicle", label: "مركبة", mode: "enforce" },
-  { test: (c) => /^55\d{2}$/.test(c) || c === "5710", dimension: "vehicle", label: "مركبة", mode: "warn" },
+  { test: (c) => /^55\d{2}$/.test(c) || c === "5710", dimension: "vehicle", label: "مركبة", mode: "enforce" },
   { test: (c) => /^56\d{2}$/.test(c), dimension: "property", label: "عقار", mode: "warn" },
   { test: (c) => c === "5130" || c === "4140", dimension: "project", label: "مشروع", mode: "warn" },
   { test: (c) => /^211[1-3]$/.test(c), dimension: "vendor", label: "مورد", mode: "warn" },

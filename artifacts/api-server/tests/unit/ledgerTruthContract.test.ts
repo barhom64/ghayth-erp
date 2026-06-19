@@ -63,11 +63,20 @@ describe("#2246 assertLedgerTruth — central ledger-truth contract (orchestrato
     expect(r.violations).toHaveLength(0);
   });
 
-  // 8. MANDATORY REGRESSION — must NOT over-enforce.
-  it("REGRESSION (#8): 5520 vehicle maintenance WITHOUT vehicleId does NOT throw (warn only)", () => {
+  // 8a. B1 PROMOTION — the whole vehicle class (55xx + 5710) is now enforced.
+  it("ENFORCE (B1): 5520 vehicle maintenance WITHOUT vehicleId now throws", () => {
+    expect(() =>
+      assertLedgerTruth({ lines: [{ accountCode: "5520", vehicleId: null }] }),
+    ).toThrow(/التوجيه المحاسبي غير مكتمل|مركبة/);
+  });
+
+  // 8b. MANDATORY REGRESSION — must NOT over-enforce beyond promoted classes.
+  // Pointed at a STILL-warn class (property 5610) so the anti-over-enforcement
+  // guard stays alive as the ratchet advances class by class.
+  it("REGRESSION (#8): property 5610 WITHOUT propertyId does NOT throw (still warn)", () => {
     let result: ReturnType<typeof assertLedgerTruth> | undefined;
     expect(() => {
-      result = assertLedgerTruth({ lines: [{ accountCode: "5520", vehicleId: null }] });
+      result = assertLedgerTruth({ lines: [{ accountCode: "5610", propertyId: null }] });
     }).not.toThrow();
     expect(result!.warnings.length).toBe(1);
     expect(result!.violations.some((v) => v.class === "dimension")).toBe(true);

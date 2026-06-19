@@ -5,8 +5,8 @@ import { assertDimensionContract } from "../../src/lib/financePostingPolicy.js";
  * FIN-INTEGRITY-CONTRACT (#2233) — dimension contract enforcement test.
  *
  * Asserts the journal_lines dimension invariant at the posting door:
- *  • vehicle fuel (5510 + subsidiary) is HARD-enforced (rejects when vehicleId null).
- *  • other dimensioned classes are WARN (recorded, not rejected) — staged ratchet.
+ *  • the WHOLE vehicle class (55xx + 5710) is HARD-enforced (rejects when vehicleId null) — B1.
+ *  • property / project / vendor / client classes are WARN (recorded, not rejected) — staged ratchet.
  *  • non-dimensioned accounts pass untouched.
  * Pure function, no DB.
  */
@@ -44,9 +44,21 @@ describe("#2233 assertDimensionContract — staged dimension enforcement", () =>
     expect(r.warnings[0]).toContain("مورد");
   });
 
-  it("WARN: vehicle maintenance (5520) without vehicleId warns (only fuel is enforced first)", () => {
-    const r = assertDimensionContract({ lines: [{ accountCode: "5520", vehicleId: null }] });
-    expect(r.warnings.length).toBe(1);
+  it("ENFORCE (B1): vehicle maintenance (5520) without vehicleId is now rejected", () => {
+    expect(() =>
+      assertDimensionContract({ lines: [{ accountCode: "5520", vehicleId: null }] }),
+    ).toThrow(/التوجيه المحاسبي غير مكتمل|مركبة/);
+  });
+
+  it("ENFORCE (B1): vehicle depreciation (5710) without vehicleId is now rejected", () => {
+    expect(() =>
+      assertDimensionContract({ lines: [{ accountCode: "5710", vehicleId: null }] }),
+    ).toThrow();
+  });
+
+  it("PASS (B1): vehicle maintenance (5520) WITH vehicleId posts cleanly", () => {
+    const r = assertDimensionContract({ lines: [{ accountCode: "5520", vehicleId: 7 }] });
+    expect(r.warnings).toHaveLength(0);
   });
 
   it("WARN: property (5610) / project (5130) / client (1131) missing dims warn, never throw", () => {

@@ -246,7 +246,7 @@ describe("Scenario 3 — Linked manual journal: governance (approve floor, manda
   it("createJournalEntry enforces the dimension contract for EVERY entry (linked manual JEs included)", () => {
     // FIN-INTEGRITY-CONTRACT (#2246 SLICE 1): the shared posting path now runs
     // assertLedgerTruth — an orchestrator that COMPOSES assertDimensionContract
-    // (unchanged: fuel-5510 enforce + rest warn) plus the vendor-invoice scenario
+    // (vehicle class 55xx+5710 enforce after B1 + rest warn) plus the vendor-invoice scenario
     // and the operational manual-journal guard. So an operationally-linked manual
     // entry on a dimension-enforced account (e.g. 5510) is still refused unless it
     // carries the object dimension — dimension enforcement is preserved.
