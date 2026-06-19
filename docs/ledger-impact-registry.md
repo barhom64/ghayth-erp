@@ -91,7 +91,7 @@ createGuardedJournalEntry({
 |---------|-----------|-------|----------------|-----------------|-------|
 | فاتورة عمرة | `umrah_sales_invoices` | umrahInvoicingEngine.ts | بنود ديناميكية (AR/مصروف) | بنود ديناميكية (إيرادات/AP) | umrah_sales_invoices |
 | دفعة عمرة | `umrah_payments` | eventListeners.ts | نقد (1100/1110) | ذمم مدينة (1200) | — |
-| عمولة موظف | `employee_commission_calculations` | umrahCommissionEngine.ts | مصروف عمولات | عمولات مستحقة (2150) | employee_commission_calculations |
+| عمولة موظف | `employee_commission_calculations` | umrahCommissionEngine.ts | مصروف عمولات | عمولات مستحقة (2155) | employee_commission_calculations |
 
 **مفتاح المصدر للعمولات:** `commission:{planId}:{year}:{month}` — يمنع احتساب العمولة مرتين لنفس الشهر.
 
@@ -147,7 +147,8 @@ createGuardedJournalEntry({
 | 1300 | مخزون | أصل | مشتريات، مستودعات، متجر |
 | 1500 | أصول ثابتة | أصل | أسطول |
 | 2100 | بضاعة في الطريق (GRNI) | التزام | مشتريات |
-| 2150 | عمولات مستحقة | التزام | عمولات عمرة |
+| 2150 | مصروفات مستحقة الدفع | التزام | صيانة العقارات |
+| 2155 | عمولات مستحقة | التزام | عمولات عمرة |
 | 2131 | ضريبة القيمة المضافة المستحقة (مخرجات) | التزام | فواتير، CRM |
 | 4100 | إيرادات مبيعات | إيرادات | فواتير، متجر، CRM |
 | 4200 | إيرادات إيجار | إيرادات | عقارات |
