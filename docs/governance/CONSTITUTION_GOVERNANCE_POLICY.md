@@ -7,7 +7,8 @@
 
 ## 1) حالة الدستور
 
-- الملف المرجعي: `docs/governance/GHAYTH_CONSTITUTION_V3_APPROVED.md`
+- الملف المرجعي (المصدر القانوني الوحيد): `docs/ghayth-constitution.md`
+  (و`docs/governance/GHAYTH_CONSTITUTION_V3_APPROVED.md` مؤشِّر فقط لا نسخة قانونية)
 - الحالة: **معتمد ومجمّد**.
 - الطبقة: Layer 0.
 - العلاقة بالعقيدة: `docs/governance/غيث_العقيدة_الحاكمة.md` تفسير تشغيلي لا يستبدل الدستور.
