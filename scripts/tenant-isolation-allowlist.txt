@@ -84,7 +84,6 @@ routes/hr.ts:hr_excuse_requests
 routes/hr.ts:hr_leave_requests
 routes/hr.ts:hr_leave_types
 routes/hr.ts:peer_evaluations
-routes/hr.ts:shifts
 routes/hr.ts:system_evaluations
 
 # ── [TIGHTER] "my data" self-service — every read keyed by the caller's own
