@@ -1508,6 +1508,11 @@ router.post("/suppliers/:id/items", authorize({ feature: "warehouse.inventory", 
       `SELECT * FROM supplier_items WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [insertId, scope.companyId],
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "warehouse.supplier_item.created", entity: "supplier_items", entityId: insertId,
+      after: { supplierId: id, name: b.name.trim(), itemType: b.itemType ?? null },
+    }).catch(() => undefined);
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create supplier item error:"); }
 });
