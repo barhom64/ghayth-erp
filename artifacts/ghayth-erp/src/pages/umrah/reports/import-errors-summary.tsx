@@ -370,7 +370,7 @@ export default function UmrahImportErrorsSummaryReport() {
               {byStatus.length === 0 ? (
                 <p className="p-4 text-center text-xs text-muted-foreground" data-testid="import-errors-breakdown-status-empty">لا بيانات.</p>
               ) : (
-                <table className="w-full text-xs" data-testid="import-errors-breakdown-status">
+                <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-errors-breakdown-status">
                   <thead>
                     <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
                       <th className="p-2 font-medium">الحالة</th>
@@ -395,7 +395,7 @@ export default function UmrahImportErrorsSummaryReport() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </TabsContent>
 
@@ -403,7 +403,7 @@ export default function UmrahImportErrorsSummaryReport() {
               {byFileType.length === 0 ? (
                 <p className="p-4 text-center text-xs text-muted-foreground" data-testid="import-errors-breakdown-filetype-empty">لا بيانات.</p>
               ) : (
-                <table className="w-full text-xs" data-testid="import-errors-breakdown-filetype">
+                <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-errors-breakdown-filetype">
                   <thead>
                     <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
                       <th className="p-2 font-medium">النوع</th>
@@ -424,7 +424,7 @@ export default function UmrahImportErrorsSummaryReport() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </TabsContent>
 
@@ -432,7 +432,7 @@ export default function UmrahImportErrorsSummaryReport() {
               {byUploader.length === 0 ? (
                 <p className="p-4 text-center text-xs text-muted-foreground" data-testid="import-errors-breakdown-uploader-empty">لا بيانات.</p>
               ) : (
-                <table className="w-full text-xs" data-testid="import-errors-breakdown-uploader">
+                <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-errors-breakdown-uploader">
                   <thead>
                     <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
                       <th className="p-2 font-medium">المستخدم</th>
@@ -462,7 +462,7 @@ export default function UmrahImportErrorsSummaryReport() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </TabsContent>
           </Tabs>

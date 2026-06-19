@@ -4163,6 +4163,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     });
     markIdempotencyReplay(req, res, advanceAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.created", entity: "customer_advances", entityId: advanceId ?? 0,
+      after: { ref: advRef, clientId, amount: amt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-create audit failed"));
+
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Customer advance create error:");
@@ -4361,6 +4367,12 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
     // below would have responded with the error).
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.applied", entity: "customer_advances", entityId: advanceId,
+      after: { invoiceId: Number(invoiceId), amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-apply audit failed"));
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {

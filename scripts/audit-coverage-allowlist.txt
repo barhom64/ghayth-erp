@@ -9,6 +9,30 @@
 # As real gaps get audit wired in, prune their line here — the covered %
 # climbs monotonically and can never silently regress.
 #
+# ── Verified HELPER-AUDITED false positives (kept; the static 200-line window
+#    cannot see audit written by a delegated helper). Each of the following IS
+#    audited — do NOT churn them with a redundant in-handler createAuditLog:
+#      • POST /finance/journal/:id/reverse            → createAuditLog L~3475 (beyond window)
+#      • POST /finance/fiscal-periods-v2/:id/close     → closeFiscalPeriodCanonical (event_logs + audit)
+#      • POST /finance/fiscal-periods-v2/:id/reopen    → applyTransition (event_logs + createAuditLog)
+#      • POST /finance/fiscal-periods-v2/:id/lock      → applyTransition
+#      • PATCH /finance/journal-manual/:id/submit      → applyTransition
+#      • PATCH /finance/journal-manual/:id/review      → applyTransition
+#      • PATCH /finance/journal-manual/:id/approve     → applyTransition
+#      • PATCH /finance/journal-manual/:id/post        → applyTransition
+#      • POST /finance/bank-guarantees/:id/cancel      → applyTransition
+#      • POST /finance/bank-guarantees/:id/release     → applyTransition
+#      • PATCH /finance/budgets/:id/approve            → applyTransition
+#      • PATCH /finance/commitments/:id/approve        → applyTransition
+#      • PATCH /finance/financial-requests/:id/approve → applyTransition
+#      • PATCH /finance/receivables/:id/approve        → applyTransition
+#      • POST /finance/payment-run/execute             → emitEvent("payment_run.executed") L~2185 + per-PO applyTransition (both beyond window)
+#    (applyTransition lives in lib/lifecycleEngine.ts; it writes an event_logs
+#     row AND calls createAuditLog inside the transition transaction.)
+#
+# ── Non-mutating tombstone (kept; returns HTTP 410, performs no write — no audit needed):
+#      • POST /finance/fiscal-periods/:period/close    → 410 Gone, redirects to fiscal-periods-v2/:id/close
+#
 # Baseline captured: 199 unaudited write endpoint(s).
 DELETE /admin/governance/event-dlq/:id
 DELETE /admin/pricing/rules/:id
@@ -91,9 +115,6 @@ POST /events/outbox/drain
 POST /finance/:id/ocr/rerun
 POST /finance/bank-guarantees/:id/cancel
 POST /finance/bank-guarantees/:id/release
-POST /finance/cip/:id/costs
-POST /finance/customer-advances
-POST /finance/customer-advances/:id/apply
 POST /finance/fiscal-periods-v2/:id/close
 POST /finance/fiscal-periods-v2/:id/lock
 POST /finance/fiscal-periods-v2/:id/reopen
@@ -108,11 +129,6 @@ POST /finance/ocr/extractions/:id/reject
 POST /finance/payment-run/execute
 POST /finance/pricing/resolve
 POST /finance/pricing/rules
-POST /finance/vendor-advances
-POST /finance/vendor-advances/:id/apply
-POST /finance/vendor-credits
-POST /finance/vendor-credits/:id/apply
-POST /finance/vendor-invoices
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
 POST /fleet/rental-contracts/:id/payments

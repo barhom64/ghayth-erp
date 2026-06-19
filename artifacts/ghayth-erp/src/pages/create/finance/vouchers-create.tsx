@@ -524,7 +524,7 @@ export default function VouchersCreate() {
       {preview && preview.lines?.length > 0 && (
         <div className="mt-4 border rounded-lg p-3 bg-muted/30">
           <p className="text-xs font-semibold mb-2">معاينة القيد المُولّد (قبل الحفظ)</p>
-          <table className="w-full text-xs font-mono">
+          <div className="overflow-x-auto"><table className="w-full text-xs font-mono">
             <thead>
               <tr className="text-muted-foreground">
                 <th className="text-start p-1">الحساب</th>
@@ -541,7 +541,7 @@ export default function VouchersCreate() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
 
