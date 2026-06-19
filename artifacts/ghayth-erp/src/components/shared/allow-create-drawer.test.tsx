@@ -24,11 +24,13 @@ const mutateAsync = vi.fn().mockResolvedValue(CREATED);
 vi.mock("@/lib/api", () => ({
   useApiQuery: (key: string[]) => {
     const k = key[0];
-    if (k === "settings-companies") return { data: { data: [{ id: 7, name: "شركة غيث" }] } };
-    if (k === "settings-branches") return { data: { data: [{ id: 1, name: "الفرع الرئيسي" }] } };
-    if (k === "settings-departments") return { data: { data: [{ id: 5, name: "المالية" }] } };
-    if (k === "employees-list-deps") return { data: { data: [{ id: 9, name: "أحمد", empNumber: "E1" }] } };
-    return { data: { data: [] } };
+    const wrap = (rows: any[]) => ({ data: { data: rows }, refetch: vi.fn() });
+    if (k === "settings-companies") return wrap([{ id: 7, name: "شركة غيث" }]);
+    if (k === "settings-branches") return wrap([{ id: 1, name: "الفرع الرئيسي" }]);
+    if (k === "settings-departments") return wrap([{ id: 5, name: "المالية" }]);
+    if (k === "employees-list-deps") return wrap([{ id: 9, name: "أحمد", empNumber: "E1" }]);
+    if (k === "departments-list") return wrap([{ id: 5, name: "المالية" }]);
+    return wrap([]);
   },
   useApiMutation: () => ({ mutateAsync, isPending: false }),
   asList: (resp: any) => (Array.isArray(resp?.data) ? resp.data : Array.isArray(resp) ? resp : []),
@@ -36,7 +38,9 @@ vi.mock("@/lib/api", () => ({
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
+import { useState } from "react";
 import { AllowCreateDrawer } from "./allow-create-drawer";
+import { DepartmentSelect } from "./entity-selects";
 
 describe("AllowCreateDrawer", () => {
   it("opens the FULL department form in the drawer — not a truncated quick-add", async () => {
@@ -81,3 +85,42 @@ describe("AllowCreateDrawer — branch", () => {
 // test without heavy scaffolding. The drawer MECHANISM is proven by the
 // department + branch cases above; the project wiring is covered by typecheck
 // and the shared form being reused by projects-create.tsx.
+
+// ── الاختبار السلوكي (شرط مجلس ghayth-review على #2629) ───────────────────────
+// الطبقة 1 السابقة كانت تثبت الرندرة فقط. هذا يثبت مسار المستخدم الفعلي عبر
+// المحدِّد: «+ جديد» → الدرج بالنموذج الكامل → الحفظ → اختيار الكيان الجديد
+// تلقائيًا (#2134) → إغلاق الدرج. هذا ما تعتمد عليه كل المحدِّدات المعمَّمة.
+describe("AllowCreateDrawer — سلوكي: إنشاء → اختيار تلقائي → إغلاق عبر المحدِّد", () => {
+  function SelectHarness() {
+    const [val, setVal] = useState("");
+    return (
+      <div>
+        <DepartmentSelect value={val} onChange={setVal} label="القسم" />
+        <div data-testid="selected-dept">{val}</div>
+      </div>
+    );
+  }
+
+  it("«+ قسم جديد» يفتح الدرج، والحفظ يختار الكيان الجديد ثم يغلق الدرج", async () => {
+    const user = userEvent.setup();
+    render(<SelectHarness />);
+
+    // لا قيمة مختارة بعد.
+    expect(screen.getByTestId("selected-dept").textContent).toBe("");
+
+    // افتح المحدِّد ثم فعّل «+ قسم جديد».
+    await user.click(screen.getByRole("combobox"));
+    await user.click(await screen.findByText("+ قسم جديد"));
+
+    // الدرج فتح بالنموذج الكامل (تحميل كسول — أمهله).
+    const nameInput = await screen.findByTestId("input-dept-name", {}, { timeout: 12000 });
+    await user.type(nameInput, "قسم جديد");
+    await user.click(screen.getByTestId("button-submit-dept"));
+
+    // اختيار تلقائي للكيان الجديد (id=101 من mutateAsync) — جوهر #2134.
+    await waitFor(() => expect(screen.getByTestId("selected-dept").textContent).toBe("101"));
+
+    // الدرج أُغلق: النموذج لم يعد في الـ DOM.
+    await waitFor(() => expect(screen.queryByTestId("input-dept-name")).not.toBeInTheDocument());
+  }, 20000);
+});
