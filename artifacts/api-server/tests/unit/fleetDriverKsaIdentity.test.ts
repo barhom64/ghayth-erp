@@ -21,7 +21,7 @@ const readSpa = (rel: string) => readFileSync(join(spaSrc, rel), "utf8");
 
 const MIGRATION = readApi("migrations/280_fleet_driver_ksa_identity.sql");
 const FLEET     = readApi("routes/fleet.ts");
-const FORM      = readSpa("pages/create/fleet/drivers-create.tsx");
+const FORM      = readSpa("pages/create/fleet/driver-create-form.tsx");
 
 describe("#1812 — migration 280: KSA driver identity + license origin", () => {
   it("migration file has @rollback header", () => {

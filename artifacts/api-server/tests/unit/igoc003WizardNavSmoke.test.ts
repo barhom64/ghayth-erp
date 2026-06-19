@@ -19,7 +19,7 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const PAGE_SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/create/employees-create.tsx"),
+  join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/create/employee-create-form.tsx"),
   "utf8",
 );
 

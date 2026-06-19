@@ -63,7 +63,10 @@ describe("settings/companies-tab — dual-mode form on FormShell + zod", () => {
 });
 
 describe("settings/branches-tab — dual-mode form with required companies dropdown", () => {
-  const SRC = read("settings/branches-tab.tsx");
+  // The branch create/edit form body was extracted into a dedicated
+  // component (`settings/branch-form.tsx`) so the inline AllowCreateDrawer
+  // can reuse the FULL form. The asserted form logic now lives there.
+  const SRC = read("settings/branch-form.tsx");
 
   it("imports the FormShell stack with FormSelectField", () => {
     expect(
@@ -88,7 +91,10 @@ describe("settings/branches-tab — dual-mode form with required companies dropd
   });
 
   it("FormShell uses key={editingId ?? \"new\"} for remount on edit", () => {
-    expect(SRC).toMatch(/key=\{editingId \?\? "new"\}/);
+    // The remount key still derives from `editingId ?? "new"`; the extracted
+    // form additionally suffixes `:${firstCompanyId}` so the key re-seeds the
+    // default company the moment the companies list arrives.
+    expect(SRC).toMatch(/key=\{`\$\{editingId \?\? "new"\}/);
   });
 
   it("removes the bare `if (!form.name.trim())` toast guard", () => {
@@ -96,9 +102,13 @@ describe("settings/branches-tab — dual-mode form with required companies dropd
   });
 
   it("renames `form` state to `formInitial`", () => {
-    expect(SRC).toContain("setFormInitial");
+    // After extraction into `branch-form.tsx`, the mutable `form`/`formInitial`
+    // useState seed is replaced by react-hook-form `defaultValues` derived from
+    // an `initialValues` prop — the seed-not-mutate intent is unchanged.
+    expect(SRC).toContain("defaultValues");
     expect(stripComments(SRC)).not.toMatch(/setForm\(\{/);
-    // useEffect that defaults companyId now updates `formInitial`.
-    expect(SRC).toMatch(/setFormInitial\(\(f\) => \(\{/);
+    // The companyId default (previously the `setFormInitial((f) => ({ ... }))`
+    // useEffect) now seeds the first company into defaultValues on create.
+    expect(SRC).toMatch(/companyId:\s*initialValues\?\.companyId\s*\?\?\s*\(editingId\s*\?\s*""\s*:\s*firstCompanyId\)/);
   });
 });

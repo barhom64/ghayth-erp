@@ -35,7 +35,7 @@ const EMPLOYEES_ROUTE = readFileSync(
   "utf8",
 );
 const EMPLOYEES_CREATE_PAGE = readFileSync(
-  join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/create/employees-create.tsx"),
+  join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/create/employee-create-form.tsx"),
   "utf8",
 );
 const ENTITY_SELECTS = readFileSync(
