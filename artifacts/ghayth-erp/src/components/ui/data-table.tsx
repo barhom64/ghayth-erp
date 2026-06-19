@@ -462,30 +462,38 @@ export function DataTable<T>({
                 <div
                   key={key}
                   data-state={selected ? "selected" : undefined}
-                  className={cn(
-                    "p-3 space-y-1.5",
-                    onRowClick && "cursor-pointer active:bg-surface-subtle",
-                    rowClassName?.(row),
-                  )}
-                  onClick={() => onRowClick?.(row)}
+                  className={cn("p-3", rowClassName?.(row))}
                 >
-                  {selectable && (
-                    <div className="pb-1" onClick={(e) => e.stopPropagation()}>
-                      <BulkCheckbox checked={selected} onChange={() => rowId != null && handleToggleRow(rowId)} />
+                  {/* Only the field rows are clickable — extras (expansion
+                      panels, nested actions) sit OUTSIDE the row-click area
+                      and stop propagation, matching the desktop table where
+                      extras live in their own non-clickable row. */}
+                  <div
+                    className={cn("space-y-1.5", onRowClick && "cursor-pointer active:bg-surface-subtle")}
+                    onClick={() => onRowClick?.(row)}
+                  >
+                    {selectable && (
+                      <div className="pb-1" onClick={(e) => e.stopPropagation()}>
+                        <BulkCheckbox checked={selected} onChange={() => rowId != null && handleToggleRow(rowId)} />
+                      </div>
+                    )}
+                    {visibleColumns.map((col) => {
+                      const content = col.render ? col.render(row, rowIndex) : ((row as any)[col.key] ?? "-");
+                      return (
+                        <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
+                          <span className="text-muted-foreground shrink-0">{col.header}</span>
+                          <span className={cn("min-w-0 break-words text-end", col.className)} dir={col.ltr ? "ltr" : undefined}>
+                            {content}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {extras && (
+                    <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                      {extras}
                     </div>
                   )}
-                  {visibleColumns.map((col) => {
-                    const content = col.render ? col.render(row, rowIndex) : ((row as any)[col.key] ?? "-");
-                    return (
-                      <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
-                        <span className="text-muted-foreground shrink-0">{col.header}</span>
-                        <span className={cn("min-w-0 break-words text-end", col.className)} dir={col.ltr ? "ltr" : undefined}>
-                          {content}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {extras}
                 </div>
               );
             })}

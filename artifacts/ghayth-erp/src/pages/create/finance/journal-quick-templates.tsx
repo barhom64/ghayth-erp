@@ -359,7 +359,7 @@ export default function JournalQuickTemplatesPage() {
                     <CardTitle className="text-base">معاينة القيد</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto"><table className="w-full text-sm">
                       <thead>
                         <tr className="border-b text-xs text-muted-foreground">
                           <th className="text-start py-2 px-2">الحساب</th>
@@ -383,7 +383,7 @@ export default function JournalQuickTemplatesPage() {
                           </td>
                         </tr>
                       </tbody>
-                    </table>
+                    </table></div>
                   </CardContent>
                 </Card>
               )}
