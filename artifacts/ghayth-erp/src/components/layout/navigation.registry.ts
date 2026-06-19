@@ -427,12 +427,14 @@ export const allNavSections: NavSection[] = [
         { label: "ملخص ضريبة الاستقطاع", path: "/finance/reports/wht-summary", icon: Percent },
         { label: "إعداد إقرار ضريبة الاستقطاع", path: "/finance/wht-filing-workbench", icon: FileCheck },
       ]},
-      { label: "التقارير والتحليلات المالية", path: "/finance/reports", icon: FileBarChart, module: "finance", children: [
+      { label: "القوائم المالية", path: "/finance/reports", icon: FileBarChart, module: "finance", children: [
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
         { label: "قائمة الدخل مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
         { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
         { label: "المقارنة السنوية (سنة/سنة)", path: "/finance/reports/yoy", icon: BarChart2 },
+      ]},
+      { label: "تقارير الربحية والمحافظ", path: "/finance/expense-burn-rate", icon: TrendingUp, module: "finance", children: [
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
         { label: "مؤشر صحة النظام المالي", path: "/finance/gl-health", icon: ShieldAlert },
         { label: "محفظة ربحية المشاريع", path: "/finance/project-portfolio", icon: BarChart2 },
@@ -442,13 +444,16 @@ export const allNavSections: NavSection[] = [
         { label: "محفظة مواسم العمرة", path: "/finance/umrah-season-portfolio", icon: BarChart2 },
         { label: "محلّل مزيج الإيرادات", path: "/finance/revenue-mix", icon: TrendingUp },
         { label: "محلّل مزيج المصاريف", path: "/finance/expense-mix", icon: TrendingUp },
-        { label: "اتجاه فترة التحصيل", path: "/finance/reports/dso-trend", icon: Activity },
-        // تقارير محاسبية متقدمة (CoGS/تقييم/دوران/صلاحيات/مخزون سالب + انحرافات واعتماد الموازنة).
+      ]},
+      { label: "تقارير المخزون والتكلفة", path: "/finance/reports/cogs-summary", icon: Package, module: "finance", children: [
         { label: "ملخص تكلفة المبيعات", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
         { label: "تقرير تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
         { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
         { label: "تنبيهات صلاحية الدفعات", path: "/finance/reports/lot-expiry-alerts", icon: AlertTriangle },
         { label: "مخزون سالب", path: "/finance/reports/negative-stock", icon: AlertTriangle },
+      ]},
+      { label: "تقارير الذمم والموازنة", path: "/finance/reports/dso-trend", icon: BarChart3, module: "finance", children: [
+        { label: "اتجاه فترة التحصيل", path: "/finance/reports/dso-trend", icon: Activity },
         { label: "انحرافات الميزانية", path: "/finance/budget-variance", icon: BarChart3 },
         { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
       ]},
