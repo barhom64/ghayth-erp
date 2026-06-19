@@ -11,7 +11,7 @@
 // Exits 0 on pass, 1 on any assertion failure.
 //
 
-import { unauditedWriteKeys, buildMountMap } from "./check-audit-coverage.mjs";
+import { unauditedWriteKeys, buildMountMap, auditWrapperCallMatcher } from "./check-audit-coverage.mjs";
 
 let failed = 0;
 function assert(cond, label) {
@@ -116,6 +116,54 @@ console.log("mount map — every imported router resolves to its mount prefix");
     (mm["finance.ts"] || []).includes("/finance"),
     "aliased named import (x as financeRouter) maps via the alias",
   );
+}
+
+// ── file-local audit-wrapper detection ──────────────────────────────────
+// A router that funnels every write through a thin wrapper (which itself calls
+// an audit primitive) must be recognised as audited, without the wrapper's name
+// being a primitive. The detector must also NOT misread method calls (.push())
+// or `{}` in a multi-line signature as a wrapper/body.
+console.log("audit-wrapper detection");
+{
+  // real multi-line wrapper whose signature carries an inline object type AND a
+  // `= {}` default — the body brace must still be found past the param list.
+  const src = [
+    "function recordAction(",
+    "  req,",
+    "  params: { id: number },",
+    "  after = {},",
+    "): void {",
+    "  void emitEvent({ entity: 'x', entityId: params.id });",
+    "  void auditFromRequest(req, 'update', 'x', params.id, { after });",
+    "}",
+    "router.post('/:id/close', auth, async (req, res) => {",
+    "  recordAction(req, { id: 1 });",
+    "  res.json({ ok: true });",
+    "});",
+    "router.post('/:id/raw', auth, async (req, res) => {",
+    "  const arr = []; arr.push(1);", // .push must NOT count as audit
+    "  res.json({ ok: true });",
+    "});",
+  ].join("\n");
+  const re = auditWrapperCallMatcher(src);
+  assert(re !== null && re.test("  recordAction(req, { id: 1 });"), "multi-line wrapper (inline type + {} default) detected & matched");
+  assert(re !== null && !re.test("  const arr = []; arr.push(1);"), "array .push() not read as a wrapper call");
+}
+{
+  // a file with NO audit primitives anywhere yields no matcher.
+  const src = "const helper = (x) => x + 1;\nrouter.post('/a', (req,res)=>{ helper(1); res.end(); });";
+  assert(auditWrapperCallMatcher(src) === null, "no matcher when file has no audit primitive");
+}
+{
+  // a local `push` arrow (collection helper) must never become a wrapper even
+  // if an unrelated emitEvent appears later in the file.
+  const src = [
+    "const push = (c, v) => { params.push(v); sets.push(c); };",
+    "router.patch('/x', (req,res)=>{ push('a', 1); res.json({}); });",
+    "router.post('/y', (req,res)=>{ emitEvent({}); res.json({}); });",
+  ].join("\n");
+  const re = auditWrapperCallMatcher(src);
+  assert(re === null || !re.test("push('a', 1)"), "collection `push` helper not treated as audit wrapper");
 }
 
 if (failed) {
