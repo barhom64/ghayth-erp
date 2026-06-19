@@ -87,6 +87,10 @@ const EnvSchema = z.object({
 
   // -- auth / crypto -------------------------------------------------------
   JWT_SECRET: reqStr(),
+  // TTL (hours) of the capability-scoped field-tracking token handed to the
+  // native background-geolocation plugin. Longer than the 15-minute session
+  // token so the tracker survives backgrounding; clamped to [1,24] below.
+  FIELD_TRACKING_TOKEN_TTL_HOURS: intEnv(12),
   FIELD_ENCRYPTION_KEY: optStr(),
   SECRETS_ENCRYPTION_KEY: optStr(),
 
@@ -277,6 +281,7 @@ export interface AppConfig {
   readonly pgPoolMax: number;
 
   readonly jwtSecret: string;
+  readonly fieldTrackingTokenTtlHours: number;
   readonly fieldEncryptionKey: string | undefined;
   readonly secretsEncryptionKey: string | undefined;
 
@@ -513,6 +518,7 @@ function buildConfig(env: RawEnv): AppConfig {
     pgPoolMax: env.PG_POOL_MAX,
 
     jwtSecret: env.JWT_SECRET,
+    fieldTrackingTokenTtlHours: Math.min(24, Math.max(1, env.FIELD_TRACKING_TOKEN_TTL_HOURS)),
     fieldEncryptionKey: env.FIELD_ENCRYPTION_KEY,
     secretsEncryptionKey: env.SECRETS_ENCRYPTION_KEY,
 
