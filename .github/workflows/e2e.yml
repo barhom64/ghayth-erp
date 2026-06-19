@@ -109,6 +109,15 @@ jobs:
           PORT: '5173'
         run: pnpm --filter @workspace/ghayth-erp run build
 
+      - name: Build api-server
+        # The `start` script runs `node ./dist/index.mjs`, so the server MUST be
+        # built first — there is no build-on-start. Without this step the start
+        # step fails instantly with "Cannot find module dist/index.mjs" and the
+        # healthz poll below never succeeds (the job fails at the ~120s poll cap
+        # with the suite skipped). Verified locally: build (~5s) then a fresh
+        # empty-DB boot self-applies migrations and serves healthz 200 in ~19s.
+        run: pnpm --filter @workspace/api-server run build
+
       - name: Start api-server
         env:
           PORT: '8080'
