@@ -4,7 +4,7 @@
 // all go through the Financial Engine for proper period checks and guards.
 
 import { financialEngine } from "./financialEngine.js";
-import { rawQuery, rawExecute } from "../rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
 import { registerCrossDomainHandler } from "../eventBus.js";
 import { roundTo2 } from "../businessHelpers.js";
 import type { DomainEngine } from "./domainEngineBase.js";
@@ -582,6 +582,38 @@ class HREngineImpl implements DomainEngine {
         { accountCode: salaryPayableCode, debit: amount, credit: 0, description: "تسوية رواتب مستحقة" },
         { accountCode: bankCode, debit: 0, credit: amount, description: "سداد رواتب — بنك" },
       ],
+    });
+  }
+
+  // HR-002 (atomicity) — flip a run to 'posted' AND post its payment JE inside
+  // ONE transaction so the two can never diverge. The route used to flip the
+  // status, commit, THEN post the GL; a GL failure (e.g. a closed financial
+  // period) left the run 'posted' with no settlement entry — and the
+  // "already posted" guard then blocked every retry, stranding the run.
+  // withTransaction is reentrant (AsyncLocalStorage + SAVEPOINT), so the inner
+  // postPayrollPostGL joins THIS transaction: either the status flip + the JE
+  // both commit, or both roll back and the run stays at `fromStatus` for a
+  // clean retry. The UPDATE is guarded on the expected fromStatus (TOCTOU
+  // backstop on top of the route's pre-check); a no-row match returns null so
+  // the caller maps it to the same 404 it raised before — no JE is posted.
+  async postPayrollRunWithGL(
+    ctx: HRGLContext,
+    payroll: { runId: number; period: string; totalBankPayout: number; fromStatus: string }
+  ): Promise<Record<string, unknown> | null> {
+    return withTransaction(async () => {
+      const [run] = await rawQuery<Record<string, unknown>>(
+        `UPDATE payroll_runs SET status = 'posted'
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = $3
+          RETURNING *`,
+        [payroll.runId, ctx.companyId, payroll.fromStatus]
+      );
+      if (!run) return null;
+      await this.postPayrollPostGL(ctx, {
+        runId: payroll.runId,
+        period: payroll.period,
+        totalBankPayout: payroll.totalBankPayout,
+      });
+      return run;
     });
   }
 
