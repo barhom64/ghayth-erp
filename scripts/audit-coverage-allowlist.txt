@@ -125,10 +125,6 @@ POST /finance/ocr/extractions/:id/reject
 POST /finance/payment-run/execute
 POST /finance/pricing/resolve
 POST /finance/pricing/rules
-POST /finance/vendor-advances
-POST /finance/vendor-advances/:id/apply
-POST /finance/vendor-credits
-POST /finance/vendor-credits/:id/apply
 POST /finance/vendor-invoices
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
