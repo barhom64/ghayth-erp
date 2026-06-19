@@ -168,13 +168,8 @@ export const allNavSections: NavSection[] = [
 
       // 2. الموظفون — gathers recruitment, employees, onboarding,
       // org structure, transfers, documents, contracts, letters, exit
-      { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
+      { label: "شؤون الموظفين", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
-        { label: "التوظيف والاستقطاب", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
-        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
-        { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
-        { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
-        { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
         // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
@@ -188,6 +183,13 @@ export const allNavSections: NavSection[] = [
         { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
         { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, subKey: "employees" },
         { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
+      ]},
+      { label: "التوظيف والتعيين", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
+        { label: "التوظيف والاستقطاب", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
+        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
+        { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
+        { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
+        { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
       ]},
 
       // 3. النشاط والحضور — gathers shifts + attendance + tracking

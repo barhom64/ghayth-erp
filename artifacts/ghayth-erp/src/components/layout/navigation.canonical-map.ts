@@ -245,7 +245,7 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   {
     path: "/hr/recruitment",
     canonicalLabel: "التوظيف والاستقطاب",
-    aliases: ["وظائف التوظيف"],
+    aliases: ["وظائف التوظيف", "التوظيف والتعيين"],
     redirectFrom: ["/hr/recruitment/advanced"],
     note: "INVENTORY §5 — menu 'وظائف التوظيف' vs page 'التوظيف والاستقطاب'.",
   },
