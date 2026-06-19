@@ -1207,6 +1207,11 @@ router.post("/retention/backfill", authorize({ feature: "documents", action: "de
       ).catch(() => ({ affectedRows: 0 }));
       updated += r.affectedRows ?? 0;
     }
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.retention_backfilled", entity: "documents", entityId: scope.companyId,
+      after: { updated },
+    }).catch((e) => logger.error(e, "documents retention-backfill audit failed"));
     res.json({ ok: true, updated, horizons: RETENTION_HORIZONS_YEARS });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -1281,6 +1286,11 @@ router.post("/:id/acls", authorize({ feature: "documents", action: "update" }), 
        RETURNING id`,
       [scope.companyId, id, body.userId ?? null, body.roleKey ?? null, body.departmentId ?? null, body.permission, scope.userId, body.expiresAt ?? null]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.acl_granted", entity: "document_acls", entityId: insertId,
+      after: { documentId: id, userId: body.userId ?? null, roleKey: body.roleKey ?? null, departmentId: body.departmentId ?? null, permission: body.permission },
+    }).catch((e) => logger.error(e, "documents acl-grant audit failed"));
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
@@ -1295,6 +1305,11 @@ router.delete("/:id/acls/:aclId", authorize({ feature: "documents", action: "upd
         WHERE id = $1 AND "documentId" = $2 AND "companyId" = $3`,
       [aclId, id, scope.companyId]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "document.acl_revoked", entity: "document_acls", entityId: aclId,
+      before: { documentId: id },
+    }).catch((e) => logger.error(e, "documents acl-revoke audit failed"));
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "documents"); }
 });
