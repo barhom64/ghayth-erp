@@ -3919,6 +3919,11 @@ journalRouter.post("/opening-balances", requireMinLevel(70), authorize({ feature
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.created", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", lineCount: (lines ?? []).length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances audit failed"));
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "Create opening balances error:");
@@ -3962,6 +3967,11 @@ journalRouter.post("/opening-balances/import-csv", requireMinLevel(70), authoriz
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.imported_csv", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", linesCount: parsed.length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances-csv audit failed"));
     res.status(201).json({ ...result, linesCount: parsed.length });
   } catch (err) {
     handleRouteError(err, res, "Import opening balances CSV error:");

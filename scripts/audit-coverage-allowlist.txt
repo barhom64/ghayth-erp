@@ -9,6 +9,26 @@
 # As real gaps get audit wired in, prune their line here — the covered %
 # climbs monotonically and can never silently regress.
 #
+# ── Verified HELPER-AUDITED false positives (kept; the static 200-line window
+#    cannot see audit written by a delegated helper). Each of the following IS
+#    audited — do NOT churn them with a redundant in-handler createAuditLog:
+#      • POST /finance/journal/:id/reverse            → createAuditLog L~3475 (beyond window)
+#      • POST /finance/fiscal-periods-v2/:id/close     → closeFiscalPeriodCanonical (event_logs + audit)
+#      • POST /finance/fiscal-periods-v2/:id/reopen    → applyTransition (event_logs + createAuditLog)
+#      • POST /finance/fiscal-periods-v2/:id/lock      → applyTransition
+#      • PATCH /finance/journal-manual/:id/submit      → applyTransition
+#      • PATCH /finance/journal-manual/:id/review      → applyTransition
+#      • PATCH /finance/journal-manual/:id/approve     → applyTransition
+#      • PATCH /finance/journal-manual/:id/post        → applyTransition
+#      • POST /finance/bank-guarantees/:id/cancel      → applyTransition
+#      • POST /finance/bank-guarantees/:id/release     → applyTransition
+#      • PATCH /finance/budgets/:id/approve            → applyTransition
+#      • PATCH /finance/commitments/:id/approve        → applyTransition
+#      • PATCH /finance/financial-requests/:id/approve → applyTransition
+#      • PATCH /finance/receivables/:id/approve        → applyTransition
+#    (applyTransition lives in lib/lifecycleEngine.ts; it writes an event_logs
+#     row AND calls createAuditLog inside the transition transaction.)
+#
 # Baseline captured: 199 unaudited write endpoint(s).
 DELETE /admin/governance/event-dlq/:id
 DELETE /admin/pricing/rules/:id
@@ -91,18 +111,19 @@ POST /events/outbox/drain
 POST /finance/:id/ocr/rerun
 POST /finance/bank-guarantees/:id/cancel
 POST /finance/bank-guarantees/:id/release
-POST /finance/cip/:id/costs
 POST /finance/customer-advances
 POST /finance/customer-advances/:id/apply
 POST /finance/fiscal-periods-v2/:id/close
 POST /finance/fiscal-periods-v2/:id/lock
 POST /finance/fiscal-periods-v2/:id/reopen
 POST /finance/fiscal-periods/:period/close
+# Already audited — createAuditLog("journal.reversed") + emitEvent fire after the
+# reversal transaction commits (finance-journal.ts), but the handler body exceeds
+# the guard's 200-line static window so the call reads as a gap. Kept as a
+# documented window false-positive, NOT a real gap.
 POST /finance/journal/:id/reverse
 POST /finance/ocr/extractions/:id/confirm
 POST /finance/ocr/extractions/:id/reject
-POST /finance/opening-balances
-POST /finance/opening-balances/import-csv
 POST /finance/payment-run/execute
 POST /finance/pricing/resolve
 POST /finance/pricing/rules
