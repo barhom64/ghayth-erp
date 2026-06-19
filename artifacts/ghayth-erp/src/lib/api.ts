@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
+import { isNativeAuth, getNativeAccessToken, nativeRefresh } from "@/lib/native-auth";
 import { toast } from "@/hooks/use-toast";
 import { notifyRateLimited } from "./rate-limit-toast";
 import { useAppContextOptional } from "@/contexts/app-context";
@@ -136,6 +137,16 @@ export function apiUrl(path: string): string {
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 
+// Native Bearer-refresh dedupe: concurrent 401s must NOT each rotate the
+// refresh token — the server's reuse-detection would burn the session and
+// log the user out spuriously. Mirror the web `refreshPromise` singleton.
+let nativeRefreshPromise: Promise<boolean> | null = null;
+function tryNativeRefresh(): Promise<boolean> {
+  if (nativeRefreshPromise) return nativeRefreshPromise;
+  nativeRefreshPromise = nativeRefresh(BASE).finally(() => { nativeRefreshPromise = null; });
+  return nativeRefreshPromise;
+}
+
 async function tryRefreshToken(): Promise<boolean> {
   if (isRefreshing && refreshPromise) return refreshPromise;
 
@@ -192,6 +203,12 @@ export async function apiFetch<T = any>(
       // localStorage may be unavailable (SSR, private mode) — non-fatal.
     }
   }
+  // Native (Capacitor): cookies don't cross the WebView origin, so carry the
+  // Bearer token from native storage. Inert on the web (isNativeAuth=false).
+  if (isNativeAuth()) {
+    const t = getNativeAccessToken();
+    if (t) headers["Authorization"] = `Bearer ${t}`;
+  }
 
   let res: Response;
   try {
@@ -203,9 +220,16 @@ export async function apiFetch<T = any>(
     throw networkErr;
   }
 
-  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
-    const refreshed = await tryRefreshToken();
+  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh" && path !== "/auth/mobile/login") {
+    // Native rotates via the Bearer refresh endpoint; web uses the cookie
+    // refresh. On success the native path re-stamps the Authorization header
+    // with the freshly-rotated access token before the retry.
+    const refreshed = isNativeAuth() ? await tryNativeRefresh() : await tryRefreshToken();
     if (refreshed) {
+      if (isNativeAuth()) {
+        const t = getNativeAccessToken();
+        if (t) headers["Authorization"] = `Bearer ${t}`;
+      }
       res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
     } else {
       localStorage.removeItem("erp_assignments");
