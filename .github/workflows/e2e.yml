@@ -118,6 +118,19 @@ jobs:
         # empty-DB boot self-applies migrations and serves healthz 200 in ~19s.
         run: pnpm --filter @workspace/api-server run build
 
+      - name: Load DB schema
+        # Regression guard: the refactor dropped the explicit schema load on the
+        # assumption that an empty-DB boot self-applies everything. But the app
+        # queries `system_settings` (timezone) during boot, before migrations
+        # create it → "relation system_settings does not exist" floods the log
+        # and the suite fails. Loading the full dump first (db/schema.sql)
+        # restores the previously-green behaviour; the app's idempotent
+        # boot-migrations then run cleanly on top.
+        run: |
+          psql "$DATABASE_URL" -c "SELECT version();"
+          psql "$DATABASE_URL" -f db/schema.sql
+          echo "::notice::schema load OK — $(psql -tA "$DATABASE_URL" -c "SELECT count(*) FROM pg_tables WHERE schemaname='public'") tables"
+
       - name: Start api-server
         env:
           PORT: '8080'
