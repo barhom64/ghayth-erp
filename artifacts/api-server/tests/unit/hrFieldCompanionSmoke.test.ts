@@ -104,12 +104,19 @@ describe("PR-9 (#2077) — companion page: eligibility-first + Arabic UX + batte
     expect(PAGE).toMatch(/!q\.some\(\(x\) => x\.capturedAt === p\.capturedAt\)/);
     expect(PAGE).toMatch(/window\.addEventListener\("online", onOnline\)/);
   });
-  it("stop button exists + interval cleared on unmount (no zombie timers)", () => {
+  it("stop button exists + unmount clears the timer, wake-lock and native watcher (no zombies)", () => {
     expect(PAGE).toMatch(/data-testid="stop-btn"/);
-    expect(PAGE).toMatch(/useEffect\(\(\) => \(\) => \{ if \(timerRef\.current\) clearInterval\(timerRef\.current\); \}, \[\]\)/);
+    // unmount cleanup now also releases the Wake Lock and stops the native watcher
+    expect(PAGE).toMatch(/if \(timerRef\.current\) clearInterval\(timerRef\.current\);[\s\S]{0,120}releaseWakeLock\(\);[\s\S]{0,120}stopNativeFieldTracking\(\)/);
   });
   it("a 403 policy rejection STOPS the loop (doesn't queue or retry-storm)", () => {
     expect(PAGE).toMatch(/err\?\.code === "FORBIDDEN"[\s\S]{0,300}stopTracking\(\)/);
+  });
+  it("background tracking: tries the native (Capacitor) path first, then falls back to the browser", () => {
+    expect(PAGE).toMatch(/if \(isNative\)/);
+    expect(PAGE).toMatch(/startNativeFieldTracking\(/);
+    // browser fallback acquires a Wake Lock to keep the screen/JS alive
+    expect(PAGE).toMatch(/await acquireWakeLock\(\)/);
   });
 });
 
