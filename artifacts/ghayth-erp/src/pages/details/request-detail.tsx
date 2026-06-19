@@ -329,7 +329,7 @@ export default function RequestDetail() {
         onOpenChange={(o) => !o && setPreviewAttachment(null)}
       />
       {request && id && (
-        <EntityEditDialog<RequestEditForm>
+        <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
           title="تعديل الطلب"

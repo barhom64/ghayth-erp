@@ -217,7 +217,7 @@ export default function ViolationsSummaryReport() {
             </p>
           </div>
           <div data-testid="violations-recent-empty">
-          <DataTable<SummaryResp["recent"][number]>
+          <DataTable
             data={data?.recent ?? []}
             rowKey={(r) => String(r.id)}
             noToolbar
@@ -282,7 +282,7 @@ function BreakdownTable<T extends { count: number; total: number; [k: string]: a
     return { ...r, _pct: totalCount > 0 ? Math.round((r.count / totalCount) * 100) : 0, _label: labels?.[key] ?? key, _tone: tones?.[key] };
   });
   return (
-    <DataTable<typeof augRows[number]>
+    <DataTable
       data={augRows}
       rowKey={(r) => String(r[keyField as string])}
       noToolbar

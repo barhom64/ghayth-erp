@@ -44,8 +44,8 @@ router.post("/ping", authorize({ feature: "hr.attendance.checkin", action: "crea
           fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
         });
       case "forbidden":
-        throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
-          fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
+        throw new ForbiddenError("لا توجد سياسة تتبع فعّالة لهذا الموظف", {
+          fix: "يتطلب التتبع الميداني سياسة تتبع صريحة ومفعّلة لهذا الموظف. تواصل مع المسؤول لتفعيل سياسة التتبع.",
           meta: { categoryKey: r.categoryKey, trackingFrequencySeconds: r.freq },
         });
       case "throttled":

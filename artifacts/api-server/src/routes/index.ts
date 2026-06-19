@@ -74,6 +74,7 @@ import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
 import myFieldTrackingRouter from "./myFieldTracking.js";
+import employeeTrackingPolicyRouter from "./employeeTrackingPolicy.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
 import workspaceRouter from "./workspace.js";
@@ -391,6 +392,11 @@ router.use("/clients", requireModule("crm", "finance"), clientsRouter);
 // Per-user HR limiter mounted once on /hr so it runs exactly once per
 // request, regardless of which sub-router handles it. See umrah notes below.
 router.use("/hr", hrUserLimiter);
+// Mount the tracking-policy router BEFORE hrRouter: hr.ts defines a generic
+// GET/PATCH "/attendance/:id" that would otherwise shadow the more specific
+// "/attendance/tracking-policies" list/create routes (parsing "tracking-policies"
+// as an :id → 422). Specific router first wins.
+router.use("/hr", requireModule("hr"), employeeTrackingPolicyRouter);
 router.use("/hr", requireModule("hr"), hrRouter);
 router.use("/hr/discipline", requireModule("hr"), disciplineRouter);
 router.use("/hr", requireModule("hr"), loansRouter);

@@ -449,7 +449,7 @@ export default function RiskDetail() {
       }
     />
     {risk && id && (
-      <EntityEditDialog<RiskEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل المخاطر"

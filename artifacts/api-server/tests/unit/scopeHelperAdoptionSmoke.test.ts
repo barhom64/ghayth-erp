@@ -69,6 +69,14 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "correspondence.ts",
   "digital-signature.ts",
   "documents.ts",
+  // employeeTrackingPolicy.ts: Tracking Eligibility Contract control plane —
+  // per-employee tracking-policy CRUD + disable + AUDITED location view. All
+  // handlers are point lookups / upserts keyed on the caller's single active
+  // scope.companyId (the contract is companyId-scoped to the active company),
+  // and the location view is a per-target gated endpoint, not a multi-company
+  // list cascade — buildScopedWhere adds no behaviour here. Mirrors
+  // myFieldTracking.ts / finance-memory.ts. Allowlisted with justification.
+  "employeeTrackingPolicy.ts",
   "execDashboard.ts",
   "export.ts",
   "finance-algorithms.ts",
@@ -338,9 +346,14 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: routes/communications-sms-webhook.ts — anonymous
       // Twilio SMS inbound webhook (no req.scope; tenant resolved from the
       // inbound payload, then keyed by the resolved companyId). Allowlisted.
-      total: 128,
+      // +1 total/manualOnly: routes/employeeTrackingPolicy.ts — Tracking
+      // Eligibility Contract control plane (per-employee tracking-policy CRUD +
+      // disable + AUDITED location view). Point lookups/upserts keyed on the
+      // caller's single active scope.companyId + a per-target gated location
+      // view, not a multi-company list cascade. Allowlisted with justification.
+      total: 129,
       helperUsers: 39,
-      manualOnly: 86,
+      manualOnly: 87,
     });
   });
 });

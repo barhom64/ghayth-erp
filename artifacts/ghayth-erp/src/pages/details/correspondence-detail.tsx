@@ -382,7 +382,7 @@ export default function CorrespondenceDetail() {
         }
       />
       {item && id && (
-        <EntityEditDialog<CorrespondenceEditForm>
+        <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
           title="تعديل المراسلة"

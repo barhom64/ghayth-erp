@@ -246,7 +246,7 @@ export default function UmrahSubAgentBalancesReport() {
 
       <Card data-testid="subagent-balances-table">
         <CardContent className="p-0">
-          <DataTable<SubAgentBalanceRow>
+          <DataTable
             data={visibleRows}
             rowKey={(r) => String(r.id)}
             noToolbar

@@ -87,7 +87,7 @@ function BankCard({
     }
     setBusy(true);
     try {
-      await apiFetch(`/api/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
+      await apiFetch(`/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
         method: "PUT",
         body: JSON.stringify({ fields }),
       });
@@ -104,7 +104,7 @@ function BankCard({
   async function clearRow() {
     setBusy(true);
     try {
-      await apiFetch(`/api/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
+      await apiFetch(`/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
         method: "DELETE",
       });
       toast({ title: "تم حذف بيانات الاعتماد", description: "سيتم استخدام متغيرات البيئة كبديل عند توفرها." });
@@ -214,7 +214,7 @@ function BankCard({
 }
 
 export default function WpsBankCredentialsSettings() {
-  const path = "/api/hr/saudi/wps/credentials";
+  const path = "/hr/saudi/wps/credentials";
   const { data, isLoading, error } = useApiQuery<CredentialsResponse>(
     ["hr", "saudi", "wps", "credentials"],
     path,

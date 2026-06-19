@@ -244,7 +244,7 @@ export default function AuditDetail() {
       }
     />
     {audit && id && (
-      <EntityEditDialog<AuditEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل التدقيق"

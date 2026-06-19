@@ -400,7 +400,7 @@ export default function PolicyDetail() {
       }
     />
     {policy && id && (
-      <EntityEditDialog<PolicyEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل السياسة"
