@@ -7,30 +7,38 @@ import {
   Percent, Boxes, Coins, Network,
 } from "lucide-react";
 
+// 22 تبويبًا مُرتَّبة في عناقيد منطقية (دفتر الأستاذ → المدينون → المصروفات
+// والمشتريات → الالتزامات → الموازنة والأصول → الضرائب → التقارير والتوجيه)
+// ليسهل مسح الشريط الطويل بدل الترتيب المبعثر السابق.
 const TABS = [
+  // دفتر الأستاذ
   { href: "/finance/accounts", label: "الحسابات", icon: BookOpen, match: ["/finance/accounts"] },
-  { href: "/finance/invoices", label: "الفواتير", icon: FileText, match: ["/finance/invoices"] },
   { href: "/finance/journal", label: "القيود", icon: ScrollText, match: ["/finance/journal", "/finance/journal-manual", "/finance/opening-balances", "/finance/recurring-journals"] },
   { href: "/finance/vouchers", label: "السندات", icon: FileSpreadsheet, match: ["/finance/vouchers"] },
-  { href: "/finance/expenses", label: "المصروفات", icon: CreditCard, match: ["/finance/expenses"] },
-  { href: "/finance/budget", label: "الميزانية", icon: Wallet, match: ["/finance/budget"] },
-  { href: "/finance/purchase-orders", label: "المشتريات", icon: ShoppingCart, match: ["/finance/purchase-orders", "/finance/purchase-requests"] },
+  // المدينون والمقبوضات
+  { href: "/finance/invoices", label: "الفواتير", icon: FileText, match: ["/finance/invoices"] },
   { href: "/finance/receivables", label: "المقبوضات", icon: Receipt, match: ["/finance/receivables"] },
   { href: "/finance/customer-advances", label: "دفعات مقدمة", icon: Coins, match: ["/finance/customer-advances"] },
-  { href: "/finance/commitments", label: "الالتزامات", icon: ClipboardList, match: ["/finance/commitments"] },
+  // المصروفات والمشتريات والموردون
+  { href: "/finance/expenses", label: "المصروفات", icon: CreditCard, match: ["/finance/expenses"] },
+  { href: "/finance/payments", label: "المدفوعات", icon: Banknote, match: ["/finance/payments"] },
+  { href: "/finance/purchase-orders", label: "المشتريات", icon: ShoppingCart, match: ["/finance/purchase-orders", "/finance/purchase-requests"] },
+  { href: "/finance/vendors", label: "الموردون", icon: Building2, match: ["/finance/vendors"] },
   { href: "/finance/financial-requests", label: "الطلبات المالية", icon: HandCoins, match: ["/finance/financial-requests"] },
+  // الالتزامات والسلف والعهد
+  { href: "/finance/commitments", label: "الالتزامات", icon: ClipboardList, match: ["/finance/commitments"] },
   { href: "/finance/salary-advances", label: "السلف", icon: BadgeDollarSign, match: ["/finance/salary-advances"] },
   { href: "/finance/custodies", label: "العهد", icon: Landmark, match: ["/finance/custodies"] },
+  // الموازنة والأصول
+  { href: "/finance/budget", label: "الميزانية", icon: Wallet, match: ["/finance/budget"] },
   { href: "/finance/fixed-assets", label: "الأصول الثابتة", icon: Box, match: ["/finance/fixed-assets"] },
-  { href: "/finance/vendors", label: "الموردون", icon: Building2, match: ["/finance/vendors"] },
-  { href: "/finance/payments", label: "المدفوعات", icon: Banknote, match: ["/finance/payments"] },
+  // الضرائب والزكاة
   { href: "/finance/tax", label: "الزكاة والضريبة", icon: Repeat, match: ["/finance/tax"] },
-  // الـ tabs الجديدة من حملة الإصلاح المالي (هـ سعادة المحامي إبراهيم):
   { href: "/finance/tax-codes", label: "رموز الضريبة", icon: Percent, match: ["/finance/tax-codes"] },
   { href: "/finance/wht-categories", label: "فئات الاستقطاع", icon: Receipt, match: ["/finance/wht-categories"] },
   { href: "/finance/reports/zatca", label: "تقارير الزكاة والضريبة", icon: Boxes, match: ["/finance/reports/zatca", "/finance/reports/vat-reconciliation", "/finance/reports/wht-summary", "/finance/reports/cogs-summary", "/finance/reports/inventory-valuation", "/finance/reports/inventory-turnover", "/finance/reports/lot-expiry-alerts", "/finance/reports/negative-stock", "/finance/reports/gl-integrity-gaps", "/finance/reports/unmapped-lines"] },
+  // التقارير والتوجيه
   { href: "/finance/reports", label: "التقارير", icon: BarChart3, match: ["/finance/reports"] },
-  // التوجيه البُعدي — نظرة موحّدة على ربط الكيانات بالحسابات + مراكز التكلفة
   { href: "/finance/dimensional-routing", label: "التوجيه البُعدي", icon: Network, match: ["/finance/dimensional-routing", "/finance/subsidiary-accounts", "/finance/cost-centers"] },
 ];
 
