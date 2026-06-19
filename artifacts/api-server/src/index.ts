@@ -9,6 +9,7 @@ import { registerEventListeners } from "./lib/eventListeners.js";
 import { registerJourneyTracking } from "./lib/journeyTracking.js";
 import { registerRulesEngineListener } from "./lib/rulesEngine.js";
 import "./lib/engines/hrEngine.js";
+import "./lib/integrations/githubSupportSync.js";
 import { seedDemoData } from "./lib/seedDemoData.js";
 import { bootstrapAdminUser } from "./lib/bootstrapAdmin.js";
 import { syncFeatureCatalog } from "./lib/rbac/catalogSync.js";

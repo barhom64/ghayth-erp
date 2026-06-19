@@ -34,8 +34,6 @@ DELETE /org/scoring-weights/:id
 DELETE /org/supervision-lines/:id
 DELETE /org/team-memberships/:id
 DELETE /org/teams/:id
-DELETE /rbac/v2/sod/:id
-DELETE /rbac/v2/users/:userId/roles/:roleId
 DELETE /scheduled-reports/:id
 DELETE /umrah/hotels/:id
 DELETE /umrah/import/presets/:id
@@ -66,7 +64,6 @@ PATCH /org/committees/:id
 PATCH /org/legal-entities/:id
 PATCH /org/positions/:id
 PATCH /org/teams/:id
-PATCH /rbac/v2/sod/:id
 PATCH /scheduled-reports/:id
 PATCH /umrah/hotels/:id
 PATCH /umrah/penalties/:id/waive
@@ -168,16 +165,7 @@ POST /org/team-memberships
 POST /org/teams
 POST /print/render
 POST /print/reprint-requests
-POST /rbac/v2/admin/sync-all-roles
-POST /rbac/v2/jit/:id/approve
-POST /rbac/v2/jit/:id/cancel
-POST /rbac/v2/jit/:id/reject
-POST /rbac/v2/jit/request
-POST /rbac/v2/roles/:id/clone
 POST /rbac/v2/simulate
-POST /rbac/v2/sod
-POST /rbac/v2/templates/:id/apply
-POST /rbac/v2/users/:userId/roles
 POST /scheduled-reports
 POST /umrah/agent-invoices/:id/record-payment
 POST /umrah/groups/:id/transport-requests
@@ -203,10 +191,6 @@ PUT /finance/pricing/rules/:id
 PUT /finance/saudi/wps/credentials/:bankCode
 PUT /hr/pricing/rules/:id
 PUT /hr/saudi/wps/credentials/:bankCode
-PUT /rbac/v2/roles/:id/approval-limits
-PUT /rbac/v2/roles/:id/field-policies
-PUT /rbac/v2/roles/:id/grants
-PUT /rbac/v2/roles/:id/grants/simple
 PUT /warehouse/pricing/rules/:id
 PUT /warehouse/saudi/wps/credentials/:bankCode
 POST /umrah/commission-plans/simulate
