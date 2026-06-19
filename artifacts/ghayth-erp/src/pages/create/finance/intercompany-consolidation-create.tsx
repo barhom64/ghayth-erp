@@ -54,7 +54,7 @@ export default function IntercompanyConsolidationCreatePage() {
                 <div>
                   <div className="text-sm font-semibold mb-2 text-status-neutral-foreground">الأداء حسب الشركة</div>
                   <div className="rounded-xl border overflow-hidden">
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto"><table className="w-full text-sm">
                       <thead className="bg-surface-subtle">
                         <tr>
                           <th className="px-3 py-2 text-right">الشركة</th>
@@ -73,7 +73,7 @@ export default function IntercompanyConsolidationCreatePage() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></div>
                   </div>
                 </div>
               )}

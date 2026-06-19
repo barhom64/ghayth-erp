@@ -277,7 +277,7 @@ export default function TransportOpsDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
                     <thead className="bg-surface-subtle text-xs text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-start">المركبة</th>
@@ -317,7 +317,7 @@ export default function TransportOpsDashboard() {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table></div>
                 </CardContent>
               </Card>
             </>

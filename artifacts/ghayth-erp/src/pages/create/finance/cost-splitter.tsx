@@ -623,7 +623,7 @@ export default function CostSplitterPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            <table className="w-full text-xs">
+            <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead>
                 <tr className="text-muted-foreground border-b">
                   <th className="text-end p-1">الحساب</th>
@@ -651,7 +651,7 @@ export default function CostSplitterPage() {
                   <td className="p-1 font-mono text-end text-red-700">{formatCurrency(taxSplit.gross)}</td>
                 </tr>
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}
