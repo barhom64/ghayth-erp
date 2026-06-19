@@ -12,7 +12,9 @@ export const settingsRoutes = [
   { path: "/settings/companies", component: Settings },
   { path: "/settings/channels", component: Settings },
   { path: "/settings/controls", component: Settings },
-  { path: "/settings/workflows", component: Settings },
+  // «الإجراءات» (workflow_definitions) — dormant engine superseded by approval-chains;
+  // its settings tab was removed, so this deep-path redirects to «الموافقات».
+  { path: "/settings/workflows", component: redirectTo("/settings/approvals") },
   { path: "/settings/approvals", component: Settings },
   { path: "/settings/numbering", component: Settings },
   { path: "/settings/accounting", component: Settings },

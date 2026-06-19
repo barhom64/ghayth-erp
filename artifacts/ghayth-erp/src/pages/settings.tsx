@@ -29,7 +29,6 @@ import { useAppContext } from "@/contexts/app-context";
 import { GovIntegrationsTab } from "./settings/gov-integrations-tab";
 import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";
 import { CommunicationChannelsTab } from "./settings/communication-channels-tab";
-import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { BranchesTab } from "./settings/branches-tab";
 import { DepartmentsTab } from "./settings/departments-tab";
 import { CompaniesTab } from "./settings/companies-tab";
@@ -320,7 +319,6 @@ const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/companies": "companies",
   "/settings/channels": "channels",
   "/settings/controls": "controls",
-  "/settings/workflows": "workflows",
   "/settings/approvals": "approvals",
   "/settings/numbering": "numbering",
   "/settings/accounting": "accounting",
@@ -350,7 +348,6 @@ export default function SettingsPage() {
           {/* الحوكمة والإجراءات */}
           <TabsTrigger value="controls">التحكم</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
-          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="numbering">الترقيم</TabsTrigger>
           {/* المالية والامتثال */}
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
@@ -368,7 +365,6 @@ export default function SettingsPage() {
         <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
-        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="numbering"><NumberingTab /></TabsContent>
         <TabsContent value="accounting"><AccountingMappingsTab /></TabsContent>
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>

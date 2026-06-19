@@ -90,7 +90,6 @@ const INTENTIONAL_OFF_SIDEBAR = new Set([
   "/settings/letterhead",
   "/settings/channels",
   "/settings/controls",
-  "/settings/workflows",
   "/settings/approvals",
   "/settings/numbering",
   "/settings/accounting",
