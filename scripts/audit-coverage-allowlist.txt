@@ -51,8 +51,6 @@ PATCH /finance/journal-manual/:id/post
 PATCH /finance/journal-manual/:id/review
 PATCH /finance/journal-manual/:id/submit
 PATCH /finance/receivables/:id/approve
-PATCH /finance/zatca/expense/:id
-PATCH /finance/zatca/invoice/:id
 PATCH /finance/zatca/missing-tax-numbers/:id
 PATCH /hr/excuse-requests/:id/approve
 PATCH /hr/exit/:id/approve
@@ -116,8 +114,6 @@ POST /finance/vendor-credits
 POST /finance/vendor-credits/:id/apply
 POST /finance/vendor-invoices
 POST /finance/vendor-invoices/impact-preview
-POST /finance/zatca/expense/:id/submit
-POST /finance/zatca/invoice/:id/submit
 POST /finance/zatca/test-connection
 POST /fleet/rental-contracts/:id/payments
 POST /hr/:id/ocr/rerun
