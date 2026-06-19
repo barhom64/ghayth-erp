@@ -119,9 +119,79 @@ function makeIsAuditedByMiddleware(prefixes) {
   };
 }
 
+// Audit primitives, by name. A handler-window match on any of these means the
+// handler logs who/what/when directly.
+const AUDIT_PRIMITIVE = /createAuditLog\s*\(|auditFromRequest\s*\(|auditMutation\s*\(|emitEvent\s*\(/;
+
+// Many routers funnel every write through a thin file-local wrapper instead of
+// calling the primitive inline — e.g. org.ts `audit(req, …)` and
+// inboxConversations.ts `recordConversationAction(req, …)`, both of which call
+// auditFromRequest + emitEvent internally. The wrapper's NAME is not an audit
+// primitive, so the per-handler window scan reported these audited endpoints as
+// gaps. This detects such wrappers (a function/const defined in THIS file whose
+// OWN body — balanced-brace scoped, so it cannot bleed into a neighbouring
+// handler — calls a primitive) and returns a RegExp matching a NON-METHOD call
+// to any of them, so a handler that delegates to the wrapper is correctly
+// counted as audited. It can only REDUCE false positives: a genuinely-unaudited
+// handler calls neither a primitive nor an auditing wrapper, so it stays flagged.
+//
+// Returns the wrapper's OWN body. It first walks past the parameter list by
+// paren depth — so braces inside the signature (`= {}` defaults, `params: {…}`
+// inline object types, multi-line signatures) are never mistaken for the body —
+// then balances the body braces so the scan stops at the wrapper's closing `}`
+// and cannot bleed into following code. For a brace-less arrow (`=> expr`) the
+// body is the expression text after `=>`.
+function wrapperBody(lines, defIdx) {
+  const text = lines.slice(defIdx, Math.min(defIdx + 120, lines.length)).join("\n");
+  const lp = text.indexOf("(");
+  if (lp === -1) return "";
+  let i = lp, pdepth = 0;
+  for (; i < text.length; i++) {
+    if (text[i] === "(") pdepth++;
+    else if (text[i] === ")") { pdepth--; if (pdepth === 0) { i++; break; } }
+  }
+  const bo = text.indexOf("{", i);
+  if (bo === -1) {
+    const ar = text.indexOf("=>", i);
+    return ar === -1 ? "" : text.slice(ar + 2, ar + 400); // brace-less arrow
+  }
+  let depth = 0;
+  for (let p = bo; p < text.length; p++) {
+    if (text[p] === "{") depth++;
+    else if (text[p] === "}") { depth--; if (depth === 0) return text.slice(bo, p + 1); }
+  }
+  return text.slice(bo);
+}
+
+// Common collection/Promise method names that are never audit wrappers — guards
+// against a stray `.push(`/`.set(`/`.then(` being read as a wrapper call.
+const NON_WRAPPER_NAMES = new Set([
+  "push", "pop", "shift", "unshift", "splice", "set", "get", "add", "has", "delete",
+  "map", "filter", "forEach", "reduce", "find", "some", "every", "then", "catch",
+  "finally", "join", "slice", "concat", "includes", "sort", "keys", "values",
+]);
+
+export function auditWrapperCallMatcher(src) {
+  const lines = src.split(/\r?\n/);
+  const defRe = /(?:async\s+function|function)\s+([A-Za-z_]\w*)\s*\(|(?:const|let)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*(?::[^=]*?)?=>|[A-Za-z_]\w*\s*=>)/;
+  const primitiveNames = new Set(["createAuditLog", "auditFromRequest", "auditMutation", "emitEvent"]);
+  const names = new Set();
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(defRe);
+    if (!m) continue;
+    const name = m[1] || m[2];
+    if (!name || primitiveNames.has(name) || NON_WRAPPER_NAMES.has(name)) continue;
+    if (AUDIT_PRIMITIVE.test(wrapperBody(lines, i))) names.add(name);
+  }
+  if (names.size === 0) return null;
+  // (?<!\.) so a method call like `arr.<name>(` is NOT read as a wrapper call.
+  return new RegExp(`(?<!\\.)\\b(?:${[...names].join("|")})\\s*\\(`);
+}
+
 function scanFile(file, mountMap, isAuditedByMiddleware) {
   const src = readFileSync(file, "utf8");
   const lines = src.split(/\r?\n/);
+  const wrapperRe = auditWrapperCallMatcher(src);
   const endpoints = [];
   const re = /\b(\w+)\.(get|post|put|patch|delete)\(\s*[`"']([^`"']+)[`"']/i;
   for (let i = 0; i < lines.length; i++) {
@@ -146,10 +216,8 @@ function scanFile(file, mountMap, isAuditedByMiddleware) {
         file: fileRel,
         line: i + 1,
         hasAudit:
-          /createAuditLog\s*\(/.test(win) ||
-          /auditFromRequest\s*\(/.test(win) ||
-          /auditMutation\s*\(/.test(win) ||
-          /emitEvent\s*\(/.test(win) ||
+          AUDIT_PRIMITIVE.test(win) ||
+          (wrapperRe !== null && wrapperRe.test(win)) ||
           isAuditedByMiddleware(joined),
       });
     }
