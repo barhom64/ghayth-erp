@@ -111,8 +111,6 @@ POST /events/outbox/drain
 POST /finance/:id/ocr/rerun
 POST /finance/bank-guarantees/:id/cancel
 POST /finance/bank-guarantees/:id/release
-POST /finance/customer-advances
-POST /finance/customer-advances/:id/apply
 POST /finance/fiscal-periods-v2/:id/close
 POST /finance/fiscal-periods-v2/:id/lock
 POST /finance/fiscal-periods-v2/:id/reopen
