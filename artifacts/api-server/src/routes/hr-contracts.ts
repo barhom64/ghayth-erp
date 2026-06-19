@@ -133,7 +133,7 @@ contractsRouter.get("/:id", authorize({ feature: "hr.contracts", action: "list" 
 contractsRouter.post("/", authorize({ feature: "hr.contracts", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const data = createContractSchema.parse(req.body);
+    const data = zodParse(createContractSchema.safeParse(req.body));
 
     const [emp] = await rawQuery<Record<string, unknown>>(
       `SELECT e.id, e.name FROM employees e JOIN employee_assignments ea ON ea."employeeId"=e.id WHERE e.id = $1 AND ea."companyId" = $2 LIMIT 1`,
