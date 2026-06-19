@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { API_BASE } from "@/lib/api";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
@@ -24,7 +25,7 @@ const uploadSchema = z.object({
 });
 type UploadForm = z.infer<typeof uploadSchema>;
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_BASE;
 
 const CATEGORIES = [
   { value: "contracts", label: "عقود" },
