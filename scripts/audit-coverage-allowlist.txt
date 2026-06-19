@@ -98,11 +98,13 @@ POST /finance/fiscal-periods-v2/:id/close
 POST /finance/fiscal-periods-v2/:id/lock
 POST /finance/fiscal-periods-v2/:id/reopen
 POST /finance/fiscal-periods/:period/close
+# Already audited — createAuditLog("journal.reversed") + emitEvent fire after the
+# reversal transaction commits (finance-journal.ts), but the handler body exceeds
+# the guard's 200-line static window so the call reads as a gap. Kept as a
+# documented window false-positive, NOT a real gap.
 POST /finance/journal/:id/reverse
 POST /finance/ocr/extractions/:id/confirm
 POST /finance/ocr/extractions/:id/reject
-POST /finance/opening-balances
-POST /finance/opening-balances/import-csv
 POST /finance/payment-run/execute
 POST /finance/pricing/resolve
 POST /finance/pricing/rules
