@@ -62,9 +62,6 @@ export interface NavSection {
 
 export const allNavSections: NavSection[] = [
   // ══════════════════════════════════════════════════════════════════════
-  // 1. الرئيسية
-  // ══════════════════════════════════════════════════════════════════════
-  // ══════════════════════════════════════════════════════════════════════
   // 1. الرئيسية — لوحات + مراكز التحكم + بوابة الموظف
   // ══════════════════════════════════════════════════════════════════════
   // Restructured from a flat 10-item list into three logical sub-groups
@@ -283,7 +280,7 @@ export const allNavSections: NavSection[] = [
         // companies/branches/departments (settings). Kept URL-reachable (off-sidebar)
         // because hr/org-tree still links org-memberships for team/committee CRUD.
         { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
-        { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
+        { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings", perm: ["admin:view", "admin:list"], permMode: "any" },
         { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },
       ]},
     ],
