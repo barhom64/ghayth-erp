@@ -91,7 +91,21 @@ const INITIAL = {
   whtCategoryDefault: "" as string,
 };
 
-export default function VendorPartyForm({ intent }: { intent: VendorPartyFormIntent }) {
+export default function VendorPartyForm({
+  intent,
+  embedded = false,
+  onCreated,
+  onCancel,
+}: {
+  intent: VendorPartyFormIntent;
+  /** When true, render without the page chrome (CreatePageLayout) — for the
+   *  inline AllowCreateDrawer. Defaults to the standalone-page behaviour. */
+  embedded?: boolean;
+  /** Inline-create success: receive the new row instead of navigating. */
+  onCreated?: (created: any) => void;
+  /** Inline-create cancel: close the drawer instead of navigating. */
+  onCancel?: () => void;
+}) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const createMut = useApiMutation(intent.postUrl, "POST", intent.invalidateKeys);
@@ -158,18 +172,19 @@ export default function VendorPartyForm({ intent }: { intent: VendorPartyFormInt
             whtCategoryDefault: form.whtCategoryDefault || undefined,
           }
         : corePayload;
-      await createMut.mutateAsync(payload);
+      const created = await createMut.mutateAsync(payload);
       clearDraft();
       toast({ title: intent.saveSuccessMsg });
-      setLocation(intent.backPath);
+      if (onCreated) onCreated(created);
+      else setLocation(intent.backPath);
     } catch (err: any) {
       setApiError(err);
       toast({ variant: "destructive", title: intent.saveErrorMsg, description: err?.fix ?? err?.message });
     }
   };
 
-  return (
-    <CreatePageLayout title={intent.title} backPath={intent.backPath}>
+  const body = (
+    <>
       {hasDraft && (
         <div className="mb-4 flex items-center justify-between bg-status-warning-surface border border-status-warning-surface rounded-lg px-4 py-2 text-sm text-status-warning-foreground">
           <span>تم استعادة مسودة محفوظة سابقاً</span>
@@ -300,11 +315,15 @@ export default function VendorPartyForm({ intent }: { intent: VendorPartyFormInt
 
       <FileDropZone files={attachments} onFilesChange={setAttachments} />
       <div className="flex justify-end gap-3 pt-6">
-        <Button variant="outline" onClick={() => setLocation(intent.backPath)}>إلغاء</Button>
+        <Button variant="outline" onClick={onCancel ?? (() => setLocation(intent.backPath))}>إلغاء</Button>
         <Button onClick={handleSubmit} disabled={!form.name || createMut.isPending} rateLimitAware>
           {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
         </Button>
       </div>
-    </CreatePageLayout>
+    </>
+  );
+
+  return embedded ? body : (
+    <CreatePageLayout title={intent.title} backPath={intent.backPath}>{body}</CreatePageLayout>
   );
 }
