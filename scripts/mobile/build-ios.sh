@@ -16,6 +16,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_DIR="$REPO_ROOT/artifacts/ghayth-erp"
 API_ORIGIN="${VITE_API_ORIGIN:-https://hr.door.sa}"
+# manual (افتراضي: يفتح Xcode للتوقيع) أو release (أرشفة + تصدير IPA موقّع آليًا).
+BUILD_MODE="${BUILD_MODE:-manual}"
 
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "✗ بناء iOS يتطلب macOS + Xcode. شغّله على ماك."
@@ -54,8 +56,37 @@ cat <<'PLIST'
     UIBackgroundModes                              = [ location ]
 PLIST
 
-echo ""
-echo "✅ تم التجهيز. أكمل في Xcode:"
-echo "     npx cap open ios"
-echo "   ثم: اختر فريق التوقيع (Signing & Capabilities) › Run على جهاز،"
-echo "   أو Product › Archive للرفع إلى TestFlight / App Store."
+WS="$APP_DIR/ios/App/App.xcworkspace"
+
+if [ "$BUILD_MODE" = "release" ]; then
+  # ── أرشفة + تصدير IPA موقّع للمتجر آليًا (بلا فتح Xcode) ──────────────────
+  echo ""
+  echo "▶ أرشفة وتصدير IPA موقّع للمتجر (release)…"
+  : "${EXPORT_OPTIONS_PLIST:?مطلوب EXPORT_OPTIONS_PLIST — مسار ExportOptions.plist (يحوي method=app-store + teamID + التوقيع)}"
+  if [ ! -d "$WS" ]; then
+    echo "✗ لم يُنشأ مشروع iOS بعد: $WS"; exit 1
+  fi
+  if [ ! -f "$EXPORT_OPTIONS_PLIST" ]; then
+    echo "✗ ملف خيارات التصدير غير موجود: $EXPORT_OPTIONS_PLIST"; exit 1
+  fi
+  ARCHIVE="$APP_DIR/ios/build/App.xcarchive"
+  IPA_DIR="$APP_DIR/ios/build/ipa"
+  # تأكّد أن أذونات الموقع أُضيفت لـInfo.plist مسبقًا (مرة واحدة) قبل الأرشفة.
+  xcodebuild -workspace "$WS" -scheme App -configuration Release \
+    -archivePath "$ARCHIVE" \
+    ${DEVELOPMENT_TEAM:+DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"} \
+    clean archive
+  xcodebuild -exportArchive -archivePath "$ARCHIVE" \
+    -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
+    -exportPath "$IPA_DIR"
+  echo "✅ تم التصدير الموقّع: $IPA_DIR/"
+  echo "   ارفعه عبر Transporter، أو:"
+  echo "     xcrun altool --upload-app -t ios -f \"$IPA_DIR\"/*.ipa --apiKey <KEY> --apiIssuer <ISSUER>"
+else
+  echo ""
+  echo "✅ تم التجهيز. أكمل في Xcode:"
+  echo "     npx cap open ios"
+  echo "   ثم: اختر فريق التوقيع (Signing & Capabilities) › Run على جهاز،"
+  echo "   أو Product › Archive للرفع إلى TestFlight / App Store."
+  echo "   (للأتمتة الكاملة بلا Xcode: BUILD_MODE=release مع EXPORT_OPTIONS_PLIST)"
+fi
