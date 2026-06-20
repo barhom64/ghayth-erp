@@ -156,134 +156,140 @@ export const allNavSections: NavSection[] = [
     // only restructure the MENU, not the routes themselves. Old
     // bookmarks + deep-links keep working.
     items: [
-      // 1. لوحة HR
-      // PR-1 / #2163 — was module:"bi" (FU-2). hr_manager owns hr, not bi.
-      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
-      // بوابة /hr — لوحة تشغيلية خاصة بفريق الموارد البشرية (مؤشرات وروابط
-      // سريعة لا تظهر في اللوحة العامة). كانت مركّبة بلا مدخل (orphan).
-      { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr" },
+      // إدارة الموارد البشرية — مدخل وحدة واحد يجمع مجموعات HR الفرعية (نفس نمط
+      // «إدارة العمرة»/«إدارة الأسطول»). كانت 11 مدخلًا مسطّحًا، فأُعيد تجميعها تحت
+      // مدخل واحد: اللوحة أولاً ثم دورة العمل ثم التقارير ثم الإعدادات آخراً. إعادة
+      // تجميع فقط — كل مسار/صلاحية/تسمية محفوظ (لا أيتام ولا روابط ميتة).
+      { label: "إدارة الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr", children: [
+        // 1. لوحة HR
+        // PR-1 / #2163 — was module:"bi" (FU-2). hr_manager owns hr, not bi.
+        { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard },
+        // بوابة /hr — لوحة تشغيلية خاصة بفريق الموارد البشرية (مؤشرات وروابط
+        // سريعة لا تظهر في اللوحة العامة). كانت مركّبة بلا مدخل (orphan).
+        { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase },
 
-      // 2. الموظفون — gathers recruitment, employees, onboarding,
-      // org structure, transfers, documents, contracts, letters, exit
-      { label: "شؤون الموظفين", path: "/employees", icon: Users, module: "hr", children: [
-        { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
-        { label: "إنشاء موظف سريع", path: "/employees/quick-create", icon: Zap, subKey: "employees" },
-        { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
-        { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
-        // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
-        // PR-7 «الموحّد»). أُزيل تكرار «الهيكل المصوّر» وعنصر org-tree المنفصل في
-        // إعدادات HR. مسارا /hr/organization (عرض المناصب) و .../structure (العلاقات)
-        // يبقيان مسجَّلين deep-link — لا حذف ولا 404. متابعة: نقل عرضَي «المناصب»
-        // و«العلاقات» إلى org-tree كتبويبات ثم retire الصفحتين.
-        { label: "الهيكل التنظيمي", path: "/hr/org-tree", icon: Network, subKey: "organization" },
-        { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
-        { label: "وثائق المنشأة والموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
-        { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
-        { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, subKey: "employees" },
-        { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
-      ]},
-      { label: "التوظيف والتعيين", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
-        { label: "التوظيف والاستقطاب", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
-        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
-        { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
-        { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
-        { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
-        { label: "طلبات استكمال البيانات", path: "/hr/self-onboarding-review", icon: ClipboardCheck, subKey: "employees" },
-      ]},
+        // 2. الموظفون — gathers recruitment, employees, onboarding,
+        // org structure, transfers, documents, contracts, letters, exit
+        { label: "شؤون الموظفين", path: "/employees", icon: Users, children: [
+          { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
+          { label: "إنشاء موظف سريع", path: "/employees/quick-create", icon: Zap, subKey: "employees" },
+          { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
+          { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
+          // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
+          // PR-7 «الموحّد»). أُزيل تكرار «الهيكل المصوّر» وعنصر org-tree المنفصل في
+          // إعدادات HR. مسارا /hr/organization (عرض المناصب) و .../structure (العلاقات)
+          // يبقيان مسجَّلين deep-link — لا حذف ولا 404. متابعة: نقل عرضَي «المناصب»
+          // و«العلاقات» إلى org-tree كتبويبات ثم retire الصفحتين.
+          { label: "الهيكل التنظيمي", path: "/hr/org-tree", icon: Network, subKey: "organization" },
+          { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
+          { label: "وثائق المنشأة والموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
+          { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
+          { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, subKey: "employees" },
+          { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
+        ]},
+        { label: "التوظيف والتعيين", path: "/hr/recruitment", icon: Briefcase, children: [
+          { label: "التوظيف والاستقطاب", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
+          { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
+          { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
+          { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
+          { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
+          { label: "طلبات استكمال البيانات", path: "/hr/self-onboarding-review", icon: ClipboardCheck, subKey: "employees" },
+        ]},
 
-      // 3. النشاط والحضور — gathers shifts + attendance + tracking
-      // (previously 2 separate top-level entries)
-      { label: "النشاط والحضور", path: "/hr/attendance", icon: Clock, module: "hr", children: [
-        { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
-        // HR-REV-2 §4.6 — «تقارير الحضور» تعيش في مجموعة «التقارير» الموحّدة
-        // (التي صُمِّمت لتجميع تقارير الحضور/الأداء/الرواتب)؛ أُزيل المكرّر هنا.
-        { label: "التتبع الحي (الميداني)", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
-        { label: "سياسات التتبع", path: "/hr/attendance/tracking-policies", icon: ShieldCheck, subKey: "attendance" },
-        { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
-        { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
-        // HR-REV — أُزيل «إدارة الورديات» المكرّر: /hr/shifts/management يرتدّ إلى
-        // /hr/shifts، ونموذج إسناد الموظف صار تبويب «التعيينات» في الصفحة نفسها.
-      ]},
+        // 3. النشاط والحضور — gathers shifts + attendance + tracking
+        // (previously 2 separate top-level entries)
+        { label: "النشاط والحضور", path: "/hr/attendance", icon: Clock, children: [
+          { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
+          // HR-REV-2 §4.6 — «تقارير الحضور» تعيش في مجموعة «التقارير» الموحّدة
+          // (التي صُمِّمت لتجميع تقارير الحضور/الأداء/الرواتب)؛ أُزيل المكرّر هنا.
+          { label: "التتبع الحي (الميداني)", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
+          { label: "سياسات التتبع", path: "/hr/attendance/tracking-policies", icon: ShieldCheck, subKey: "attendance" },
+          { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
+          { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
+          // HR-REV — أُزيل «إدارة الورديات» المكرّر: /hr/shifts/management يرتدّ إلى
+          // /hr/shifts، ونموذج إسناد الموظف صار تبويب «التعيينات» في الصفحة نفسها.
+        ]},
 
-      // 4. الطلبات — single inbox for leaves/OT/excuses + the new
-      // Services Catalog landing
-      { label: "الطلبات", path: "/hr/services", icon: ClipboardCheck, module: "hr", children: [
-        { label: "خدمات الموارد البشرية", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
-        { label: "صندوق موافقات الموارد البشرية", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
-        { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
-        { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
-        { label: "طلبات الاستئذان", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
-        { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
-      ]},
+        // 4. الطلبات — single inbox for leaves/OT/excuses + the new
+        // Services Catalog landing
+        { label: "الطلبات", path: "/hr/services", icon: ClipboardCheck, children: [
+          { label: "خدمات الموارد البشرية", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
+          { label: "صندوق موافقات الموارد البشرية", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
+          { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
+          { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
+          { label: "طلبات الاستئذان", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
+          { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
+        ]},
 
-      // 5. الامتثال والجزاءات — gathers all violations + memos +
-      // regulations + Saudization (previously 3 separate clusters).
-      // PR-10 (#2077) — Closure Gate: explicit perm guard on the
-      // group + the discipline/violations children so the رابط لا يظهر
-      // for users without violations/discipline visibility (e.g.
-      // payroll_officer). Backend authorize() still 403s either way —
-      // this just keeps «نظهرَ ثم 403» out of the UX. السعودة + WPS
-      // children stay on their own permissions so finance/payroll
-      // personas can still reach them.
-      { label: "المخالفات والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
-        perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
-        children: [
-        // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
-        // هي المدخل الوحيد. صفحة «إدارة المخالفات» (/hr/violations/management) صار
-        // محتواها (قائمة المخالفات الخام + الاعتماد + التحليل) تبويب «المخالفات الخام»
-        // داخل violations.tsx، والصفحة الميتة أُزيلت (retire) والمسار يُعاد توجيهه.
-        { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
-        { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
-        { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
-        { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
-        { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
-        { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees", perm: ["hr.saudization:view","hr.saudization:list"], permMode: "any" },
-        { label: "حماية الأجور / مدد / البنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
-        { label: "إعدادات حماية الأجور", path: "/hr/saudi-compliance/wps/settings", icon: Settings, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
-      ]},
+        // 5. الامتثال والجزاءات — gathers all violations + memos +
+        // regulations + Saudization (previously 3 separate clusters).
+        // PR-10 (#2077) — Closure Gate: explicit perm guard on the
+        // group + the discipline/violations children so the رابط لا يظهر
+        // for users without violations/discipline visibility (e.g.
+        // payroll_officer). Backend authorize() still 403s either way —
+        // this just keeps «نظهرَ ثم 403» out of the UX. السعودة + WPS
+        // children stay on their own permissions so finance/payroll
+        // personas can still reach them.
+        { label: "المخالفات والجزاءات", path: "/hr/violations", icon: Scale,
+          perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
+          children: [
+          // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
+          // هي المدخل الوحيد. صفحة «إدارة المخالفات» (/hr/violations/management) صار
+          // محتواها (قائمة المخالفات الخام + الاعتماد + التحليل) تبويب «المخالفات الخام»
+          // داخل violations.tsx، والصفحة الميتة أُزيلت (retire) والمسار يُعاد توجيهه.
+          { label: "نظرة عامة على المخالفات", path: "/hr/violations", icon: ListChecks, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+          { label: "المحاضر التأديبية", path: "/hr/violations?tab=memos", icon: FileText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+          { label: "الرصد التلقائي", path: "/hr/violations/auto-detection", icon: Radar, subKey: "violations", perm: ["hr.violations:view","hr.violations:list"], permMode: "any" },
+          { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+          { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
+          { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees", perm: ["hr.saudization:view","hr.saudization:list"], permMode: "any" },
+          { label: "حماية الأجور / مدد / البنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
+          { label: "إعدادات حماية الأجور", path: "/hr/saudi-compliance/wps/settings", icon: Settings, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
+        ]},
 
-      // 6. الأداء والتطوير — gathers performance + 360 + IDP + training
-      // (previously 2 separate top-level entries)
-      { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, module: "hr", children: [
-        { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
-        { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Activity, subKey: "performance" },
-        { label: "خطط التطوير الفردية", path: "/hr/idp", icon: BookOpen, subKey: "performance" },
-        { label: "البرامج التدريبية", path: "/hr/training", icon: GraduationCap, subKey: "training" },
-        // HR-REV — أُزيل «التقييم المتقدم» و«التدريب المتقدم» المكرّران: مساراهما
-        // (/hr/performance/advanced و/hr/training/advanced) يرتدّان للصفحة الأم،
-        // وتحليلاتهما صارت تبويب «التحليلات» / قسم «البرامج حسب الحالة» داخلها.
-      ]},
+        // 6. الأداء والتطوير — gathers performance + 360 + IDP + training
+        // (previously 2 separate top-level entries)
+        { label: "الأداء والتطوير", path: "/hr/performance", icon: Target, children: [
+          { label: "تقييم الأداء", path: "/hr/performance", icon: Target, subKey: "performance" },
+          { label: "التقييم 360°", path: "/hr/evaluation-360", icon: Activity, subKey: "performance" },
+          { label: "خطط التطوير الفردية", path: "/hr/idp", icon: BookOpen, subKey: "performance" },
+          { label: "البرامج التدريبية", path: "/hr/training", icon: GraduationCap, subKey: "training" },
+          // HR-REV — أُزيل «التقييم المتقدم» و«التدريب المتقدم» المكرّران: مساراهما
+          // (/hr/performance/advanced و/hr/training/advanced) يرتدّان للصفحة الأم،
+          // وتحليلاتهما صارت تبويب «التحليلات» / قسم «البرامج حسب الحالة» داخلها.
+        ]},
 
-      // 7. الرواتب — payroll + components + loans + EOS + accruals + WPS
-      { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, module: "hr", children: [
-        { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
-        { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
-        { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
-        { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
-        { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
-        { label: "نظام حماية الأجور", path: "/hr/wps", icon: Send, subKey: "payroll" },
-      ]},
+        // 7. الرواتب — payroll + components + loans + EOS + accruals + WPS
+        { label: "الرواتب والمستحقات", path: "/hr/payroll", icon: DollarSign, children: [
+          { label: "مسيرات الرواتب", path: "/hr/payroll", icon: DollarSign, subKey: "payroll" },
+          { label: "مكونات الرواتب", path: "/hr/payroll/salary-components", icon: Percent, subKey: "payroll" },
+          { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
+          { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
+          { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
+          { label: "نظام حماية الأجور", path: "/hr/wps", icon: Send, subKey: "payroll" },
+        ]},
 
-      // 8. التقارير — single entry, surfaces reports that lived under
-      // attendance/performance/payroll clusters
-      { label: "التقارير", path: "/hr/turnover-report", icon: FileBarChart, module: "hr", children: [
-        { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
-        { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
-        // HR-REV — أُزيل «تحليلات التوظيف المتقدمة» المكرّر: /hr/recruitment/advanced
-        // يرتدّ إلى /hr/recruitment (مدخل «وظائف التوظيف») التي تشمله بالكامل.
-      ]},
+        // 8. التقارير — single entry, surfaces reports that lived under
+        // attendance/performance/payroll clusters
+        { label: "التقارير", path: "/hr/turnover-report", icon: FileBarChart, children: [
+          { label: "تقرير الدوران", path: "/hr/turnover-report", icon: FileBarChart, subKey: "performance" },
+          { label: "تقارير الحضور", path: "/hr/attendance/reports", icon: BarChart3, subKey: "attendance" },
+          // HR-REV — أُزيل «تحليلات التوظيف المتقدمة» المكرّر: /hr/recruitment/advanced
+          // يرتدّ إلى /hr/recruitment (مدخل «وظائف التوظيف») التي تشمله بالكامل.
+        ]},
 
-      // 9. الإعدادات — attendance policy + holidays
-      { label: "إعدادات الموارد البشرية", path: "/hr/attendance-policy", icon: Settings, module: "hr", children: [
-        { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
-        { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
-        // /admin/org-model + /admin/org-memberships removed from the sidebar:
-        // the legal_entities/positions/teams overlay (migration 274) is a parallel
-        // org model consumed nowhere outside org.ts — the load-bearing structure is
-        // companies/branches/departments (settings). Kept URL-reachable (off-sidebar)
-        // because hr/org-tree still links org-memberships for team/committee CRUD.
-        { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
-        { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },
+        // 9. الإعدادات — attendance policy + holidays
+        { label: "إعدادات الموارد البشرية", path: "/hr/attendance-policy", icon: Settings, children: [
+          { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
+          { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
+          // /admin/org-model + /admin/org-memberships removed from the sidebar:
+          // the legal_entities/positions/teams overlay (migration 274) is a parallel
+          // org model consumed nowhere outside org.ts — the load-bearing structure is
+          // companies/branches/departments (settings). Kept URL-reachable (off-sidebar)
+          // because hr/org-tree still links org-memberships for team/committee CRUD.
+          { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
+          { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },
+        ]},
       ]},
     ],
   },
