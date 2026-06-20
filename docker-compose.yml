@@ -43,6 +43,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api-server
+      args:
+        APP_COMMIT: ${APP_COMMIT:-unknown}
     restart: unless-stopped
     depends_on:
       db:
