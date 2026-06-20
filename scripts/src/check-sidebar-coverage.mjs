@@ -181,7 +181,11 @@ function getRedirectRoutePaths() {
 /** Pure: every `path: "/x"` value in a navigation-registry source string. */
 export function extractSidebarPaths(src) {
   const out = [];
-  for (const m of src.matchAll(/\bpath:\s*["']([^"']+)["']/g)) out.push(m[1]);
+  // Virtual wrappers (path "#…") are visual sidebar containers, not pages/routes
+  // — skip them, consistent with getNavigationRegistry which also skips "#" paths.
+  for (const m of src.matchAll(/\bpath:\s*["']([^"']+)["']/g)) {
+    if (!m[1].startsWith("#")) out.push(m[1]);
+  }
   return out;
 }
 
