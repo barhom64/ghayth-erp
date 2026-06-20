@@ -156,6 +156,15 @@ async function start() {
   server.listen(port, "0.0.0.0", async () => {
     logger.info({ port }, "Server listening");
 
+    // Realtime SSE hub — subscribe to the event bus so every change is pushed
+    // live to connected clients (web + native app stay in sync).
+    try {
+      const { initRealtimeHub } = await import("./lib/realtimeHub.js");
+      initRealtimeHub();
+    } catch (err) {
+      logger.error({ err }, "[realtime] failed to init hub");
+    }
+
     try {
       await startCronScheduler();
       logger.info("Cron scheduler started");
