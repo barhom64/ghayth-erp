@@ -107,6 +107,11 @@ jobs:
         # socket; any value satisfies the assertion.
         env:
           PORT: '5173'
+          # Disable the SSE realtime client in the e2e build: a persistent
+          # EventSource connection keeps the network perpetually "active" so
+          # Playwright's waitForLoadState("networkidle") never resolves and the
+          # whole suite hangs. Realtime push has its own unit coverage.
+          VITE_DISABLE_REALTIME: '1'
         run: pnpm --filter @workspace/ghayth-erp run build
 
       - name: Build api-server
