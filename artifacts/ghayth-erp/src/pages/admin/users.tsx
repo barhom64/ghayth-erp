@@ -47,6 +47,7 @@ import {
   Search, Users, Trash2, Edit2, ShieldAlert, AlertCircle,
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelectField } from "@/components/shared/searchable-select";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -522,13 +523,15 @@ function RoleAssignmentSection({ users }: { users: any[] }) {
 
   return (
     <div className="space-y-3">
-      <Select value={selectedUserId ? String(selectedUserId) : "_none"} onValueChange={(v) => { const id = v === "_none" ? null : Number(v); setSelectedUserId(id); if (id) loadUserRoles(id); }}>
-        <SelectTrigger><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="_none">— اختر مستخدم لإدارة أدواره —</SelectItem>
-          {users.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.employeeName || u.email}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      <SearchableSelectField
+        label="المستخدم"
+        hideLabel
+        options={users.map((u: any) => ({ value: String(u.id), label: u.employeeName || u.email, sublabel: u.employeeName ? u.email : undefined }))}
+        value={selectedUserId ? String(selectedUserId) : ""}
+        onValueChange={(v) => { const id = v ? Number(v) : null; setSelectedUserId(id); if (id) loadUserRoles(id); }}
+        placeholder="— اختر مستخدم لإدارة أدواره —"
+        searchPlaceholder="ابحث عن مستخدم..."
+      />
       {selectedUserId && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
