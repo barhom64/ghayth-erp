@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { z } from "zod";
 import { Link, useLocation } from "wouter";
 import {
@@ -202,6 +202,7 @@ function DocumentsList() {
     try {
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
         credentials: "include",
+        headers: { ...nativeAuthHeaders() },
       });
       if (!res.ok) throw new Error("فشل التنزيل");
       const blob = await res.blob();

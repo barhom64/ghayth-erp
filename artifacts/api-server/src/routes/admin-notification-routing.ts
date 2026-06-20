@@ -3,7 +3,7 @@
  *
  * Two CRUD resources backed by tables that already exist in the
  * schema (notification_routing_rules + notification_fallback_chains).
- * The notificationEngine.ts runtime already reads from these; this
+ * The notificationDispatch.ts runtime already reads from these; this
  * router gives operators a UI to manage them instead of editing rows
  * by hand.
  *

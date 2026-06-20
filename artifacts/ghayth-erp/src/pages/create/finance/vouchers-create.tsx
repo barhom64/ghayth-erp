@@ -230,7 +230,7 @@ export default function VouchersCreate() {
     amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
     accountCode: form.accountCode ? null : "الحساب المحاسبي مطلوب",
     sourceAccountCode: !form.sourceAccountCode && !form.accountCode ? "يجب تحديد حساب مدين وحساب دائن" : null,
-    branchId: form.branchId ? null : "الفرع مطلوب",
+    // الفرع اختياري في الخلفية ويُعبّأ من سياق الدخول — لا يُفرض.
   });
 
   // #1715 §11 — «معاينة القيد قبل الحفظ». Calls the SAME endpoint with

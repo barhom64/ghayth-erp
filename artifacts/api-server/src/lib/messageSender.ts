@@ -35,7 +35,7 @@
  *   - routes/admin.ts (POST /admin/broadcast-notification)
  *   - routes/support.ts (POST /support/ticket/:id/reply)
  *   - routes/employees.ts (POST /employees/terminate/:id/send-letter)
- *   - lib/notificationEngine.ts (when sending via template)
+ *   - lib/notificationDispatch.ts (when sending via template)
  *
  * Documentation: docs/architecture/communications-unification.md
  */

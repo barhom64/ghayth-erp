@@ -351,7 +351,14 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // disable + AUDITED location view). Point lookups/upserts keyed on the
       // caller's single active scope.companyId + a per-target gated location
       // view, not a multi-company list cascade. Allowlisted with justification.
-      total: 129,
+      // +1 total ONLY: routes/realtime.ts — SSE live-push stream. A single GET
+      // that self-authenticates (EventSource can't set headers) and derives the
+      // tenant from the active assignment by id; it holds an open stream rather
+      // than a scoped list, so buildScopedWhere doesn't apply AND there is no
+      // manual companyId list-predicate (its lookup is keyed by assignment id).
+      // Tenant isolation is enforced in realtimeHub (per-company buckets), not
+      // a SQL predicate — so it counts under neither helperUsers nor manualOnly.
+      total: 130,
       helperUsers: 39,
       manualOnly: 87,
     });

@@ -195,11 +195,13 @@ export default function UmrahExemptPilgrims() {
     setSelectedIds(next);
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={refetch} />;
-
+  // Rules of Hooks: usePrintRows must run before the early returns below, so
+  // compute rows first then call the hook unconditionally on every render.
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
 

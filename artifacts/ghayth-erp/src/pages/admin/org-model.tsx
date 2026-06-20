@@ -67,7 +67,7 @@ interface ApprovalAuthority {
 }
 
 // ─── helper ────────────────────────────────────────────────────────────────
-function api<T>(path: string) {
+function useApi<T>(path: string) {
   return useApiQuery<{ data: T[] }>([path], path);
 }
 
@@ -79,7 +79,7 @@ const PERM_WRITE = "admin:update";
 // ════════════════════════════════════════════════════════════════════════════
 function LegalEntitiesTab() {
   const { toast } = useToast();
-  const { data, isLoading, isError, refetch } = api<LegalEntity>("/org/legal-entities");
+  const { data, isLoading, isError, refetch } = useApi<LegalEntity>("/org/legal-entities");
   const rows = asList<LegalEntity>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ nameAr: "", nameEn: "", crNumber: "", vatNumber: "", taxNumber: "" });
@@ -193,7 +193,7 @@ function LegalEntitiesTab() {
 // ════════════════════════════════════════════════════════════════════════════
 function PositionsTab() {
   const { toast } = useToast();
-  const { data, isLoading, isError, refetch } = api<Position>("/org/positions");
+  const { data, isLoading, isError, refetch } = useApi<Position>("/org/positions");
   const rows = asList<Position>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ positionKey: "", labelAr: "", labelEn: "", description: "", level: 30 });
@@ -310,7 +310,7 @@ function PositionsTab() {
 // ════════════════════════════════════════════════════════════════════════════
 function TeamsTab() {
   const { toast } = useToast();
-  const { data, isLoading, isError, refetch } = api<Team>("/org/teams");
+  const { data, isLoading, isError, refetch } = useApi<Team>("/org/teams");
   const rows = asList<Team>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", scopeType: "department" });
@@ -440,7 +440,7 @@ const COMMITTEE_TYPES = [
 
 function CommitteesTab() {
   const { toast } = useToast();
-  const { data, isLoading, isError, refetch } = api<Committee>("/org/committees");
+  const { data, isLoading, isError, refetch } = useApi<Committee>("/org/committees");
   const rows = asList<Committee>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", type: "audit", description: "", startDate: "", endDate: "" });
@@ -570,7 +570,7 @@ const LINE_TYPES = [
 
 function SupervisionLinesTab() {
   const { toast } = useToast();
-  const { data, isLoading, isError, refetch } = api<SupervisionLine>("/org/supervision-lines?active=true");
+  const { data, isLoading, isError, refetch } = useApi<SupervisionLine>("/org/supervision-lines?active=true");
   const rows = asList<SupervisionLine>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ supervisorAssignmentId: "", superviseeAssignmentId: "", lineType: "administrative", isPrimary: false });
@@ -663,7 +663,7 @@ function SupervisionLinesTab() {
 // ════════════════════════════════════════════════════════════════════════════
 function ApprovalAuthoritiesTab() {
   const { toast } = useToast();
-  const { data, isLoading, isError, refetch } = api<ApprovalAuthority>("/org/approval-authorities?active=true");
+  const { data, isLoading, isError, refetch } = useApi<ApprovalAuthority>("/org/approval-authorities?active=true");
   const rows = asList<ApprovalAuthority>(data?.data || []);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
