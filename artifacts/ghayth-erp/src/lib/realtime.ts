@@ -26,6 +26,11 @@ let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
  */
 export function connectRealtime(queryClient: QueryClient): () => void {
   if (typeof EventSource === "undefined") return () => {};
+  // e2e builds set VITE_DISABLE_REALTIME=1: a persistent SSE connection keeps
+  // the network perpetually active so Playwright's waitForLoadState("networkidle")
+  // never resolves. Realtime is a pure enhancement (own unit coverage), so the
+  // test build simply skips it.
+  if (import.meta.env.VITE_DISABLE_REALTIME === "1") return () => {};
   if (source) return disconnectRealtime;
 
   let url = `${API_BASE}/api/realtime/stream`;
