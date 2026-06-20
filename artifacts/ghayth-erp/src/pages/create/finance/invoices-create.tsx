@@ -193,10 +193,7 @@ export default function InvoicesCreate() {
       toast({ variant: "destructive", title: firstError });
       return;
     }
-    if (!form.branchId) {
-      toast({ variant: "destructive", title: "الفرع مطلوب" });
-      return;
-    }
+    // الفرع اختياري في الخلفية (.optional) ويُعبّأ من سياق الدخول — لا يُفرض.
     try {
       await createMut.mutateAsync({
         clientId: Number(form.clientId),
