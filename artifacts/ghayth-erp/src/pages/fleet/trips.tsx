@@ -25,6 +25,7 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { VehicleSelect, DriverSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 
 type ViewMode = "list" | "schedule";
@@ -35,10 +36,6 @@ export default function TripsPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["trips"], "/fleet/trips");
-  const { data: vehiclesResp } = useApiQuery<any>(["fleet-vehicles-trips"], "/fleet/vehicles?limit=500");
-  const { data: driversResp } = useApiQuery<any>(["fleet-drivers-trips"], "/fleet/drivers?limit=500");
-  const vehicles: any[] = vehiclesResp?.data || vehiclesResp || [];
-  const drivers: any[] = driversResp?.data || driversResp || [];
   const items: any[] = data?.data || [];
   const [filters, setFilters] = useFilters();
   const [viewMode, setViewMode] = useState<ViewMode>("list");
@@ -179,22 +176,18 @@ export default function TripsPage() {
         <div className="rounded-lg border bg-white p-4 mb-4 space-y-3" data-testid="form-create-trip">
           <h3 className="text-base font-semibold">إنشاء رحلة جديدة</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>المركبة</Label>
-              <select className="w-full h-10 border rounded-md px-2" value={tripForm.vehicleId}
-                onChange={(e) => setTripForm((v) => ({ ...v, vehicleId: e.target.value }))}>
-                <option value="">— اختر مركبة —</option>
-                {vehicles.map((v: any) => <option key={v.id} value={v.id}>{v.plateNumber} {v.brand ? `(${v.brand})` : ""}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label>السائق</Label>
-              <select className="w-full h-10 border rounded-md px-2" value={tripForm.driverId}
-                onChange={(e) => setTripForm((v) => ({ ...v, driverId: e.target.value }))}>
-                <option value="">— اختر سائق —</option>
-                {drivers.map((d: any) => <option key={d.id} value={d.id}>{d.name || d.driverName}</option>)}
-              </select>
-            </div>
+            <VehicleSelect
+              label="المركبة"
+              placeholder="— اختر مركبة —"
+              value={tripForm.vehicleId}
+              onChange={(v) => setTripForm((x) => ({ ...x, vehicleId: v }))}
+            />
+            <DriverSelect
+              label="السائق"
+              placeholder="— اختر سائق —"
+              value={tripForm.driverId}
+              onChange={(v) => setTripForm((x) => ({ ...x, driverId: v }))}
+            />
             <div>
               <Label>من (الموقع)</Label>
               <Input value={tripForm.origin} onChange={(e) => setTripForm((v) => ({ ...v, origin: e.target.value }))} />
