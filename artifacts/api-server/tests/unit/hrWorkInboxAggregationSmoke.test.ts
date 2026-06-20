@@ -53,11 +53,11 @@ describe("PR-5 (#2077) — the page exists, is routed, and is in the sidebar", (
     expect(NAV_SRC).toMatch(/label: "صندوق الأعمال", path: "\/work-inbox"/);
   });
   it("the experimental /my/work-queue route stays as a back-compat alias", () => {
-    // The legacy «ما ينتظر إجراءاتي» entry must now point at /work-inbox
-    // (the canonical page) while the /my/work-queue ROUTE is still
+    // The «مساحاتي» entry (unified to «صندوق الأعمال» by the UX Nav Governance
+    // wave) points at /work-inbox while the /my/work-queue ROUTE is still
     // mounted in miscRoutes so old bookmarks/notification action urls
     // resolve. This avoids a 404 storm on existing deep-links.
-    expect(NAV_SRC).toMatch(/label: "ما ينتظر إجراءاتي", path: "\/work-inbox"/);
+    expect(NAV_SRC).toMatch(/label: "صندوق الأعمال", path: "\/work-inbox"/);
     expect(ROUTES_SRC).toMatch(/\{ path: "\/my\/work-queue", component: WorkQueue \}/);
   });
 });

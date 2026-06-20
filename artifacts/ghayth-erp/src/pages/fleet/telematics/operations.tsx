@@ -216,7 +216,7 @@ export default function FleetTelematicsOperations() {
 
   return (
     <PageShell
-      title="تشغيل التتبع — مراقبة CMSV6 و breakers"
+      title="تشغيل التتبع"
       breadcrumbs={[
         { href: "/fleet", label: "الأسطول" },
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },

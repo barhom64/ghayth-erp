@@ -211,7 +211,7 @@ export default function CogsSummaryPage() {
 
   return (
     <PageShell
-      title="ملخص التكلفة وهامش الربح (COGS)"
+      title="ملخص التكلفة وهامش الربح"
       subtitle="إيراد − تكلفة المباع (صافي المرتجعات) = الربح. مع تقسيم حسب المنتج / العميل / الشهر."
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

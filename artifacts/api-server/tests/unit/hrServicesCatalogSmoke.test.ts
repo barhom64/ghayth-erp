@@ -71,7 +71,8 @@ describe("Services Catalog — wired into router + nav", () => {
   });
 
   it("navigation.registry.ts links to the catalog under «طلباتي»", () => {
-    expect(NAV_SRC).toMatch(/label: "كتالوج خدمات HR", path: "\/hr\/services"/);
+    // Unified to «خدمات الموارد البشرية» by the UX Nav Governance wave.
+    expect(NAV_SRC).toMatch(/label: "خدمات الموارد البشرية", path: "\/hr\/services"/);
   });
 });
 

@@ -342,7 +342,7 @@ export default function VendorSpendPage() {
 
   return (
     <PageShell
-      title="تحليل الإنفاق على الموردين (Vendor Spend Analysis)"
+      title="تحليل الإنفاق على الموردين"
       subtitle="تركّز الإنفاق + سلوك السداد + حالة العقود — مفتاح إدارة سلسلة التوريد"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

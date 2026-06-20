@@ -172,7 +172,7 @@ describe("/finance/dimensional-routing visual dashboard", () => {
 
   it("added to FinanceTabsNav with Network icon — operator can find it from the finance hub", () => {
     expect(TABS).toContain(`href: "/finance/dimensional-routing"`);
-    expect(TABS).toContain(`label: "التأصيل المالي"`);
+    expect(TABS).toContain(`label: "التوجيه البُعدي"`);
     expect(TABS).toContain("Network");
   });
 
