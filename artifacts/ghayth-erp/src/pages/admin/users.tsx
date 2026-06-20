@@ -526,7 +526,7 @@ function RoleAssignmentSection({ users }: { users: any[] }) {
       <SearchableSelectField
         label="المستخدم"
         hideLabel
-        options={users.map((u: any) => ({ value: String(u.id), label: u.employeeName || u.email, sublabel: u.employeeName ? u.email : undefined }))}
+        options={users.map((u: any) => ({ value: String(u.id), label: u.employeeName ? `${u.employeeName} · ${u.email}` : u.email }))}
         value={selectedUserId ? String(selectedUserId) : ""}
         onValueChange={(v) => { const id = v ? Number(v) : null; setSelectedUserId(id); if (id) loadUserRoles(id); }}
         placeholder="— اختر مستخدم لإدارة أدواره —"
