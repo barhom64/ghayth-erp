@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
+import { verifyOnboardingToken, markOnboardingTokenUsed } from "../lib/employeeOnboarding.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -152,6 +153,107 @@ router.post("/forgot-password", publicLimiter, async (req, res) => {
     res.json(genericOk);
   } catch (err) {
     handleRouteError(err, res, "طلب استعادة كلمة المرور");
+  }
+});
+
+// ─── الاستكمال الذاتي للموظف (token عام) ─────────────────────────────────────
+// الموظف المُضاف سريعًا يفتح هذه الصفحة برمز مؤقت، يرى ما حدّده صاحب الشركة
+// (قراءة فقط)، ويملأ بياناته الشخصية فقط. تُحفظ في مرحلة مؤقتة بانتظار اعتماد
+// HR — لا تُكتب على السجل ولا تُفعّل الموظف هنا. لا يمنح الرمز أي دخول للنظام.
+
+// الحقول التي يملؤها الموظف — تطابق تقسيم الحقول المعتمد (لا منصب/راتب/فرع/مدير).
+const selfOnboardingSchema = z.object({
+  nationalId: z.string().trim().max(40).optional().nullable(),
+  nationality: z.string().trim().max(80).optional().nullable(),
+  gender: z.enum(["male", "female"]).optional().nullable(),
+  dateOfBirth: z.string().trim().optional().nullable(),
+  phone: z.string().trim().max(40).optional().nullable(),
+  personalEmail: z.string().email().optional().nullable(),
+  iqamaNumber: z.string().trim().max(40).optional().nullable(),
+  iqamaExpiry: z.string().trim().optional().nullable(),
+  passportNumber: z.string().trim().max(40).optional().nullable(),
+  passportExpiry: z.string().trim().optional().nullable(),
+  borderNumber: z.string().trim().max(40).optional().nullable(),
+  visaNumber: z.string().trim().max(40).optional().nullable(),
+  visaType: z.string().trim().max(40).optional().nullable(),
+  visaExpiry: z.string().trim().optional().nullable(),
+  bankName: z.string().trim().max(120).optional().nullable(),
+  bankAccount: z.string().trim().max(60).optional().nullable(),
+  iban: z.string().trim().max(60).optional().nullable(),
+  emergencyContact: z.string().trim().max(120).optional().nullable(),
+  emergencyPhone: z.string().trim().max(40).optional().nullable(),
+  attachments: z.array(z.any()).optional().nullable(),
+});
+
+// GET — يعرض ملخص ما حدّده صاحب الشركة (قراءة فقط) + أي مُدخَلات سابقة.
+router.get("/onboarding/:token", publicLimiter, async (req, res) => {
+  try {
+    const verified = await verifyOnboardingToken(String(req.params.token || ""));
+    if (!verified) {
+      res.status(410).json({ error: "الرابط غير صالح أو منتهٍ. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT e.id, e.name, e."empNumber", e."selfSubmittedData",
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
+              b.name AS "branchName", d.name AS "departmentName", ea."hireDate"
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."isPrimary" = TRUE
+         LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+         LEFT JOIN branches b ON b.id = ea."branchId"
+         LEFT JOIN departments d ON d.id = ea."departmentId"
+        WHERE e.id = $1 AND e."companyId" = $2 AND e."deletedAt" IS NULL
+        LIMIT 1`,
+      [verified.employeeId, verified.companyId],
+    );
+    if (rows.length === 0) {
+      res.status(410).json({ error: "الرابط غير صالح. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const r = rows[0] as any;
+    res.json({
+      // ما حدّده صاحب الشركة — قراءة فقط.
+      ownerSet: {
+        name: r.name, empNumber: r.empNumber, jobTitle: r.jobTitle,
+        branchName: r.branchName, departmentName: r.departmentName, hireDate: r.hireDate,
+      },
+      // مُدخَلات سابقة (إن أُرسلت ولم تُعتمد بعد) لإكمالها.
+      submitted: r.selfSubmittedData ?? null,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "فتح صفحة الاستكمال الذاتي");
+  }
+});
+
+// POST — يحفظ بيانات الموظف في المرحلة المؤقتة (بانتظار الاعتماد).
+router.post("/onboarding/:token", publicLimiter, async (req, res) => {
+  try {
+    const verified = await verifyOnboardingToken(String(req.params.token || ""));
+    if (!verified) {
+      res.status(410).json({ error: "الرابط غير صالح أو منتهٍ. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const data = zodParse(selfOnboardingSchema.safeParse(req.body ?? {}));
+    await rawExecute(
+      `UPDATE employees
+          SET "selfSubmittedData" = $1::jsonb, "selfSubmittedAt" = NOW(), "activationStatus" = 'self_submitted'
+        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+      [JSON.stringify(data), verified.employeeId, verified.companyId],
+    );
+    await markOnboardingTokenUsed(verified.tokenId);
+    void createAuditLog({
+      companyId: verified.companyId, branchId: undefined, userId: 0,
+      action: "employee.self_onboarding_submitted", entity: "employees", entityId: verified.employeeId,
+      after: { selfSubmitted: true },
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    void emitEvent({
+      companyId: verified.companyId, branchId: 0, userId: 0,
+      action: "employee.self_onboarding_submitted", entity: "employees", entityId: verified.employeeId,
+      details: JSON.stringify({ submitted: true }),
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    res.json({ ok: true, message: "تم استلام بياناتك. ستتم مراجعتها واعتمادها لتفعيل حسابك." });
+  } catch (err) {
+    handleRouteError(err, res, "إرسال بيانات الاستكمال الذاتي");
   }
 });
 

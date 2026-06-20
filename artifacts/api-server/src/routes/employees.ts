@@ -29,6 +29,7 @@ import { hashPassword } from "../lib/auth.js";
 import { sendMessage } from "../lib/messageSender.js";
 import { randomBytes } from "node:crypto";
 import { issueAuthToken, PublicBaseUrlMissingError, TOKEN_TTL_MINUTES } from "../lib/authTokens.js";
+import { issueOnboardingToken } from "../lib/employeeOnboarding.js";
 import { sendAuthEmail } from "../lib/authNotifications.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 // PR-4 (#2077) — on-demand recompute + history wraps the existing
@@ -415,6 +416,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
 const quickActivateSchema = z.object({
   name: z.string().min(1),
   phone: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
   nationalId: z.string().optional().nullable(),
   nationality: z.string().optional().nullable(),
   departmentId: z.coerce.number().optional().nullable(),
@@ -481,7 +483,7 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
   try {
     const body = zodParse(quickActivateSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, phone, nationalId, nationality, departmentId, jobTitle } = body;
+    const { name, phone, email, nationalId, nationality, departmentId, jobTitle } = body;
 
     if (!name) {
       throw new ValidationError("لا يمكن إنشاء موظف بدون اسم", {
@@ -516,10 +518,10 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       // 'inactive' is the only CHECK-allowed pending-ish status (migration
       // 084); it gates the employee until the activation flow flips it.
       const empRes = await client.query(
-        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status, "activationStatus")
-         VALUES ($1, $2, $3, $4, $5, 'inactive', 'pending_activation')
+        `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", nationality, status, "activationStatus")
+         VALUES ($1, $2, $3, $4, $5, $6, 'inactive', $7)
          RETURNING id`,
-        [name, phone || null, finalEmpNumber, nationalId || null, nationality || null]
+        [name, phone || null, email || null, finalEmpNumber, nationalId || null, nationality || null, email ? 'self_invited' : 'pending_activation']
       );
       const empId = empRes.rows[0].id;
 
@@ -634,15 +636,162 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       },
     });
 
+    // ── رابط الاستكمال الذاتي ──
+    // حين يتوفّر بريد الموظف، نُصدِر رمزًا مؤقتًا ونرسل له رابطًا يفتح صفحة
+    // عامة يملأ فيها بياناته الشخصية (بانتظار مراجعة HR). يُعاد الرابط للمُعيِّن
+    // أيضًا لنسخه يدويًا. فشل الإرسال لا يُفشِل الإنشاء (المظف أُنشئ فعلًا).
+    let onboardingLink: string | null = null;
+    let onboardingWarning: string | null = null;
+    if (email) {
+      try {
+        const issued = await issueOnboardingToken({ companyId: scope.companyId, employeeId: empId, createdBy: scope.userId });
+        onboardingLink = issued.url;
+        void sendMessage({
+          channel: "email",
+          recipient: email,
+          recipientName: name,
+          subject: "استكمال بيانات التوظيف",
+          body: `أهلاً ${name},\n\nيرجى استكمال بياناتك الوظيفية عبر الرابط التالي خلال 7 أيام:\n${issued.url}\n\nبعد إرسالك للبيانات ستتم مراجعتها واعتمادها لتفعيل حسابك.`,
+          companyId: scope.companyId,
+          userId: scope.userId,
+          relatedType: "employee",
+          relatedId: empId,
+          templateKey: "employee.self_onboarding",
+        }).catch((e) => logger.error(e, "quick-activate onboarding email failed"));
+      } catch (e) {
+        if (e instanceof PublicBaseUrlMissingError) {
+          onboardingWarning = "أُنشئ الموظف لكن تعذّر إرسال رابط الاستكمال: رابط النظام العام (PUBLIC_BASE_URL) غير مضبوط.";
+          logger.error("[quick-activate] PUBLIC_BASE_URL empty — onboarding link not sent");
+        } else {
+          onboardingWarning = "أُنشئ الموظف لكن تعذّر إصدار رابط الاستكمال.";
+          logger.error(e, "[quick-activate] failed to issue onboarding token");
+        }
+      }
+    }
+
     res.status(201).json({
       id: empId,
       empNumber: finalEmpNumber,
       assignmentId,
       status: "inactive",
       onboardingTasksCreated: onboardingTaskCount,
+      onboardingLink,
+      ...(onboardingWarning ? { onboardingWarning } : {}),
     });
   } catch (err) {
     handleRouteError(err, res, "Quick-activate employee error:");
+  }
+});
+
+// ─── مراجعة واعتماد بيانات الاستكمال الذاتي (الدفعة ب) ───────────────────────
+// قائمة الموظفين الذين أرسلوا بياناتهم بانتظار المراجعة.
+router.get("/self-submissions", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT e.id, e.name, e."empNumber", e."selfSubmittedAt", e."selfSubmittedData",
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle", b.name AS "branchName"
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."isPrimary" = TRUE AND ea."companyId" = $1
+         LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+         LEFT JOIN branches b ON b.id = ea."branchId"
+        WHERE e."companyId" = $1 AND e."deletedAt" IS NULL
+          AND e."activationStatus" = 'self_submitted'
+        ORDER BY e."selfSubmittedAt" ASC NULLS LAST`,
+      [scope.companyId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "قائمة طلبات استكمال البيانات");
+  }
+});
+
+// اعتماد البيانات المُرسَلة: تُطبَّق الحقول الشخصية على السجل، تُفرَّغ المرحلة
+// المؤقتة، وتتقدّم الحالة إلى ready_for_hr_review (التفعيل الفعلي يبقى عبر
+// المسار المراجَع الذي يطلق رسالة بداية العمل). لا تمسّ حقول صاحب الشركة.
+router.post("/:id/approve-self-data", authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [emp] = await rawQuery<{ id: number; selfSubmittedData: any; activationStatus: string | null }>(
+      `SELECT id, "selfSubmittedData", "activationStatus" FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!emp) throw new NotFoundError("الموظف غير موجود");
+    if (!emp.selfSubmittedData) {
+      throw new ValidationError("لا توجد بيانات مُرسَلة للاعتماد", { field: "id", fix: "انتظر حتى يرسل الموظف بياناته عبر رابط الاستكمال." });
+    }
+    const d = emp.selfSubmittedData as Record<string, any>;
+    await rawExecute(
+      `UPDATE employees SET
+         "nationalId" = COALESCE($1, "nationalId"),
+         nationality = COALESCE($2, nationality),
+         gender = COALESCE($3, gender),
+         "dateOfBirth" = COALESCE($4, "dateOfBirth"),
+         phone = COALESCE($5, phone),
+         "personalEmail" = COALESCE($6, "personalEmail"),
+         "iqamaNumber" = COALESCE($7, "iqamaNumber"),
+         "iqamaExpiry" = COALESCE($8, "iqamaExpiry"),
+         "passportNumber" = COALESCE($9, "passportNumber"),
+         "passportExpiry" = COALESCE($10, "passportExpiry"),
+         "borderNumber" = COALESCE($11, "borderNumber"),
+         "visaNumber" = COALESCE($12, "visaNumber"),
+         "visaType" = COALESCE($13, "visaType"),
+         "visaExpiry" = COALESCE($14, "visaExpiry"),
+         "bankName" = COALESCE($15, "bankName"),
+         "bankAccount" = COALESCE($16, "bankAccount"),
+         iban = COALESCE($17, iban),
+         "emergencyContact" = COALESCE($18, "emergencyContact"),
+         "emergencyPhone" = COALESCE($19, "emergencyPhone"),
+         attachments = COALESCE($20::jsonb, attachments),
+         "selfSubmittedData" = NULL,
+         "activationStatus" = 'ready_for_hr_review'
+       WHERE id = $21 AND "companyId" = $22 AND "deletedAt" IS NULL`,
+      [
+        d.nationalId ?? null, d.nationality ?? null, d.gender ?? null, d.dateOfBirth ?? null,
+        d.phone ?? null, d.personalEmail ?? null, d.iqamaNumber ?? null, d.iqamaExpiry ?? null,
+        d.passportNumber ?? null, d.passportExpiry ?? null, d.borderNumber ?? null,
+        d.visaNumber ?? null, d.visaType ?? null, d.visaExpiry ?? null,
+        d.bankName ?? null, d.bankAccount ?? null, d.iban ?? null,
+        d.emergencyContact ?? null, d.emergencyPhone ?? null,
+        d.attachments ? JSON.stringify(d.attachments) : null,
+        id, scope.companyId,
+      ],
+    );
+    void createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.self_data_approved", entity: "employees", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      before: { activationStatus: emp.activationStatus }, after: { activationStatus: "ready_for_hr_review" },
+    }).catch((e) => logger.error(e, "approve-self-data audit failed"));
+    res.json({ ok: true, message: "اعتُمدت بيانات الموظف. يمكن الآن تفعيله بعد إكمال خطة التهيئة." });
+  } catch (err) {
+    handleRouteError(err, res, "اعتماد بيانات الاستكمال الذاتي");
+  }
+});
+
+// رفض البيانات المُرسَلة: تُفرَّغ المرحلة المؤقتة ويُعاد الموظف لحالة الدعوة
+// ليُرسِل من جديد (يُعاد إصدار الرابط من زر الدعوة).
+router.post("/:id/reject-self-data", authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 500) : null;
+    const result = await rawExecute(
+      `UPDATE employees SET "selfSubmittedData" = NULL, "activationStatus" = 'self_invited'
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND "activationStatus" = 'self_submitted'`,
+      [id, scope.companyId],
+    );
+    if (!result.affectedRows) throw new NotFoundError("لا توجد بيانات مُرسَلة لهذا الموظف");
+    void createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.self_data_rejected", entity: "employees", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      after: { rejected: true, reason },
+    }).catch((e) => logger.error(e, "reject-self-data audit failed"));
+    res.json({ ok: true, message: "أُعيدت البيانات للموظف لتصحيحها." });
+  } catch (err) {
+    handleRouteError(err, res, "رفض بيانات الاستكمال الذاتي");
   }
 });
 
