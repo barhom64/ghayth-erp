@@ -871,51 +871,56 @@ export const allNavSections: NavSection[] = [
   {
     title: "الإدارة والحوكمة",
     items: [
-      { label: "مركز الطلبات", path: "/requests", icon: ClipboardCheck, module: "requests", children: [
-        { label: "تقديم طلب", path: "/requests", icon: ClipboardCheck },
-        { label: "أنواع الطلبات", path: "/requests/types", icon: ListTodo },
-        // «سير العمل» (/requests/workflows) dropped from the sidebar: its `workflows`
-        // table has no executor (the live approval engine is approval_chains), so it
-        // surfaced a non-functional feature. Route kept reachable (off-sidebar).
+      // مركز الإدارة والحوكمة — مدخل واحد يجمع وحدات الإدارة (الطلبات، المستندات،
+      // التواصل، القانونية، الحوكمة، الإقفال). قسم متعدّد الوحدات، فالمدخل بلا module
+      // والأبناء يحملون وحداتهم. إعادة تجميع بصري فقط — لا مسار/صلاحية تغيّر.
+      { label: "مركز الإدارة والحوكمة", path: "/governance", icon: Briefcase, children: [
+        { label: "مركز الطلبات", path: "/requests", icon: ClipboardCheck, module: "requests", children: [
+          { label: "تقديم طلب", path: "/requests", icon: ClipboardCheck },
+          { label: "أنواع الطلبات", path: "/requests/types", icon: ListTodo },
+          // «سير العمل» (/requests/workflows) dropped from the sidebar: its `workflows`
+          // table has no executor (the live approval engine is approval_chains), so it
+          // surfaced a non-functional feature. Route kept reachable (off-sidebar).
+        ]},
+        { label: "المستندات", path: "/documents", icon: FileText, module: "documents", children: [
+          { label: "جميع المستندات", path: "/documents", icon: FileText },
+          { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
+          { label: "الأرشيف", path: "/documents/archive", icon: Archive },
+          { label: "صندوق المسح الضوئي", path: "/documents/ocr-inbox", icon: FileText },
+          { label: "مراجعة المسح الضوئي", path: "/documents/ocr/review", icon: FileCheck },
+          { label: "القوالب", path: "/documents/templates", icon: FilePlus },
+          { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
+        ]},
+        { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
+          { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
+          { label: "الصناديق المتصلة", path: "/mailboxes", icon: Send },
+          { label: "بريد الشركة", path: "/company-email", icon: Mail, perm: "admin:update" },
+          { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
+          // Phase 5: communications dashboard is admin-only — non-managers
+          // get redirected to /inbox automatically. Sidebar hides it for
+          // them via minRoleLevel.
+          { label: "مراقبة الاتصالات", path: "/communications", icon: MessageSquare, minRoleLevel: 50 },
+          { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap, minRoleLevel: 50 },
+        ]},
+        { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 50, children: [
+          { label: "نظرة عامة", path: "/legal", icon: LayoutDashboard },
+          { label: "القضايا", path: "/legal/cases", icon: Briefcase },
+          { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
+          { label: "الوثائق القانونية", path: "/legal/documents", icon: FileText },
+          { label: "الجلسات القادمة", path: "/legal/sessions", icon: Calendar },
+          { label: "الأحكام القضائية", path: "/legal/judgments", icon: CheckCircle },
+          { label: "المراسلات", path: "/legal/correspondence", icon: Mail },
+        ]},
+        { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
+          { label: "نظرة عامة", path: "/governance", icon: Shield },
+          { label: "السياسات", path: "/governance/policies", icon: FileCheck },
+          { label: "مخاطر الحوكمة", path: "/governance/risks", icon: AlertTriangle },
+          { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
+          { label: "الامتثال المؤسسي", path: "/governance/compliance", icon: CheckCircle },
+          { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
+        ]},
+        { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 50 },
       ]},
-      { label: "المستندات", path: "/documents", icon: FileText, module: "documents", children: [
-        { label: "جميع المستندات", path: "/documents", icon: FileText },
-        { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
-        { label: "الأرشيف", path: "/documents/archive", icon: Archive },
-        { label: "صندوق المسح الضوئي", path: "/documents/ocr-inbox", icon: FileText },
-        { label: "مراجعة المسح الضوئي", path: "/documents/ocr/review", icon: FileCheck },
-        { label: "القوالب", path: "/documents/templates", icon: FilePlus },
-        { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
-      ]},
-      { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
-        { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
-        { label: "الصناديق المتصلة", path: "/mailboxes", icon: Send },
-        { label: "بريد الشركة", path: "/company-email", icon: Mail, perm: "admin:update" },
-        { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
-        // Phase 5: communications dashboard is admin-only — non-managers
-        // get redirected to /inbox automatically. Sidebar hides it for
-        // them via minRoleLevel.
-        { label: "مراقبة الاتصالات", path: "/communications", icon: MessageSquare, minRoleLevel: 50 },
-        { label: "محرك الإشعارات", path: "/communications/notification-engine", icon: Zap, minRoleLevel: 50 },
-      ]},
-      { label: "الشؤون القانونية", path: "/legal/cases", icon: Scale, module: "legal", minRoleLevel: 50, children: [
-        { label: "نظرة عامة", path: "/legal", icon: LayoutDashboard },
-        { label: "القضايا", path: "/legal/cases", icon: Briefcase },
-        { label: "العقود القانونية", path: "/legal/contracts", icon: FileSignature },
-        { label: "الوثائق القانونية", path: "/legal/documents", icon: FileText },
-        { label: "الجلسات القادمة", path: "/legal/sessions", icon: Calendar },
-        { label: "الأحكام القضائية", path: "/legal/judgments", icon: CheckCircle },
-        { label: "المراسلات", path: "/legal/correspondence", icon: Mail },
-      ]},
-      { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
-        { label: "نظرة عامة", path: "/governance", icon: Shield },
-        { label: "السياسات", path: "/governance/policies", icon: FileCheck },
-        { label: "مخاطر الحوكمة", path: "/governance/risks", icon: AlertTriangle },
-        { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
-        { label: "الامتثال المؤسسي", path: "/governance/compliance", icon: CheckCircle },
-        { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
-      ]},
-      { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 50 },
     ],
   },
   // ══════════════════════════════════════════════════════════════════════
@@ -924,108 +929,113 @@ export const allNavSections: NavSection[] = [
   {
     title: "النظام",
     items: [
-      { label: "ذكاء الأعمال", path: "/bi", icon: LineChart, module: "bi", minRoleLevel: 50, children: [
-        { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
-        { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
-        { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
-        // UX Nav Governance (موجة التنقّل، شريحة 6) — أُزيلت 3 مداخل كانت تؤول
-        // جميعها إلى /bi عبر redirect: «مؤشرات الأداء» (/bi/kpis)، «التقارير
-        // التحليلية» (/bi/reports)، «لوحات BI» (/bi/dashboards). صار «ذكاء
-        // الأعمال» مدخلاً واحداً بدل أربعة بنفس الوجهة. الأسماء الثلاثة محفوظة
-        // كأسماء بحث في navigation.canonical-map.ts (المبدأ #6)، والمسارات تبقى
-        // مُركَّبة كـ redirect (لا حذف — المبدأ #3). check-sidebar-coverage رُقِّي
-        // ليعدّ مسارات الـ redirect off-sidebar مشروعة فلا تصير orphan.
-        { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
-        { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
-        { label: "منصة الذكاء الاصطناعي", path: "/intelligence/ai-workbench", icon: Sparkles },
-      ]},
-      // 17-item "مدير النظام" was one flat list — broke into 4 themed
-      // sub-groups so an admin can find a specific tool without scanning
-      // the whole list. Order: identity first, then ops, then integrations,
-      // then audit trails.
-      { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
-        { label: "المستخدمين والصلاحيات", path: "/admin/users", icon: KeyRound, children: [
-          { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
-          { label: "إنشاء سريع وصلاحيات", path: "/admin/user-onboarding", icon: UserPlus, perm: ["admin:update"], permMode: "any" },
-          { label: "الأدوار والصلاحيات", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
-          { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
-          { label: "قوالب المسميات الوظيفية", path: "/admin/job-titles", icon: Shield, perm: "hr.employees:update" },
-          { label: "الأدوار", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
-          { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, perm: ["admin:view", "admin:list"], permMode: "any" },
+      // إدارة النظام — مدخل وحدة واحد يجمع أدوات النظام (ذكاء الأعمال، الإدارة، الأتمتة،
+      // الطباعة، الاشتراك، الإعدادات). قسم متعدّد الوحدات، فالمدخل بلا module والأبناء
+      // يحملون وحداتهم وصلاحياتهم كما هي. إعادة تجميع بصري فقط — لا مسار/صلاحية تغيّر.
+      { label: "إدارة النظام", path: "/admin", icon: Shield, children: [
+        { label: "ذكاء الأعمال", path: "/bi", icon: LineChart, module: "bi", minRoleLevel: 50, children: [
+          { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
+          { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
+          { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
+          // UX Nav Governance (موجة التنقّل، شريحة 6) — أُزيلت 3 مداخل كانت تؤول
+          // جميعها إلى /bi عبر redirect: «مؤشرات الأداء» (/bi/kpis)، «التقارير
+          // التحليلية» (/bi/reports)، «لوحات BI» (/bi/dashboards). صار «ذكاء
+          // الأعمال» مدخلاً واحداً بدل أربعة بنفس الوجهة. الأسماء الثلاثة محفوظة
+          // كأسماء بحث في navigation.canonical-map.ts (المبدأ #6)، والمسارات تبقى
+          // مُركَّبة كـ redirect (لا حذف — المبدأ #3). check-sidebar-coverage رُقِّي
+          // ليعدّ مسارات الـ redirect off-sidebar مشروعة فلا تصير orphan.
+          { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
+          { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
+          { label: "منصة الذكاء الاصطناعي", path: "/intelligence/ai-workbench", icon: Sparkles },
         ]},
-        { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
-          { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "الوثائق الحكومية المنتهية", path: "/admin/expiring-docs", icon: Clock, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
-          { label: "كتالوج الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "صندوق الأحداث الصادرة", path: "/admin/outbox", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "تنبيهات البنية التحتية", path: "/admin/infra-alerts", icon: AlertTriangle, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "تتبّع الرحلات الحيّة", path: "/admin/journeys", icon: GitBranch, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "مراقبة دورة الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "حاكم النظام", path: "/admin/system-governor", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "سجل الكيانات", path: "/admin/system-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "سجل النطاقات", path: "/admin/domain-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
+        // 17-item "مدير النظام" was one flat list — broke into 4 themed
+        // sub-groups so an admin can find a specific tool without scanning
+        // the whole list. Order: identity first, then ops, then integrations,
+        // then audit trails.
+        { label: "مدير النظام", path: "/admin", icon: Shield, module: "admin", minRoleLevel: 90, children: [
+          { label: "المستخدمين والصلاحيات", path: "/admin/users", icon: KeyRound, children: [
+            { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
+            { label: "إنشاء سريع وصلاحيات", path: "/admin/user-onboarding", icon: UserPlus, perm: ["admin:update"], permMode: "any" },
+            { label: "الأدوار والصلاحيات", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+            { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
+            { label: "قوالب المسميات الوظيفية", path: "/admin/job-titles", icon: Shield, perm: "hr.employees:update" },
+            { label: "الأدوار", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+            { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, perm: ["admin:view", "admin:list"], permMode: "any" },
+          ]},
+          { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
+            { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "الوثائق الحكومية المنتهية", path: "/admin/expiring-docs", icon: Clock, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
+            { label: "كتالوج الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "صندوق الأحداث الصادرة", path: "/admin/outbox", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "تنبيهات البنية التحتية", path: "/admin/infra-alerts", icon: AlertTriangle, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "تتبّع الرحلات الحيّة", path: "/admin/journeys", icon: GitBranch, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "مراقبة دورة الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "حاكم النظام", path: "/admin/system-governor", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "سجل الكيانات", path: "/admin/system-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "سجل النطاقات", path: "/admin/domain-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
+          ]},
+          { label: "حوكمة الصلاحيات", path: "/admin/policy-engine", icon: Shield, children: [
+            { label: "محرك سياسات الصلاحيات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
+            { label: "تجاوزات الموافقات", path: "/admin/approval-overrides", icon: Bell, perm: "admin:update" },
+            { label: "حماية البيانات الشخصية", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "التوقيع الرقمي", path: "/admin/digital-signature", icon: FileSignature, perm: ["admin:list", "admin:view"], permMode: "any" },
+          ]},
+          { label: "تشخيص محاسبي", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
+            { label: "تسوية دفتر الأستاذ", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "إخفاقات الترحيل", path: "/admin/posting-failures", icon: AlertTriangle, perm: ["admin:list", "admin:view"], permMode: "any" },
+          ]},
+          { label: "التكاملات والاتصالات", path: "/admin/integrations", icon: Mail, children: [
+            { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
+            { label: "مركز التحكّم بالاتصالات", path: "/admin/communication-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "مركز التحكم بالمقسم الهاتفي", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "تشخيص التكاملات", path: "/admin/integrations-diagnostics", icon: Activity, perm: "admin:update" },
+            { label: "مراجعات الفوترة الإلكترونية", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
+            { label: "مختبر الذكاء", path: "/admin/intelligence-playground", icon: Brain, perm: "admin:update" },
+            { label: "استيراد البيانات (إداري)", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
+          ]},
+          { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
+            { label: "سجل تدقيق النظام", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
+            { label: "سجل الحركات", path: "/activity-log", icon: Activity },
+          ]},
         ]},
-        { label: "حوكمة الصلاحيات", path: "/admin/policy-engine", icon: Shield, children: [
-          { label: "محرك سياسات الصلاحيات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
-          { label: "تجاوزات الموافقات", path: "/admin/approval-overrides", icon: Bell, perm: "admin:update" },
-          { label: "حماية البيانات الشخصية", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "التوقيع الرقمي", path: "/admin/digital-signature", icon: FileSignature, perm: ["admin:list", "admin:view"], permMode: "any" },
+        // Agent 7 (visibility consistency) — dropped "automation:write"
+        // from the perm list: it isn't in FEATURE_PERMISSIONS or in legacy
+        // PERMISSIONS, so it can never be granted and the OR branch was
+        // dead. Backend routes/automation.ts authorizes on admin:list /
+        // admin:update, so admin:update is the only meaningful gate here.
+        { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: "admin:update" },
+        { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 50, perm: ["bi:read", "reports:read"], permMode: "any" },
+        // Printing entries were scattered across admin, reports, manager-board and
+        // settings — consolidated here into one "الطباعة والمطبوعات" group. Each
+        // child keeps its original module/perm/minRoleLevel so visibility filtering
+        // is unchanged; only the grouping moved (no page removed → no orphans).
+        { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 50, children: [
+          { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 50, perm: "print_jobs:read" },
+          { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 50, perm: "print:reprint:approve" },
+          // مدخلان لنفس الصفحة (/admin/print-templates) لجمهورَي صلاحية مختلفين:
+          // مستخدمو الإعدادات (L70 + templates:read) والمدراء (L90 + admin:*). مدخل
+          // الإعدادات يهبط مباشرة بدل المرور عبر redirect المسار /settings/print-templates
+          // (يبقى ذلك المسار مُركَّبًا في settingsRoutes للروابط القديمة).
+          { label: "قوالب الطباعة", path: "/admin/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
+          { label: "قوالب الطباعة (الإدارة)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
-        { label: "تشخيص محاسبي", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
-          { label: "تسوية دفتر الأستاذ", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "إخفاقات الترحيل", path: "/admin/posting-failures", icon: AlertTriangle, perm: ["admin:list", "admin:view"], permMode: "any" },
+        // كانت orphan: إدارة اشتراك المنشأة (الحالة/التفعيل/تمديد التجربة) — صفحة
+        // admin مستقلة مبوّبة على admin:view (على نمط «الأتمتة»).
+        { label: "اشتراك المنشأة", path: "/admin/subscription", icon: CreditCard, module: "admin", perm: "admin:view" },
+        { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
+          { label: "عام", path: "/settings", icon: Cog },
+          { label: "الفروع", path: "/settings/branches", icon: Building, perm: "settings:write" },
+          { label: "الشركات", path: "/settings/companies", icon: Building2, perm: "settings:write" },
+          { label: "الأقسام", path: "/settings/departments", icon: Network, perm: "settings:write" },
+          { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
+          { label: "سجل مراجعة الإعدادات", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
         ]},
-        { label: "التكاملات والاتصالات", path: "/admin/integrations", icon: Mail, children: [
-          { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
-          { label: "مركز التحكّم بالاتصالات", path: "/admin/communication-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "مركز التحكم بالمقسم الهاتفي", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "تشخيص التكاملات", path: "/admin/integrations-diagnostics", icon: Activity, perm: "admin:update" },
-          { label: "مراجعات الفوترة الإلكترونية", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "مختبر الذكاء", path: "/admin/intelligence-playground", icon: Brain, perm: "admin:update" },
-          { label: "استيراد البيانات (إداري)", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
-        ]},
-        { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
-          { label: "سجل تدقيق النظام", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
-          { label: "سجل الحركات", path: "/activity-log", icon: Activity },
-        ]},
-      ]},
-      // Agent 7 (visibility consistency) — dropped "automation:write"
-      // from the perm list: it isn't in FEATURE_PERMISSIONS or in legacy
-      // PERMISSIONS, so it can never be granted and the OR branch was
-      // dead. Backend routes/automation.ts authorizes on admin:list /
-      // admin:update, so admin:update is the only meaningful gate here.
-      { label: "الأتمتة", path: "/automation", icon: Zap, module: "admin", minRoleLevel: 60, perm: "admin:update" },
-      { label: "التقارير المجدولة", path: "/reports/scheduled", icon: CalendarClock, module: "bi", minRoleLevel: 50, perm: ["bi:read", "reports:read"], permMode: "any" },
-      // Printing entries were scattered across admin, reports, manager-board and
-      // settings — consolidated here into one "الطباعة والمطبوعات" group. Each
-      // child keeps its original module/perm/minRoleLevel so visibility filtering
-      // is unchanged; only the grouping moved (no page removed → no orphans).
-      { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 50, children: [
-        { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 50, perm: "print_jobs:read" },
-        { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 50, perm: "print:reprint:approve" },
-        // مدخلان لنفس الصفحة (/admin/print-templates) لجمهورَي صلاحية مختلفين:
-        // مستخدمو الإعدادات (L70 + templates:read) والمدراء (L90 + admin:*). مدخل
-        // الإعدادات يهبط مباشرة بدل المرور عبر redirect المسار /settings/print-templates
-        // (يبقى ذلك المسار مُركَّبًا في settingsRoutes للروابط القديمة).
-        { label: "قوالب الطباعة", path: "/admin/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
-        { label: "قوالب الطباعة (الإدارة)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
-        { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
-      ]},
-      // كانت orphan: إدارة اشتراك المنشأة (الحالة/التفعيل/تمديد التجربة) — صفحة
-      // admin مستقلة مبوّبة على admin:view (على نمط «الأتمتة»).
-      { label: "اشتراك المنشأة", path: "/admin/subscription", icon: CreditCard, module: "admin", perm: "admin:view" },
-      { label: "الإعدادات", path: "/settings", icon: Cog, module: "settings", minRoleLevel: 70, children: [
-        { label: "عام", path: "/settings", icon: Cog },
-        { label: "الفروع", path: "/settings/branches", icon: Building, perm: "settings:write" },
-        { label: "الشركات", path: "/settings/companies", icon: Building2, perm: "settings:write" },
-        { label: "الأقسام", path: "/settings/departments", icon: Network, perm: "settings:write" },
-        { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
-        { label: "سجل مراجعة الإعدادات", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
       ]},
     ],
   },

@@ -129,8 +129,8 @@ export const NAVIGATION_CANONICAL_MAP: CanonicalNavEntry[] = [
   {
     path: "/admin",
     canonicalLabel: "مدير النظام",
-    aliases: ["الأدوار والصلاحيات", "الأدوار والصلاحيات (v2)", "لوحة الإدارة"],
-    note: "INVENTORY §1.أ — group-leader pattern (group «مدير النظام» / overview «الأدوار والصلاحيات» / page «لوحة الإدارة»). The «(v2)» suffix was dropped in the Arabic-label cleanup; kept as an alias for back-compat search.",
+    aliases: ["الأدوار والصلاحيات", "الأدوار والصلاحيات (v2)", "لوحة الإدارة", "إدارة النظام"],
+    note: "INVENTORY §1.أ — group-leader pattern (group «مدير النظام» / overview «الأدوار والصلاحيات» / page «لوحة الإدارة»). The «(v2)» suffix was dropped in the Arabic-label cleanup; kept as an alias for back-compat search. «إدارة النظام» هو مدخل وحدة قسم «النظام» (يجمع أدوات النظام) ويهبط على /admin.",
   },
 
   // ── §3/§4 — one function reached by several names, some via redirect ──
