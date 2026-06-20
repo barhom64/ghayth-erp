@@ -153,6 +153,7 @@ import { execDashboardRouter } from "./execDashboard.js";
 import assistantRouter from "./assistant.js";
 import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
+import { customFieldsRouter } from "./customFields.js";
 import contractsRouter from "./hr-contracts.js";
 import correspondenceRouter from "./correspondence.js";
 import numberingRouter from "./numbering.js";
@@ -537,6 +538,9 @@ router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
 });
 router.use("/marketing", requireModule("marketing"), marketingRouter);
 router.use("/settings", requireModule("settings"), requireMinLevel(70), settingsRouter);
+// #2719 — الحقول المخصّصة لكل شركة: تعريفات + قيم EAV (هجرة 394). إدارة المخطط
+// عبر صلاحية settings؛ القيم تُحفظ في جدولها فقط (لا مساس بجداول الكيانات).
+router.use("/custom-fields", requireModule("settings"), requireMinLevel(50), customFieldsRouter);
 // Numbering center (Issue #1141): admin surface for the central numbering
 // authority. authMiddleware is applied inside the router (it carries
 // per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
