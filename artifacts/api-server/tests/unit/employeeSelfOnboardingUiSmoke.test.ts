@@ -77,3 +77,13 @@ describe("الدفعة هـ — إعادة إرسال الرابط من لوحة
     expect(BOARD).toMatch(/resendMut\.mutate\(\{ id: e\.id \}\)/);
   });
 });
+
+describe("الدفعة و — عدّاد الطلبات بانتظار المراجعة", () => {
+  it("لوحة التفعيل تعرض KPI لعدد المُرسِلين (self_submitted)", () => {
+    expect(BOARD).toMatch(/بانتظار استكمال البيانات/);
+    expect(BOARD).toMatch(/pending\.filter\(\(e: any\) => e\.activationStatus === "self_submitted"\)\.length/);
+  });
+  it("صفحة المراجعة تُظهر العدد في الترويسة", () => {
+    expect(REVIEW).toMatch(/\$\{rows\.length\} طلب بانتظار المراجعة/);
+  });
+});
