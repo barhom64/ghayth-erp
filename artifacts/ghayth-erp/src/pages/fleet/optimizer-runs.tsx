@@ -17,7 +17,8 @@ import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
-import { Calculator, RefreshCw, ChevronLeft } from "lucide-react";
+import { Calculator, ChevronLeft } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface RunRow {
   id: number;
@@ -76,10 +77,7 @@ export default function OptimizerRunsPage() {
             </Button>
           ))}
         </div>
-        <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className={`h-3.5 w-3.5 me-1 ${isLoading ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} disabled={isLoading} />
       </div>
 
       <Card className="mt-4">

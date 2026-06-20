@@ -39,8 +39,9 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Server, Sparkles, ClipboardCheck, BookOpen, Plus, Send, CheckCircle2,
-  XCircle, AlertOctagon, MessageSquare, RefreshCw, Eye, FlaskConical, PlayCircle, TestTube, ExternalLink,
+  XCircle, AlertOctagon, MessageSquare, Eye, FlaskConical, PlayCircle, TestTube, ExternalLink,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 type AiCapability = "generation" | "stt" | "embedding" | "image";
 
@@ -346,9 +347,7 @@ export default function AdminAiGovernance() {
       ]}
       subtitle="سجلّ المزوّدات، كتالوج الـ prompts، ومركز المراجعة"
       actions={
-        <Button variant="outline" size="sm" onClick={refreshAll}>
-          <RefreshCw className="w-4 h-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={refreshAll} />
       }
     >
       <PageStateWrapper isLoading={ovLoading && !overview} error={ovError} onRetry={refetchOverview}>

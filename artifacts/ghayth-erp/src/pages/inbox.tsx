@@ -44,6 +44,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { RefreshAction } from "@/components/page-actions";
 import {
   Mail, MessageSquare, Phone, Send, Plus, RefreshCw,
   ArrowDownLeft, ArrowUpRight, AlertOctagon, Sparkles,
@@ -305,9 +306,7 @@ export default function Inbox() {
       subtitle="كل التواصل كمحادثات: بريد، واتساب، رسائل نصية، ومكالمات — طرف + محادثة + سياق"
       actions={
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={refreshAll}>
-            <RefreshCw className="w-4 h-4 me-1" />تحديث
-          </Button>
+          <RefreshAction onRefresh={refreshAll} />
           <Button variant="outline" size="sm" onClick={() => setSignaturesOpen(true)}>
             <PenSquare className="w-4 h-4 me-1" />التواقيع
           </Button>

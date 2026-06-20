@@ -11,8 +11,9 @@ import { Button } from "@/components/ui/button";
 import { formatDateAr } from "@/lib/formatters";
 import { useState } from "react";
 import {
-  RefreshCw, Activity, Zap, Filter,
+  Activity, Zap, Filter,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { PrintButton } from "@/components/shared/print-button";
 
 export default function AdminEventMonitor() {
@@ -86,9 +87,7 @@ export default function AdminEventMonitor() {
               })),
             })}
           />
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 me-1" />تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} />
         </div>
       }
     >

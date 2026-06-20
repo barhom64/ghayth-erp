@@ -10,6 +10,7 @@ import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { History, TrendingUp, TrendingDown, ExternalLink, RefreshCw } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface FxRevaluation {
@@ -237,13 +238,7 @@ export default function FxRevaluationHistoryPage() {
               </Badge>
             );
           })}
-          <Button
-            variant="ghost" size="sm" className="text-xs h-7"
-            onClick={() => refetch()} disabled={isFetching}
-          >
-            <RefreshCw className={`h-3 w-3 me-1 ${isFetching ? "animate-spin" : ""}`} />
-            تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} disabled={isFetching} />
         </div>
       )}
 
