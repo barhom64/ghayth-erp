@@ -112,6 +112,13 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
   // company/branch list cascades which this surface intentionally isn't.
   "finance-memory.ts",
+  // fleet-inspections.ts: vehicle inspection + photos (متابعة النقل بالصور,
+  // PR1). Mostly point operations keyed by (companyId, id) — get/update/delete/
+  // approve/reject a single inspection or photo — plus one filtered list. The
+  // company predicate is a literal `"companyId" = $N` per tenant-point-lookup;
+  // buildScopedWhere targets multi-company branch list cascades which this
+  // surface intentionally isn't. Manual scope.companyId is correct here.
+  "fleet-inspections.ts",
   // fleet-optimizer.ts: TA-T18-VRP Phase 2 — five short handlers that
   // each touch a single tenant-scoped table with literal `"companyId" =
   // $N`; the buildScopedWhere helper adds noise without changing
@@ -358,9 +365,13 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // manual companyId list-predicate (its lookup is keyed by assignment id).
       // Tenant isolation is enforced in realtimeHub (per-company buckets), not
       // a SQL predicate — so it counts under neither helperUsers nor manualOnly.
-      total: 130,
+      // +1 total/manualOnly: routes/fleet-inspections.ts (متابعة النقل بالصور,
+      // PR1) — vehicle inspection + photos CRUD, point ops keyed by
+      // (companyId, id) + one filtered list; allowlisted with justification
+      // (mirrors fleet-optimizer.ts, tenant-point-lookup, no branch cascade).
+      total: 131,
       helperUsers: 39,
-      manualOnly: 87,
+      manualOnly: 88,
     });
   });
 });
