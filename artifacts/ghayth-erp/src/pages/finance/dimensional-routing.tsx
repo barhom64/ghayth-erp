@@ -139,7 +139,7 @@ export default function DimensionalRoutingPage() {
 
   return (
     <PageShell
-      title="التأصيل المالي"
+      title="التوجيه البُعدي"
       subtitle="نظرة عامة على ربط الكيانات بالحسابات الفرعية ومراكز التكلفة — يوضّح أين توجد فجوات تغطية تحتاج استكمال"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

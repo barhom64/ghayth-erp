@@ -522,13 +522,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       { label: "طلب إجازة", icon: Plus, link: "/hr/leaves/create" },
       { label: "اعتماد الطلبات", icon: CheckSquare, link: "/hr/leaves?tab=pending", minRoleLevel: 40 },
     ],
-    "/hr/leaves/management": [
-      { label: "طلب إجازة", icon: Plus, link: "/hr/leaves/create" },
-      { label: "عرض الطلبات", icon: ClipboardList, link: "/hr/leaves" },
-    ],
     "/hr/leaves/approval-chains": [
       { label: "طلب إجازة", icon: Plus, link: "/hr/leaves/create" },
-      { label: "إدارة الإجازات", icon: ClipboardList, link: "/hr/leaves/management" },
+      { label: "إدارة الإجازات", icon: ClipboardList, link: "/hr/leaves" },
     ],
     "/hr/attendance": [
       { label: "تسجيل حضور بالرمز المصوّر", icon: QrCode, link: "/hr/attendance/qr-scanner" },
@@ -556,11 +552,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     ],
     "/hr/performance": [
       { label: "تقييم جديد", icon: Plus, link: "/hr/performance/create" },
-      { label: "تقييم متقدم", icon: BarChart3, link: "/hr/performance/advanced" },
-    ],
-    "/hr/performance/advanced": [
-      { label: "تقييم جديد", icon: Plus, link: "/hr/performance/create" },
-      { label: "التقييمات", icon: Star, link: "/hr/performance" },
     ],
     "/hr/training": [
       { label: "برنامج تدريبي جديد", icon: Plus, link: "/hr/training/create" },
@@ -588,7 +579,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     "/hr/violations": [
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "الرصد التلقائي", icon: Radar, link: "/hr/violations/auto-detection" },
-      { label: "إدارة المخالفات", icon: ClipboardList, link: "/hr/violations/management" },
       { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
       { label: "لائحة الانضباط", icon: BookOpen, link: "/hr/discipline/regulation" },
     ],
@@ -597,22 +587,12 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
       { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
     ],
-    "/hr/violations/management": [
-      { label: "مخالفة جديدة", icon: Plus, link: "/hr/violations/create" },
-      { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
-      { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
-    ],
     "/hr/discipline/regulation": [
       { label: "محاضر الاستفسار", icon: FileText, link: "/hr/violations?tab=memos" },
       { label: "المخالفات", icon: AlertTriangle, link: "/hr/violations" },
     ],
     "/hr/shifts": [
       { label: "وردية جديدة", icon: Plus, link: "/hr/shifts/create" },
-      { label: "إدارة الورديات", icon: Clock, link: "/hr/shifts/management" },
-    ],
-    "/hr/shifts/management": [
-      { label: "وردية جديدة", icon: Plus, link: "/hr/shifts/create" },
-      { label: "الورديات", icon: Clock, link: "/hr/shifts" },
     ],
     "/finance/invoices": [
       { label: "فاتورة جديدة", icon: Plus, link: "/finance/invoices/create" },

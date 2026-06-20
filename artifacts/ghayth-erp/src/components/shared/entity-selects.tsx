@@ -505,6 +505,20 @@ export const ProjectSelect = buildEntitySelect({
   getSublabel: (r) => r?.code || "",
 });
 
+export const UnitSelect = buildEntitySelect({
+  queryKey: "property-units-list",
+  endpoint: "/properties/units?limit=500",
+  defaultLabel: "الوحدة العقارية",
+  defaultPlaceholder: "اختر الوحدة",
+  searchPlaceholder: "ابحث عن وحدة...",
+  createTitle: "إضافة وحدة",
+  createLabel: "+ وحدة جديدة",
+  createApiPath: "/properties/units",
+  createFields: [{ key: "unitNumber", label: "رقم الوحدة", required: true }],
+  getName: (r) => [r?.buildingName, r?.unitNumber].filter(Boolean).join(" - ") || `#${r?.id}`,
+  getSublabel: (r) => r?.unitType || r?.status || "",
+});
+
 export const AccountSelect = buildEntitySelect({
   queryKey: "chart-of-accounts",
   endpoint: "/finance/accounts?limit=500",

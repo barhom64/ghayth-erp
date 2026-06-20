@@ -53,9 +53,9 @@ export default function DocumentsOcrInboxPage() {
 
   return (
     <PageShell
-      title="صندوق استخراج المستندات (OCR)"
+      title="صندوق استخراج المستندات"
       subtitle="مراجعة وتأكيد البيانات المستخرجة من المستندات الممسوحة"
-      breadcrumbs={[{ label: "المستندات" }, { label: "صندوق OCR" }]}
+      breadcrumbs={[{ label: "المستندات" }, { label: "صندوق المسح الضوئي" }]}
       actions={
         <div className="flex gap-1 text-xs">
           {(["pending", "confirmed", "rejected", ""] as const).map((s) => (

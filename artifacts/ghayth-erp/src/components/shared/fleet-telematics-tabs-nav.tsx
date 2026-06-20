@@ -11,9 +11,9 @@ const TABS = [
   { href: "/fleet/telematics/sensors", label: "قراءات الحساسات", icon: Activity },
   { href: "/fleet/telematics/evidence", label: "أرشيف الأدلة", icon: Archive },
   { href: "/fleet/telematics/video-evidence", label: "جلسات الفيديو", icon: Video },
-  { href: "/fleet/telematics/devices", label: "أجهزة MDVR", icon: HardDrive },
+  { href: "/fleet/telematics/devices", label: "أجهزة التسجيل (MDVR)", icon: HardDrive },
   { href: "/fleet/telematics/operations", label: "لوحة التشغيل", icon: ShieldCheck },
-  { href: "/fleet/telematics/settings", label: "إعدادات CMSV6", icon: Settings },
+  { href: "/fleet/telematics/settings", label: "إعدادات منصة التتبع", icon: Settings },
 ];
 
 export function FleetTelematicsTabsNav() {

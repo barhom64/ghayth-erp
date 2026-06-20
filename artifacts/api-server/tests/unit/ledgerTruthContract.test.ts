@@ -21,14 +21,17 @@ describe("#2246 assertLedgerTruth — central ledger-truth contract (orchestrato
     ).toThrow(/التوجيه المحاسبي غير مكتمل|مركبة/);
   });
 
-  // 2.
+  // 2. Vendor without vendorId is now rejected universally by the dimension
+  // contract (step a, fires before the vendor_invoice scenario check) — the
+  // invariant "vendor_invoice line needs vendorId" still holds, message may come
+  // from either gate.
   it("ENFORCE: vendor_invoice scenario, 2111 line WITHOUT vendorId throws", () => {
     expect(() =>
       assertLedgerTruth({
         lines: [{ accountCode: "2111", vendorId: null }],
         header: { sourceType: "vendor_invoice" },
       }),
-    ).toThrow(/فاتورة المورد بلا مورد|vendorId/);
+    ).toThrow(/فاتورة المورد بلا مورد|vendorId|التوجيه المحاسبي غير مكتمل|مورد/);
   });
 
   // 3.
@@ -63,20 +66,29 @@ describe("#2246 assertLedgerTruth — central ledger-truth contract (orchestrato
     expect(r.violations).toHaveLength(0);
   });
 
-  // 8. MANDATORY REGRESSION — must NOT over-enforce.
-  it("REGRESSION (#8): 5520 vehicle maintenance WITHOUT vehicleId does NOT throw (warn only)", () => {
-    let result: ReturnType<typeof assertLedgerTruth> | undefined;
-    expect(() => {
-      result = assertLedgerTruth({ lines: [{ accountCode: "5520", vehicleId: null }] });
-    }).not.toThrow();
-    expect(result!.warnings.length).toBe(1);
-    expect(result!.violations.some((v) => v.class === "dimension")).toBe(true);
+  // 8a. COMPREHENSIVE ENFORCEMENT — every dimensioned class now rejects a missing dim.
+  it("ENFORCE (all): 5520 vehicle / 5610 property / 5130 project / 1131 client without dim all throw", () => {
+    expect(() => assertLedgerTruth({ lines: [{ accountCode: "5520", vehicleId: null }] })).toThrow(/مركبة/);
+    expect(() => assertLedgerTruth({ lines: [{ accountCode: "5610", propertyId: null }] })).toThrow(/عقار/);
+    expect(() => assertLedgerTruth({ lines: [{ accountCode: "5130", projectId: null }] })).toThrow(/مشروع/);
+    expect(() => assertLedgerTruth({ lines: [{ accountCode: "1131", clientId: null }] })).toThrow(/عميل/);
   });
 
-  it("REGRESSION: vendor 2111 WITHOUT vendorId outside vendor_invoice scenario warns only (does NOT throw)", () => {
-    const r = assertLedgerTruth({ lines: [{ accountCode: "2111", vendorId: null }] });
-    expect(r.warnings.length).toBe(1);
-    expect(r.warnings[0]).toContain("مورد");
+  // 8b. MANDATORY REGRESSION — must NOT over-enforce onto NON-dimensioned accounts.
+  // The anti-over-enforcement guard now points at cash (1111): no cost object,
+  // so it must always pass even with no dimension on the line.
+  it("REGRESSION (#8): non-dimensioned cash 1111 with no dimension does NOT throw", () => {
+    let result: ReturnType<typeof assertLedgerTruth> | undefined;
+    expect(() => {
+      result = assertLedgerTruth({ lines: [{ accountCode: "1111" }] });
+    }).not.toThrow();
+    expect(result!.violations.some((v) => v.class === "dimension")).toBe(false);
+  });
+
+  it("ENFORCE (all): vendor 2111 WITHOUT vendorId now throws even outside vendor_invoice scenario", () => {
+    expect(() =>
+      assertLedgerTruth({ lines: [{ accountCode: "2111", vendorId: null }] }),
+    ).toThrow(/التوجيه المحاسبي غير مكتمل|مورد/);
   });
 });
 
