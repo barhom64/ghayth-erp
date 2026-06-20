@@ -8793,6 +8793,8 @@ CREATE TABLE public.employees (
     status character varying(20) DEFAULT 'active'::character varying,
     "activationStatus" character varying(40),
     "activationToken" character varying(100),
+    "selfSubmittedData" jsonb,
+    "selfSubmittedAt" timestamp with time zone,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "iqamaNumber" character varying(30),
     "passportNumber" character varying(30),

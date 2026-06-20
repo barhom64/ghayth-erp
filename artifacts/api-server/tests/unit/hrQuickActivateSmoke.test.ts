@@ -54,10 +54,11 @@ describe("HR-REV-3 (#2222) — pending (inactive) employee creation", () => {
   it("creates the assignment in 'active' status (so activation flow finds it)", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO employee_assignments[\s\S]*?'active'/);
   });
-  it("stamps activationStatus = 'pending_activation' on the hire (HR-REV-3 slice 4a)", () => {
+  it("stamps activationStatus on the hire — self_invited مع البريد وإلا pending_activation", () => {
     const empInsert = QA_BLOCK.match(/INSERT INTO employees[\s\S]*?RETURNING/)?.[0] || "";
     expect(empInsert).toMatch(/"activationStatus"/);
-    expect(empInsert).toMatch(/'pending_activation'/);
+    // القيمة مُمَرَّرة عبر بارامتر: self_invited عند توفّر البريد وإلا pending_activation.
+    expect(QA_BLOCK).toMatch(/email \? 'self_invited' : 'pending_activation'/);
   });
 });
 
