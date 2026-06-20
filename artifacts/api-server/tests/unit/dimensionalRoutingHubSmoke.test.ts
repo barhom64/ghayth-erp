@@ -30,8 +30,11 @@ const ROUTES_TSX = readFileSync(
   join(import.meta.dirname!, "../../../ghayth-erp/src/routes/financeRoutes.tsx"),
   "utf8",
 );
+// FinanceTabsNav is now a thin wrapper over <ModuleTabsNav> that derives its
+// tabs from navigation.registry — so the dimensional-routing entry lives in the
+// registry (the single source the bar mirrors), which is what we assert on.
 const TABS = readFileSync(
-  join(import.meta.dirname!, "../../../ghayth-erp/src/components/shared/finance-tabs-nav.tsx"),
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -171,7 +174,7 @@ describe("/finance/dimensional-routing visual dashboard", () => {
   });
 
   it("added to FinanceTabsNav with Network icon — operator can find it from the finance hub", () => {
-    expect(TABS).toContain(`href: "/finance/dimensional-routing"`);
+    expect(TABS).toContain(`path: "/finance/dimensional-routing"`);
     expect(TABS).toContain(`label: "التوجيه البُعدي"`);
     expect(TABS).toContain("Network");
   });

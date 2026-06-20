@@ -120,34 +120,22 @@ describe("HR top-nav stability — static guard", () => {
     }
   });
 
-  it("HrTabsNav mirrors the sidebar's top-level groups in declared order", () => {
-    const navSrc = readFileSync(
-      join(
-        PAGES_ROOT,
-        "..",
-        "components",
-        "shared",
-        "hr-tabs-nav.tsx",
-      ),
-      "utf8",
-    );
-    // Extract the labels in declared order from the TABS array.
-    const labelOrder: string[] = [];
-    const re = /label:\s*"([^"]+)"/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(navSrc)) !== null) labelOrder.push(m[1]);
-    // HR-REV — the horizontal bar now mirrors the sidebar's top-level groups
-    // 1:1 (dashboard + the 8 functional groups) instead of a flat entity list.
-    expect(labelOrder).toEqual([
-      "لوحة الموارد البشرية",
-      "الموظفون",
-      "النشاط والحضور",
-      "الطلبات",
-      "المخالفات والجزاءات",
-      "الأداء والتطوير",
-      "الرواتب والمستحقات",
-      "التقارير",
-      "الإعدادات",
-    ]);
+  it("HrTabsNav mirrors the sidebar by deriving from the registry (no hand list to drift)", () => {
+    const shared = join(PAGES_ROOT, "..", "components", "shared");
+    const navSrc = readFileSync(join(shared, "hr-tabs-nav.tsx"), "utf8");
+    // The bar must delegate to the shared ModuleTabsNav for the HR section;
+    // there is NO hand-maintained tab list here that could drift from the
+    // sidebar (that drift is exactly what produced the «الموظفون»/«شؤون
+    // الموظفين» mismatch before this refactor).
+    expect(navSrc).toMatch(/<ModuleTabsNav\s+section="الموارد البشرية"/);
+    expect(navSrc).not.toMatch(/\blabel:\s*"/);
+
+    // ModuleTabsNav derives both levels from the SAME permission-filtered
+    // pipeline the sidebar uses (useFilteredNavSections), so the horizontal bar
+    // mirrors the sidebar groups by construction AND never shows a tab the user
+    // lacks permission for («نظهر ثم 403»).
+    const modSrc = readFileSync(join(shared, "module-tabs-nav.tsx"), "utf8");
+    expect(modSrc).toMatch(/useFilteredNavSections/);
+    expect(modSrc).toMatch(/navigation\.registry/);
   });
 });
