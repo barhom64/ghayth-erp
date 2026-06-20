@@ -3,7 +3,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, parseId, zodParse, ValidationError, NotFoundError } from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
 
@@ -464,13 +464,13 @@ calendarRouter.post("/appointments", authorize({ feature: "calendar.my", action:
        b.relatedEntityId ?? null, JSON.stringify(b.attendees ?? []), scope.userId],
     );
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "appointment.created", entity: "appointments", entityId: row.id, details: JSON.stringify({ title: b.title }) }).catch((e) => logger.error(e, "appointment event failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "appointments", entityId: row.id, after: { title: b.title, startsAt: b.startsAt } }).catch((e) => logger.error(e, "appointment audit failed"));
+    auditFromRequest(req, "create", "appointments", row.id, { after: { title: b.title, startsAt: b.startsAt } }).catch((e) => logger.error(e, "appointment audit failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create appointment error:"); }
 });
 
 // PATCH /calendar/appointments/:id — تعديل موعد.
-calendarRouter.patch("/appointments/:id", authorize({ feature: "calendar.my", action: "update", resource: { table: "appointments", idParam: "id" } }), async (req, res) => {
+calendarRouter.patch("/appointments/:id", authorize({ feature: "calendar.my", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -496,39 +496,39 @@ calendarRouter.patch("/appointments/:id", authorize({ feature: "calendar.my", ac
       params,
     );
     if (!row) throw new NotFoundError("الموعد غير موجود");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "appointments", entityId: id }).catch((e) => logger.error(e, "appointment audit failed"));
+    auditFromRequest(req, "update", "appointments", id).catch((e) => logger.error(e, "appointment audit failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update appointment error:"); }
 });
 
 // DELETE /calendar/appointments/:id — حذف ناعم.
-calendarRouter.delete("/appointments/:id", authorize({ feature: "calendar.my", action: "delete", resource: { table: "appointments", idParam: "id" } }), async (req, res) => {
+calendarRouter.delete("/appointments/:id", authorize({ feature: "calendar.my", action: "delete" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(`UPDATE appointments SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("الموعد غير موجود");
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "appointment.deleted", entity: "appointments", entityId: id }).catch((e) => logger.error(e, "appointment event failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "appointments", entityId: id }).catch((e) => logger.error(e, "appointment audit failed"));
+    auditFromRequest(req, "delete", "appointments", id).catch((e) => logger.error(e, "appointment audit failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete appointment error:"); }
 });
 
 // POST /calendar/appointments/:id/restore — استرجاع (سلة المحذوفات #2713).
-calendarRouter.post("/appointments/:id/restore", authorize({ feature: "calendar.my", action: "update", resource: { table: "appointments", idParam: "id" } }), async (req, res) => {
+calendarRouter.post("/appointments/:id/restore", authorize({ feature: "calendar.my", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(`UPDATE appointments SET "deletedAt" = NULL WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("لا يوجد موعد محذوف بهذا المعرّف");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "restore", entity: "appointments", entityId: id }).catch((e) => logger.error(e, "appointment audit failed"));
+    auditFromRequest(req, "restore", "appointments", id).catch((e) => logger.error(e, "appointment audit failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "appointment.restored", entity: "appointments", entityId: id }).catch((e) => logger.error(e, "appointment event failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Restore appointment error:"); }
 });
 
 // GET /calendar/appointments/:id/ics — تنزيل دعوة iCalendar للموعد.
-calendarRouter.get("/appointments/:id/ics", authorize({ feature: "calendar.my", action: "view", resource: { table: "appointments", idParam: "id" } }), async (req, res) => {
+calendarRouter.get("/appointments/:id/ics", authorize({ feature: "calendar.my", action: "view" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");

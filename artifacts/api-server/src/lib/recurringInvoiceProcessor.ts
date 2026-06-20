@@ -8,6 +8,7 @@
 // الفاتورة نفسها ولا تُكرّر القيد (عقد postSalesInvoice).
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { computeNextRunDate } from "./recurringJournalProcessor.js";
+import { todayISO } from "./businessHelpers.js";
 import { logger } from "./logger.js";
 import type { InsertSalesInvoiceFn, SalesInvoiceLineInput } from "./engines/financialEngine.js";
 
@@ -51,7 +52,7 @@ export async function runRecurringInvoice(params: {
   today?: string;
   force?: boolean;
 }): Promise<RunRecurringInvoiceResult> {
-  const today = params.today || new Date().toISOString().slice(0, 10);
+  const today = params.today || todayISO();
   const [tpl] = await rawQuery<RecurringInvoiceTemplateRow>(
     `SELECT id, "companyId", "branchId", "clientId", title, lines, currency, frequency, "nextRunDate"::text AS "nextRunDate", "dueInDays", notes
        FROM recurring_invoice_templates
@@ -122,7 +123,7 @@ export async function runRecurringInvoice(params: {
 
 /** يعالج كل القوالب المستحقّة لشركة (أو الكل) — للاستدعاء من cron أو يدويًا. */
 export async function processDueRecurringInvoices(companyId: number, createdBy: number): Promise<{ processed: number; results: RunRecurringInvoiceResult[] }> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
   const due = await rawQuery<{ id: number }>(
     `SELECT id FROM recurring_invoice_templates
       WHERE "companyId" = $1 AND active = TRUE AND "deletedAt" IS NULL AND "nextRunDate" <= $2::date

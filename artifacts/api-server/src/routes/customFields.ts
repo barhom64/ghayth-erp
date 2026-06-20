@@ -8,7 +8,7 @@ import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { handleRouteError, parseId, zodParse, ValidationError, NotFoundError, ConflictError } from "../lib/errorHandler.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
 
@@ -49,8 +49,8 @@ customFieldsRouter.get("/definitions", authorize({ feature: "settings", action: 
   } catch (err) { handleRouteError(err, res, "List custom field definitions error:"); }
 });
 
-// POST /custom-fields/definitions — تعريف حقل جديد.
-customFieldsRouter.post("/definitions", authorize({ feature: "settings", action: "create" }), async (req, res) => {
+// POST /custom-fields/definitions — تعريف حقل جديد (إدارة المخطط = تحديث الإعدادات).
+customFieldsRouter.post("/definitions", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const b = zodParse(defSchema.safeParse(req.body ?? {}));
@@ -68,13 +68,13 @@ customFieldsRouter.post("/definitions", authorize({ feature: "settings", action:
       [scope.companyId, b.entityType, b.fieldKey, b.label, b.fieldType, JSON.stringify(b.options ?? []), b.required ?? false, b.sortOrder ?? 0, b.isActive ?? true, scope.userId],
     );
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "custom_field.created", entity: "custom_field_definitions", entityId: row.id, details: JSON.stringify({ entityType: b.entityType, fieldKey: b.fieldKey }) }).catch((e) => logger.error(e, "custom field event failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "custom_field_definitions", entityId: row.id, after: { entityType: b.entityType, fieldKey: b.fieldKey, label: b.label } }).catch((e) => logger.error(e, "custom field audit failed"));
+    auditFromRequest(req, "create", "custom_field_definitions", row.id, { after: { entityType: b.entityType, fieldKey: b.fieldKey, label: b.label } }).catch((e) => logger.error(e, "custom field audit failed"));
     res.status(201).json(row);
   } catch (err) { handleRouteError(err, res, "Create custom field definition error:"); }
 });
 
 // PATCH /custom-fields/definitions/:id — تعديل تعريف.
-customFieldsRouter.patch("/definitions/:id", authorize({ feature: "settings", action: "update", resource: { table: "custom_field_definitions", idParam: "id" } }), async (req, res) => {
+customFieldsRouter.patch("/definitions/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -96,20 +96,20 @@ customFieldsRouter.patch("/definitions/:id", authorize({ feature: "settings", ac
       params,
     );
     if (!row) throw new NotFoundError("تعريف الحقل غير موجود");
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "custom_field_definitions", entityId: id }).catch((e) => logger.error(e, "custom field audit failed"));
+    auditFromRequest(req, "update", "custom_field_definitions", id).catch((e) => logger.error(e, "custom field audit failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update custom field definition error:"); }
 });
 
-// DELETE /custom-fields/definitions/:id — حذف ناعم.
-customFieldsRouter.delete("/definitions/:id", authorize({ feature: "settings", action: "delete", resource: { table: "custom_field_definitions", idParam: "id" } }), async (req, res) => {
+// DELETE /custom-fields/definitions/:id — حذف ناعم (إدارة المخطط = تحديث الإعدادات).
+customFieldsRouter.delete("/definitions/:id", authorize({ feature: "settings", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(`UPDATE custom_field_definitions SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("تعريف الحقل غير موجود");
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "custom_field.deleted", entity: "custom_field_definitions", entityId: id }).catch((e) => logger.error(e, "custom field event failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "custom_field_definitions", entityId: id }).catch((e) => logger.error(e, "custom field audit failed"));
+    auditFromRequest(req, "delete", "custom_field_definitions", id).catch((e) => logger.error(e, "custom field audit failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete custom field definition error:"); }
 });
@@ -161,7 +161,7 @@ customFieldsRouter.put("/values", authorize({ feature: "settings", action: "upda
       );
       written++;
     }
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "custom_field_values", entityId: b.entityId, after: { entityType: b.entityType, fields: written } }).catch((e) => logger.error(e, "custom field audit failed"));
+    auditFromRequest(req, "update", "custom_field_values", b.entityId, { after: { entityType: b.entityType, fields: written } }).catch((e) => logger.error(e, "custom field audit failed"));
     res.json({ success: true, written });
   } catch (err) { handleRouteError(err, res, "Save custom field values error:"); }
 });

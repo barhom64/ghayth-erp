@@ -5,7 +5,8 @@ import { join } from "node:path";
 /**
  * #2719 — الحقول المخصّصة لكل شركة (الأساس). اختبار ثابت — لا DB.
  * يؤكّد: هجرة 394 (تعريفات + قيم EAV)، تعريفات CRUD + قيم get/put على
- * customFields.ts بصلاحية settings + حارس resource + upsert + تجاهل المفاتيح
+ * customFields.ts بصلاحية settings (إدارة المخطط = action "update"، إذ لا تدعم
+ * settings الإنشاء/الحذف) + حصر companyId في كل SQL + upsert + تجاهل المفاتيح
  * غير المعرّفة، والتسجيل في routes/index.ts.
  */
 const API_SRC = join(import.meta.dirname!, "../../src");
@@ -28,15 +29,18 @@ describe("custom fields — migration 394", () => {
 
 describe("custom fields — definitions CRUD (settings RBAC)", () => {
   it("guards every route under the settings feature with the right action", () => {
+    // settings تدعم القراءة + "update" فقط — إدارة مخطط الحقول (إنشاء/حذف تعريف)
+    // تُمثَّل كـ "update" على الإعدادات (لا توسعة RBAC). يبقى التدقيق دلاليًّا
+    // create/delete عبر auditFromRequest.
     expect(CF).toMatch(/\.get\("\/definitions",\s*authorize\(\{ feature: "settings", action: "list" \}\)/);
-    expect(CF).toMatch(/\.post\("\/definitions",\s*authorize\(\{ feature: "settings", action: "create" \}\)/);
-    expect(CF).toMatch(/\.patch\("\/definitions\/:id",\s*authorize\(\{ feature: "settings", action: "update", resource: \{ table: "custom_field_definitions", idParam: "id" \} \}\)/);
-    expect(CF).toMatch(/\.delete\("\/definitions\/:id",\s*authorize\(\{ feature: "settings", action: "delete", resource: \{ table: "custom_field_definitions", idParam: "id" \} \}\)/);
+    expect(CF).toMatch(/\.post\("\/definitions",\s*authorize\(\{ feature: "settings", action: "update" \}\)/);
+    expect(CF).toMatch(/\.patch\("\/definitions\/:id",\s*authorize\(\{ feature: "settings", action: "update" \}\)/);
+    expect(CF).toMatch(/\.delete\("\/definitions\/:id",\s*authorize\(\{ feature: "settings", action: "update" \}\)/);
   });
   it("enforces unique fieldKey per (company, entityType) + select needs options + Audit", () => {
     expect(CF).toMatch(/SELECT id FROM custom_field_definitions WHERE "companyId"=\$1 AND "entityType"=\$2 AND "fieldKey"=\$3 AND "deletedAt" IS NULL/);
     expect(CF).toMatch(/fieldType === "select" && \(!b\.options \|\| b\.options\.length === 0\)/);
-    expect(CF).toMatch(/action: "create", entity: "custom_field_definitions"/);
+    expect(CF).toMatch(/auditFromRequest\(req, "create", "custom_field_definitions"/);
   });
 });
 

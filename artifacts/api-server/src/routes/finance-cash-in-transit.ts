@@ -8,7 +8,7 @@ import { handleRouteError, parseId, zodParse, ValidationError, NotFoundError, Co
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest, todayISO } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
 
@@ -61,7 +61,7 @@ cashInTransitRouter.post("/cash-in-transit", authorize({ feature: "finance.journ
     await assertPostableMoneyAccount(scope.companyId, b.clearingAccountCode, "clearingAccountCode");
 
     const amount = Number(b.amount);
-    const sentDate = b.sentDate || new Date().toISOString().slice(0, 10);
+    const sentDate = b.sentDate || todayISO();
     const transferKey = b.transferKey || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const sourceKey = `finance:cash_in_transit:send:${scope.companyId}:${transferKey}`;
     const ref = b.reference || `CIT-${sentDate}`;
@@ -90,20 +90,20 @@ cashInTransitRouter.post("/cash-in-transit", authorize({ feature: "finance.journ
       [scope.companyId, scope.branchId ?? null, b.sourceAccountCode, b.destinationAccountCode, b.clearingAccountCode, amount, b.currency ?? "SAR", sentDate, sent.journalId, b.reference ?? null, b.notes ?? null, scope.userId],
     );
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "cash_in_transit.sent", entity: "cash_in_transit_transfers", entityId: row.id, details: JSON.stringify({ amount, journalId: sent.journalId }) }).catch((e) => logger.error(e, "cash-in-transit event failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "cash_in_transit_transfers", entityId: row.id, after: { amount, status: "in_transit", journalId: sent.journalId } }).catch((e) => logger.error(e, "cash-in-transit audit failed"));
+    auditFromRequest(req, "create", "cash_in_transit_transfers", row.id, { after: { amount, status: "in_transit", journalId: sent.journalId } }).catch((e) => logger.error(e, "cash-in-transit audit failed"));
     res.status(201).json({ id: row.id, status: "in_transit", journalId: sent.journalId });
   } catch (err) { handleRouteError(err, res, "Initiate cash-in-transit error:"); }
 });
 
 // POST /finance/cash-in-transit/:id/confirm — الطور 2: مدين الهدف / دائن المقاصّة.
-cashInTransitRouter.post("/cash-in-transit/:id/confirm", authorize({ feature: "finance.journal", action: "create", resource: { table: "cash_in_transit_transfers", idParam: "id" } }), async (req, res) => {
+cashInTransitRouter.post("/cash-in-transit/:id/confirm", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const [t] = await rawQuery<any>(`SELECT * FROM cash_in_transit_transfers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!t) throw new NotFoundError("التحويل غير موجود");
     if (t.status !== "in_transit") throw new ConflictError(`لا يمكن تأكيد تحويل بحالة "${t.status}"`);
-    const arrivedDate = (req.body?.arrivedDate as string) || new Date().toISOString().slice(0, 10);
+    const arrivedDate = (req.body?.arrivedDate as string) || todayISO();
     const amount = Number(t.amount);
     const ref = t.reference || `CIT-${id}`;
     const sourceKey = `finance:cash_in_transit:arrive:${scope.companyId}:${id}`;
@@ -131,7 +131,7 @@ cashInTransitRouter.post("/cash-in-transit/:id/confirm", authorize({ feature: "f
     );
     if (!affectedRows) throw new ConflictError("تغيّرت حالة التحويل — أعد التحميل");
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "cash_in_transit.arrived", entity: "cash_in_transit_transfers", entityId: id, details: JSON.stringify({ journalId: arr.journalId }) }).catch((e) => logger.error(e, "cash-in-transit event failed"));
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "cash_in_transit_transfers", entityId: id, after: { status: "arrived", journalId: arr.journalId } }).catch((e) => logger.error(e, "cash-in-transit audit failed"));
+    auditFromRequest(req, "update", "cash_in_transit_transfers", id, { after: { status: "arrived", journalId: arr.journalId } }).catch((e) => logger.error(e, "cash-in-transit audit failed"));
     res.json({ id, status: "arrived", journalId: arr.journalId });
   } catch (err) { handleRouteError(err, res, "Confirm cash-in-transit error:"); }
 });

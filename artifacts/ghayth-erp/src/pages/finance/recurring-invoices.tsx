@@ -12,7 +12,7 @@ import { ClientSelect } from "@/components/shared/entity-selects";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Play, Trash2, X } from "lucide-react";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, todayLocal } from "@/lib/formatters";
 import { DataTable, type DataTableColumn, PageShell, PageStatusBadge } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
@@ -27,7 +27,7 @@ const FREQUENCY_LABEL: Record<string, string> = {
 };
 const emptyLine = { description: "", quantity: 1, unitPriceExclTax: 0 };
 const emptyForm = {
-  clientId: "", title: "", frequency: "monthly", startDate: new Date().toISOString().slice(0, 10),
+  clientId: "", title: "", frequency: "monthly", startDate: todayLocal(),
   dueInDays: 30, lines: [{ ...emptyLine }],
 };
 

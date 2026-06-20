@@ -10,7 +10,7 @@ import { AccountSelect } from "@/components/shared/entity-selects";
 import { isMoneyAccount } from "@/lib/finance-account-usage";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, CheckCircle2, ArrowLeftRight } from "lucide-react";
-import { formatDateAr, formatCurrency } from "@/lib/formatters";
+import { formatDateAr, formatCurrency, todayLocal } from "@/lib/formatters";
 import { DataTable, type DataTableColumn, PageShell, PageStatusBadge } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -21,7 +21,7 @@ import { PageStateWrapper } from "@/components/shared/page-state";
  */
 const emptyForm = {
   sourceAccountCode: "", destinationAccountCode: "", clearingAccountCode: "",
-  amount: "", sentDate: new Date().toISOString().slice(0, 10), reference: "", notes: "",
+  amount: "", sentDate: todayLocal(), reference: "", notes: "",
 };
 
 export default function CashInTransitPage() {

@@ -28,15 +28,15 @@ describe("recurring invoices — template CRUD (finance.recurring RBAC)", () => 
   it("guards every route under finance.recurring with the right action", () => {
     expect(ROUTE).toMatch(/\.get\("\/recurring-invoices",\s*authorize\(\{ feature: "finance\.recurring", action: "list" \}\)/);
     expect(ROUTE).toMatch(/\.post\("\/recurring-invoices",\s*authorize\(\{ feature: "finance\.recurring", action: "create" \}\)/);
-    expect(ROUTE).toMatch(/\.patch\("\/recurring-invoices\/:id",\s*authorize\(\{ feature: "finance\.recurring", action: "update", resource: \{ table: "recurring_invoice_templates", idParam: "id" \} \}\)/);
-    expect(ROUTE).toMatch(/\.delete\("\/recurring-invoices\/:id",\s*authorize\(\{ feature: "finance\.recurring", action: "delete", resource: \{ table: "recurring_invoice_templates", idParam: "id" \} \}\)/);
+    expect(ROUTE).toMatch(/\.patch\("\/recurring-invoices\/:id",\s*authorize\(\{ feature: "finance\.recurring", action: "update" \}\)/);
+    expect(ROUTE).toMatch(/\.delete\("\/recurring-invoices\/:id",\s*authorize\(\{ feature: "finance\.recurring", action: "delete" \}\)/);
   });
   it("validates client ownership + line shape matches SalesInvoiceLineInput + Audit", () => {
     expect(ROUTE).toMatch(/SELECT id FROM clients WHERE id=\$1 AND "companyId"=\$2 AND "deletedAt" IS NULL/);
     expect(ROUTE).toMatch(/unitPriceExclTax/);
     expect(ROUTE).toMatch(/isTaxable/);
     expect(ROUTE).toMatch(/taxCode/);
-    expect(ROUTE).toMatch(/action: "create", entity: "recurring_invoice_templates"/);
+    expect(ROUTE).toMatch(/auditFromRequest\(req, "create", "recurring_invoice_templates"/);
   });
   it("seeds nextRunDate = startDate on create (first run due at start)", () => {
     expect(ROUTE).toMatch(/"startDate","nextRunDate"[\s\S]*VALUES \(\$1,\$2,\$3,\$4,\$5::jsonb,\$6,\$7,\$8,\$8,/);

@@ -67,6 +67,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // companyId. Manual scope is correct here.
   "communications-sms-webhook.ts",
   "correspondence.ts",
+  // customFields.ts: per-company custom-field schema (#2719) — definitions +
+  // EAV values. Point lookups / upserts keyed by (companyId, entityType,
+  // fieldKey) / (companyId, id); the table is newer than the schema dump so it
+  // carries no resource guard (mirrors employee_tracking_policies). Manual
+  // companyId scoping is correct here — not a branch list cascade.
+  "customFields.ts",
   "digital-signature.ts",
   "documents.ts",
   // employeeTrackingPolicy.ts: Tracking Eligibility Contract control plane —
@@ -80,6 +86,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "execDashboard.ts",
   "export.ts",
   "finance-algorithms.ts",
+  // finance-cash-in-transit.ts: #2714 clearing-account transfers (2-phase JE
+  // via the existing engine). List/lookup/confirm keyed by (companyId, id /
+  // status); point-lookup + per-row state advance, not a branch list cascade.
+  // Manual companyId scoping is correct here (mirrors finance-memory.ts).
+  "finance-cash-in-transit.ts",
   // finance-amortization.ts: FIN-TIME-SPREADING (#2247) prepaid-amortization
   // CRUD + run trigger. List/insert/run keyed by (companyId, …) — point
   // lookups + a per-company recognition run, not a branch list cascade.
@@ -112,6 +123,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
   // company/branch list cascades which this surface intentionally isn't.
   "finance-memory.ts",
+  // finance-recurring-invoices.ts: customer recurring-invoice templates +
+  // run/run-due (generation reuses financialEngine.postSalesInvoice). List/
+  // lookup/run keyed by (companyId, id); point-lookup + per-company due run,
+  // not a branch list cascade. Manual companyId scoping is correct here.
+  "finance-recurring-invoices.ts",
   // fleet-optimizer.ts: TA-T18-VRP Phase 2 — five short handlers that
   // each touch a single tenant-scoped table with literal `"companyId" =
   // $N`; the buildScopedWhere helper adds noise without changing
@@ -351,9 +367,15 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // disable + AUDITED location view). Point lookups/upserts keyed on the
       // caller's single active scope.companyId + a per-target gated location
       // view, not a multi-company list cascade. Allowlisted with justification.
-      total: 129,
+      // +3 total/manualOnly: this session's three new finance/settings route
+      // files ship with manual companyId scoping (point-lookup/upsert shape,
+      // tables newer than the schema dump): routes/customFields.ts (#2719),
+      // routes/finance-cash-in-transit.ts (#2714), and
+      // routes/finance-recurring-invoices.ts. All allowlisted above with
+      // justification (mirror finance-memory.ts / employee_tracking_policies).
+      total: 132,
       helperUsers: 39,
-      manualOnly: 87,
+      manualOnly: 90,
     });
   });
 });

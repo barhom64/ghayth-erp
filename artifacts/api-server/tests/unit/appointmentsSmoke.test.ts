@@ -5,7 +5,9 @@ import { join } from "node:path";
 /**
  * #2704 — المواعيد + دعوة .ics (P2). اختبار ثابت (يقرأ المصدر) — لا DB.
  * يؤكّد: الهجرة 393 (جدول appointments)، مسارات CRUD + استرجاع + .ics على
- * calendar.ts بصلاحية calendar.my + حارس resource، ودمجها في /upcoming.
+ * calendar.ts بصلاحية calendar.my + حصر companyId في كل عبارة SQL
+ * (الجدول حديث، خارج لقطة المخطّط بعد — كنمط employee_tracking_policies)،
+ * وتدقيق عبر auditFromRequest، ودمجها في /upcoming.
  */
 const API_SRC = join(import.meta.dirname!, "../../src");
 const CALENDAR = readFileSync(join(API_SRC, "routes/calendar.ts"), "utf8");
@@ -27,15 +29,15 @@ describe("appointments — CRUD + restore + ics routes (calendar.ts)", () => {
   it("all routes guard the calendar.my feature with the right actions", () => {
     expect(CALENDAR).toMatch(/calendarRouter\.get\("\/appointments",\s*authorize\(\{ feature: "calendar\.my", action: "list" \}\)/);
     expect(CALENDAR).toMatch(/calendarRouter\.post\("\/appointments",\s*authorize\(\{ feature: "calendar\.my", action: "create" \}\)/);
-    expect(CALENDAR).toMatch(/calendarRouter\.patch\("\/appointments\/:id",\s*authorize\(\{ feature: "calendar\.my", action: "update", resource: \{ table: "appointments", idParam: "id" \} \}\)/);
-    expect(CALENDAR).toMatch(/calendarRouter\.delete\("\/appointments\/:id",\s*authorize\(\{ feature: "calendar\.my", action: "delete", resource: \{ table: "appointments", idParam: "id" \} \}\)/);
-    expect(CALENDAR).toMatch(/calendarRouter\.post\("\/appointments\/:id\/restore",\s*authorize\(\{ feature: "calendar\.my", action: "update", resource: \{ table: "appointments", idParam: "id" \} \}\)/);
-    expect(CALENDAR).toMatch(/calendarRouter\.get\("\/appointments\/:id\/ics",\s*authorize\(\{ feature: "calendar\.my", action: "view", resource: \{ table: "appointments", idParam: "id" \} \}\)/);
+    expect(CALENDAR).toMatch(/calendarRouter\.patch\("\/appointments\/:id",\s*authorize\(\{ feature: "calendar\.my", action: "update" \}\)/);
+    expect(CALENDAR).toMatch(/calendarRouter\.delete\("\/appointments\/:id",\s*authorize\(\{ feature: "calendar\.my", action: "delete" \}\)/);
+    expect(CALENDAR).toMatch(/calendarRouter\.post\("\/appointments\/:id\/restore",\s*authorize\(\{ feature: "calendar\.my", action: "update" \}\)/);
+    expect(CALENDAR).toMatch(/calendarRouter\.get\("\/appointments\/:id\/ics",\s*authorize\(\{ feature: "calendar\.my", action: "view" \}\)/);
   });
 
   it("writes are company-scoped + carry Audit/Event", () => {
     expect(CALENDAR).toMatch(/INSERT INTO appointments/);
-    expect(CALENDAR).toMatch(/action: "create", entity: "appointments"/);
+    expect(CALENDAR).toMatch(/auditFromRequest\(req, "create", "appointments"/);
     expect(CALENDAR).toMatch(/action: "appointment\.created"/);
     expect(CALENDAR).toMatch(/UPDATE appointments SET "deletedAt" = NOW\(\) WHERE id = \$1 AND "companyId" = \$2 AND "deletedAt" IS NULL/);
     expect(CALENDAR).toMatch(/UPDATE appointments SET "deletedAt" = NULL WHERE id = \$1 AND "companyId" = \$2 AND "deletedAt" IS NOT NULL/);
