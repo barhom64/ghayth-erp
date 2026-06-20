@@ -233,7 +233,13 @@ export async function apiFetch<T = any>(
       res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
     } else {
       localStorage.removeItem("erp_assignments");
-      window.location.href = `${BASE}/login`;
+      // Redirect to the in-app login route, NOT `${BASE}/login`: on native
+      // BASE is the absolute server origin, so that would navigate the WebView
+      // OUT of the app to the live website. The login page lives in the bundle
+      // at the SPA router base (import.meta.env.BASE_URL), same origin as the
+      // app on web and native alike.
+      const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      window.location.href = `${appBase}/login`;
       throw new Error("انتهت الجلسة، يرجى تسجيل الدخول مجدداً");
     }
   }
