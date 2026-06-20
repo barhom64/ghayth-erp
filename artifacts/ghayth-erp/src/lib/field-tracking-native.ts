@@ -68,10 +68,10 @@ export async function startNativeFieldTracking(opts: StartNativeOptions): Promis
   if (!isNativeFieldTracking()) return false;
   try {
     const BackgroundGeolocation = loadPlugin();
-    if (!BackgroundGeolocation?.addWatcher) {
-      opts.onError?.("plugin التتبع الخلفي غير مثبّت في هذا البناء.");
-      return false;
-    }
+    // Plugin not registered (e.g. a build without it): fall back SILENTLY to
+    // the browser path — don't flash a scary error while tracking actually
+    // starts. The caller (field-companion) handles the fallback on `false`.
+    if (!BackgroundGeolocation?.addWatcher) return false;
     const pingUrl = `${opts.apiOrigin.replace(/\/$/, "")}/api/my/field/ping`;
     watcherId = await BackgroundGeolocation.addWatcher(
       {
