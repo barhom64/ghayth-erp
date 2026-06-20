@@ -180,6 +180,7 @@ const CashflowDashboard = lazy(() => import("@/pages/finance/cashflow-dashboard"
 const OpeningBalances = lazy(() => import("@/pages/finance/opening-balances"));
 const OpeningBalancesCreate = lazy(() => import("@/pages/create/finance/opening-balances-create"));
 const RecurringJournals = lazy(() => import("@/pages/finance/recurring-journals"));
+const RecurringInvoices = lazy(() => import("@/pages/finance/recurring-invoices"));
 const RecurringJournalsCreate = lazy(() => import("@/pages/create/finance/recurring-journals-create"));
 const RecurringCalendar = lazy(() => import("@/pages/finance/recurring-calendar"));
 const RecurringJournalDetail = lazy(() => import("@/pages/finance/recurring-journal-detail"));
@@ -439,6 +440,7 @@ export const financeRoutes = [
   { path: "/finance/opening-balances", component: OpeningBalances, minRoleLevel: 70 },
   { path: "/finance/opening-balances/create", component: OpeningBalancesCreate, minRoleLevel: 70 },
   { path: "/finance/recurring-journals", component: RecurringJournals },
+  { path: "/finance/recurring-invoices", component: RecurringInvoices },
   { path: "/finance/amortization", component: Amortization },
   { path: "/finance/deferred-revenue", component: DeferredRevenue },
   { path: "/finance/subsidiary-account-failures", component: SubsidiaryAccountFailures },

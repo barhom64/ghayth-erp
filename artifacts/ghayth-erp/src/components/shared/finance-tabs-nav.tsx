@@ -18,7 +18,7 @@ const PRIMARY_TABS: Tab[] = [
   { href: "/finance/accounts", label: "الحسابات", icon: BookOpen, match: ["/finance/accounts"] },
   { href: "/finance/journal", label: "القيود", icon: ScrollText, match: ["/finance/journal", "/finance/journal-manual", "/finance/opening-balances", "/finance/recurring-journals"] },
   { href: "/finance/vouchers", label: "السندات", icon: FileSpreadsheet, match: ["/finance/vouchers"] },
-  { href: "/finance/invoices", label: "الفواتير", icon: FileText, match: ["/finance/invoices"] },
+  { href: "/finance/invoices", label: "الفواتير", icon: FileText, match: ["/finance/invoices", "/finance/recurring-invoices"] },
   { href: "/finance/receivables", label: "المقبوضات", icon: Receipt, match: ["/finance/receivables"] },
   { href: "/finance/customer-advances", label: "دفعات مقدمة", icon: Coins, match: ["/finance/customer-advances"] },
   { href: "/finance/expenses", label: "المصروفات", icon: CreditCard, match: ["/finance/expenses"] },
