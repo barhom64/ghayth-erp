@@ -21,7 +21,8 @@ import {
   applyFilters,
   exportToCSV,
 } from "@workspace/ui-core";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { FileText, Gavel, Plus, Scale, Copy, ExternalLink, Mail, BarChart2, DollarSign, CheckCircle, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -84,8 +85,11 @@ function ContractsTab() {
   const pageSize = 20;
   const { permissions } = useAppContext();
   const canManage = permissions.canManageLegal;
+  // #2713 (تعميم) — سلة المحذوفات للعقود.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { toast } = useToast();
   const { data: contractsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["legal-contracts", String(page)], `/legal/contracts?page=${page}&limit=${pageSize}`
+    ["legal-contracts", String(page), showDeleted ? "deleted" : "active"], `/legal/contracts?page=${page}&limit=${pageSize}${showDeleted ? "&deleted=true" : ""}`
   );
   const contracts = asList(contractsResp);
   const total = contractsResp?.total || contracts.length;
@@ -112,6 +116,16 @@ function ContractsTab() {
     onSuccess: () => refetch(),
   });
 
+  async function handleRestoreContract(id: number) {
+    try {
+      await apiFetch(`/legal/contracts/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع العقد" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
+
   const editFields = [
     { key: "title", label: "العنوان" },
     { key: "contractType", label: "النوع" },
@@ -132,15 +146,21 @@ function ContractsTab() {
       key: "actions", header: "الإجراءات",
       render: (c) => (
         <div className="flex items-center gap-1">
-          <RowActions
-            canEdit={canManage}
-            onEdit={() => startEdit(c.id, { title: c.title, contractType: c.contractType || "", partyName: c.partyName || "", value: Number(c.value) || 0, status: c.status || "draft" })}
-            onDelete={() => startDelete(c.id)}
-            deletePerm="legal:delete"
-          />
-          <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="نسخ العقد"><Link href={`/legal/create?copyFrom=${c.id}`}>
-              <Copy className="h-4 w-4" />
-            </Link></Button>
+          {showDeleted ? (
+            <Button variant="outline" size="sm" onClick={() => handleRestoreContract(c.id)}>استرجاع</Button>
+          ) : (
+            <>
+              <RowActions
+                canEdit={canManage}
+                onEdit={() => startEdit(c.id, { title: c.title, contractType: c.contractType || "", partyName: c.partyName || "", value: Number(c.value) || 0, status: c.status || "draft" })}
+                onDelete={() => startDelete(c.id)}
+                deletePerm="legal:delete"
+              />
+              <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="نسخ العقد"><Link href={`/legal/create?copyFrom=${c.id}`}>
+                  <Copy className="h-4 w-4" />
+                </Link></Button>
+            </>
+          )}
         </div>
       ),
     },
@@ -223,7 +243,12 @@ function ContractsTab() {
       )}
 
       <Card>
-        <CardHeader><CardTitle>العقود القانونية</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{showDeleted ? "العقود المحذوفة" : "العقود القانونية"}</CardTitle>
+          <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => { setShowDeleted((v) => !v); setPage(1); }}>
+            {showDeleted ? "العقود النشطة" : "سلة المحذوفات"}
+          </Button>
+        </CardHeader>
         <CardContent>
           <DataTable
             columns={columns}
