@@ -6,6 +6,7 @@ const HrServices = lazy(() => import("@/pages/hr/services"));
 const Employees = lazy(() => import("@/pages/employees"));
 const EmployeeDetail = lazy(() => import("@/pages/employee-detail"));
 const EmployeesCreate = lazy(() => import("@/pages/create/employees-create"));
+const EmployeeQuickCreate = lazy(() => import("@/pages/create/hr/employee-quick-create"));
 const Attendance = lazy(() => import("@/pages/hr/attendance"));
 const AttendanceCreate = lazy(() => import("@/pages/create/hr/attendance-create"));
 const Leaves = lazy(() => import("@/pages/hr/leaves"));
@@ -134,6 +135,7 @@ export const hrRoutes = [
   { path: "/hr/services", component: HrServices, subKey: "services" },
   { path: "/employees", component: Employees, subKey: "employees" },
   { path: "/employees/create", component: EmployeesCreate, subKey: "employees" },
+  { path: "/employees/quick-create", component: EmployeeQuickCreate, subKey: "employees" },
   { path: "/employees/:id", component: EmployeeDetail, subKey: "employees" },
   { path: "/hr/attendance", component: Attendance, subKey: "attendance" },
   { path: "/hr/attendance/create", component: AttendanceCreate, subKey: "attendance" },
