@@ -105,7 +105,7 @@ if (Capacitor.isNativePlatform()) {
 - ✅ **الأساس backend**: التوكن المحدود + الحارس المركزي + endpoint الإصدار + اختبارات.
 - ✅ **تحسين المتصفح**: `field-companion.tsx` يستخدم Wake Lock (يمنع قفل الشاشة) + تحذير عند إخفاء الصفحة. يعمل للموظف المتعاون الذي يُبقي الصفحة مفتوحة.
 - ✅ **جسر Capacitor (كود)**: `lib/field-tracking-native.ts` — خامل على الويب (dynamic import بـ@vite-ignore)، ينشط داخل التطبيق الأصلي فيرسل الموقع الخلفي إلى `/my/field/ping` بتوكن Bearer. `field-companion` يجرّب الأصلي أولاً ثم يسقط لمسار المتصفح.
-- ✅ **`capacitor.config.ts`**: جاهز (appId `sa.door.ghayth`، webDir `dist`).
+- ✅ **`capacitor.config.ts`**: جاهز (appId `sa.door.ghayth`، webDir `dist/public`).
 - ⏳ **بناء التطبيق الأصلي**: الخطوات أدناه — تُنفَّذ على Replit/ماك/أندرويد ستوديو.
 
 ---
@@ -119,7 +119,7 @@ pnpm add @capacitor/core @capacitor/cli @capacitor/android @capacitor/ios \
          @capacitor-community/background-geolocation
 
 # 2) بناء الويب ثم توليد المشاريع الأصلية
-pnpm build                       # ينتج dist/ (webDir في capacitor.config.ts)
+BASE_PATH=/ pnpm build           # ينتج dist/public/ (webDir = dist/public)
 npx cap add android
 npx cap add ios                  # iOS يتطلب ماك + Xcode
 npx cap sync
