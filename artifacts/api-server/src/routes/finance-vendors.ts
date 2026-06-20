@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { rawQuery, assertInsert, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -106,9 +106,14 @@ vendorsRouter.get("/vendors", authorize({ feature: "finance.vendors", action: "l
   try {
     const scope = req.scope!;
     const filters = parseScopeFilters(req);
-    const { where, params } = buildScopedWhere(scope, filters, { softDeleteColumn: '"deletedAt"' });
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض المحذوف ناعمًا فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
+    const { where, params } = showDeleted
+      ? buildScopedWhere(scope, filters)
+      : buildScopedWhere(scope, filters, { softDeleteColumn: '"deletedAt"' });
+    const finalWhere = showDeleted ? `${where} AND "deletedAt" IS NOT NULL` : where;
     const rows = await rawQuery<VendorRow>(
-      `SELECT * FROM suppliers WHERE ${where} ORDER BY name LIMIT 500`,
+      `SELECT * FROM suppliers WHERE ${finalWhere} ORDER BY name LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -201,6 +206,25 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
     res.status(201).json(row || { id: insertId, name, contactPerson, phone, email, taxNumber, category });
   } catch (err) {
     handleRouteError(err, res, "Create vendor error:");
+  }
+});
+
+// #2713 (تعميم) — استرجاع مورد محذوف ناعمًا (سلة المحذوفات). صلاحية تعديل + Audit.
+vendorsRouter.post("/vendors/:id/restore", authorize({ feature: "finance.vendors", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const vendorId = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `UPDATE suppliers SET "deletedAt" = NULL WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NOT NULL`,
+      [vendorId, scope.companyId]
+    );
+    if (!affectedRows) throw new NotFoundError("لا يوجد مورد محذوف بهذا المعرّف");
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "vendor.restored", entity: "suppliers", entityId: vendorId, details: JSON.stringify({ restored: true }) }).catch((err) => pushToDLQ("event", { action: "vendor.restored", entityId: vendorId }, err, scope.companyId));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "restore", entity: "suppliers", entityId: vendorId }).catch((err) => logger.error(err, "[audit] vendor.restored:"));
+    const [row] = await rawQuery<VendorRow>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2`, [vendorId, scope.companyId]);
+    res.json(row ?? { id: vendorId, restored: true });
+  } catch (err) {
+    handleRouteError(err, res, "Restore vendor error:");
   }
 });
 
