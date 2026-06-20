@@ -166,11 +166,12 @@ export const allNavSections: NavSection[] = [
         // RBAC-REV-STD (#2761) — لوحتا HR الإداريتان بلا subKey، فلا يحرسهما
         // canAccessSubPage. minRoleLevel:25 يُخفيهما عن الموظف الاستاندر (10)
         // والسائق (15) — اللذين تظهر وحدتهما «hr» عبر منحة ذاتية فقط — مع
-        // إبقائهما للأدوار الوظيفية في HR. (module على المدخل الأب «إدارة الموارد البشرية».)
-        { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, minRoleLevel: 25 },
+        // إبقائهما للأدوار الوظيفية في HR. يبقى module:"hr" صريحًا على لوحتَي القياس
+        // (لا على الأب فقط): يطابق نمط «إدارة الأسطول» ويحرسه platformWave2Pr1…Decoupling.
+        { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr", minRoleLevel: 25 },
         // بوابة /hr — لوحة تشغيلية خاصة بفريق الموارد البشرية (مؤشرات وروابط
         // سريعة لا تظهر في اللوحة العامة). كانت مركّبة بلا مدخل (orphan).
-        { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, minRoleLevel: 25 },
+        { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr", minRoleLevel: 25 },
 
         // 2. الموظفون — gathers recruitment, employees, onboarding,
         // org structure, transfers, documents, contracts, letters, exit
