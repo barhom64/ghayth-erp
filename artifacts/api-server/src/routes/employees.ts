@@ -2607,6 +2607,38 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       details: JSON.stringify({ changedFields }),
     }).catch((e) => logger.error(e, "employees background task failed"));
 
+    // ── رسالة بداية العمل عند التفعيل ──
+    // المُعيَّن عبر «التفعيل السريع» يُنشأ بحالة inactive بلا رسالة ترحيب
+    // (لأنه لم يباشر بعد). رسالة الترحيب في الإنشاء الكامل (Step 9) لا تصله
+    // لأنه لم يمر بذلك المسار. فعند لحظة التفعيل الفعلية (inactive/pending/
+    // onboarding → active) — وهي لحظة مباشرة العمل — نرسل رسالة بداية العمل
+    // مرة واحدة. الموظف المُنشأ كاملًا يُنشأ active مباشرة فلا يمر هنا، فلا
+    // ازدواج في الإرسال.
+    const wasActivated =
+      status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status);
+    if (wasActivated && after && employee.assignmentId != null) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: Number(employee.assignmentId),
+        type: "welcome", title: "مرحباً بك — مباشرة العمل",
+        body: `أهلاً ${after.name}، تم تفعيل حسابك ومباشرتك العمل برقم وظيفي ${after.empNumber}. يسعدنا انضمامك إلى الفريق.`,
+        priority: "normal", refType: "employee", refId: id,
+      }).catch((e) => logger.error(e, "employees background task failed"));
+      if (after.email) {
+        void sendMessage({
+          channel: "email",
+          recipient: after.email,
+          recipientName: after.name,
+          subject: `مرحباً بك في فريق العمل - ${after.empNumber}`,
+          body: `أهلاً ${after.name}،\n\nتم تفعيل حسابك ومباشرتك العمل.\nرقمك الوظيفي: ${after.empNumber}\nالمسمى الوظيفي: ${after.jobTitle ?? ""}\n\nيسعدنا انضمامك إلى الفريق.`,
+          companyId: scope.companyId,
+          userId: scope.userId,
+          relatedType: "employee",
+          relatedId: id,
+          templateKey: "employee.welcome",
+        }).catch((e) => logger.error(e, "employees background task failed"));
+      }
+    }
+
     res.json(after);
   } catch (err) {
     handleRouteError(err, res, "Update employee error:");
