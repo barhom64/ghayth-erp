@@ -21,10 +21,13 @@ const SHARED = join(REPO_ROOT, "artifacts/ghayth-erp/src/components/shared");
 // النواة نفسها لا تُحاسَب (هي البيت الموحّد).
 export const CORE_FILE = "searchable-select.tsx";
 
-// الأساس المجمّد: مكوّنات منفصلة قائمة قبل اعتماد الحارس. لا يُضاف إليها —
-// تُحذف فقط عند توحيدها على النواة. (map/location-kind قد تبقى لطبيعتها المختلفة.)
+// الأساس المجمّد: مكوّنات لا تُعيد استخدام النواة. المتبقّية **متمايزة عمدًا**
+// لا مرشّحة للتوحيد (تبقى):
+//   • umrah-group-picker  = مُحدِّد سياقي واسع (Dialog ببطاقات) — المادة 15.7 (سياق لا اسم).
+//   • location-kind-picker = قائمة نوع مغلقة (enum) لا بحث كيان.
+//   • map-location-picker  = منتقي خريطة، طبيعة مختلفة كليًا.
+// (supplier-item-picker وُحِّد في B1، journal-template-picker في B2.)
 export const BASELINE = new Set([
-  "journal-template-picker.tsx",
   "location-kind-picker.tsx",
   "map-location-picker.tsx",
   "umrah-group-picker.tsx",
