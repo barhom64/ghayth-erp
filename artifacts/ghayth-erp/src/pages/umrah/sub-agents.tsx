@@ -358,15 +358,13 @@ export default function UmrahSubAgents() {
                 <Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
               </div>
               <div><Label>الوكيل الرئيسي *</Label>
-                <Select
+                <SearchableSelect
                   value={editing.agentId ? String(editing.agentId) : ""}
                   onValueChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                  options={agents.map((a) => ({ value: String(a.id), label: a.name }))}
+                  placeholder="اختر الوكيل"
+                  searchPlaceholder="ابحث عن وكيل..."
+                />
               </div>
               <div><Label>شروط الدفع</Label>
                 <Select
