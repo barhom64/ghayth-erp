@@ -21,6 +21,7 @@ import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { SearchableSelect } from "@/components/shared/searchable-select";
+import { UmrahAgentSelect } from "@/components/shared/entity-selects";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 import { Plus, Link2, Users, Pencil } from "lucide-react";
 
@@ -357,13 +358,11 @@ export default function UmrahSubAgents() {
               <div><Label>الاسم *</Label>
                 <Input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
               </div>
-              <div><Label>الوكيل الرئيسي *</Label>
-                <SearchableSelect
+              <div>
+                <UmrahAgentSelect
+                  label="الوكيل الرئيسي *"
                   value={editing.agentId ? String(editing.agentId) : ""}
-                  onValueChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
-                  options={agents.map((a) => ({ value: String(a.id), label: a.name }))}
-                  placeholder="اختر الوكيل"
-                  searchPlaceholder="ابحث عن وكيل..."
+                  onChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
                 />
               </div>
               <div><Label>شروط الدفع</Label>
