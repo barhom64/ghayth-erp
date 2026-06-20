@@ -52,7 +52,7 @@ describe("hr/salary-components — create form on FormShell + zod", () => {
   });
 });
 
-describe("admin-integrations — create form on FormShell + zod with refine() JSON validation", () => {
+describe("admin-integrations — create form on FormShell + zod with superRefine per-type validation", () => {
   const SRC = read("admin-integrations.tsx");
 
   it("imports the FormShell stack", () => {
@@ -64,12 +64,15 @@ describe("admin-integrations — create form on FormShell + zod with refine() JS
     expect(SRC).toContain("FormSelectField");
   });
 
-  it("validates JSON config inline via z.string().refine() — not after submit", () => {
+  it("validates config at schema time via superRefine — JSON for non-github, token for github", () => {
     // The old flow: try { JSON.parse(form.config) } catch { toast(...); return; }
-    // The new flow surfaces the error next to the field, before submit.
+    // Now validation runs at schema time per type: non-github → valid JSON,
+    // github → token present (it uses the simple token field, not raw JSON).
     expect(SRC).toContain("z.string()");
-    expect(SRC).toMatch(/\.refine\(\(s\) => \{[\s\S]+JSON\.parse\(s\)/);
+    expect(SRC).toContain("superRefine");
+    expect(SRC).toMatch(/JSON\.parse\(val\.config/);
     expect(SRC).toContain("صيغة JSON غير صالحة");
+    expect(SRC).toContain("التوكن مطلوب");
   });
 
   it("removes the old try/catch on form.config inside handleCreate", () => {
@@ -95,8 +98,19 @@ describe("admin-integrations — create form on FormShell + zod with refine() JS
     expect(SRC).not.toContain('from "@/components/ui/textarea"');
   });
 
-  it("submit handler safe-parses JSON because the schema already validated it", () => {
-    expect(SRC).toContain("// Schema already guaranteed config is valid JSON");
-    expect(SRC).toMatch(/const parsedConfig = JSON\.parse\(values\.config\);/);
+  it("submit builds config by type — JSON.parse for non-github, {token,repo} for github", () => {
+    // The schema already validated per type, so the handler parses the JSON
+    // config for non-github and assembles {token, repo} for github.
+    expect(SRC).toMatch(/JSON\.parse\(values\.config/);
+    expect(SRC).toContain("token:");
+    expect(SRC).toContain("repo:");
+  });
+
+  it("github type shows a single masked token field + prefilled repo (no raw JSON)", () => {
+    // §5/3 — a non-technical operator pastes only the token; repo is prefilled.
+    expect(SRC).toContain("useWatch");
+    expect(SRC).toContain("githubToken");
+    expect(SRC).toContain("رمز الوصول");
+    expect(SRC).toMatch(/type="password"/);
   });
 });
