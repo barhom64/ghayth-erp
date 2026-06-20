@@ -31,7 +31,7 @@ export default function BIPage() {
           <TabsTrigger value="leave-balance" className="text-xs">رصيد الإجازات</TabsTrigger>
           <TabsTrigger value="property" className="text-xs">الإشغال العقاري</TabsTrigger>
           <TabsTrigger value="training" className="text-xs">عائد التدريب</TabsTrigger>
-          <TabsTrigger value="ai-insights" className="text-xs">رؤى AI</TabsTrigger>
+          <TabsTrigger value="ai-insights" className="text-xs">رؤى ذكية</TabsTrigger>
           <TabsTrigger value="alert-fatigue" className="text-xs">إدارة التنبيهات</TabsTrigger>
         </TabsList>
         <div className="mt-4">

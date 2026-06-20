@@ -5,8 +5,8 @@ import { assertDimensionContract } from "../../src/lib/financePostingPolicy.js";
  * FIN-INTEGRITY-CONTRACT (#2233) — dimension contract enforcement test.
  *
  * Asserts the journal_lines dimension invariant at the posting door:
- *  • vehicle fuel (5510 + subsidiary) is HARD-enforced (rejects when vehicleId null).
- *  • other dimensioned classes are WARN (recorded, not rejected) — staged ratchet.
+ *  • the WHOLE vehicle class (55xx + 5710) is HARD-enforced (rejects when vehicleId null) — B1.
+ *  • property / project / vendor / client classes are WARN (recorded, not rejected) — staged ratchet.
  *  • non-dimensioned accounts pass untouched.
  * Pure function, no DB.
  */
@@ -38,26 +38,45 @@ describe("#2233 assertDimensionContract — staged dimension enforcement", () =>
     expect(r.warnings).toHaveLength(0);
   });
 
-  it("WARN (not reject): vendor AP line (2111) without vendorId records a warning, does not throw", () => {
-    const r = assertDimensionContract({ lines: [{ accountCode: "2111", vendorId: null }] });
-    expect(r.warnings.length).toBe(1);
-    expect(r.warnings[0]).toContain("مورد");
+  it("ENFORCE (all): vendor AP line (2111) without vendorId is now rejected", () => {
+    expect(() =>
+      assertDimensionContract({ lines: [{ accountCode: "2111", vendorId: null }] }),
+    ).toThrow(/التوجيه المحاسبي غير مكتمل|مورد/);
   });
 
-  it("WARN: vehicle maintenance (5520) without vehicleId warns (only fuel is enforced first)", () => {
-    const r = assertDimensionContract({ lines: [{ accountCode: "5520", vehicleId: null }] });
-    expect(r.warnings.length).toBe(1);
+  it("ENFORCE (B1): vehicle maintenance (5520) without vehicleId is now rejected", () => {
+    expect(() =>
+      assertDimensionContract({ lines: [{ accountCode: "5520", vehicleId: null }] }),
+    ).toThrow(/التوجيه المحاسبي غير مكتمل|مركبة/);
   });
 
-  it("WARN: property (5610) / project (5130) / client (1131) missing dims warn, never throw", () => {
+  it("ENFORCE (B1): vehicle depreciation (5710) without vehicleId is now rejected", () => {
+    expect(() =>
+      assertDimensionContract({ lines: [{ accountCode: "5710", vehicleId: null }] }),
+    ).toThrow();
+  });
+
+  it("PASS (B1): vehicle maintenance (5520) WITH vehicleId posts cleanly", () => {
+    const r = assertDimensionContract({ lines: [{ accountCode: "5520", vehicleId: 7 }] });
+    expect(r.warnings).toHaveLength(0);
+  });
+
+  it("ENFORCE (all): property (5610) / project (5130) / client (1131) missing dims now throw", () => {
+    expect(() => assertDimensionContract({ lines: [{ accountCode: "5610", propertyId: null }] })).toThrow(/عقار/);
+    expect(() => assertDimensionContract({ lines: [{ accountCode: "5130", projectId: null }] })).toThrow(/مشروع/);
+    expect(() => assertDimensionContract({ lines: [{ accountCode: "1131", clientId: null }] })).toThrow(/عميل/);
+  });
+
+  it("PASS (all): every dimensioned class WITH its dimension posts cleanly", () => {
     const r = assertDimensionContract({
       lines: [
-        { accountCode: "5610", propertyId: null },
-        { accountCode: "5130", projectId: null },
-        { accountCode: "1131", clientId: null },
+        { accountCode: "5610", propertyId: 3 },
+        { accountCode: "5130", projectId: 9 },
+        { accountCode: "2111", vendorId: 5 },
+        { accountCode: "1131", clientId: 8 },
       ],
     });
-    expect(r.warnings.length).toBe(3);
+    expect(r.warnings).toHaveLength(0);
   });
 
   it("PASS: non-dimensioned accounts (cash/VAT/equity) are ignored", () => {
@@ -67,11 +86,11 @@ describe("#2233 assertDimensionContract — staged dimension enforcement", () =>
     expect(r.warnings).toHaveLength(0);
   });
 
-  it("mixed batch: throws on the enforced fuel violation even if other lines only warn", () => {
+  it("mixed batch: throws when any dimensioned line is missing its dimension", () => {
     expect(() =>
       assertDimensionContract({
         lines: [
-          { accountCode: "2111", vendorId: null }, // warn
+          { accountCode: "1111" }, // non-dimensioned, fine
           { accountCode: "5510", vehicleId: null }, // enforce → throw
         ],
       }),

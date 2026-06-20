@@ -29,7 +29,6 @@ import { useAppContext } from "@/contexts/app-context";
 import { GovIntegrationsTab } from "./settings/gov-integrations-tab";
 import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";
 import { CommunicationChannelsTab } from "./settings/communication-channels-tab";
-import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { BranchesTab } from "./settings/branches-tab";
 import { DepartmentsTab } from "./settings/departments-tab";
 import { CompaniesTab } from "./settings/companies-tab";
@@ -37,6 +36,7 @@ import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
 import { SystemControlsTab } from "./settings/system-controls-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
+import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { NumberingTab } from "./settings/numbering-tab";
 
 // GeneralSettings — 11-field edit form. The server stores values as
@@ -310,14 +310,23 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
 
 
 
-// Multiple routes (/settings/branches, /settings/departments, ...) share this
-// component. Without this seed, every routed URL would land on the "general"
-// tab — same broken-tab pattern fixed on bi / governance / legal.
+// Every tab gets a deep-path so it's directly reachable (URL + nav + search),
+// not only by a manual click inside /settings. The component reads `location`
+// and opens the matching tab.
 const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/branches": "branches",
+  "/settings/letterhead": "letterhead",
   "/settings/departments": "departments",
   "/settings/companies": "companies",
+  "/settings/channels": "channels",
+  "/settings/controls": "controls",
+  "/settings/approvals": "approvals",
+  "/settings/numbering": "numbering",
+  "/settings/accounting": "accounting",
   "/settings/audit-log": "audit",
+  "/settings/resolved": "resolved",
+  "/settings/zatca": "zatca",
+  "/settings/gov": "gov",
 };
 
 export default function SettingsPage() {
@@ -332,36 +341,40 @@ export default function SettingsPage() {
       <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="general">عام</TabsTrigger>
-          <TabsTrigger value="branches">الفروع</TabsTrigger>
-          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
-          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          {/* الهوية والتنظيم */}
           <TabsTrigger value="companies">الشركات</TabsTrigger>
-          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="branches">الفروع</TabsTrigger>
+          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
+          {/* الحوكمة والإجراءات */}
           <TabsTrigger value="controls">التحكم</TabsTrigger>
-          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
+          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="numbering">الترقيم</TabsTrigger>
+          {/* المالية والامتثال */}
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
-          <TabsTrigger value="audit">التدقيق</TabsTrigger>
-          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
           <TabsTrigger value="zatca">هيئة الزكاة والضريبة</TabsTrigger>
           <TabsTrigger value="gov">التكاملات الحكومية</TabsTrigger>
+          {/* النظام والمراقبة */}
+          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="audit">التدقيق</TabsTrigger>
+          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings /></TabsContent>
-        <TabsContent value="branches"><BranchesTab /></TabsContent>
-        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
-        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
-        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="branches"><BranchesTab /></TabsContent>
+        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
+        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
-        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
+        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="numbering"><NumberingTab /></TabsContent>
         <TabsContent value="accounting"><AccountingMappingsTab /></TabsContent>
-        <TabsContent value="audit"><AuditLogTab /></TabsContent>
-        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
         <TabsContent value="gov"><GovIntegrationsTab /></TabsContent>
+        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="audit"><AuditLogTab /></TabsContent>
+        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
       </Tabs>
     </PageShell>
   );

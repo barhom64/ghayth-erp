@@ -64,7 +64,7 @@ vi.mock("../../src/lib/rawdb.js", () => ({
 vi.mock("../../src/lib/kpiEngine.js", () => ({ saveAllCompaniesKPISnapshots: vi.fn() }));
 vi.mock("../../src/lib/smartAlerts.js", () => ({ runSmartAlertsAllCompanies: vi.fn() }));
 vi.mock("../../src/lib/selfAuditEngine.js", () => ({ runSelfAuditAllCompanies: vi.fn() }));
-vi.mock("../../src/lib/notificationEngine.js", () => ({
+vi.mock("../../src/lib/notificationDispatch.js", () => ({
   processFallbackChains: vi.fn(),
   dispatchNotification: vi.fn(),
   interpolateTemplate: (s: string) => s,

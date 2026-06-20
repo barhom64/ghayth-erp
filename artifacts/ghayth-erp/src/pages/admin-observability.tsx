@@ -21,7 +21,7 @@ import {
 } from "@workspace/ui-core";
 import { useState } from "react";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
-import { apiFetch, useApiQuery, API_BASE } from "@/lib/api";
+import { apiFetch, useApiQuery, API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -177,7 +177,7 @@ export default function AdminObservability() {
   const metricsQ = useQuery({
     queryKey: ["k8s-metrics-probe"],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/api/metrics`, { credentials: "include" });
+      const res = await fetch(`${API_BASE}/api/metrics`, { credentials: "include", headers: { ...nativeAuthHeaders() } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return { ok: true };
     },

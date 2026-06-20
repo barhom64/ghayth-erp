@@ -37,11 +37,11 @@ import { login } from "./_helpers/login";
 // Lifted from artifacts/ghayth-erp/src/components/shared/hr-tabs-nav.tsx
 // (HR-REV layout: the bar mirrors the sidebar's top-level groups 1:1).
 const HR_TABS = [
-  "لوحة HR",
+  "لوحة الموارد البشرية",
   "الموظفون",
   "النشاط والحضور",
   "الطلبات",
-  "الامتثال والجزاءات",
+  "المخالفات والجزاءات",
   "الأداء والتطوير",
   "الرواتب والمستحقات",
   "التقارير",
@@ -55,7 +55,7 @@ const PAGES = [
   { path: "/hr/attendance",   breadcrumb: "الحضور والانصراف",       activeTab: "النشاط والحضور" },
   { path: "/hr/leaves",       breadcrumb: "طلبات الإجازات",         activeTab: "الطلبات" },
   { path: "/hr/training",     breadcrumb: "برامج التدريب",          activeTab: "الأداء والتطوير" },
-  { path: "/hr/violations",   breadcrumb: "المخالفات والجزاءات",    activeTab: "الامتثال والجزاءات" },
+  { path: "/hr/violations",   breadcrumb: "المخالفات والجزاءات",    activeTab: "المخالفات والجزاءات" },
 ] as const;
 
 // iPhone 13 mini portrait — a common low-width RTL mobile target.

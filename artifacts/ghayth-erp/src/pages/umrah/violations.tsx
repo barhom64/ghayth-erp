@@ -280,7 +280,7 @@ export default function UmrahViolations() {
 
   return (
     <PageShell
-      title="المخالفات"
+      title="المخالفات النظامية"
       subtitle="رصد المخالفات: تأخر المغادرة، الهروب، وأخرى"
       breadcrumbs={[{ label: "العمرة" }, { label: "المخالفات" }]}
       actions={

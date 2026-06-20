@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../src/lib/notificationEngine.js", () => ({
+vi.mock("../../src/lib/notificationDispatch.js", () => ({
   dispatchNotification: vi.fn(async () => ({ deliveryIds: [] })),
 }));
 vi.mock("../../src/lib/recipientResolver.js", () => ({
@@ -19,7 +19,7 @@ vi.mock("../../src/lib/recipientResolver.js", () => ({
 }));
 
 import { notifyBusinessEvent } from "../../src/lib/notifyBusinessEvent.js";
-import { dispatchNotification } from "../../src/lib/notificationEngine.js";
+import { dispatchNotification } from "../../src/lib/notificationDispatch.js";
 import { resolveRecipient, shouldCcPersonalEmail } from "../../src/lib/recipientResolver.js";
 
 const dispatchSpy = vi.mocked(dispatchNotification);

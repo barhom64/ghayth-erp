@@ -103,7 +103,7 @@ describe("#2079 TA-T18-13 — FIX-12 — rental sub-app surfaces in FleetTabsNav
 
   it("the existing cargo tab is preserved (regression pin)", () => {
     expect(FLEET_TABS).toMatch(
-      /href:\s*"\/fleet\/cargo"[\s\S]{0,200}?label:\s*"نقل البضائع"/,
+      /href:\s*"\/fleet\/cargo"[\s\S]{0,200}?label:\s*"الشحن والبضائع"/,
     );
   });
 });

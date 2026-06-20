@@ -1,4 +1,8 @@
 /**
+ * employeeLifecycleEngine — سياسة دورة حياة الموظف الخاصة بـHR (المسار القائد يملك سياسته).
+ * **ليس** المِيكانيزم العام lifecycleEngine، و**ليس** journeyEngine (الرحلات التشغيلية) —
+ * مفهوم متمايز (قاموس المفاهيم §3). يبقى منفصلًا عمدًا: HR قائد يملك سياسة موظفه (المادة 5).
+ *
  * employeeLifecycleEngine — single source of truth for valid employee
  * lifecycle transitions (#2077 PR-8).
  *

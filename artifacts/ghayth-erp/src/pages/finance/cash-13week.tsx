@@ -197,7 +197,7 @@ export default function Cash13WeekPage() {
 
   return (
     <PageShell
-      title="تدفق نقدي 13 أسبوع (13-Week Cash Flow)"
+      title="تدفق نقدي 13 أسبوع"
       subtitle="الأداة المعيارية للبنوك لتقييم خط الائتمان — تنبؤ السيولة الأسبوعي مع نظرة 3 أشهر للأمام"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

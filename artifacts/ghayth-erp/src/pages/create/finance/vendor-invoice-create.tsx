@@ -199,7 +199,7 @@ export default function VendorInvoiceCreate() {
 
   const handleSubmit = async () => {
     if (!supplierId) { toast({ variant: "destructive", title: "اختر المورد" }); return; }
-    if (!branchId) { toast({ variant: "destructive", title: "الفرع مطلوب" }); return; }
+    // الفرع اختياري في الخلفية ويُعبّأ من سياق الدخول — لا يُفرض على المستخدم.
     const payloadLines = buildLinePayload();
     if (payloadLines.length === 0) { toast({ variant: "destructive", title: "أضف بندًا واحدًا على الأقل بغرض حساب ومبلغ" }); return; }
     if (paid && !sourceAccountCode) { toast({ variant: "destructive", title: "اختر مصدر الصرف للفاتورة المدفوعة" }); return; }

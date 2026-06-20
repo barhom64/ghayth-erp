@@ -159,6 +159,11 @@ export const miscRoutes: { path: string; component: any; module?: ModuleType; mi
   { path: "/insights", component: Insights, module: "bi" },
   { path: "/automation", component: Automation, module: "admin" },
   { path: "/activity-log", component: ActivityLog },
-  { path: "/module-dashboards", component: ModuleDashboards, module: "bi" },
+  // Multi-module shell: each tab (?tab=hr|fleet|warehouse|store|crm|support|…)
+  // fetches /module-dashboards/<module>, which is server-gated per module. The
+  // nav links are already gated per their own module, so gating the route by
+  // "bi" only mismatched them — an hr/fleet/… manager saw their dashboard link
+  // then hit 403. No route-level module gate; per-tab data perms protect it.
+  { path: "/module-dashboards", component: ModuleDashboards },
   { path: "/reports/scheduled", component: ScheduledReports, module: "bi", minRoleLevel: 50 },
 ];

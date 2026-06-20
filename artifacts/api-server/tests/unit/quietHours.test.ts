@@ -6,7 +6,7 @@
  * in_app + webhook.
  */
 import { describe, it, expect } from "vitest";
-import { isWithinQuietHours } from "../../src/lib/notificationEngine.js";
+import { isWithinQuietHours } from "../../src/lib/notificationDispatch.js";
 
 function at(hhmm: string): Date {
   // Build a Date at the given HH:MM on a fixed local day. Year/month

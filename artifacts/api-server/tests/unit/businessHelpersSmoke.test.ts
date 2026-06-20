@@ -6,7 +6,7 @@ const root = join(import.meta.dirname!, "../../../../artifacts/api-server/src/li
 const read = (f: string) => readFileSync(join(root, f), "utf8");
 
 const BH = read("businessHelpers.ts");
-const NE = read("notificationEngine.ts");
+const NE = read("notificationDispatch.ts");
 const NS = read("notificationService.ts");
 
 // ═════════════════════════���════════════════════════════════════════════════
@@ -149,7 +149,7 @@ describe("businessHelpers — security", () => {
 // NOTIFICATION ENGINE
 // ═══════════════��═════════════════════════════════════���════════════════════
 
-describe("notificationEngine — exports", () => {
+describe("notificationDispatch — exports", () => {
   it("exports EngineChannel type", () => {
     expect(NE).toContain("export type EngineChannel");
   });
@@ -175,7 +175,7 @@ describe("notificationEngine — exports", () => {
   });
 });
 
-describe("notificationEngine — channels", () => {
+describe("notificationDispatch — channels", () => {
   for (const ch of ["in_app", "email", "sms", "whatsapp", "push", "webhook"]) {
     it(`supports channel: ${ch}`, () => {
       expect(NE).toContain(`"${ch}"`);

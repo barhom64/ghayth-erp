@@ -119,7 +119,7 @@ export default function ApprovalOverridesReportPage() {
 
   return (
     <PageShell
-      title="سجل تجاوز الـ Workflow"
+      title="سجل تجاوزات الموافقات"
       subtitle="كل قرارات تجاوز سلسلة الاعتماد — متاح للمراجع الخارجي والمدير المالي"
       breadcrumbs={[
         { href: "/admin", label: "الإدارة" },

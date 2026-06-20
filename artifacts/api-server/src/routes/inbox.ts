@@ -11,7 +11,7 @@
  * Routes:
  *   POST /inbox/send                 — compose a new outbound message
  *                                      on any channel; passes through
- *                                      notificationEngine so DLP rules
+ *                                      notificationDispatch so DLP rules
  *                                      apply + provider failover works
  *   POST /inbox/threads/:id/reply    — reply in an existing thread
  *                                      (keyed by recipient address)
@@ -25,7 +25,7 @@
  *   1. Records the outbound row in communications_log (audit trail).
  *   2. Inserts into the channel's queue (email_queue / sms_queue /
  *      whatsapp_queue) so the existing workers pick it up.
- *   3. Applies DLP via the same scanner notificationEngine uses on its
+ *   3. Applies DLP via the same scanner notificationDispatch uses on its
  *      template-driven sends. Blocked messages are written to the log
  *      with status='blocked_dlp' so the operator UI surfaces them.
  */

@@ -100,8 +100,8 @@ export default function AdminPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 lg:grid-cols-8 h-auto">
           <TabsTrigger value="rbac-v2" className="text-xs sm:text-sm">الصلاحيات الطبقية</TabsTrigger>
-          <TabsTrigger value="rbac-users" className="text-xs sm:text-sm">إسناد v2</TabsTrigger>
-          <TabsTrigger value="rbac-sod" className="text-xs sm:text-sm">قواعد SoD</TabsTrigger>
+          <TabsTrigger value="rbac-users" className="text-xs sm:text-sm">إسناد الأدوار</TabsTrigger>
+          <TabsTrigger value="rbac-sod" className="text-xs sm:text-sm">قواعد فصل المهام</TabsTrigger>
           <TabsTrigger value="rbac-jit" className="text-xs sm:text-sm">طلبات مؤقتة</TabsTrigger>
           <TabsTrigger value="users" className="text-xs sm:text-sm">المستخدمين</TabsTrigger>
           <TabsTrigger value="logs" className="text-xs sm:text-sm">السجلات</TabsTrigger>

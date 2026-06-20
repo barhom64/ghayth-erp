@@ -87,7 +87,7 @@ export default function ControlTowerPage() {
 
   return (
     <PageShell
-      title="برج المراقبة (Control Tower)"
+      title="برج المراقبة"
       subtitle="نظرة لحظية واحدة على حالة الأسطول كاملًا — مركبات، سائقون، رحلات، حجوزات، تنبيهات"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "برج المراقبة" }]}
     >

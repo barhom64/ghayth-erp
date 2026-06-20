@@ -106,7 +106,8 @@ const bulkRolePermissionsSchema = z.object({
 
 const createIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب"),
-  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
+  // "github" — توكن مزامنة تذاكر الدعم مع المستودع (lib/integrations/githubSupportSync).
+  type: z.enum(["email", "sms", "whatsapp", "webhook", "github"]),
   config: z.any().optional(),
   enabled: z.boolean().optional(),
   status: z.enum(["active", "inactive", "error"]).optional(),
@@ -123,7 +124,7 @@ const createCustomRoleSchema = z.object({
 
 const updateIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب").optional(),
-  type: z.enum(["email", "sms", "whatsapp", "webhook"]).optional(),
+  type: z.enum(["email", "sms", "whatsapp", "webhook", "github"]).optional(),
   config: z.any().optional(),
   status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
@@ -1357,6 +1358,11 @@ router.post("/governance/event-dlq/:id/replay", authorize({ feature: "admin", ac
       `UPDATE event_dlq SET "retryCount"="retryCount"+1, "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`,
       [id, scope.companyId]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "admin.event_dlq.replayed", entity: "event_dlq", entityId: id,
+      after: { eventName: entry.eventName },
+    }).catch(() => undefined);
     res.json({ replayed: true, eventName: entry.eventName });
   } catch (err) { handleRouteError(err, res, "DLQ replay error:"); }
 });
@@ -1367,6 +1373,10 @@ router.delete("/governance/event-dlq/:id", authorize({ feature: "admin", action:
     const id = parseId(req.params.id, "id");
     const { affectedRows } = await rawExecute(`UPDATE event_dlq SET "resolvedAt"=NOW() WHERE id=$1 AND ("companyId"=$2 OR "companyId" IS NULL)`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("السجل غير موجود");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "admin.event_dlq.resolved", entity: "event_dlq", entityId: id,
+    }).catch(() => undefined);
     res.json({ resolved: true });
   } catch (err) { handleRouteError(err, res, "DLQ resolve error:"); }
 });

@@ -103,7 +103,7 @@ export default function PurchaseOrdersCreate() {
     const validItems = items.filter((i) => Number(i.unitPrice) > 0 && i.productId);
     const firstError = validate({
       supplierId: form.supplierId ? null : "المورد مطلوب",
-      branchId: form.branchId ? null : "الفرع مطلوب",
+      // الفرع اختياري في الخلفية ويُعبّأ من سياق الدخول — لا يُفرض.
       items: validItems.length === 0 ? "يرجى إضافة بند واحد على الأقل" : null,
     });
     if (firstError) {
