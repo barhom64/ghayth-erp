@@ -2,7 +2,7 @@ import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, Confl
 import { Router, type Response as ExpressResponse } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
-import { signToken, signRefreshToken, verifyPassword, hashPassword } from "../lib/auth.js";
+import { signToken, signRefreshToken, verifyPassword, hashPassword, signPending2faToken, verifyPending2faToken } from "../lib/auth.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { setCsrfCookie } from "../middlewares/csrfMiddleware.js";
 import { canonicalizeModules } from "../lib/rbac/roleModulesCatalog.js";
@@ -19,6 +19,7 @@ import {
   authenticateUserByPassword,
   createUserSession,
   rotateUserSession,
+  loadUserSessionContext,
 } from "../lib/authSession.js";
 import { encryptField, decryptField } from "../lib/fieldEncryption.js";
 import {
@@ -401,6 +402,17 @@ router.post("/login", loginLimiter, async (req, res) => {
     const auth = await authenticateUserByPassword(email, password);
     const { primary, assignments, userRoles } = auth;
 
+    // #2712 (1ب) — إن كانت 2FA مفعّلة: لا تُصدر جلسة؛ أعد رمزًا مؤقّتًا فقط
+    // (لا يصلح كرمز وصول)، يكملها العميل عبر /auth/2fa/verify-login.
+    const [twofaRow] = await rawQuery<{ twoFactorEnabled: boolean }>(
+      `SELECT "twoFactorEnabled" FROM users WHERE id=$1`, [auth.userId]);
+    if (twofaRow?.twoFactorEnabled) {
+      const pendingToken = signPending2faToken({ userId: auth.userId, employeeId: auth.employeeId, assignmentId: primary.id, role: primary.role });
+      emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: auth.userId, action: "auth.login.2fa_required", entity: "users", entityId: auth.userId, ip: (req.ip ?? null) || "unknown", details: JSON.stringify({ email }) }).catch((e) => logger.error(e, "auth background task failed"));
+      res.json({ twoFactorRequired: true, pendingToken });
+      return;
+    }
+
     const ipAddress = req.ip ?? null;
     const session = await createUserSession({
       userId: auth.userId,
@@ -474,6 +486,17 @@ router.post("/mobile/login", loginLimiter, async (req, res) => {
 
     const auth = await authenticateUserByPassword(email, password);
     const { primary, assignments, userRoles } = auth;
+
+    // #2712 (1ب) — 2FA مفعّلة: أعد رمزًا مؤقّتًا في الجسم (لا يصلح كرمز وصول)؛
+    // يكملها العميل عبر /auth/mobile/2fa/verify-login.
+    const [twofaRow] = await rawQuery<{ twoFactorEnabled: boolean }>(
+      `SELECT "twoFactorEnabled" FROM users WHERE id=$1`, [auth.userId]);
+    if (twofaRow?.twoFactorEnabled) {
+      const pendingToken = signPending2faToken({ userId: auth.userId, employeeId: auth.employeeId, assignmentId: primary.id, role: primary.role });
+      emitEvent({ companyId: primary.companyId, branchId: primary.branchId ?? undefined, userId: auth.userId, action: "auth.login.2fa_required", entity: "users", entityId: auth.userId, ip: (req.ip ?? null) || "unknown", details: JSON.stringify({ email, channel: "mobile" }) }).catch((e) => logger.error(e, "auth background task failed"));
+      res.json({ twoFactorRequired: true, pendingToken });
+      return;
+    }
 
     const ipAddress = req.ip ?? null;
     const session = await createUserSession({
@@ -896,6 +919,99 @@ router.get("/2fa/status", authMiddleware, authedUserLimiter, async (req, res) =>
     });
   } catch (err) {
     handleRouteError(err, res, "2FA status error:");
+  }
+});
+
+// ─── #2712 (1ب) — إنفاذ 2FA عند تسجيل الدخول ────────────────────────────────
+// بعد نجاح كلمة المرور، إن كانت 2FA مفعّلة يعيد /login رمزًا مؤقّتًا (لا جلسة)؛
+// يُكمل العميل هنا برمز TOTP أو رمز احتياطي فتُصدر الجلسة الحقيقية.
+const verifyLogin2faSchema = z.object({
+  pendingToken: z.string().min(1, "انتهت الجلسة المؤقتة، أعد تسجيل الدخول"),
+  token: z.string().optional(),
+  backupCode: z.string().optional(),
+}).refine((v) => !!v.token || !!v.backupCode, { message: "أدخل رمز التحقق أو رمزًا احتياطيًا" });
+
+interface User2faVerifyRow {
+  twoFactorEnabled: boolean;
+  twoFactorSecret: string | null;
+  twoFactorBackupCodes: Array<{ hash: string; usedAt: string | null }> | null;
+}
+
+// يتحقق من العامل الثاني: رمز TOTP أو رمز احتياطي (يُستهلك مرة واحدة). true عند النجاح.
+async function passSecondFactor(userId: number, token?: string, backupCode?: string): Promise<boolean> {
+  const [u] = await rawQuery<User2faVerifyRow>(
+    `SELECT "twoFactorEnabled", "twoFactorSecret", "twoFactorBackupCodes" FROM users WHERE id=$1`, [userId]);
+  if (!u || !u.twoFactorEnabled || !u.twoFactorSecret) return false;
+  if (token && verifyTOTP(decryptField(u.twoFactorSecret), token)) return true;
+  if (backupCode) {
+    const wanted = hashBackupCode(backupCode);
+    const codes = Array.isArray(u.twoFactorBackupCodes) ? u.twoFactorBackupCodes : [];
+    const idx = codes.findIndex((c) => c && !c.usedAt && c.hash === wanted);
+    if (idx >= 0) {
+      codes[idx]!.usedAt = new Date().toISOString();
+      await rawExecute(`UPDATE users SET "twoFactorBackupCodes"=$1 WHERE id=$2`, [JSON.stringify(codes), userId]);
+      return true;
+    }
+  }
+  return false;
+}
+
+// POST /2fa/verify-login (ويب) — يكمل الدخول بكوكيز الجلسة.
+router.post("/2fa/verify-login", loginLimiter, async (req, res) => {
+  try {
+    const { pendingToken, token, backupCode } = zodParse(verifyLogin2faSchema.safeParse(req.body ?? {}));
+    const pending = (() => {
+      try { return verifyPending2faToken(pendingToken); }
+      catch { throw new ForbiddenError("انتهت الجلسة المؤقتة، أعد تسجيل الدخول"); }
+    })();
+    if (!(await passSecondFactor(pending.userId, token, backupCode))) {
+      throw new ForbiddenError("رمز التحقق غير صحيح");
+    }
+    const ctx = await loadUserSessionContext(pending.userId, pending.employeeId);
+    const ipAddress = req.ip ?? null;
+    const session = await createUserSession({
+      userId: pending.userId, assignmentId: pending.assignmentId, role: pending.role,
+      userAgent: req.headers["user-agent"] ?? null, ipAddress,
+    });
+    setAccessTokenCookie(res, session.accessToken);
+    setRefreshTokenCookie(res, session.refreshToken);
+    setCsrfCookie(res);
+    emitEvent({ companyId: ctx.primary.companyId, branchId: ctx.primary.branchId ?? undefined, userId: pending.userId, action: "auth.login.2fa_success", entity: "users", entityId: pending.userId, ip: ipAddress || "unknown" }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ assignments: ctx.assignments, userRoles: ctx.userRoles });
+  } catch (err) {
+    handleRouteError(err, res, "2FA verify-login error:");
+  }
+});
+
+// POST /mobile/2fa/verify-login — نفس المنطق، التوكنات في الجسم.
+router.post("/mobile/2fa/verify-login", loginLimiter, async (req, res) => {
+  try {
+    const { pendingToken, token, backupCode } = zodParse(verifyLogin2faSchema.safeParse(req.body ?? {}));
+    const pending = (() => {
+      try { return verifyPending2faToken(pendingToken); }
+      catch { throw new ForbiddenError("انتهت الجلسة المؤقتة، أعد تسجيل الدخول"); }
+    })();
+    if (!(await passSecondFactor(pending.userId, token, backupCode))) {
+      throw new ForbiddenError("رمز التحقق غير صحيح");
+    }
+    const ctx = await loadUserSessionContext(pending.userId, pending.employeeId);
+    const ipAddress = req.ip ?? null;
+    const session = await createUserSession({
+      userId: pending.userId, assignmentId: pending.assignmentId, role: pending.role,
+      userAgent: req.headers["user-agent"] ?? null, ipAddress,
+    });
+    emitEvent({ companyId: ctx.primary.companyId, branchId: ctx.primary.branchId ?? undefined, userId: pending.userId, action: "auth.login.2fa_success", entity: "users", entityId: pending.userId, ip: ipAddress || "unknown", details: JSON.stringify({ channel: "mobile" }) }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({
+      tokenType: session.tokenType,
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      accessTokenExpiresIn: session.accessTokenExpiresIn,
+      refreshTokenExpiresIn: session.refreshTokenExpiresIn,
+      assignments: ctx.assignments,
+      userRoles: ctx.userRoles,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "Mobile 2FA verify-login error:");
   }
 });
 

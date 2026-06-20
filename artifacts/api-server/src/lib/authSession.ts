@@ -206,6 +206,17 @@ export async function authenticateUserByPassword(
     logger.error({ err: resetErr, userId: user.id }, "Failed to reset login state after successful auth");
   }
 
+  return loadUserSessionContext(user.id, user.employeeId);
+}
+
+/**
+ * Load a user's active assignments + RBAC roles by id — WITHOUT a password
+ * check. Shared by the password login (after credentials pass) and the 2FA
+ * verify-login step (after the TOTP / backup code passes) so both mint the
+ * exact same session context (single source of truth). Throws
+ * ForbiddenError when the user has no active assignment.
+ */
+export async function loadUserSessionContext(userId: number, employeeId: number): Promise<AuthenticatedUser> {
   const assignments = await rawQuery<AssignmentLoginRow>(
     `SELECT ea.id, ea."companyId", ea."branchId", ea.role, ea.status,
             ea."jobTitleId", COALESCE(jt.name, ea."jobTitle") AS "jobTitle",
@@ -215,7 +226,7 @@ export async function authenticateUserByPassword(
      LEFT JOIN branches b ON b.id = ea."branchId" AND b."companyId" = ea."companyId"
      LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
      WHERE ea."employeeId" = $1 AND ea.status = 'active'`,
-    [user.employeeId],
+    [employeeId],
   );
 
   if (!assignments.length) {
@@ -245,7 +256,7 @@ export async function authenticateUserByPassword(
        AND r.is_active = TRUE AND r.is_template = FALSE
        AND (ur.expires_at IS NULL OR ur.expires_at > NOW())
      ORDER BY is_primary DESC, level DESC`,
-    [user.id, primary.companyId],
+    [userId, primary.companyId],
   );
 
   // PR-2 / #2163 — canonicalise the projection. split_part above emits
@@ -262,8 +273,8 @@ export async function authenticateUserByPassword(
   }));
 
   return {
-    userId: user.id,
-    employeeId: user.employeeId,
+    userId,
+    employeeId,
     assignments,
     userRoles,
     primary,

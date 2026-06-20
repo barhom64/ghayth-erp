@@ -84,12 +84,15 @@ describe("GET /2fa/status", () => {
   });
 });
 
-describe("login flow is untouched in batch 1a (zero lockout risk)", () => {
-  it("the /login handler still issues a session immediately after password auth", () => {
+describe("login flow enforces 2FA when enabled (batch 1b)", () => {
+  it("/login branches on twoFactorEnabled → returns a pending token, NOT a session", () => {
     const login = handler("post", "/login");
     expect(login).toMatch(/authenticateUserByPassword\(email, password\)/);
-    expect(login).toMatch(/createUserSession\(/);
-    // No 2FA gate wired into login yet — that is batch 1b.
-    expect(login).not.toMatch(/twoFactor|verifyTOTP/);
+    expect(login).toMatch(/SELECT "twoFactorEnabled" FROM users/);
+    expect(login).toMatch(/signPending2faToken\(/);
+    expect(login).toMatch(/res\.json\(\{ twoFactorRequired: true, pendingToken \}\)/);
+  });
+  it("non-2FA users still get a full session immediately (unchanged path)", () => {
+    expect(handler("post", "/login")).toMatch(/createUserSession\(/);
   });
 });
