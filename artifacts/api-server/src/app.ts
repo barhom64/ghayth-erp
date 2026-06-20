@@ -96,7 +96,11 @@ const replitDevHostPattern: RegExp | null = (() => {
   const prefix = dev.split(".")[0];
   if (!prefix) return null;
   const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^https://${escaped}\\.(?:[a-z0-9-]+\\.)?(?:repl\\.co|replit\\.dev)$`);
+  // Allow ZERO-OR-MORE intermediate subdomain segments (`*`, not `?`): the
+  // Expo web preview serves on `<slug>.expo.<base>.replit.dev` — an extra
+  // `expo.` segment vs the plain `<slug>.<base>.replit.dev` web preview — so a
+  // single optional segment would CORS-block the mobile app's API XHRs.
+  return new RegExp(`^https://${escaped}\\.(?:[a-z0-9-]+\\.)*(?:repl\\.co|replit\\.dev)$`);
 })();
 
 app.use(cors({
