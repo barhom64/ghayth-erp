@@ -521,37 +521,38 @@ class HREngineImpl implements DomainEngine {
       deductionLines.push({ accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions });
     }
 
-    // ── الدفعة 2 — استمام مركز التكلفة على سطور الرواتب (يمسّ الدفتر: بُعد فقط) ──
-    // لكل موظف، نشتق مركز تكلفته من تخصيص فرعه الرئيسي
-    // (employee_branch_allocations): تجاوز صريح costCenterId إن وُجد، وإلا
-    // مركز التكلفة التلقائي للفرع (BR-XXXX) عبر seam المالية deriveBranchCostCenter.
-    // هذا بُعد محاسبي يُستمّ على السطور فقط — لا يغيّر أي مبلغ مدين/دائن ولا
-    // توازن القيد. موظف بلا تخصيص (أو breakdown غير موثوق) يبقى بلا مركز تكلفة
-    // كما هو سلوك اليوم — توافق خلفي تام. (الدفعة 2ب لاحقًا: التوزيع متعدد الفروع).
+    // ── الدفعة 2/2ب — اشتقاق مركز التكلفة + التوزيع على الفروع (يمسّ الدفتر) ──
+    // لكل موظف، نشتق وجهة (وجهات) تحميل راتبه من تخصيصات فروعه
+    // (employee_branch_allocations):
+    //   • موظف أحادي الفرع (0 أو 1 تخصيص): بُعد فقط — يُستمّ مركز التكلفة والفرع
+    //     على سطوره دون تغيير أي مبلغ. الفرع الموثوق من سطر breakdown (تعيين
+    //     الرواتب الحالي المُصفّى)، فيبقى صحيحًا بعد PATCH أو بلا تخصيص (التفعيل
+    //     السريع). التخصيص يقدّم تجاوزًا صريحًا لمركز التكلفة مُقيّدًا بمطابقة الفرع.
+    //   • موظف متعدد الفروع (>1 تخصيص بمجموع نِسَب = 100%): يُقسَّم كل سطر من سطوره
+    //     على الوجهات حسب النسبة، وبواقي التقريب على آخر حصة — فيبقى مجموع السطر
+    //     ثابتًا والقيد متوازنًا للقرش. مركز التكلفة لكل حصة: تجاوز التخصيص أو
+    //     المركز التلقائي للفرع. مجموع نِسَب ≠ 100% → نتراجع لمسار أحادي الفرع
+    //     (أمان: لا توزيع مُضلِّل). سطور الالتزام الجماعية (بلا employeeId) لا تتأثر.
+    let postedDebitLines = debitLines;
+    let postedDeductionLines = deductionLines;
     if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
-      // المصدر الموثوق لفرع كل موظف هو سطر breakdown (تعيين الرواتب الحالي،
-      // المُصفّى من منح الوصول في routes/hr.ts). يبقى صحيحًا حتى لو تغيّر الفرع
-      // عبر PATCH أو لم يُنشأ تخصيص بعد (موظف التفعيل السريع). جدول التخصيصات
-      // يقدّم فقط تجاوزًا صريحًا لمركز التكلفة، مُقيّدًا بمطابقة فرع الرواتب —
-      // فلا يفوز صف منح وصول في فرع آخر.
       const empBranch = new Map<number, number | null>();
       for (const e of payroll.breakdown) empBranch.set(e.employeeId, e.branchId ?? null);
       const empIds = [...empBranch.keys()];
 
-      const allocRows = await rawQuery<{ employeeId: number; branchId: number | null; costCenterId: number | null }>(
-        `SELECT eba."employeeId", eba."branchId", eba."costCenterId"
+      const allocRows = await rawQuery<{ employeeId: number; branchId: number | null; costCenterId: number | null; allocationPercent: string | number | null }>(
+        `SELECT eba."employeeId", eba."branchId", eba."costCenterId", eba."allocationPercent"
            FROM employee_branch_allocations eba
           WHERE eba."companyId" = $1
             AND eba."endDate" IS NULL
-            AND eba."costCenterId" IS NOT NULL
             AND eba."employeeId" = ANY($2::int[])`,
         [ctx.companyId, empIds]
       );
-      const empOverride = new Map<number, number>();
+      const allocByEmp = new Map<number, Array<{ branchId: number | null; costCenterId: number | null; percent: number }>>();
       for (const r of allocRows) {
-        if (r.costCenterId != null && r.branchId === empBranch.get(r.employeeId)) {
-          empOverride.set(r.employeeId, r.costCenterId);
-        }
+        const list = allocByEmp.get(r.employeeId) ?? [];
+        list.push({ branchId: r.branchId, costCenterId: r.costCenterId, percent: roundTo2(Number(r.allocationPercent ?? 0)) });
+        allocByEmp.set(r.employeeId, list);
       }
 
       const branchCcCache = new Map<number, number | null>();
@@ -563,29 +564,68 @@ class HREngineImpl implements DomainEngine {
         return branchCcCache.get(branchId) ?? null;
       };
 
-      const empDims = new Map<number, { branchId: number | null; costCenterId: number | null }>();
+      // وجهات تحميل كل موظف: قائمة { branchId, costCenterId, percent } مجموعها 100.
+      type Target = { branchId: number | null; costCenterId: number | null; percent: number };
+      const empTargets = new Map<number, Target[]>();
       for (const empId of empIds) {
         const branchId = empBranch.get(empId) ?? null;
-        const costCenterId = empOverride.get(empId) ?? (await ccForBranch(branchId));
-        empDims.set(empId, { branchId, costCenterId });
+        const allocs = allocByEmp.get(empId) ?? [];
+        const sumPct = roundTo2(allocs.reduce((s, a) => s + a.percent, 0));
+        if (allocs.length > 1 && sumPct === 100) {
+          // متعدد الفروع — وجهة لكل تخصيص.
+          const targets: Target[] = [];
+          for (const a of allocs) {
+            targets.push({ branchId: a.branchId, costCenterId: a.costCenterId ?? (await ccForBranch(a.branchId)), percent: a.percent });
+          }
+          empTargets.set(empId, targets);
+        } else {
+          // أحادي الفرع (سلوك الدفعة 2): الفرع من breakdown + تجاوز مطابق للفرع.
+          const override = allocs.find((a) => a.costCenterId != null && a.branchId === branchId)?.costCenterId ?? null;
+          empTargets.set(empId, [{ branchId, costCenterId: override ?? (await ccForBranch(branchId)), percent: 100 }]);
+        }
       }
 
-      const stamp = (l: { employeeId?: number; costCenterId?: number; branchId?: number }) => {
-        if (l.employeeId == null) return;
-        const d = empDims.get(l.employeeId);
-        if (!d) return;
-        if (d.costCenterId != null) l.costCenterId = d.costCenterId;
-        if (d.branchId != null && l.branchId == null) l.branchId = d.branchId;
+      type Line = { accountCode: string; debit: number; credit: number; employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number };
+      const splitLine = (l: Line): Line[] => {
+        if (l.employeeId == null) return [l]; // سطر جماعي — لا يُمسّ.
+        const targets = empTargets.get(l.employeeId);
+        if (!targets || targets.length === 0) return [l];
+        if (targets.length === 1) {
+          const t = targets[0];
+          if (t.costCenterId != null) l.costCenterId = t.costCenterId;
+          if (t.branchId != null && l.branchId == null) l.branchId = t.branchId;
+          return [l];
+        }
+        // متعدد الوجهات — قسّم المبلغ بالنسبة، والبواقي على آخر حصة.
+        const isDebit = (l.debit ?? 0) > 0;
+        const amount = isDebit ? l.debit : l.credit;
+        const out: Line[] = [];
+        let running = 0;
+        for (let i = 0; i < targets.length; i++) {
+          const t = targets[i];
+          const share = i === targets.length - 1 ? roundTo2(amount - running) : roundTo2((amount * t.percent) / 100);
+          running = roundTo2(running + share);
+          if (share <= 0) continue;
+          out.push({
+            ...l,
+            debit: isDebit ? share : 0,
+            credit: isDebit ? 0 : share,
+            ...(t.costCenterId != null ? { costCenterId: t.costCenterId } : {}),
+            ...(t.branchId != null ? { branchId: t.branchId } : {}),
+          });
+        }
+        return out.length > 0 ? out : [l];
       };
-      for (const l of debitLines) stamp(l);
-      for (const l of deductionLines) stamp(l);
+
+      postedDebitLines = debitLines.flatMap(splitLine);
+      postedDeductionLines = deductionLines.flatMap(splitLine);
     }
 
     const lines = [
-      ...debitLines,
+      ...postedDebitLines,
       { accountCode: salaryPayableCode, debit: 0, credit: bankPayout },
       { accountCode: gosiPayableCode, debit: 0, credit: gosiPayable },
-      ...deductionLines,
+      ...postedDeductionLines,
       // WHT payable — separate CR line on the ZATCA WHT-payable account.
       // Caller has already netted WHT off bankPayout so the entry balances.
       { accountCode: whtPayableCode, debit: 0, credit: totalWht },

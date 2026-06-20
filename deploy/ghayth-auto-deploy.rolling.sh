@@ -151,6 +151,11 @@ fi
 log "new commit: ${OLD_SHA:0:8} -> ${REMOTE:0:8}"
 git reset --hard "origin/$BRANCH" >> "$LOG_FILE" 2>&1
 
+# Bake the deployed revision into the api image so GET /api/version reports the
+# exact running commit (the image build has no .git of its own). Read by the
+# api service's build arg in docker-compose.prod.yml -> Dockerfile -> build.mjs.
+export APP_COMMIT="$REMOTE"
+
 if ! dc build api web >> "$LOG_FILE" 2>&1; then
   log "ERROR build failed; restoring ${OLD_SHA:0:8} (containers untouched), will retry next run"
   git reset --hard "$OLD_SHA" >> "$LOG_FILE" 2>&1
@@ -165,6 +170,21 @@ fi
 
 # Only recreate web after the api swap succeeded, so api+web never go out of sync.
 dc up -d --no-deps web >> "$LOG_FILE" 2>&1
+
+# Mobile web export — ISOLATED + non-fatal. Built/brought up separately AFTER
+# api+web are healthy so a mobile build failure can never roll back or block the
+# core stack; the web nginx resolves the `mobile` host at request time, so a
+# missing/stale mobile container only 502s /mobile/ (the main UI stays up). We
+# only log a warning on failure and let the next run retry.
+if dc build mobile >> "$LOG_FILE" 2>&1; then
+  if dc up -d --no-deps mobile >> "$LOG_FILE" 2>&1; then
+    log "mobile deployed"
+  else
+    log "WARN mobile up failed; api+web stay deployed, will retry next run"
+  fi
+else
+  log "WARN mobile build failed; api+web stay deployed, will retry next run"
+fi
 
 sleep 5
 if curl -fsS http://127.0.0.1:8088/api/healthz >/dev/null 2>&1; then log "post-deploy api healthz OK"; else log "WARN post-deploy api healthz FAILED"; fi

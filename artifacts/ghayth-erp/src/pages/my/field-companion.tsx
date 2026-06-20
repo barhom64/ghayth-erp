@@ -17,7 +17,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PageShell } from "@workspace/ui-core";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, API_BASE } from "@/lib/api";
 import {
   isNativeFieldTracking,
   startNativeFieldTracking,
@@ -182,7 +182,9 @@ export default function FieldCompanionPage() {
         const { token } = await apiFetch<{ token: string }>(
           "/my/field/tracking-token", { method: "POST" },
         );
-        const apiOrigin = (import.meta as any).env?.VITE_API_ORIGIN || window.location.origin;
+        // Use the single native-aware origin (API_BASE) so the plugin posts
+        // to the real server, not the app bundle origin (https://localhost).
+        const apiOrigin = API_BASE;
         const started = await startNativeFieldTracking({
           token,
           apiOrigin,

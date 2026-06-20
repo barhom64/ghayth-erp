@@ -187,6 +187,7 @@ export const allNavSections: NavSection[] = [
         { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
         { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
         { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
+        { label: "طلبات استكمال البيانات", path: "/hr/self-onboarding-review", icon: ClipboardCheck, subKey: "employees" },
       ]},
 
       // 3. النشاط والحضور — gathers shifts + attendance + tracking

@@ -35,6 +35,7 @@ import NotFound from "@/pages/not-found";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const PrintVerify = lazy(() => import("@/pages/print-verify"));
+const OnboardingSelf = lazy(() => import("@/pages/onboarding-self"));
 // Standalone /driver-portal/* retired (#1354) — drivers now log in
 // via the regular /login and land on /me/driver (dashboard auto-
 // redirects them based on user.role === "driver").
@@ -186,6 +187,13 @@ function Router() {
       <Route path="/print/verify/:jobId">
         <Suspense fallback={<PageLoader />}>
           <PrintVerify />
+        </Suspense>
+      </Route>
+      {/* صفحة الاستكمال الذاتي للموظف — عامة (?token=...). يملأ الموظف بياناته
+          الشخصية فقط؛ الخلفية تتحقق من الرمز ولا تمنح أي دخول للنظام. */}
+      <Route path="/onboarding">
+        <Suspense fallback={<PageLoader />}>
+          <OnboardingSelf />
         </Suspense>
       </Route>
       {/* /driver-portal/* retired (#1354) — drivers now use the regular
