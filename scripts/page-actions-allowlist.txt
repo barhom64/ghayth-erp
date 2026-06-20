@@ -1,0 +1,31 @@
+# page-actions-allowlist.txt
+# ─────────────────────────────────────────────────────────────────────────────
+# مواضع زرّ إجراء يدوي مقبولة — سطر واحد بصيغة action:path لكل ملف/فعل
+# (action ∈ refresh|print|export)، مع عدد اختياري لاحق `action:path N` (الافتراضي 1)
+# يثبّت عدد المرّات الأساس. هذه ليست المكوّن الموحّد عمدًا، بل آلية إطار، أو تحكّم
+# على مستوى القسم، أو إجراء صفّي. الحارس يفشل على action:path غير مُدرج، أو حين
+# يكتسب ملفٌ مُدرج مرّاتٍ أكثر من عدده الأساس (زر يدوي جديد).
+#   node scripts/src/check-page-actions.mjs --write-allowlist   # لإعادة التوليد
+
+# تحديثات على مستوى القسم داخل ترويسات البطاقات (DLQ وقائمة الإيقافات، زرّان) —
+# ليست شريط أزرار الصفحة، بل تحكّم دقيق لكل قسم على حدة.
+refresh:artifacts/ghayth-erp/src/pages/admin-system-governor.tsx 2
+
+# زر «حساب/تحديث» لكل صف في جدول المؤشّرات (حالة refreshingId لكل صف) — إجراء
+# صفّي لإعادة حساب قيمة المؤشّر، لا تحديث بيانات الصفحة.
+refresh:artifacts/ghayth-erp/src/pages/bi/kpis-tab.tsx
+
+# ── الطباعة ──────────────────────────────────────────────────────────────────
+# print-layout.tsx: مكوّن معاينة/إطار الطباعة نفسه (window.print، زرّان: المعاينة
+# والترويسة) — هو آلية الطباعة لا زرّ صفحة، فلا يُحوَّل إلى PrintButton.
+print:artifacts/ghayth-erp/src/components/print-layout.tsx 2
+
+# bi-admin-reports / bi-operations: طباعة متصفّح للوحة تقارير (window.print مع
+# تدقيق logClientPrint) — ليست وثيقة مرقّمة، فلا ينطبق PrintButton.
+print:artifacts/ghayth-erp/src/pages/bi-admin-reports.tsx
+print:artifacts/ghayth-erp/src/pages/bi-operations.tsx
+
+# ── التصدير ──────────────────────────────────────────────────────────────────
+# list-page.tsx: قائمة التصدير (Excel/CSV) في شريط أدوات إطار ListPage المشترك —
+# آلية التصدير القياسية للقوائم، سياقها يختلف عن شريط أزرار الصفحة (ExportAction).
+export:artifacts/ghayth-erp/src/components/list-page.tsx
