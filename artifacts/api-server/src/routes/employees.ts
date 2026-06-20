@@ -886,24 +886,12 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           fix: "اختر فئة القوى العاملة (موظف/سائق/مدير/…) لتطبيق سياسة الحضور المناسبة.",
         });
       }
-      if (!teamId) {
-        throw new ValidationError("الفريق مطلوب", {
-          field: "teamId",
-          fix: "اختر الفريق الذي ينضم إليه الموظف من الإعدادات → الفِرَق.",
-        });
-      }
-      if (!projectId) {
-        throw new ValidationError("المشروع مطلوب", {
-          field: "projectId",
-          fix: "اختر المشروع/المنتج التشغيلي الذي يساهم فيه الموظف.",
-        });
-      }
-      if (!costCenterId) {
-        throw new ValidationError("مركز التكلفة مطلوب", {
-          field: "costCenterId",
-          fix: "اختر مركز التكلفة الذي يُحاسب عليه راتب الموظف.",
-        });
-      }
+      // PR (النظام يَحضُر لا يُحضَر له): الفريق والمشروع ومركز التكلفة
+      // ليست حقائق تعيين جوهرية — الفريق والمشروع أمور عارضة تُسنَد لاحقًا
+      // عبر عقود العضوية المستقلة (POST /team-memberships, /project-assignments)،
+      // ومركز التكلفة يُشتق آليًا من فرع الموظف وصفته في كل فرع (محرّك
+      // resolveCostCenter). لذا لا تُفرَض وقت التعيين. تبقى إلزامية: المنصب،
+      // فئة الحضور، المدير المباشر — وهي الحقائق المؤسسية الجوهرية للموظف.
       if (!managerId) {
         throw new ValidationError("المدير المباشر مطلوب", {
           field: "managerId",
@@ -1105,6 +1093,21 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          positionId ? Number(positionId) : null, categoryKey || null]
       );
       const assignmentId = assignRes.rows[0].id;
+
+      // ── الدفعة 1 — تخصيص الفرع الرئيسي ──
+      // النموذج الموحّد لاشتقاق مركز التكلفة: الموظف يُربط بفرعه الرئيسي
+      // كصف تخصيص أساسي (100%). مركز التكلفة يُترك NULL ليُشتق آليًا من
+      // الفرع وقت ترحيل الرواتب (الدفعة 2). فروع إضافية بصفات/نِسَب مختلفة
+      // تُضاف لاحقًا عبر تخصيصات أخرى. لا يُنشأ إن غاب الفرع (بيانات حدّية).
+      if (targetBranchId) {
+        await client.query(
+          `INSERT INTO employee_branch_allocations
+             ("companyId","employeeId","assignmentId","branchId",capacity,"allocationPercent","isPrimary","startDate","createdBy")
+           VALUES ($1,$2,$3,$4,$5,100.00,TRUE,$6,$7)
+           ON CONFLICT ("assignmentId","branchId","startDate") DO NOTHING`,
+          [effectiveCompanyId, empId, assignmentId, targetBranchId, categoryKey || null, effectiveHireDate, scope.activeAssignmentId ?? null]
+        );
+      }
 
       // ── PR-1 (#2077) Step 3b — institutional bridges (team/project/committee) ──
       // These rows close the «الموظف ككيان تشغيلي مؤسسي» chain at create
@@ -2618,6 +2621,38 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       after,
       details: JSON.stringify({ changedFields }),
     }).catch((e) => logger.error(e, "employees background task failed"));
+
+    // ── رسالة بداية العمل عند التفعيل ──
+    // المُعيَّن عبر «التفعيل السريع» يُنشأ بحالة inactive بلا رسالة ترحيب
+    // (لأنه لم يباشر بعد). رسالة الترحيب في الإنشاء الكامل (Step 9) لا تصله
+    // لأنه لم يمر بذلك المسار. فعند لحظة التفعيل الفعلية (inactive/pending/
+    // onboarding → active) — وهي لحظة مباشرة العمل — نرسل رسالة بداية العمل
+    // مرة واحدة. الموظف المُنشأ كاملًا يُنشأ active مباشرة فلا يمر هنا، فلا
+    // ازدواج في الإرسال.
+    const wasActivated =
+      status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status);
+    if (wasActivated && after && employee.assignmentId != null) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: Number(employee.assignmentId),
+        type: "welcome", title: "مرحباً بك — مباشرة العمل",
+        body: `أهلاً ${after.name}، تم تفعيل حسابك ومباشرتك العمل برقم وظيفي ${after.empNumber}. يسعدنا انضمامك إلى الفريق.`,
+        priority: "normal", refType: "employee", refId: id,
+      }).catch((e) => logger.error(e, "employees background task failed"));
+      if (after.email) {
+        void sendMessage({
+          channel: "email",
+          recipient: after.email,
+          recipientName: after.name,
+          subject: `مرحباً بك في فريق العمل - ${after.empNumber}`,
+          body: `أهلاً ${after.name}،\n\nتم تفعيل حسابك ومباشرتك العمل.\nرقمك الوظيفي: ${after.empNumber}\nالمسمى الوظيفي: ${after.jobTitle ?? ""}\n\nيسعدنا انضمامك إلى الفريق.`,
+          companyId: scope.companyId,
+          userId: scope.userId,
+          relatedType: "employee",
+          relatedId: id,
+          templateKey: "employee.welcome",
+        }).catch((e) => logger.error(e, "employees background task failed"));
+      }
+    }
 
     res.json(after);
   } catch (err) {

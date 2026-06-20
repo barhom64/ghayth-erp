@@ -5,6 +5,7 @@
 
 import { financialEngine } from "./financialEngine.js";
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
+import { deriveBranchCostCenter } from "../accountingAllocation.js";
 import { registerCrossDomainHandler } from "../eventBus.js";
 import { roundTo2 } from "../businessHelpers.js";
 import type { DomainEngine } from "./domainEngineBase.js";
@@ -382,7 +383,7 @@ class HREngineImpl implements DomainEngine {
     let breakdownTrusted = false;
     const debitLines: Array<{
       accountCode: string; debit: number; credit: number;
-      employeeId?: number; departmentId?: number;
+      employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number;
     }> = [];
 
     if (payroll.breakdown && payroll.breakdown.length > 0) {
@@ -487,7 +488,7 @@ class HREngineImpl implements DomainEngine {
     // ALWAYS balances by construction.
     const deductionLines: Array<{
       accountCode: string; debit: number; credit: number;
-      employeeId?: number; departmentId?: number;
+      employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number;
     }> = [];
     if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
       let classified = 0;
@@ -518,6 +519,66 @@ class HREngineImpl implements DomainEngine {
       // Legacy / untrusted breakdown — single aggregate clearing line (the
       // pre-#2303 behaviour), so the dimensional split is never misleading.
       deductionLines.push({ accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions });
+    }
+
+    // ── الدفعة 2 — استمام مركز التكلفة على سطور الرواتب (يمسّ الدفتر: بُعد فقط) ──
+    // لكل موظف، نشتق مركز تكلفته من تخصيص فرعه الرئيسي
+    // (employee_branch_allocations): تجاوز صريح costCenterId إن وُجد، وإلا
+    // مركز التكلفة التلقائي للفرع (BR-XXXX) عبر seam المالية deriveBranchCostCenter.
+    // هذا بُعد محاسبي يُستمّ على السطور فقط — لا يغيّر أي مبلغ مدين/دائن ولا
+    // توازن القيد. موظف بلا تخصيص (أو breakdown غير موثوق) يبقى بلا مركز تكلفة
+    // كما هو سلوك اليوم — توافق خلفي تام. (الدفعة 2ب لاحقًا: التوزيع متعدد الفروع).
+    if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
+      // المصدر الموثوق لفرع كل موظف هو سطر breakdown (تعيين الرواتب الحالي،
+      // المُصفّى من منح الوصول في routes/hr.ts). يبقى صحيحًا حتى لو تغيّر الفرع
+      // عبر PATCH أو لم يُنشأ تخصيص بعد (موظف التفعيل السريع). جدول التخصيصات
+      // يقدّم فقط تجاوزًا صريحًا لمركز التكلفة، مُقيّدًا بمطابقة فرع الرواتب —
+      // فلا يفوز صف منح وصول في فرع آخر.
+      const empBranch = new Map<number, number | null>();
+      for (const e of payroll.breakdown) empBranch.set(e.employeeId, e.branchId ?? null);
+      const empIds = [...empBranch.keys()];
+
+      const allocRows = await rawQuery<{ employeeId: number; branchId: number | null; costCenterId: number | null }>(
+        `SELECT eba."employeeId", eba."branchId", eba."costCenterId"
+           FROM employee_branch_allocations eba
+          WHERE eba."companyId" = $1
+            AND eba."endDate" IS NULL
+            AND eba."costCenterId" IS NOT NULL
+            AND eba."employeeId" = ANY($2::int[])`,
+        [ctx.companyId, empIds]
+      );
+      const empOverride = new Map<number, number>();
+      for (const r of allocRows) {
+        if (r.costCenterId != null && r.branchId === empBranch.get(r.employeeId)) {
+          empOverride.set(r.employeeId, r.costCenterId);
+        }
+      }
+
+      const branchCcCache = new Map<number, number | null>();
+      const ccForBranch = async (branchId: number | null): Promise<number | null> => {
+        if (branchId == null) return null;
+        if (!branchCcCache.has(branchId)) {
+          branchCcCache.set(branchId, await deriveBranchCostCenter(ctx.companyId, branchId));
+        }
+        return branchCcCache.get(branchId) ?? null;
+      };
+
+      const empDims = new Map<number, { branchId: number | null; costCenterId: number | null }>();
+      for (const empId of empIds) {
+        const branchId = empBranch.get(empId) ?? null;
+        const costCenterId = empOverride.get(empId) ?? (await ccForBranch(branchId));
+        empDims.set(empId, { branchId, costCenterId });
+      }
+
+      const stamp = (l: { employeeId?: number; costCenterId?: number; branchId?: number }) => {
+        if (l.employeeId == null) return;
+        const d = empDims.get(l.employeeId);
+        if (!d) return;
+        if (d.costCenterId != null) l.costCenterId = d.costCenterId;
+        if (d.branchId != null && l.branchId == null) l.branchId = d.branchId;
+      };
+      for (const l of debitLines) stamp(l);
+      for (const l of deductionLines) stamp(l);
     }
 
     const lines = [
