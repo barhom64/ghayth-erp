@@ -50,7 +50,12 @@ export default function SelfOnboardingReviewPage() {
   const rows: any[] = data?.data ?? [];
 
   return (
-    <PageShell title="طلبات استكمال البيانات" subtitle="مراجعة واعتماد البيانات التي أدخلها الموظفون عبر رابط الاستكمال الذاتي">
+    <PageShell
+      title="طلبات استكمال البيانات"
+      subtitle={rows.length > 0
+        ? `${rows.length} طلب بانتظار المراجعة — راجع البيانات التي أدخلها الموظفون عبر رابط الاستكمال الذاتي`
+        : "مراجعة واعتماد البيانات التي أدخلها الموظفون عبر رابط الاستكمال الذاتي"}
+    >
       <HrTabsNav />
       {rows.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">
