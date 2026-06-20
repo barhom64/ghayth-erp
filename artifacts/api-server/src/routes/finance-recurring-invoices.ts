@@ -10,6 +10,7 @@ import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { runRecurringInvoice, processDueRecurringInvoices } from "../lib/recurringInvoiceProcessor.js";
 import { z } from "zod";
 
 export const recurringInvoicesRouter = Router();
@@ -113,4 +114,30 @@ recurringInvoicesRouter.delete("/recurring-invoices/:id", authorize({ feature: "
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "recurring_invoice_templates", entityId: id }).catch((e) => logger.error(e, "recurring invoice audit failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete recurring invoice error:"); }
+});
+
+// ── التوليد (يمسّ الدفتر عبر financialEngine.postSalesInvoice) ────────────────
+
+// POST /finance/recurring-invoices/:id/run — توليد فاتورة فورًا من قالب (يدوي).
+recurringInvoicesRouter.post("/recurring-invoices/:id/run", authorize({ feature: "finance.recurring", action: "create", resource: { table: "recurring_invoice_templates", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const force = (req.body?.force ?? true) !== false; // التشغيل اليدوي فوري افتراضيًا
+    const result = await runRecurringInvoice({ companyId: scope.companyId, templateId: id, createdBy: scope.userId, force });
+    if (!result.generated) throw new ValidationError(result.reason || "تعذّر توليد الفاتورة", { field: "id" });
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "generate", entity: "recurring_invoice_templates", entityId: id, after: { invoiceId: result.invoiceId, invoiceNumber: result.invoiceNumber } }).catch((e) => logger.error(e, "recurring invoice audit failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "recurring_invoice.generated", entity: "recurring_invoice_templates", entityId: id, details: JSON.stringify({ invoiceId: result.invoiceId }) }).catch((e) => logger.error(e, "recurring invoice event failed"));
+    res.status(201).json(result);
+  } catch (err) { handleRouteError(err, res, "Run recurring invoice error:"); }
+});
+
+// POST /finance/recurring-invoices/run-due — معالجة كل القوالب المستحقّة للشركة.
+recurringInvoicesRouter.post("/recurring-invoices/run-due", authorize({ feature: "finance.recurring", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const out = await processDueRecurringInvoices(scope.companyId, scope.userId);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "generate", entity: "recurring_invoice_templates", entityId: 0, after: { processed: out.processed } }).catch((e) => logger.error(e, "recurring invoice audit failed"));
+    res.json(out);
+  } catch (err) { handleRouteError(err, res, "Run due recurring invoices error:"); }
 });
