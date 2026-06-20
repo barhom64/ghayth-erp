@@ -71,10 +71,17 @@ if [ "$BUILD_MODE" = "release" ]; then
   fi
   ARCHIVE="$APP_DIR/ios/build/App.xcarchive"
   IPA_DIR="$APP_DIR/ios/build/ipa"
+  # فريق التوقيع اختياري — نمرّره كوسيط منفصل عبر مصفوفة لتفادي حقن علامات
+  # الاقتباس الحرفية. التوسعة ${arr[@]+...} آمنة مع مصفوفة فارغة تحت set -u
+  # على bash 3.2 (إصدار macOS الافتراضي).
+  ARCHIVE_ARGS=()
+  if [ -n "${DEVELOPMENT_TEAM:-}" ]; then
+    ARCHIVE_ARGS+=("DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM")
+  fi
   # تأكّد أن أذونات الموقع أُضيفت لـInfo.plist مسبقًا (مرة واحدة) قبل الأرشفة.
   xcodebuild -workspace "$WS" -scheme App -configuration Release \
     -archivePath "$ARCHIVE" \
-    ${DEVELOPMENT_TEAM:+DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM"} \
+    ${ARCHIVE_ARGS[@]+"${ARCHIVE_ARGS[@]}"} \
     clean archive
   xcodebuild -exportArchive -archivePath "$ARCHIVE" \
     -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" \
