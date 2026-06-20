@@ -167,6 +167,7 @@ export const allNavSections: NavSection[] = [
       // org structure, transfers, documents, contracts, letters, exit
       { label: "شؤون الموظفين", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
+        { label: "إنشاء موظف سريع", path: "/employees/quick-create", icon: Zap, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
         // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
