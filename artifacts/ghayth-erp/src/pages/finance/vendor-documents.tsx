@@ -17,6 +17,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
+import { VendorSelect } from "@/components/shared/entity-selects";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
@@ -97,13 +98,9 @@ export default function VendorDocumentsPage() {
   const advQ = useApiQuery<{ data: AdvanceRow[] }>(["vendor-advances"], "/finance/vendor-advances");
   const crdQ = useApiQuery<{ data: CreditRow[] }>(["vendor-credits"], "/finance/vendor-credits");
   const invQ = useApiQuery<{ data: VInvoiceRow[] }>(["vendor-invoices"], "/finance/vendor-invoices");
-  const suppliersQ = useApiQuery<{ data: { id: number; name: string }[] }>(
-    ["finance-vendors-for-documents"], "/finance/vendors?limit=500",
-  );
   const posQ = useApiQuery<{ data: { id: number; ref?: string; poNumber?: string; supplierId?: number }[] }>(
     ["purchase-orders-for-documents"], "/finance/purchase-orders?limit=500",
   );
-  const suppliers = suppliersQ.data?.data ?? [];
   const pos = posQ.data?.data ?? [];
 
   const bySearch = <T extends { ref: string; supplierName: string | null }>(rows: T[]) => {
@@ -272,11 +269,7 @@ export default function VendorDocumentsPage() {
     </div>
   );
   const supplierSelect = (value: string, onChange: (v: string) => void) => (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      className="w-full h-8 px-2 border rounded bg-background text-xs">
-      <option value="">— اختر المورد —</option>
-      {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-    </select>
+    <VendorSelect label="المورد" hideLabel value={value} onChange={onChange} placeholder="— اختر المورد —" />
   );
   const txt = (v: string, on: (x: string) => void, dir?: "ltr") => (
     <input value={v} onChange={(e) => on(e.target.value)} dir={dir}
