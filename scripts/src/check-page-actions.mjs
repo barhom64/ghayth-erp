@@ -2,28 +2,28 @@
 //
 // scripts/src/check-page-actions.mjs
 //
-// Page action-bar consistency guard (refresh). Catches the hand-rolled
-// refresh control class — a `<Button>`/`<button>` that pairs the
-// `RefreshCw` icon with the bare Arabic label «تحديث» — which should be
-// the single unified component instead:
+// Page action-bar consistency guard. Catches hand-rolled versions of the
+// three unified page actions — a `<Button>`/`<button>` that pairs the action's
+// lucide icon with its bare Arabic label — which should be the single unified
+// component instead:
 //
-//     import { RefreshAction } from "@/components/page-actions";
-//     <RefreshAction onRefresh={refetch} />
+//     تحديث  RefreshCw → <RefreshAction onRefresh={…} />   (@/components/page-actions)
+//     طباعة  Printer   → <PrintButton … />                 (@/components/shared/print-button)
+//     تصدير  Download  → <ExportAction onExport={…} />      (@/components/page-actions)
 //
-// Why this exists: the app shipped dozens of bespoke refresh buttons
-// (varied size / variant / icon spacing), so the same action looked and
-// behaved differently on every page. They were unified onto RefreshAction
-// (icon-only, hover-expands to the label, fixed place in the PageShell
-// actions slot). Once unified, this guard keeps NEW bespoke refresh
-// buttons from sneaking back in.
+// Why this exists: the app shipped dozens of bespoke action buttons (varied
+// size / variant / icon spacing), so the same action looked and behaved
+// differently on every page. They were unified onto these components (icon-only,
+// hover-expands to the label, fixed place in the PageShell actions slot). Once
+// unified, this guard keeps NEW bespoke ones from sneaking back in.
 //
-// Scoped, NOT flagged — these are deliberately different controls, kept
-// in scripts/page-actions-refresh-allowlist.txt:
+// Scoped, NOT flagged — deliberately different controls, kept in
+// scripts/page-actions-allowlist.txt as `action:path` entries:
 //   • section/card-header refreshes (a per-section control, not the page bar),
 //   • per-row table «تحديث» (recompute one row, with per-row spinner state).
-// A toggle/recompute whose label is a longer phrase («تحديث تلقائي»،
-// «تحديث اللقطة»، «تحديث التحليل») is NOT a standard refresh button and is
-// excluded by the detector itself (the label must be the bare «تحديث»).
+// A toggle/recompute whose label is a longer phrase («تحديث تلقائي»، «طباعة A4»،
+// «تصدير Excel» …) is NOT a standard action button — the detector requires the
+// BARE label, so those are excluded automatically.
 //
 // OFFLINE: pure source scan, no DB / build / server needed — so it runs
 // unconditionally in CI (like check:button-nesting).
@@ -38,32 +38,47 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const ALLOWLIST_PATH = join(REPO_ROOT, "scripts/page-actions-refresh-allowlist.txt");
+const ALLOWLIST_PATH = join(REPO_ROOT, "scripts/page-actions-allowlist.txt");
 
-// The app that owns RefreshAction (@/components/page-actions). Other portals
-// don't import it, so they're out of scope for this guard.
+// The app that owns the unified actions. Other portals don't import them.
 const SRC_DIR = "artifacts/ghayth-erp/src";
 
 // A `<Button …>…</Button>` (or lowercase `<button>`) body. Non-greedy, so each
 // match is a single element; `[\s\S]` crosses newlines for multi-line buttons.
 const BTN_RE = /<([Bb]utton)\b[^>]*>([\s\S]*?)<\/\1>/g;
-// The bare refresh label: «تحديث» as the element's own text — preceded by a
-// tag-close / whitespace / start, and followed by a tag-open, a `{…}` JSX
-// expression, or end. A longer phrase («تحديث تلقائي» …) has another Arabic
-// word after it, so it does NOT match — those aren't standard refresh buttons.
-const BARE_REFRESH_LABEL = /(?:^|>|\s)تحديث\s*(?:<|\{|$)/;
 
-/** True when `text` contains a hand-rolled refresh button: a Button/button
- *  element that pairs the RefreshCw icon with the bare «تحديث» label. */
-export function fileHasManualRefresh(text) {
-  if (!text.includes("RefreshCw") || !text.includes("تحديث")) return false;
-  let m;
-  BTN_RE.lastIndex = 0;
-  while ((m = BTN_RE.exec(text))) {
-    const inner = m[2];
-    if (inner.includes("RefreshCw") && BARE_REFRESH_LABEL.test(inner)) return true;
+// The three unified page actions: lucide icon + bare Arabic label + the fix.
+const ACTIONS = [
+  { key: "refresh", icon: "RefreshCw", label: "تحديث", fix: 'import { RefreshAction } from "@/components/page-actions";  →  <RefreshAction onRefresh={…} />' },
+  { key: "print",   icon: "Printer",   label: "طباعة", fix: 'import { PrintButton } from "@/components/shared/print-button";  →  <PrintButton … />' },
+  { key: "export",  icon: "Download",  label: "تصدير", fix: 'import { ExportAction } from "@/components/page-actions";  →  <ExportAction onExport={…} />' },
+];
+
+// The bare label as the element's own text — preceded by a tag-close / whitespace
+// / start, and followed by a tag-open, a `{…}` JSX expression, or end. A longer
+// phrase has another word after it, so it does NOT match.
+const bareRe = (label) => new RegExp(`(?:^|>|\\s)${label}\\s*(?:<|\\{|$)`);
+const RE_CACHE = new Map(ACTIONS.map((a) => [a.key, bareRe(a.label)]));
+
+/** Returns the Set of action keys for which `text` has a hand-rolled button —
+ *  a Button/button element pairing the action's icon with its bare label. */
+export function fileManualActions(text) {
+  const hits = new Set();
+  for (const a of ACTIONS) {
+    if (!text.includes(a.icon) || !text.includes(a.label)) continue;
+    const re = RE_CACHE.get(a.key);
+    let m;
+    BTN_RE.lastIndex = 0;
+    while ((m = BTN_RE.exec(text))) {
+      if (m[2].includes(a.icon) && re.test(m[2])) { hits.add(a.key); break; }
+    }
   }
-  return false;
+  return hits;
+}
+
+/** Back-compat: true when `text` has a hand-rolled refresh button. */
+export function fileHasManualRefresh(text) {
+  return fileManualActions(text).has("refresh");
 }
 
 async function walkTsx(dir, out) {
@@ -85,6 +100,7 @@ async function walkTsx(dir, out) {
   return out;
 }
 
+/** Offenders as sorted `action:relpath` strings. */
 async function findOffenders() {
   const offenders = [];
   const abs = join(REPO_ROOT, SRC_DIR);
@@ -92,9 +108,8 @@ async function findOffenders() {
   const files = await walkTsx(abs, []);
   for (const f of files) {
     const text = await readFile(f, "utf8");
-    if (fileHasManualRefresh(text)) {
-      offenders.push(relative(REPO_ROOT, f).split("\\").join("/"));
-    }
+    const rel = relative(REPO_ROOT, f).split("\\").join("/");
+    for (const key of fileManualActions(text)) offenders.push(`${key}:${rel}`);
   }
   offenders.sort();
   return offenders;
@@ -116,15 +131,15 @@ async function main() {
 
   if (process.argv.includes("--write-allowlist")) {
     const header = [
-      "# page-actions-refresh-allowlist.txt",
+      "# page-actions-allowlist.txt",
       "#",
-      "# Files with a refresh button (RefreshCw + bare «تحديث») that is",
-      "# deliberately NOT the unified RefreshAction — a section/card-header",
-      "# control or a per-row table action. The guard only fails on a file",
-      "# NOT listed here. Regenerate with:",
+      "# Accepted hand-rolled page-action buttons, one `action:path` per line",
+      "# (action ∈ refresh|print|export). These are deliberately NOT the unified",
+      "# component — a section/card-header control or a per-row table action.",
+      "# The guard only fails on an `action:path` NOT listed here. Regenerate:",
       "#   node scripts/src/check-page-actions.mjs --write-allowlist",
       "#",
-      `# Baseline captured: ${offenders.length} file(s).`,
+      `# Baseline captured: ${offenders.length} entr${offenders.length === 1 ? "y" : "ies"}.`,
       "",
     ].join("\n");
     await writeFile(ALLOWLIST_PATH, header + offenders.join("\n") + "\n", "utf8");
@@ -133,35 +148,36 @@ async function main() {
   }
 
   const allow = loadAllowlist();
-  const fresh = offenders.filter((f) => !allow.has(f));
-  const stale = [...allow].filter((f) => !offenders.includes(f)).sort();
+  const fresh = offenders.filter((o) => !allow.has(o));
+  const stale = [...allow].filter((o) => !offenders.includes(o)).sort();
 
   if (stale.length) {
     console.log(
       `[check:page-actions] NOTE: ${stale.length} allowlist entr${stale.length === 1 ? "y is" : "ies are"} stale ` +
         `(file changed or removed) — prune from ${relative(REPO_ROOT, ALLOWLIST_PATH)}:`,
     );
-    for (const f of stale) console.log(`    - ${f}`);
+    for (const o of stale) console.log(`    - ${o}`);
   }
 
   if (fresh.length) {
+    const byAction = (k) => fresh.filter((o) => o.startsWith(`${k}:`)).map((o) => o.slice(k.length + 1));
+    console.error(`\n[check:page-actions] FAIL: ${fresh.length} NEW hand-rolled page-action button(s):`);
+    for (const a of ACTIONS) {
+      const hits = byAction(a.key);
+      if (!hits.length) continue;
+      console.error(`\n  «${a.label}» (use ${a.fix}):`);
+      for (const f of hits) console.error(`    ✗ ${f}`);
+    }
     console.error(
-      `\n[check:page-actions] FAIL: ${fresh.length} NEW hand-rolled refresh button(s) ` +
-        `(RefreshCw + «تحديث» instead of the unified component):`,
-    );
-    for (const f of fresh) console.error(`    ✗ ${f}`);
-    console.error(
-      "\n  Fix: use the unified action so refresh looks/behaves the same everywhere:\n" +
-        "      import { RefreshAction } from \"@/components/page-actions\";\n" +
-        "      <RefreshAction onRefresh={refetch} />\n" +
-        "  If this is genuinely a section/per-row control, add the path to\n" +
-        "  scripts/page-actions-refresh-allowlist.txt with a one-line reason.",
+      "\n  Fix: use the unified component so the action looks/behaves the same\n" +
+        "  everywhere. If this is genuinely a section/per-row control, add the\n" +
+        "  `action:path` line to scripts/page-actions-allowlist.txt with a reason.",
     );
     process.exit(1);
   }
 
   console.log(
-    `[check:page-actions] OK — ${offenders.length} baseline exception(s) allowlisted, 0 new.`,
+    `[check:page-actions] OK — ${offenders.length} baseline exception(s) allowlisted, 0 new (refresh/print/export).`,
   );
 }
 
