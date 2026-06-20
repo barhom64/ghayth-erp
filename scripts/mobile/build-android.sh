@@ -33,7 +33,9 @@ pnpm add \
 
 # ── 2) بناء النظام الكامل (Vite) — ينتج dist/ = webDir ───────────────────────
 echo "▶ [2/6] بناء النظام الكامل…"
-VITE_API_ORIGIN="$API_ORIGIN" pnpm build
+# BASE_PATH=/ is REQUIRED (vite.config throws without it) and MUST be root for
+# the native app, so the bundle's asset URLs resolve from the WebView origin.
+BASE_PATH=/ VITE_API_ORIGIN="$API_ORIGIN" pnpm build
 
 # ── 3) توليد مشروع أندرويد (idempotent) ──────────────────────────────────────
 echo "▶ [3/6] تجهيز مشروع أندرويد…"

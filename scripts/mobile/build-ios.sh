@@ -33,7 +33,9 @@ pnpm add \
   @capacitor-community/background-geolocation
 
 echo "▶ [2/5] بناء النظام الكامل…"
-VITE_API_ORIGIN="$API_ORIGIN" pnpm build
+# BASE_PATH=/ is REQUIRED (vite.config throws without it) and MUST be root for
+# the native app, so the bundle's asset URLs resolve from the WebView origin.
+BASE_PATH=/ VITE_API_ORIGIN="$API_ORIGIN" pnpm build
 
 echo "▶ [3/5] تجهيز مشروع iOS…"
 if [ ! -d "$APP_DIR/ios" ]; then

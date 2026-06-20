@@ -16,8 +16,11 @@ interface CapacitorConfigShape {
 const config: CapacitorConfigShape = {
   appId: "sa.door.ghayth",
   appName: "غيث",
-  // مخرجات بناء Vite — `pnpm --filter ghayth-erp build` ثم `npx cap sync`.
-  webDir: "dist",
+  // Vite's build.outDir is `dist/public` (vite.config.ts), so the built
+  // index.html lives at dist/public/index.html — Capacitor must point THERE,
+  // not at `dist`, or `cap sync` copies an empty folder and the app loads a
+  // blank screen.
+  webDir: "dist/public",
   server: { androidScheme: "https" },
   plugins: {
     // @capacitor-community/background-geolocation — لا إعداد إلزامي هنا؛

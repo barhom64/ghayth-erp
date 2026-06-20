@@ -16,7 +16,7 @@ bash scripts/mobile/build-android.sh
 
 السكربت ينفّذ **كل شيء تلقائيًا**:
 1. يثبّت Capacitor + plugin التتبع الخلفي
-2. يبني النظام الكامل (`pnpm build` → `dist/`)
+2. يبني النظام الكامل (`pnpm build` → `dist/public/`)
 3. يولّد مشروع `android/`
 4. يزامن الويب + الـplugins (`cap sync`)
 5. يحقن أذونات الموقع الخلفي في AndroidManifest
@@ -38,7 +38,7 @@ VITE_API_ORIGIN=https://your-server bash scripts/mobile/build-android.sh
 ```bash
 cd artifacts/ghayth-erp
 pnpm add @capacitor/core @capacitor/cli @capacitor/ios @capacitor-community/background-geolocation
-VITE_API_ORIGIN=https://hr.door.sa pnpm build
+BASE_PATH=/ VITE_API_ORIGIN=https://hr.door.sa pnpm build
 npx cap add ios && npx cap sync ios
 npx cap open ios   # Xcode → أضف أذونات الموقع في Info.plist ثم Run/Archive
 ```
@@ -66,6 +66,6 @@ npx cap open ios   # Xcode → أضف أذونات الموقع في Info.plist 
 بعد أي تغيير على الويب:
 ```bash
 cd artifacts/ghayth-erp
-pnpm build && npx cap sync
+BASE_PATH=/ VITE_API_ORIGIN=https://hr.door.sa pnpm build && npx cap sync
 ```
 ثم أعد بناء الـAPK. (المحتوى المحمَّل من الخادم يتحدّث فورًا بلا إعادة بناء.)
