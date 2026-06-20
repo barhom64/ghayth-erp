@@ -87,11 +87,12 @@ router.post("/inspections", authorize({ feature: "fleet.vehicles", action: "crea
 router.get("/inspections", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { vehicleId, driverId, inspectionType, status } = req.query as Record<string, string | undefined>;
+    const { vehicleId, driverId, inspectionType, status, rentalContractId } = req.query as Record<string, string | undefined>;
     const params: unknown[] = [scope.companyId];
     let where = `i."companyId" = $1 AND i."deletedAt" IS NULL`;
     if (vehicleId) { params.push(Number(vehicleId)); where += ` AND i."vehicleId" = $${params.length}`; }
     if (driverId) { params.push(Number(driverId)); where += ` AND i."driverId" = $${params.length}`; }
+    if (rentalContractId) { params.push(Number(rentalContractId)); where += ` AND i."rentalContractId" = $${params.length}`; }
     if (inspectionType && (INSPECTION_TYPES as readonly string[]).includes(inspectionType)) {
       params.push(inspectionType); where += ` AND i."inspectionType" = $${params.length}`;
     }
