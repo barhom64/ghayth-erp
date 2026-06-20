@@ -1094,6 +1094,21 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       );
       const assignmentId = assignRes.rows[0].id;
 
+      // ── الدفعة 1 — تخصيص الفرع الرئيسي ──
+      // النموذج الموحّد لاشتقاق مركز التكلفة: الموظف يُربط بفرعه الرئيسي
+      // كصف تخصيص أساسي (100%). مركز التكلفة يُترك NULL ليُشتق آليًا من
+      // الفرع وقت ترحيل الرواتب (الدفعة 2). فروع إضافية بصفات/نِسَب مختلفة
+      // تُضاف لاحقًا عبر تخصيصات أخرى. لا يُنشأ إن غاب الفرع (بيانات حدّية).
+      if (targetBranchId) {
+        await client.query(
+          `INSERT INTO employee_branch_allocations
+             ("companyId","employeeId","assignmentId","branchId",capacity,"allocationPercent","isPrimary","startDate","createdBy")
+           VALUES ($1,$2,$3,$4,$5,100.00,TRUE,$6,$7)
+           ON CONFLICT ("assignmentId","branchId","startDate") DO NOTHING`,
+          [effectiveCompanyId, empId, assignmentId, targetBranchId, categoryKey || null, effectiveHireDate, scope.activeAssignmentId ?? null]
+        );
+      }
+
       // ── PR-1 (#2077) Step 3b — institutional bridges (team/project/committee) ──
       // These rows close the «الموظف ككيان تشغيلي مؤسسي» chain at create
       // time so the engineer never has to remember a follow-up step:
