@@ -83,6 +83,7 @@ import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
 import { recurringInvoicesRouter } from "./finance-recurring-invoices.js";
+import { cashInTransitRouter } from "./finance-cash-in-transit.js";
 import { financeMemoryRouter } from "./finance-memory.js";
 import { financeAmortizationRouter } from "./finance-amortization.js";
 import { financeDeferredRevenueRouter } from "./finance-deferred-revenue.js";
@@ -431,6 +432,8 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), fin
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
 // قوالب الفوترة المتكررة للعملاء (#كلها). CRUD غير دفتري؛ التوليد دفعة لاحقة.
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringInvoicesRouter);
+// النقد في الطريق (#2714). طوران يُرحَّلان عبر postJournalEntry القائم.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), cashInTransitRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
