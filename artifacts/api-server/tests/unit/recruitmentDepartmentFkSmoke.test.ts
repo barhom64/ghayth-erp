@@ -20,8 +20,8 @@ const MIGRATION = read("artifacts/api-server/src/migrations/394_job_postings_dep
 const ROUTE = read("artifacts/api-server/src/routes/recruitment.ts");
 
 describe("migration 394 — job_postings.departmentId FK", () => {
-  it("adds an idempotent departmentId FK referencing departments(id)", () => {
-    expect(MIGRATION).toMatch(/ADD COLUMN IF NOT EXISTS "departmentId" INTEGER REFERENCES departments\(id\)/);
+  it("adds an idempotent departmentId FK with ON DELETE SET NULL", () => {
+    expect(MIGRATION).toMatch(/ADD COLUMN IF NOT EXISTS "departmentId" INTEGER REFERENCES departments\(id\) ON DELETE SET NULL/);
   });
   it("backfills existing rows by matching department name within the same company", () => {
     expect(MIGRATION).toMatch(/UPDATE job_postings/);
@@ -44,6 +44,11 @@ describe("recruitment route — department name/id are kept consistent", () => {
     // id provided -> derive name; name only -> derive id
     expect(ROUTE).toMatch(/SELECT name FROM departments WHERE id=\$1 AND "companyId"=\$2/);
     expect(ROUTE).toMatch(/SELECT id FROM departments WHERE name=\$1 AND "companyId"=\$2/);
+  });
+  it("resolves an ambiguous (non-unique) department name to NULL, not an arbitrary row", () => {
+    // no LIMIT 1 shortcut; only a unique match sets the FK
+    expect(ROUTE).not.toMatch(/SELECT id FROM departments WHERE name=\$1 AND "companyId"=\$2 LIMIT 1/);
+    expect(ROUTE).toMatch(/matches\.length === 1/);
   });
   it("persists both the FK and the denormalized name on insert", () => {
     expect(ROUTE).toMatch(/INSERT INTO job_postings \(title, department, "departmentId"/);

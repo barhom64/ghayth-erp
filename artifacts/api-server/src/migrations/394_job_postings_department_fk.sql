@@ -11,8 +11,11 @@
 --
 -- @rollback: ALTER TABLE job_postings DROP COLUMN IF EXISTS "departmentId";
 
+-- ON DELETE SET NULL: القسم denormalized بالاسم ومتاح للعرض، فحذف قسم لا يجب
+-- أن يفشل بسبب إعلان قديم مرتبط (مسار حذف القسم في settings يفحص تعيينات
+-- الموظفين فقط)؛ يُفرَّغ الـ FK ويبقى الاسم محفوظًا.
 ALTER TABLE job_postings
-  ADD COLUMN IF NOT EXISTS "departmentId" INTEGER REFERENCES departments(id);
+  ADD COLUMN IF NOT EXISTS "departmentId" INTEGER REFERENCES departments(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_job_postings_department
   ON job_postings ("departmentId");

@@ -133,10 +133,13 @@ async function resolveDepartment(
     );
     if (d) name = d.name; else id = null;
   } else if (name) {
-    const [d] = await rawQuery<{ id: number }>(
-      `SELECT id FROM departments WHERE name=$1 AND "companyId"=$2 LIMIT 1`, [name, companyId],
+    // اسم فقط → اشتق المعرّف فقط عند تطابق فريد. الأقسام لا تملك قيد تفرّد على
+    // (companyId, name) (قد يتكرر الاسم عبر فروع/إدارات)، فالاسم الغامض يُترك
+    // بلا FK (الاسم محفوظ) بدل ربطه بصف عشوائي.
+    const matches = await rawQuery<{ id: number }>(
+      `SELECT id FROM departments WHERE name=$1 AND "companyId"=$2`, [name, companyId],
     );
-    if (d) id = d.id;
+    if (matches.length === 1) id = matches[0].id;
   }
   return { id, name };
 }
