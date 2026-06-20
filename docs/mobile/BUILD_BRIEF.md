@@ -6,6 +6,17 @@
 
 ---
 
+## المتطلبات المشتركة (مرة واحدة)
+- **Node 20+** و **pnpm** مثبّتان.
+- استنساخ المستودع وتثبيت الحزم من الجذر:
+  ```bash
+  git clone <repo-url> ghayth-erp && cd ghayth-erp && pnpm install
+  ```
+- **HTTPS إلزامي:** مرّر `VITE_API_ORIGIN=https://<خادمك>` في كل بناء — أندرويد
+  يحجب `http://` افتراضيًا، وتحديد الموقع يتطلب سياقًا آمنًا.
+
+---
+
 ## أندرويد (يُبنى على Linux / Replit / ويندوز + Android Studio)
 
 ```bash
@@ -14,6 +25,9 @@ VITE_API_ORIGIN=https://hr.door.sa bash ../../scripts/mobile/build-android.sh
 ```
 الناتج: `artifacts/ghayth-erp/android/app/build/outputs/apk/debug/app-debug.apk`
 → ثبّته على جوال أندرويد واختبر القائمة أدناه.
+
+> **لإصدار المتجر الموقّع (AAB لـGoogle Play):** انظر قسم
+> [«إصدار موقّع للمتجر»](#-إصدار-موقّع-للمتجر-release) أدناه.
 
 ---
 
@@ -48,6 +62,43 @@ npx cap open ios
 
 **في كل الحالات:** تظل تحتاج **حساب Apple Developer** ($99/سنة) لتوقيع التطبيق
 ورفعه على App Store / TestFlight — هذا قيد Apple لا مفرّ منه.
+
+---
+
+## 🔐 إصدار موقّع للمتجر (release)
+
+الأوامر أعلاه تبني `debug` (تثبيت مباشر للاختبار). للإصدار الموقّع الموجّه للمتجر
+مرّر `BUILD_MODE=release` — السكربتات تتكفّل بالباقي.
+
+### أندرويد — AAB لـGoogle Play (+ APK موقّع)
+```bash
+cd artifacts/ghayth-erp
+BUILD_MODE=release \
+  KEYSTORE_PATH=/path/to/ghayth.jks \
+  KEYSTORE_PASSWORD=*** KEY_ALIAS=ghayth KEY_PASSWORD=*** \
+  VITE_API_ORIGIN=https://hr.door.sa bash ../../scripts/mobile/build-android.sh
+```
+الناتج:
+- `android/app/build/outputs/bundle/release/app-release.aab` ← ارفعه على **Google Play Console**
+- `android/app/build/outputs/apk/release/app-release.apk` ← تثبيت مباشر موقّع
+
+> أنشئ ملف التوقيع **مرة واحدة** واحفظه بأمان (فقدانه يمنع تحديث التطبيق لاحقًا):
+> ```bash
+> keytool -genkey -v -keystore ghayth.jks -keyalg RSA -keysize 2048 \
+>   -validity 10000 -alias ghayth
+> ```
+
+### iOS — أرشفة + IPA موقّع (على ماك)
+```bash
+cd artifacts/ghayth-erp
+BUILD_MODE=release \
+  EXPORT_OPTIONS_PLIST=/path/to/ExportOptions.plist \
+  DEVELOPMENT_TEAM=ABCDE12345 \
+  VITE_API_ORIGIN=https://hr.door.sa bash ../../scripts/mobile/build-ios.sh
+```
+الناتج: `ios/build/ipa/*.ipa` — ارفعه عبر **Transporter** أو `xcrun altool`. يتطلب
+`ExportOptions.plist` فيه `method=app-store` و`teamID`. (بدون `BUILD_MODE=release`
+يُجهّز المشروع ويفتح Xcode للتوقيع اليدوي كما في القسم أعلاه.)
 
 ---
 
