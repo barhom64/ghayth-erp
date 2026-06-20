@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -124,19 +124,48 @@ vendorsRouter.post("/vendors", authorize({ feature: "finance.vendors", action: "
       name, contactPerson, phone, email, taxNumber, address, paymentTerms, category,
       residencyStatus, taxResidenceCountry, defaultWhtRate, whtCategoryDefault,
     } = zodParse(createVendorSchema.safeParse(req.body ?? {}));
-    const { insertId } = await rawExecute(
-      `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category,
-                              "residencyStatus", "taxResidenceCountry", "defaultWhtRate", "whtCategoryDefault")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [
-        scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null,
-        address || null, paymentTerms || null, category || null,
-        residencyStatus ?? "resident",
-        taxResidenceCountry ? taxResidenceCountry.toUpperCase() : null,
-        defaultWhtRate ?? null,
-        whtCategoryDefault || null,
-      ]
-    );
+    // #2716 — منع تكرار المورد (يحاكي نمط منع تكرار العميل في clients.ts:215-229).
+    // الفحص + الإدراج داخل معاملة واحدة مع FOR UPDATE حتى لا ينشئ طلبان متزامنان
+    // موردَين بنفس الهاتف/البريد/الرقم الضريبي. قيد UNIQUE على مستوى القاعدة
+    // مؤجَّل لهجرة باعتماد إبراهيم (الجزء المعماري من #2716).
+    let insertId = 0;
+    await withTransaction(async (txClient) => {
+      if (phone) {
+        const { rows: [dup] } = await txClient.query<{ id: number }>(
+          `SELECT id FROM suppliers WHERE phone = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
+          [phone, scope.companyId]
+        );
+        if (dup) throw new ConflictError("رقم الهاتف مستخدم لمورد آخر", { field: "phone", fix: "استخدم رقم هاتف مختلفًا أو ابحث عن المورد الموجود" });
+      }
+      if (email) {
+        const { rows: [dup] } = await txClient.query<{ id: number }>(
+          `SELECT id FROM suppliers WHERE email = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
+          [email, scope.companyId]
+        );
+        if (dup) throw new ConflictError("البريد الإلكتروني مستخدم لمورد آخر", { field: "email", fix: "استخدم بريدًا إلكترونيًا مختلفًا أو ابحث عن المورد الموجود" });
+      }
+      if (taxNumber) {
+        const { rows: [dup] } = await txClient.query<{ id: number }>(
+          `SELECT id FROM suppliers WHERE "taxNumber" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1 FOR UPDATE`,
+          [taxNumber, scope.companyId]
+        );
+        if (dup) throw new ConflictError("الرقم الضريبي مستخدم لمورد آخر", { field: "taxNumber", fix: "تحقق من الرقم الضريبي أو ابحث عن المورد الموجود" });
+      }
+      const { rows: [newRow] } = await txClient.query<{ id: number }>(
+        `INSERT INTO suppliers ("companyId", name, "contactPerson", phone, email, "taxNumber", address, "paymentTerms", category,
+                                "residencyStatus", "taxResidenceCountry", "defaultWhtRate", "whtCategoryDefault")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+        [
+          scope.companyId, name, contactPerson || null, phone || null, email || null, taxNumber || null,
+          address || null, paymentTerms || null, category || null,
+          residencyStatus ?? "resident",
+          taxResidenceCountry ? taxResidenceCountry.toUpperCase() : null,
+          defaultWhtRate ?? null,
+          whtCategoryDefault || null,
+        ]
+      );
+      insertId = newRow!.id;
+    });
     assertInsert(insertId, "suppliers");
 
     // #1945 FIN-003 — open the vendor's per-entity payable subsidiary account
