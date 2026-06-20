@@ -14,6 +14,18 @@ import { getUsageStats } from "../lib/activityTracker.js";
 import { calculateClientRFM, calculateAllClientsRFM, getClientAnalyticsSummary, getBestContactTime, detectSeasonalPatterns } from "../lib/clientAnalytics.js";
 import { getPersonalizedRecommendations } from "../lib/smartRecommendations.js";
 import { logger } from "../lib/logger.js";
+import {
+  loadInfraCriticalDigestConfig,
+  saveInfraCriticalDigestConfig,
+  deleteInfraCriticalDigestCompanyOverride,
+  hasInfraCriticalDigestCompanyOverride,
+  parseInfraCriticalDigestConfig,
+  INFRA_CRITICAL_DIGEST_CONFIG_KEY,
+  INFRA_CRITICAL_DIGEST_DEFAULT_CONFIG,
+  INFRA_CRITICAL_DIGEST_MIN_COOLDOWN_MINUTES,
+  INFRA_CRITICAL_DIGEST_MAX_COOLDOWN_MINUTES,
+  type InfraCriticalDigestConfig,
+} from "../lib/infraAlerts.js";
 
 // ── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -130,6 +142,252 @@ router.patch("/alerts/:id/read", authorize({ feature: "admin", action: "update" 
     }).catch((e) => logger.error(e, "intelligence background task failed"));
     res.json({ message: "تم تعليم التنبيه كمقروء" });
   } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ── Infrastructure alerts (platform "infra" health) ──────────────────────────
+// One place for admins to see recent platform-level alerts — Redis rate-limit
+// fallback/recovery, event-DLQ backlog, and recurring suppression-trace write
+// failures — instead of digging through email or the generic alerts screen.
+// All such alerts land in smart_alerts with relatedType = 'system_health'.
+router.get("/alerts/infra", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const { severity, state } = req.query as Record<string, string | undefined>;
+    const conditions = [`sa."companyId" = $1`, `sa."relatedType" = 'system_health'`];
+    const params: unknown[] = [scope.companyId];
+    if (severity) { params.push(severity); conditions.push(`sa.severity = $${params.length}`); }
+    // state: 'open' (default) | 'acknowledged' | 'all'
+    if (state === "acknowledged") conditions.push(`sa."isDismissed" = true`);
+    else if (state !== "all") conditions.push(`sa."isDismissed" = false`);
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT sa.id, sa.type, sa.severity, sa.title, sa.description,
+              sa."relatedType", sa."relatedId", sa."isRead", sa."isDismissed",
+              sa."createdAt", sa."companyId", c.name AS "companyName"
+       FROM smart_alerts sa
+       LEFT JOIN companies c ON c.id = sa."companyId"
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY sa."createdAt" DESC
+       LIMIT 200`,
+      params
+    );
+    const [counts] = await rawQuery<Record<string, unknown>>(
+      `SELECT COUNT(*) FILTER (WHERE "isDismissed" = false) AS open,
+              COUNT(*) FILTER (WHERE "isDismissed" = false AND severity = 'critical') AS "openCritical"
+       FROM smart_alerts
+       WHERE "companyId" = $1 AND "relatedType" = 'system_health'`,
+      [scope.companyId]
+    );
+    res.json(maskFields(req, {
+      data: rows,
+      total: rows.length,
+      open: Number(counts?.open ?? 0),
+      openCritical: Number(counts?.openCritical ?? 0),
+    }));
+  } catch (err) { handleRouteError(err, res, "Infra alerts error:"); }
+});
+
+router.patch("/alerts/:id/dismiss", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await rawQuery(
+      `UPDATE smart_alerts SET "isDismissed"=true, "isRead"=true WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: id, after: { isDismissed: true } }).catch((e) => logger.error(e, "intelligence background task failed"));
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.alert.dismissed",
+      entity: "smart_alerts",
+      entityId: id,
+      details: JSON.stringify({ isDismissed: true }),
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
+    res.json({ message: "تم اعتماد التنبيه" });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// Bulk-acknowledge open infra (system_health) alerts in one shot. During an
+// incident the same root cause can fire many alerts (one per company); this lets
+// an admin clear a wave at once, optionally narrowed to a single alert `type`.
+router.post("/alerts/infra/dismiss-bulk", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const type = typeof req.body?.type === "string" && req.body.type.trim() ? String(req.body.type).trim() : undefined;
+    const conditions = [`"companyId" = $1`, `"relatedType" = 'system_health'`, `"isDismissed" = false`];
+    const params: unknown[] = [scope.companyId];
+    if (type) { params.push(type); conditions.push(`type = $${params.length}`); }
+    const updated = await rawQuery<{ id: number }>(
+      `UPDATE smart_alerts SET "isDismissed"=true, "isRead"=true
+       WHERE ${conditions.join(" AND ")} RETURNING id`,
+      params
+    );
+    const count = updated.length;
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "smart_alerts", entityId: 0, after: { isDismissed: true, bulk: true, type: type ?? null, count } }).catch((e) => logger.error(e, "intelligence background task failed"));
+    emitEvent({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "intelligence.alert.dismissed_bulk",
+      entity: "smart_alerts",
+      entityId: 0,
+      details: JSON.stringify({ isDismissed: true, type: type ?? null, count }),
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
+    res.json({ dismissed: count, message: count > 0 ? `تم اعتماد ${count} تنبيه` : "لا توجد تنبيهات مفتوحة للاعتماد" });
+  } catch (err) { handleRouteError(err, res, "خطأ غير متوقع"); }
+});
+
+// ── Infra-critical digest config (Task #834 / per-company Task #845) ──────────
+// Settings that control which severities page on-call and the re-alert cooldown
+// for the critical-infra-alert digest (cronScheduler infraCriticalAlertDigestScan).
+// Read by the cron scan; tuned here by admins. A company can set its OWN override
+// (scope "company", the default) that falls back to the system default (scope
+// "system"). The cron resolves the effective config per company.
+const infraDigestConfigSchema = z.object({
+  severityThreshold: z.enum(["info", "warning", "critical"]),
+  cooldownMinutes: z
+    .number()
+    .int()
+    .min(INFRA_CRITICAL_DIGEST_MIN_COOLDOWN_MINUTES)
+    .max(INFRA_CRITICAL_DIGEST_MAX_COOLDOWN_MINUTES),
+  // Which level this write targets. Defaults to the caller's own company so the
+  // common case (a tenant tuning its own paging) needs no extra field.
+  scope: z.enum(["company", "system"]).optional(),
+  // Optional target company (Task #851) — lets an admin tune ANY company they
+  // manage, not just their own. Validated against allowedCompanies server-side;
+  // ignored when scope === "system". Absent → the caller's own company.
+  companyId: z.number().int().positive().optional(),
+});
+
+router.get("/alerts/infra/settings", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // Which company this read targets. An admin may tune any company they manage
+    // (Task #851), so an optional ?companyId selects one of the caller's
+    // allowed companies; absent/invalid falls back to the caller's own company
+    // (the original single-company behaviour).
+    const requestedCompanyId = Number(req.query.companyId);
+    const targetCompanyId =
+      Number.isInteger(requestedCompanyId) && scope.allowedCompanies.includes(requestedCompanyId)
+        ? requestedCompanyId
+        : scope.companyId;
+    // Effective config for the target company (override → system default →
+    // built-in), plus the raw system default and whether that company has its
+    // own override so the UI can show "using system default" vs "company
+    // override". `companies` powers the picker and flags which already have an
+    // override (no settings:view needed — stays under the admin feature).
+    const [config, systemConfig, hasOverride, companyRows, overrideRows] = await Promise.all([
+      loadInfraCriticalDigestConfig(targetCompanyId),
+      loadInfraCriticalDigestConfig(),
+      hasInfraCriticalDigestCompanyOverride(targetCompanyId),
+      rawQuery<{ id: number; name: string }>(
+        `SELECT id, name FROM companies WHERE id = ANY($1) ORDER BY name`,
+        [scope.allowedCompanies]
+      ),
+      rawQuery<{ companyId: number; value: string }>(
+        `SELECT "companyId", value FROM system_settings WHERE key = $1 AND "companyId" = ANY($2) AND "branchId" IS NULL`,
+        [INFRA_CRITICAL_DIGEST_CONFIG_KEY, scope.allowedCompanies]
+      ),
+    ]);
+    // Map each overriding company to its parsed config so the UI can list which
+    // companies deviate from the system default and HOW (Task #861), without an
+    // extra per-company round-trip.
+    const overrideConfigById = new Map<number, InfraCriticalDigestConfig>();
+    for (const r of overrideRows) {
+      overrideConfigById.set(Number(r.companyId), parseInfraCriticalDigestConfig(r.value));
+    }
+    const companies = companyRows.map((c) => {
+      const override = overrideConfigById.get(Number(c.id));
+      return {
+        id: c.id,
+        name: c.name,
+        hasOverride: !!override,
+        // Only overriding companies carry a config; inheritors use systemConfig.
+        ...(override ? { config: override } : {}),
+      };
+    });
+    res.json(maskFields(req, {
+      companyId: targetCompanyId,
+      companies,
+      config,
+      systemConfig,
+      hasCompanyOverride: hasOverride,
+      defaults: INFRA_CRITICAL_DIGEST_DEFAULT_CONFIG,
+      limits: {
+        minCooldownMinutes: INFRA_CRITICAL_DIGEST_MIN_COOLDOWN_MINUTES,
+        maxCooldownMinutes: INFRA_CRITICAL_DIGEST_MAX_COOLDOWN_MINUTES,
+      },
+    }));
+  } catch (err) { handleRouteError(err, res, "Infra digest settings error:"); }
+});
+
+router.put("/alerts/infra/settings", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    // zodParse for the shape, then parse... to normalise/clamp defensively.
+    const input = zodParse(infraDigestConfigSchema.safeParse(req.body));
+    const config = parseInfraCriticalDigestConfig(input);
+    // A company-scoped write may target any company the admin manages
+    // (Task #851); fall back to the caller's own company when unset/invalid.
+    // Back-compat default: a bare write (no scope, no companyId) targets the
+    // SYSTEM default — the original pre-#851 single-config behaviour and exactly
+    // what the system-wide digest cron reads. A companyId without an explicit
+    // scope is an unambiguous company-targeted write (Task #851). The frontend
+    // always sends an explicit scope, so this only affects API callers that omit
+    // it (e.g. the admin tuning the system default with no company picked).
+    const effectiveScope: "system" | "company" =
+      input.scope ?? (input.companyId != null ? "company" : "system");
+    const overrideCompanyId =
+      input.companyId != null && scope.allowedCompanies.includes(input.companyId)
+        ? input.companyId
+        : scope.companyId;
+    const targetCompanyId = effectiveScope === "system" ? null : overrideCompanyId;
+    await saveInfraCriticalDigestConfig(config, targetCompanyId);
+    const auditPayload = { ...config, scope: effectiveScope, targetCompanyId };
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "update",
+      entity: "system_settings", entityId: 0, after: { infra_critical_digest_config: auditPayload },
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "intelligence.infra_digest_settings.updated", entity: "system_settings", entityId: 0,
+      details: JSON.stringify(auditPayload),
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
+    res.json({
+      message: effectiveScope === "system"
+        ? "تم حفظ الإعداد الافتراضي للنظام"
+        : "تم حفظ إعدادات تنبيهات البنية التحتية للشركة",
+      config,
+      scope: effectiveScope,
+    });
+  } catch (err) { handleRouteError(err, res, "Infra digest settings update error:"); }
+});
+
+// Remove a company's override so it falls back to the system default. An admin
+// may reset any company they manage (Task #851) via ?companyId; absent/invalid
+// resets the caller's own company.
+router.delete("/alerts/infra/settings", authorize({ feature: "admin", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const requestedCompanyId = Number(req.query.companyId);
+    const targetCompanyId =
+      Number.isInteger(requestedCompanyId) && scope.allowedCompanies.includes(requestedCompanyId)
+        ? requestedCompanyId
+        : scope.companyId;
+    await deleteInfraCriticalDigestCompanyOverride(targetCompanyId);
+    const config = await loadInfraCriticalDigestConfig();
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId, action: "delete",
+      entity: "system_settings", entityId: 0, after: { infra_critical_digest_config: "reset_to_system_default", targetCompanyId },
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "intelligence.infra_digest_settings.reset", entity: "system_settings", entityId: 0,
+      details: JSON.stringify({ scope: "company", targetCompanyId }),
+    }).catch((e) => logger.error(e, "intelligence background task failed"));
+    res.json({ message: "تمت إعادة الإعداد إلى الافتراضي للنظام", config });
+  } catch (err) { handleRouteError(err, res, "Infra digest settings reset error:"); }
 });
 
 router.get("/kpis", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
