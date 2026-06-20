@@ -886,24 +886,12 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           fix: "اختر فئة القوى العاملة (موظف/سائق/مدير/…) لتطبيق سياسة الحضور المناسبة.",
         });
       }
-      if (!teamId) {
-        throw new ValidationError("الفريق مطلوب", {
-          field: "teamId",
-          fix: "اختر الفريق الذي ينضم إليه الموظف من الإعدادات → الفِرَق.",
-        });
-      }
-      if (!projectId) {
-        throw new ValidationError("المشروع مطلوب", {
-          field: "projectId",
-          fix: "اختر المشروع/المنتج التشغيلي الذي يساهم فيه الموظف.",
-        });
-      }
-      if (!costCenterId) {
-        throw new ValidationError("مركز التكلفة مطلوب", {
-          field: "costCenterId",
-          fix: "اختر مركز التكلفة الذي يُحاسب عليه راتب الموظف.",
-        });
-      }
+      // PR (النظام يَحضُر لا يُحضَر له): الفريق والمشروع ومركز التكلفة
+      // ليست حقائق تعيين جوهرية — الفريق والمشروع أمور عارضة تُسنَد لاحقًا
+      // عبر عقود العضوية المستقلة (POST /team-memberships, /project-assignments)،
+      // ومركز التكلفة يُشتق آليًا من فرع الموظف وصفته في كل فرع (محرّك
+      // resolveCostCenter). لذا لا تُفرَض وقت التعيين. تبقى إلزامية: المنصب،
+      // فئة الحضور، المدير المباشر — وهي الحقائق المؤسسية الجوهرية للموظف.
       if (!managerId) {
         throw new ValidationError("المدير المباشر مطلوب", {
           field: "managerId",
