@@ -8,6 +8,8 @@
 -- DDL-only (لا seed) → seed-drift safe. > baseline-cutoff (297) ليعمل على
 -- fresh/CI. كل العبارات idempotent.
 --
+-- @rollback: ALTER TABLE users DROP COLUMN IF EXISTS "twoFactorEnabled", DROP COLUMN IF EXISTS "twoFactorSecret", DROP COLUMN IF EXISTS "twoFactorEnrolledAt", DROP COLUMN IF EXISTS "twoFactorBackupCodes";
+--
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "twoFactorEnabled"     BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "twoFactorSecret"      TEXT;        -- سرّ TOTP مشفّر (fieldEncryption)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "twoFactorEnrolledAt"  TIMESTAMP;   -- وقت التفعيل
