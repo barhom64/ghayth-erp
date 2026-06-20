@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError, parseId, zodParse } from "../lib/errorHandler.js";
 import { Router, type Response as ExpressResponse } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -1012,6 +1012,76 @@ router.post("/mobile/2fa/verify-login", loginLimiter, async (req, res) => {
     });
   } catch (err) {
     handleRouteError(err, res, "Mobile 2FA verify-login error:");
+  }
+});
+
+// ─── #2712 (الدفعة 2) — إدارة الجلسات النشطة (الأجهزة) ───────────────────────
+// مبنية على refresh_tokens (مخزن الجلسات الفعلي). يتصرّف المستخدم في جلساته
+// هو فقط (ownership عبر userId)، والجلسة الحالية تُميَّز بمطابقة كوكي التحديث.
+interface SessionListRow {
+  id: number;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+// GET /sessions — الجلسات النشطة (غير الملغاة وغير المنتهية).
+router.get("/sessions", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const currentRefresh: string | null = req.cookies?.erp_refresh ?? null;
+    const rows = await rawQuery<SessionListRow>(
+      `SELECT id, "ipAddress", "userAgent", "createdAt"
+         FROM refresh_tokens
+        WHERE "userId"=$1 AND "revokedAt" IS NULL AND "expiresAt" > NOW()
+        ORDER BY "createdAt" DESC`,
+      [scope.userId],
+    );
+    let currentId: number | null = null;
+    if (currentRefresh) {
+      const [cur] = await rawQuery<{ id: number }>(
+        `SELECT id FROM refresh_tokens WHERE token=$1 AND "userId"=$2 LIMIT 1`,
+        [currentRefresh, scope.userId],
+      );
+      currentId = cur?.id ?? null;
+    }
+    res.json({ data: rows.map((r) => ({ ...r, current: r.id === currentId })) });
+  } catch (err) {
+    handleRouteError(err, res, "List sessions error:");
+  }
+});
+
+// POST /sessions/:id/revoke — إنهاء جلسة محددة (يملكها المستخدم).
+router.post("/sessions/:id/revoke", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id);
+    const { affectedRows } = await rawExecute(
+      `UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE id=$1 AND "userId"=$2 AND "revokedAt" IS NULL`,
+      [id, scope.userId],
+    );
+    if (!affectedRows) throw new NotFoundError("الجلسة غير موجودة أو منتهية");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "session_revoked", sessionId: id } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, message: "تم إنهاء الجلسة" });
+  } catch (err) {
+    handleRouteError(err, res, "Revoke session error:");
+  }
+});
+
+// POST /sessions/revoke-others — إنهاء كل الجلسات عدا الحالية.
+router.post("/sessions/revoke-others", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const currentRefresh: string | null = req.cookies?.erp_refresh ?? null;
+    const { affectedRows } = await rawExecute(
+      `UPDATE refresh_tokens SET "revokedAt"=NOW()
+        WHERE "userId"=$1 AND "revokedAt" IS NULL AND ($2::text IS NULL OR token <> $2)`,
+      [scope.userId, currentRefresh],
+    );
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "sessions_revoked_others", count: affectedRows } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, revoked: affectedRows, message: "تم إنهاء بقية الجلسات" });
+  } catch (err) {
+    handleRouteError(err, res, "Revoke other sessions error:");
   }
 });
 
