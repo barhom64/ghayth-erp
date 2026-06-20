@@ -130,11 +130,12 @@ describe("HR top-nav stability — static guard", () => {
     expect(navSrc).toMatch(/<ModuleTabsNav\s+section="الموارد البشرية"/);
     expect(navSrc).not.toMatch(/\blabel:\s*"/);
 
-    // ModuleTabsNav derives both levels from allNavSections (the single source
-    // of truth), so the horizontal bar mirrors the sidebar groups by
-    // construction — the mirror can no longer silently break.
+    // ModuleTabsNav derives both levels from the SAME permission-filtered
+    // pipeline the sidebar uses (useFilteredNavSections), so the horizontal bar
+    // mirrors the sidebar groups by construction AND never shows a tab the user
+    // lacks permission for («نظهر ثم 403»).
     const modSrc = readFileSync(join(shared, "module-tabs-nav.tsx"), "utf8");
-    expect(modSrc).toMatch(/allNavSections/);
+    expect(modSrc).toMatch(/useFilteredNavSections/);
     expect(modSrc).toMatch(/navigation\.registry/);
   });
 });

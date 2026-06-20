@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { cn } from "@/lib/utils";
 import { MoreHorizontal, ChevronDown } from "lucide-react";
-import { allNavSections, type NavItem } from "@/components/layout/navigation.registry";
+import { type NavItem, type NavSection } from "@/components/layout/navigation.registry";
+import { useFilteredNavSections } from "@/components/layout/sidebar-layout";
 
 // ──────────────────────────────────────────────────────────────────────────
 // ModuleTabsNav — مرآة القائمة الجانبية، مشتقّة منها مباشرة (مصدر واحد).
@@ -10,6 +11,10 @@ import { allNavSections, type NavItem } from "@/components/layout/navigation.reg
 // المستوى الأول (الشريط الرئيسي) = مجموعات القسم العليا في navigation.registry
 // (نفس التسميات والترتيب والأيقونات). المستوى الثاني (الشريط الفرعي) = أبناء
 // المجموعة النشطة. بهذا يستحيل أن ينحرف الأفقي عن الجانبي — لأنه نفس المصدر.
+//
+// الترشيح بالصلاحيات: نشتقّ من useFilteredNavSections (نفس خطّ ترشيح القائمة
+// الجانبية: perm / permMode / minRoleLevel + فحص تسجيل المسار)، فلا يظهر تبويب
+// لا يملك المستخدم صلاحيته (تفاديًا لـ«نظهر ثم 403»).
 //
 // - section: عنوان القسم في allNavSections (مثل "الموارد البشرية").
 // - wrap: إن كان القسم مغلّفًا بمجموعة واحدة (مثل "إدارة الأسطول")، نشتقّ أبناءها.
@@ -20,35 +25,42 @@ function basePath(p: string): string {
   return p.split(/[?#]/)[0];
 }
 
-/** كل المسارات تحت عنصر (هو + كل أحفاده). */
+/** كل المسارات (الكاملة، مع أي ?query) تحت عنصر — هو وكل أحفاده. */
 function pathsUnder(item: NavItem): string[] {
-  const out = [basePath(item.path)];
+  const out = [item.path];
   for (const c of item.children ?? []) out.push(...pathsUnder(c));
   return out;
 }
 
-/** أطول تطابق بين موقع المتصفّح ومسارات العنصر (-1 = لا تطابق). الأطول يفوز،
- *  حتى لا يبتلع جذرٌ عام (/hr) كل أبنائه التابعين لمجموعات أخرى. */
-function matchLen(item: NavItem, loc: string): number {
+/** أطول تطابق بين الموقع الحالي ومسارات العنصر (-1 = لا تطابق). الأطول يفوز حتى
+ *  لا يبتلع جذرٌ عام (/hr) أبناءَ مجموعات أخرى. المسارات ذات ?query (مثل لوحات
+ *  /module-dashboards?tab=…) تتطابق فقط بالموقع الكامل `here` كي لا تتساوى لوحاتٌ
+ *  تتمايز بالـ query فقط. */
+function matchLen(item: NavItem, loc: string, here: string): number {
   let best = -1;
-  for (const p of pathsUnder(item)) {
-    if (loc === p) best = Math.max(best, p.length + 1);
-    else if (loc.startsWith(`${p}/`)) best = Math.max(best, p.length);
+  for (const raw of pathsUnder(item)) {
+    if (raw.includes("?")) {
+      if (here === raw) best = Math.max(best, basePath(raw).length + 2);
+    } else if (loc === raw) {
+      best = Math.max(best, raw.length + 1);
+    } else if (loc.startsWith(`${raw}/`)) {
+      best = Math.max(best, raw.length);
+    }
   }
   return best;
 }
 
-function activeIndex(items: NavItem[], loc: string): number {
+function activeIndex(items: NavItem[], loc: string, here: string): number {
   let idx = -1, bestLen = 0;
   items.forEach((it, i) => {
-    const len = matchLen(it, loc);
+    const len = matchLen(it, loc, here);
     if (len > bestLen) { bestLen = len; idx = i; }
   });
   return idx;
 }
 
-function moduleGroups(section: string, wrap?: string): NavItem[] {
-  const sec = allNavSections.find((s) => s.title === section);
+function moduleGroups(sections: NavSection[], section: string, wrap?: string): NavItem[] {
+  const sec = sections.find((s) => s.title === section);
   if (!sec) return [];
   if (wrap) {
     const w = sec.items.find((g) => g.label === wrap);
@@ -85,21 +97,25 @@ export function ModuleTabsNav({ section, wrap, primaryCount = 12 }: {
   section: string; wrap?: string; primaryCount?: number;
 }) {
   const [loc] = useLocation();
+  const search = useSearch();
+  const here = search ? `${loc}${search.startsWith("?") ? "" : "?"}${search}` : loc;
   const [moreOpen, setMoreOpen] = useState(false);
-  const groups = moduleGroups(section, wrap);
+  // مُرشَّحة بالصلاحيات — نفس خطّ القائمة الجانبية.
+  const sections = useFilteredNavSections();
+  const groups = moduleGroups(sections, section, wrap);
   if (groups.length === 0) return null;
 
-  const activeIdx = activeIndex(groups, loc);
+  const activeIdx = activeIndex(groups, loc, here);
   const primary = groups.slice(0, primaryCount);
   const overflow = groups.slice(primaryCount);
   const overflowActive = activeIdx >= primaryCount;
   const activeGroup = activeIdx >= 0 ? groups[activeIdx] : undefined;
   const subTabs = activeGroup?.children ?? [];
-  const subActiveIdx = activeIndex(subTabs, loc);
+  const subActiveIdx = activeIndex(subTabs, loc, here);
 
   return (
     <div data-testid={`module-tabs-${section}`}>
-      {/* الشريط الرئيسي — مجموعات الجانبية */}
+      {/* الشريط الرئيسي — مجموعات الجانبية (landmark تنقّل واحد) */}
       <div className="border-b mb-2 -mt-2 overflow-x-auto">
         <nav className="flex gap-1 min-w-max items-center" dir="rtl">
           {primary.map((g, i) => (
@@ -151,14 +167,14 @@ export function ModuleTabsNav({ section, wrap, primaryCount = 12 }: {
         </nav>
       </div>
 
-      {/* الشريط الفرعي — أبناء المجموعة النشطة */}
+      {/* الشريط الفرعي — أبناء المجموعة النشطة (tablist لا landmark ثانٍ) */}
       {subTabs.length > 0 && (
         <div className="border-b mb-4 overflow-x-auto">
-          <nav className="flex gap-1 min-w-max items-center" dir="rtl">
+          <div role="tablist" className="flex gap-1 min-w-max items-center" dir="rtl">
             {subTabs.map((c, i) => (
               <TabLink key={c.path + i} item={c} active={i === subActiveIdx} secondary />
             ))}
-          </nav>
+          </div>
         </div>
       )}
     </div>
