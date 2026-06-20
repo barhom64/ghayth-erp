@@ -214,6 +214,15 @@ run_step "check:link-nested-anchor" node scripts/src/check-link-nested-anchor.mj
   # returned-JSX event handlers). Pure-logic fixtures guard the detector.
   run_step "check:usememo-setstate:tests" node scripts/src/check-usememo-setstate.test.mjs
   run_step "check:usememo-setstate" node scripts/src/check-usememo-setstate.mjs
+  # RULES OF HOOKS: a React Hook called conditionally — after an early `return`,
+  # inside an if/loop/ternary, or in a plain helper function — changes the hook
+  # count between renders and throws "Rendered more hooks than during the
+  # previous render", blanking the whole page (the expenses-create / exempt-
+  # pilgrims / org-model incidents). typecheck/build pass; only manifests at
+  # runtime. AST-based scan (bundled tsc); empty baseline in
+  # scripts/hooks-rules-allowlist.txt. Pure-logic fixtures guard the detector.
+  run_step "check:hooks-rules:tests" node scripts/src/check-hooks-rules.test.mjs
+  run_step "check:hooks-rules" node scripts/src/check-hooks-rules.mjs
   # The strict account-creation limiter (registerLimiter, max 5/hour) must never
   # gate a GET probe. /api/auth/setup-state is polled on every login-page mount;
   # gating it with the registration budget 429s the probe under modest/shared-IP
