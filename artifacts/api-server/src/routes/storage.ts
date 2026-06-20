@@ -140,7 +140,19 @@ router.get("/storage/objects/*path", authMiddleware, authorize({ feature: "docum
          WHERE dv."storageKey"=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL LIMIT 1`,
         [objectPath, scope.companyId]
       );
-      if (docs.length === 0 && versions.length === 0) {
+      // وثائق الاستكمال الذاتي تُرفع خادميًا ولا تُسجَّل في جدول documents؛
+      // اسمح بالعرض إذا كان المسار مرجَّعًا في بيانات/مرفقات موظف بنفس الشركة.
+      // المسار يحوي UUID فريدًا، فالمطابقة النصية كافية وآمنة ضمن نطاق الشركة.
+      const onboardingRef = (docs.length === 0 && versions.length === 0)
+        ? await rawQuery(
+            `SELECT id FROM employees
+              WHERE "companyId"=$2 AND "deletedAt" IS NULL
+                AND (("selfSubmittedData")::text LIKE '%'||$1||'%' OR (attachments)::text LIKE '%'||$1||'%')
+              LIMIT 1`,
+            [objectPath, scope.companyId]
+          )
+        : [];
+      if (docs.length === 0 && versions.length === 0 && onboardingRef.length === 0) {
         throw new ForbiddenError("Access denied");
       }
     }

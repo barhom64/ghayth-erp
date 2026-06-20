@@ -130,7 +130,9 @@ const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
 const WpsSettings = lazy(() => import("@/pages/hr/saudi-compliance/wps/settings"));
 
 export const hrRoutes = [
-  { path: "/hr", component: HR },
+  // RBAC-REV-STD — مركز HR لوحة إدارية بلا subKey؛ minRoleLevel:25 يحرس
+  // الوصول المباشر بالرابط (لا الواجهة فقط) فلا يصله الاستاندر (10)/السائق (15).
+  { path: "/hr", component: HR, minRoleLevel: 25 },
   // HR-010 / #1799 priority #4 — Services Catalog landing page.
   { path: "/hr/services", component: HrServices, subKey: "services" },
   { path: "/employees", component: Employees, subKey: "employees" },

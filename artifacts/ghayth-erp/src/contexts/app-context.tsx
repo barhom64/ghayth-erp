@@ -77,6 +77,33 @@ const roleKeySubPages: Record<string, Record<string, string[]>> = {
   payroll_officer: { hr: ["payroll", "attendance"] },
 };
 
+// لواحق المفاتيح الذاتية (الخدمة الذاتية): ملفي الشخصي / تسجيل حضوري / إجازاتي.
+// منحة على أحد هذه لا تُخوّل الصفحات الإدارية للوحدة — هي فقط تُدخل اسم
+// الوحدة الأم في allowedModules. تُستعمل لإيقاف تسريب «ظاهر+403» حيث كان
+// الموظف الاستاندر يرى قائمة الموارد البشرية كاملة بسبب منحة ذاتية واحدة
+// (hr.employees.self / hr.attendance.checkin). RBAC-REV-STD.
+const SELF_FEATURE_SUFFIXES = [".self", ".checkin", ".my"] as const;
+
+/**
+ * هل يملك المستخدم منحة إدارية فعلية (غير ذاتية) داخل هذه الوحدة؟
+ * تتجاهل المنح الذاتية (التي تنتهي بلاحقة ذاتية) فلا تُعَدّ تخويلًا
+ * للصفحات الإدارية. `*` (المالك) يمرّ دائمًا.
+ */
+export function hasManagementGrantInModule(
+  rawPermissions: readonly string[],
+  module: string,
+): boolean {
+  for (const p of rawPermissions) {
+    if (p === "*") return true;
+    const scope = p.split(":")[0]; // "hr.employees" | "hr.employees.self" | "hr"
+    if (!scope) continue;
+    if (scope.split(".")[0] !== module) continue;
+    if (SELF_FEATURE_SUFFIXES.some((s) => scope.endsWith(s))) continue;
+    return true; // منحة غير ذاتية ضمن الوحدة
+  }
+  return false;
+}
+
 export type PermissionKey =
   | "canViewAllBranches"
   | "canManageViolations"
@@ -504,17 +531,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const canAccessSubPage = useCallback((module: string, subKey: string) => {
     if (!selectedRole) return false;
+    if (isOwnerRole) return true;
     const rk = selectedRole.roleKey;
     const perms = roleKeySubPages[rk];
-    if (!perms) {
-      return allowedModules.includes(module as ModuleType);
+    if (perms) {
+      const moduleSubs = perms[module];
+      // الخريطة هي المرجع للأدوار المُسجَّلة: تُظهر الصفحات المُصرَّح بها فقط.
+      if (moduleSubs) return moduleSubs.includes(subKey);
     }
-    const moduleSubs = perms[module];
-    if (!moduleSubs) {
-      return allowedModules.includes(module as ModuleType);
-    }
-    return moduleSubs.includes(subKey);
-  }, [selectedRole, allowedModules]);
+    // RBAC-REV-STD — منع افتراضي للأدوار/الوحدات غير المُسجَّلة. السلوك القديم
+    // (allowedModules.includes(module)) كان يسرّب كل صفحات HR الفرعية للموظف
+    // الاستاندر الذي تظهر وحدته «hr» فقط عبر منحة ذاتية
+    // (hr.employees.self / hr.attendance.checkin). نُظهر الصفحة الإدارية فقط
+    // عند امتلاك منحة إدارية فعلية (غير ذاتية) داخل الوحدة.
+    return hasManagementGrantInModule(rawPermissions, module);
+  }, [selectedRole, isOwnerRole, rawPermissions]);
 
   return (
     <AppContext.Provider value={{

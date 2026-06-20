@@ -31,6 +31,18 @@ bash scripts/mobile/build-android.sh
 VITE_API_ORIGIN=https://your-server bash scripts/mobile/build-android.sh
 ```
 
+### إصدار موقّع للمتجر (release)
+السكربت يبني `debug` افتراضيًا (تثبيت مباشر). للإصدار الموقّع الموجّه لـGoogle Play
+مرّر `BUILD_MODE=release` مع بيانات ملف التوقيع (keystore):
+```bash
+BUILD_MODE=release \
+  KEYSTORE_PATH=/path/ghayth.jks KEYSTORE_PASSWORD=*** \
+  KEY_ALIAS=ghayth KEY_PASSWORD=*** \
+  bash scripts/mobile/build-android.sh
+```
+ينتج `bundle/release/app-release.aab` (لرفعه على Play Console) + APK موقّع. أنشئ
+ملف التوقيع مرة واحدة عبر `keytool -genkey` واحفظه بأمان (فقدانه يمنع التحديثات لاحقًا).
+
 ---
 
 ## iOS (يتطلب ماك + Xcode + حساب Apple Developer)

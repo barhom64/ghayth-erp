@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { formatDateAr } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
@@ -7,7 +7,7 @@ import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { AvatarInitial } from "@/components/shared/avatar-initial";
-import { UserCheck, Inbox } from "lucide-react";
+import { UserCheck, Inbox, FileText } from "lucide-react";
 
 /**
  * /hr/self-onboarding-review — «طلبات استكمال البيانات».
@@ -30,6 +30,23 @@ const FIELD_LABELS: Record<string, string> = {
 export default function SelfOnboardingReviewPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["employee-self-submissions"], "/employees/self-submissions");
   const [openId, setOpenId] = useState<number | null>(null);
+
+  // عرض مرفق الموظف عبر مسار التخزين المُصادَق (لا href مباشر — الرمز في الترويسة).
+  const viewAttachment = async (att: { path: string; name?: string }) => {
+    try {
+      const rel = att.path.replace(/^\/objects\//, "");
+      const res = await fetch(`${API_BASE}/api/storage/objects/${rel}`, {
+        credentials: "include",
+        headers: { ...nativeAuthHeaders() },
+      });
+      if (!res.ok) throw new Error("فشل فتح المرفق");
+      const url = URL.createObjectURL(await res.blob());
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      // الفشل صامت — المرفق قد يكون محذوفًا أو الصلاحية غير كافية.
+    }
+  };
 
   const approveMut = useApiMutation<unknown, { id: number }>(
     (b) => `/employees/${b.id}/approve-self-data`,
@@ -103,16 +120,36 @@ export default function SelfOnboardingReviewPage() {
                     </div>
                   </div>
                   {open && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm border-t border-border pt-3">
-                      {Object.keys(FIELD_LABELS).map((k) => (
-                        <div key={k}>
-                          <span className="text-muted-foreground">{FIELD_LABELS[k]}: </span>
-                          {k === "gender"
-                            ? (submitted[k] === "female" ? "أنثى" : submitted[k] === "male" ? "ذكر" : "—")
-                            : (submitted[k] || "—")}
+                    <>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm border-t border-border pt-3">
+                        {Object.keys(FIELD_LABELS).map((k) => (
+                          <div key={k}>
+                            <span className="text-muted-foreground">{FIELD_LABELS[k]}: </span>
+                            {k === "gender"
+                              ? (submitted[k] === "female" ? "أنثى" : submitted[k] === "male" ? "ذكر" : "—")
+                              : (submitted[k] || "—")}
+                          </div>
+                        ))}
+                      </div>
+                      {Array.isArray(submitted.attachments) && submitted.attachments.length > 0 && (
+                        <div className="border-t border-border pt-3">
+                          <div className="text-xs text-muted-foreground mb-2">المرفقات ({submitted.attachments.length})</div>
+                          <div className="flex flex-wrap gap-2">
+                            {submitted.attachments.map((att: any, i: number) => (
+                              <button
+                                key={att.path || i}
+                                type="button"
+                                onClick={() => viewAttachment(att)}
+                                className="flex items-center gap-2 rounded-lg bg-surface-subtle px-3 py-1.5 text-sm hover:bg-surface-muted"
+                              >
+                                <FileText className="w-4 h-4 text-status-info-foreground" />
+                                <span className="truncate max-w-[180px]">{att.name || "مرفق"}</span>
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>
