@@ -82,6 +82,7 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { recurringInvoicesRouter } from "./finance-recurring-invoices.js";
 import { financeMemoryRouter } from "./finance-memory.js";
 import { financeAmortizationRouter } from "./finance-amortization.js";
 import { financeDeferredRevenueRouter } from "./finance-deferred-revenue.js";
@@ -428,6 +429,8 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
+// قوالب الفوترة المتكررة للعملاء (#كلها). CRUD غير دفتري؛ التوليد دفعة لاحقة.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringInvoicesRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
