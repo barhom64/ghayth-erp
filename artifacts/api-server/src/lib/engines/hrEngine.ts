@@ -5,6 +5,7 @@
 
 import { financialEngine } from "./financialEngine.js";
 import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
+import { deriveBranchCostCenter } from "../accountingAllocation.js";
 import { registerCrossDomainHandler } from "../eventBus.js";
 import { roundTo2 } from "../businessHelpers.js";
 import type { DomainEngine } from "./domainEngineBase.js";
@@ -382,7 +383,7 @@ class HREngineImpl implements DomainEngine {
     let breakdownTrusted = false;
     const debitLines: Array<{
       accountCode: string; debit: number; credit: number;
-      employeeId?: number; departmentId?: number;
+      employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number;
     }> = [];
 
     if (payroll.breakdown && payroll.breakdown.length > 0) {
@@ -487,7 +488,7 @@ class HREngineImpl implements DomainEngine {
     // ALWAYS balances by construction.
     const deductionLines: Array<{
       accountCode: string; debit: number; credit: number;
-      employeeId?: number; departmentId?: number;
+      employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number;
     }> = [];
     if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
       let classified = 0;
@@ -518,6 +519,47 @@ class HREngineImpl implements DomainEngine {
       // Legacy / untrusted breakdown — single aggregate clearing line (the
       // pre-#2303 behaviour), so the dimensional split is never misleading.
       deductionLines.push({ accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions });
+    }
+
+    // ── الدفعة 2 — استمام مركز التكلفة على سطور الرواتب (يمسّ الدفتر: بُعد فقط) ──
+    // لكل موظف، نشتق مركز تكلفته من تخصيص فرعه الرئيسي
+    // (employee_branch_allocations): تجاوز صريح costCenterId إن وُجد، وإلا
+    // مركز التكلفة التلقائي للفرع (BR-XXXX) عبر seam المالية deriveBranchCostCenter.
+    // هذا بُعد محاسبي يُستمّ على السطور فقط — لا يغيّر أي مبلغ مدين/دائن ولا
+    // توازن القيد. موظف بلا تخصيص (أو breakdown غير موثوق) يبقى بلا مركز تكلفة
+    // كما هو سلوك اليوم — توافق خلفي تام. (الدفعة 2ب لاحقًا: التوزيع متعدد الفروع).
+    if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
+      const empIds = [...new Set(payroll.breakdown.map((e) => e.employeeId))];
+      const allocRows = await rawQuery<{ employeeId: number; branchId: number | null; costCenterId: number | null }>(
+        `SELECT eba."employeeId", eba."branchId", eba."costCenterId"
+           FROM employee_branch_allocations eba
+          WHERE eba."companyId" = $1
+            AND eba."isPrimary" = TRUE
+            AND eba."endDate" IS NULL
+            AND eba."employeeId" = ANY($2::int[])`,
+        [ctx.companyId, empIds]
+      );
+      const branchCcCache = new Map<number, number | null>();
+      const empDims = new Map<number, { branchId: number | null; costCenterId: number | null }>();
+      for (const r of allocRows) {
+        let cc = r.costCenterId ?? null;
+        if (cc == null && r.branchId != null) {
+          if (!branchCcCache.has(r.branchId)) {
+            branchCcCache.set(r.branchId, await deriveBranchCostCenter(ctx.companyId, r.branchId));
+          }
+          cc = branchCcCache.get(r.branchId) ?? null;
+        }
+        empDims.set(r.employeeId, { branchId: r.branchId, costCenterId: cc });
+      }
+      const stamp = (l: { employeeId?: number; costCenterId?: number; branchId?: number }) => {
+        if (l.employeeId == null) return;
+        const d = empDims.get(l.employeeId);
+        if (!d) return;
+        if (d.costCenterId != null) l.costCenterId = d.costCenterId;
+        if (d.branchId != null && l.branchId == null) l.branchId = d.branchId;
+      };
+      for (const l of debitLines) stamp(l);
+      for (const l of deductionLines) stamp(l);
     }
 
     const lines = [
