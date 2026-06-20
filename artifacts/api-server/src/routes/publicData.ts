@@ -3,6 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { verifyOnboardingToken, markOnboardingTokenUsed } from "../lib/employeeOnboarding.js";
+import { ObjectStorageService } from "../lib/objectStorage.js";
 import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
@@ -223,6 +224,58 @@ router.get("/onboarding/:token", publicLimiter, async (req, res) => {
     });
   } catch (err) {
     handleRouteError(err, res, "فتح صفحة الاستكمال الذاتي");
+  }
+});
+
+// رفع وثيقة (صورة هوية/جواز/PDF) من صفحة الاستكمال العامة — نموذج خادمي:
+// الموظف يرسل base64، والخادم يتحقق من النوع والحجم ثم يرفعه بصلاحياته.
+// لا رابط تخزين موقّع يُسلَّم لِحامل الرمز (لا تعريض كتابة مباشرة للتخزين).
+const ALLOWED_DOC_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
+const MAX_DOC_BYTES = 5 * 1024 * 1024; // 5MB للملف الخام
+const onboardingDocSchema = z.object({
+  fileName: z.string().trim().min(1).max(160),
+  mimeType: z.enum(ALLOWED_DOC_MIME),
+  dataBase64: z.string().min(1),
+});
+const objectStorage = new ObjectStorageService();
+
+router.post("/onboarding/:token/document", publicLimiter, async (req, res) => {
+  try {
+    const verified = await verifyOnboardingToken(String(req.params.token || ""));
+    if (!verified) {
+      res.status(410).json({ error: "الرابط غير صالح أو منتهٍ. اطلب رابطًا جديدًا من جهة العمل." });
+      return;
+    }
+    const body = zodParse(onboardingDocSchema.safeParse(req.body ?? {}));
+    // تجريد بادئة data URL إن وُجدت ثم فك الترميز والتحقق من الحجم الفعلي.
+    const b64 = body.dataBase64.includes(",") ? body.dataBase64.slice(body.dataBase64.indexOf(",") + 1) : body.dataBase64;
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(b64, "base64");
+    } catch {
+      res.status(400).json({ error: "تعذّر قراءة الملف. أعد المحاولة." });
+      return;
+    }
+    if (buffer.length === 0) {
+      res.status(400).json({ error: "الملف فارغ." });
+      return;
+    }
+    if (buffer.length > MAX_DOC_BYTES) {
+      res.status(413).json({ error: "حجم الملف يتجاوز الحد المسموح (5 ميغابايت)." });
+      return;
+    }
+    const path = await objectStorage.uploadBytes(buffer, body.mimeType);
+    void createAuditLog({
+      companyId: verified.companyId, branchId: undefined, userId: 0,
+      action: "employee.self_onboarding_document_uploaded", entity: "employees", entityId: verified.employeeId,
+      after: { fileName: body.fileName, mimeType: body.mimeType, size: buffer.length },
+    }).catch((e) => logger.error(e, "publicData background task failed"));
+    res.json({
+      ok: true,
+      attachment: { path, name: body.fileName, mimeType: body.mimeType, size: buffer.length, uploadedAt: new Date().toISOString() },
+    });
+  } catch (err) {
+    handleRouteError(err, res, "رفع وثيقة الاستكمال الذاتي");
   }
 });
 

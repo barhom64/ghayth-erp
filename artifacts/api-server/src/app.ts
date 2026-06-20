@@ -127,6 +127,8 @@ app.use(cookieParser());
 app.use("/api/umrah/import", express.json({ limit: "50mb" }));
 app.use("/api/umrah/assign-bulk", express.json({ limit: "10mb" }));
 app.use("/api/storage", express.json({ limit: "10mb" }));
+// رفع وثائق الاستكمال الذاتي عبر base64 (ملف خام حتى 5MB ≈ 6.7MB بعد الترميز).
+app.use("/api/public/onboarding", express.json({ limit: "8mb" }));
 // NF-COMM-01 / RD3-01 — capture raw body for inbound webhooks (WhatsApp +
 // PBX) so we can verify HMAC against the unmodified payload. Express
 // normally reparses on every retry; storing the buffer at parse time
