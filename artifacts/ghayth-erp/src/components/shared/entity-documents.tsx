@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useFormContext } from "react-hook-form";
 import { z } from "zod";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
@@ -77,6 +77,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     try {
       const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
         credentials: "include",
+        headers: { ...nativeAuthHeaders() },
       });
       if (res.status === 429) {
         throw new RateLimitError(notifyRateLimited(res));
@@ -213,7 +214,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
     try {
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...nativeAuthHeaders(), "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });
