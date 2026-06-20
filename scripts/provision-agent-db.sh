@@ -191,6 +191,30 @@ SEED_REPLAY_ALLOWLIST=(
   # (migrate.ts) the DB already has companies, so this ordering gap is
   # provision-harness-only. #2140 slice 2-أ.
   "336_vendor_ap_accounting_anchors.sql"
+  # 338 is POST-cutoff (applied at step 4) but, like 336, CROSS JOINs
+  # `companies` AND resolves account codes against chart_of_accounts —
+  # so at step 4 (empty companies + no COA) its asset-anchor intent
+  # mappings (asset_disposal_cash, asset_impairment_loss,
+  # asset_revaluation_*, …) resolve to NULL and seed 0 rows. Replay it
+  # here, after the company-defaults seed populates the COA (incl. the
+  # 1291/3600/5850/5860 fixed-asset accounts), so `resolved_code IS NOT
+  # NULL` holds and the intents actually land. Idempotent (ON CONFLICT
+  # DO NOTHING). Provision-harness-only — a real boot already has
+  # companies + COA before 338 runs. #2140 slice 5-a.
+  "338_fixed_assets_anchors.sql"
+  # 377 corrects the asset_disposal_cash anchor (1100 control-parent →
+  # 1111 main-cash leaf). It MUST replay AFTER 338 (which creates the
+  # asset_disposal_cash row during this same 5b pass) — array order is
+  # preserved by the replay loop, so this entry stays below 338.
+  # Idempotent UPDATE scoped to one operationType. #2140 slice 5-a.
+  "377_fix_asset_disposal_cash_anchor.sql"
+  # 382 re-points purchase_grni from 2150 → 2115 (the dedicated GRNI
+  # leaf, now live in every company via 035_inventory_projects_gl_accounts
+  # — also in this allowlist). 378 MUST replay AFTER 336 (which seeds
+  # the original 2150 row) and AFTER 035 (which seeds 2115) — array
+  # order is preserved by the replay loop, so this entry stays below
+  # both. Idempotent UPDATE scoped to one operationType. FIN-SUB-01.
+  "382_fix_purchase_grni_anchor.sql"
 )
 is_replay_seed() {
   for s in "${SEED_REPLAY_ALLOWLIST[@]}"; do

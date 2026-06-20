@@ -16,6 +16,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
+import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -593,6 +594,10 @@ router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء الموسم");
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "umrah.season.opened", entity: "umrah_seasons", entityId: rows[0].id, after: { title: b.title } }).catch((e) => logger.error(e, "umrah background task failed"));
+    // Per-season cost centre — season is a time-bound cost/profit bucket
+    // (costs carry umrahSeasonId on their journal lines); auto-provision it so
+    // per-season P&L drill-down works from day one, like project/agent.
+    createCostCenterForEntity(scope.companyId, "umrah_season", rows[0].id as number, b.title, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah season cost-centre auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
@@ -766,6 +771,10 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     // Per-agent revenue subsidiary account (#1594) — fire-and-forget; sales for
     // this agent route to its own revenue leaf via resolveRevenueAccount.
     createSubsidiaryAccountsForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { branchId: scope.branchId, actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent subsidiary auto-create failed"));
+    // Per-agent cost centre — backs /reports/profitability/umrah-agent with a real
+    // cost_centers row (the agent already had a subsidiary account + umrahAgentId
+    // dimension, but no auto cost centre — the one asymmetry vs vehicle/property).
+    createCostCenterForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent cost-centre auto-create failed"));
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
@@ -1223,8 +1232,8 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     // GAP_MATRIX P1 — pilgrims CSV export was in audit_logs (via logSensitiveAccess)
     // but missing from print_jobs. Both lanes required for PDPL compliance.
     rawExecute(
-      `INSERT INTO print_jobs ("companyId","branchId","requestedBy","entityType","entityId","format","status","printedAt")
-       VALUES ($1,$2,$3,'report_umrah_pilgrims',NULL,'csv','completed',NOW())`,
+      `INSERT INTO print_jobs ("companyId","branchId","userId","entityType","entityId","format","status")
+       VALUES ($1,$2,$3,'report_umrah_pilgrims','0','csv','completed')`,
       [scope.companyId, scope.branchId ?? null, scope.userId]
     ).catch(() => {});
 
@@ -1237,28 +1246,34 @@ router.get("/pilgrims/export.csv", authorize({ feature: "umrah", action: "list" 
     };
     // Manifest columns operators routinely need. Order matches what
     // MOFA / hotel / bus driver handouts use: identity → trip → flight.
+    //
+    // U-18-P4 — bilingual header policy: Arabic primary with English
+    // in parentheses so partner systems that operate in EN (MOFA
+    // status APIs, MOI border feed) can still parse the column set
+    // without a separate mapping table. Charter §3.2 endorses this
+    // direction.
     const headers = [
-      ["nuskNumber", "رقم نسك"],
-      ["fullName", "الاسم"],
-      ["passportNumber", "رقم الجواز"],
-      ["nationality", "الجنسية"],
-      ["gender", "الجنس"],
-      ["phone", "الهاتف"],
-      ["visaNumber", "رقم التأشيرة"],
-      ["visaExpiry", "صلاحية التأشيرة"],
-      ["mofaNumber", "رقم الموفا"],
-      ["borderNumber", "رقم الحدود"],
-      ["status", "الحالة"],
-      ["arrivalDate", "تاريخ الوصول"],
-      ["departureDate", "تاريخ المغادرة"],
-      ["entryFlight", "رحلة الوصول"],
-      ["exitFlight", "رحلة المغادرة"],
-      ["hotelName", "الفندق"],
-      ["roomNumber", "رقم الغرفة"],
-      ["seasonTitle", "الموسم"],
-      ["groupName", "المجموعة"],
-      ["agentName", "الوكيل الرئيسي"],
-      ["subAgentName", "الوكيل الفرعي"],
+      ["nuskNumber", "رقم نسك (Nusk No.)"],
+      ["fullName", "الاسم (Name)"],
+      ["passportNumber", "رقم الجواز (Passport No.)"],
+      ["nationality", "الجنسية (Nationality)"],
+      ["gender", "الجنس (Gender)"],
+      ["phone", "الهاتف (Phone)"],
+      ["visaNumber", "رقم التأشيرة (Visa No.)"],
+      ["visaExpiry", "صلاحية التأشيرة (Visa Expiry)"],
+      ["mofaNumber", "رقم الموفا (MOFA No.)"],
+      ["borderNumber", "رقم الحدود (Border No.)"],
+      ["status", "الحالة (Status)"],
+      ["arrivalDate", "تاريخ الوصول (Arrival Date)"],
+      ["departureDate", "تاريخ المغادرة (Departure Date)"],
+      ["entryFlight", "رحلة الوصول (Arrival Flight)"],
+      ["exitFlight", "رحلة المغادرة (Departure Flight)"],
+      ["hotelName", "الفندق (Hotel)"],
+      ["roomNumber", "رقم الغرفة (Room No.)"],
+      ["seasonTitle", "الموسم (Season)"],
+      ["groupName", "المجموعة (Group)"],
+      ["agentName", "الوكيل الرئيسي (Main Agent)"],
+      ["subAgentName", "الوكيل الفرعي (Sub-Agent)"],
     ] as const;
     const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
     const decrypted = rows.map(decryptPilgrimRow) as Array<Record<string, unknown>>;
@@ -2236,6 +2251,7 @@ router.post("/penalties/waive-bulk", authorize({ feature: "umrah", action: "upda
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.penalty.waived_bulk", entity: "umrah_penalties", entityId: 0,
+      after: { successCount: successIds.length, totalAmount, reason: body.reason, skipped: skipped.length, errors: errors.length },
       details: JSON.stringify({ successCount: successIds.length, totalAmount, reason: body.reason, skipped: skipped.length, errors: errors.length }),
     }).catch((e) => logger.error(e, "bulk waive bg"));
 

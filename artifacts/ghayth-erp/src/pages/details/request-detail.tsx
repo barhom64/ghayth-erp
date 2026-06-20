@@ -6,7 +6,7 @@ import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace
 import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ApprovalActions, ActionHistory, NotesDisplay } from "@workspace/workflow-kit";
@@ -301,11 +301,11 @@ export default function RequestDetail() {
         error={error}
         onRetry={refetch}
         printable
-        onPrint={() => { /* print button triggers EntityPrintButton below */ }}
+        onPrint={() => { /* print button triggers PrintButton below */ }}
         actions={
           <>
             {request?.branchId && (
-              <EntityPrintButton
+              <PrintButton
                 entityType="request"
                 entityId={id ?? 0}
                />
@@ -329,7 +329,7 @@ export default function RequestDetail() {
         onOpenChange={(o) => !o && setPreviewAttachment(null)}
       />
       {request && id && (
-        <EntityEditDialog<RequestEditForm>
+        <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
           title="تعديل الطلب"

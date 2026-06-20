@@ -12,7 +12,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionHistory } from "@workspace/workflow-kit";
@@ -398,7 +398,7 @@ export default function PerformanceDetail() {
       actions={
         <>
           {review && (
-            <EntityPrintButton
+            <PrintButton
               entityType="performance_review"
               entityId={id ?? 0}
              />

@@ -243,7 +243,7 @@ router.delete("/roles/:id", authorize({ feature: "admin.roles", action: "delete"
     if (!role) return void res.status(404).json({ error: "الدور غير موجود" });
     if (role.is_system) return void res.status(403).json({ error: "لا يمكن حذف الأدوار النظامية" });
 
-    const [{ count }] = await rawQuery<{ count: string }>(`SELECT COUNT(*)::text AS count FROM rbac_user_roles WHERE role_id = $1`, [id]);
+    const [{ count }] = await rawQuery<{ count: string }>(`SELECT COUNT(*)::text AS count FROM rbac_user_roles WHERE role_id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (Number(count) > 0) return void res.status(409).json({ error: `الدور مرتبط بـ ${count} مستخدم — افصلهم أولاً` });
 
     await rawExecute(`DELETE FROM rbac_roles WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
@@ -348,6 +348,11 @@ router.put("/roles/:id/grants", authorize({ feature: "admin.roles", action: "upd
 
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.grants_updated", entity: "rbac_roles", entityId: id,
+      after: { count: parsed.data.grants.length },
+    }).catch(() => undefined);
     res.json({ updated: parsed.data.grants.length });
   } catch (err) {
     handleRouteError(err, res, "replace grants");
@@ -410,6 +415,11 @@ router.put("/roles/:id/grants/simple", authorize({ feature: "admin.roles", actio
 
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.grants_updated", entity: "rbac_roles", entityId: id,
+      after: { count: expanded.length },
+    }).catch(() => undefined);
     res.json({ updated: expanded.length });
   } catch (err) {
     handleRouteError(err, res, "replace grants (simple)");
@@ -471,6 +481,11 @@ router.put("/roles/:id/field-policies", authorize({ feature: "admin.roles", acti
 
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.field_policies_updated", entity: "rbac_roles", entityId: id,
+      after: { count: parsed.data.policies.length },
+    }).catch(() => undefined);
     res.json({ updated: parsed.data.policies.length });
   } catch (err) {
     handleRouteError(err, res, "replace field policies");
@@ -534,6 +549,11 @@ router.put("/roles/:id/approval-limits", authorize({ feature: "admin.roles", act
 
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.role.approval_limits_updated", entity: "rbac_roles", entityId: id,
+      after: { count: parsed.data.limits.length },
+    }).catch(() => undefined);
     res.json({ updated: parsed.data.limits.length });
   } catch (err) {
     handleRouteError(err, res, "replace approval limits");
@@ -569,6 +589,11 @@ router.post("/sod", authorize({ feature: "admin.roles", action: "create" }), asy
       [scope.companyId, ruleKey, labelAr, featureA, actionA, featureB, actionB, severity, isActive]
     );
     invalidateSodCache(scope.companyId);
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.sod.created", entity: "rbac_sod_rules", entityId: result.insertId,
+      after: { ruleKey, featureA, actionA, featureB, actionB, severity },
+    }).catch(() => undefined);
     res.status(201).json({ id: result.insertId });
   } catch (err) {
     handleRouteError(err, res, "create SoD rule");
@@ -608,6 +633,11 @@ router.patch("/sod/:id", authorize({ feature: "admin.roles", action: "update" })
       params
     );
     invalidateSodCache(scope.companyId);
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.sod.updated", entity: "rbac_sod_rules", entityId: id,
+      after: { fields: sets.length },
+    }).catch(() => undefined);
     res.json({ updated: 1 });
   } catch (err) {
     handleRouteError(err, res, "update SoD rule");
@@ -624,6 +654,11 @@ router.delete("/sod/:id", authorize({ feature: "admin.roles", action: "delete" }
     const { affectedRows } = await rawExecute(`DELETE FROM rbac_sod_rules WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
     if (!affectedRows) throw new NotFoundError("قاعدة فصل المهام غير موجودة");
     invalidateSodCache(scope.companyId);
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.sod.deleted", entity: "rbac_sod_rules", entityId: id,
+      before: { ruleKey: rule.rule_key },
+    }).catch(() => undefined);
     res.json({ deleted: 1 });
   } catch (err) {
     handleRouteError(err, res, "delete SoD rule");
@@ -671,7 +706,10 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
     const { newRoleKey, labelAr, asTemplate } = zodParse(cloneRoleSchema.safeParse(req.body));
 
     await withTransaction(async (client) => {
-      const [src] = (await client.query(`SELECT * FROM rbac_roles WHERE id = $1`, [sourceId])).rows;
+      const [src] = (await client.query(
+        `SELECT * FROM rbac_roles WHERE id = $1 AND ("companyId" = $2 OR is_template = TRUE)`,
+        [sourceId, scope.companyId],
+      )).rows;
       if (!src) throw new ValidationError("الدور المصدر غير موجود");
 
       const ins = await client.query(
@@ -706,6 +744,11 @@ router.post("/roles/:id/clone", authorize({ feature: "admin.roles", action: "cre
          SELECT $1, feature_key, action, currency, max_amount, requires_dual_control FROM rbac_approval_limits WHERE role_id = $2`,
         [newId, sourceId]
       );
+      await createAuditLog({
+        companyId: scope.companyId, userId: scope.userId,
+        action: "rbac.role.cloned", entity: "rbac_roles", entityId: newId,
+        after: { newRoleKey, sourceId, asTemplate: !!asTemplate },
+      }).catch(() => undefined);
       res.status(201).json({ id: newId });
     });
 
@@ -794,6 +837,11 @@ router.post("/templates/:id/apply", authorize({ feature: "admin.roles", action: 
     });
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.template.applied", entity: "rbac_roles", entityId: newId,
+      after: { newRoleKey, templateId },
+    }).catch(() => undefined);
     res.status(201).json({ id: newId });
   } catch (err) {
     handleRouteError(err, res, "apply template");
@@ -1030,6 +1078,11 @@ router.post("/users/:userId/roles", authorize({ feature: "admin.roles", action: 
     );
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.user_role.assigned", entity: "rbac_user_roles", entityId: userId,
+      after: { roleId, roleKey: roleRow.role_key, isPrimary: !!isPrimary },
+    }).catch(() => undefined);
     res.status(201).json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "assign role");
@@ -1039,12 +1092,19 @@ router.post("/users/:userId/roles", authorize({ feature: "admin.roles", action: 
 router.delete("/users/:userId/roles/:roleId", authorize({ feature: "admin.roles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
+    const userId = parseId(req.params.userId, "userId");
+    const roleId = parseId(req.params.roleId, "roleId");
     await rawExecute(
       `DELETE FROM rbac_user_roles WHERE "userId" = $1 AND role_id = $2 AND "companyId" = $3`,
-      [parseId(req.params.userId, "userId"), parseId(req.params.roleId, "roleId"), scope.companyId]
+      [userId, roleId, scope.companyId]
     );
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.user_role.unassigned", entity: "rbac_user_roles", entityId: userId,
+      before: { roleId },
+    }).catch(() => undefined);
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "unassign role");
@@ -1094,6 +1154,11 @@ router.post("/admin/sync-all-roles", authorize({ feature: "admin.roles", action:
 
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.roles.synced_all", entity: "rbac_user_roles", entityId: scope.userId,
+      after: { added: inserted.affectedRows ?? 0, totalRoles: Number(count) },
+    }).catch(() => undefined);
     res.json({ added: inserted.affectedRows ?? 0, totalRoles: Number(count) });
   } catch (err) {
     handleRouteError(err, res, "sync all roles");
@@ -1123,7 +1188,7 @@ const jitDecisionSchema = z.object({
 router.post("/jit/request", async (req, res) => {
   try {
     const scope = req.scope!;
-    const body = jitRequestSchema.parse(req.body);
+    const body = zodParse(jitRequestSchema.safeParse(req.body));
 
     // Validate against the feature catalog: feature must exist, action
     // must be in availableActions, and scope must be in availableScopes.
@@ -1172,6 +1237,11 @@ router.post("/jit/request", async (req, res) => {
       [scope.userId, scope.companyId, body.featureKey, body.action, body.scope, body.justification, body.requestedMinutes]
     );
     assertInsert(insertId, "rbac_jit_requests");
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.requested", entity: "rbac_jit_requests", entityId: insertId,
+      after: { featureKey: body.featureKey, action: body.action, scope: body.scope, requestedMinutes: body.requestedMinutes },
+    }).catch(() => undefined);
     res.status(201).json({ id: insertId, status: "pending" });
   } catch (err) {
     handleRouteError(err, res, "create JIT request");
@@ -1218,7 +1288,7 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const body = jitDecisionSchema.parse(req.body || {});
+    const body = zodParse(jitDecisionSchema.safeParse(req.body || {}));
 
     await withTransaction(async (client) => {
       const { rows: [j] } = await client.query<Record<string, unknown>>(
@@ -1257,12 +1327,18 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
     await bumpCacheVersion(scope.companyId);
     invalidateRoleCache();
 
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.approved", entity: "rbac_jit_requests", entityId: id,
+      reason: body.reason || undefined,
+    }).catch(() => undefined);
+
     // Notify the requester so they don't have to refresh the JIT page
     // to find out. We look up their active assignment ID to feed
     // createNotification (which keys on assignmentId, not userId).
     void (async () => {
       const [{ rows: [j] }, asgRes] = await Promise.all([
-        rawQuery<Record<string, unknown>>(`SELECT "userId", feature_key, action, requested_minutes FROM rbac_jit_requests WHERE id = $1`, [id])
+        rawQuery<Record<string, unknown>>(`SELECT "userId", feature_key, action, requested_minutes FROM rbac_jit_requests WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId])
           .then((rows) => ({ rows })),
         rawQuery<{ id: number }>(
           `SELECT ea.id FROM employee_assignments ea
@@ -1300,7 +1376,7 @@ router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "upda
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const body = jitDecisionSchema.parse(req.body || {});
+    const body = zodParse(jitDecisionSchema.safeParse(req.body || {}));
 
     const { affectedRows } = await rawExecute(
       `UPDATE rbac_jit_requests
@@ -1316,6 +1392,12 @@ router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "upda
        VALUES (NULL, $1, $2, 'jit.reject', $3, $4)`,
       [scope.companyId, scope.userId, JSON.stringify({ jitId: id }), body.reason || null]
     ).catch(() => undefined);
+
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.rejected", entity: "rbac_jit_requests", entityId: id,
+      reason: body.reason || undefined,
+    }).catch(() => undefined);
 
     // Notify the requester of the rejection.
     void (async () => {
@@ -1360,6 +1442,10 @@ router.post("/jit/:id/cancel", async (req, res) => {
       [id, scope.userId, scope.companyId]
     );
     if (!affectedRows) throw new NotFoundError("طلب JIT غير موجود أو لا يمكن إلغاؤه");
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "rbac.jit.cancelled", entity: "rbac_jit_requests", entityId: id,
+    }).catch(() => undefined);
     res.json({ ok: true });
   } catch (err) {
     handleRouteError(err, res, "cancel JIT");

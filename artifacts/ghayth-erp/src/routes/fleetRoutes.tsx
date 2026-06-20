@@ -40,6 +40,13 @@ const TelematicsDevices = lazy(() => import("@/pages/fleet/telematics/devices"))
 const TelematicsVideoEvidence = lazy(() => import("@/pages/fleet/telematics/video-evidence"));
 const TelematicsSettings = lazy(() => import("@/pages/fleet/telematics/settings"));
 const TelematicsOperations = lazy(() => import("@/pages/fleet/telematics/operations"));
+// TA-GAP-09 Phase 2 — Maps quota usage dashboard.
+const MapsUsage = lazy(() => import("@/pages/fleet/maps-usage"));
+// Control Tower — single-page operator dashboard (audit file 22 + #1812).
+const TransportControlTower = lazy(() => import("@/pages/fleet/transport-control-tower"));
+// TA-T18-VRP Phase 2 — Fleet Optimizer batch-mode (runs list + detail).
+const OptimizerRuns = lazy(() => import("@/pages/fleet/optimizer-runs"));
+const OptimizerRunDetail = lazy(() => import("@/pages/fleet/optimizer-run-detail"));
 const TelematicsEvidence = lazy(() => import("@/pages/fleet/telematics/evidence"));
 const TelematicsScorecard = lazy(() => import("@/pages/fleet/telematics/scorecard"));
 const CargoList = lazy(() => import("@/pages/fleet/cargo"));
@@ -60,6 +67,8 @@ const RentalCreate = lazy(() => import("@/pages/fleet/rental-create"));
 const RentalDetail = lazy(() => import("@/pages/fleet/rental-detail"));
 // #1812 Planning engine — ops dashboard + driver in-app navigation.
 const TransportOpsDashboard = lazy(() => import("@/pages/fleet/transport-ops-dashboard"));
+// TR-022 — unified transport calendar.
+const TransportCalendar = lazy(() => import("@/pages/fleet/transport-calendar"));
 const MeDriverNavigation = lazy(() => import("@/pages/fleet/me-driver-navigation"));
 // #1812 integration bridges — linked sources view.
 const TransportIntegration = lazy(() => import("@/pages/fleet/transport-integration"));
@@ -111,6 +120,13 @@ export const fleetRoutes = [
   { path: "/fleet/telematics/video-evidence", component: TelematicsVideoEvidence },
   { path: "/fleet/telematics/settings", component: TelematicsSettings },
   { path: "/fleet/telematics/operations", component: TelematicsOperations },
+  // TA-GAP-09 Phase 2 — Maps quota usage dashboard.
+  { path: "/fleet/maps/usage", component: MapsUsage },
+  // Control Tower — audit doc file 22 + #1812 user brief.
+  { path: "/fleet/transport/control-tower", component: TransportControlTower },
+  // TA-T18-VRP Phase 2 — Fleet Optimizer (detail BEFORE list since wouter is order-sensitive).
+  { path: "/fleet/optimizer/runs/:id", component: OptimizerRunDetail },
+  { path: "/fleet/optimizer/runs", component: OptimizerRuns },
   { path: "/fleet/telematics/evidence", component: TelematicsEvidence },
   { path: "/fleet/telematics/scorecard", component: TelematicsScorecard },
   // Driver self-service dashboard — appears at /me/driver. Role gate
@@ -141,6 +157,7 @@ export const fleetRoutes = [
   { path: "/fleet/rental-contracts/:id", component: RentalDetail },
   // #1812 ops dashboard + driver navigation surfaces.
   { path: "/fleet/transport/ops-dashboard", component: TransportOpsDashboard },
+  { path: "/fleet/transport/calendar", component: TransportCalendar }, // TR-022
   { path: "/fleet/transport/integration", component: TransportIntegration },
   { path: "/fleet/transport/itineraries", component: TransportItineraries },
   { path: "/fleet/transport/itineraries/:id", component: TransportItineraryDetail },

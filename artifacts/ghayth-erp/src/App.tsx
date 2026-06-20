@@ -1,4 +1,5 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
+import { connectRealtime } from "@/lib/realtime";
 import { Switch, Route, Router as WouterRouter, useLocation, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -34,6 +35,7 @@ import NotFound from "@/pages/not-found";
 
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const PrintVerify = lazy(() => import("@/pages/print-verify"));
+const OnboardingSelf = lazy(() => import("@/pages/onboarding-self"));
 // Standalone /driver-portal/* retired (#1354) — drivers now log in
 // via the regular /login and land on /me/driver (dashboard auto-
 // redirects them based on user.role === "driver").
@@ -86,7 +88,10 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: false,
+      // Refetch when the user returns to the tab/app, so data is fresh the
+      // moment they look — the cheap half of "stay live-linked with the web".
+      // The other half is the realtime SSE push (lib/realtime.ts).
+      refetchOnWindowFocus: true,
       throwOnError: false,
     },
     mutations: {
@@ -159,6 +164,14 @@ function ProtectedRoutes() {
 
 function Router() {
   const { isAuthenticated, loading } = useAuth();
+  // Live link: while authenticated, hold an SSE connection so server-side
+  // changes (anyone, anywhere in this company) push in and the open screens
+  // refetch — no manual refresh. Tears down on logout / unmount.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const disconnect = connectRealtime(queryClient);
+    return disconnect;
+  }, [isAuthenticated]);
   if (loading) return <PageLoader />;
   return (
     <Switch>
@@ -174,6 +187,13 @@ function Router() {
       <Route path="/print/verify/:jobId">
         <Suspense fallback={<PageLoader />}>
           <PrintVerify />
+        </Suspense>
+      </Route>
+      {/* صفحة الاستكمال الذاتي للموظف — عامة (?token=...). يملأ الموظف بياناته
+          الشخصية فقط؛ الخلفية تتحقق من الرمز ولا تمنح أي دخول للنظام. */}
+      <Route path="/onboarding">
+        <Suspense fallback={<PageLoader />}>
+          <OnboardingSelf />
         </Suspense>
       </Route>
       {/* /driver-portal/* retired (#1354) — drivers now use the regular

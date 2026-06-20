@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -412,88 +412,91 @@ export default function FixedAssetRegisterPage() {
             <CardHeader>
               <CardTitle className="text-base">السجل التفصيلي ({filtered.length})</CardTitle>
             </CardHeader>
-            <CardContent>
-              {filtered.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">لا توجد أصول مطابقة للفلتر</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="text-start py-2 px-2">الرمز/الاسم</th>
-                        <th className="text-start py-2 px-2">الفئة</th>
-                        <th className="text-end py-2 px-2">التكلفة</th>
-                        <th className="text-end py-2 px-2">العمر/طريقة</th>
-                        <th className="text-end py-2 px-2">الإهلاك</th>
-                        <th className="text-end py-2 px-2">القيمة الدفترية</th>
-                        <th className="py-2 px-2 w-32">تقدم الإهلاك</th>
-                        <th className="py-2 px-2">الحالة</th>
-                        <th className="py-2 px-2 w-8"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map(a => {
-                        const cost = Number(a.purchaseCost);
-                        const dep = Number(a.accumulatedDepreciation);
-                        const depPct = cost > 0 ? (dep / cost) * 100 : 0;
-                        const age = ageInYears(a.purchaseDate, today);
-                        const status = STATUS_LABELS[a.status] ?? { label: a.status, color: "bg-muted" };
-                        return (
-                          <tr key={a.id} className="border-b hover:bg-muted/30">
-                            <td className="py-2 px-2">
-                              <div className="font-mono text-[11px] text-muted-foreground">{a.code ?? "—"}</div>
-                              <div className="font-medium">{a.name}</div>
-                            </td>
-                            <td className="py-2 px-2 text-xs">{a.category ?? "—"}</td>
-                            <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(cost)}</td>
-                            <td className="py-2 px-2 text-end text-xs">
-                              <div>{age.toFixed(1)} / {a.usefulLifeYears} سنة</div>
-                              <div className="text-[10px] text-muted-foreground">{a.depreciationMethod}</div>
-                            </td>
-                            <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">
-                              {formatCurrency(dep)}
-                            </td>
-                            <td className="py-2 px-2 text-end tabular-nums font-semibold text-status-success-foreground">
-                              {formatCurrency(Number(a.currentBookValue))}
-                            </td>
-                            <td className="py-2 px-2">
-                              <div className="flex items-center gap-1">
-                                <div className="flex-1 h-2 bg-muted rounded overflow-hidden">
-                                  <div
-                                    className={depPct >= 100 ? "bg-status-warning-foreground" : "bg-status-danger-foreground"}
-                                    style={{ width: `${Math.min(depPct, 100)}%`, height: "100%" }}
-                                  />
-                                </div>
-                                <span className="text-[10px] tabular-nums w-8 text-end">{depPct.toFixed(0)}%</span>
-                              </div>
-                            </td>
-                            <td className="py-2 px-2">
-                              <Badge variant="outline" className="text-[10px]">
-                                <span className={`w-1.5 h-1.5 rounded-full ${status.color} ml-1`} />
-                                {status.label}
-                              </Badge>
-                            </td>
-                            <td className="py-2 px-2">
-                              <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/fixed-assets/${a.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="font-semibold bg-muted/40">
-                        <td colSpan={2} className="py-2 px-2">الإجمالي</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totalCost)}</td>
-                        <td className="py-2 px-2"></td>
-                        <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">{formatCurrency(totalAccDep)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums text-status-success-foreground">{formatCurrency(totalNBV)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{totalCost > 0 ? `${((totalAccDep / totalCost) * 100).toFixed(0)}%` : "—"}</td>
-                        <td colSpan={2}></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
+            <CardContent className="p-0">
+              <DataTable
+                data={filtered}
+                rowKey={(a) => String(a.id)}
+                noToolbar
+                pageSize={0}
+                emptyMessage="لا توجد أصول مطابقة للفلتر"
+                columns={[
+                  {
+                    key: "name", header: "الرمز/الاسم",
+                    render: (a) => (
+                      <>
+                        <div className="font-mono text-[11px] text-muted-foreground">{a.code ?? "—"}</div>
+                        <div className="font-medium">{a.name}</div>
+                      </>
+                    ),
+                  },
+                  { key: "category", header: "الفئة", render: (a) => <span className="text-xs">{a.category ?? "—"}</span> },
+                  { key: "purchaseCost", header: "التكلفة", align: "end", render: (a) => <span className="tabular-nums">{formatCurrency(Number(a.purchaseCost))}</span> },
+                  {
+                    key: "usefulLifeYears", header: "العمر/طريقة", align: "end",
+                    render: (a) => (
+                      <>
+                        <div className="text-xs">{ageInYears(a.purchaseDate, today).toFixed(1)} / {a.usefulLifeYears} سنة</div>
+                        <div className="text-[10px] text-muted-foreground">{a.depreciationMethod}</div>
+                      </>
+                    ),
+                  },
+                  {
+                    key: "accumulatedDepreciation", header: "الإهلاك", align: "end",
+                    render: (a) => <span className="tabular-nums text-status-danger-foreground">{formatCurrency(Number(a.accumulatedDepreciation))}</span>,
+                  },
+                  {
+                    key: "currentBookValue", header: "القيمة الدفترية", align: "end",
+                    render: (a) => <span className="tabular-nums font-semibold text-status-success-foreground">{formatCurrency(Number(a.currentBookValue))}</span>,
+                  },
+                  {
+                    key: "depreciationMethod", header: "تقدم الإهلاك",
+                    render: (a) => {
+                      const cost = Number(a.purchaseCost);
+                      const dep = Number(a.accumulatedDepreciation);
+                      const pct = cost > 0 ? (dep / cost) * 100 : 0;
+                      return (
+                        <div className="flex items-center gap-1">
+                          <div className="flex-1 h-2 bg-muted rounded overflow-hidden">
+                            <div className={pct >= 100 ? "bg-status-warning-foreground" : "bg-status-danger-foreground"} style={{ width: `${Math.min(pct, 100)}%`, height: "100%" }} />
+                          </div>
+                          <span className="text-[10px] tabular-nums w-8 text-end">{pct.toFixed(0)}%</span>
+                        </div>
+                      );
+                    },
+                  },
+                  {
+                    key: "status", header: "الحالة",
+                    render: (a) => {
+                      const s = STATUS_LABELS[a.status] ?? { label: a.status, color: "bg-muted" };
+                      return (
+                        <Badge variant="outline" className="text-[10px]">
+                          <span className={`w-1.5 h-1.5 rounded-full ${s.color} ml-1`} />
+                          {s.label}
+                        </Badge>
+                      );
+                    },
+                  },
+                  {
+                    key: "id", header: "",
+                    render: (a) => (
+                      <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7">
+                        <Link href={`/finance/fixed-assets/${a.id}`}><ExternalLink className="w-3 h-3" /></Link>
+                      </Button>
+                    ),
+                  },
+                ] satisfies DataTableColumn<FixedAsset>[]}
+                renderGrandTotal={() => (
+                  <tr className="font-semibold bg-muted/40 border-t-2">
+                    <td colSpan={2} className="py-2 px-3">الإجمالي</td>
+                    <td className="py-2 px-3 text-end tabular-nums">{formatCurrency(totalCost)}</td>
+                    <td className="py-2 px-3" />
+                    <td className="py-2 px-3 text-end tabular-nums text-status-danger-foreground">{formatCurrency(totalAccDep)}</td>
+                    <td className="py-2 px-3 text-end tabular-nums text-status-success-foreground">{formatCurrency(totalNBV)}</td>
+                    <td className="py-2 px-3 text-end tabular-nums">{totalCost > 0 ? `${((totalAccDep / totalCost) * 100).toFixed(0)}%` : "—"}</td>
+                    <td colSpan={2} />
+                  </tr>
+                )}
+              />
             </CardContent>
           </Card>
         </>

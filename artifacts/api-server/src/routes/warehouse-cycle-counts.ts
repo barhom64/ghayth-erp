@@ -56,9 +56,12 @@ router.get("/cycle-counts", authorize({ feature: "warehouse.inventory", action: 
   try {
     const scope = req.scope!;
     // warehouse_cycle_counts has no branchId column — company-level cascade only.
+    // disableBranchScope (not just enforceBranchScope:false) so an explicit
+    // ?branchIds= filter doesn't silently fall through to the joined warehouse's
+    // branch (cc has no branch of its own; this is intentionally company-level).
     const { where, params } = buildScopedWhere(scope, parseScopeFilters(req), {
       companyColumn: 'cc."companyId"',
-      enforceBranchScope: false,
+      disableBranchScope: true,
     });
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT cc.*, w.name AS "warehouseName",
@@ -200,8 +203,8 @@ router.get("/cycle-counts/:id", authorize({ feature: "warehouse.inventory", acti
       `SELECT l.*, p.name AS "productName", p.sku
        FROM warehouse_cycle_count_lines l
        JOIN warehouse_products p ON p.id=l."productId"
-       WHERE l."cycleCountId"=$1 ORDER BY l.id`,
-      [id]
+       WHERE l."cycleCountId"=$1 AND p."companyId"=$2 ORDER BY l.id`,
+      [id, scope.companyId]
     );
     res.json(maskFields(req, { ...cc, items }));
   } catch (err) { handleRouteError(err, res, "Cycle count detail error:"); }
@@ -298,8 +301,8 @@ router.post("/cycle-counts/:id/post", authorize({ feature: "warehouse.inventory"
       `SELECT l.id, l."productId", l.variance, p.name AS "productName", p."costPrice", p."lastWaCost"
        FROM warehouse_cycle_count_lines l
        JOIN warehouse_products p ON p.id=l."productId"
-       WHERE l."cycleCountId"=$1 AND l.variance <> 0 AND l."adjustmentJournalEntryId" IS NULL`,
-      [id]
+       WHERE l."cycleCountId"=$1 AND p."companyId"=$2 AND l.variance <> 0 AND l."adjustmentJournalEntryId" IS NULL`,
+      [id, scope.companyId]
     );
 
     const posted: Array<{ lineId: number; movementId: number; journalId: number | null }> = [];

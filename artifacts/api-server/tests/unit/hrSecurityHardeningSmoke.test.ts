@@ -23,15 +23,19 @@ const EXIT = readFileSync(
   "utf8",
 );
 
-// ─── SEC-1 — /exit/:id/complete gates on HR_ROLES ────────────────────────
+// ─── SEC-1 — /exit/:id/complete gates on an elevated grant ───────────────
+// HR-REV-1 #1 migrated this inline gate off the hardcoded HR_ROLES array to
+// a grant-derived scopeCan(hr.exit:approve) check (the seeded HR_ROLES —
+// hr_manager/owner/gm — are exactly the holders of hr.exit:approve). The
+// SoD requirement is unchanged: "update" alone is not enough to complete.
 
-describe("SEC-1: /exit/:id/complete requires HR_ROLES (not feature update alone)", () => {
-  it("checks HR_ROLES.includes(scope.role) before applying transition", () => {
+describe("SEC-1: /exit/:id/complete requires an elevated grant (not feature update alone)", () => {
+  it("checks scopeCan(hr.exit:approve) before applying transition", () => {
     const completeBlock = EXIT.slice(
       EXIT.indexOf('router.patch("/exit/:id/complete"'),
       EXIT.indexOf('router.patch("/exit/:id/complete"') + 4000,
     );
-    expect(completeBlock).toContain("HR_ROLES.includes(scope.role)");
+    expect(completeBlock).toContain('scopeCan(scope, "hr.exit", "approve")');
     expect(completeBlock).toContain(
       "غير مصرّح لك بإتمام نهاية الخدمة — يلزم دور موارد بشرية",
     );
@@ -143,11 +147,15 @@ describe("RACE-2: payroll run takes pg_advisory_xact_lock + re-checks duplicate"
   });
 });
 
-// ─── SEC-3 — salary_components writes restricted to PAYROLL_ROLES ────────
+// ─── SEC-3 — salary_components writes restricted to the hr.payroll authority ──
+// HR-REV-1 #1 migrated the inline PAYROLL_ROLES SoD gate to a grant-derived
+// scopeCan(hr.payroll:<verb>) check (tighter than the route's
+// hr.payroll.runs capability, exactly as before).
 
-describe("SEC-3: salary-components writes require PAYROLL_ROLES", () => {
+describe("SEC-3: salary-components writes require the hr.payroll authority", () => {
+  const ACTION_FOR = { post: "create", patch: "update", delete: "delete" } as const;
   for (const verb of ["post", "patch", "delete"] as const) {
-    it(`${verb.toUpperCase()} /salary-components requires PAYROLL_ROLES inline`, () => {
+    it(`${verb.toUpperCase()} /salary-components requires scopeCan(hr.payroll:${ACTION_FOR[verb]}) inline`, () => {
       // The handler appears as `router.${verb}("/salary-components"...`
       // for POST and `router.${verb}("/salary-components/:id"...` for
       // PATCH/DELETE. Find whichever matches first.
@@ -158,7 +166,7 @@ describe("SEC-3: salary-components writes require PAYROLL_ROLES", () => {
       const start = HR.indexOf(needle);
       expect(start, `${needle} handler exists`).toBeGreaterThan(0);
       const block = HR.slice(start, start + 2500);
-      expect(block).toContain("PAYROLL_ROLES.includes(scope.role)");
+      expect(block).toContain(`scopeCan(scope, "hr.payroll", "${ACTION_FOR[verb]}")`);
       // POST/PATCH say "تعديل"; DELETE says "حذف". Either is fine —
       // what matters is the error mentions "مكوّنات الراتب".
       expect(block).toContain("مكوّنات الراتب");

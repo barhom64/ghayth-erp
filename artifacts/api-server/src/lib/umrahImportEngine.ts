@@ -582,7 +582,8 @@ export interface ImportScope {
   /**
    * Optional override for the umrah-nusk-cost (DR) account code. When
    * unset the engine falls back to the `account_mappings` row for
-   * `umrah_nusk_cost`/debit, then to the hard default `5201`. Lets the
+   * `umrah_nusk_cost`/debit, then to the hard default `5120` (تكلفة
+   * الخدمات — a postable leaf seeded in every company's chart). Lets the
    * operator route a specific batch to a different cost account (e.g.
    * to separate Umrah hotels vs. transport accounting).
    */
@@ -1575,8 +1576,8 @@ export async function postNuskJournalEntries(
   if (totalAmount > 0 && nuskStatus !== "cancelled" && !existingApJeId) {
     try {
       const expCode = scope.purchaseAccountCode
-        || await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
-      const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
+        || await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5120");
+      const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2111");
       const apJeId = await createGuardedJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,
@@ -1606,8 +1607,8 @@ export async function postNuskJournalEntries(
   if (nuskStatus === "refunded" && refundAmount > 0 && !existingRefundJeId) {
     try {
       const expCode = scope.purchaseAccountCode
-        || await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5201");
-      const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2101");
+        || await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "debit", "5120");
+      const apCode = await getAccountCodeFromMapping(scope.companyId, "umrah_nusk_cost", "credit", "2111");
       const refundJeId = await createGuardedJournalEntry({
         companyId: scope.companyId,
         branchId: scope.branchId || 0,

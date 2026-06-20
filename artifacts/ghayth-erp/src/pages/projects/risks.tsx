@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { z } from "zod";
 import { useApiQuery, asList } from "@/lib/api";
+import { ProjectSelect } from "@/components/shared/entity-selects";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,9 +87,6 @@ export default function RisksPage() {
   const [projectId, setProjectId] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useFilters();
-
-  const { data: projects } = useApiQuery<any>(["projects-list"], "/projects?limit=100");
-  const projectList = asList(projects?.data || projects);
 
   const { data, refetch } = useApiQuery<any>(
     ["project-risks", projectId],
@@ -240,12 +238,7 @@ export default function RisksPage() {
       <ProjectsTabsNav />
       <div className="flex items-center gap-2">
         <Label>المشروع:</Label>
-        <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger className="w-64"><SelectValue placeholder="اختر مشروعاً" /></SelectTrigger>
-          <SelectContent>
-            {projectList.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <ProjectSelect value={projectId} onChange={setProjectId} allowCreate={false} className="w-64" placeholder="اختر مشروعاً" />
       </div>
 
       {showForm && (

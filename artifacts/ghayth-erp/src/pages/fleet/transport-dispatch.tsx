@@ -15,6 +15,21 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { useToast } from "@/hooks/use-toast";
 import { statusLabel, statusDict } from "@/lib/transport-status-labels";
 
+// The dispatch-order PATCH endpoint is an ACTION state-machine
+// ({ action: notify|accept|decline|start|complete|close|cancel }) — not a raw
+// status write. Map each selectable dispatch status back to the action that
+// produces it (inverse of the server's DISPATCH_ACTION_TARGETS). 'pending' (the
+// initial state) has no producing action, so it is intentionally absent.
+const STATUS_TO_ACTION: Record<string, string> = {
+  notified: "notify",
+  accepted: "accept",
+  declined: "decline",
+  executing: "start",
+  completed: "complete",
+  closed: "close",
+  cancelled: "cancel",
+};
+
 // #1733 Comment 9 — dispatch board surface. Shows scheduled dispatch
 // orders grouped per-driver in a daily timeline column so the
 // dispatcher can spot conflicts and gaps visually.
@@ -78,8 +93,14 @@ export default function TransportDispatchBoard() {
 
   const { data: vehiclesResp } = useApiQuery<any>(["fleet-vehicles-dispatch"], "/fleet/vehicles?limit=500");
   const { data: driversResp } = useApiQuery<any>(["fleet-drivers-dispatch"], "/fleet/drivers?limit=500");
-  const vehicles = asList(vehiclesResp);
   const drivers = asList(driversResp);
+  // Show ALL vehicles (the backend guards eligibility on assign), but
+  // surface each vehicle's status and float "available" to the top so
+  // the dispatcher's default pick is the sensible one.
+  const vehicles = [...asList(vehiclesResp)].sort((a: any, b: any) => {
+    const rank = (s: string) => (s === "available" ? 0 : s === "in_use" || s === "on_trip" ? 1 : 2);
+    return rank(a?.status) - rank(b?.status);
+  });
 
   const createOrder = async () => {
     try {
@@ -104,10 +125,15 @@ export default function TransportDispatchBoard() {
 
   const saveEdit = async () => {
     if (!editingOrder) return;
+    const action = STATUS_TO_ACTION[editStatus];
+    if (!action) {
+      toast({ variant: "destructive", title: "هذه الحالة لا يمكن تعيينها يدويًا" });
+      return;
+    }
     try {
       await apiFetch(`/transport/dispatch-orders/${editingOrder.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ status: editStatus }),
+        body: JSON.stringify({ action }),
       });
       toast({ title: "تم تحديث الأمر" });
       setEditingOrder(null);
@@ -207,7 +233,7 @@ export default function TransportDispatchBoard() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <GuardedButton perm="transport:create" size="sm" onClick={() => setShowCreate((v) => !v)}>
+          <GuardedButton perm="fleet.dispatch:create" size="sm" onClick={() => setShowCreate((v) => !v)}>
             <Plus className="h-4 w-4 me-1" />{showCreate ? "إلغاء" : "أمر توزيع جديد"}
           </GuardedButton>
           <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/bookings">
@@ -232,7 +258,11 @@ export default function TransportDispatchBoard() {
               <select className="w-full h-10 border rounded-md px-2" value={createForm.vehicleId}
                 onChange={(e) => setCreateForm((f) => ({ ...f, vehicleId: e.target.value }))}>
                 <option value="">— اختر —</option>
-                {vehicles.map((v: any) => <option key={v.id} value={v.id}>{v.plateNumber}</option>)}
+                {vehicles.map((v: any) => (
+                  <option key={v.id} value={v.id}>
+                    {v.plateNumber}{v.status ? ` — ${statusLabel("vehicle", v.status).label}` : ""}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -423,7 +453,7 @@ export default function TransportDispatchBoard() {
                               <div className="mt-1 text-[10px] text-status-info-foreground">جاري إعادة الجدولة…</div>
                             )}
                             <div className="mt-1 flex justify-end">
-                              <GuardedButton perm="transport:update" variant="ghost" size="sm" className="h-5 w-5 p-0"
+                              <GuardedButton perm="fleet.dispatch:update" variant="ghost" size="sm" className="h-5 w-5 p-0"
                                 onClick={(e) => { e.stopPropagation(); setEditingOrder(o); setEditStatus(o.status); }}>
                                 <Pencil className="h-2.5 w-2.5" />
                               </GuardedButton>
@@ -453,7 +483,7 @@ export default function TransportDispatchBoard() {
               <Label>الحالة</Label>
               <select className="w-full h-10 border rounded-md px-2 mt-1" value={editStatus}
                 onChange={(e) => setEditStatus(e.target.value)}>
-                {Object.entries(statusDict("dispatch")).map(([k, info]) => <option key={k} value={k}>{info.label}</option>)}
+                {Object.entries(statusDict("dispatch")).filter(([k]) => STATUS_TO_ACTION[k]).map(([k, info]) => <option key={k} value={k}>{info.label}</option>)}
               </select>
             </div>
             <div className="flex gap-2 justify-end pt-1">

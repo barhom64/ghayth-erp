@@ -18,7 +18,6 @@
  *   PATCH  /transport/itineraries/:id/legs/:legId    — update a leg
  *   DELETE /transport/itineraries/:id/legs/:legId    — remove a leg
  *
- *   POST   /transport/dispatch-orders/:id/navigation/start    — start session
  *   POST   /transport/dispatch-orders/:id/navigation/ping     — driver ping
  *   POST   /transport/dispatch-orders/:id/navigation/event    — state transition
  *   POST   /transport/dispatch-orders/:id/navigation/complete — end session
@@ -47,6 +46,18 @@ import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import {
   MapsService, loadPlanningSettings, updatePlanningSettings,
 } from "../lib/fleet/mapsService.js";
+// TA-GAP-09 Phase 2 — read-only usage dashboard counts. Loader is
+// best-effort and never throws; the route handler echoes its result.
+import { loadMapsUsage } from "../lib/fleet/mapsUsageCounter.js";
+// TA-GAP-09 Phase 3 — operator-set caps + the alert sweep that
+// follows. Routes below expose the configuration; the cron registered
+// in cronScheduler.ts runs the sweep.
+import { loadActiveThresholds, upsertThreshold } from "../lib/fleet/mapsUsageThresholdAlerts.js";
+// TR-021 — operating-window helper for a realistic utilisation denominator.
+import { dailyOperatingMinutes, type OperatingWindowSettings } from "../lib/fleet/operatingWindow.js";
+// Maps Provider Adapter — masking helper is exported separately so
+// any route that needs to echo the planning settings goes through
+// the single chokepoint instead of re-implementing the masking.
 import {
   suggestAssignments,
   suggestForLeg,
@@ -63,16 +74,18 @@ transportPlanningRouter.use(authMiddleware);
 // #2079 FIX-11 (DEAD-02) — the `mapbox` and `here_maps` providers
 // remain declared in the TS type union and the DB CHECK constraint
 // (migration 271:130) because old rows may still carry them, but
-// the mapsService falls back to `manual_only` for both of them
-// (mapsService.ts:305-309). Exposing them as a settable value
-// through the PATCH endpoint is misleading — the operator picks
-// "mapbox", clicks save, then notices every estimate is still a
-// straight-line manual approximation. Restrict the input enum to
-// the two providers that ACTUALLY work (`manual_only` +
-// `google_maps`). DB rows already on `mapbox`/`here_maps` keep
-// loading correctly — the type union stays — but no new write
-// can set those values via the public PATCH.
-const MAP_PROVIDERS_WRITABLE = ["manual_only", "google_maps"] as const;
+// the mapsService falls back to `manual_only` for both of them.
+// Exposing them as a settable value through the PATCH endpoint is
+// misleading — the operator picks "mapbox", clicks save, then
+// notices every estimate is still a straight-line manual
+// approximation. Restrict the input enum to the three providers
+// that ACTUALLY work end-to-end:
+//   • manual_only — explicit "use internal estimate, do not call Google"
+//   • google_maps — explicit "always use Google, fail loud if no key"
+//   • auto        — operator-friendly: use Google if a key exists,
+//                   else fall back to the internal estimate
+// (Maps Provider Adapter, owner brief 2026-06-15.)
+const MAP_PROVIDERS_WRITABLE = ["manual_only", "google_maps", "auto"] as const;
 
 transportPlanningRouter.get(
   "/transport/planning-settings",
@@ -81,7 +94,11 @@ transportPlanningRouter.get(
     try {
       const scope = req.scope!;
       const settings = await loadPlanningSettings(scope.companyId);
-      res.json(maskFields(req, { data: settings }));
+      // Maps Provider Adapter — `toClientSettings` is the SINGLE
+      // chokepoint that strips the raw API key (returns the masked
+      // form) and adds the SPA-ready fallback notice. Wrap with
+      // `maskFields` so any future per-field policy still applies.
+      res.json(maskFields(req, { data: MapsService.toClientSettings(settings) }));
     } catch (err) {
       handleRouteError(err, res, "Load planning settings error:");
     }
@@ -91,7 +108,7 @@ transportPlanningRouter.get(
 const updateSettingsSchema = z.object({
   mapProvider: z.enum(MAP_PROVIDERS_WRITABLE, {
     errorMap: () => ({
-      message: "مزوّد الخرائط المختار غير مفعَّل في النظام — المسموح: manual_only أو google_maps",
+      message: "مزوّد الخرائط المختار غير مفعَّل في النظام — المسموح: manual_only أو google_maps أو auto",
     }),
   }).optional(),
   mapProviderApiKey: z.string().max(255).nullable().optional(),
@@ -101,6 +118,16 @@ const updateSettingsSchema = z.object({
   defaultBufferMinutes: z.coerce.number().int().min(0).max(480).optional(),
   defaultDeadheadKmh: z.coerce.number().int().min(10).max(200).optional(),
   estimateCacheTtlMinutes: z.coerce.number().int().min(15).max(43200).optional(),
+  // Maps Provider Adapter (owner brief 2026-06-15) — operator toggle
+  // for the driver's "ابدأ الملاحة" external link. The link itself is
+  // keyless; this flag is for fleets that want to forbid the driver
+  // from leaving the app even when no in-app map is available. We
+  // accept boolean OR the strings "true"/"false" since some form
+  // libraries serialize toggles as strings; everything else rejects.
+  enableExternalNavigationUrls: z
+    .union([z.boolean(), z.enum(["true", "false"])])
+    .transform((v) => (typeof v === "string" ? v === "true" : v))
+    .optional(),
 });
 
 transportPlanningRouter.patch(
@@ -111,12 +138,23 @@ transportPlanningRouter.patch(
       const scope = req.scope!;
       const b = zodParse(updateSettingsSchema.safeParse(req.body));
       const updated = await updatePlanningSettings(scope.companyId, b);
+      // Audit-log the PATCH body, but never the raw API key. Owner
+      // brief: «لا تطبعه في logs». Replace it with `[set]`/`[cleared]`
+      // before the row hits the audit trail.
+      const auditPayload: Record<string, unknown> = { ...b };
+      if ("mapProviderApiKey" in auditPayload) {
+        auditPayload.mapProviderApiKey =
+          auditPayload.mapProviderApiKey == null || auditPayload.mapProviderApiKey === ""
+            ? "[cleared]"
+            : "[set]";
+      }
       createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
         action: "update", entity: "transport_planning_settings", entityId: scope.companyId,
-        after: { ...b },
+        after: auditPayload,
       }).catch((e) => logger.error(e, "planning settings audit failed"));
-      res.json({ data: updated });
+      // Echo back the masked client view, never the raw settings row.
+      res.json({ data: MapsService.toClientSettings(updated) });
     } catch (err) {
       handleRouteError(err, res, "Update planning settings error:");
     }
@@ -137,6 +175,240 @@ transportPlanningRouter.post(
       res.json({ data: { status } });
     } catch (err) {
       handleRouteError(err, res, "Maps provider health-check error:");
+    }
+  },
+);
+
+// TA-GAP-09 Phase 2 — Maps quota dashboard read endpoint.
+// Returns per-day, per-provider, per-apiSurface counts for the
+// caller's company. Phase 1 (#2439) wired the counter writes. This
+// endpoint exposes them for the SPA dashboard.
+//
+// RBAC: gated on `fleet.bookings:view` (same scope as the planning
+// settings — anyone who can read the maps provider config can read
+// our spend against it).
+transportPlanningRouter.get(
+  "/transport/maps-usage",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const days = Math.min(Math.max(Number(req.query.days ?? 30) || 30, 1), 366);
+      const rows = await loadMapsUsage({ companyId: scope.companyId, days });
+      res.json({ data: { rows, windowDays: days } });
+    } catch (err) {
+      handleRouteError(err, res, "Load maps usage error:");
+    }
+  },
+);
+
+// TA-GAP-09 Phase 3 — operator-set quota thresholds (daily + monthly).
+// Companion to /transport/maps-usage: the GET returns the active caps
+// so the SPA can show the cap line + the PUT lets the operator set
+// or update them.
+transportPlanningRouter.get(
+  "/transport/maps-usage/thresholds",
+  authorize({ feature: "fleet.bookings", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const rows = await loadActiveThresholds(scope.companyId);
+      res.json({ data: { rows } });
+    } catch (err) {
+      handleRouteError(err, res, "Load maps thresholds error:");
+    }
+  },
+);
+
+// ── Control Tower (audit doc file 22 + #1812 user brief) ──
+//
+// Single read endpoint that returns a one-shot snapshot of the entire
+// fleet operating state. The operator brief was:
+//   "هذه أهم شاشة ناقصة. لوحة كبيرة فيها: مركبات متاحة / مشغولة /
+//    صيانة / سائقون متاحون / في راحة / رحلات اليوم / متأخرة / حرجة"
+//
+// All counts are COUNT(*) FILTER queries against existing indexes —
+// no new schema. Today's matching is in Asia/Riyadh time (the operator
+// brief never said GMT).
+//
+//   late_dispatches : status IN ('accepted','executing'), startedAt
+//                     IS NULL, scheduledStartAt + 15min < NOW().
+//   critical_window : status IN ('pending','notified'),
+//                     scheduledStartAt within the next 2 hours.
+//   unassigned_today: bookings whose scheduledStart falls today but
+//                     have no active dispatch order (not declined,
+//                     not cancelled).
+transportPlanningRouter.get(
+  "/transport/control-tower",
+  authorize({ feature: "fleet.dispatch", action: "list" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      // Day window: caller's date or today (Asia/Riyadh).
+      const dateParam = typeof req.query.date === "string" ? req.query.date : "";
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+        ? dateParam
+        : new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
+
+      // ── Vehicles snapshot ────────────────────────────────────
+      const [vehiclesRow] = await rawQuery<{
+        total: number;
+        available: number;
+        inUse: number;
+        maintenance: number;
+        offDuty: number;
+        suspended: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE status = 'available')::int   AS available,
+           COUNT(*) FILTER (WHERE status = 'in_use')::int       AS "inUse",
+           COUNT(*) FILTER (WHERE status = 'maintenance')::int  AS maintenance,
+           COUNT(*) FILTER (WHERE status = 'off_duty')::int     AS "offDuty",
+           COUNT(*) FILTER (WHERE status = 'suspended')::int    AS suspended
+         FROM fleet_vehicles
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+        [scope.companyId],
+      );
+
+      // ── Drivers snapshot ─────────────────────────────────────
+      const [driversRow] = await rawQuery<{
+        total: number;
+        available: number;
+        onTrip: number;
+        offDuty: number;
+        suspended: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE COALESCE(status, 'available') = 'available')::int AS available,
+           COUNT(*) FILTER (WHERE status = 'on_trip')::int                          AS "onTrip",
+           COUNT(*) FILTER (WHERE status = 'off_duty')::int                         AS "offDuty",
+           COUNT(*) FILTER (WHERE status = 'suspended')::int                        AS suspended
+         FROM fleet_drivers
+         WHERE "companyId" = $1 AND "deletedAt" IS NULL`,
+        [scope.companyId],
+      );
+
+      // ── Today's dispatches snapshot ──────────────────────────
+      const [dispatchesRow] = await rawQuery<{
+        total: number;
+        pending: number;
+        notified: number;
+        accepted: number;
+        executing: number;
+        completed: number;
+        late: number;
+        critical: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE status = 'pending')::int    AS pending,
+           COUNT(*) FILTER (WHERE status = 'notified')::int   AS notified,
+           COUNT(*) FILTER (WHERE status = 'accepted')::int   AS accepted,
+           COUNT(*) FILTER (WHERE status = 'executing')::int  AS executing,
+           COUNT(*) FILTER (WHERE status = 'completed')::int  AS completed,
+           COUNT(*) FILTER (WHERE status IN ('accepted','executing')
+                            AND "startedAt" IS NULL
+                            AND "scheduledStartAt" + INTERVAL '15 minutes' < NOW())::int AS late,
+           COUNT(*) FILTER (WHERE status IN ('pending','notified')
+                            AND "scheduledStartAt" > NOW()
+                            AND "scheduledStartAt" < NOW() + INTERVAL '2 hours')::int    AS critical
+         FROM transport_dispatch_orders
+         WHERE "companyId" = $1
+           AND DATE("scheduledStartAt" AT TIME ZONE 'Asia/Riyadh') = $2::date`,
+        [scope.companyId, day],
+      );
+
+      // ── Today's bookings snapshot (assigned vs not) ──────────
+      const [bookingsRow] = await rawQuery<{
+        total: number;
+        unassigned: number;
+      }>(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE NOT EXISTS (
+             SELECT 1 FROM transport_dispatch_orders d
+              WHERE d."bookingId" = b.id
+                AND d."companyId" = b."companyId"
+                AND d.status NOT IN ('declined','cancelled')
+           ))::int AS unassigned
+         FROM transport_bookings b
+         WHERE b."companyId" = $1
+           AND b."deletedAt" IS NULL
+           AND DATE(b."requestedPickupDate" AT TIME ZONE 'Asia/Riyadh') = $2::date`,
+        [scope.companyId, day],
+      );
+
+      // ── Alerts synthesis (operator-friendly, Arabic-labelled) ─
+      const alerts: Array<{ kind: string; severity: "critical" | "warn" | "info"; label: string }> = [];
+      if (dispatchesRow.late > 0) {
+        alerts.push({ kind: "late_dispatches", severity: "critical",
+          label: `${dispatchesRow.late} مهمة متأخرة عن موعد الانطلاق` });
+      }
+      if (dispatchesRow.critical > 0) {
+        alerts.push({ kind: "critical_window", severity: "warn",
+          label: `${dispatchesRow.critical} مهمة لم تُقبل وموعدها خلال ساعتين` });
+      }
+      if (bookingsRow.unassigned > 0) {
+        alerts.push({ kind: "unassigned_bookings", severity: "warn",
+          label: `${bookingsRow.unassigned} حجز اليوم بلا أمر تشغيل` });
+      }
+      if (vehiclesRow.available === 0 && dispatchesRow.pending > 0) {
+        alerts.push({ kind: "no_capacity", severity: "critical",
+          label: "لا مركبات متاحة مع وجود مهام pending" });
+      }
+      if (driversRow.total > 0 && driversRow.available === 0) {
+        alerts.push({ kind: "no_active_drivers", severity: "critical",
+          label: "لا سائقون متاحون حاليًّا" });
+      }
+
+      res.json({
+        data: {
+          date: day,
+          vehicles: vehiclesRow,
+          drivers: driversRow,
+          dispatches: dispatchesRow,
+          bookings: bookingsRow,
+          alerts,
+        },
+      });
+    } catch (err) {
+      handleRouteError(err, res, "Control tower error:");
+    }
+  },
+);
+
+const upsertThresholdSchema = z.object({
+  period: z.enum(["daily", "monthly"]),
+  callCountThreshold: z.coerce.number().int().positive(),
+  warningPct: z.coerce.number().int().min(1).max(99).optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+transportPlanningRouter.put(
+  "/transport/maps-usage/thresholds",
+  authorize({ feature: "fleet.bookings", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const b = zodParse(upsertThresholdSchema.safeParse(req.body));
+      const result = await upsertThreshold({
+        companyId: scope.companyId,
+        period: b.period,
+        callCountThreshold: b.callCountThreshold,
+        warningPct: b.warningPct,
+        notes: b.notes ?? null,
+        createdBy: scope.userId,
+      });
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "maps_usage_thresholds", entityId: result.id,
+        after: { period: b.period, callCountThreshold: b.callCountThreshold, warningPct: b.warningPct ?? 80 },
+      }).catch((e) => logger.error(e, "maps threshold audit failed"));
+      res.json({ data: result });
+    } catch (err) {
+      handleRouteError(err, res, "Upsert maps threshold error:");
     }
   },
 );
@@ -378,6 +650,18 @@ transportPlanningRouter.get(
         [scope.companyId, startDate],
       );
 
+      // TR-021 / UTIL-02 — the utilisation denominator honours the
+      // company's configured operating window (falls back to 12h/day)
+      // instead of a flat 24×7, so the % matches what the assignment
+      // engine scores on and isn't artificially halved.
+      const [windowRow] = await rawQuery<OperatingWindowSettings>(
+        `SELECT "operatingStartTime", "operatingEndTime", "operatingDaysMask"
+           FROM transport_planning_settings
+          WHERE "companyId" = $1`,
+        [scope.companyId],
+      );
+      const weeklyOperatingSeconds = dailyOperatingMinutes(windowRow ?? null) * 7 * 60;
+
       // Per-vehicle utilisation: minutes booked across the 7-day window
       // / total minutes in the window. Sorts heaviest at top so the
       // dispatcher can spot the at-risk units (and the under-used ones).
@@ -399,7 +683,7 @@ transportPlanningRouter.get(
                 ROUND(
                   COALESCE(SUM(
                     EXTRACT(EPOCH FROM (o."scheduledEndAt" - o."scheduledStartAt"))
-                  )::numeric, 0) / NULLIF(7 * 24 * 3600, 0) * 100,
+                  )::numeric, 0) / NULLIF($3, 0) * 100,
                   1
                 ) AS utilisation
            FROM fleet_vehicles v
@@ -414,8 +698,28 @@ transportPlanningRouter.get(
           HAVING COUNT(o.id) > 0 OR v.status = 'available'
           ORDER BY utilisation DESC NULLS LAST, v.id ASC
           LIMIT 100`,
-        [scope.companyId, startDate],
+        [scope.companyId, startDate, weeklyOperatingSeconds],
       );
+
+      // TR-021 — fleet-level rollup so the dispatcher sees the whole
+      // picture at a glance (idle vs over-worked units), not just the
+      // per-vehicle list. Derived from the rows already fetched — no
+      // extra round-trip.
+      const activeRows = vehicleUtilisation.filter((v) => v.bookedMinutes > 0);
+      const avgUtilisation = activeRows.length > 0
+        ? Math.round(
+            (activeRows.reduce((s, v) => s + Number(v.utilisation), 0) / activeRows.length) * 10,
+          ) / 10
+        : 0;
+      const fleetSummary = {
+        vehiclesTracked: vehicleUtilisation.length,
+        activeVehicles: activeRows.length,
+        idleVehicles: vehicleUtilisation.length - activeRows.length,
+        avgUtilisation,
+        overUtilised: vehicleUtilisation.filter((v) => Number(v.utilisation) > 80).length,
+        underUtilised: activeRows.filter((v) => Number(v.utilisation) < 30).length,
+        operatingHoursPerDay: Math.round(dailyOperatingMinutes(windowRow ?? null) / 60 * 10) / 10,
+      };
 
       res.json(maskFields(req, {
         data: {
@@ -424,6 +728,7 @@ transportPlanningRouter.get(
             .toISOString().slice(0, 10),
           daily,
           vehicleUtilisation,
+          fleetSummary,
         },
       }));
     } catch (err) {
@@ -434,10 +739,7 @@ transportPlanningRouter.get(
 
 // ─── Itineraries ─────────────────────────────────────────────────────
 
-const TRANSPORT_SERVICE_TYPES = [
-  "cargo_load", "passenger_umrah", "passenger_general",
-  "equipment_rental", "internal_transfer", "other",
-] as const;
+import { TRANSPORT_SERVICE_TYPES } from "../lib/transportEnums.js";
 
 const createItinerarySchema = z.object({
   itineraryName: z.string().min(1).max(255),
@@ -889,81 +1191,10 @@ transportPlanningRouter.post(
 );
 
 // ─── Navigation sessions ─────────────────────────────────────────────
-
-async function loadDispatchOrderForDriver(
-  companyId: number, dispatchOrderId: number,
-): Promise<{
-  id: number; driverId: number; vehicleId: number;
-  status: string; bookingLineId: number;
-  fromLat: number | null; fromLng: number | null;
-  toLat: number | null; toLng: number | null;
-} | null> {
-  const [row] = await rawQuery<{
-    id: number; driverId: number; vehicleId: number;
-    status: string; bookingLineId: number;
-    fromLat: number | null; fromLng: number | null;
-    toLat: number | null; toLng: number | null;
-  }>(
-    `SELECT d.id, d."driverId", d."vehicleId", d.status, d."bookingLineId",
-            fl.latitude  AS "fromLat",
-            fl.longitude AS "fromLng",
-            tl.latitude  AS "toLat",
-            tl.longitude AS "toLng"
-       FROM transport_dispatch_orders d
-            JOIN transport_booking_lines bl ON bl.id = d."bookingLineId" AND bl."deletedAt" IS NULL
-            JOIN transport_bookings b ON b.id = bl."bookingId" AND b."deletedAt" IS NULL
-            LEFT JOIN transport_locations fl ON fl.id = b."fromLocationId" AND fl."deletedAt" IS NULL
-            LEFT JOIN transport_locations tl ON tl.id = b."toLocationId" AND tl."deletedAt" IS NULL
-      WHERE d.id = $1 AND d."companyId" = $2`,
-    [dispatchOrderId, companyId],
-  );
-  return row ?? null;
-}
-
-transportPlanningRouter.post(
-  "/transport/dispatch-orders/:id/navigation/start",
-  authorize({ feature: "fleet.dispatch", action: "update" }),
-  async (req, res) => {
-    try {
-      const scope = req.scope!;
-      const dispatchOrderId = parseId(req.params.id, "id");
-      const order = await loadDispatchOrderForDriver(scope.companyId, dispatchOrderId);
-      if (!order) throw new NotFoundError("أمر التوزيع غير موجود");
-      if (!["accepted", "executing"].includes(order.status)) {
-        throw new ValidationError(
-          `لا يمكن بدء جلسة ملاحة على أمر بحالة "${order.status}". يجب قبول المهمة أولاً.`,
-          { field: "status" },
-        );
-      }
-      const settings = await loadPlanningSettings(scope.companyId);
-
-      const { insertId } = await rawExecute(
-        `INSERT INTO driver_navigation_sessions
-           ("companyId", "dispatchOrderId", "driverId", "vehicleId",
-            "originLat", "originLng", "destinationLat", "destinationLng",
-            provider)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          scope.companyId, dispatchOrderId, order.driverId, order.vehicleId,
-          order.fromLat, order.fromLng, order.toLat, order.toLng,
-          settings.mapProvider,
-        ],
-      );
-      assertInsert(insertId, "driver_navigation_sessions");
-
-      emitEvent({
-        companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
-        action: "fleet.dispatch.navigation_started",
-        entity: "driver_navigation_sessions", entityId: insertId,
-        details: JSON.stringify({ dispatchOrderId, provider: settings.mapProvider }),
-      }).catch((e) => logger.error(e, "navigation start event failed"));
-
-      res.status(201).json({ data: { id: insertId, provider: settings.mapProvider } });
-    } catch (err) {
-      handleRouteError(err, res, "Start navigation session error:");
-    }
-  },
-);
+// The explicit "start session" route (POST .../navigation/start) was retired:
+// navigation sessions are now auto-created when a dispatch order is accepted
+// (the auto-start hook in PATCH /transport/dispatch-orders/:id — see
+// transport-bookings.ts). No client ever called the explicit endpoint.
 
 const pingSchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
@@ -991,11 +1222,15 @@ transportPlanningRouter.post(
                 "remainingMeters" = COALESCE($6, "remainingMeters"),
                 "updatedAt" = NOW()
           WHERE "dispatchOrderId" = $7 AND "companyId" = $8
-            AND status NOT IN ('ended', 'cancelled')`,
+            AND status NOT IN ('ended', 'cancelled')
+            AND "driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $9 AND fd."companyId" = $8 AND fd."deletedAt" IS NULL
+            )`,
         [
           b.lat, b.lng, b.speedKmh ?? null, b.heading ?? null,
           b.etaSeconds ?? null, b.remainingMeters ?? null,
-          dispatchOrderId, scope.companyId,
+          dispatchOrderId, scope.companyId, scope.userId,
         ],
       );
       if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة لهذه المهمة");
@@ -1047,8 +1282,12 @@ transportPlanningRouter.post(
                 status = $1,
                 "updatedAt" = NOW()
           WHERE "dispatchOrderId" = $2 AND "companyId" = $3
-            AND status NOT IN ('ended', 'cancelled')`,
-        [m.status, dispatchOrderId, scope.companyId],
+            AND status NOT IN ('ended', 'cancelled')
+            AND "driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $4 AND fd."companyId" = $3 AND fd."deletedAt" IS NULL
+            )`,
+        [m.status, dispatchOrderId, scope.companyId, scope.userId],
       );
       if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة لهذه المهمة");
 
@@ -1078,8 +1317,12 @@ transportPlanningRouter.post(
                 "endedAt" = NOW(),
                 "updatedAt" = NOW()
           WHERE "dispatchOrderId" = $1 AND "companyId" = $2
-            AND status NOT IN ('ended', 'cancelled')`,
-        [dispatchOrderId, scope.companyId],
+            AND status NOT IN ('ended', 'cancelled')
+            AND "driverId" IN (
+              SELECT fd.id FROM fleet_drivers fd
+               WHERE fd."employeeId" = $3 AND fd."companyId" = $2 AND fd."deletedAt" IS NULL
+            )`,
+        [dispatchOrderId, scope.companyId, scope.userId],
       );
       if (affectedRows === 0) throw new NotFoundError("لا توجد جلسة ملاحة نشطة");
 
@@ -1099,6 +1342,29 @@ transportPlanningRouter.post(
         action: "fleet.dispatch.navigation_ended",
         entity: "driver_navigation_sessions", entityId: dispatchOrderId,
       }).catch((e) => logger.error(e, "navigation complete event failed"));
+
+      // TA-T18-DR Phase 2 — recompute the driver's reputation lazily
+      // after each completion. Best-effort + isolated so a recompute
+      // failure never blocks the operator's "I'm done" action.
+      (async () => {
+        try {
+          const [order] = await rawQuery<{ driverId: number }>(
+            `SELECT "driverId" FROM transport_dispatch_orders
+              WHERE id = $1 AND "companyId" = $2`,
+            [dispatchOrderId, scope.companyId],
+          );
+          if (order) {
+            const { computeDriverReputation } =
+              await import("../lib/fleet/driverReputation.js");
+            await computeDriverReputation({
+              companyId: scope.companyId,
+              driverId: order.driverId,
+            });
+          }
+        } catch (e) {
+          logger.warn({ err: e, dispatchOrderId }, "post-complete reputation recompute failed");
+        }
+      })().catch(() => undefined);
 
       res.json({ ok: true });
     } catch (err) {

@@ -81,6 +81,11 @@ if (!config.isProduction) {
   allowedOrigins.add("http://localhost:5173");
   allowedOrigins.add("http://localhost:80");
 }
+// Capacitor native shells: Android WebView uses Origin `https://localhost`
+// (already allowed above); iOS WKWebView uses the `capacitor://localhost`
+// scheme. Allow it so the native app's API calls aren't CORS-blocked. The
+// app ships the same SPA bundle — this is the only origin difference.
+allowedOrigins.add("capacitor://localhost");
 
 const isProduction = config.isProduction;
 
@@ -91,7 +96,11 @@ const replitDevHostPattern: RegExp | null = (() => {
   const prefix = dev.split(".")[0];
   if (!prefix) return null;
   const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`^https://${escaped}\\.(?:[a-z0-9-]+\\.)?(?:repl\\.co|replit\\.dev)$`);
+  // Allow ZERO-OR-MORE intermediate subdomain segments (`*`, not `?`): the
+  // Expo web preview serves on `<slug>.expo.<base>.replit.dev` — an extra
+  // `expo.` segment vs the plain `<slug>.<base>.replit.dev` web preview — so a
+  // single optional segment would CORS-block the mobile app's API XHRs.
+  return new RegExp(`^https://${escaped}\\.(?:[a-z0-9-]+\\.)*(?:repl\\.co|replit\\.dev)$`);
 })();
 
 app.use(cors({
@@ -118,6 +127,8 @@ app.use(cookieParser());
 app.use("/api/umrah/import", express.json({ limit: "50mb" }));
 app.use("/api/umrah/assign-bulk", express.json({ limit: "10mb" }));
 app.use("/api/storage", express.json({ limit: "10mb" }));
+// رفع وثائق الاستكمال الذاتي عبر base64 (ملف خام حتى 5MB ≈ 6.7MB بعد الترميز).
+app.use("/api/public/onboarding", express.json({ limit: "8mb" }));
 // NF-COMM-01 / RD3-01 — capture raw body for inbound webhooks (WhatsApp +
 // PBX) so we can verify HMAC against the unmodified payload. Express
 // normally reparses on every retry; storing the buffer at parse time

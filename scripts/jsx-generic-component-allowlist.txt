@@ -1,0 +1,9 @@
+# jsx-generic-component-allowlist.txt
+#
+# Pre-existing files rendering a component with an explicit JSX type
+# argument (`<DataTable<MyRow> …>` / `<DataTable<any> …>`), which breaks
+# the Replit dev preview (cartographer Babel parse error → module 500).
+# De-allowlist by dropping the type arg (T is inferred from the props)
+# and pruning the line here.
+#
+# Baseline captured: 0 file(s).

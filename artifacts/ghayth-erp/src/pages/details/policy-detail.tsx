@@ -20,7 +20,7 @@ import {
 } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, FileText, ListChecks, Link2, Plus, X } from "lucide-react";
@@ -381,7 +381,7 @@ export default function PolicyDetail() {
       actions={
         <>
           {policy && (
-            <EntityPrintButton
+            <PrintButton
               entityType="policy"
               entityId={id ?? 0}
              />
@@ -400,7 +400,7 @@ export default function PolicyDetail() {
       }
     />
     {policy && id && (
-      <EntityEditDialog<PolicyEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل السياسة"

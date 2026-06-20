@@ -186,8 +186,8 @@ export default function PurchaseOrdersPage() {
 
   return (
     <PageShell
-      title="طلبات الشراء"
-      subtitle="إدارة طلبات الشراء والاعتماد والاستلام والمطابقة مع الفواتير"
+      title="أوامر الشراء"
+      subtitle="إدارة أوامر الشراء والاعتماد والاستلام والمطابقة مع الفواتير"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "طلبات الشراء" }]}
       loading={isLoading}
       actions={

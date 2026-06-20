@@ -138,7 +138,7 @@ class FleetEngineImpl implements DomainEngine {
   ) {
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_expense", "debit", "5560"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "credit", "2157"),
     ]);
 
     const costCenterId = await resolveVehicleCostCenter(ctx.companyId, violation.vehicleId);
@@ -167,7 +167,7 @@ class FleetEngineImpl implements DomainEngine {
     violation: { id: number; vehicleId?: number; amount: number }
   ) {
     const [payableCode, cashCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_fines_payable", "debit", "2157"),
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111"),
     ]);
 
@@ -331,7 +331,7 @@ class FleetEngineImpl implements DomainEngine {
 
     const [debitCode, creditCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_expense", "debit", "5140"),
-      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "fleet_trip_payable", "credit", "2111"),
     ]);
 
     return financialEngine.postJournalEntry({
@@ -450,6 +450,155 @@ class FleetEngineImpl implements DomainEngine {
         candidateId: row.id,
       });
     }
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #TA-T18 finance-boundary — maintenance cost → Accounting Candidate.
+   * Owner's rule: transport NEVER posts GL directly. Completing a
+   * maintenance ticket queues an EXPENSE candidate the accountant
+   * reviews + materialises (postMaintenanceGL runs at materialise-time,
+   * not on completion). Mirrors createCargoBillingCandidate; revenue is
+   * NULL (pure expense), suggestedCost carries the amount. Idempotent on
+   * (company, sourceType, sourceId).
+   */
+  async createMaintenanceExpenseCandidate(
+    ctx: FleetGLContext,
+    maintenance: { id: number; vehicleId: number; cost: number; type?: string | null; description?: string | null; sourceRef?: string | null }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const cost = Number(maintenance.cost) || 0;
+    if (cost <= 0) return null;
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId",
+           "sourceType", "sourceId", "sourceRef",
+           "serviceType", "serviceDate",
+           "vehicleId",
+           quantity, "unitOfMeasure",
+           "operationalStatus",
+           "suggestedRevenue", "suggestedCost",
+           notes,
+           "createdBy"
+         )
+         VALUES (
+           $1, $2,
+           'maintenance', $3, $4,
+           'maintenance', CURRENT_DATE,
+           $5,
+           1, 'service',
+           'completed',
+           NULL, $6,
+           $7,
+           $8
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'maintenance' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [
+        ctx.companyId,
+        ctx.branchId || null,
+        maintenance.id,
+        maintenance.sourceRef ?? `MAINT-${maintenance.id}`,
+        maintenance.vehicleId,
+        cost,
+        maintenance.description ?? null,
+        ctx.createdBy,
+      ]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #TA-T18 finance-boundary — fuel cost → Accounting Candidate.
+   * Logging a fuel entry queues an EXPENSE candidate (no direct GL);
+   * the accountant materialises it (postFuelExpenseGL runs then).
+   */
+  async createFuelExpenseCandidate(
+    ctx: FleetGLContext,
+    fuel: { id: number; vehicleId: number; cost: number; description?: string | null; sourceRef?: string | null }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const cost = Number(fuel.cost) || 0;
+    if (cost <= 0) return null;
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId", "sourceType", "sourceId", "sourceRef",
+           "serviceType", "serviceDate", "vehicleId",
+           quantity, "unitOfMeasure", "operationalStatus",
+           "suggestedRevenue", "suggestedCost", notes, "createdBy"
+         )
+         VALUES (
+           $1, $2, 'fuel', $3, $4,
+           'fuel', CURRENT_DATE, $5,
+           1, 'service', 'completed',
+           NULL, $6, $7, $8
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'fuel' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [ctx.companyId, ctx.branchId || null, fuel.id, fuel.sourceRef ?? `FUEL-${fuel.id}`, fuel.vehicleId, cost, fuel.description ?? null, ctx.createdBy]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return { id: row.id, created: !row.existed };
+  }
+
+  /**
+   * #TA-T18 finance-boundary — insurance premium → Accounting Candidate.
+   * Recording a policy queues an EXPENSE candidate (no direct GL); the
+   * accountant materialises it (postInsuranceGL runs then).
+   */
+  async createInsuranceExpenseCandidate(
+    ctx: FleetGLContext,
+    insurance: { id: number; vehicleId: number; cost: number; description?: string | null; sourceRef?: string | null }
+  ): Promise<{ id: number; created: boolean } | null> {
+    const cost = Number(insurance.cost) || 0;
+    if (cost <= 0) return null;
+    const rows = await rawQuery<{ id: number; existed: boolean }>(
+      `WITH ins AS (
+         INSERT INTO transport_billing_candidates (
+           "companyId", "branchId", "sourceType", "sourceId", "sourceRef",
+           "serviceType", "serviceDate", "vehicleId",
+           quantity, "unitOfMeasure", "operationalStatus",
+           "suggestedRevenue", "suggestedCost", notes, "createdBy"
+         )
+         VALUES (
+           $1, $2, 'insurance', $3, $4,
+           'insurance', CURRENT_DATE, $5,
+           1, 'policy', 'completed',
+           NULL, $6, $7, $8
+         )
+         ON CONFLICT ("companyId", "sourceType", "sourceId") DO NOTHING
+         RETURNING id, FALSE AS existed
+       )
+       SELECT id, existed FROM ins
+       UNION ALL
+       SELECT id, TRUE AS existed
+         FROM transport_billing_candidates
+        WHERE "companyId" = $1 AND "sourceType" = 'insurance' AND "sourceId" = $3
+          AND NOT EXISTS (SELECT 1 FROM ins)
+       LIMIT 1`,
+      [ctx.companyId, ctx.branchId || null, insurance.id, insurance.sourceRef ?? `INS-${insurance.id}`, insurance.vehicleId, cost, insurance.description ?? null, ctx.createdBy]
+    );
+    const row = rows[0];
+    if (!row) return null;
     return { id: row.id, created: !row.existed };
   }
 
@@ -724,9 +873,9 @@ class FleetEngineImpl implements DomainEngine {
 
     const [arCode, revenueCode, costCode, payableCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_receivable", "debit", "1131"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_revenue", "credit", "4153"),
       financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_cost", "debit", "5140"),
-      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2150"),
+      financialEngine.resolveAccountCode(ctx.companyId, "cargo_freight_payable", "credit", "2111"),
     ]);
 
     const lines: JournalEntryLine[] = [];

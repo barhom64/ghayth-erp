@@ -68,7 +68,7 @@ export async function reclassifyRevenueForInvoices(
     scope.companyId,
     "umrah_invoice_revenue",
     "credit",
-    "4200",
+    "4130",
   );
 
   // Build the invoice set. We pull the dimension columns (subAgentId +

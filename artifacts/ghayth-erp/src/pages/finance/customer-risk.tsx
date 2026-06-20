@@ -337,7 +337,7 @@ export default function CustomerRiskPage() {
 
   return (
     <PageShell
-      title="تحليل مخاطر العملاء (Customer Risk Dashboard)"
+      title="تحليل مخاطر العملاء"
       subtitle="تركّز الذمم + سلوك السداد + إنذار العملاء المتأخرين تكراراً — مفتاح إدارة الائتمان"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

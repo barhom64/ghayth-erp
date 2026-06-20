@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { AssignmentSuggestDialog } from "@/components/shared/assignment-suggest-dialog";
 import { BookingSourceContextPanel } from "@/components/shared/booking-source-context-panel";
+import { DateField } from "@/components/shared/form-field-wrapper";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 
 // #1733 Comment 9 — booking detail page. Single-screen view of the
 // booking + its lines + the dispatch orders that came out of it.
@@ -60,6 +62,9 @@ interface BookingDetail {
   createdAt: string;
   lines: BookingLine[];
   dispatchOrders: DispatchOrder[];
+  // #2475-follow-up — resolved booking-cancel policy (guard|cascade), used by
+  // the confirmation/preview dialog. Defaults to "guard" when absent.
+  cancelPolicy?: "guard" | "cascade";
   // #1812 source-context (from loadSourceContext on backend).
   // Null when the booking is manual_entry or the FK didn't resolve.
   sourceContext: {
@@ -218,6 +223,10 @@ export default function TransportBookingDetail() {
     [["transport-booking", id || ""], ["transport-bookings"]],
     { successMessage: "تم تحديث حالة الحجز" },
   );
+  // #2475-follow-up — cancelling is destructive (under "cascade" it also cancels
+  // the dispatch orders + trips and frees the vehicle/driver), so route the
+  // "cancelled" transition through a policy-aware confirmation dialog.
+  const [cancelConfirm, setCancelConfirm] = useState(false);
 
   // #2079 TA-T18-08 — dedicated approval mutations.
   const canApprove = usePermission("fleet.bookings:approve");
@@ -336,7 +345,11 @@ export default function TransportBookingDetail() {
                 {opts.length > 0 && (
                   <Select
                     value=""
-                    onValueChange={(v) => { if (v) statusMut.mutate({ status: v }); }}
+                    onValueChange={(v) => {
+                      if (!v) return;
+                      if (v === "cancelled") setCancelConfirm(true);
+                      else statusMut.mutate({ status: v });
+                    }}
                   >
                     <SelectTrigger className="w-44">
                       <SelectValue placeholder={`تغيير الحالة (${opts.length})`} />
@@ -404,7 +417,7 @@ export default function TransportBookingDetail() {
               مصدر: {SOURCE_LABEL[b.bookingSource] ?? b.bookingSource}
             </Badge>
             {b.umrahGroupId && (
-              <Link href={`/umrah/groups/${b.umrahGroupId}`}>
+              <Link href={`/umrah/groups/${b.umrahGroupId}`} asChild>
                 <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                   <Users className="h-3 w-3" />مجموعة عمرة #{b.umrahGroupId}
                 </a>
@@ -426,7 +439,7 @@ export default function TransportBookingDetail() {
               </span>
             )}
             {b.customerId && (
-              <Link href={`/clients/${b.customerId}`}>
+              <Link href={`/clients/${b.customerId}`} asChild>
                 <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                   <User className="h-3 w-3" />عميل #{b.customerId}
                 </a>
@@ -532,14 +545,10 @@ export default function TransportBookingDetail() {
                 <Input className="h-8 mt-1 text-sm" value={lineForm.unitOfMeasure}
                   onChange={e => setLineForm(f => ({ ...f, unitOfMeasure: e.target.value }))} placeholder="trip, kg, pax..." />
               </div>
-              <div><label className="text-xs text-muted-foreground">موعد الاستلام</label>
-                <Input type="datetime-local" className="h-8 mt-1 text-sm" value={lineForm.scheduledPickupAt}
-                  onChange={e => setLineForm(f => ({ ...f, scheduledPickupAt: e.target.value }))} />
-              </div>
-              <div><label className="text-xs text-muted-foreground">موعد التسليم</label>
-                <Input type="datetime-local" className="h-8 mt-1 text-sm" value={lineForm.scheduledDeliveryAt}
-                  onChange={e => setLineForm(f => ({ ...f, scheduledDeliveryAt: e.target.value }))} />
-              </div>
+              <DateField label="موعد الاستلام" mode="datetime" value={lineForm.scheduledPickupAt}
+                onChange={v => setLineForm(f => ({ ...f, scheduledPickupAt: v }))} />
+              <DateField label="موعد التسليم" mode="datetime" value={lineForm.scheduledDeliveryAt}
+                onChange={v => setLineForm(f => ({ ...f, scheduledDeliveryAt: v }))} />
             </div>
             <div className="flex justify-end mt-3">
               <Button size="sm" onClick={async () => {
@@ -572,7 +581,7 @@ export default function TransportBookingDetail() {
               لا توجد سطور بعد. أضف سطراً لكل مركبة مطلوبة قبل التوزيع.
             </div>
           ) : (
-            <DataTable<BookingLine>
+            <DataTable
               columns={lineColumns}
               data={b.lines}
               emptyMessage="لا توجد سطور"
@@ -594,7 +603,7 @@ export default function TransportBookingDetail() {
               لم يتم توزيع هذا الحجز على سائق بعد.
             </div>
           ) : (
-            <DataTable<DispatchOrder>
+            <DataTable
               columns={dispatchColumns}
               data={b.dispatchOrders}
               emptyMessage="لا توجد أوامر توزيع"
@@ -616,6 +625,42 @@ export default function TransportBookingDetail() {
           }}
         />
       )}
+      {/* #2475-follow-up — policy-aware confirmation/preview before a cancel. */}
+      {(() => {
+        const policy = b.cancelPolicy === "cascade" ? "cascade" : "guard";
+        const ACTIVE_ORDER = new Set(["pending", "notified", "accepted", "executing"]);
+        const activeOrders = (b.dispatchOrders || []).filter((o) => ACTIVE_ORDER.has(String(o.status)));
+        const hasActive = activeOrders.length > 0;
+        const guardBlocked = policy === "guard" && hasActive;
+        return (
+          <ConfirmActionDialog
+            open={cancelConfirm}
+            onOpenChange={setCancelConfirm}
+            variant={guardBlocked ? "caution" : "destructive"}
+            title={guardBlocked ? "تنبيه: يوجد أمر توزيع نشط" : "تأكيد إلغاء الحجز"}
+            description={
+              guardBlocked
+                ? `سياسة الإلغاء الحالية «حماية»: لا يمكن إلغاء الحجز ما دام هناك ${activeOrders.length} أمر توزيع نشط. ألغِ أوامر التوزيع أولاً من لوحة التوزيع (تُلغى معها الرحلة وتُحرَّر المركبة والسائق) ثم أعد المحاولة.`
+                : hasActive
+                  ? `سياسة الإلغاء الحالية «تتالٍ»: سيُلغى ${activeOrders.length} أمر توزيع نشط ورحلاتها، وتُحرَّر المركبة والسائق، وتُلغى الأسطر غير المنتهية. لا يمكن التراجع.`
+                  : "سيُعلَّم هذا الحجز كملغى. لا يمكن التراجع."
+            }
+            confirmLabel={guardBlocked ? "محاولة الإلغاء" : "تأكيد الإلغاء"}
+            pending={statusMut.isPending}
+            onConfirm={() => statusMut.mutate({ status: "cancelled" }, { onSuccess: () => setCancelConfirm(false) })}
+          >
+            {hasActive && (
+              <ul className="text-xs list-disc ps-5 space-y-0.5 max-h-40 overflow-auto">
+                {activeOrders.map((o) => (
+                  <li key={o.id}>
+                    {o.driverName || "بلا سائق"}{o.vehiclePlate ? ` — ${o.vehiclePlate}` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ConfirmActionDialog>
+        );
+      })()}
     </PageShell>
   );
 }

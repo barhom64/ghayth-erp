@@ -12,7 +12,7 @@
  */
 import { useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
 import { CreateMemoDialog } from "@/components/hr/create-memo-dialog";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -37,7 +37,7 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
-import { VIOLATION_STATUS } from "@/lib/hr-type-maps";
+import { VIOLATION_STATUS, SEVERITY_LEVELS } from "@/lib/hr-type-maps";
 import { cn } from "@/lib/utils";
 import {
   Plus, AlertTriangle, Scale, DollarSign, Shield, Clock, Ban, Gavel,
@@ -57,7 +57,7 @@ const INCIDENT_LABELS: Record<string, { label: string; Icon: typeof Clock; color
   custom:           { label: "مخصّص",        Icon: PenLine,    color: "text-slate-600 bg-slate-50"   },
 };
 
-const VALID_TABS = ["overview", "memos", "auto", "regulation"] as const;
+const VALID_TABS = ["overview", "memos", "violations", "auto", "regulation"] as const;
 type TabKey = (typeof VALID_TABS)[number];
 
 function getTabFromQuery(qs: string): TabKey {
@@ -173,12 +173,15 @@ export default function ViolationsPage() {
       <KpiGrid items={kpis} />
 
       <Tabs value={activeTab} onValueChange={setTab} dir="rtl" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 max-w-3xl">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 max-w-4xl">
           <TabsTrigger value="overview" className="gap-1.5">
             <ListChecks className="h-4 w-4" /> نظرة عامة
           </TabsTrigger>
           <TabsTrigger value="memos" className="gap-1.5">
             <FileText className="h-4 w-4" /> المحاضر
+          </TabsTrigger>
+          <TabsTrigger value="violations" className="gap-1.5">
+            <AlertTriangle className="h-4 w-4" /> المخالفات الخام
           </TabsTrigger>
           <TabsTrigger value="auto" className="gap-1.5">
             <Radar className="h-4 w-4" /> الرصد التلقائي
@@ -190,6 +193,7 @@ export default function ViolationsPage() {
 
         <TabsContent value="overview"><OverviewTab memos={memos} stats={stats} /></TabsContent>
         <TabsContent value="memos"><MemosTab memos={memos} onSortedDataChange={setPrintRows} /></TabsContent>
+        <TabsContent value="violations"><RawViolationsTab /></TabsContent>
         <TabsContent value="auto"><AutoDetectionLink /></TabsContent>
         <TabsContent value="regulation"><RegulationLink /></TabsContent>
       </Tabs>
@@ -516,6 +520,144 @@ function MemosTab({ memos, onSortedDataChange }: { memos: any[]; onSortedDataCha
         onClose={() => setCreating(false)}
         onCreated={() => setCreating(false)}
       />
+    </div>
+  );
+}
+
+// ───────────────────────── Raw Violations Tab ─────────────────────────
+// HR-REV-7 — ported from the retired violations-management.tsx (route now
+// redirects here). Surfaces the raw `/hr/violations` records + the lifecycle
+// «اعتماد» action + a by-type distribution, which the memo-centric tabs above
+// don't cover. Kept as a sibling tab so no capability is lost on retire.
+
+function RawViolationsTab() {
+  const { data, isLoading, isError } = useApiQuery<any>(["violations"], "/hr/violations");
+  const { data: vStats } = useApiQuery<any>(["violations-stats"], "/hr/violations-stats");
+  const items = data?.data || [];
+
+  // Approve drives the real lifecycle endpoint (applyTransition + discipline
+  // ladder). The legacy "resolve" PATCH was removed in the HR functional audit
+  // (C7) — keep only the approve transition.
+  const approveViolationMut = useApiMutation<any, { id: number }>(
+    (body) => `/hr/violations/${body.id}/approve`,
+    "PATCH",
+    [["violations"], ["violations-stats"]],
+    { successMessage: "تم اعتماد المخالفة" }
+  );
+  const approvingId = approveViolationMut.isPending ? approveViolationMut.variables?.id ?? null : null;
+
+  const [filters, setFilters] = useFilters();
+  const filtered = applyFilters(items, filters, { searchFields: ["employeeName"], statusField: "status", dateField: "createdAt" });
+
+  const byType = items.reduce((acc: Record<string, number>, v: any) => {
+    const t = v.type || "أخرى";
+    acc[t] = (acc[t] || 0) + 1;
+    return acc;
+  }, {});
+
+  const columns: DataTableColumn<any>[] = [
+    { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
+    { key: "type", header: "النوع", sortable: true, render: (v) => v.type },
+    { key: "description", header: "الوصف", sortable: true, className: "text-muted-foreground max-w-48 truncate", render: (v) => v.description },
+    {
+      key: "severity",
+      header: "الشدة",
+      sortable: true,
+      render: (v) => <Badge className={SEVERITY_LEVELS[v.severity]?.color || ""}>{SEVERITY_LEVELS[v.severity]?.label || v.severity}</Badge>,
+    },
+    {
+      key: "deduction",
+      header: "الخصم",
+      sortable: true,
+      className: "text-status-error-foreground font-medium",
+      render: (v) => formatCurrency(Number(v.deduction || 0)),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: true,
+      render: (v) => <PageStatusBadge status={v.status} />,
+    },
+    {
+      key: "actions",
+      header: "إجراء",
+      render: (v) => (
+        !["approved", "rejected"].includes(v.status) ? (
+          <GuardedButton
+            perm="hr:approve"
+            size="sm"
+            variant="outline"
+            className="text-xs"
+            onClick={(e) => { e.stopPropagation(); approveViolationMut.mutate({ id: v.id }); }}
+            disabled={approvingId === v.id}
+          >
+            <Shield className="h-3 w-3 me-1" />{approvingId === v.id ? "..." : "اعتماد"}
+          </GuardedButton>
+        ) : null
+      ),
+    },
+  ];
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState />;
+
+  return (
+    <div className="space-y-4">
+      <KpiGrid items={[
+        { label: "إجمالي المخالفات", value: vStats?.total ?? items.length, icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
+        { label: "نشطة", value: vStats?.active ?? 0, icon: Scale, color: "text-status-warning-foreground bg-status-warning-surface" },
+        { label: "إجمالي الخصومات", value: formatCurrency(vStats?.totalDeductions ?? 0), icon: DollarSign, color: "text-orange-600 bg-orange-50" },
+        { label: "أنواع المخالفات", value: Object.keys(byType).length, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
+      ]} />
+
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالاسم...",
+          statuses: Object.entries(SEVERITY_LEVELS).map(([k, v]) => ({ value: k, label: v.label })),
+          showDateRange: true,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+        onExportCSV={() =>
+          exportToCSV(filtered, [
+            { key: "employeeName", label: "الموظف" },
+            { key: "type", label: "النوع" },
+            { key: "description", label: "الوصف" },
+            { key: "severity", label: "الشدة" },
+            { key: "deduction", label: "الخصم" },
+            { key: "status", label: "الحالة" },
+          ], "المخالفات")
+        }
+      />
+      <DataTable
+        columns={columns}
+        data={filtered}
+        noToolbar
+        emptyMessage="لا توجد مخالفات"
+        pageSize={20}
+      />
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">توزيع المخالفات حسب النوع</CardTitle></CardHeader>
+        <CardContent>
+          {items.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">لا توجد بيانات</p>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(byType).sort(([, a], [, b]) => (b as number) - (a as number)).map(([type, count]) => (
+                <div key={type} className="flex items-center gap-3">
+                  <span className="text-sm w-40 truncate">{type}</span>
+                  <div className="flex-1 bg-surface-subtle rounded-full h-6 overflow-hidden">
+                    <div className="h-full bg-red-400 rounded-full" style={{ width: `${(count as number / items.length) * 100}%` }} />
+                  </div>
+                  <span className="text-sm font-medium w-8">{count as number}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

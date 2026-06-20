@@ -84,11 +84,18 @@ describe("#1733 follow-up — transport_intake_rules backend CRUD", () => {
     for (const op of ["booking", "dispatch", "service_line"]) {
       expect(BACKEND).toContain(`"${op}"`);
     }
+    // #TA-T18-UX-AUDIT — the 6 service types are now sourced from the shared
+    // lib/transportEnums (dedup of 5 byte-identical copies); the route imports
+    // the enum instead of re-declaring the list inline.
+    expect(BACKEND).toMatch(
+      /import \{ TRANSPORT_SERVICE_TYPES \} from "\.\.\/lib\/transportEnums\.js"/,
+    );
+    const ENUMS = readApi("lib/transportEnums.ts");
     for (const s of [
       "cargo_load", "passenger_umrah", "passenger_general",
       "equipment_rental", "internal_transfer", "other",
     ]) {
-      expect(BACKEND).toContain(`"${s}"`);
+      expect(ENUMS).toContain(`"${s}"`);
     }
   });
 

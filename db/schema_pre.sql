@@ -8015,7 +8015,9 @@ CREATE TABLE public.employee_commission_plans (
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
     "deletedAt" timestamp with time zone,
-    version integer DEFAULT 1 NOT NULL
+    version integer DEFAULT 1 NOT NULL,
+    "agentId" integer,
+    "subAgentId" integer
 );
 
 
@@ -8789,7 +8791,10 @@ CREATE TABLE public.employees (
     lat numeric(10,7),
     lon numeric(10,7),
     status character varying(20) DEFAULT 'active'::character varying,
+    "activationStatus" character varying(40),
     "activationToken" character varying(100),
+    "selfSubmittedData" jsonb,
+    "selfSubmittedAt" timestamp with time zone,
     "createdAt" timestamp without time zone DEFAULT now() NOT NULL,
     "iqamaNumber" character varying(30),
     "passportNumber" character varying(30),
@@ -14421,7 +14426,11 @@ CREATE TABLE public.onboarding_tasks (
     "completedAt" timestamp without time zone,
     "completedBy" integer,
     "createdAt" timestamp without time zone DEFAULT now(),
-    "updatedAt" timestamp with time zone DEFAULT now()
+    "updatedAt" timestamp with time zone DEFAULT now(),
+    "ownerRole" character varying(40),
+    reason text,
+    mandatory boolean DEFAULT true,
+    "serviceType" character varying(40)
 );
 
 
@@ -14587,7 +14596,13 @@ CREATE TABLE public.password_reset_requests (
     status character varying(20) DEFAULT 'pending'::character varying,
     "resolvedBy" integer,
     "resolvedAt" timestamp with time zone,
-    "createdAt" timestamp with time zone DEFAULT now()
+    "createdAt" timestamp with time zone DEFAULT now(),
+    "userId" integer,
+    "tokenHash" character varying(64),
+    purpose character varying(20) DEFAULT 'password_reset'::character varying NOT NULL,
+    "expiresAt" timestamp with time zone,
+    "usedAt" timestamp with time zone,
+    CONSTRAINT password_reset_requests_purpose_check CHECK (((purpose)::text = ANY ((ARRAY['password_reset'::character varying, 'activation'::character varying, 'invitation'::character varying])::text[])))
 );
 
 
@@ -19852,6 +19867,7 @@ CREATE TABLE public.umrah_agents (
     "createdBy" integer,
     "updatedBy" integer,
     "deletedAt" timestamp with time zone,
+    "contactEmployeeId" integer,
     CONSTRAINT umrah_agents_status_check CHECK (((status)::text = ANY (ARRAY[('active'::character varying)::text, ('inactive'::character varying)::text, ('suspended'::character varying)::text, ('blocked'::character varying)::text])))
 );
 
@@ -20313,7 +20329,8 @@ CREATE TABLE public.umrah_packages (
     "updatedAt" timestamp with time zone DEFAULT now(),
     "createdBy" integer,
     "updatedBy" integer,
-    "branchId" integer
+    "branchId" integer,
+    "defaultHotelId" integer
 );
 
 
@@ -20549,6 +20566,7 @@ CREATE TABLE public.umrah_pilgrims (
     "visaIssuedAt" timestamp with time zone,
     "visaRejectedAt" timestamp with time zone,
     "visaRejectionReason" text,
+    notifications_opt_out boolean,
     CONSTRAINT umrah_pilgrims_status_check CHECK (((status)::text = ANY (ARRAY[('pending'::character varying)::text, ('arrived'::character varying)::text, ('active'::character varying)::text, ('overstayed'::character varying)::text, ('overstay_penalized'::character varying)::text, ('departed'::character varying)::text, ('violated'::character varying)::text, ('absconded'::character varying)::text, ('deceased'::character varying)::text, ('visa_rejected'::character varying)::text, ('visa_printed'::character varying)::text, ('cancelled'::character varying)::text])))
 );
 
@@ -20945,7 +20963,8 @@ CREATE TABLE public.umrah_sub_agents (
     "updatedBy" integer,
     "createdAt" timestamp with time zone DEFAULT now(),
     "updatedAt" timestamp with time zone DEFAULT now(),
-    "deletedAt" timestamp with time zone
+    "deletedAt" timestamp with time zone,
+    "contactEmployeeId" integer
 );
 
 

@@ -13,10 +13,25 @@ test.describe("Admin journey tracking — operational UI", () => {
     await login(page);
     await page.goto("/admin/journeys");
 
-    await expect(page.getByText("تتبّع الرحلات الحيّة")).toBeVisible();
-    // Status counters render.
-    await expect(page.getByText("قيد التنفيذ").first()).toBeVisible();
-    await expect(page.getByText("مكتملة").first()).toBeVisible();
+    // Scope to the routed content <main> — the sidebar topbar renders an <h1>
+    // with the same title, so an unscoped heading lookup hits 2+ elements.
+    const main = page.getByRole("main");
+    await expect(
+      main.getByRole("heading", { name: "تتبّع الرحلات الحيّة" }),
+    ).toBeVisible();
+
+    // The status filter controls render. Targeting them by button role keeps
+    // the assertion off the duplicate counter labels and row badges that share
+    // the same text ("قيد التنفيذ" / "مكتملة").
+    await expect(page.getByRole("button", { name: "الكل" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "قيد التنفيذ" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "مكتملة" })).toBeVisible();
+
+    // The counter cards render regardless of seeded data — "الإجمالي" is the
+    // unique total-counter label, so it proves the gauges are present without
+    // asserting any specific count.
+    await expect(main.getByText("الإجمالي", { exact: true })).toBeVisible();
+
     // The status filter toggles work (switch to completed, page stays healthy).
     await page.getByRole("button", { name: "مكتملة" }).click();
     await expect(page.getByRole("button", { name: "تحديث" })).toBeVisible();

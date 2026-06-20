@@ -83,6 +83,17 @@ describe("Org Model — backend routes", () => {
     expect(ORG_SRC).toMatch(/ON CONFLICT \("assignmentId", "featureKey", action, currency\) DO UPDATE/);
   });
 
+  it("supervision-lines + approval-authorities are gated on hr.organization, NOT generic admin (HR-REV-1 #4)", () => {
+    // The org model belongs to the HR Manager domain; gating it on the
+    // generic `admin` feature locked everyone but the owner out. Pin the
+    // domain-correct feature so a refactor can't silently regress to admin.
+    const supBlock = ORG_SRC.slice(ORG_SRC.indexOf('router.get("/supervision-lines"'), ORG_SRC.indexOf('router.get("/supervision-lines"') + 200);
+    const authBlock = ORG_SRC.slice(ORG_SRC.indexOf('router.get("/approval-authorities"'), ORG_SRC.indexOf('router.get("/approval-authorities"') + 200);
+    expect(supBlock).toContain("authorize(ORG_READ)");
+    expect(authBlock).toContain("authorize(ORG_READ)");
+    expect(ORG_SRC).toMatch(/const ORG_READ = \{ feature: "hr\.organization", action: "list" \}/);
+  });
+
   it("supervision_lines POST rejects self-supervision before INSERT", () => {
     expect(ORG_SRC).toMatch(/supervisorAssignmentId === body\.superviseeAssignmentId/);
     expect(ORG_SRC).toMatch(/لا يمكن للموظف أن يشرف على نفسه/);
@@ -160,13 +171,38 @@ describe("Org Model — frontend page", () => {
   });
 });
 
+// HR-REV-1 — catalog-read permission gate.
+// positions/teams/committees read endpoints were gated on admin:list which
+// silently 403'd every HR operator and returned empty dropdowns in the
+// new-employee wizard (the same root cause already fixed for
+// employee-categories in PR-3/#2077). All three must share the lighter
+// hr.employees:list gate so any HR user can populate the dropdowns.
+describe("Org Model — catalog read gates (HR-REV-1)", () => {
+  it("GET /positions uses hr.employees:list (not admin:list)", () => {
+    expect(ORG_SRC).toMatch(/router\.get\("\/positions", authorize\(HR_EMPLOYEES_READ\)/);
+  });
+  it("GET /teams uses hr.employees:list (not admin:list)", () => {
+    expect(ORG_SRC).toMatch(/router\.get\("\/teams", authorize\(HR_EMPLOYEES_READ\)/);
+  });
+  it("GET /committees uses hr.employees:list (not admin:list)", () => {
+    expect(ORG_SRC).toMatch(/router\.get\("\/committees", authorize\(HR_EMPLOYEES_READ\)/);
+  });
+  it("GET /employee-categories already uses hr.employees:list (regression guard)", () => {
+    expect(ORG_SRC).toMatch(/router\.get\("\/employee-categories", authorize\(HR_EMPLOYEES_READ\)/);
+  });
+});
+
 describe("Org Model — wiring (routes + nav)", () => {
   it("AdminOrgModel imported and registered at /admin/org-model", () => {
     expect(ADMIN_ROUTES_SRC).toMatch(/const AdminOrgModel = lazy\(\(\) => import\("@\/pages\/admin\/org-model"\)\)/);
     expect(ADMIN_ROUTES_SRC).toMatch(/\{ path: "\/admin\/org-model", component: AdminOrgModel \}/);
   });
 
-  it("nav entry under «إعدادات الموارد البشرية»", () => {
-    expect(NAV_SRC).toMatch(/label: "نموذج المؤسسة التشغيلي", path: "\/admin\/org-model"/);
+  it("intentionally off-sidebar (route-reachable; retired as an org-structure duplicate)", () => {
+    // UX Nav Governance — the legal_entities/positions/teams overlay duplicates
+    // the load-bearing companies/branches/departments structure, so its sidebar
+    // entry was dropped. The /admin/org-model route stays mounted for deep links
+    // — pinned in check-sidebar-coverage's OFF_SIDEBAR_ALLOWLIST.
+    expect(NAV_SRC).not.toMatch(/label: "نموذج المؤسسة التشغيلي", path: "\/admin\/org-model"/);
   });
 });

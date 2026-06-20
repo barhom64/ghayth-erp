@@ -10,6 +10,7 @@ import {
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { requestIdempotencyToken, markIdempotencyReplay } from "../lib/requestIdempotency.js";
+import { cascadeDispatchToBooking } from "../lib/transportDispatchCascade.js";
 import { logger } from "../lib/logger.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { hashPassword } from "../lib/auth.js";
@@ -24,6 +25,11 @@ import { registerObligation, markObligationMet, cancelObligation } from "../lib/
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
 import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { fleetEngine, hrEngine } from "../lib/engines/index.js";
+import {
+  computeDriverReputation,
+  loadDriverReputation,
+  recomputeAllDrivers,
+} from "../lib/fleet/driverReputation.js";
 import { z } from "zod";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
@@ -135,7 +141,7 @@ const createVehicleSchema = z.object({
 const createDriverSchema = z.object({
   name: z.string().min(1),
   phone: z.string().min(1),
-  licenseNumber: z.string().min(1),
+  licenseNumber: z.string().optional(),
   licenseExpiry: z.string().optional(),
   licenseType: z.string().optional(),
   licenseClass: z.enum(LICENSE_CLASS_VALUES).optional(),
@@ -160,13 +166,19 @@ const createDriverSchema = z.object({
     // Non-Saudi origin (gcc / international / temporary) → must carry iqamaNumber.
     if (!d.licenseOrigin) return true; // legacy / not yet specified
     if (d.licenseOrigin === "saudi") return !!d.nationalId;
-    return !!d.iqamaNumber;
+    // Non-Saudi must carry both an iqama AND a real license number
+    // (Saudi licenses use the national ID, so licenseNumber is optional there).
+    return !!d.iqamaNumber && !!d.licenseNumber;
   },
   (d) => ({
     message: d.licenseOrigin === "saudi"
       ? "الرخصة سعودية — رقم الهوية الوطنية مطلوب"
-      : "السائق غير سعودي — رقم الإقامة مطلوب",
-    path: d.licenseOrigin === "saudi" ? ["nationalId"] : ["iqamaNumber"],
+      : !d.iqamaNumber
+      ? "السائق غير سعودي — رقم الإقامة مطلوب"
+      : "السائق غير سعودي — رقم الرخصة مطلوب",
+    path: d.licenseOrigin === "saudi"
+      ? ["nationalId"]
+      : !d.iqamaNumber ? ["iqamaNumber"] : ["licenseNumber"],
   }),
 );
 
@@ -1436,6 +1448,90 @@ router.get("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "view"
   } catch (err) { handleRouteError(err, res, "Get driver error:"); }
 });
 
+// TA-T18-DR Phase 1 — Driver Reputation Scoring.
+//
+//   GET  /drivers/:id/reputation              — read persisted breakdown
+//   POST /drivers/:id/recompute-reputation    — recompute one driver
+//   POST /drivers/reputation/recompute-all    — recompute every active driver
+//
+// Phase 1 is storage + compute + read API only. The engine integration
+// (using `reputationScore` as a scoring axis with rebalanced weights)
+// lands in a follow-up PR after this data has populated.
+router.get(
+  "/drivers/:id/reputation",
+  authorize({ feature: "fleet.vehicles", action: "view" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const reputation = await loadDriverReputation(scope.companyId, id);
+      if (!reputation) throw new NotFoundError("السائق غير موجود");
+      res.json({ data: reputation });
+    } catch (err) {
+      handleRouteError(err, res, "Get driver reputation error:");
+    }
+  },
+);
+
+const recomputeOneSchema = z.object({
+  windowDays: z.coerce.number().int().min(7).max(365).optional(),
+});
+
+router.post(
+  "/drivers/:id/recompute-reputation",
+  authorize({ feature: "fleet.vehicles", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const id = parseId(req.params.id, "id");
+      const b = zodParse(recomputeOneSchema.safeParse(req.body ?? {}));
+      // Verify driver belongs to scope before doing the compute.
+      const [exists] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_drivers
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!exists) throw new NotFoundError("السائق غير موجود");
+      const reputation = await computeDriverReputation({
+        companyId: scope.companyId,
+        driverId: id,
+        windowDays: b.windowDays,
+      });
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "fleet_drivers", entityId: id,
+        after: { reputationScore: reputation.reputationScore, recomputed: true },
+      }).catch((e) => logger.error(e, "driver reputation audit failed"));
+      res.json({ data: reputation });
+    } catch (err) {
+      handleRouteError(err, res, "Recompute driver reputation error:");
+    }
+  },
+);
+
+router.post(
+  "/drivers/reputation/recompute-all",
+  authorize({ feature: "fleet.vehicles", action: "update" }),
+  async (req, res) => {
+    try {
+      const scope = req.scope!;
+      const b = zodParse(recomputeOneSchema.safeParse(req.body ?? {}));
+      const result = await recomputeAllDrivers({
+        companyId: scope.companyId,
+        windowDays: b.windowDays,
+      });
+      createAuditLog({
+        companyId: scope.companyId, branchId: scope.branchId ?? undefined, userId: scope.userId,
+        action: "update", entity: "fleet_drivers", entityId: scope.companyId,
+        after: { bulkReputationRecompute: result },
+      }).catch((e) => logger.error(e, "bulk reputation audit failed"));
+      res.json({ data: result });
+    } catch (err) {
+      handleRouteError(err, res, "Bulk recompute reputation error:");
+    }
+  },
+);
+
 router.patch("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -2203,6 +2299,57 @@ router.post("/trips/:id/complete", authorize({ feature: "fleet.trips", action: "
           const dRes = await client.query(`UPDATE fleet_drivers SET status='available', "totalTrips"=COALESCE("totalTrips",0)+1 WHERE id=$1 AND "companyId"=$2 AND status='on_trip' AND "deletedAt" IS NULL`, [trip.driverId, scope.companyId]);
           if (!dRes.rowCount) logger.warn({ driverId: trip.driverId }, "trip complete: driver status reset affected 0 rows");
         }
+        // #12 auto-status — a trip spun up from a dispatch order carries the
+        // canonical sourceKey "dispatch:<orderId>:<token>" (see POST /trips).
+        // Completing that trip auto-completes the dispatch order and cascades
+        // to its booking line + booking, so the operator never closes the
+        // dispatch-board entry by hand. Mirrors the terminal side-effects of
+        // POST /transport/dispatch-orders/:id/action (status + completedAt, end
+        // the live navigation session, stamp driver duty) and shares the
+        // booking cascade via cascadeDispatchToBooking. Guarded to orders still
+        // "executing" so it never force-closes one the operator already moved
+        // past, and is a silent no-op for ad-hoc (non-dispatch) trips. Runs on
+        // the transition's own client, so it commits atomically with the trip.
+        const tripSourceKey = typeof trip.sourceKey === "string" ? trip.sourceKey : "";
+        const dispatchLink = /^dispatch:(\d+):/.exec(tripSourceKey);
+        if (dispatchLink) {
+          const dispatchOrderId = Number(dispatchLink[1]);
+          const dispRes = await client.query<{ id: number; bookingLineId: number; driverId: number | null }>(
+            `SELECT id, "bookingLineId", "driverId"
+               FROM transport_dispatch_orders
+              WHERE id = $1 AND "companyId" = $2 AND status = 'executing'
+              FOR UPDATE`,
+            [dispatchOrderId, scope.companyId],
+          );
+          const disp = dispRes.rows[0];
+          if (disp) {
+            await client.query(
+              `UPDATE transport_dispatch_orders
+                  SET status = 'completed', "completedAt" = NOW(), "updatedAt" = NOW()
+                WHERE id = $1 AND "companyId" = $2`,
+              [disp.id, scope.companyId],
+            );
+            await client.query(
+              `UPDATE driver_navigation_sessions
+                  SET status = 'ended', "endedAt" = NOW(), "updatedAt" = NOW()
+                WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+                  AND status NOT IN ('ended', 'cancelled')`,
+              [disp.id, scope.companyId],
+            );
+            if (disp.driverId) {
+              await client.query(
+                `UPDATE fleet_drivers SET "lastDutyEndedAt" = NOW(), "updatedAt" = NOW()
+                  WHERE id = $1 AND "companyId" = $2`,
+                [disp.driverId, scope.companyId],
+              );
+            }
+            await cascadeDispatchToBooking(client, {
+              bookingLineId: disp.bookingLineId,
+              target: "completed",
+              companyId: scope.companyId,
+            });
+          }
+        }
       },
     });
 
@@ -2295,6 +2442,55 @@ router.post("/trips/:id/cancel", authorize({ feature: "fleet.trips", action: "up
             [row.driverId, scope.companyId]
           );
         }
+        // Re-dispatch on cancel (operator decision) — a cancelled trip is NOT a
+        // cancelled booking. If this trip came from a dispatch order
+        // ("dispatch:<id>:<token>" sourceKey) that's still mid-flight, send the
+        // order back to the pool so another driver can be assigned, rather than
+        // cancelling the operational need. The order returns to "pending" (its
+        // accept/start stamps cleared; driverId/vehicleId are NOT NULL columns
+        // so they linger as the last assignment until the order is re-notified
+        // or reassigned via the assignment endpoint), its live navigation
+        // session is cancelled, and the booking line returns to "open"
+        // (re-pickable; 'open' is the valid awaiting-dispatch booking-line
+        // state — 'pending' is a dispatch-ORDER status, not a line one).
+        // The booking itself is left unchanged — mirroring the
+        // driver-decline flow. A silent no-op for ad-hoc trips or orders already
+        // terminal. Runs on the transition client → atomic with the cancel.
+        const tripSourceKey = typeof row.sourceKey === "string" ? row.sourceKey : "";
+        const dispatchLink = /^dispatch:(\d+):/.exec(tripSourceKey);
+        if (dispatchLink) {
+          const dispatchOrderId = Number(dispatchLink[1]);
+          const dispRes = await client.query<{ id: number; bookingLineId: number }>(
+            `SELECT id, "bookingLineId"
+               FROM transport_dispatch_orders
+              WHERE id = $1 AND "companyId" = $2 AND status IN ('accepted', 'executing')
+              FOR UPDATE`,
+            [dispatchOrderId, scope.companyId],
+          );
+          const disp = dispRes.rows[0];
+          if (disp) {
+            await client.query(
+              `UPDATE transport_dispatch_orders
+                  SET status = 'pending', "acceptedAt" = NULL, "startedAt" = NULL,
+                      "updatedAt" = NOW()
+                WHERE id = $1 AND "companyId" = $2`,
+              [disp.id, scope.companyId],
+            );
+            await client.query(
+              `UPDATE driver_navigation_sessions
+                  SET status = 'cancelled', "endedAt" = NOW(), "updatedAt" = NOW()
+                WHERE "dispatchOrderId" = $1 AND "companyId" = $2
+                  AND status NOT IN ('ended', 'cancelled')`,
+              [disp.id, scope.companyId],
+            );
+            await client.query(
+              `UPDATE transport_booking_lines
+                  SET status = 'open', "updatedAt" = NOW()
+                WHERE id = $1 AND "companyId" = $2`,
+              [disp.bookingLineId, scope.companyId],
+            );
+          }
+        }
       },
     });
     emitEvent({
@@ -2336,8 +2532,8 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
       throw new ValidationError("إحداثيات النقطة مطلوبة", { field: "lat", fix: "أرسل lat و lon (أو latitude و longitude) في جسم الطلب" });
     }
     const { insertId } = await rawExecute(
-      `INSERT INTO fleet_gps_tracking ("vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,NOW())`,
-      [trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
+      `INSERT INTO fleet_gps_tracking ("companyId","vehicleId","driverId",latitude,longitude,speed,"recordedAt") VALUES ($1,$2,$3,$4,$5,$6,NOW())`,
+      [scope.companyId, trip.vehicleId, trip.driverId, lat, lon, b.speed || 0]
     );
     assertInsert(insertId, "fleet_gps_tracking");
     emitEvent({
@@ -2352,7 +2548,7 @@ router.post("/trips/:id/waypoints", authorize({ feature: "fleet.trips", action: 
       after: { tripId, lat, lon, speed: b.speed || 0 },
     }).catch((e) => logger.error(e, "fleet background task failed"));
 
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_gps_tracking WHERE id=$1`, [insertId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_gps_tracking WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, tripId, lat, lon });
   } catch (err) { handleRouteError(err, res, "Waypoint error:"); }
 });
@@ -2548,12 +2744,14 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       },
     });
 
-    // Auto journal entry for maintenance cost
+    // #TA-T18 finance-boundary — completing maintenance no longer posts
+    // GL directly. It queues an EXPENSE candidate for the accountant, who
+    // materialises it (postMaintenanceGL runs then, in finance). Transport
+    // never touches the ledger; finance is the authority for the money.
     if (finalCost > 0) {
-      // Maintenance JE lands on the vehicle's branch, not the operator's.
-      // Pre-fix the cost JE used scope.branchId, so a vehicle assigned to
-      // Branch A but serviced by a session working Branch B silently
-      // booked the cost to Branch B and broke per-branch fleet P&L.
+      // The candidate (and the eventual JE) lands on the VEHICLE's branch,
+      // not the operator's — a vehicle on Branch A serviced from Branch B
+      // must still book to Branch A for correct per-branch fleet P&L.
       const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
         `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [m.vehicleId, scope.companyId]
@@ -2561,10 +2759,10 @@ router.post("/maintenance/:id/complete", authorize({ feature: "fleet.maintenance
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const vehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const { fleetEngine } = await import("../lib/engines/index.js");
-      await fleetEngine.postMaintenanceGL(
+      await fleetEngine.createMaintenanceExpenseCandidate(
         { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id, vehicleId: m.vehicleId as number, totalCost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
-      ).catch((e: unknown) => logger.error(e, "Maintenance GL failed:"));
+        { id, vehicleId: m.vehicleId as number, cost: finalCost, type: m.type as string | undefined, description: `مصروف صيانة مركبة${plateLabel} / ${m.type ?? ""} / ${m.description ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Maintenance expense candidate failed:"));
     }
 
     // Mark the scheduled obligation as met and register the next one
@@ -3072,7 +3270,9 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
     );
     assertInsert(insertId, "fleet_fuel_logs");
 
-    // Auto journal entry for fuel cost (vehicle's branch, not operator's)
+    // #TA-T18 finance-boundary — logging fuel no longer posts GL directly;
+    // it queues an EXPENSE candidate the accountant materialises (then the
+    // GL is posted, in finance). Transport never touches the ledger.
     if (totalCost > 0) {
       const [vehicle] = await rawQuery<{ plateNumber?: string; branchId?: number | null }>(
         `SELECT "plateNumber", "branchId" FROM fleet_vehicles WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
@@ -3081,10 +3281,10 @@ router.post("/fuel-logs", authorize({ feature: "fleet.trips", action: "create" }
       const plateLabel = vehicle?.plateNumber ? ` / ${vehicle.plateNumber}` : "";
       const vehicleBranchId = vehicle?.branchId ?? scope.branchId;
       const { fleetEngine } = await import("../lib/engines/index.js");
-      await fleetEngine.postFuelExpenseGL(
+      await fleetEngine.createFuelExpenseCandidate(
         { companyId: scope.companyId, branchId: vehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: insertId, vehicleId: resolvedVehicleId, amount: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
-      ).catch((e: unknown) => logger.error(e, "Fuel GL failed:"));
+        { id: insertId, vehicleId: resolvedVehicleId, cost: totalCost, description: `مصروف وقود${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Fuel expense candidate failed:"));
     }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -3180,10 +3380,10 @@ router.post("/insurance", authorize({ feature: "fleet.vehicles", action: "create
       const insuranceType = b.type || b.insuranceType || 'comprehensive';
       const insuranceTypeLabel = insuranceType === 'comprehensive' ? 'شامل' : insuranceType === 'third_party' ? 'طرف ثالث' : insuranceType;
       const { fleetEngine } = await import("../lib/engines/index.js");
-      await fleetEngine.postInsuranceGL(
+      await fleetEngine.createInsuranceExpenseCandidate(
         { companyId: scope.companyId, branchId: insuranceVehicleBranchId, createdBy: scope.activeAssignmentId ?? scope.userId },
-        { id: insertId, vehicleId: Number(b.vehicleId), premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
-      ).catch((e: unknown) => logger.error(e, "Insurance GL failed:"));
+        { id: insertId, vehicleId: Number(b.vehicleId), cost: premium, description: `مصروف تأمين${plateLabel} / ${insuranceTypeLabel} / ${b.provider ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Insurance expense candidate failed:"));
     }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM fleet_insurance WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
@@ -4011,18 +4211,30 @@ router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action
     if (!vehicleRow) {
       throw new ValidationError("المركبة غير موجودة", { field: "vehicleId", fix: "اختر مركبة مسجلة" });
     }
+    let driverEmployeeId: number | null = null;
     if (b.driverId) {
-      const [driverRow] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      const [driverRow] = await rawQuery<{ id: number; employeeId: number | null }>(
+        `SELECT id, "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.driverId, scope.companyId]
       );
       if (!driverRow) {
         throw new ValidationError("السائق غير موجود", { field: "driverId", fix: "اختر سائقاً مسجلاً في النظام" });
       }
+      driverEmployeeId = driverRow.employeeId ?? null;
     }
     // "company" (default) = company pays the fine → GL expense.
     // "driver" = fine liability shifted to driver → payroll deduction in current period.
     const liability: 'company' | 'driver' = b.liability === 'driver' ? 'driver' : 'company';
+    // Guard the silent-drop: a driver-liability fine can only be docked if the
+    // driver is linked to an employee record. Without this the deduction step
+    // skips quietly — no GL (liability isn't company), no payroll row, no error
+    // — and the fine vanishes from both ledgers. Fail fast at validation time.
+    if (liability === 'driver' && fineAmount > 0 && driverEmployeeId == null) {
+      throw new ValidationError(
+        "السائق غير مرتبط بسجل موظف — لا يمكن حسم الغرامة من راتبه",
+        { field: "driverId", fix: "اربط السائق بموظف، أو غيّر المسؤولية إلى «الشركة» لترحيلها كمصروف." }
+      );
+    }
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_traffic_violations
@@ -4706,6 +4918,11 @@ router.post("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicl
        VALUES ($1,$2,$3,$4,'pending',$5)`,
       [scope.companyId, id, b.data.dueDate, b.data.amount, b.data.notes ?? null]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_payment.scheduled", entity: "fleet_rental_payments", entityId: insertId,
+      after: { contractId: id, dueDate: b.data.dueDate, amount: b.data.amount },
+    }).catch(() => undefined);
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "rental schedule error"); }
 });

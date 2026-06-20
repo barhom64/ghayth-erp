@@ -108,13 +108,38 @@ d("Umrah analytic account — auto-create when agent missing (Issue #2197)", () 
 
 d("Custody analytic — one employee in multiple branches (Issue #2197)", () => {
   let rawExecute: typeof import("../../src/lib/rawdb.js").rawExecute;
+  let rawQuery:   typeof import("../../src/lib/rawdb.js").rawQuery;
   let resolveAnalyticAccount: typeof import("../../src/lib/gl/analytic-accounts.js").resolveAnalyticAccount;
 
   const createdIds: number[] = [];
+  // 2026-06-16 — analytic_accounts.employeeId is a real FK to
+  // employees(id). The original test used synthetic ids 42/43 which
+  // pre-dated the FK; create real test employees in beforeAll so the
+  // resolver can reference them.
+  let testEmployeeIds: number[] = [];
 
   beforeAll(async () => {
-    rawExecute = (await import("../../src/lib/rawdb.js")).rawExecute;
+    const rdb = await import("../../src/lib/rawdb.js");
+    rawExecute = rdb.rawExecute;
+    rawQuery   = rdb.rawQuery;
     resolveAnalyticAccount = (await import("../../src/lib/gl/analytic-accounts.js")).resolveAnalyticAccount;
+    // Seed two synthetic employees for the test (find-or-create by
+    // email so repeat runs reuse the same rows).
+    async function fcEmployee(email: string, name: string): Promise<number> {
+      const [row] = await rawQuery<{ id: number }>(
+        `SELECT id FROM employees WHERE email = $1 LIMIT 1`, [email],
+      );
+      if (row) return row.id;
+      const [created] = await rawQuery<{ id: number }>(
+        `INSERT INTO employees (name, "companyId", email, status) VALUES ($1, $2, $3, 'active') RETURNING id`,
+        [name, COMPANY, email],
+      );
+      return created.id;
+    }
+    testEmployeeIds = [
+      await fcEmployee("custody-test-emp1@test.local", "Custody Test Emp 1"),
+      await fcEmployee("custody-test-emp2@test.local", "Custody Test Emp 2"),
+    ];
   });
 
   afterAll(async () => {
@@ -124,7 +149,7 @@ d("Custody analytic — one employee in multiple branches (Issue #2197)", () => 
   });
 
   it("creates separate analytic accounts per branch for the same employee — no GL duplication", async () => {
-    const emp = 42; // synthetic employee id
+    const emp = testEmployeeIds[0]; // real employee seeded in beforeAll
 
     const accBranch1 = await resolveAnalyticAccount({
       dims: { companyId: COMPANY, sourceModule: "custody", employeeId: emp, branchId: 1 },
@@ -146,7 +171,7 @@ d("Custody analytic — one employee in multiple branches (Issue #2197)", () => 
   });
 
   it("same dims returns same analytic account (no duplicate per re-call)", async () => {
-    const emp = 43;
+    const emp = testEmployeeIds[1];
     const a = await resolveAnalyticAccount({
       dims: { companyId: COMPANY, sourceModule: "custody", employeeId: emp, branchId: 1 },
     });

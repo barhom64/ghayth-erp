@@ -16,6 +16,12 @@ interface CommissionPlan {
   employeeId: number;
   assignmentId: number;
   seasonId: number;
+  // U-05-P2 — agent attribution backed by migration 348 nullable columns.
+  // Drives the umrahAgentId dimension on the commission JE so finance-side
+  // reports can split commission expense by marketer (agent) when the
+  // plan was set up for that workflow.
+  agentId: number | null;
+  subAgentId: number | null;
   planName: string;
   baseSalary: number;
   commissionType: string;
@@ -198,7 +204,7 @@ export async function calculateCommissionForPlan(
         getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "6200"),
         viaHr
           ? getAccountCodeFromMapping(plan.companyId, "salary_payable",      "credit", "2120")
-          : getAccountCodeFromMapping(plan.companyId, "commission_payable",  "credit", "2150"),
+          : getAccountCodeFromMapping(plan.companyId, "commission_payable",  "credit", "2155"),
       ]);
 
       const payableDescription = viaHr
@@ -220,13 +226,13 @@ export async function calculateCommissionForPlan(
         // umrahSeasonId carries the season tied to this commission plan
         // so commission-expense reports can drill by season alongside
         // the existing employee dimension (financial-integrity audit #5).
-        // umrahAgentId would carry the marketer's agent attribution but
-        // employee_commission_plans has no agentId column today — the
-        // dimension is left undefined here and will be added when the
-        // plan schema gains an agent FK in a follow-up.
+        // U-05-P2: umrahAgentId now carries the marketer attribution
+        // when the plan was set up against a specific agent (migration
+        // 348 surfaced the column as nullable). Sub-agent attribution
+        // ships once journal_entry_lines gains the column.
         lines: [
-          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
-          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: payableDescription, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId },
+          { accountCode: expenseCode, debit: result.finalAmount, credit: 0, description: `مصروف عمولة — ${plan.planName}`, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId, umrahAgentId: plan.agentId ?? undefined },
+          { accountCode: payableCode, debit: 0, credit: result.finalAmount, description: payableDescription, employeeId: plan.employeeId, umrahSeasonId: plan.seasonId, umrahAgentId: plan.agentId ?? undefined },
         ],
       }, { table: "employee_commission_calculations", id: planId });
     }
@@ -239,11 +245,19 @@ export async function calculateCommissionForPlan(
 // Simulate — read-only, no writes
 // ---------------------------------------------------------------------------
 
+export interface CommissionSimulationOverrides {
+  totalMutamers?: number;
+  avgProfitPerVisa?: number;
+  avgSalePrice?: number;
+  salesPercent?: number;
+}
+
 export async function simulateCommission(
   planId: number,
   month: number,
   year: number,
   companyId?: number,
+  overrides?: CommissionSimulationOverrides,
 ): Promise<CalculationResult> {
   const [plan] = await rawQuery<CommissionPlan>(
     `SELECT * FROM employee_commission_plans WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
@@ -257,7 +271,18 @@ export async function simulateCommission(
   );
 
   const queryFn: QueryFn = (sql, params) => rawQuery(sql, params).then((rows) => ({ rows }));
-  return compute(queryFn, plan, tiers, month, year);
+  return compute(queryFn, plan, tiers, month, year, overrides);
+}
+
+export async function simulateCommissionAdHoc(
+  plan: CommissionPlan,
+  tiers: CommissionTier[],
+  month: number,
+  year: number,
+  overrides?: CommissionSimulationOverrides,
+): Promise<CalculationResult> {
+  const queryFn: QueryFn = (sql, params) => rawQuery(sql, params).then((rows) => ({ rows }));
+  return compute(queryFn, plan, tiers, month, year, overrides);
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +295,7 @@ async function compute(
   tiers: CommissionTier[],
   month: number,
   year: number,
+  overrides?: CommissionSimulationOverrides,
 ): Promise<CalculationResult> {
   const excludedMonths: number[] = Array.isArray(plan.excludedMonths) ? plan.excludedMonths : [];
   const isExcludedMonth = excludedMonths.includes(month);
@@ -289,9 +315,9 @@ async function compute(
     [plan.companyId, plan.seasonId, month, year, plan.employeeId]
   )).rows[0] ?? { total: 0, avg_profit: 0, avg_price: 0 };
 
-  const totalMutamers = Number(mutamerStats.total) || 0;
-  const avgProfitPerVisa = Number(mutamerStats.avg_profit) || 0;
-  const avgSalePrice = Number(mutamerStats.avg_price) || 0;
+  const totalMutamers = overrides?.totalMutamers ?? (Number(mutamerStats.total) || 0);
+  const avgProfitPerVisa = overrides?.avgProfitPerVisa ?? (Number(mutamerStats.avg_profit) || 0);
+  const avgSalePrice = overrides?.avgSalePrice ?? (Number(mutamerStats.avg_price) || 0);
 
   const totalSalesRes = (await queryFn(
     `SELECT COALESCE(SUM("totalAmount"), 0)::numeric(12,2) AS total_sales
@@ -310,9 +336,9 @@ async function compute(
        AND ni."createdBy" IN (SELECT u.id FROM users u WHERE u."employeeId" = $4)`,
     [plan.companyId, month, year, plan.employeeId]
   )).rows[0];
-  const salesPercent = totalCompanySales > 0
+  const salesPercent = overrides?.salesPercent ?? (totalCompanySales > 0
     ? Math.round((Number(employeeSalesRes?.emp_sales) / totalCompanySales) * 10000) / 100
-    : 0;
+    : 0);
 
   const { conditionMet, conditionDetails } = checkConditions(plan, avgProfitPerVisa, salesPercent);
 

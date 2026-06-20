@@ -15,7 +15,7 @@
  */
 import { useMemo, useState } from "react";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import {
@@ -133,47 +133,26 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          {rows.length === 0 ? (
+          {rows.length === 0 && (
             <p className="text-sm text-muted-foreground py-12 text-center" data-testid="profitability-empty">
               لا بيانات للموسم المحدد.
             </p>
-          ) : (
-            <table className="w-full text-sm" data-testid="profitability-table">
-              <thead className="bg-muted/40">
-                <tr>
-                  <th className="p-2 text-start">الاسم</th>
-                  <th className="p-2 text-start">{subColumnLabel}</th>
-                  <th className="p-2 text-end">الإيراد</th>
-                  <th className="p-2 text-end">التكلفة</th>
-                  <th className="p-2 text-end">صافي الربح</th>
-                  <th className="p-2 text-end">الهامش %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const np = Number(r.netProfit) || 0;
-                  const isNeg = np < 0;
-                  const margin = r.marginPercent == null ? null : Number(r.marginPercent);
-                  const rowKey = (r as any)[idColumn] ?? `${r.name}-${rows.indexOf(r)}`;
-                  return (
-                    <tr key={rowKey} className="border-t hover:bg-muted/20"
-                        data-testid={`profitability-row-${rowKey}`}>
-                      <td className="p-2 font-medium">{r.name ?? "—"}</td>
-                      <td className="p-2 text-muted-foreground">{subColumnValue(r)}</td>
-                      <td className="p-2 text-end font-mono">{formatCurrency(Number(r.revenue) || 0)}</td>
-                      <td className="p-2 text-end font-mono">{formatCurrency(Number(r.cost) || 0)}</td>
-                      <td className={`p-2 text-end font-mono ${isNeg ? "text-status-error-foreground" : "text-status-success-foreground"}`}>
-                        {formatCurrency(np)}
-                      </td>
-                      <td className="p-2 text-end font-mono">
-                        {margin == null ? "—" : `${margin}%`}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           )}
+          <DataTable
+            data={rows}
+            rowKey={(r) => { const rowKey = (r as any)[idColumn] ?? `${r.name}`; return String(rowKey); }}
+            noToolbar
+            pageSize={0}
+            emptyMessage=""
+            columns={[
+              { key: "name", header: "الاسم", render: (r) => { const rowKey = (r as any)[idColumn] ?? r.name; return <span data-testid={`profitability-row-${rowKey}`} className="font-medium">{r.name ?? "—"}</span>; } },
+              { key: "nuskGroupNumber", header: subColumnLabel, render: (r) => <span className="text-muted-foreground">{subColumnValue(r)}</span> },
+              { key: "revenue", header: "الإيراد", align: "end" as const, render: (r) => <span className="font-mono">{formatCurrency(Number(r.revenue) || 0)}</span> },
+              { key: "cost", header: "التكلفة", align: "end" as const, render: (r) => <span className="font-mono">{formatCurrency(Number(r.cost) || 0)}</span> },
+              { key: "netProfit", header: "صافي الربح", align: "end" as const, render: (r) => { const np = Number(r.netProfit) || 0; const isNeg = np < 0; return <span className={`font-mono ${isNeg ? "text-status-error-foreground" : "text-status-success-foreground"}`}>{formatCurrency(np)}</span>; } },
+              { key: "marginPercent", header: "الهامش %", align: "end" as const, render: (r) => { const margin = r.marginPercent == null ? null : Number(r.marginPercent); return <span className="font-mono">{margin == null ? "—" : `${margin}%`}</span>; } },
+            ] satisfies DataTableColumn<ProfitabilityRow>[]}
+          />
         </CardContent>
       </Card>
     </PageShell>

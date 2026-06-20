@@ -138,7 +138,7 @@ export default function FiscalPeriodsV2Page() {
   ];
 
   return (
-    <ListPage<FiscalPeriodV2Row>
+    <ListPage
       title="إقفال الفترات المالية"
       subtitle="إنشاء وإقفال وإعادة فتح الفترات المالية (نظام v2)"
       breadcrumbs={[

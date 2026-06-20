@@ -1,10 +1,8 @@
 import { useLocation } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { useAppContext } from "@/contexts/app-context";
+import { useApiMutation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { CostCenterSelect } from "@/components/shared/entity-selects";
+import { CostCenterSelect, PostingAccountSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -31,8 +29,6 @@ const emptyLine = (): JournalLine => ({
 export default function JournalManualCreatePage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const { scopeQueryString } = useAppContext();
-  const scopeSuffix = scopeQueryString ? `?${scopeQueryString}` : "";
 
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("finance_journal_manual_create", {
     description: "",
@@ -42,11 +38,6 @@ export default function JournalManualCreatePage() {
     lines: [emptyLine(), emptyLine()],
   });
   const { fieldErrors, validate } = useFieldErrors();
-
-  const { data: coaData, isLoading, isError } = useApiQuery<any>(
-    ["chart-of-accounts"],
-    `/finance/chart-of-accounts${scopeSuffix}`
-  );
 
   const createMutation = useApiMutation<unknown, any>(
     "/finance/journal-manual",
@@ -58,10 +49,6 @@ export default function JournalManualCreatePage() {
     },
   );
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
-
-  const coa = coaData?.data ?? coaData ?? [];
 
   const totalDebit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.debit), 0));
   const totalCredit = roundMoney(form.lines.reduce((s, l) => s + roundMoney(l.credit), 0));
@@ -133,7 +120,7 @@ export default function JournalManualCreatePage() {
             </div>
 
             <div className="rounded-xl border overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead className="bg-surface-subtle">
                   <tr>
                     <th className="px-3 py-2 text-right">رمز الحساب</th>
@@ -148,15 +135,13 @@ export default function JournalManualCreatePage() {
                     <>
                       <tr key={`row-${i}`} className="border-t">
                         <td className="px-2 py-1">
-                          <Input
-                            list={`coa-list-${i}`}
+                          <PostingAccountSelect
                             value={line.accountCode}
-                            onChange={e => updateLine(i, "accountCode", e.target.value)}
-                            placeholder="الحساب"
+                            onChange={(v) => updateLine(i, "accountCode", v)}
+                            label="رمز الحساب"
+                            placeholder="اختر حسابًا قابلًا للترحيل"
+                            error={fieldErrors[`lines.${i}.accountCode`]}
                           />
-                          <datalist id={`coa-list-${i}`}>
-                            {(Array.isArray(coa) ? coa : []).map((a: any) => <option key={a.code} value={a.code}>{a.code} - {a.name}</option>)}
-                          </datalist>
                         </td>
                         <td className="px-2 py-1">
                           <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
@@ -191,7 +176,7 @@ export default function JournalManualCreatePage() {
                     <td></td>
                   </tr>
                 </tfoot>
-              </table>
+              </table></div>
             </div>
 
             {!isBalanced && totalDebit > 0 && (

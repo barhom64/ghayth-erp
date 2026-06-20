@@ -1,0 +1,324 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/**
+ * FND-013 / #2340 triage — tenant-isolation read-back scoping.
+ *
+ * Several finance-core handlers read a row back by id right after an
+ * INSERT / verified UPDATE and return it in the response. The write
+ * itself was always companyId-scoped (INSERT carries the column; the
+ * UPDATE has `AND "companyId" = $N` plus an affectedRows===0 throw), so
+ * the read-back was protected only *transitively* by the upstream check.
+ *
+ * If a future refactor drops that upstream check, an unscoped
+ * `SELECT * FROM <tenant table> WHERE id = $1` becomes a cross-tenant
+ * read (IDOR). Scoping the read-back itself makes each statement
+ * self-defending. This pins that the read-backs carry the predicate so
+ * the hardening can't silently regress, independent of the static
+ * tenant-isolation guard (which runs in a separate CI lane).
+ *
+ * These four (file, table) pairs were removed from
+ * scripts/tenant-isolation-allowlist.txt by the same change.
+ */
+
+const ROUTES = join(import.meta.dirname!, "../../src/routes");
+const ACCOUNTS = readFileSync(join(ROUTES, "finance-accounts.ts"), "utf8");
+const ENGINE = readFileSync(join(ROUTES, "accounting-engine.ts"), "utf8");
+const LEGAL = readFileSync(join(ROUTES, "legal.ts"), "utf8");
+const GOVERNANCE = readFileSync(join(ROUTES, "governance.ts"), "utf8");
+const TRANSPORT = readFileSync(join(ROUTES, "transport-bookings.ts"), "utf8");
+const IMPACT = readFileSync(join(ROUTES, "impactPreview.ts"), "utf8");
+const PROPERTIES = readFileSync(join(ROUTES, "properties.ts"), "utf8");
+const TASKS = readFileSync(join(ROUTES, "tasks.ts"), "utf8");
+const PROJECTS = readFileSync(join(ROUTES, "projects.ts"), "utf8");
+const WAREHOUSE_ADV = readFileSync(join(ROUTES, "warehouse-advanced.ts"), "utf8");
+const WAREHOUSE = readFileSync(join(ROUTES, "warehouse.ts"), "utf8");
+const WAREHOUSE_CC = readFileSync(join(ROUTES, "warehouse-cycle-counts.ts"), "utf8");
+const BI = readFileSync(join(ROUTES, "bi.ts"), "utf8");
+const NUMBERING = readFileSync(join(ROUTES, "numbering.ts"), "utf8");
+const MEINSIGHTS = readFileSync(join(ROUTES, "meInsights.ts"), "utf8");
+
+// Strip block + line comments so a table name inside a JSDoc doesn't
+// register as a live statement.
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+}
+
+/**
+ * Assert that EVERY `SELECT ... FROM <table> WHERE id = $1` (the
+ * read-back shape) in `src` carries a "companyId" predicate. We match
+ * the id-lookup occurrences and require companyId within the same
+ * statement (up to the closing backtick).
+ */
+function everyIdReadbackIsScoped(src: string, table: string): boolean {
+  const stripped = stripComments(src);
+  // Statement = from `SELECT` ... `FROM <table>` ... up to the closing backtick.
+  const re = new RegExp(
+    "SELECT[\\s\\S]*?FROM\\s+" + table + "\\b[\\s\\S]*?`",
+    "g",
+  );
+  let m: RegExpExecArray | null;
+  let sawIdLookup = false;
+  while ((m = re.exec(stripped)) !== null) {
+    const stmt = m[0];
+    if (!/\bid\s*=\s*\$\d/.test(stmt)) continue; // not an id read-back
+    sawIdLookup = true;
+    if (!/"companyId"\s*=\s*\$\d/.test(stmt)) return false;
+  }
+  return sawIdLookup; // must have found at least one to be meaningful
+}
+
+describe("FND-013 #2340 — finance-accounts read-backs are companyId-scoped", () => {
+  for (const table of ["tax_codes", "wht_categories", "accounting_allocation_rules"]) {
+    it(`every "FROM ${table} WHERE id = $1" read-back carries a companyId predicate`, () => {
+      expect(everyIdReadbackIsScoped(ACCOUNTS, table)).toBe(true);
+    });
+  }
+
+  it("no bare unscoped id read-back remains for these tables", () => {
+    const stripped = stripComments(ACCOUNTS);
+    for (const table of ["tax_codes", "wht_categories", "accounting_allocation_rules"]) {
+      // A bare read-back would be `FROM <table> WHERE id = $1` followed by a
+      // backtick with no companyId before it.
+      const bad = new RegExp("FROM\\s+" + table + "\\s+WHERE\\s+id\\s*=\\s*\\$1`");
+      expect(stripped).not.toMatch(bad);
+    }
+  });
+});
+
+describe("FND-013 #2340 — accounting-engine provisioning-failure read-back is scoped", () => {
+  it("retry read-back of subsidiary_account_provisioning_failures carries companyId", () => {
+    expect(everyIdReadbackIsScoped(ENGINE, "subsidiary_account_provisioning_failures")).toBe(true);
+  });
+});
+
+describe("FND-013 #2340 — parent-verified list reads are company-scoped", () => {
+  it("legal correspondence list (by caseId) carries a companyId predicate", () => {
+    const stripped = stripComments(LEGAL);
+    // The case is verified by companyId first; the correspondence list must
+    // also be scoped so it's self-defending if that check ever moves.
+    expect(stripped).toMatch(
+      /FROM legal_correspondence WHERE "caseId"=\$1 AND "companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(/FROM legal_correspondence WHERE "caseId"=\$1 ORDER/);
+  });
+
+  it("governance policy version lists carry a (companyId OR system-template) predicate", () => {
+    const stripped = stripComments(GOVERNANCE);
+    // Two version queries select by (parentId OR id); both must be scoped to
+    // the caller's company, allowing companyId IS NULL system templates.
+    const versionReads = [
+      ...stripped.matchAll(
+        /FROM governance_policies WHERE \("parentId"=\$1 OR id=\$1\)([\s\S]*?)`/g,
+      ),
+    ];
+    expect(versionReads.length).toBeGreaterThanOrEqual(2);
+    for (const m of versionReads) {
+      expect(m[1]).toMatch(/\("companyId"=\$2 OR "companyId" IS NULL\)/);
+    }
+  });
+
+  it("governance policy_module_links list (by policyId) carries a companyId predicate", () => {
+    const stripped = stripComments(GOVERNANCE);
+    expect(stripped).toMatch(
+      /FROM policy_module_links WHERE "policyId"=\$1 AND \("companyId"=\$2 OR "companyId" IS NULL\)/,
+    );
+    expect(stripped).not.toMatch(/FROM policy_module_links WHERE "policyId"=\$1 LIMIT/);
+  });
+});
+
+describe("FND-013 #2340 — parent-verified child reads (batch 3) are company-scoped", () => {
+  it("transport_booking_lines reads (by bookingId) all carry companyId — no bare form left", () => {
+    const stripped = stripComments(TRANSPORT);
+    const scoped = [
+      ...stripped.matchAll(
+        /FROM transport_booking_lines WHERE "bookingId" = \$1 AND "companyId" = \$2/g,
+      ),
+    ];
+    expect(scoped.length).toBeGreaterThanOrEqual(2);
+    expect(stripped).not.toMatch(
+      /FROM transport_booking_lines WHERE "bookingId" = \$1 AND "deletedAt"/,
+    );
+  });
+
+  it("impactPreview project_phases count (by projectId) carries companyId", () => {
+    const stripped = stripComments(IMPACT);
+    expect(stripped).toMatch(
+      /FROM project_phases WHERE "projectId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId" = \$1`/);
+  });
+
+  it("contract_payment_schedule reads (by contractId) all carry companyId — no bare form left", () => {
+    const stripped = stripComments(PROPERTIES);
+    const scoped = [
+      ...stripped.matchAll(
+        /FROM contract_payment_schedule WHERE "contractId"=\$1 AND "companyId"=\$2/g,
+      ),
+    ];
+    expect(scoped.length).toBeGreaterThanOrEqual(3);
+    // No occurrence of the table followed by contractId with no companyId before
+    // the next clause (ORDER / closing backtick).
+    expect(stripped).not.toMatch(
+      /FROM contract_payment_schedule WHERE "contractId"=\$1 ORDER/,
+    );
+    expect(stripped).not.toMatch(
+      /FROM contract_payment_schedule WHERE "contractId"=\$1`/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — tasks.ts task_assignees mutations (batch 4) are company-scoped", () => {
+  // The team-sync handler and the single-assignee add/remove handlers mutate
+  // task_assignees by (taskId, assignmentId) or by row id. The parent task /
+  // membership is companyId-verified upstream, but each mutation must also
+  // carry companyId so it's self-defending. (EXISTS subqueries and the count
+  // CTE are dynamic-`${}` / already-scoped, so they're out of scope here.)
+  it("team-sync removedAt + role updates (by taskId,assignmentId) carry companyId", () => {
+    const stripped = stripComments(TASKS);
+    expect(stripped).toMatch(
+      /UPDATE task_assignees SET "removedAt" = NOW\(\)\s+WHERE "taskId" = \$1 AND "assignmentId" = \$2 AND "companyId" = \$3/,
+    );
+    expect(stripped).toMatch(
+      /UPDATE task_assignees SET role = \$1\s+WHERE "taskId" = \$2 AND "assignmentId" = \$3 AND "companyId" = \$4/,
+    );
+  });
+
+  it("existence SELECT (by taskId,assignmentId) carries companyId", () => {
+    const stripped = stripComments(TASKS);
+    expect(stripped).toMatch(
+      /SELECT id FROM task_assignees\s+WHERE "taskId" = \$1 AND "assignmentId" = \$2 AND "companyId" = \$3/,
+    );
+  });
+
+  it("by-id role updates carry companyId — no bare WHERE id form left", () => {
+    const stripped = stripComments(TASKS);
+    expect(stripped).toMatch(/UPDATE task_assignees SET role = \$1 WHERE id = \$2 AND "companyId" = \$3/);
+    expect(stripped).toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1 AND "companyId" = \$2/);
+    expect(stripped).not.toMatch(/UPDATE task_assignees SET role = \$1 WHERE id = \$2`/);
+    expect(stripped).not.toMatch(/UPDATE task_assignees SET role = 'primary' WHERE id = \$1`/);
+  });
+});
+
+describe("FND-013 #2340 — projects.ts project_phases reads (batch 5) are company-scoped", () => {
+  // Every project_phases read sits behind a companyId-verified project
+  // (assertProjectAccess / a companyId-scoped project lookup). Each read must
+  // also carry companyId so it stays safe if that upstream check ever moves.
+  it("all project_phases reads carry a companyId predicate — none bare", () => {
+    const stripped = stripComments(PROJECTS);
+    const reads = [...stripped.matchAll(/FROM project_phases\b[\s\S]*?`/g)];
+    expect(reads.length).toBeGreaterThanOrEqual(6);
+    for (const m of reads) {
+      // Skip the INSERT...RETURNING-less paths: these are all SELECTs by
+      // projectId/id; require companyId in each.
+      expect(m[0]).toMatch(/"companyId"\s*=\s*\$\d/);
+    }
+  });
+
+  it("no bare project_phases WHERE projectId/id forms remain", () => {
+    const stripped = stripComments(PROJECTS);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1 ORDER/);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE "projectId"=\$1`/);
+    expect(stripped).not.toMatch(/FROM project_phases WHERE id=\$1 AND "projectId"=\$2`/);
+  });
+});
+
+describe("FND-013 #2340 — warehouse-advanced post-insert read-backs (batch 6) are scoped", () => {
+  it("warehouse_stock_lots read-back carries companyId", () => {
+    const stripped = stripComments(WAREHOUSE_ADV);
+    expect(stripped).toMatch(
+      /FROM warehouse_stock_lots l WHERE l\.id=\$1 AND l\."companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(/FROM warehouse_stock_lots l WHERE l\.id=\$1 AND l\."deletedAt"/);
+  });
+
+  it("warehouse_stock_serials read-back carries companyId", () => {
+    const stripped = stripComments(WAREHOUSE_ADV);
+    expect(stripped).toMatch(
+      /FROM warehouse_stock_serials WHERE id=\$1 AND "companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(/FROM warehouse_stock_serials WHERE id=\$1 AND "deletedAt"/);
+  });
+});
+
+describe("FND-013 #2340 — warehouse_products JOINs (batch 7) carry companyId", () => {
+  // Display joins (product name / stock) behind a companyId-verified parent
+  // (cycle-count / inventory-count). The driving line tables have no companyId
+  // column, so the joined warehouse_products is scoped via scope.companyId.
+  it("cycle-count line reads scope the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE_CC);
+    const joins = [...stripped.matchAll(/JOIN warehouse_products p ON p\.id=l\."productId"/g)];
+    expect(joins.length).toBeGreaterThanOrEqual(2);
+    // Every such statement must carry p."companyId"=$N somewhere.
+    for (const m of stripped.matchAll(/FROM warehouse_cycle_count_lines l[\s\S]*?`/g)) {
+      if (/JOIN warehouse_products p/.test(m[0])) {
+        expect(m[0]).toMatch(/p\."companyId"=\$\d/);
+      }
+    }
+  });
+
+  it("inventory-count item read scopes the joined warehouse_products by companyId", () => {
+    const stripped = stripComments(WAREHOUSE);
+    // The pre-apply fetch (LIMIT 10000) must carry wp."companyId".
+    expect(stripped).toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 AND wp\."companyId"=\$2/,
+    );
+    expect(stripped).not.toMatch(
+      /JOIN warehouse_products wp ON wp\.id=ici\."productId" WHERE ici\."countId"=\$1 LIMIT/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — bi.ts per-user reads (batch 8) carry companyId", () => {
+  // Personal alert-fatigue surfaces scoped by the caller's own assignment;
+  // companyId added so the read is scoped on both axes (assignmentId is
+  // already company-unique, so this is defense-in-depth).
+  it("alert_fatigue_settings read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM alert_fatigue_settings WHERE "assignmentId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM alert_fatigue_settings WHERE "assignmentId" = \$1`/);
+  });
+
+  it("notifications daily-count read carries companyId", () => {
+    const stripped = stripComments(BI);
+    expect(stripped).toMatch(
+      /FROM notifications\s+WHERE "assignmentId" = \$1 AND "companyId" = \$2 AND DATE\("createdAt"\)/,
+    );
+  });
+});
+
+describe("FND-013 #2340 — numbering_counters read (batch 9) carries companyId", () => {
+  // numbering_counters.companyId is NOT NULL — strictly per-company. The
+  // scheme is companyId-verified first; the counters list under it must be
+  // scoped too (numbering integrity: never surface another tenant's counters).
+  it("scheme-counters list scopes by companyId", () => {
+    const stripped = stripComments(NUMBERING);
+    expect(stripped).toMatch(
+      /FROM numbering_counters\s+WHERE "schemeId" = \$1 AND "companyId" = \$2/,
+    );
+    expect(stripped).not.toMatch(/FROM numbering_counters\s+WHERE "schemeId" = \$1\s+ORDER/);
+  });
+});
+
+describe("FND-013 #2340 — meInsights pending-requests UNION (batch 10) carries companyId", () => {
+  // /me/proactive-insights category 3 UNION-ALLs the caller's pending
+  // leave / loan / overtime requests, scoped by their own assignment. Each
+  // branch also carries companyId so all three tenant tables are scoped.
+  it("each UNION branch scopes its table by companyId", () => {
+    const stripped = stripComments(MEINSIGHTS);
+    for (const t of ["hr_leave_requests", "hr_employee_loans", "hr_overtime_requests"]) {
+      expect(stripped).toMatch(
+        new RegExp(`WHERE "assignmentId" = \\$1 AND ${t}\\."companyId" = \\$2 AND status = 'pending'`),
+      );
+    }
+    // No bare unscoped form left for any of the three.
+    for (const t of ["hr_leave_requests", "hr_employee_loans", "hr_overtime_requests"]) {
+      expect(stripped).not.toMatch(
+        new RegExp(`WHERE "assignmentId" = \\$1 AND status = 'pending' AND ${t}\\."deletedAt"`),
+      );
+    }
+  });
+});

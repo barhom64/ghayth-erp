@@ -42,8 +42,14 @@ const createProjectSchema = z.object({
   description: z.string().optional().nullable(),
   clientId: z.coerce.number().optional().nullable(),
   managerId: z.coerce.number().optional().nullable(),
-  startDate: z.string().min(1, "تاريخ بداية المشروع مطلوب"),
-  endDate: z.string().min(1, "تاريخ نهاية المشروع مطلوب"),
+  // #institutional-link — dates were hard-required, but the inline
+  // quick-create dialog (the «+ مشروع جديد» in ProjectSelect, used by the
+  // employee-create institutional-link picker) only supplies name. Made
+  // optional here and defaulted in the handler so a minimal quick-create
+  // succeeds (today → +1 year, editable later); the full project-create
+  // page still enforces dates via its own client-side validation.
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
   budget: z.union([z.coerce.number(), z.string()]).optional().nullable(),
   status: z.string().optional(),
   phases: z.array(z.object({
@@ -418,11 +424,16 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المشروع مطلوب", { field: "name", fix: "أدخل اسماً واضحاً للمشروع" });
     }
-    if (!b.startDate) {
-      throw new ValidationError("تاريخ بداية المشروع مطلوب", { field: "startDate", fix: "حدد تاريخ بداية المشروع" });
+    // #institutional-link — the inline quick-create («+ مشروع جديد» in the
+    // employee-link picker) supplies only a name. Default the dates to
+    // today → +1 year so a minimal create succeeds; the full project-create
+    // page always sends real dates (enforced client-side), so this default
+    // only ever applies to the lightweight inline path.
+    if (!b.startDate || !String(b.startDate).trim()) {
+      b.startDate = todayISO();
     }
-    if (!b.endDate) {
-      throw new ValidationError("تاريخ نهاية المشروع مطلوب", { field: "endDate", fix: "حدد تاريخ التسليم المخطط للمشروع" });
+    if (!b.endDate || !String(b.endDate).trim()) {
+      b.endDate = toDateISO(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
     }
     const startD = new Date(b.startDate);
     const endD = new Date(b.endDate);
@@ -581,7 +592,7 @@ router.get("/:id", authorize({ feature: "projects.list", action: "view", resourc
     const [project] = await rawQuery<Record<string, unknown>>(`SELECT p.*, cl.name AS "clientName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."companyId"=p."companyId" AND cl."deletedAt" IS NULL WHERE ${detailWhere}`, detailParams);
     if (!project) throw new NotFoundError("المشروع غير موجود");
     const [phases, tasks] = await Promise.all([
-      rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`, [project.id]),
+      rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "orderIndex" LIMIT 500`, [project.id, scope.companyId]),
       rawQuery<Record<string, unknown>>(`SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 AND pt."deletedAt" IS NULL ORDER BY pt."dueDate" LIMIT 500`, [project.id]),
     ]);
 
@@ -831,7 +842,7 @@ router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "creat
       [scope.companyId, projectId, b.name.trim(), b.orderIndex || 0, b.startDate || null, b.endDate || null]
     );
     assertInsert(insertId, "project_phases");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [insertId, projectId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2 AND "companyId"=$3`, [insertId, projectId, scope.companyId]);
 
     createAuditLog({
       companyId: scope.companyId,
@@ -865,7 +876,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
 
     const project = await assertProjectAccess(projectId, scope);
 
-    const [phase] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2`, [phaseId, projectId]);
+    const [phase] = await rawQuery<Record<string, unknown>>(`SELECT * FROM project_phases WHERE id=$1 AND "projectId"=$2 AND "companyId"=$3`, [phaseId, projectId, scope.companyId]);
     if (!phase) throw new NotFoundError("المرحلة غير موجودة");
 
     // State machine — validated through lifecycleEngine's "project_phases"
@@ -904,7 +915,7 @@ router.patch("/:id/phases/:phaseId/complete", authorize({ feature: "projects.tas
     let milestoneInvoiceCreated = false;
     if (project?.clientId) {
       try {
-        const allPhases = await rawQuery<Record<string, unknown>>(`SELECT id FROM project_phases WHERE "projectId"=$1`, [projectId]);
+        const allPhases = await rawQuery<Record<string, unknown>>(`SELECT id FROM project_phases WHERE "projectId"=$1 AND "companyId"=$2`, [projectId, scope.companyId]);
         const phaseWeight = allPhases.length > 0 ? 1 / allPhases.length : 0.25;
         const milestoneAmount = Number(project.budget) * phaseWeight;
         const monthNum = currentMonthPadded();
@@ -968,8 +979,8 @@ router.post("/:id/tasks", authorize({ feature: "projects.tasks", action: "create
     }
     if (b.phaseId) {
       const [phase] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM project_phases WHERE id=$1 AND "projectId"=$2`,
-        [b.phaseId, projectId]
+        `SELECT id FROM project_phases WHERE id=$1 AND "projectId"=$2 AND "companyId"=$3`,
+        [b.phaseId, projectId, scope.companyId]
       );
       if (!phase) {
         throw new ValidationError("المرحلة غير موجودة", { field: "phaseId", fix: "اختر مرحلة تابعة لهذا المشروع" });
@@ -2439,8 +2450,8 @@ router.post("/:id/close", authorize({ feature: "projects.list", action: "update"
     try {
       const teamRows = await rawQuery<{ employeeId: number }>(
         `SELECT DISTINCT pr."employeeId" FROM project_resources pr
-         WHERE pr."projectId" = $1 AND pr."employeeId" IS NOT NULL`,
-        [projectId]
+         WHERE pr."projectId" = $1 AND pr."companyId" = $2 AND pr."employeeId" IS NOT NULL`,
+        [projectId, scope.companyId]
       );
       const managerRow = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea
@@ -2493,8 +2504,8 @@ router.get("/:id/gantt", authorize({ feature: "projects.list", action: "list" })
 
     const [phases, tasks, milestones] = await Promise.all([
       rawQuery<Record<string, unknown>>(
-        `SELECT * FROM project_phases WHERE "projectId"=$1 ORDER BY "orderIndex" LIMIT 500`,
-        [projectId]
+        `SELECT * FROM project_phases WHERE "projectId"=$1 AND "companyId"=$2 ORDER BY "orderIndex" LIMIT 500`,
+        [projectId, scope.companyId]
       ),
       rawQuery<Record<string, unknown>>(
         `SELECT pt.*, e.name AS "assigneeName" FROM project_tasks pt LEFT JOIN employees e ON e.id=pt."assigneeId" AND e."deletedAt" IS NULL WHERE pt."projectId"=$1 ORDER BY pt."startDate","phaseId" LIMIT 500`,

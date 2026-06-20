@@ -133,7 +133,7 @@ export default function OrgTreePage() {
 
   return (
     <PageShell
-      title="الشجرة التنظيمية"
+      title="الهيكل التنظيمي"
       subtitle="الهيكل الموحد: شركة ← فرع ← إدارة ← قسم ← فريق. اللجنة والمشروع ومركز التكلفة ارتباطات تشغيلية فوق الشجرة، ليست داخلها."
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },
@@ -161,7 +161,7 @@ export default function OrgTreePage() {
         </CardHeader>
         <CardContent>
           {data.branches.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">لا توجد فروع. أضف الفرع من <Link href="/settings"><a className="text-primary">الإعدادات</a></Link>.</p>
+            <p className="text-sm text-muted-foreground text-center py-6">لا توجد فروع. أضف الفرع من <Link href="/settings" asChild><a className="text-primary">الإعدادات</a></Link>.</p>
           ) : (
             <div className="space-y-3">
               {data.branches.map((b) => (
@@ -224,9 +224,9 @@ export default function OrgTreePage() {
             النظر عن قسمه. تظهر كعضويات في ملف الموظف، وليست عقدًا في الهيكل.
           </p>
           <div className="flex flex-wrap gap-2 text-xs">
-            <Link href="/admin/org-memberships"><a className="text-primary hover:underline flex items-center gap-1">إدارة العضويات (فِرَق/لجان/مشاريع) <ArrowUpRight className="h-3 w-3" /></a></Link>
+            <Link href="/admin/org-memberships" asChild><a className="text-primary hover:underline flex items-center gap-1">إدارة العضويات (فِرَق/لجان/مشاريع) <ArrowUpRight className="h-3 w-3" /></a></Link>
             <span className="text-muted-foreground">·</span>
-            <Link href="/finance/cost-centers"><a className="text-primary hover:underline flex items-center gap-1">مراكز التكلفة <ArrowUpRight className="h-3 w-3" /></a></Link>
+            <Link href="/finance/cost-centers" asChild><a className="text-primary hover:underline flex items-center gap-1">مراكز التكلفة <ArrowUpRight className="h-3 w-3" /></a></Link>
           </div>
         </CardContent>
       </Card>

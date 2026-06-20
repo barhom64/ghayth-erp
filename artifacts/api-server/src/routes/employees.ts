@@ -27,6 +27,10 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { hashPassword } from "../lib/auth.js";
 import { sendMessage } from "../lib/messageSender.js";
+import { randomBytes } from "node:crypto";
+import { issueAuthToken, PublicBaseUrlMissingError, TOKEN_TTL_MINUTES } from "../lib/authTokens.js";
+import { issueOnboardingToken } from "../lib/employeeOnboarding.js";
+import { sendAuthEmail } from "../lib/authNotifications.js";
 import { registerObligation, cancelObligation } from "../lib/obligationsEngine.js";
 // PR-4 (#2077) — on-demand recompute + history wraps the existing
 // employeeScoringEngine library. The library + the weekly/monthly
@@ -207,6 +211,15 @@ const createEmployeeSchema = z.object({
   projectId: z.coerce.number().int().positive().optional().nullable(),
   costCenterId: z.coerce.number().int().positive().optional().nullable(),
   committeeId: z.coerce.number().int().positive().optional().nullable(),
+  // الدفعة 3 — توزيع الموظف على عدة فروع (اختياري). حين يُرسَل بأكثر من فرع،
+  // يُستبدل التخصيص الأساسي المفرد بهذه القائمة (مجموع النِسَب يجب = 100).
+  // كل عنصر: الفرع + الصفة في الفرع + النسبة + مركز تكلفة اختياري (تجاوز).
+  branchAllocations: z.array(z.object({
+    branchId: z.coerce.number().int().positive(),
+    capacity: z.string().trim().max(80).optional().nullable(),
+    allocationPercent: z.coerce.number().positive().max(100),
+    costCenterId: z.coerce.number().int().positive().optional().nullable(),
+  })).optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -353,7 +366,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
          WHERE "entityType" = 'employee' AND "companyId" = $${govCompanyIdx}
          GROUP BY "entityId"
        )
-       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status,
+       SELECT e.id, e.name, e.phone, e.email, e."empNumber", e.status, e."activationStatus",
               ea.id AS "activeAssignmentId",
               e."iqamaNumber", e."iqamaExpiry", e."iqamaStatus",
               COALESCE(jt.name, ea."jobTitle") AS "jobTitle", ea."jobTitleId",
@@ -403,6 +416,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
 const quickActivateSchema = z.object({
   name: z.string().min(1),
   phone: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
   nationalId: z.string().optional().nullable(),
   nationality: z.string().optional().nullable(),
   departmentId: z.coerce.number().optional().nullable(),
@@ -410,11 +424,66 @@ const quickActivateSchema = z.object({
   hireDate: z.string().optional().nullable(),
 });
 
+// HR-REV-4 (#2223) §2/§4 — the activation plan is generated from the job
+// title's professional category, so a سائق, a محاسب and an إداري get materially
+// different distributed task sets (each task routed to its owning role, with a
+// serviceType for the ones that are a service request — vehicle/custody/access
+// — never a manual HR checkbox). This is the in-code profile until the
+// DB-driven job_activation_profiles tables land (HR-REV-4 full). Both the
+// quick-activate and the full-create paths call this with the resolved
+// job_titles.category (null → the general/admin default).
+type ActivationTask = {
+  title: string;
+  ownerRole: string;
+  reason: string;
+  mandatory: boolean;
+  serviceType?: string;
+};
+
+function buildActivationPlan(category: string | null): ReadonlyArray<ActivationTask> {
+  const c = (category || "").toLowerCase();
+  const contract: ActivationTask = { title: "توقيع عقد العمل والتأمينات", ownerRole: "documents", reason: "العقد والتأمينات والتحقق من الوثائق", mandatory: true };
+  const manager: ActivationTask = { title: "تعريف المدير المباشر والفريق", ownerRole: "department", reason: "تأكيد المباشرة وتعريف الفريق وموقع العمل", mandatory: true };
+
+  // Driver — field/GPS attendance + vehicle + device custody + cost center.
+  if (c.includes("driver") || c.includes("سائق") || c.includes("field") || c.includes("ميدان")) {
+    return [
+      { title: "التحقق من رخصة القيادة", ownerRole: "documents", reason: "رخصة قيادة سارية شرط للقيادة", mandatory: true },
+      contract,
+      manager,
+      { title: "تطبيق سياسة حضور ميدانية (GPS)", ownerRole: "hr", reason: "فئة السائق تتطلب تتبّع GPS", mandatory: true },
+      { title: "طلب تخصيص مركبة", ownerRole: "fleet", reason: "تخصيص مركبة من الأسطول (طلب خدمة لا إنشاء)", mandatory: true, serviceType: "vehicle" },
+      { title: "صرف عهدة جهاز/شريحة", ownerRole: "warehouse", reason: "عهدة تشغيلية بوثيقة استلام", mandatory: false, serviceType: "custody" },
+      { title: "ربط مركز التكلفة/المشروع", ownerRole: "payroll", reason: "تحميل التكلفة على المركز الصحيح", mandatory: true },
+    ];
+  }
+
+  // Accountant / finance — restricted financial access, no vehicle, no GPS.
+  if (c.includes("account") || c.includes("finance") || c.includes("محاسب") || c.includes("مالي")) {
+    return [
+      contract,
+      manager,
+      { title: "منح صلاحية مالية مقيّدة", ownerRole: "access", reason: "وصول مالي محدود حسب الدور (لا رؤية تحقيقات إلا بمنح صريح)", mandatory: true, serviceType: "access" },
+      { title: "ربط مركز التكلفة", ownerRole: "payroll", reason: "ربط محاسبي لمركز التكلفة", mandatory: false },
+      { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    ];
+  }
+
+  // General / admin default.
+  return [
+    { title: "تسليم أجهزة IT وإعداد الحسابات", ownerRole: "it", reason: "تجهيز الحساب والبريد وصرف عهدة الأجهزة", mandatory: true, serviceType: "access" },
+    contract,
+    manager,
+    { title: "اعتماد الراتب والبدلات والحساب البنكي", ownerRole: "payroll", reason: "تحديد الراتب والبدلات والحساب البنكي", mandatory: true },
+    { title: "دورة التعريف بالشركة وسياساتها", ownerRole: "hr", reason: "التعريف بالسياسات واللوائح", mandatory: false },
+  ];
+}
+
 router.post("/quick-activate", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(quickActivateSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { name, phone, nationalId, nationality, departmentId, jobTitle } = body;
+    const { name, phone, email, nationalId, nationality, departmentId, jobTitle } = body;
 
     if (!name) {
       throw new ValidationError("لا يمكن إنشاء موظف بدون اسم", {
@@ -449,10 +518,10 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       // 'inactive' is the only CHECK-allowed pending-ish status (migration
       // 084); it gates the employee until the activation flow flips it.
       const empRes = await client.query(
-        `INSERT INTO employees (name, phone, "empNumber", "nationalId", nationality, status)
-         VALUES ($1, $2, $3, $4, $5, 'inactive')
+        `INSERT INTO employees (name, phone, email, "empNumber", "nationalId", nationality, status, "activationStatus")
+         VALUES ($1, $2, $3, $4, $5, $6, 'inactive', $7)
          RETURNING id`,
-        [name, phone || null, finalEmpNumber, nationalId || null, nationality || null]
+        [name, phone || null, email || null, finalEmpNumber, nationalId || null, nationality || null, email ? 'self_invited' : 'pending_activation']
       );
       const empId = empRes.rows[0].id;
 
@@ -462,14 +531,19 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
         [empId, preIssued.assignmentId]
       );
 
-      // ── Resolve jobTitleId from the jobTitle text (company-scoped) ──
+      // ── Resolve jobTitleId + category from the jobTitle text (company-scoped) ──
+      // category drives the activation plan (HR-REV-4 §1): سائق ≠ محاسب ≠ إداري.
       let resolvedJobTitleId: number | null = null;
+      let resolvedCategory: string | null = null;
       if (effectiveJobTitle && effectiveJobTitle !== "موظف") {
         const jtRes = await client.query(
-          `SELECT id FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
+          `SELECT id, category FROM job_titles WHERE name = $1 AND ("companyId" = $2 OR "companyId" IS NULL) LIMIT 1`,
           [effectiveJobTitle, effectiveCompanyId]
         );
-        if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
+        if (jtRes.rows.length > 0) {
+          resolvedJobTitleId = jtRes.rows[0].id;
+          resolvedCategory = jtRes.rows[0].category ?? null;
+        }
       }
 
       // ── Create the first assignment in ACTIVE state ──
@@ -484,22 +558,22 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       );
       const assignmentId = assignRes.rows[0].id;
 
-      // ── Create the 4 onboarding tasks (same plan as the full create) ──
-      const onboardingTasks = [
-        "تسليم أجهزة IT وإعداد الحسابات",
-        "توقيع عقد العمل والتأمينات",
-        "تعريف المدير المباشر والفريق",
-        "دورة التعريف بالشركة وسياساتها",
-      ];
-      const dueDateOnboarding = new Date();
-      dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const taskTitle of onboardingTasks) {
+      // ── Create the onboarding tasks from the job-category profile ──
+      // Due date = 7 days from *Riyadh* today. Anchoring on the noon-UTC of
+      // todayISO() (the tenant-local date) keeps the +7 a stable calendar
+      // offset; a raw `new Date()` would be the UTC date and roll a day early
+      // in the evening Riyadh hours (Task #400 class).
+      const dueDateOnboarding = new Date(`${todayISO()}T12:00:00Z`);
+      dueDateOnboarding.setUTCDate(dueDateOnboarding.getUTCDate() + 7);
+      const activationPlan = buildActivationPlan(resolvedCategory);
+      for (const task of activationPlan) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
-           VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
+      const onboardingTaskCount = activationPlan.length;
 
       // ── Record the lifecycle event (state → onboarding) ──
       // offer_accepted is the event that maps to the onboarding state
@@ -526,10 +600,10 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
         ]
       );
 
-      return { empId, assignmentId };
+      return { empId, assignmentId, onboardingTaskCount };
     });
 
-    const { empId, assignmentId } = result;
+    const { empId, assignmentId, onboardingTaskCount } = result;
 
     // ── Event log ──
     await emitEvent({
@@ -537,7 +611,7 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       action: "employee.quick_activated", entity: "employees", entityId: empId,
       details: JSON.stringify({
         empNumber: finalEmpNumber, assignmentId, jobTitle: effectiveJobTitle,
-        status: "inactive", onboardingTasks: 4,
+        status: "inactive", onboardingTasks: onboardingTaskCount,
         context: {
           companyId: scope.companyId,
           branchId: scope.branchId ?? null,
@@ -558,19 +632,210 @@ router.post("/quick-activate", authorize({ feature: "hr.employees", action: "cre
       impersonationSourceUser: scope.impersonationSourceUser ?? null,
       after: {
         name, empNumber: finalEmpNumber, jobTitle: effectiveJobTitle,
-        status: "inactive", assignmentId, onboardingTasksCreated: 4,
+        status: "inactive", assignmentId, onboardingTasksCreated: onboardingTaskCount,
       },
     });
+
+    // ── رابط الاستكمال الذاتي ──
+    // حين يتوفّر بريد الموظف، نُصدِر رمزًا مؤقتًا ونرسل له رابطًا يفتح صفحة
+    // عامة يملأ فيها بياناته الشخصية (بانتظار مراجعة HR). يُعاد الرابط للمُعيِّن
+    // أيضًا لنسخه يدويًا. فشل الإرسال لا يُفشِل الإنشاء (المظف أُنشئ فعلًا).
+    let onboardingLink: string | null = null;
+    let onboardingWarning: string | null = null;
+    if (email) {
+      try {
+        const issued = await issueOnboardingToken({ companyId: scope.companyId, employeeId: empId, createdBy: scope.userId });
+        onboardingLink = issued.url;
+        void sendMessage({
+          channel: "email",
+          recipient: email,
+          recipientName: name,
+          subject: "استكمال بيانات التوظيف",
+          body: `أهلاً ${name},\n\nيرجى استكمال بياناتك الوظيفية عبر الرابط التالي خلال 7 أيام:\n${issued.url}\n\nبعد إرسالك للبيانات ستتم مراجعتها واعتمادها لتفعيل حسابك.`,
+          companyId: scope.companyId,
+          userId: scope.userId,
+          relatedType: "employee",
+          relatedId: empId,
+          templateKey: "employee.self_onboarding",
+        }).catch((e) => logger.error(e, "quick-activate onboarding email failed"));
+      } catch (e) {
+        if (e instanceof PublicBaseUrlMissingError) {
+          onboardingWarning = "أُنشئ الموظف لكن تعذّر إرسال رابط الاستكمال: رابط النظام العام (PUBLIC_BASE_URL) غير مضبوط.";
+          logger.error("[quick-activate] PUBLIC_BASE_URL empty — onboarding link not sent");
+        } else {
+          onboardingWarning = "أُنشئ الموظف لكن تعذّر إصدار رابط الاستكمال.";
+          logger.error(e, "[quick-activate] failed to issue onboarding token");
+        }
+      }
+    }
 
     res.status(201).json({
       id: empId,
       empNumber: finalEmpNumber,
       assignmentId,
       status: "inactive",
-      onboardingTasksCreated: 4,
+      onboardingTasksCreated: onboardingTaskCount,
+      onboardingLink,
+      ...(onboardingWarning ? { onboardingWarning } : {}),
     });
   } catch (err) {
     handleRouteError(err, res, "Quick-activate employee error:");
+  }
+});
+
+// ─── مراجعة واعتماد بيانات الاستكمال الذاتي (الدفعة ب) ───────────────────────
+// قائمة الموظفين الذين أرسلوا بياناتهم بانتظار المراجعة.
+router.get("/self-submissions", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT e.id, e.name, e."empNumber", e."selfSubmittedAt", e."selfSubmittedData",
+              COALESCE(jt.name, ea."jobTitle") AS "jobTitle", b.name AS "branchName"
+         FROM employees e
+         JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."isPrimary" = TRUE AND ea."companyId" = $1
+         LEFT JOIN job_titles jt ON jt.id = ea."jobTitleId"
+         LEFT JOIN branches b ON b.id = ea."branchId"
+        WHERE e."companyId" = $1 AND e."deletedAt" IS NULL
+          AND e."activationStatus" = 'self_submitted'
+        ORDER BY e."selfSubmittedAt" ASC NULLS LAST`,
+      [scope.companyId],
+    );
+    res.json({ data: rows, total: rows.length });
+  } catch (err) {
+    handleRouteError(err, res, "قائمة طلبات استكمال البيانات");
+  }
+});
+
+// اعتماد البيانات المُرسَلة: تُطبَّق الحقول الشخصية على السجل، تُفرَّغ المرحلة
+// المؤقتة، وتتقدّم الحالة إلى ready_for_hr_review (التفعيل الفعلي يبقى عبر
+// المسار المراجَع الذي يطلق رسالة بداية العمل). لا تمسّ حقول صاحب الشركة.
+router.post("/:id/approve-self-data", authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [emp] = await rawQuery<{ id: number; selfSubmittedData: any; activationStatus: string | null }>(
+      `SELECT id, "selfSubmittedData", "activationStatus" FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!emp) throw new NotFoundError("الموظف غير موجود");
+    if (!emp.selfSubmittedData) {
+      throw new ValidationError("لا توجد بيانات مُرسَلة للاعتماد", { field: "id", fix: "انتظر حتى يرسل الموظف بياناته عبر رابط الاستكمال." });
+    }
+    const d = emp.selfSubmittedData as Record<string, any>;
+    await rawExecute(
+      `UPDATE employees SET
+         "nationalId" = COALESCE($1, "nationalId"),
+         nationality = COALESCE($2, nationality),
+         gender = COALESCE($3, gender),
+         "dateOfBirth" = COALESCE($4, "dateOfBirth"),
+         phone = COALESCE($5, phone),
+         "personalEmail" = COALESCE($6, "personalEmail"),
+         "iqamaNumber" = COALESCE($7, "iqamaNumber"),
+         "iqamaExpiry" = COALESCE($8, "iqamaExpiry"),
+         "passportNumber" = COALESCE($9, "passportNumber"),
+         "passportExpiry" = COALESCE($10, "passportExpiry"),
+         "borderNumber" = COALESCE($11, "borderNumber"),
+         "visaNumber" = COALESCE($12, "visaNumber"),
+         "visaType" = COALESCE($13, "visaType"),
+         "visaExpiry" = COALESCE($14, "visaExpiry"),
+         "bankName" = COALESCE($15, "bankName"),
+         "bankAccount" = COALESCE($16, "bankAccount"),
+         iban = COALESCE($17, iban),
+         "emergencyContact" = COALESCE($18, "emergencyContact"),
+         "emergencyPhone" = COALESCE($19, "emergencyPhone"),
+         attachments = COALESCE($20::jsonb, attachments),
+         "selfSubmittedData" = NULL,
+         "activationStatus" = 'ready_for_hr_review'
+       WHERE id = $21 AND "companyId" = $22 AND "deletedAt" IS NULL`,
+      [
+        d.nationalId ?? null, d.nationality ?? null, d.gender ?? null, d.dateOfBirth ?? null,
+        d.phone ?? null, d.personalEmail ?? null, d.iqamaNumber ?? null, d.iqamaExpiry ?? null,
+        d.passportNumber ?? null, d.passportExpiry ?? null, d.borderNumber ?? null,
+        d.visaNumber ?? null, d.visaType ?? null, d.visaExpiry ?? null,
+        d.bankName ?? null, d.bankAccount ?? null, d.iban ?? null,
+        d.emergencyContact ?? null, d.emergencyPhone ?? null,
+        d.attachments ? JSON.stringify(d.attachments) : null,
+        id, scope.companyId,
+      ],
+    );
+    void createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.self_data_approved", entity: "employees", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      before: { activationStatus: emp.activationStatus }, after: { activationStatus: "ready_for_hr_review" },
+    }).catch((e) => logger.error(e, "approve-self-data audit failed"));
+    res.json({ ok: true, message: "اعتُمدت بيانات الموظف. يمكن الآن تفعيله بعد إكمال خطة التهيئة." });
+  } catch (err) {
+    handleRouteError(err, res, "اعتماد بيانات الاستكمال الذاتي");
+  }
+});
+
+// رفض البيانات المُرسَلة: تُفرَّغ المرحلة المؤقتة ويُعاد الموظف لحالة الدعوة
+// ليُرسِل من جديد (يُعاد إصدار الرابط من زر الدعوة).
+router.post("/:id/reject-self-data", authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.slice(0, 500) : null;
+    const result = await rawExecute(
+      `UPDATE employees SET "selfSubmittedData" = NULL, "activationStatus" = 'self_invited'
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND "activationStatus" = 'self_submitted'`,
+      [id, scope.companyId],
+    );
+    if (!result.affectedRows) throw new NotFoundError("لا توجد بيانات مُرسَلة لهذا الموظف");
+    void createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.self_data_rejected", entity: "employees", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      after: { rejected: true, reason },
+    }).catch((e) => logger.error(e, "reject-self-data audit failed"));
+    res.json({ ok: true, message: "أُعيدت البيانات للموظف لتصحيحها." });
+  } catch (err) {
+    handleRouteError(err, res, "رفض بيانات الاستكمال الذاتي");
+  }
+});
+
+// إعادة إصدار رابط الاستكمال الذاتي (الدفعة هـ). الرابط يُصدَر أول مرة عند
+// الإضافة السريعة وينتهي خلال ٧ أيام؛ لو انتهى أو لم يتصرّف الموظف، يعيد HR
+// إصداره من هنا. يُبطِل الرمز السابق ويرسل رابطًا جديدًا. لا يُسمح للموظف
+// المفعّل (status=active) لأن الاستكمال الذاتي مرحلة ما قبل التفعيل.
+router.post("/:id/resend-onboarding-link", authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [emp] = await rawQuery<{ id: number; name: string; email: string | null; status: string }>(
+      `SELECT id, name, email, status FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!emp) throw new NotFoundError("الموظف غير موجود");
+    if (emp.status === "active") {
+      throw new ValidationError("الموظف مفعّل بالفعل — لا حاجة لرابط استكمال", { field: "id", fix: "رابط الاستكمال للموظفين قبل التفعيل فقط." });
+    }
+    if (!emp.email) {
+      throw new ValidationError("لا يمكن إرسال الرابط: الموظف بلا بريد إلكتروني", { field: "email", fix: "أضف بريد الموظف أولًا من ملفه." });
+    }
+    const issued = await issueOnboardingToken({ companyId: scope.companyId, employeeId: id, createdBy: scope.userId });
+    void sendMessage({
+      channel: "email",
+      recipient: emp.email,
+      recipientName: emp.name,
+      subject: "استكمال بيانات التوظيف",
+      body: `أهلاً ${emp.name},\n\nيرجى استكمال بياناتك الوظيفية عبر الرابط التالي خلال 7 أيام:\n${issued.url}\n\nبعد إرسالك للبيانات ستتم مراجعتها واعتمادها لتفعيل حسابك.`,
+      companyId: scope.companyId,
+      userId: scope.userId,
+      relatedType: "employee",
+      relatedId: id,
+      templateKey: "employee.self_onboarding",
+    }).catch((e) => logger.error(e, "resend onboarding email failed"));
+    void createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.onboarding_link_resent", entity: "employees", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      after: { resent: true },
+    }).catch((e) => logger.error(e, "resend-onboarding-link audit failed"));
+    res.json({ ok: true, onboardingLink: issued.url, message: "أُعيد إرسال رابط الاستكمال للموظف بالبريد" });
+  } catch (err) {
+    handleRouteError(err, res, "إعادة إرسال رابط الاستكمال");
   }
 });
 
@@ -605,6 +870,8 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       sourceApplicationId,
       // PR-1 institutional binding (#2077).
       positionId, categoryKey, teamId, projectId, costCenterId, committeeId,
+      // الدفعة 3 — توزيع الفروع الاختياري.
+      branchAllocations,
       // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -823,24 +1090,12 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
           fix: "اختر فئة القوى العاملة (موظف/سائق/مدير/…) لتطبيق سياسة الحضور المناسبة.",
         });
       }
-      if (!teamId) {
-        throw new ValidationError("الفريق مطلوب", {
-          field: "teamId",
-          fix: "اختر الفريق الذي ينضم إليه الموظف من الإعدادات → الفِرَق.",
-        });
-      }
-      if (!projectId) {
-        throw new ValidationError("المشروع مطلوب", {
-          field: "projectId",
-          fix: "اختر المشروع/المنتج التشغيلي الذي يساهم فيه الموظف.",
-        });
-      }
-      if (!costCenterId) {
-        throw new ValidationError("مركز التكلفة مطلوب", {
-          field: "costCenterId",
-          fix: "اختر مركز التكلفة الذي يُحاسب عليه راتب الموظف.",
-        });
-      }
+      // PR (النظام يَحضُر لا يُحضَر له): الفريق والمشروع ومركز التكلفة
+      // ليست حقائق تعيين جوهرية — الفريق والمشروع أمور عارضة تُسنَد لاحقًا
+      // عبر عقود العضوية المستقلة (POST /team-memberships, /project-assignments)،
+      // ومركز التكلفة يُشتق آليًا من فرع الموظف وصفته في كل فرع (محرّك
+      // resolveCostCenter). لذا لا تُفرَض وقت التعيين. تبقى إلزامية: المنصب،
+      // فئة الحضور، المدير المباشر — وهي الحقائق المؤسسية الجوهرية للموظف.
       if (!managerId) {
         throw new ValidationError("المدير المباشر مطلوب", {
           field: "managerId",
@@ -961,6 +1216,56 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     const internalEmailIn = ((body as any).internalEmail as string | null | undefined) || null;
     const personalEmailIn = ((body as any).personalEmail as string | null | undefined) || null;
 
+    // ── الدفعة 3 — التحقق من توزيع الفروع (قبل المعاملة لرسالة خطأ نظيفة) ──
+    // حين يختار المُعيِّن «توزيع متعدد»، نتحقق: نِسَب مجموعها 100%، بلا فرع
+    // مكرر، وكل فرع (ومركز التكلفة إن حُدّد) تابع للشركة. هذا يضمن أن محرّك
+    // الرواتب (الدفعة 2ب) يجد تخصيصات سليمة قابلة للتوزيع.
+    let normalizedAllocations:
+      | Array<{ branchId: number; capacity: string | null; percent: number; costCenterId: number | null }>
+      | null = null;
+    if (Array.isArray(branchAllocations) && branchAllocations.length > 0) {
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const sumPct = round2(branchAllocations.reduce((s: number, a: any) => s + Number(a.allocationPercent || 0), 0));
+      if (sumPct !== 100) {
+        throw new ValidationError("مجموع نِسَب توزيع الفروع يجب أن يساوي 100%", {
+          field: "branchAllocations",
+          fix: `المجموع الحالي ${sumPct}%. عدّل النِسَب لتساوي 100%.`,
+        });
+      }
+      const branchIds = branchAllocations.map((a: any) => Number(a.branchId));
+      if (new Set(branchIds).size !== branchIds.length) {
+        throw new ValidationError("لا يجوز تكرار الفرع في التوزيع", {
+          field: "branchAllocations",
+          fix: "اجعل لكل فرع صفًا واحدًا فقط في التوزيع.",
+        });
+      }
+      const validBranches = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches WHERE id = ANY($1::int[]) AND "companyId" = $2`,
+        [[...new Set(branchIds)], effectiveCompanyId]
+      );
+      const validBranchSet = new Set(validBranches.map((b) => b.id));
+      const ccIds = branchAllocations.map((a: any) => (a.costCenterId ? Number(a.costCenterId) : null)).filter((x: number | null): x is number => x != null);
+      const validCcSet = new Set<number>();
+      if (ccIds.length > 0) {
+        const validCcs = await rawQuery<{ id: number }>(
+          `SELECT id FROM cost_centers WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [[...new Set(ccIds)], effectiveCompanyId]
+        );
+        for (const c of validCcs) validCcSet.add(c.id);
+      }
+      normalizedAllocations = branchAllocations.map((a: any) => {
+        const bId = Number(a.branchId);
+        if (!validBranchSet.has(bId)) {
+          throw new ValidationError(`الفرع رقم ${bId} غير موجود`, { field: "branchAllocations", fix: "اختر فروعًا تابعة لشركتك." });
+        }
+        const ccId = a.costCenterId ? Number(a.costCenterId) : null;
+        if (ccId != null && !validCcSet.has(ccId)) {
+          throw new ValidationError(`مركز التكلفة رقم ${ccId} غير موجود`, { field: "branchAllocations", fix: "اختر مركز تكلفة تابعًا لشركتك أو اتركه فارغًا ليُشتق من الفرع." });
+        }
+        return { branchId: bId, capacity: a.capacity ? String(a.capacity) : null, percent: round2(Number(a.allocationPercent)), costCenterId: ccId };
+      });
+    }
+
     const result = await withTransaction(async (client) => {
       const finalEmpNumber = preIssuedEmpNumber!;
 
@@ -1025,6 +1330,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         );
         if (jtRes.rows.length > 0) resolvedJobTitleId = jtRes.rows[0].id;
       }
+      // Resolve the job category for the activation plan (HR-REV-4 §1). Falls
+      // back to categoryKey (attendance category) when the title has none.
+      let resolvedCategory: string | null = null;
+      if (resolvedJobTitleId) {
+        const catRes = await client.query(`SELECT category FROM job_titles WHERE id = $1 LIMIT 1`, [resolvedJobTitleId]);
+        resolvedCategory = catRes.rows[0]?.category ?? null;
+      }
+      if (!resolvedCategory && categoryKey) resolvedCategory = String(categoryKey);
 
       const assignRes = await client.query(
         `INSERT INTO employee_assignments ("employeeId","companyId","branchId","departmentId","jobTitle","jobTitleId",role,salary,"hireDate","isPrimary",status,"managerId","positionId","categoryKey")
@@ -1034,6 +1347,36 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
          positionId ? Number(positionId) : null, categoryKey || null]
       );
       const assignmentId = assignRes.rows[0].id;
+
+      // ── تخصيص الفروع (الدفعة 1 + 3) ──
+      // النموذج الموحّد لاشتقاق مركز التكلفة: علاقة الموظف↔الفرع كتخصيصات.
+      //   • توزيع متعدد (الدفعة 3): المُعيِّن اختار عدة فروع بنِسَب مجموعها 100%
+      //     — نُدرج صفًا لكل فرع، والأساسي هو فرع الموظف الرئيسي إن كان ضمنها
+      //     وإلا أول صف. مركز التكلفة لكل صف: تجاوز صريح أو يُشتق وقت الترحيل.
+      //   • الافتراضي (الدفعة 1): فرع رئيسي واحد (100%). مركز التكلفة NULL
+      //     ليُشتق آليًا من الفرع وقت ترحيل الرواتب. لا يُنشأ إن غاب الفرع.
+      if (normalizedAllocations && normalizedAllocations.length > 0) {
+        const primaryBranchId = normalizedAllocations.some((a) => a.branchId === targetBranchId)
+          ? targetBranchId
+          : normalizedAllocations[0].branchId;
+        for (const a of normalizedAllocations) {
+          await client.query(
+            `INSERT INTO employee_branch_allocations
+               ("companyId","employeeId","assignmentId","branchId",capacity,"allocationPercent","costCenterId","isPrimary","startDate","createdBy")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             ON CONFLICT ("assignmentId","branchId","startDate") DO NOTHING`,
+            [effectiveCompanyId, empId, assignmentId, a.branchId, a.capacity, a.percent, a.costCenterId, a.branchId === primaryBranchId, effectiveHireDate, scope.activeAssignmentId ?? null]
+          );
+        }
+      } else if (targetBranchId) {
+        await client.query(
+          `INSERT INTO employee_branch_allocations
+             ("companyId","employeeId","assignmentId","branchId",capacity,"allocationPercent","isPrimary","startDate","createdBy")
+           VALUES ($1,$2,$3,$4,$5,100.00,TRUE,$6,$7)
+           ON CONFLICT ("assignmentId","branchId","startDate") DO NOTHING`,
+          [effectiveCompanyId, empId, assignmentId, targetBranchId, categoryKey || null, effectiveHireDate, scope.activeAssignmentId ?? null]
+        );
+      }
 
       // ── PR-1 (#2077) Step 3b — institutional bridges (team/project/committee) ──
       // These rows close the «الموظف ككيان تشغيلي مؤسسي» chain at create
@@ -1142,22 +1485,20 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         [contractRes.rows[0].id, issuedContract.assignmentId]
       );
 
-      // ── Step 7: Create 4 onboarding tasks ──
-      const onboardingTasks = [
-        "تسليم أجهزة IT وإعداد الحسابات",
-        "توقيع عقد العمل والتأمينات",
-        "تعريف المدير المباشر والفريق",
-        "دورة التعريف بالشركة وسياساتها",
-      ];
-      const dueDateOnboarding = new Date();
-      dueDateOnboarding.setDate(dueDateOnboarding.getDate() + 7);
-      for (const taskTitle of onboardingTasks) {
+      // ── Step 7: Create the onboarding tasks from the job-category profile ──
+      // Due date = 7 days from Riyadh today (noon-UTC anchor keeps the offset
+      // stable; a raw new Date() would be the UTC date — Task #400 class).
+      const dueDateOnboarding = new Date(`${todayISO()}T12:00:00Z`);
+      dueDateOnboarding.setUTCDate(dueDateOnboarding.getUTCDate() + 7);
+      const activationPlan = buildActivationPlan(resolvedCategory);
+      for (const task of activationPlan) {
         await client.query(
-          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status)
-           VALUES ($1,$2,$3,$4,$5,'pending')`,
-          [scope.companyId, empId, assignmentId, taskTitle, toDateISO(dueDateOnboarding)]
+          `INSERT INTO onboarding_tasks ("companyId","employeeId","assignmentId",title,"dueDate",status,"ownerRole",reason,mandatory,"serviceType")
+           VALUES ($1,$2,$3,$4,$5,'pending',$6,$7,$8,$9)`,
+          [scope.companyId, empId, assignmentId, task.title, toDateISO(dueDateOnboarding), task.ownerRole, task.reason, task.mandatory, task.serviceType ?? null]
         );
       }
+      const onboardingTaskCount = activationPlan.length;
 
       // ── Step 8: Auto-create user account ──
       // Login email priority: explicit internalEmail > legacy email.
@@ -1167,12 +1508,16 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       const loginEmail = internalEmailIn || email || null;
       let userId: number | null = null;
       let createdNewUser = false;
-      let tempPassword: string | null = null;
       if (loginEmail) {
         const existingUser = await client.query(`SELECT id FROM users WHERE email=$1`, [loginEmail]);
         if (existingUser.rows.length === 0) {
-          tempPassword = Math.random().toString(36).slice(-8) + "A1!";
-          const hashedPw = await hashPassword(tempPassword);
+          // #2137 — NEVER store or email a known/guessable temporary
+          // password. Create the account with an unguessable random
+          // password the user never sees, then (post-commit) email a
+          // single-use invitation link so they set their own. Mirrors the
+          // admin user-create flow (admin.ts).
+          const unknownPassword = randomBytes(16).toString("hex");
+          const hashedPw = await hashPassword(unknownPassword);
           const userRes = await client.query(
             `INSERT INTO users (email, "passwordHash", role, "employeeId", "isActive") VALUES ($1,$2,$3,$4,true) RETURNING id`,
             [loginEmail, hashedPw, role || "employee", empId]
@@ -1368,10 +1713,11 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         ).catch((e) => logger.error(e, "employees background task failed"));
       }
 
-      return { empId, assignmentId, finalEmpNumber, userId, tempPassword };
+      return { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail, onboardingTaskCount };
     });
 
-    const { empId, assignmentId, finalEmpNumber, userId, tempPassword } = result;
+    const { empId, assignmentId, finalEmpNumber, userId, createdNewUser, loginEmail, onboardingTaskCount } = result;
+    let accountInviteWarning: string | null = null;
 
     // ── Step 8: Notify manager and HR ──
     const managerAssignmentId = await getManagerAssignmentId(scope.companyId, targetBranchId);
@@ -1391,7 +1737,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     createNotification({
       companyId: scope.companyId, assignmentId: hrTargetId,
       type: "employee_created", title: "تم إضافة موظف جديد — مطلوب متابعة HR",
-      body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح. تم إنشاء ${4} مهام تهيئة. يرجى مراجعة ملف الموظف.`,
+      body: `تم إضافة الموظف ${name} برقم ${finalEmpNumber} بنجاح. تم إنشاء ${onboardingTaskCount} مهام تهيئة. يرجى مراجعة ملف الموظف.`,
       priority: "high", refType: "employee", refId: empId,
     }).catch((e) => logger.error(e, "employees background task failed"));
     if (hrTargetId !== scope.activeAssignmentId) {
@@ -1424,21 +1770,35 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
         templateKey: "employee.welcome",
       }).catch((e) => logger.error(e, "employees background task failed"));
     }
-    if (email && tempPassword) {
-      // dlpExempt: credentials send (see admin.ts for full reasoning).
-      void sendMessage({
-        channel: "email",
-        recipient: email,
-        recipientName: name,
-        subject: `بيانات الدخول إلى النظام - ${finalEmpNumber}`,
-        body: `أهلاً ${name}،\n\nتم إنشاء حساب لك في نظام غيث ERP.\n\nالبريد الإلكتروني: ${email}\nكلمة المرور المؤقتة: ${tempPassword}\n\nيرجى تغيير كلمة المرور فور تسجيل الدخول الأول.\n\nهذه الرسالة تلقائية، يرجى عدم الرد عليها.`,
-        companyId: scope.companyId,
-        userId: scope.userId,
-        relatedType: "user",
-        relatedId: empId,
-        dlpExempt: true,
-        templateKey: "employee.credentials.welcome",
-      }).catch((e) => logger.error(e, "employees background task failed"));
+    if (createdNewUser && loginEmail) {
+      // #2137 — send a single-use invitation LINK (set-your-own-password)
+      // instead of a raw temporary password. issueAuthToken builds the
+      // link first, so an empty PUBLIC_BASE_URL fails BEFORE any token row
+      // is written; we surface a warning rather than emailing a broken
+      // link. Mirrors POST /admin/users.
+      try {
+        const issued = await issueAuthToken({ userId, email: loginEmail, purpose: "invitation" });
+        await sendAuthEmail({
+          companyId: scope.companyId,
+          userId: scope.userId,
+          recipientEmail: loginEmail,
+          recipientName: name,
+          templateKey: "auth.new_user_invitation.email",
+          vars: {
+            userName: name,
+            activationUrl: issued.url,
+            expiresHours: String(TOKEN_TTL_MINUTES.invitation / 60),
+          },
+        });
+      } catch (e) {
+        if (e instanceof PublicBaseUrlMissingError) {
+          accountInviteWarning = "أُنشئ حساب الموظف لكن تعذّر إرسال رابط الدعوة: رابط النظام العام (PUBLIC_BASE_URL) غير مضبوط.";
+          logger.error("[employees] PUBLIC_BASE_URL empty — invitation link not sent");
+        } else {
+          logger.error(e, "[employees] failed to send invitation email");
+          accountInviteWarning = "أُنشئ حساب الموظف لكن تعذّر إرسال رابط الدعوة.";
+        }
+      }
     }
 
     // ── Step 10: Event log ──
@@ -1451,7 +1811,7 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       action: "employee.created", entity: "employees", entityId: empId,
       details: JSON.stringify({
         empNumber: finalEmpNumber, assignmentId, jobTitle, role, salary,
-        onboardingTasks: 4, probationDays: Number(probationDays),
+        onboardingTasks: onboardingTaskCount, probationDays: Number(probationDays),
         // PR-1 (#2077) — institutional binding in the event so audit
         // dashboards can answer «who got bound to project X this month?»
         positionId: positionId ? Number(positionId) : null,
@@ -1541,10 +1901,10 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       [empId, scope.companyId]
     );
 
-    res.status(201).json({
+    res.status(201).json(maskFields(req, {
       ...employee,
       assignmentId,
-      onboardingTasksCreated: 4,
+      onboardingTasksCreated: onboardingTaskCount,
       // PR-1 (#2077) — surface the institutional binding so the
       // post-create success card can render «الموظف مرتبط بـ …».
       institutional: {
@@ -1558,13 +1918,14 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       probationEndDate: (() => { const d = new Date(effectiveHireDate); d.setDate(d.getDate() + Number(probationDays)); return toDateISO(d); })(),
       userAccount: userId ? {
         userId,
-        email: email || null,
-        isNewAccount: !!tempPassword,
-        message: tempPassword
-          ? "تم إنشاء حساب مستخدم. كلمة المرور المؤقتة أُرسلت إلى الموظف عبر البريد الإلكتروني."
+        email: loginEmail || email || null,
+        isNewAccount: createdNewUser,
+        message: createdNewUser
+          ? (accountInviteWarning ?? "تم إنشاء حساب مستخدم وأُرسل رابط الدعوة لتعيين كلمة المرور إلى الموظف.")
           : "تم ربط الحساب الموجود بالموظف.",
+        inviteWarning: accountInviteWarning,
       } : null,
-    });
+    }));
   } catch (err) {
     handleRouteError(err, res, "Create employee error:");
   }
@@ -1573,11 +1934,17 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
 router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { employeeId, status } = req.query as Record<string, string | undefined>;
+    const { employeeId, status, ownerRole, mandatory } = req.query as Record<string, string | undefined>;
     const conditions = [`ot."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (employeeId) { params.push(Number(employeeId)); conditions.push(`ot."employeeId" = $${params.length}`); }
     if (status) { params.push(status); conditions.push(`ot.status = $${params.length}`); }
+    // HR-REV-3 (#2222) — per-owner queue: each owning department (الأسطول/
+    // الوثائق/الرواتب…) can pull just the activation tasks routed to it.
+    if (ownerRole) { params.push(ownerRole); conditions.push(`ot."ownerRole" = $${params.length}`); }
+    // mandatory=true|false narrows to the gating items (or the optional ones).
+    if (mandatory === "true") { conditions.push(`ot.mandatory IS NOT FALSE`); }
+    else if (mandatory === "false") { conditions.push(`ot.mandatory IS FALSE`); }
     interface OnboardingTaskRow extends Record<string, unknown> {
       id: number;
       companyId: number;
@@ -1614,14 +1981,47 @@ router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", actio
       completedAt?: string | null;
       completedBy?: number | null;
     }
-    const [row] = await rawQuery<OnboardingTaskRow>(
-      `UPDATE onboarding_tasks SET status = $1,
-       "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
-       "completedBy" = $2
-       WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
-      [status, scope.activeAssignmentId, id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("المهمة غير موجودة");
+    // The task update + the activation auto-gate touch two tables, so they run
+    // in one transaction (rawQuery auto-joins the ambient tx) — a failure on the
+    // employees UPDATE must not leave the task flipped on its own.
+    const row = await withTransaction(async () => {
+      const [r] = await rawQuery<OnboardingTaskRow>(
+        `UPDATE onboarding_tasks SET status = $1,
+         "completedAt" = CASE WHEN $1 = 'completed' THEN NOW() ELSE NULL END,
+         "completedBy" = $2
+         WHERE id = $3 AND "companyId" = $4 AND status != 'completed' RETURNING *`,
+        [status, scope.activeAssignmentId, id, scope.companyId]
+      );
+      if (!r) throw new NotFoundError("المهمة غير موجودة");
+
+      // HR-REV-3 §1 auto-gate — once every MANDATORY task for this hire is done,
+      // advance a still-pending_activation employee to ready_for_hr_review so HR
+      // knows the distributed plan is complete. Only flips from pending_activation
+      // (never overrides a later state); reversible if a task is re-opened.
+      if (status === "completed") {
+        const [pending] = await rawQuery<{ cnt: number }>(
+          `SELECT COUNT(*)::int AS cnt FROM onboarding_tasks
+            WHERE "employeeId" = $1 AND "companyId" = $2 AND mandatory IS NOT FALSE
+              AND status NOT IN ('completed','skipped')`,
+          [r.employeeId, scope.companyId]
+        );
+        if (pending && pending.cnt === 0) {
+          // Tenant scope via the employee's assignment (employees.companyId is
+          // not populated on quick-activate; the assignment carries the tenant).
+          await rawQuery(
+            `UPDATE employees SET "activationStatus" = 'ready_for_hr_review'
+              WHERE id = $1 AND "activationStatus" = 'pending_activation'
+                AND EXISTS (
+                  SELECT 1 FROM employee_assignments ea
+                  WHERE ea."employeeId" = employees.id AND ea."companyId" = $2
+                )`,
+            [r.employeeId, scope.companyId]
+          );
+        }
+      }
+      return r;
+    });
+
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "onboarding_task.updated", entity: "onboarding_tasks", entityId: id,
@@ -1653,8 +2053,19 @@ router.get("/:id/finance-summary", authorize({ feature: "hr.employees", action: 
       internalEmail: string | null;
       email: string | null;
     }>(
-      `SELECT id, "personalEmail", "internalEmail", email
-         FROM employees WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL) AND "deletedAt" IS NULL`,
+      // Tenant scope via the assignment, NOT the `OR companyId IS NULL`
+      // fallback: employees.companyId is intentionally left NULL (the tenant
+      // lives on employee_assignments), so the old fallback matched an
+      // employee row from ANY company. Require an assignment in the caller's
+      // company instead — true tenant isolation, defense-in-depth behind the
+      // authorize(resource) gate.
+      `SELECT e.id, e."personalEmail", e."internalEmail", e.email
+         FROM employees e
+        WHERE e.id = $1 AND e."deletedAt" IS NULL
+          AND EXISTS (
+            SELECT 1 FROM employee_assignments ea
+             WHERE ea."employeeId" = e.id AND ea."companyId" = $2
+          )`,
       [id, scope.companyId]
     );
     if (!emp) throw new NotFoundError("الموظف غير موجود");
@@ -1826,6 +2237,28 @@ router.patch("/job-titles/:id", authorize({ feature: "hr.employees", action: "up
     }).catch(() => undefined);
     res.json({ ok: true });
   } catch (err) { handleRouteError(err, res, "update job_title"); }
+});
+
+router.delete("/job-titles/:id", authorize({ feature: "hr.employees", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    // Soft delete — mirrors the org.ts catalog pattern (positions/teams/…):
+    // job_titles has an isActive flag and no deletedAt column, and existing
+    // assignments keep their jobTitleId FK, so we deactivate rather than drop.
+    // System titles (companyId IS NULL) are shared and must not be touched.
+    const result = await rawExecute(
+      `UPDATE job_titles SET "isActive" = FALSE, "updatedAt" = NOW()
+        WHERE id = $1 AND "companyId" = $2`,
+      [id, scope.companyId]
+    );
+    if (result.affectedRows === 0) throw new NotFoundError("المسمّى الوظيفي غير موجود أو غير قابل للحذف");
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "delete", entity: "job_titles", entityId: id,
+    }).catch(() => undefined);
+    res.json({ ok: true, isActive: false });
+  } catch (err) { handleRouteError(err, res, "delete job_title"); }
 });
 
 router.get("/documents", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
@@ -2033,10 +2466,15 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 ea."serialNumber", ea."assignedAt", ea."returnedAt",
                 ea."conditionOnAssign", ea."conditionOnReturn", ea.notes
            FROM employee_assets ea
-          WHERE ea."assignmentId" = $3 AND ea."companyId" = $2
+          WHERE ea."assignmentId" = $2 AND ea."companyId" = $1
           ORDER BY ea."returnedAt" NULLS FIRST, ea."assignedAt" DESC
           LIMIT 50`,
-        [id, scope.companyId, employee.assignmentId]
+        // NOTE: the employee `id` is NOT referenced by this child query (it
+        // filters by assignmentId + companyId), so it must NOT be bound — a
+        // leftover $1=id made Postgres 42P18 "could not determine data type of
+        // parameter $1", which the .catch swallowed → the «العهد» tab was
+        // silently always empty.
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees custodies query failed"); return []; }),
       // HR-012 / #1799 priority #1 — Employee 360 tab «المسميات».
       // Resolves the assignment's position (admin role) to its label
@@ -2050,9 +2488,11 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 p.level, p.description
            FROM employee_assignments ea
            JOIN positions p ON p.id = ea."positionId"
-            AND (p."companyId" IS NULL OR p."companyId" = $2)
-          WHERE ea.id = $3 LIMIT 1`,
-        [id, scope.companyId, employee.assignmentId]
+            AND (p."companyId" IS NULL OR p."companyId" = $1)
+          WHERE ea.id = $2 LIMIT 1`,
+        // employee `id` unreferenced here → not bound (was a $1 42P18 that the
+        // .catch swallowed, leaving «المسميات» blank).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees position query failed"); return []; }) : Promise.resolve([]),
       // HR-014 — Employee 360 overview enrichment (#1799 priority #10):
       // surface the latest monthly score + active (unacknowledged) signals
@@ -2065,15 +2505,16 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
                 "qualityScore", "managerScore", "developmentScore",
                 rationale, "computedAt"
            FROM employee_scores
-          WHERE "assignmentId" = $3 AND "companyId" = $2 AND scope = 'monthly'
+          WHERE "assignmentId" = $2 AND "companyId" = $1 AND scope = 'monthly'
           ORDER BY "periodKey" DESC LIMIT 1`,
-        [id, scope.companyId, employee.assignmentId]
+        // employee `id` unreferenced here → not bound (42P18-then-swallowed).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees latestScore query failed"); return []; }) : Promise.resolve([]),
       employee.assignmentId ? rawQuery<Record<string, unknown>>(
         `SELECT id, "signalType", severity, scope, "periodKey", title,
                 reasons, "compositeScore", "createdAt"
            FROM employee_signals
-          WHERE "assignmentId" = $3 AND "companyId" = $2
+          WHERE "assignmentId" = $2 AND "companyId" = $1
             AND "acknowledgedAt" IS NULL
             AND "createdAt" >= CURRENT_DATE - INTERVAL '90 days'
           ORDER BY
@@ -2083,7 +2524,8 @@ router.get("/:id", authorize({ feature: "hr.employees", action: "view", resource
             END,
             "createdAt" DESC
           LIMIT 20`,
-        [id, scope.companyId, employee.assignmentId]
+        // employee `id` unreferenced here → not bound (42P18-then-swallowed).
+        [scope.companyId, employee.assignmentId]
       ).catch((e) => { logger.error(e, "employees activeSignals query failed"); return []; }) : Promise.resolve([]),
     ]);
 
@@ -2245,6 +2687,33 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
           field: "departmentId",
           fix: "اختر قسماً موجوداً في الشركة.",
         });
+      }
+    }
+
+    // HR-REV-3 (#2222) — activation ready-gate. Flipping a quick-activated
+    // employee (inactive/pending/onboarding) to active is only allowed once
+    // every MANDATORY onboarding task is completed or skipped — so activation
+    // can't bypass the distributed plan's owning roles. Re-activating a
+    // suspended/terminated employee is exempt (it carries no onboarding plan).
+    const PENDING_ACTIVATION = ["inactive", "pending", "onboarding"];
+    if (status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status)) {
+      const [gate] = await rawQuery<{ remaining: number }>(
+        `SELECT COUNT(*)::int AS remaining FROM onboarding_tasks
+          WHERE "employeeId" = $1 AND "companyId" = $2
+            AND mandatory IS NOT FALSE
+            AND status NOT IN ('completed','skipped')`,
+        [id, scope.companyId]
+      );
+      const remaining = Number(gate?.remaining ?? 0);
+      if (remaining > 0) {
+        throw new ValidationError(
+          `لا يمكن التفعيل: ${remaining} بند إلزامي في خطة التهيئة لم يكتمل بعد`,
+          {
+            field: "status",
+            fix: "أكمل البنود الإلزامية في «لوحة قيد التفعيل» قبل تفعيل الموظف.",
+            meta: { remainingMandatory: remaining },
+          }
+        );
       }
     }
 
@@ -2421,6 +2890,38 @@ router.patch("/:id", authorize({ feature: "hr.employees", action: "update", reso
       after,
       details: JSON.stringify({ changedFields }),
     }).catch((e) => logger.error(e, "employees background task failed"));
+
+    // ── رسالة بداية العمل عند التفعيل ──
+    // المُعيَّن عبر «التفعيل السريع» يُنشأ بحالة inactive بلا رسالة ترحيب
+    // (لأنه لم يباشر بعد). رسالة الترحيب في الإنشاء الكامل (Step 9) لا تصله
+    // لأنه لم يمر بذلك المسار. فعند لحظة التفعيل الفعلية (inactive/pending/
+    // onboarding → active) — وهي لحظة مباشرة العمل — نرسل رسالة بداية العمل
+    // مرة واحدة. الموظف المُنشأ كاملًا يُنشأ active مباشرة فلا يمر هنا، فلا
+    // ازدواج في الإرسال.
+    const wasActivated =
+      status === "active" && before.status != null && PENDING_ACTIVATION.includes(before.status);
+    if (wasActivated && after && employee.assignmentId != null) {
+      createNotification({
+        companyId: scope.companyId, assignmentId: Number(employee.assignmentId),
+        type: "welcome", title: "مرحباً بك — مباشرة العمل",
+        body: `أهلاً ${after.name}، تم تفعيل حسابك ومباشرتك العمل برقم وظيفي ${after.empNumber}. يسعدنا انضمامك إلى الفريق.`,
+        priority: "normal", refType: "employee", refId: id,
+      }).catch((e) => logger.error(e, "employees background task failed"));
+      if (after.email) {
+        void sendMessage({
+          channel: "email",
+          recipient: after.email,
+          recipientName: after.name,
+          subject: `مرحباً بك في فريق العمل - ${after.empNumber}`,
+          body: `أهلاً ${after.name}،\n\nتم تفعيل حسابك ومباشرتك العمل.\nرقمك الوظيفي: ${after.empNumber}\nالمسمى الوظيفي: ${after.jobTitle ?? ""}\n\nيسعدنا انضمامك إلى الفريق.`,
+          companyId: scope.companyId,
+          userId: scope.userId,
+          relatedType: "employee",
+          relatedId: id,
+          templateKey: "employee.welcome",
+        }).catch((e) => logger.error(e, "employees background task failed"));
+      }
+    }
 
     res.json(after);
   } catch (err) {

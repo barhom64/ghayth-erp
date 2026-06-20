@@ -5,7 +5,7 @@ import { ValidationError } from "./errorHandler.js";
 import { sendNotification } from "./notificationService.js";
 import { validateEventPayload, getEventDefinition } from "./eventCatalog.js";
 import { logger } from "./logger.js";
-import { assertDimensionContract } from "./financePostingPolicy.js";
+import { assertLedgerTruth } from "./financePostingPolicy.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "./rbacCatalog.js";
 import { config } from "./config.js";
 import {
@@ -682,10 +682,21 @@ export async function createJournalEntry(params: {
     // routing page surfaces the toggle so the operator can opt in.
     await substituteSubsidiaryAccountCodes(client, params.lines, params.companyId);
 
-    // FIN-INTEGRITY-CONTRACT (#2233) — عقد البُعد بعد اكتمال إثراء الأبعاد،
-    // قبل إدراج السطور (داخل المعاملة: الرفض يُرجِع كل شيء). تدريجي: enforce
-    // لوقود المركبة (5510)، warn لبقية الأصناف (يُسجَّل فقط).
-    const dimContract = assertDimensionContract({ lines: params.lines });
+    // FIN-INTEGRITY-CONTRACT (#2246 SLICE 1) — عقد صدق دفتر الأستاذ المركزي بعد
+    // اكتمال إثراء الأبعاد، قبل إدراج السطور (داخل المعاملة: الرفض يُرجِع كل شيء).
+    // مُنسِّق يُركّب عقد البُعد (enforce وقود 5510 + warn البقية، دون تغيير) +
+    // سيناريو فاتورة المورد (enforce vendorId) + حوكمة القيد اليدوي التشغيلي.
+    const dimContract = assertLedgerTruth({
+      lines: params.lines as any,
+      header: {
+        type: params.type ?? "manual",
+        sourceType: params.sourceType ?? null,
+        isManual: params.sourceType === "manual_journal" || (params.type ?? "manual") === "manual",
+        description: params.description ?? null,
+        reason: params.description ?? null,
+      },
+      context: { companyId: params.companyId },
+    });
     if (dimContract.warnings.length > 0) {
       logger.warn(
         { companyId: params.companyId, ref: params.ref, warnings: dimContract.warnings },

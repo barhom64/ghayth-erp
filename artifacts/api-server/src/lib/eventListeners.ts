@@ -1039,7 +1039,7 @@ export function registerEventListeners() {
         const comm = Number(runTotals?.comm) || 0;
         if (comm > 0) {
           const [commPayableCode, salaryPayableCode] = await Promise.all([
-            getAccountCodeFromMapping(payload.companyId, "commission_payable", "debit", "2150"),
+            getAccountCodeFromMapping(payload.companyId, "commission_payable", "debit", "2155"),
             getAccountCodeFromMapping(payload.companyId, "salary_payable", "credit", "2120"),
           ]);
           await createGuardedJournalEntry({
@@ -1469,8 +1469,8 @@ export function registerEventListeners() {
         const ref = (payload as any).after?.ref ?? details.ref ?? "";
         const subAgentId = (payload as any).after?.subAgentId ?? details.subAgentId ?? "";
         if (total > 0) {
-          const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_receivables", "debit", "1200");
-          const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4100");
+          const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_receivables", "debit", "1131");
+          const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4130");
           await createGuardedJournalEntry({
             companyId: payload.companyId,
             branchId: (payload.branchId as number) || 0,
@@ -1785,8 +1785,8 @@ export function registerEventListeners() {
       if (total <= 0) return;
 
       const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_agent_receivable", "debit", "1210");
-      const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4200");
-      const penaltyCode = await getAccountCodeFromMapping(payload.companyId, "penalty_revenue", "credit", "4210");
+      const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4130");
+      const penaltyCode = await getAccountCodeFromMapping(payload.companyId, "penalty_revenue", "credit", "4930");
       const commissionCode = await getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5200");
 
       const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [
@@ -1848,7 +1848,7 @@ export function registerEventListeners() {
         if (sarAmount > 0) {
           const [cashCode, arCode] = await Promise.all([
             getAccountCodeFromMapping(payload.companyId, "invoice_payment_cash", "debit", method === "cash" ? "1100" : "1110"),
-            getAccountCodeFromMapping(payload.companyId, "invoice_payment_ar", "credit", "1200"),
+            getAccountCodeFromMapping(payload.companyId, "invoice_payment_ar", "credit", "1131"),
           ]);
           await createGuardedJournalEntry({
             companyId: payload.companyId,
@@ -1919,7 +1919,7 @@ export function registerEventListeners() {
         try {
           const [expenseCode, payableCode] = await Promise.all([
             getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
-            getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2150"),
+            getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2155"),
           ]);
           await createGuardedJournalEntry({
             companyId: payload.companyId,

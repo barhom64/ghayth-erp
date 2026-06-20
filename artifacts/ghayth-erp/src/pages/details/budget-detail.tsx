@@ -11,7 +11,7 @@ import {
   type RelatedEntity,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ActionHistory, ApprovalActions } from "@workspace/workflow-kit";
@@ -291,7 +291,7 @@ export default function BudgetDetail() {
       onRetry={refetch}
       actions={
         <>
-          <EntityPrintButton
+          <PrintButton
             entityType="budget"
             entityId={id ?? 0}
            />

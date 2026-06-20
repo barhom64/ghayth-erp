@@ -5,7 +5,7 @@
 // ============================================================================
 
 import { Router } from "express";
-import { HR_APPROVAL_ROLES } from "../lib/rbacCatalog.js";
+import { scopeCan } from "../lib/rbac/authzEngine.js";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
@@ -48,6 +48,7 @@ import {
   handleRouteError,
   NotFoundError,
   ConflictError,
+  ValidationError,
   ForbiddenError,
   parseId,
   zodParse,
@@ -327,6 +328,41 @@ router.post("/overtime", authorize({ feature: "hr.overtime", action: "create" })
 
     const period = b.overtimeDate.substring(0, 7); // YYYY-MM
 
+    // سياسة HR قابلة للضبط — سقف وقت إضافي شهري لكل موظف. الإعداد
+    // system_settings.overtime_monthly_cap_hours؛ الافتراضي 0/غائب = بلا حدّ
+    // (صفر تغيير للسلوك القائم). عند ضبطه > 0 يُرفض ما يتجاوز السقف داخل الشهر
+    // (يحسب pending + approved، يستثني المرفوض). «النظام يَحضُر»: يمنع التجاوز
+    // سلفًا برسالة تبيّن المتبقي، بدل اكتشافه لاحقًا.
+    const capRow = await rawQuery<{ value: string | null }>(
+      `SELECT value FROM system_settings
+        WHERE key = 'overtime_monthly_cap_hours'
+          AND ( "companyId" = $1 OR "companyId" IS NULL )
+        ORDER BY ("companyId" IS NULL) ASC
+        LIMIT 1`,
+      [scope.companyId]
+    );
+    const monthlyCap = Number(capRow[0]?.value ?? 0);
+    if (Number.isFinite(monthlyCap) && monthlyCap > 0) {
+      const [agg] = await rawQuery<{ total: number | string }>(
+        `SELECT COALESCE(SUM(hours), 0) AS total
+           FROM hr_overtime_requests
+          WHERE "assignmentId" = $1 AND "payrollPeriod" = $2
+            AND "companyId" = $3 AND "deletedAt" IS NULL AND status != 'rejected'`,
+        [b.assignmentId, period, scope.companyId]
+      );
+      const already = Number(agg?.total ?? 0);
+      if (already + hours > monthlyCap) {
+        throw new ValidationError(
+          `تجاوز سقف الوقت الإضافي الشهري (${monthlyCap} ساعة) — المسجَّل لهذا الشهر: ${already} ساعة`,
+          {
+            field: "hours",
+            fix: `المتبقي ضمن السقف: ${Math.max(0, monthlyCap - already)} ساعة. عدّل الساعات أو سقف الإعدادات.`,
+            meta: { monthlyCap, alreadyLogged: already, requested: hours },
+          }
+        );
+      }
+    }
+
     // Numbering center (#1141 closure) — atomic issue + INSERT + linkback.
     const atomic = await withTransaction(async () => {
       const issued = await issueNumber({
@@ -429,7 +465,7 @@ router.patch("/overtime/:id/approve", authorize({ feature: "hr.overtime", action
     const { approved = true, reason, notes } = b;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.overtime", "approve")) {
       throw new ForbiddenError(
         "صلاحية اعتماد الوقت الإضافي محصورة بالمدير أو HR أو المالك",
         { fix: "اطلب من مديرك المباشر تنفيذ الموافقة.", meta: { yourRole: scope.role } }
@@ -545,7 +581,7 @@ router.patch("/overtime/:id/reject", authorize({ feature: "hr.overtime", action:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    if (!HR_APPROVAL_ROLES.includes(scope.role)) {
+    if (!scopeCan(scope, "hr.overtime", "reject")) {
       throw new ForbiddenError("صلاحية رفض طلبات الوقت الإضافي محصورة بالمدير أو HR أو المالك");
     }
 

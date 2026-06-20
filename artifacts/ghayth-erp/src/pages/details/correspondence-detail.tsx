@@ -14,7 +14,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { AttachmentPreview, type PreviewableAttachment } from "@/components/shared/attachment-preview";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { EntityTags } from "@/components/shared/entity-tags";
@@ -334,11 +334,11 @@ export default function CorrespondenceDetail() {
         extraTabs={extraTabs}
         hideTabs={hideTabs}
         printable
-        onPrint={() => { /* handled by EntityPrintButton below */ }}
+        onPrint={() => { /* handled by PrintButton below */ }}
         actions={
           <>
             {item && (
-              <EntityPrintButton
+              <PrintButton
                 entityType="official_letter"
                 entityId={item.id ?? id}
                />
@@ -382,7 +382,7 @@ export default function CorrespondenceDetail() {
         }
       />
       {item && id && (
-        <EntityEditDialog<CorrespondenceEditForm>
+        <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
           title="تعديل المراسلة"

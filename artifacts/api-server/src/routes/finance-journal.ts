@@ -35,6 +35,10 @@ import {
   isDryRun,
 } from "../lib/requestIdempotency.js";
 import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
+import {
+  isOperationallyLinkedEntry,
+  assertOperationalManualApprovalAllowed,
+} from "../lib/financePostingPolicy.js";
 
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { closeFiscalPeriodCanonical } from "../lib/fiscalPeriodLifecycle.js";
@@ -47,6 +51,12 @@ import {
   evaluateExpensePlan,
   type PlannedExpenseLine,
 } from "../lib/expenseJournalPlan.js";
+import {
+  buildVendorInvoiceLines,
+  evaluateVendorInvoicePlan,
+  type PlannedVendorInvoiceLine,
+  type VendorInvoiceLineInput,
+} from "../lib/vendorInvoiceJournalPlan.js";
 import { logger } from "../lib/logger.js";
 
 export const journalRouter = Router();
@@ -192,6 +202,66 @@ const createExpenseSchema = z.object({
   ...operationalEffectsShape,
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// #2241 (FIN-P11-VENDOR-INVOICE-WORKSPACE) — vendor invoice (supplier bill).
+// A SEPARATE entry path from the fuel/expense path: it posts a MULTI-LINE
+// journal whose single credit leg is the supplier PAYABLE (آجل) OR the money
+// source (paid). Each line carries an `accountPurpose` (TEXT) — the engine
+// resolves the GL account; the UI/memory NEVER carry a GL code. Line dims mirror
+// finance-purchase.ts `purchaseLineDimsSchema`.
+// ─────────────────────────────────────────────────────────────────────────────
+const vendorInvoiceLineSchema = z.object({
+  itemId: z.coerce.number().int().positive().optional(),
+  itemName: z.string().optional(),
+  quantity: z.coerce.number().optional(),
+  unit: z.string().optional(),
+  unitPrice: z.coerce.number().optional(),
+  taxCode: z.string().optional(),
+  // amount = qty × unitPrice (net of VAT) — the line's debit base.
+  amount: z.coerce.number(),
+  vatAmount: z.coerce.number().optional(),
+  // TEXT purpose only — the financial engine resolves it to a GL account.
+  accountPurpose: z.string().min(1, "غرض الحساب مطلوب لكل سطر"),
+  scenario: z.string().optional(),
+  targetType: z.string().optional(),
+  // line dims (mirror purchaseLineDimsSchema).
+  costCenterId: z.coerce.number().optional(),
+  projectId: z.coerce.number().optional(),
+  vehicleId: z.coerce.number().optional(),
+  propertyId: z.coerce.number().optional(),
+  unitId: z.coerce.number().optional(),
+  contractId: z.coerce.number().optional(),
+  clientId: z.coerce.number().optional(),
+  employeeId: z.coerce.number().optional(),
+  assetId: z.coerce.number().optional(),
+  umrahSeasonId: z.coerce.number().optional(),
+  umrahAgentId: z.coerce.number().optional(),
+});
+
+const vendorInvoicePreviewSchema = z.object({
+  supplierId: z.coerce.number().int().positive(),
+  paid: z.coerce.boolean().optional().default(false),
+  sourceAccountCode: z.string().optional(),
+  branchId: z.any().optional(),
+  lines: z.array(vendorInvoiceLineSchema).min(1, "أدخل بندًا واحدًا على الأقل"),
+});
+
+const createVendorInvoiceSchema = z.object({
+  supplierId: z.coerce.number().int().positive(),
+  paid: z.coerce.boolean().optional().default(false),
+  sourceAccountCode: z.string().optional(),
+  invoiceNo: z.string().optional(),
+  invoiceDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  description: z.string().optional(),
+  reference: z.string().optional(),
+  attachmentUrl: z.string().optional(),
+  attachmentType: z.string().optional(),
+  branchId: z.any().optional(),
+  companyId: z.any().optional(),
+  lines: z.array(vendorInvoiceLineSchema).min(1, "أدخل بندًا واحدًا على الأقل"),
+});
+
 const updateDescriptionSchema = z.object({
   description: z.string().optional(),
 });
@@ -199,6 +269,15 @@ const updateDescriptionSchema = z.object({
 const approvalSchema = z.object({
   approved: z.any().optional(),
   notes: z.string().optional(),
+});
+
+// #2239 (FIN-P9-APPROVAL-WORKSPACE) — body for the request-attachment / comment
+// side actions. `notes` is required (the handler enforces a non-empty string
+// and throws a ValidationError otherwise); request-attachment may carry an
+// optional attachmentType hint.
+const expenseNoteActionSchema = z.object({
+  notes: z.string().min(1, "النص مطلوب"),
+  attachmentType: z.string().optional(),
 });
 
 const voucherAllocationSchema = z.object({
@@ -308,6 +387,13 @@ const reverseJournalSchema = z.object({
   reverseDate: z.string().optional(),
 });
 
+// FIN-OPERATIONAL-MANUAL-JOURNAL-GUARD (#2239) — approve body. `reason` is
+// optional at the schema layer (ordinary manual JEs need none) but becomes
+// MANDATORY in the handler when the entry is operationally linked.
+const approveJournalSchema = z.object({
+  reason: z.string().optional(),
+});
+
 const yearEndCloseSchema = z.object({
   retainedEarningsAccountCode: z.string().optional().default("3300"),
   force: z.boolean().optional().default(false),
@@ -409,7 +495,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
                   AND aa.action = 'approved' AND aa."companyId" = je."companyId"
                 ORDER BY aa.id DESC LIMIT 1) AS "approvedByName"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
@@ -786,8 +872,8 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
     if (costCenter) {
       const [budget] = await rawQuery<Record<string, unknown>>(
         `SELECT cc.name, cc."allocatedAmount",
-                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE je."companyId" = $2 AND jl."costCenter" = cc.name AND je."deletedAt" IS NULL), 0) AS "usedAmount"
-         FROM cost_centers cc WHERE cc.name = $1 AND cc."companyId" = $2 LIMIT 1`,
+                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE je."companyId" = $2 AND jl."costCenter" = cc.name AND jl."deletedAt" IS NULL AND je."deletedAt" IS NULL), 0) AS "usedAmount"
+         FROM cost_centers cc WHERE cc.name = $1 AND cc."companyId" = $2 AND cc."deletedAt" IS NULL LIMIT 1`,
         [costCenter, scope.companyId]
       );
       if (budget) {
@@ -1335,7 +1421,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     const [createdExpense] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, effectiveCompanyId]
@@ -1343,6 +1429,301 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     res.status(201).json({ ...(createdExpense || { id: journalId }), idempotentReplay: alreadyExists });
   } catch (err) {
     handleRouteError(err, res, "Create expense error:");
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #2241 (FIN-P11-VENDOR-INVOICE-WORKSPACE) — vendor invoice (supplier bill).
+//
+// SEPARATE from the expense/fuel path (expenses-create.tsx / buildExpenseLines
+// are NOT touched). A vendor invoice posts a MULTI-LINE journal: one DR per item
+// line (account resolved from the line's `accountPurpose` TEXT — never a GL code
+// from the UI), an optional DR for total input VAT, and ONE credit leg = the
+// supplier PAYABLE (purchase_vendor_ap → 2111) when آجل, or the money source
+// when paid. `vendorId` is stamped on every line. Preview + save share the same
+// resolver so they can never drift.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Resolve a vendor invoice into its planned journal lines using the SAME
+ * primitives the save path uses. Pure-ish: it resolves accounts via the engine
+ * (read-only) and returns the planned lines + the resolved AP/VAT/source codes.
+ * NEVER writes to the DB.
+ */
+async function resolveVendorInvoicePlan(
+  scope: { companyId: number; branchId?: number | null },
+  p: { supplierId: number; paid: boolean; sourceAccountCode?: string | null; lines: z.infer<typeof vendorInvoiceLineSchema>[] },
+): Promise<{
+  lines: PlannedVendorInvoiceLine[];
+  apAccountCode: string;
+  vatInputAccountCode: string | null;
+  sourceAccountCode: string | null;
+  totalWithVat: number;
+}> {
+  const { financialEngine } = await import("../lib/engines/index.js");
+
+  // AP (supplier payable) — credit leg for a credit (آجل) invoice.
+  const apAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "purchase_vendor_ap", "credit", "2111");
+
+  // Build each item DR line: resolve its account from accountPurpose (TEXT), and
+  // its dimensions through the SHARED entity-link builder (stamping vendorId).
+  const itemLines: VendorInvoiceLineInput[] = [];
+  let totalVat = 0;
+  let totalNet = 0;
+  for (const line of p.lines) {
+    const { entityLink } = buildExpenseEntityLink({
+      relatedEntityType: "supplier",
+      relatedEntityId: p.supplierId,
+      projectId: line.projectId ?? null,
+      lineAllocation: {
+        costCenterId: line.costCenterId ?? undefined,
+        projectId: line.projectId ?? undefined,
+        vehicleId: line.vehicleId ?? undefined,
+        propertyId: line.propertyId ?? undefined,
+        unitId: line.unitId ?? undefined,
+        contractId: line.contractId ?? undefined,
+        clientId: line.clientId ?? undefined,
+        employeeId: line.employeeId ?? undefined,
+        assetId: line.assetId ?? undefined,
+        umrahSeasonId: line.umrahSeasonId ?? undefined,
+        umrahAgentId: line.umrahAgentId ?? undefined,
+        vendorId: p.supplierId,
+      },
+    });
+    // The engine resolves the line's GL account from its accountPurpose (TEXT).
+    const expenseAccountCode = await financialEngine.resolveAccountCode(
+      scope.companyId,
+      line.accountPurpose,
+      "debit",
+      "5000",
+    );
+    const net = roundTo2(Number(line.amount) || 0);
+    const vat = roundTo2(Number(line.vatAmount) || 0);
+    totalNet = roundTo2(totalNet + net);
+    totalVat = roundTo2(totalVat + vat);
+    itemLines.push({ expenseAccountCode, baseAmount: net, vatAmount: vat, entityLink });
+  }
+
+  const totalWithVat = roundTo2(totalNet + totalVat);
+  let vatInputAccountCode: string | null = null;
+  if (totalVat > 0) {
+    vatInputAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "vat_input", "debit", "1180");
+  }
+
+  const lines = buildVendorInvoiceLines({
+    lines: itemLines,
+    paid: p.paid,
+    sourceAccountCode: p.paid ? (p.sourceAccountCode ?? null) : null,
+    apAccountCode,
+    vatInputAccountCode,
+    totalWithVat,
+    vendorId: p.supplierId,
+  });
+
+  return { lines, apAccountCode, vatInputAccountCode, sourceAccountCode: p.paid ? (p.sourceAccountCode ?? null) : null, totalWithVat };
+}
+
+/** Validate that the supplier exists AND belongs to the caller's company. */
+async function assertVendorBelongsToCompany(companyId: number, supplierId: number): Promise<void> {
+  const [sup] = await rawQuery<{ id: number }>(
+    `SELECT id FROM suppliers WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL LIMIT 1`,
+    [supplierId, companyId],
+  );
+  if (!sup) throw new ValidationError("المورد غير موجود أو لا يتبع الشركة", { field: "supplierId", fix: "اختر موردًا من قائمة الموردين." });
+}
+
+journalRouter.post("/vendor-invoices/impact-preview", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const p = zodParse(vendorInvoicePreviewSchema.safeParse(req.body ?? {}));
+    await assertVendorBelongsToCompany(scope.companyId, p.supplierId);
+
+    const paymentMethod = p.paid ? "cash" : null;
+    const empty = (incompleteReason: string): JournalPreviewView => ({
+      ready: false,
+      incompleteReason,
+      lines: [],
+      totals: { debit: 0, credit: 0 },
+      balanced: false,
+      blockers: [],
+      warnings: [],
+      sourceContext: { paymentMethod, sourceAccountCode: p.sourceAccountCode || null, sourceAccountName: null },
+      suggestedDocumentStatus: "draft",
+      suggestedPaymentStatus: p.paid ? "paid" : "unpaid",
+      suggestedPostingStatus: "blocked",
+    });
+
+    const items: Array<{ category: string; label: string; value: string; severity: "info" | "warning" | "danger" | "success" }> = [];
+
+    // HARD RULES surfaced as preview blockers (mirror the save-path errors).
+    let journalPreview: JournalPreviewView;
+    if (!p.paid && p.sourceAccountCode) {
+      journalPreview = { ...empty("لا مصدر صرف في الفاتورة الآجلة"), blockers: [{ code: "payment_source", field: "sourceAccountCode", message: "لا مصدر صرف في الفاتورة الآجلة" }] };
+    } else if (p.paid && !p.sourceAccountCode) {
+      journalPreview = { ...empty("اختر مصدر الصرف للفاتورة المدفوعة"), blockers: [{ code: "payment_source", field: "sourceAccountCode", message: "اختر مصدر الصرف للفاتورة المدفوعة" }] };
+    } else {
+      const plan = await resolveVendorInvoicePlan(scope, p);
+
+      // account existence/postability + names (read-only).
+      const codes = Array.from(new Set(plan.lines.map((l) => l.accountCode).filter(Boolean)));
+      const accountRows = await rawQuery<{ code: string; name: string }>(
+        `SELECT code, name FROM chart_of_accounts
+           WHERE "companyId" = $1 AND code = ANY($2::text[])
+             AND "deletedAt" IS NULL AND "isActive" = true AND "allowPosting" = true`,
+        [scope.companyId, codes],
+      );
+      const knownAccountCodes = new Set(accountRows.map((r) => r.code));
+      const nameByCode = new Map(accountRows.map((r) => [r.code, r.name]));
+
+      const evald = evaluateVendorInvoicePlan({ lines: plan.lines, knownAccountCodes });
+
+      const lineViews: JournalPreviewLineView[] = (plan.lines as PlannedVendorInvoiceLine[]).map((l, i) => {
+        const dims: Record<string, unknown> = {};
+        for (const k of ["vehicleId", "propertyId", "projectId", "vendorId", "clientId", "unitId", "assetId", "contractId", "employeeId", "costCenterId", "costCenter"]) {
+          if (l[k] != null) dims[k] = l[k];
+        }
+        let lineSource: JournalPreviewLineView["accountSource"];
+        let reason: string;
+        if (l.role === "expense") { lineSource = "purpose"; reason = "حساب البند — مُحلّ من غرض الحساب (accountPurpose)"; }
+        else if (l.role === "vat_input") { lineSource = "purpose"; reason = "ضريبة مدخلات — غرض الحساب vat_input"; }
+        else { lineSource = p.paid ? "selected" : "purpose"; reason = p.paid ? "مصدر الصرف المختار (مدفوعة)" : "ذمة المورد — غرض الحساب purchase_vendor_ap (آجل)"; }
+        return {
+          lineNo: i + 1,
+          accountCode: l.accountCode,
+          accountName: nameByCode.get(l.accountCode) ?? null,
+          debit: l.debit,
+          credit: l.credit,
+          role: l.role,
+          dimensions: dims,
+          derivationReason: reason,
+          accountSource: lineSource,
+          status: knownAccountCodes.has(l.accountCode) ? "ok" : "account_not_found",
+        };
+      });
+
+      journalPreview = {
+        ready: true,
+        lines: lineViews,
+        totals: { debit: evald.totalDebit, credit: evald.totalCredit },
+        balanced: evald.balanced,
+        blockers: evald.blockers,
+        warnings: evald.warnings,
+        sourceContext: { paymentMethod, sourceAccountCode: plan.sourceAccountCode, sourceAccountName: plan.sourceAccountCode ? (nameByCode.get(plan.sourceAccountCode) ?? null) : null },
+        suggestedDocumentStatus: "draft",
+        suggestedPaymentStatus: p.paid ? "paid" : "unpaid",
+        suggestedPostingStatus: evald.blockers.length > 0 ? "blocked" : "unposted",
+      };
+
+      items.push({ category: "محاسبي", label: p.paid ? "فاتورة مورد مدفوعة" : "فاتورة مورد آجلة", value: p.paid ? `مدين البنود / دائن مصدر الصرف ${plan.totalWithVat.toLocaleString("ar-SA")}` : `مدين البنود / دائن ذمة المورد ${plan.totalWithVat.toLocaleString("ar-SA")}`, severity: "info" });
+    }
+
+    const hasDanger = (journalPreview.blockers.length ?? 0) > 0;
+    res.json({
+      actionType: "create_vendor_invoice",
+      employeeId: 0,
+      employeeName: "",
+      items,
+      journalPreview,
+      summary: hasDanger
+        ? `لا يمكن الحفظ: ${journalPreview.blockers[0].message}`
+        : `فاتورة مورد ${journalPreview.totals.credit.toLocaleString("ar-SA")} ر.س جاهزة للتسجيل`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "خطأ في معاينة أثر فاتورة المورد");
+  }
+});
+
+journalRouter.post("/vendor-invoices", authorize({ feature: "finance.journal", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(createVendorInvoiceSchema.safeParse(req.body ?? {}));
+
+    const effectiveCompanyId = b.companyId && scope.allowedCompanies.includes(Number(b.companyId)) ? Number(b.companyId) : scope.companyId;
+    const branchId = b.branchId ? Number(b.branchId) : null;
+    if (!branchId && !scope.branchId) {
+      throw new ValidationError("الفرع مطلوب لتسجيل فاتورة المورد", { field: "branchId", fix: "حدد الفرع الذي تنتمي إليه الفاتورة" });
+    }
+
+    await assertVendorBelongsToCompany(effectiveCompanyId, b.supplierId);
+
+    // HARD RULES — credit (آجل) invoices must NOT carry a money source; paid
+    // invoices MUST. Enforced server-side regardless of the UI.
+    if (!b.paid && b.sourceAccountCode) {
+      throw new ValidationError("لا مصدر صرف في الفاتورة الآجلة", { field: "sourceAccountCode", fix: "احذف مصدر الصرف، أو فعّل «مدفوعة» إذا دُفِعت الفاتورة فورًا" });
+    }
+    if (b.paid && !b.sourceAccountCode) {
+      throw new ValidationError("اختر مصدر الصرف للفاتورة المدفوعة", { field: "sourceAccountCode", fix: "حدد الخزنة/البنك الذي خرج منه المال" });
+    }
+
+    // Attachment required for vendor invoices (mirror the expense policy).
+    const attachCheck = checkAttachmentRequired({ operationType: "vendor_invoice", hasAttachment: !!b.attachmentUrl });
+    if (attachCheck.required && !b.attachmentUrl) {
+      throw new ValidationError(attachCheck.reason || "المرفق إلزامي لفاتورة المورد", { field: "attachmentUrl", fix: "أرفق صورة فاتورة المورد قبل الحفظ" });
+    }
+
+    const plan = await resolveVendorInvoicePlan({ companyId: effectiveCompanyId, branchId: branchId ?? scope.branchId ?? null }, b);
+    const journalLines = (plan.lines as PlannedVendorInvoiceLine[]).map(({ role, ...line }) => line);
+
+    const { financialEngine } = await import("../lib/engines/index.js");
+    const idempotencyToken = requestIdempotencyToken(req);
+    const ref = `VINV-${idempotencyToken}`;
+    const finalDescription = b.description || `فاتورة مورد${b.invoiceNo ? ` #${b.invoiceNo}` : ""}`;
+
+    const { journalId, alreadyExists } = await withTransaction(async () => {
+      const posted = await financialEngine.postJournalEntry({
+        companyId: effectiveCompanyId,
+        branchId: branchId ?? scope.branchId,
+        createdBy: scope.activeAssignmentId,
+        ref,
+        description: finalDescription,
+        type: "expense",
+        sourceType: "vendor_invoice",
+        sourceId: 0,
+        sourceKey: `finance:vendor_invoice:${idempotencyToken}`,
+        lines: journalLines,
+        postingDate: b.invoiceDate ? toDateISO(b.invoiceDate) : undefined,
+      });
+
+      await rawExecute(
+        `UPDATE journal_entries SET "relatedEntityType" = $1, "relatedEntityId" = $2, "paymentMethod" = $3, reference = $4, "isPaid" = $5, "attachmentUrl" = $6, "attachmentType" = $7, "operationType" = $8 WHERE id = $9 AND "companyId" = $10 AND "deletedAt" IS NULL`,
+        ["supplier", b.supplierId, b.paid ? "cash" : "credit", b.invoiceNo || b.reference || null, b.paid, b.attachmentUrl ?? null, b.attachmentType ?? "invoice", "vendor_invoice", posted.journalId, effectiveCompanyId],
+      );
+
+      return { journalId: posted.journalId, alreadyExists: posted.alreadyExists };
+    });
+    markIdempotencyReplay(req, res, alreadyExists);
+
+    await createAuditLog({
+      companyId: effectiveCompanyId,
+      branchId: branchId ?? scope.branchId ?? undefined,
+      userId: scope.userId,
+      action: "vendor_invoice.created",
+      entity: "journal_entries",
+      entityId: journalId,
+      after: { ref, supplierId: b.supplierId, paid: b.paid, totalWithVat: plan.totalWithVat, lineCount: b.lines.length },
+      activeRoleKey: scope.selectedRoleKey ?? null,
+    });
+
+    emitEvent({
+      companyId: effectiveCompanyId,
+      userId: scope.userId,
+      action: "finance.vendor_invoice.created",
+      entity: "journal_entries",
+      entityId: journalId,
+      details: JSON.stringify({ ref, supplierId: b.supplierId, paid: b.paid, sourceAccountCode: plan.sourceAccountCode, apAccountCode: plan.apAccountCode, totalWithVat: plan.totalWithVat, lineCount: b.lines.length }),
+    }).catch((e) => logger.error(e, "finance-journal vendor-invoice event failed"));
+
+    const [created] = await rawQuery<Record<string, unknown>>(
+      `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
+       FROM journal_entries je
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
+       WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
+       GROUP BY je.id`,
+      [journalId, effectiveCompanyId],
+    );
+    res.status(201).json({ ...(created || { id: journalId }), idempotentReplay: alreadyExists });
+  } catch (err) {
+    handleRouteError(err, res, "Create vendor invoice error:");
   }
 });
 
@@ -1539,6 +1920,118 @@ journalRouter.patch("/expenses/:id/approve", authorize({ feature: "finance.journ
   }
 });
 
+// #2239 (FIN-P9-APPROVAL-WORKSPACE) — two side actions an approver can take on
+// the unified decision workspace WITHOUT deciding the request: ask the
+// submitter for a missing source document, or leave a note. Both record an
+// approval_actions row + audit log + event, scoped to the company exactly like
+// the approve handler above (ref LIKE 'EXP%' + companyId), so they never trip
+// the tenant-isolation guard.
+journalRouter.post("/expenses/:id/request-attachment", authorize({ feature: "finance.journal", action: "approve", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const expenseId = parseId(req.params.id, "id");
+    const { notes, attachmentType } = zodParse(expenseNoteActionSchema.safeParse(req.body ?? {}));
+    if (!notes || !String(notes).trim()) {
+      throw new ValidationError("نص الطلب مطلوب", { field: "notes", fix: "اذكر المرفق المطلوب من مقدّم الطلب" });
+    }
+
+    const [exp] = await rawQuery<Record<string, unknown>>(
+      `SELECT ref, status FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      [expenseId, scope.companyId]
+    );
+    if (!exp) throw new NotFoundError("المصروف غير موجود");
+
+    // Atomic: record the approval action and flip the expense status together,
+    // so a failure between them can't leave an action row with the wrong state
+    // (or a returned expense with no audit-trail action).
+    await withTransaction(async () => {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+         VALUES ('expense',$1,'request_attachment',$2,$3,$4)`,
+        [expenseId, String(notes).trim(), scope.userId, scope.companyId]
+      );
+
+      // Move it back to "returned" so the submitter sees it needs work — reuses
+      // the SAME state the approve handler's return path lands on. Guarded to the
+      // pending family so we never re-open a decided expense.
+      await rawExecute(
+        `UPDATE journal_entries SET status = 'returned'
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'
+            AND status IN ('draft','pending_approval','returned','pending')`,
+        [expenseId, scope.companyId]
+      );
+    });
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "request_attachment",
+      entity: "journal_entries",
+      entityId: expenseId,
+      before: { ref: exp.ref, status: exp.status },
+      after: { status: "returned", notes: String(notes).trim(), attachmentType: attachmentType ?? null },
+    });
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "expense.attachment_requested",
+      entity: "expenses",
+      entityId: expenseId,
+      details: JSON.stringify({ ref: exp.ref, notes: String(notes).trim(), attachmentType: attachmentType ?? null }),
+    }).catch((e) => logger.error(e, "finance-journal background task failed"));
+
+    res.json({ message: "تم طلب المرفق", status: "returned" });
+  } catch (err) {
+    handleRouteError(err, res, "Request attachment error:");
+  }
+});
+
+journalRouter.post("/expenses/:id/comment", authorize({ feature: "finance.journal", action: "view", resource: { table: "expenses", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const expenseId = parseId(req.params.id, "id");
+    const { notes } = zodParse(expenseNoteActionSchema.safeParse(req.body ?? {}));
+    if (!notes || !String(notes).trim()) {
+      throw new ValidationError("نص الملاحظة مطلوب", { field: "notes", fix: "اكتب ملاحظتك" });
+    }
+
+    const [exp] = await rawQuery<Record<string, unknown>>(
+      `SELECT ref FROM journal_entries WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'`,
+      [expenseId, scope.companyId]
+    );
+    if (!exp) throw new NotFoundError("المصروف غير موجود");
+
+    await rawExecute(
+      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+       VALUES ('expense',$1,'comment',$2,$3,$4)`,
+      [expenseId, String(notes).trim(), scope.userId, scope.companyId]
+    );
+
+    await createAuditLog({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "comment",
+      entity: "journal_entries",
+      entityId: expenseId,
+      after: { ref: exp.ref, notes: String(notes).trim() },
+    });
+
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "expense.commented",
+      entity: "expenses",
+      entityId: expenseId,
+      details: JSON.stringify({ ref: exp.ref, notes: String(notes).trim() }),
+    }).catch((e) => logger.error(e, "finance-journal background task failed"));
+
+    res.json({ message: "تمت إضافة الملاحظة" });
+  } catch (err) {
+    handleRouteError(err, res, "Comment expense error:");
+  }
+});
+
 journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
@@ -1562,7 +2055,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
               je."documentStatus", je."paymentStatus", je."postingStatus",
               e_cre.name AS "createdByName"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
@@ -1602,7 +2095,7 @@ journalRouter.get("/vouchers/:id", authorize({ feature: "finance.journal", actio
               COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status,
               je."documentStatus", je."paymentStatus", je."postingStatus"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
          AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
        GROUP BY je.id`,
@@ -2103,7 +2596,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     const [createdVoucher] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -2220,7 +2713,7 @@ journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", ac
     // postingStatus='posted' here — where status alone would mislabel it.
     // (This list never exposed isPaid; not added — paymentStatus conveys the
     // payment state truthfully, gated by the canBePaid rule.)
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status, je."documentStatus", je."paymentStatus", je."postingStatus" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."documentStatus", je."paymentStatus", je."postingStatus", je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status, je."documentStatus", je."paymentStatus", je."postingStatus" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."documentStatus", je."paymentStatus", je."postingStatus", je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } }));
   } catch (err) {
     res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
@@ -2247,7 +2740,7 @@ journalRouter.get("/salary-advances/:id", authorize({ feature: "finance.journal"
               COALESCE(SUM(jl.debit), 0) AS amount,
               CONCAT('SA-', je.id) AS "refDisplay"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
        GROUP BY je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
                 je."documentStatus", je."paymentStatus", je."postingStatus", je."branchId", je."companyId"`,
@@ -2272,8 +2765,8 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
     let advanceAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "salary_advance_receivable", "debit", "1141");
     if (employeeId) {
       const [subAcc] = await rawQuery<Record<string, unknown>>(
-        `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-         WHERE sa."companyId" = $1 AND sa."entityType" = 'employee' AND sa."entityId" = $2 AND sa."accountType" = 'advance'`,
+        `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId" AND ca."deletedAt" IS NULL
+         WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."entityType" = 'employee' AND sa."entityId" = $2 AND sa."accountType" = 'advance'`,
         [scope.companyId, Number(employeeId)]
       );
       if (subAcc) advanceAccountCode = subAcc.code as string;
@@ -2329,7 +2822,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
     const [createdAdvance] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -2427,7 +2920,7 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
               COALESCE(SUM(jl.credit), 0) AS "totalCredit",
               COALESCE(json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) FILTER (WHERE jl.id IS NOT NULL), '[]') AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL
        GROUP BY je.id
        ORDER BY je."createdAt" DESC LIMIT 200`,
@@ -2462,6 +2955,19 @@ journalRouter.post("/journal", requireMinLevel(50), authorize({ feature: "financ
     }
     if (!description) throw new ValidationError("وصف القيد مطلوب", { field: "description" });
     if (!Array.isArray(lines) || lines.length < 2) throw new ValidationError("القيد يجب أن يحتوي على بندين على الأقل", { field: "lines" });
+    // FIN-OPERATIONAL-MANUAL-JOURNAL-GUARD (#2239) — a manual JE whose lines
+    // carry an operational dimension (vehicle/property/asset/employee/driver/
+    // unit/contract) enters a SPECIAL governance path: the reason (description)
+    // is MANDATORY and the object link must be non-null (it IS the dimension,
+    // already asserted by the line carrying it). Ordinary GL-only manual JEs
+    // are unaffected. Elevated approval is enforced at /journal/:id/approve.
+    const operationallyLinked = isOperationallyLinkedEntry(lines);
+    if (operationallyLinked && !String(description).trim()) {
+      throw new ValidationError("سبب القيد اليدوي المرتبط بكائن تشغيلي مطلوب", {
+        field: "description",
+        fix: "أدخل سبب/وصف القيد اليدوي المرتبط بالكائن التشغيلي لتوثيقه",
+      });
+    }
     for (const l of lines) { l.debit = roundTo2(Number(l.debit) || 0); l.credit = roundTo2(Number(l.credit) || 0); }
     // Reject negative amounts up front. Without this guard a user passing
     // `{debit:-100, credit:0}` produces a "negative debit" that survives
@@ -2583,12 +3089,12 @@ journalRouter.post("/journal", requireMinLevel(50), authorize({ feature: "financ
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit } }).catch((e) => logger.error(e, "finance-journal background task failed"));
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "journal_entries", entityId: insertId, after: { ref, description, totalDebit, operationallyLinked, reason: operationallyLinked ? description : undefined } }).catch((e) => logger.error(e, "finance-journal background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "finance.journal.created", entity: "journal_entries", entityId: insertId, details: JSON.stringify({ ref }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
     const [createdJournal] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [insertId, scope.companyId]
@@ -2626,7 +3132,7 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
       `SELECT jl.*, coa.name AS "accountName"
        FROM journal_lines jl
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $2 AND coa."deletedAt" IS NULL
-       WHERE jl."journalId" = $1
+       WHERE jl."journalId" = $1 AND jl."deletedAt" IS NULL
        ORDER BY jl.id ASC`,
       [id, je.companyId]
     );
@@ -2648,10 +3154,42 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
 // FIN-013 — approve a draft manual journal. Pure status transition; no GL
 // movement yet. The companion `/post` endpoint runs the balance push.
 // GAP_MATRIX P0 — approve floor at 60 (branch_manager+): separation of duties.
+// FIN-OPERATIONAL-MANUAL-JOURNAL-GUARD (#2239) — when the entry is operationally
+// linked, the ordinary level-60 gate is INSUFFICIENT: a SPECIAL path applies —
+// elevated GM authority (scope.isOwner || OWNER_GM_ROLES → level 90 in the RBAC
+// catalog, strictly above the 60/70 finance gates) AND a mandatory approval
+// reason. The elevation is enforced INSIDE the handler (requireMinLevel is
+// static route middleware) after the entry is loaded and classified.
 journalRouter.post("/journal/:id/approve", requireMinLevel(60), authorize({ feature: "finance.journal", action: "update" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
+    const { reason } = zodParse(approveJournalSchema.safeParse(req.body ?? {}));
+
+    // Load the entry header + lines (company-scoped) to classify its
+    // operational linkage before the transition. NotFound here mirrors the
+    // lifecycle engine's own not-found behaviour for a missing/foreign id.
+    const [header] = await rawQuery<{ relatedEntityType: string | null }>(
+      `SELECT "relatedEntityType" FROM journal_entries
+        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
+          AND "sourceType" = 'manual_journal' LIMIT 1`,
+      [id, scope.companyId],
+    );
+    const linkLines = await rawQuery<Record<string, unknown>>(
+      `SELECT "vehicleId", "propertyId", "assetId", "employeeId",
+              "driverId", "unitId", "contractId"
+         FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
+      [id],
+    );
+    const operationallyLinked = isOperationallyLinkedEntry(linkLines as any, header ?? null);
+    // SPECIAL governance path — throws ForbiddenError (403) if not GM/owner,
+    // ValidationError (422) if the reason is missing. No-op when not linked.
+    assertOperationalManualApprovalAllowed({
+      linked: operationallyLinked,
+      elevated: scope.isOwner || OWNER_GM_ROLES.includes(scope.role),
+      reason,
+    });
+
     try {
       const updated = await applyTransition<Record<string, unknown>>({
         entity: "journal_entries",
@@ -2666,8 +3204,8 @@ journalRouter.post("/journal/:id/approve", requireMinLevel(60), authorize({ feat
           "approvedAt": new Date(),
         },
       });
-      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "approve", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
-      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.approved", entity: "journal_entries", entityId: id }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "approve", entity: "journal_entries", entityId: id, after: { operationallyLinked, reason: operationallyLinked ? reason : undefined } }).catch((e) => logger.error(e, "finance-journal background task failed"));
+      emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "finance.journal.approved", entity: "journal_entries", entityId: id, details: JSON.stringify({ operationallyLinked }) }).catch((e) => logger.error(e, "finance-journal background task failed"));
       res.json(updated);
     } catch (err) {
       const lifecycle = lifecycleErrorResponse(err);
@@ -2956,7 +3494,7 @@ journalRouter.post("/journal/:id/reverse", requireMinLevel(70), authorize({ feat
     const [createdReversal] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [newJournalId, scope.companyId]
@@ -2984,7 +3522,7 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
     `SELECT coa.code, coa.name,
             COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) AS balance
      FROM chart_of_accounts coa
-     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code AND jl."deletedAt" IS NULL
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true AND je."reversedById" IS NULL
@@ -2999,7 +3537,7 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
     `SELECT coa.code, coa.name,
             COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0) AS balance
      FROM chart_of_accounts coa
-     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code AND jl."deletedAt" IS NULL
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true AND je."reversedById" IS NULL
@@ -3212,7 +3750,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requireMinLevel(70)
     const [createdYearEnd] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -3227,7 +3765,8 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requireMinLevel(70)
 // OPENING BALANCES (Phase 2)
 // ─────────────────────────────────────────────────────────────────────────────
 
-journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
+// GAP_MATRIX P0 — opening balances expose initial GL amounts; gate at 70 to match mutations.
+journalRouter.get("/opening-balances", requireMinLevel(70), authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { periodStart } = req.query as { periodStart?: string };
@@ -3267,7 +3806,7 @@ journalRouter.get("/opening-balances", authorize({ feature: "finance.accounts", 
                 'credit', jl.credit
               ) ORDER BY jl.id) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${where}${extraWhere}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
@@ -3380,6 +3919,11 @@ journalRouter.post("/opening-balances", requireMinLevel(70), authorize({ feature
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.created", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", lineCount: (lines ?? []).length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances audit failed"));
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "Create opening balances error:");
@@ -3423,6 +3967,11 @@ journalRouter.post("/opening-balances/import-csv", requireMinLevel(70), authoriz
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.imported_csv", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", linesCount: parsed.length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances-csv audit failed"));
     res.status(201).json({ ...result, linesCount: parsed.length });
   } catch (err) {
     handleRouteError(err, res, "Import opening balances CSV error:");

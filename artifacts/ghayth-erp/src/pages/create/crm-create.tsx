@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ClientSelect } from "@/components/shared/entity-selects";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrencySymbol } from "@/lib/formatters";
@@ -28,17 +28,12 @@ export default function CrmCreate() {
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const addOpp = useApiMutation("/crm/opportunities", "POST", [["crm-opportunities"], ["crm-stats"], ["crm-pipeline"]]);
-  const { data: clientsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["clients-list"], "/clients");
   // CRM-003 — /crm/assignees is gated by the CRM feature; GET /employees
   // required hr.employees and 403'd for CRM-only users.
   const { data: employeesData } = useApiQuery<{ data: any[] }>(["crm-assignees"], "/crm/assignees");
-  const clients = clientsData?.data || [];
   const employees = employeesData?.data || [];
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(DRAFT_KEY, INITIAL);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const handleSubmit = async () => {
     const firstError = validate({
@@ -90,20 +85,19 @@ export default function CrmCreate() {
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="عنوان الفرصة" required value={form.title} onChange={(v) => setForm((f) => ({ ...f, title: v }))} placeholder="عنوان الفرصة" error={fieldErrors.title} />
-          <FormFieldWrapper label="العميل">
-            <Select value={form.clientId || "_none"} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v === "_none" ? "" : v }))}>
-              <SelectTrigger><SelectValue placeholder="بدون عميل" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">بدون عميل</SelectItem>
-                {clients.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div>
+            <ClientSelect
+              label="العميل"
+              placeholder="بدون عميل"
+              value={form.clientId}
+              onChange={(v) => setForm((f) => ({ ...f, clientId: v }))}
+            />
             {form.clientId && (
               <div className="mt-3">
                 <ClientContextCard clientId={form.clientId} section="opportunity" />
               </div>
             )}
-          </FormFieldWrapper>
+          </div>
           <FormFieldWrapper label="المرحلة">
             <Select value={form.stage} onValueChange={(v) => setForm((f) => ({ ...f, stage: v }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>

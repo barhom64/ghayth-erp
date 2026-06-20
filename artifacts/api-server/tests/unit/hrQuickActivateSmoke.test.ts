@@ -54,11 +54,37 @@ describe("HR-REV-3 (#2222) — pending (inactive) employee creation", () => {
   it("creates the assignment in 'active' status (so activation flow finds it)", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO employee_assignments[\s\S]*?'active'/);
   });
+  it("stamps activationStatus on the hire — self_invited مع البريد وإلا pending_activation", () => {
+    const empInsert = QA_BLOCK.match(/INSERT INTO employees[\s\S]*?RETURNING/)?.[0] || "";
+    expect(empInsert).toMatch(/"activationStatus"/);
+    // القيمة مُمَرَّرة عبر بارامتر: self_invited عند توفّر البريد وإلا pending_activation.
+    expect(QA_BLOCK).toMatch(/email \? 'self_invited' : 'pending_activation'/);
+  });
 });
 
 describe("HR-REV-3 (#2222) — onboarding plan + audit + numbering", () => {
   it("INSERTs into onboarding_tasks", () => {
     expect(QA_BLOCK).toMatch(/INSERT INTO onboarding_tasks/);
+  });
+  it("routes each onboarding task to a distributed ownerRole (HR-REV-3 slice 1)", () => {
+    // Tasks are generated with an owning role + reason + mandatory + serviceType,
+    // not flat title strings — so completion is distributed.
+    expect(QA_BLOCK).toMatch(/INSERT INTO onboarding_tasks[\s\S]*?"ownerRole"[\s\S]*?reason[\s\S]*?mandatory[\s\S]*?"serviceType"/);
+    expect(QA_BLOCK).toMatch(/buildActivationPlan\(resolvedCategory\)/);
+    expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"documents"/);
+    expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"department"/);
+  });
+  it("generates a per-category plan: driver ≠ accountant ≠ admin (HR-REV-4 slice)", () => {
+    // The plan builder branches on the job_titles.category resolved from the
+    // title, so a driver gets a vehicle/custody/GPS plan while an accountant
+    // gets restricted financial access and no vehicle.
+    expect(EMPLOYEES_ROUTE).toMatch(/function buildActivationPlan\(category: string \| null\)/);
+    expect(EMPLOYEES_ROUTE).toMatch(/c\.includes\("driver"\)/);
+    expect(EMPLOYEES_ROUTE).toMatch(/serviceType:\s*"vehicle"/);
+    expect(EMPLOYEES_ROUTE).toMatch(/ownerRole:\s*"fleet"/);
+    expect(EMPLOYEES_ROUTE).toMatch(/c\.includes\("account"\)/);
+    // quick-activate resolves the category from job_titles to feed the plan.
+    expect(QA_BLOCK).toMatch(/SELECT id, category FROM job_titles/);
   });
   it("calls createAuditLog", () => {
     expect(QA_BLOCK).toMatch(/createAuditLog\(/);
@@ -69,5 +95,54 @@ describe("HR-REV-3 (#2222) — onboarding plan + audit + numbering", () => {
     expect(QA_BLOCK).toMatch(/issueNumber\(/);
     expect(QA_BLOCK).toMatch(/entityKey: "employee_code"/);
     expect(QA_BLOCK).toMatch(/entityTable: "employees"/);
+  });
+});
+
+describe("HR-REV-3 (#2222) — activation ready-gate (slice 4b)", () => {
+  // PATCH /:id flips inactive→active; activation must be blocked until every
+  // mandatory onboarding task is done, enforced server-side (not just in the UI).
+  const PATCH_BLOCK =
+    EMPLOYEES_ROUTE.match(
+      /router\.patch\("\/:id"[\s\S]*?const employee = \{ id: before\.id/,
+    )?.[0] || "";
+
+  it("the PATCH /:id handler block was extracted", () => {
+    expect(PATCH_BLOCK).not.toBe("");
+  });
+  it("gates activation only on the pending-activation statuses (not suspended re-activation)", () => {
+    expect(PATCH_BLOCK).toMatch(/PENDING_ACTIVATION\s*=\s*\[\s*"inactive",\s*"pending",\s*"onboarding"\s*\]/);
+    expect(PATCH_BLOCK).toMatch(/status === "active" && before\.status != null && PENDING_ACTIVATION\.includes\(before\.status\)/);
+  });
+  it("counts only incomplete MANDATORY onboarding tasks", () => {
+    expect(PATCH_BLOCK).toMatch(/FROM onboarding_tasks[\s\S]*?mandatory IS NOT FALSE[\s\S]*?status NOT IN \('completed','skipped'\)/);
+  });
+  it("rejects activation with a ValidationError when any mandatory item remains", () => {
+    expect(PATCH_BLOCK).toMatch(/if \(remaining > 0\)/);
+    expect(PATCH_BLOCK).toMatch(/throw new ValidationError\(/);
+    expect(PATCH_BLOCK).toMatch(/remainingMandatory: remaining/);
+  });
+});
+
+describe("رسالة بداية العمل عند التفعيل (activation welcome)", () => {
+  // The PATCH handler, on a real activation transition (inactive/pending/
+  // onboarding → active), must fire a one-time start-of-work message so a
+  // quick-activated employee finally gets a welcome at the moment they
+  // actually start. Full-create employees are created active directly, so
+  // they never hit this branch — no double-send.
+  const PATCH_TAIL =
+    EMPLOYEES_ROUTE.match(
+      /const wasActivated =[\s\S]*?res\.json\(after\);/,
+    )?.[0] || "";
+
+  it("computes wasActivated only on a pending→active transition", () => {
+    expect(PATCH_TAIL).toMatch(
+      /const wasActivated\s*=\s*[\s\S]*?status === "active" && before\.status != null && PENDING_ACTIVATION\.includes\(before\.status\)/,
+    );
+  });
+  it("fires a welcome notification on activation", () => {
+    expect(PATCH_TAIL).toMatch(/if \(wasActivated && after[\s\S]*?createNotification\([\s\S]*?type: "welcome"/);
+  });
+  it("emails the start-of-work message when the employee has an email", () => {
+    expect(PATCH_TAIL).toMatch(/if \(after\.email\)[\s\S]*?sendMessage\([\s\S]*?templateKey: "employee\.welcome"/);
   });
 });

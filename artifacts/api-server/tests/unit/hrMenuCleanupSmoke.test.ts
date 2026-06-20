@@ -39,10 +39,10 @@ describe("Menu cleanup — HR section restructure (HR-011)", () => {
   // The 9 canonical top-level labels from inventory §D.2.
   const canonicalLabels = [
     "لوحة الموارد البشرية",
-    "الموظفون",
+    "شؤون الموظفين",
     "النشاط والحضور",
     "الطلبات",
-    "الامتثال والجزاءات",
+    "المخالفات والجزاءات",
     "الأداء والتطوير",
     "الرواتب والمستحقات",
     "التقارير",
@@ -79,13 +79,16 @@ describe("Menu cleanup — HR section restructure (HR-011)", () => {
     // Quick coverage check — the routes that lived under removed
     // top-level entries must still be reachable from the new
     // structure. Picks one representative path per removed cluster.
+    // HR-REV — the retired «*/management» و «*/advanced» shadow pages now
+    // redirect to their canonical page, and their redundant menu entries were
+    // dropped (their content lives as tabs there). Each cluster is still
+    // represented by its canonical path below (/hr/shifts, /hr/training, …),
+    // so we no longer assert the redirect-only legacy paths in the menu.
     const mustSurvive = [
       "/hr/recruitment",
       "/hr/recruitment/applications",
       "/hr/shifts",
-      "/hr/shifts/management",
       "/hr/training",
-      "/hr/training/advanced",
       "/hr/violations/auto-detection",
       "/hr/discipline/regulation",
       "/hr/documents",
@@ -99,8 +102,9 @@ describe("Menu cleanup — HR section restructure (HR-011)", () => {
   });
 
   it("HR Services Catalog is the «الطلبات» landing entry", () => {
+    // Unified to «خدمات الموارد البشرية» by the UX Nav Governance wave.
     expect(hrSection).toMatch(
-      /\{\s*label:\s*"كتالوج الخدمات"\s*,\s*path:\s*"\/hr\/services"/,
+      /\{\s*label:\s*"خدمات الموارد البشرية"\s*,\s*path:\s*"\/hr\/services"/,
     );
   });
 });

@@ -38,6 +38,7 @@ export interface AllocationInput {
   // Optional dimensional context the line already carries; used both
   // for rule matching (conditionsJson) and to fill the journal line.
   dimensions?: {
+    branchId?: number | null;
     vehicleId?: number | null;
     propertyId?: number | null;
     unitId?: number | null;
@@ -507,6 +508,7 @@ export async function logAllocationOverride(params: {
 
 function normalizeDimensions(dims: AllocationInput["dimensions"]): Required<NonNullable<AllocationInput["dimensions"]>> {
   return {
+    branchId: dims?.branchId ?? null,
     vehicleId: dims?.vehicleId ?? null,
     propertyId: dims?.propertyId ?? null,
     unitId: dims?.unitId ?? null,
@@ -572,6 +574,7 @@ async function resolveCostCenter(
   let entityType: string | null = null;
   let entityId: number | null = null;
   switch (strategy) {
+    case "from_branch":   entityType = "branch";   entityId = dims.branchId;   break;
     case "from_vehicle":  entityType = "vehicle";  entityId = dims.vehicleId;  break;
     case "from_property": entityType = "property"; entityId = dims.propertyId; break;
     case "from_unit":     entityType = "unit";     entityId = dims.unitId;     break;
@@ -594,6 +597,20 @@ async function resolveCostCenter(
     [companyId, entityType, entityId]
   );
   return rows[0]?.id ?? null;
+}
+
+/**
+ * يشتق مركز التكلفة المرتبط بفرع (المركز التلقائي `BR-XXXX` المربوط عبر
+ * linkedEntityType='branch'). seam مشترك يستهلكه محرك الرواتب لاستمام بُعد
+ * مركز التكلفة على سطور قيد الرواتب دون تكرار منطق البحث في cost_centers.
+ * يُرجِع null إن لم يوجد مركز تكلفة للفرع (لا يفرض شيئًا على القيد).
+ */
+export async function deriveBranchCostCenter(
+  companyId: number,
+  branchId: number | null | undefined,
+): Promise<number | null> {
+  if (!branchId) return null;
+  return resolveCostCenter(companyId, "from_branch", normalizeDimensions({ branchId }), null);
 }
 
 function checkRequiredEntity(entityType: string | null, dims: Required<NonNullable<AllocationInput["dimensions"]>>): string | null {

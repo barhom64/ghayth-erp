@@ -27,7 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { SupportTabsNav } from "@/components/shared/support-tabs-nav";
 import { z } from "zod";
-import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock } from "lucide-react";
+import { Headphones, Plus, Eye, ChevronDown, ChevronUp, AlertTriangle, BookOpen, Star, ThumbsUp, CheckCircle, Clock, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
@@ -97,6 +97,22 @@ function Support() {
     { key: "tags", header: "الوسوم", render: (t) => <EntityTags entityType="ticket" entityId={t.id} inline /> },
     { key: "title", header: "العنوان", sortable: true, render: (t) => <span className="font-medium">{t.title}</span> },
     { key: "category", header: "الفئة", sortable: true, render: (t) => t.category || "-" },
+    {
+      key: "github", header: "GitHub", sortable: false,
+      render: (t) => t.githubIssueUrl ? (
+        <a
+          href={t.githubIssueUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`link-github-${t.id}`}
+          className="inline-flex items-center gap-1 text-xs text-status-info-foreground hover:underline"
+          title="فتح بلاغ GitHub المرتبط"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />#{t.githubIssueNumber ?? "—"}
+        </a>
+      ) : <span className="text-muted-foreground">—</span>,
+    },
     { key: "clientName", header: "العميل", sortable: true, render: (t) => t.clientName || "-" },
     { key: "assigneeName", header: "المسؤول", sortable: true, render: (t) => t.assigneeName || "-" },
     {

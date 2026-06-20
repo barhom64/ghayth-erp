@@ -193,6 +193,7 @@ reportsRouter.get("/reports/balance-sheet", authorize({ feature: "finance.report
       `SELECT MAX("endDate")::text AS "endDate"
          FROM financial_periods
         WHERE "companyId" = $1
+          AND "deletedAt" IS NULL
           AND "yearEndClosed" = true
           AND "endDate" < $2`,
       [scope.companyId, asOfStr]
@@ -466,7 +467,7 @@ reportsRouter.get("/subsidiary-ledger/:entityType/:entityId", authorize({ featur
     let sections: Record<string, any> = {};
 
     if (entityType === "employee") {
-      const [emp] = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, ea.id AS "assignmentId" FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e.id = $2 LIMIT 1`, [scope.companyId, id]);
+      const [emp] = await rawQuery<Record<string, unknown>>(`SELECT e.id, e.name, ea.id AS "assignmentId" FROM employees e JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1 WHERE e.id = $2 AND e."deletedAt" IS NULL LIMIT 1`, [scope.companyId, id]);
       if (!emp) { res.json({ movements: [], summary: {}, sections: {} }); return; }
       const assignmentId = emp.assignmentId;
 
@@ -1218,7 +1219,7 @@ reportsRouter.get("/reports/entity-statement", authorize({ feature: "finance.rep
       const [emp] = await rawQuery<Record<string, unknown>>(
         `SELECT e.name, ea.id AS aid FROM employees e
          JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea."companyId" = $1
-         WHERE e.id = $2 LIMIT 1`,
+         WHERE e.id = $2 AND e."deletedAt" IS NULL LIMIT 1`,
         [scope.companyId, (Number(entityId) || 0)]
       );
       entityName = (emp?.name as string | undefined) || "";
@@ -1294,17 +1295,27 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     if (endDate) { params.push(endDate); dateFilter += ` AND je."createdAt" < ($${params.length}::date + 1)`; }
     dateFilter += getBranchCondition(scope, branchId, params);
 
+    // #2098 FIN-SUB-03 posting-axes — gate on `balancesApplied` (the
+    // true source of "is the balance actually moved", per the owner's
+    // three-axes decision), and surface `postingStatus` alongside the
+    // legacy `status` so the SPA can render the truthful axis. A
+    // directly-posted custody carries status='draft' but
+    // balancesApplied=true → postingStatus='posted'; this report
+    // must include it. An UNPOSTED draft (balancesApplied=false) must
+    // NOT enter the totals — drafts haven't actually moved cash.
     const custodies = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
-              je."createdAt" AS date, je.status,
+              je."createdAt" AS date, je.status, je."postingStatus", je."documentStatus", je."paymentStatus",
               e.name AS "employeeName", 'custody' AS type
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1400'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'CUSTODY%' ${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+         AND je.ref LIKE 'CUSTODY%'
+         AND je."balancesApplied" = true ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."postingStatus", je."documentStatus", je."paymentStatus", e.name
        ORDER BY je."createdAt" DESC
        LIMIT 500`,
       params
@@ -1313,14 +1324,16 @@ reportsRouter.get("/reports/custody-advances", authorize({ feature: "finance.rep
     const advances = await rawQuery<Record<string, unknown>>(
       `SELECT je.id, je.ref, je.description,
               COALESCE(SUM(jl.debit), 0) AS amount,
-              je."createdAt" AS date, je.status,
+              je."createdAt" AS date, je.status, je."postingStatus", je."documentStatus", je."paymentStatus",
               e.name AS "employeeName", 'advance' AS type
        FROM journal_entries je
        JOIN journal_lines jl ON jl."journalId" = je.id AND jl."accountCode" = '1410'
        LEFT JOIN employee_assignments ea ON ea.id = je."createdBy"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'ADV%' ${dateFilter}
-       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, e.name
+       WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+         AND je.ref LIKE 'ADV%'
+         AND je."balancesApplied" = true ${dateFilter}
+       GROUP BY je.id, je.ref, je.description, je."createdAt", je.status, je."postingStatus", je."documentStatus", je."paymentStatus", e.name
        ORDER BY je."createdAt" DESC
        LIMIT 500`,
       params
@@ -3487,6 +3500,52 @@ reportsRouter.get(
       );
       const manual = manualRow ?? { total: 0, noReason: 0, noDimension: 0, blind: 0 };
 
+      // ── 5. صنفان محسوبان للمخالفات (SLICE 1, #2246) — company-scoped, بلا جدول جديد ──
+      //  (i) قيود على حساب غير قابل للترحيل (allowPosting=false أو غير نشط أو محذوف).
+      //  (ii) قيود يدوية مرتبطة تشغيليًا بلا سبب.
+      const { params: npParams, dateFilter: npDate } = buildScope("je");
+      const npBranch = getBranchCondition(scope, branchId, npParams, "je");
+      const nonPostableRows = await rawQuery<{
+        journalId: number; ref: string | null; createdAt: string; accountCode: string; accountName: string; reason: string;
+      }>(
+        `SELECT je.id AS "journalId", je.ref, je."createdAt"::text AS "createdAt",
+                coa.code AS "accountCode", coa.name AS "accountName",
+                CASE WHEN coa."deletedAt" IS NOT NULL THEN 'محذوف'
+                     WHEN coa."isActive" = false THEN 'غير نشط'
+                     WHEN coa."allowPosting" = false THEN 'لا يسمح بالترحيل'
+                     ELSE '—' END AS reason
+           FROM journal_lines jl
+           JOIN journal_entries je ON je.id = jl."journalId"
+           JOIN chart_of_accounts coa ON coa.id = jl."accountId" AND coa."companyId" = $1
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND jl."deletedAt" IS NULL
+            AND (coa."allowPosting" = false OR coa."isActive" = false OR coa."deletedAt" IS NOT NULL)${npDate}${npBranch}
+          ORDER BY je."createdAt" DESC
+          LIMIT 200`,
+        npParams,
+      );
+
+      const { params: molParams, dateFilter: molDate } = buildScope("je");
+      const molBranch = getBranchCondition(scope, branchId, molParams, "je");
+      const manualNoReasonRows = await rawQuery<{
+        journalId: number; ref: string | null; createdAt: string; description: string | null;
+      }>(
+        `SELECT je.id AS "journalId", je.ref, je."createdAt"::text AS "createdAt", je.description
+           FROM journal_entries je
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."isManual" = true
+            AND (je.description IS NULL OR je.description = '' OR je.description = 'قيد يدوي')
+            AND EXISTS (
+              SELECT 1 FROM journal_lines jl
+               WHERE jl."journalId" = je.id AND jl."deletedAt" IS NULL
+                 AND (jl."vehicleId" IS NOT NULL OR jl."propertyId" IS NOT NULL OR jl."assetId" IS NOT NULL
+                   OR jl."employeeId" IS NOT NULL OR jl."driverId" IS NOT NULL OR jl."unitId" IS NOT NULL
+                   OR jl."contractId" IS NOT NULL)
+            )${molDate}${molBranch}
+          ORDER BY je."createdAt" DESC
+          LIMIT 200`,
+        molParams,
+      );
+
       // ── الملخص + ترتيب جاهزية الـratchet (الأصغر تسريبًا أولًا) ───────────
       const dimTotalLines = dimensionRows.reduce((s, r) => s + Number(r.totalLines), 0);
       const dimMissingLines = dimensionRows.reduce((s, r) => s + Number(r.missingLines), 0);
@@ -3544,6 +3603,20 @@ reportsRouter.get(
           noDimension: Number(manual.noDimension),
           blind: Number(manual.blind),
         },
+        nonPostableAccountEntries: nonPostableRows.map((r) => ({
+          journalId: Number(r.journalId),
+          ref: r.ref,
+          createdAt: r.createdAt,
+          accountCode: r.accountCode,
+          accountName: r.accountName,
+          reason: r.reason,
+        })),
+        manualOperationalNoReason: manualNoReasonRows.map((r) => ({
+          journalId: Number(r.journalId),
+          ref: r.ref,
+          createdAt: r.createdAt,
+          description: r.description,
+        })),
         ratchetReadiness,
       }));
     } catch (err) {

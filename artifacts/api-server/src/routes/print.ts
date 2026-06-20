@@ -33,7 +33,7 @@ import {
 import { listTemplates, listPrintableEntityTypes } from "../lib/print/templateResolver.js";
 import { fetchPrintArtifact } from "../lib/print/printStorage.js";
 import { logger } from "../lib/logger.js";
-import { todayISO, createAuditLog, emitEvent } from "../lib/businessHelpers.js";
+import { todayISO, createAuditLog, emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 
 const router = Router();
 
@@ -1472,6 +1472,46 @@ router.post(
       return handleRouteError(err, res, "print");
     }
   },
+);
+
+// GAP_MATRIX P0 — BI analytics pages (bi-admin-reports, bi-operations) use Ctrl+P
+// but previously had no audit trail. This endpoint lets the frontend record the
+// print event in print_jobs without going through the full render pipeline.
+router.post(
+  "/log-client-print",
+  requirePermission("print:create"),
+  async (req: Request, res: Response) => {
+    try {
+      const scope = scopeFromReq(req);
+      const body = zodParse(
+        z.object({
+          entityType: z.string().min(1).max(128),
+          entityId: z.number().int().optional().nullable(),
+          format: z.enum(["a4", "thermal_80", "thermal_58", "label", "excel", "csv", "window_print"]).default("window_print"),
+        }).safeParse(req.body)
+      );
+      const { insertId } = await rawExecute(
+        `INSERT INTO print_jobs ("companyId","branchId","userId","entityType","entityId","format","status","ipAddress","userAgent")
+         VALUES ($1,$2,$3,$4,$5,$6,'completed',$7,$8)`,
+        [
+          scope.companyId,
+          scope.branchId ?? null,
+          scope.userId,
+          body.entityType,
+          body.entityId ?? null,
+          body.format,
+          req.ip ?? null,
+          req.headers["user-agent"] ?? null,
+        ]
+      );
+      auditFromRequest(req, "print.client_print", "print_jobs", insertId, {
+        after: { entityType: body.entityType, format: body.format },
+      });
+      res.status(201).json({ jobId: insertId });
+    } catch (err) {
+      return handleRouteError(err, res, "print log-client-print");
+    }
+  }
 );
 
 export default router;

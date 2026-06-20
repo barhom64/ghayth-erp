@@ -18,20 +18,18 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Activity, Database, Clock, AlertTriangle, Shield,
   Server, CheckCircle, XCircle, Users, Building2,
-  HardDrive, Cpu, MemoryStick, RefreshCw, Plug, Gauge,
+  HardDrive, Cpu, MemoryStick, Plug, Gauge,
   Power, PowerOff, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { RefreshAction } from "@/components/page-actions";
 
 interface SystemStopRow {
   id: number;
@@ -230,37 +228,26 @@ function SystemStopsCard() {
         </DialogContent>
       </Dialog>
 
-      {/* Replaces window.confirm() for the activate stop flow */}
-      <AlertDialog open={confirmCreate} onOpenChange={(o) => !o && setConfirmCreate(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد تفعيل الإيقاف</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم تفعيل إيقاف النظام للنطاق &quot;{newScope}&quot;. متابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmedCreateStop}>تأكيد التفعيل</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={confirmCreate}
+        onOpenChange={(o) => { if (!o) setConfirmCreate(false); }}
+        variant="caution"
+        title="تأكيد تفعيل الإيقاف"
+        description={`سيتم تفعيل إيقاف النظام للنطاق "${newScope}". متابعة؟`}
+        confirmLabel="تأكيد التفعيل"
+        onConfirm={confirmedCreateStop}
+      />
 
-      {/* Replaces window.confirm() for the deactivate flow */}
-      <AlertDialog open={confirmDeactivateId !== null} onOpenChange={(o) => !o && setConfirmDeactivateId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إلغاء التفعيل</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إلغاء تفعيل إيقاف النظام. متابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmedDeactivateStop}>تأكيد الإلغاء</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={confirmDeactivateId !== null}
+        onOpenChange={(o) => { if (!o) setConfirmDeactivateId(null); }}
+        variant="caution"
+        title="تأكيد إلغاء التفعيل"
+        description="سيتم إلغاء تفعيل إيقاف النظام. متابعة؟"
+        confirmLabel="تأكيد الإلغاء"
+        onConfirm={confirmedDeactivateStop}
+      />
     </>
   );
 }
@@ -404,9 +391,7 @@ export default function AdminMonitoring() {
       subtitle="مراقبة صحة النظام والخدمات"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
@@ -694,7 +679,7 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-surface-subtle">
                   <th className="text-start p-2">الفحص</th>
@@ -720,7 +705,7 @@ export default function AdminMonitoring() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}
@@ -734,7 +719,7 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-surface-subtle">
                   <th className="text-start p-2">من</th>
@@ -751,7 +736,7 @@ export default function AdminMonitoring() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}

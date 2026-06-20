@@ -18,10 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { toast } from "@/hooks/use-toast";
 import { Banknote, Save, Trash2, ShieldCheck, KeyRound } from "lucide-react";
@@ -90,7 +87,7 @@ function BankCard({
     }
     setBusy(true);
     try {
-      await apiFetch(`/api/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
+      await apiFetch(`/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
         method: "PUT",
         body: JSON.stringify({ fields }),
       });
@@ -107,7 +104,7 @@ function BankCard({
   async function clearRow() {
     setBusy(true);
     try {
-      await apiFetch(`/api/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
+      await apiFetch(`/hr/saudi/wps/credentials/${encodeURIComponent(status.bankCode)}`, {
         method: "DELETE",
       });
       toast({ title: "تم حذف بيانات الاعتماد", description: "سيتم استخدام متغيرات البيئة كبديل عند توفرها." });
@@ -202,27 +199,22 @@ function BankCard({
         </div>
       </CardContent>
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>حذف بيانات اعتماد {status.bankCode}؟</AlertDialogTitle>
-            <AlertDialogDescription>
-              ستحاول التسليمات التالية استخدام متغيرات البيئة بدلاً من هذه القيم.
-              يمكن إعادة الإدخال في أي وقت.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={clearRow}>تأكيد الحذف</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        variant="destructive"
+        title={`حذف بيانات اعتماد ${status.bankCode}؟`}
+        description="ستحاول التسليمات التالية استخدام متغيرات البيئة بدلاً من هذه القيم. يمكن إعادة الإدخال في أي وقت."
+        confirmLabel="تأكيد الحذف"
+        onConfirm={clearRow}
+      />
     </Card>
   );
 }
 
 export default function WpsBankCredentialsSettings() {
-  const path = "/api/hr/saudi/wps/credentials";
+  const path = "/hr/saudi/wps/credentials";
   const { data, isLoading, error } = useApiQuery<CredentialsResponse>(
     ["hr", "saudi", "wps", "credentials"],
     path,

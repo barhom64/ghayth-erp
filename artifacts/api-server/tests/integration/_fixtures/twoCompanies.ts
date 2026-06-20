@@ -64,25 +64,43 @@ export function assertTestDatabase(): void {
 }
 
 async function truncateAll(): Promise<void> {
-  // Order matters only when CASCADE is missing; since we use RESTART
-  // IDENTITY CASCADE, the order is irrelevant — but we list children
-  // first so the SQL stays readable.
+  // 2026-06-15 — SCOPED cleanup of ONLY this fixture's own data.
+  //
+  // The previous implementation did `TRUNCATE TABLE … companies …
+  // RESTART IDENTITY CASCADE`, which wiped EVERY company's rows — incl.
+  // the provisioned finance baseline (the Al-Diyaa company + its full
+  // chart of accounts). Any finance dynamic test (which targets
+  // COMPANY=2 and assumes a seeded COA) scheduled AFTER a tenant-
+  // isolation test in the same vitest process then saw a bare company 2
+  // and failed en masse. That cross-test contamination is exactly what
+  // a clean-slate fixture is supposed to PREVENT.
+  //
+  // The fixture only ever writes to the 11 tables below, all for its
+  // own two companies ('Test Company A' / 'Test Company B'). So we
+  // delete just those rows, child-first (companies has no ON DELETE
+  // CASCADE — verified — so order matters), scoped by the company-name
+  // marker. The Al-Diyaa finance company (a different name) and its
+  // COA survive untouched. Repeated calls stay idempotent.
+  const FIXTURE_COMPANY_NAMES = ["Test Company A", "Test Company B"];
+  const inFixtureCompanies = `"companyId" IN (SELECT id FROM companies WHERE name = ANY($1))`;
+  // refresh_tokens → users → employees.companyId
   await rawExecute(
-    `TRUNCATE TABLE
-       refresh_tokens,
-       requests,
-       documents,
-       tasks,
-       projects,
-       clients,
-       employee_assignments,
-       users,
-       employees,
-       branches,
-       companies
-     RESTART IDENTITY CASCADE`,
-    []
+    `DELETE FROM refresh_tokens WHERE "userId" IN (
+       SELECT u.id FROM users u JOIN employees e ON e.id = u."employeeId"
+        WHERE e.${inFixtureCompanies})`,
+    [FIXTURE_COMPANY_NAMES],
   );
+  for (const tbl of ["requests", "documents", "tasks", "projects", "clients", "employee_assignments"]) {
+    await rawExecute(`DELETE FROM ${tbl} WHERE ${inFixtureCompanies}`, [FIXTURE_COMPANY_NAMES]);
+  }
+  // 2026-06-16 — DO NOT DELETE users/employees/branches/companies.
+  // Hundreds of FK constraints target each (journal_entries.postedBy,
+  // user_activity_log.userId, …) and ON DELETE CASCADE isn't
+  // universal. Leave the rows; `seedCompany` is find-or-create for
+  // each of these now, returning the existing id when present. Child
+  // rows (clients/tasks/projects/etc.) are wiped above, so each test
+  // run still starts from a known data seed without disturbing
+  // anything else in the live DB.
 }
 
 async function seedCompany(name: string): Promise<{
@@ -92,32 +110,91 @@ async function seedCompany(name: string): Promise<{
   assignmentId: number;
   employeeId: number;
 } & SeededRows> {
-  const [{ id: companyId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO companies (name, status) VALUES ($1, 'active') RETURNING id`,
-    [name]
+  // 2026-06-16 — find-or-create. truncateAll() above wipes child rows
+  // but not the companies row itself (FK wall + cross-test safety),
+  // so reuse the existing 'Test Company A/B' row on a repeat call.
+  let companyId: number;
+  const [existing] = await rawQuery<{ id: number }>(
+    `SELECT id FROM companies WHERE name = $1 LIMIT 1`, [name],
   );
-  const [{ id: branchId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO branches ("companyId", name, status) VALUES ($1, $2, 'active') RETURNING id`,
-    [companyId, `${name} HQ`]
+  if (existing) {
+    companyId = existing.id;
+  } else {
+    const [created] = await rawQuery<{ id: number }>(
+      `INSERT INTO companies (name, status) VALUES ($1, 'active') RETURNING id`, [name],
+    );
+    companyId = created.id;
+  }
+  // find-or-create branch — keyed on (companyId, branch name).
+  let branchId: number;
+  const branchName = `${name} HQ`;
+  const [existingBranch] = await rawQuery<{ id: number }>(
+    `SELECT id FROM branches WHERE "companyId" = $1 AND name = $2 LIMIT 1`,
+    [companyId, branchName],
   );
-  const [{ id: employeeId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employees (name, "companyId", email, status) VALUES ($1, $2, $3, 'active') RETURNING id`,
-    [`Owner of ${name}`, companyId, `owner-${companyId}@test.local`]
+  if (existingBranch) {
+    branchId = existingBranch.id;
+  } else {
+    const [createdBranch] = await rawQuery<{ id: number }>(
+      `INSERT INTO branches ("companyId", name, status) VALUES ($1, $2, 'active') RETURNING id`,
+      [companyId, branchName],
+    );
+    branchId = createdBranch.id;
+  }
+  // find-or-create employee — keyed on (companyId, email).
+  let employeeId: number;
+  // Email keyed on companyId. The leading 'owner-' (no 'co' prefix)
+  // matches the format mobileAuth.dynamic.test.ts depends on.
+  const ownerEmail = `owner-${companyId}@test.local`;
+  const [existingEmp] = await rawQuery<{ id: number }>(
+    `SELECT id FROM employees WHERE "companyId" = $1 AND email = $2 LIMIT 1`,
+    [companyId, ownerEmail],
   );
-  const [{ id: assignmentId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO employee_assignments
-       ("employeeId", "companyId", "branchId", "jobTitle", role, "isPrimary", status)
-     VALUES ($1, $2, $3, 'Owner', 'owner', TRUE, 'active')
-     RETURNING id`,
-    [employeeId, companyId, branchId]
+  if (existingEmp) {
+    employeeId = existingEmp.id;
+  } else {
+    const [createdEmp] = await rawQuery<{ id: number }>(
+      `INSERT INTO employees (name, "companyId", email, status) VALUES ($1, $2, $3, 'active') RETURNING id`,
+      [`Owner of ${name}`, companyId, ownerEmail],
+    );
+    employeeId = createdEmp.id;
+  }
+  // find-or-create assignment — keyed on (employeeId, companyId, branchId).
+  let assignmentId: number;
+  const [existingAsg] = await rawQuery<{ id: number }>(
+    `SELECT id FROM employee_assignments
+      WHERE "employeeId" = $1 AND "companyId" = $2 AND "branchId" = $3 AND status = 'active'
+      LIMIT 1`,
+    [employeeId, companyId, branchId],
   );
-  const passwordHash = await hashPassword("test-password-1234");
-  const [{ id: userId }] = await rawQuery<{ id: number }>(
-    `INSERT INTO users ("employeeId", email, "passwordHash", "isActive")
-     VALUES ($1, $2, $3, TRUE)
-     RETURNING id`,
-    [employeeId, `owner-${companyId}@test.local`, passwordHash]
+  if (existingAsg) {
+    assignmentId = existingAsg.id;
+  } else {
+    const [createdAsg] = await rawQuery<{ id: number }>(
+      `INSERT INTO employee_assignments
+         ("employeeId", "companyId", "branchId", "jobTitle", role, "isPrimary", status)
+       VALUES ($1, $2, $3, 'Owner', 'owner', TRUE, 'active')
+       RETURNING id`,
+      [employeeId, companyId, branchId],
+    );
+    assignmentId = createdAsg.id;
+  }
+  // find-or-create user — keyed on employeeId (1:1 in this fixture).
+  let userId: number;
+  const [existingUser] = await rawQuery<{ id: number }>(
+    `SELECT id FROM users WHERE "employeeId" = $1 LIMIT 1`, [employeeId],
   );
+  if (existingUser) {
+    userId = existingUser.id;
+  } else {
+    const passwordHash = await hashPassword("test-password-1234");
+    const [createdUser] = await rawQuery<{ id: number }>(
+      `INSERT INTO users ("employeeId", email, "passwordHash", "isActive")
+       VALUES ($1, $2, $3, TRUE) RETURNING id`,
+      [employeeId, ownerEmail, passwordHash],
+    );
+    userId = createdUser.id;
+  }
 
   // Seed one row per company in three common write-target tables so the
   // dynamic harness can exercise DELETE/PATCH/GET-by-id paths against

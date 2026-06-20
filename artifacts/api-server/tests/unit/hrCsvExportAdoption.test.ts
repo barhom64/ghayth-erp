@@ -57,7 +57,9 @@ const ADOPTED_PAGES: ReadonlyArray<{ path: string; sampleHeader: string }> = [
   { path: "hr/overtime.tsx", sampleHeader: "" },
   { path: "hr/exit-requests.tsx", sampleHeader: "" },
   { path: "hr/loans.tsx", sampleHeader: "" },
-  { path: "hr/violations-management.tsx", sampleHeader: "" },
+  // hr/violations-management.tsx retired (HR-REV-7) — its list + CSV export
+  // moved into the «المخالفات الخام» tab of hr/violations.tsx (already listed
+  // above), so adoption is still covered there.
   { path: "hr/salary-components.tsx", sampleHeader: "مكونات-الرواتب" },
   { path: "hr/idp.tsx", sampleHeader: "خطط-التطوير-الفردي" },
   { path: "hr/approval-chains.tsx", sampleHeader: "مراحل-الاعتماد" },
@@ -101,8 +103,10 @@ describe("HR CSV export — every listed page wires exportToCSV", () => {
     });
   }
 
-  it("ratchet never shrinks — minimum 28 HR pages with CSV export", () => {
-    expect(ADOPTED_PAGES.length).toBeGreaterThanOrEqual(28);
+  // Floor lowered 28 → 27 once (HR-REV-7) when violations-management.tsx was
+  // retired and its CSV export folded into violations.tsx. Otherwise grows-only.
+  it("ratchet never shrinks — minimum 27 HR pages with CSV export", () => {
+    expect(ADOPTED_PAGES.length).toBeGreaterThanOrEqual(27);
   });
 });
 

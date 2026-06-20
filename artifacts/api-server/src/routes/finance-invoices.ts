@@ -1146,6 +1146,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           accountCode: string;
           amount: number;
           costCenter: string | null;
+          costCenterId: number | null;
           activityType: string | null;
           projectId: number | null;
           vehicleId: number | null;
@@ -1200,6 +1201,9 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
               accountCode: acct,
               amount: amt,
               costCenter: cc != null ? String(cc) : null,
+              // Numeric FK — when set (e.g. a pinned trip cost-center), the
+              // enricher keeps it instead of deriving from vehicleId.
+              costCenterId: cc != null ? Number(cc) : null,
               activityType: ln.activityType,
               projectId: dims.projectId,
               vehicleId: dims.vehicleId,
@@ -1253,7 +1257,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           } else {
             buckets.set(fallbackKey, {
               accountCode: invRevenueCode, amount: diff,
-              costCenter: null, activityType: null, projectId: null,
+              costCenter: null, costCenterId: null, activityType: null, projectId: null,
               vehicleId: null, propertyId: null, employeeId: null,
               driverId: null, contractId: null, productId: null,
               unitId: null, assetId: null,
@@ -1267,6 +1271,7 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
           revenueLines.push({
             accountCode: b.accountCode, debit: 0, credit: b.amount,
             costCenter: b.costCenter ?? undefined,
+            costCenterId: b.costCenterId ?? undefined,
             activityType: b.activityType ?? undefined,
             projectId: b.projectId ?? undefined,
             vehicleId: b.vehicleId ?? undefined,
@@ -2056,7 +2061,7 @@ invoicesRouter.post("/invoices/:id/payment", authorize({ feature: "finance.invoi
     });
     markIdempotencyReplay(req, res, alreadyExists);
 
-    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: id, details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "invoice.paid", entity: "invoices", entityId: id, after: { id }, details: JSON.stringify({ amount, method, newStatus }) }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
     res.json({ message: "تم تسجيل الدفعة", newPaidAmount: newPaid, status: newStatus });
   } catch (err) {
@@ -2088,7 +2093,7 @@ invoicesRouter.get("/invoices/:id", authorize({ feature: "finance.invoices", act
       // The old `accountCode = '1100'` filter dropped bank/other-cash payments
       // entirely (DR 1110 or a tenant-mapped account); the payment JE has
       // exactly one debit leg, so SUM(debit) is the amount for ANY cash account.
-      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
+      rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0) AS amount FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE $2 AND jl.debit > 0 GROUP BY je.id, je.ref, je.description, je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `PAY-${invoice.ref}%`]),
       rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, je."createdAt" AS date FROM journal_entries je WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND (je.ref LIKE $2 OR je.ref LIKE $3) ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId, `JE-${invoice.ref}%`, `PAY-${invoice.ref}%`]),
     ]);
     res.json(maskFields(req, { ...invoice, lines, payments, journalEntries }));
@@ -2543,7 +2548,9 @@ async function invoiceApprovalAction(req: any, res: any, newStatus: "approved" |
   }
 }
 
-invoicesRouter.patch("/invoices/:id/approve", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "approved"));
+// PATCH /invoices/:id/approve was retired (#1715): it approved WITHOUT GL
+// posting and the FE never called it. Approval now goes through
+// POST /invoices/:id/approve (GL-posting). reject/return keep the PATCH verb.
 invoicesRouter.patch("/invoices/:id/reject", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "rejected"));
 invoicesRouter.patch("/invoices/:id/return", authorize({ feature: "finance.invoices", action: "update" }), (req, res) => invoiceApprovalAction(req, res, "returned"));
 
@@ -2581,6 +2588,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
          JOIN journal_entries je ON je.id = cm."journalId"
         WHERE cm."companyId" = $1
           AND to_char(cm."memoDate", 'YYYY-MM') = $2
+          AND cm."deletedAt" IS NULL
           AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true
           AND je."reversedById" IS NULL`,
@@ -2592,6 +2600,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
          JOIN journal_entries je ON je.id = dm."journalId"
         WHERE dm."companyId" = $1
           AND to_char(dm."memoDate", 'YYYY-MM') = $2
+          AND dm."deletedAt" IS NULL
           AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true
           AND je."reversedById" IS NULL`,
@@ -2605,6 +2614,7 @@ invoicesRouter.get("/tax/summary", authorize({ feature: "finance.zatca", action:
           AND je."balancesApplied" = true
           AND je."reversedById" IS NULL
         WHERE je."companyId" = $1
+          AND jl."deletedAt" IS NULL
           AND jl."accountCode" = $3
           AND to_char(je."createdAt", 'YYYY-MM') = $2`,
       [scope.companyId, targetPeriod, inputVatCode]
@@ -3064,7 +3074,7 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
       details: JSON.stringify({ memoId, amount: creditAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM credit_memos WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     // cogsReversalWarnings is non-fatal — flagged when a restored lot's
     // status drifted between sale and return (quarantine / recalled /
     // expired / disposed / qc-rejected / lot deleted). UI should
@@ -3769,7 +3779,7 @@ invoicesRouter.post("/invoices/:id/debit-memo", authorize({ feature: "finance.in
       details: JSON.stringify({ memoId, amount: chargeAmount, net, vat, reason }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
-    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM debit_memos WHERE id=$1 AND "companyId"=$2`, [memoId, scope.companyId]);
+    const [memo] = await rawQuery<Record<string, unknown>>(`SELECT * FROM debit_memos WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [memoId, scope.companyId]);
     res.status(201).json(memo || { memoId, journalId, invoiceId: id, amount: chargeAmount, netAmount: net, vatAmount: vat, reason, memoDate: memoDateStr });
   } catch (err) {
     handleRouteError(err, res, "Debit memo error:");
@@ -3785,14 +3795,14 @@ invoicesRouter.get("/invoices/:id/memos", authorize({ feature: "finance.invoices
     try {
       creditMemos = await rawQuery<Record<string, unknown>>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "journalEntryId", "createdAt"
-           FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
+           FROM credit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
     } catch (e) { logger.warn(e, "credit_memos table may not exist yet"); }
     try {
       debitMemos = await rawQuery<Record<string, unknown>>(
         `SELECT id, amount, "netAmount", "vatAmount", reason, "memoDate", "createdAt"
-           FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 ORDER BY "memoDate" DESC`,
+           FROM debit_memos WHERE "invoiceId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "memoDate" DESC`,
         [id, scope.companyId]
       );
     } catch (e) { logger.warn(e, "debit_memos table may not exist yet"); }
@@ -4153,6 +4163,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     });
     markIdempotencyReplay(req, res, advanceAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.created", entity: "customer_advances", entityId: advanceId ?? 0,
+      after: { ref: advRef, clientId, amount: amt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-create audit failed"));
+
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Customer advance create error:");
@@ -4222,6 +4238,7 @@ invoicesRouter.post("/customer-receipts", authorize({ feature: "finance.invoices
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
       action: "finance.payment.received", entity: "journal_entries", entityId: result.journalId,
+      after: { voucherId: result.journalId, clientId: body.clientId, amount: body.amount },
       details: JSON.stringify({ voucherId: result.journalId, clientId: body.clientId, amount: body.amount, applied: result.applied.length, leftover: result.leftover }),
     }).catch((e) => logger.error(e, "finance-invoices background task failed"));
 
@@ -4350,6 +4367,12 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
     // below would have responded with the error).
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.applied", entity: "customer_advances", entityId: advanceId,
+      after: { invoiceId: Number(invoiceId), amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-apply audit failed"));
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {
@@ -4483,7 +4506,7 @@ invoicesRouter.get("/dunning/preview", authorize({ feature: "finance.collection"
        LEFT JOIN clients c ON c.id = i."clientId" AND c."companyId" = i."companyId" AND c."deletedAt" IS NULL
        WHERE i."companyId"=$2
          AND i.status NOT IN ('paid','cancelled')
-         AND COALESCE(i."deletedAt",NULL) IS NULL
+         AND i."deletedAt" IS NULL
          AND i."dueDate" IS NOT NULL
          AND i."dueDate"::date < $1::date
          AND ($1::date - i."dueDate"::date) >= $3
@@ -4604,9 +4627,16 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }
 
+    const sentCount = results.filter(r => r.status === "sent").length;
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.dunning.sent", entity: "dunning_letters", entityId: scope.companyId,
+      after: { sent: sentCount, total: results.length, sentVia },
+    }).catch((e) => logger.error(e, "finance-invoices dunning audit failed"));
+
     res.status(201).json({
       total: results.length,
-      sent: results.filter(r => r.status === "sent").length,
+      sent: sentCount,
       skipped: results.filter(r => r.status === "skipped").length,
       results,
     });
@@ -4668,6 +4698,7 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
               COALESCE(SUM("vatAmount"), 0) AS total
        FROM credit_memos
        WHERE "companyId" = $1
+         AND "deletedAt" IS NULL
          AND "memoDate" >= make_date($2, 1, 1) AND "memoDate" < make_date($2 + 1, 1, 1)
        GROUP BY to_char("memoDate", 'YYYY-MM')`,
       [scope.companyId, thisYear]
@@ -4677,7 +4708,7 @@ invoicesRouter.get("/tax/declarations", authorize({ feature: "finance.zatca", ac
               COALESCE(SUM(jl.debit), 0) AS total
        FROM journal_lines jl
        JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL AND je."balancesApplied" = true
-       WHERE je."companyId" = $1 AND jl."accountCode" = $3
+       WHERE je."companyId" = $1 AND jl."deletedAt" IS NULL AND jl."accountCode" = $3
          AND je."createdAt" >= make_date($2, 1, 1) AND je."createdAt" < make_date($2 + 1, 1, 1)
        GROUP BY to_char(je."createdAt", 'YYYY-MM')`,
       [scope.companyId, thisYear, inputVatCode]

@@ -282,6 +282,12 @@ const completeMaintenanceSchema = z.object({
   zeroCostConfirmed: z.boolean().optional().nullable(),
   materialsUsed: z.array(z.any()).optional().nullable(),
   coveredByContract: z.boolean().optional().nullable(),
+  // V1 (FIN-PROP-OWNER) — من يتحمّل تكلفة الصيانة. الافتراضي "company" (سلوك
+  // قائم بلا تغيير). "owner" يوجّه القيد لفوترة المالك بدل مصروف الشركة،
+  // ومحروس: يُرفض ما لم يوجد مالك مسجّل على الوحدة/المبنى.
+  costResponsibility: z.enum(["company", "owner"]).optional().nullable(),
+  // عند تحميلها على المالك: هل تُصدَر فاتورة ضريبية (ضريبة بمعدل الشركة)؟
+  ownerVatApplicable: z.boolean().optional().nullable(),
 });
 
 const createTenantSchema = z.object({
@@ -1260,6 +1266,12 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
       return contractId;
     });
 
+    // Per-lease cost centre, nested under the unit's cost centre — gives
+    // per-contract P&L drill-down (rent revenue vs maintenance/penalties for
+    // this lease). The legal-contract path already auto-creates one; rental
+    // contracts didn't — closing that asymmetry. Fire-and-forget.
+    createCostCenterForEntity(scope.companyId, "contract", insertId, `عقد إيجار ${contractNumber}`, { parentEntityType: "unit", parentEntityId: Number(b.unitId), actorUserId: scope.userId }).catch((e) => logger.error(e, "rental contract cost-centre auto-create failed"));
+
     await applyTransition({
       entity: "property_units",
       id: Number(b.unitId),
@@ -1303,7 +1315,7 @@ router.post("/contracts", authorize({ feature: "properties.contracts", action: "
     } catch (obErr) { logger.error(obErr, "Contract obligation registration failed:"); }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
-    const schedule = await rawQuery<Record<string, unknown>>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`, [insertId]);
+    const schedule = await rawQuery<Record<string, unknown>>(`SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2 ORDER BY "installmentNumber" LIMIT 500`, [insertId, scope.companyId]);
 
     // Lifecycle event: lease.created
     await emitEvent({
@@ -1567,8 +1579,8 @@ router.post("/contracts/:id/renew", authorize({ feature: "properties.contracts",
         const installmentCount = Math.ceil(renewalMonths / freqMonths);
         const installmentAmount = roundTo2(newTotal / installmentCount);
         const maxRes = await client.query(
-          `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1`,
-          [id]
+          `SELECT COALESCE(MAX("installmentNumber"),0) AS max FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2`,
+          [id, scope.companyId]
         );
         const startNum = Number(maxRes.rows[0]?.max || 0);
         for (let i = 0; i < installmentCount; i++) {
@@ -2377,8 +2389,8 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
     const isEmergency = emergencyKeywords.some(kw => descLower.includes(kw));
 
     const pastRequests = await rawQuery<Record<string, unknown>>(
-      `SELECT EXTRACT(EPOCH FROM ("completedAt"::timestamp - "createdAt"::timestamp))/86400 AS days FROM maintenance_requests WHERE "unitId"=$1 AND status='completed' AND "completedAt" IS NOT NULL ORDER BY id DESC LIMIT 10`,
-      [b.unitId]
+      `SELECT EXTRACT(EPOCH FROM ("completedAt"::timestamp - "createdAt"::timestamp))/86400 AS days FROM maintenance_requests WHERE "unitId"=$1 AND "companyId"=$2 AND status='completed' AND "completedAt" IS NOT NULL ORDER BY id DESC LIMIT 10`,
+      [b.unitId, scope.companyId]
     );
     const responseDays = pastRequests.map((r: Record<string, unknown>) => Number(r.days)).filter((d: number) => d > 0);
     const avgResponseDays = responseDays.length > 0 ? movingAverage(responseDays) : 5;
@@ -2633,6 +2645,32 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
 
     const cost = resolvedCost ?? 0;
 
+    // V1 (FIN-PROP-OWNER) — توجيه مسؤولية التكلفة. الافتراضي = الشركة (سلوك
+    // قائم). عند اختيار "owner" صراحةً: تُفوتَر على مالك العقار المسجَّل (ذمة
+    // مدينة) لا كمصروف شركة — مع حارس يرفض "owner" ما لم يوجد مالك مسجَّل على
+    // الوحدة أو مبناها. يُنفَّذ قبل applyTransition ليفشل قبل إكمال البلاغ.
+    let billToOwner = false;
+    let maintOwnerId: number | null = null;
+    if (b.costResponsibility === "owner") {
+      const ownerLookup = mr.unitId
+        ? await rawQuery<{ ownerId: number | null }>(
+            `SELECT COALESCE(u."ownerId", bld."ownerId") AS "ownerId"
+               FROM property_units u
+               LEFT JOIN property_buildings bld ON bld.id = u."buildingId" AND bld."companyId" = $2
+              WHERE u.id = $1 AND u."companyId" = $2`,
+            [Number(mr.unitId), scope.companyId]
+          )
+        : [];
+      maintOwnerId = ownerLookup[0]?.ownerId ?? null;
+      if (!maintOwnerId) {
+        throw new ValidationError("لا يمكن تحميل الصيانة على المالك: لا يوجد مالك مسجَّل لهذا العقار", {
+          field: "costResponsibility",
+          fix: "سجّل مالك العقار (الوحدة أو المبنى) أولاً، أو اجعل التكلفة على الشركة.",
+        });
+      }
+      billToOwner = true;
+    }
+
     // Build setExtras for the completion columns
     const completionExtras: Record<string, any> = {
       completedAt: { raw: "NOW()" },
@@ -2641,6 +2679,7 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
     if (b.closureReport) completionExtras.closureReport = b.closureReport;
     if (b.afterPhotos) completionExtras.afterPhotos = JSON.stringify(b.afterPhotos);
     if (b.materialsUsed) completionExtras.materialsUsed = JSON.stringify(b.materialsUsed);
+    if (b.costResponsibility) completionExtras.costResponsibility = b.costResponsibility;
 
     // Derive allowed fromStates for "completed" from the local state machine
     const completionFromStates = Object.entries(MAINT_REQUEST_TRANSITIONS)
@@ -2659,8 +2698,10 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
 
     // --- Post-commit side-effects ---
 
+    // فاتورة المستأجر التلقائية تُتخطّى عند تحميل التكلفة على المالك (يُفوتَر
+    // المالك عبر قيد فوترة المالك أدناه، لا المستأجر).
     let invoiceId: number | null = null;
-    if (cost > 0 && !b.coveredByContract) {
+    if (cost > 0 && !b.coveredByContract && !billToOwner) {
       const monthNum = currentMonthPadded();
       const yearShort = String(currentYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
@@ -2734,12 +2775,23 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
         const propertyId = unitDimRow?.buildingId ?? 0;
         const unitId = mr.unitId ? Number(mr.unitId) : null;
         const tenantId = unitDimRow?.tenantId ?? null;
-        const glResult = await propertiesEngine.postMaintenanceExpenseGL(
-          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-          { id, propertyId, unitId, tenantId, totalCost: cost, type: mr.category as string | undefined }
-        );
-        journalEntryId = glResult.journalId;
-      } catch (e) { logger.error(e, "maintenance expense GL posting failed"); journalEntryId = null; }
+        if (billToOwner && maintOwnerId) {
+          // V1 — مُدارة لطرف ثالث: التكلفة ذمة على المالك لا مصروف شركة.
+          // مدين ذمة المالك (الإجمالي) / دائن مستحق صيانة (الصافي) / دائن ضريبة (اختياري).
+          const ownerVat = b.ownerVatApplicable ? computeVat(cost, await getCompanyVatRate(scope.companyId)) : 0;
+          const glResult = await propertiesEngine.postMaintenanceOwnerBillingGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            { id, propertyId, unitId, ownerId: maintOwnerId, totalCost: cost, vatAmount: ownerVat, type: mr.category as string | undefined }
+          );
+          journalEntryId = glResult.journalId;
+        } else {
+          const glResult = await propertiesEngine.postMaintenanceExpenseGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            { id, propertyId, unitId, tenantId, totalCost: cost, type: mr.category as string | undefined }
+          );
+          journalEntryId = glResult.journalId;
+        }
+      } catch (e) { logger.error(e, "maintenance GL posting failed"); journalEntryId = null; }
     }
 
     let followUpTaskId: number | null = null;
@@ -2912,8 +2964,8 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
     const contractIds = contracts.map((c) => c.id);
     const payments = contractIds.length > 0
       ? await rawQuery<Record<string, unknown>>(
-          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
-          [contractIds]
+          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" AND c."companyId" = $2 LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
+          [contractIds, scope.companyId]
         )
       : [];
 
@@ -4152,8 +4204,8 @@ router.get("/contracts/:id/schedule", authorize({ feature: "properties.contracts
     const [contract] = await rawQuery<Record<string, unknown>>(`SELECT id FROM rental_contracts WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [contractId, scope.companyId]);
     if (!contract) throw new NotFoundError("العقد غير موجود");
     const schedule = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 ORDER BY "installmentNumber" LIMIT 500`,
-      [contractId]
+      `SELECT * FROM contract_payment_schedule WHERE "contractId"=$1 AND "companyId"=$2 ORDER BY "installmentNumber" LIMIT 500`,
+      [contractId, scope.companyId]
     );
     res.json(maskFields(req, { data: schedule, total: schedule.length }));
   } catch (err) { handleRouteError(err, res, "Payment schedule error:"); }
@@ -4769,7 +4821,7 @@ router.post("/sales", authorize({ feature: "properties.buildings", action: "crea
       details: `بيع عقار لـ ${b.buyerName} بمبلغ ${b.salePrice}` });
 
     const [sale] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM property_sales WHERE id=$1`, [insertId]
+      `SELECT * FROM property_sales WHERE id=$1 AND "deletedAt" IS NULL`, [insertId]
     );
     res.status(201).json(sale);
   } catch (err) { handleRouteError(err, res, "Property sale create error:"); }

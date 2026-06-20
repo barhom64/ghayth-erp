@@ -11,10 +11,11 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import {
   CheckCircle2, AlertTriangle, XCircle, ChevronRight,
-  Calendar, ListChecks, Download, RefreshCw,
+  Calendar, ListChecks, Download,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 
 /**
  * Daily Finance Close Checklist
@@ -282,10 +283,7 @@ export default function DailyCloseChecklistPage() {
             />
           </div>
           <div className="flex-1" />
-          <Button variant="outline" size="sm" onClick={refetchAll}>
-            <RefreshCw className="w-4 h-4 ml-1" />
-            تحديث
-          </Button>
+          <RefreshAction onRefresh={refetchAll} />
           <Button variant="outline" size="sm" onClick={exportCSV} disabled={allLoading}>
             <Download className="w-4 h-4 ml-1" />
             CSV

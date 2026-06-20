@@ -10,7 +10,7 @@ import {
   FormGrid,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -104,7 +104,7 @@ function ClientRelationshipCard<T extends { id: number | string }>({
         ) : (
           <div className="space-y-2">
             {items.map((item) => (
-              <Link key={item.id} href={hrefFor(item)}>
+              <Link key={item.id} href={hrefFor(item)} asChild>
                 <a className="block p-3 rounded-md border hover:bg-muted/30 transition">
                   {renderItem(item)}
                 </a>
@@ -762,7 +762,7 @@ export default function ClientDetail() {
               <FileSpreadsheet className="h-4 w-4" /> كشف حساب
             </Link></Button>
           {client && (
-            <EntityPrintButton
+            <PrintButton
               entityType="client"
               entityId={client.id ?? params?.id}
 

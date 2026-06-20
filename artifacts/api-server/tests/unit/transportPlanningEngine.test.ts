@@ -227,8 +227,10 @@ describe("#1812 — planning routes", () => {
     expect(PLANNING_ROUTES).toMatch(/\.delete\(\s*"\/transport\/itineraries\/:id\/legs\/:legId"/);
   });
 
-  it("exposes navigation session lifecycle (start / ping / event / complete / get / me)", () => {
-    expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/start/);
+  it("exposes navigation session lifecycle (ping / event / complete / get / me)", () => {
+    // The explicit POST .../navigation/start route was retired — navigation
+    // sessions are now auto-created when a dispatch order is accepted (the
+    // auto-start hook in PATCH /transport/dispatch-orders/:id).
     expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/ping/);
     expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/event/);
     expect(PLANNING_ROUTES).toMatch(/\/transport\/dispatch-orders\/:id\/navigation\/complete/);
@@ -296,9 +298,15 @@ describe("#1812 — driver in-app navigation SPA", () => {
     expect(DRIVER_NAV).not.toMatch(/(السعر|التكلفة|الفاتورة|القيد|الإيراد)/);
   });
 
-  it("offers the external-maps fallback link", () => {
+  it("offers the prominent 'ابدأ الملاحة' button bound to a keyless Google Maps deep link", () => {
+    // Maps Provider Adapter (owner brief 2026-06-15) promoted the
+    // small "(احتياطي)" link into a primary action button so the
+    // driver never has to leave-and-search. The link itself is the
+    // same keyless `api=1` form, so it works whether or not a
+    // Google API key is configured on the server.
     expect(DRIVER_NAV).toContain("www.google.com/maps");
-    expect(DRIVER_NAV).toMatch(/احتياطي/);
+    expect(DRIVER_NAV).toMatch(/ابدأ الملاحة/);
+    expect(DRIVER_NAV).toMatch(/data-testid="start-navigation-button"/);
   });
 
   it("registered in fleetRoutes at /me/driver/navigation", () => {

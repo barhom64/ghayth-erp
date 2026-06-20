@@ -41,7 +41,10 @@ const EXPECTED: Record<string, string> = {
   vendor_return_revenue:     "5110",
   purchase_vat_input:        "1180",
   vat_input_reversal:        "1180",
-  purchase_grni:             "2150",
+  // migration 382 (#2524) re-pointed purchase_grni from 2150
+  // (Accrued Expenses parent) to the dedicated GRNI leaf 2115
+  // (فواتير لم تُستلم / Goods Received Not Invoiced).
+  purchase_grni:             "2115",
 };
 
 d("FIN #2140 slice 2-أ — vendor AP accounting anchors (live DB)", () => {

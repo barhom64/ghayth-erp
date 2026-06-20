@@ -205,7 +205,7 @@ export default function Entity360Page() {
 
   return (
     <PageShell
-      title="نظرة شاملة على كيان (Entity 360)"
+      title="نظرة شاملة على كيان"
       subtitle="اختر مركبة / عقار / موظف / مشروع → اعرض كل التأثير المالي عبر كل الأبعاد في مكان واحد"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

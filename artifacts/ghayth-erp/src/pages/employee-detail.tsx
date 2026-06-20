@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatDateAr, formatTimeAr, formatCurrency } from "@/lib/formatters";
+import { VISA_TYPES, CONTRACT_TYPES, IQAMA_STATUS, hrLabel } from "@/lib/hr-type-maps";
 import { PrintPreviewModal } from "@workspace/report-kit";
 import { useBranchLetterhead } from "@/hooks/use-branch-letterhead";
 import { useAuth } from "@/lib/auth";
@@ -541,7 +542,7 @@ function PerformanceWidget({ employeeId, latestScore, activeSignals }: {
             {/* PR-4 (#2077) — link to the dedicated score detail page
                 where HR sees full rationale per dimension + raw counters
                 + history + the on-demand recompute button. */}
-            <Link href={`/hr/employees/${employeeId}/score`}>
+            <Link href={`/hr/employees/${employeeId}/score`} asChild>
               <a className="text-xs text-status-info-foreground hover:underline ms-auto" data-testid="link-employee-score-detail">
                 تفصيل كامل ←
               </a>
@@ -1265,12 +1266,12 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الإقامة</p><p className="font-mono text-sm">{employee.iqamaNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">انتهاء الإقامة</p><p className="text-sm">{employee.iqamaExpiry ? formatDateAr(employee.iqamaExpiry) : "-"}</p></div>
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground">حالة الإقامة</p><p className="text-sm">{employee.iqamaStatus === "active" ? "سارية" : employee.iqamaStatus === "expired" ? "منتهية" : employee.iqamaStatus === "renewal_pending" ? "قيد التجديد" : employee.iqamaStatus || "-"}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground">حالة الإقامة</p><p className="text-sm">{hrLabel(IQAMA_STATUS, employee.iqamaStatus)}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الجواز</p><p className="font-mono text-sm">{employee.passportNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">انتهاء الجواز</p><p className="text-sm">{employee.passportExpiry ? formatDateAr(employee.passportExpiry) : "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الحدود</p><p className="font-mono text-sm">{employee.borderNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم التأشيرة</p><p className="font-mono text-sm">{employee.visaNumber || "-"}</p></div>
-                  <div className="space-y-1"><p className="text-xs text-muted-foreground">نوع التأشيرة</p><p className="text-sm">{employee.visaType || "-"}</p></div>
+                  <div className="space-y-1"><p className="text-xs text-muted-foreground">نوع التأشيرة</p><p className="text-sm">{hrLabel(VISA_TYPES, employee.visaType)}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">انتهاء التأشيرة</p><p className="text-sm">{employee.visaExpiry ? formatDateAr(employee.visaExpiry) : "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم الكفيل / المنشأة</p><p className="font-mono text-sm">{employee.sponsorNumber || "-"}</p></div>
                   <div className="space-y-1"><p className="text-xs text-muted-foreground">رقم رخصة العمل</p><p className="font-mono text-sm">{employee.workPermitNumber || "-"}</p></div>
@@ -1557,7 +1558,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">نوع العقد</p>
-                  <p className="text-sm">{contract.contractType || "—"}</p>
+                  <p className="text-sm">{hrLabel(CONTRACT_TYPES, contract.contractType)}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">الحالة</p>
@@ -1915,7 +1916,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
               <div className="text-center py-6 border-t border-dashed">
                 <FileText className="h-8 w-8 mx-auto mb-2 opacity-40" />
                 <p className="text-muted-foreground text-sm">لا توجد وثائق مرفقة لهذا الموظف</p>
-                <p className="text-xs text-muted-foreground mt-1">يمكنك إضافة الوثائق من <Link href="/hr/documents"><a className="text-primary hover:underline">إدارة وثائق الموارد البشرية</a></Link></p>
+                <p className="text-xs text-muted-foreground mt-1">يمكنك إضافة الوثائق من <Link href="/hr/documents" asChild><a className="text-primary hover:underline">إدارة وثائق الموارد البشرية</a></Link></p>
               </div>
             ) : (
               <div className="space-y-2 border-t pt-3">
@@ -1930,7 +1931,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                   </div>
                 ))}
                 {documents.length > 5 && (
-                  <Link href="/hr/documents">
+                  <Link href="/hr/documents" asChild>
                     <a className="text-xs text-primary hover:underline flex items-center gap-1 mt-2">
                       عرض كل الوثائق ({documents.length}) <ArrowUpRight className="h-3 w-3" />
                     </a>
@@ -1950,7 +1951,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 <Award className="h-5 w-5" />
                 التقييم المؤسسي
               </span>
-              <Link href={`/hr/employees/${id}/score`}>
+              <Link href={`/hr/employees/${id}/score`} asChild>
                 <a className="text-xs text-primary hover:underline flex items-center gap-1">
                   التفصيل الكامل <ArrowUpRight className="h-3 w-3" />
                 </a>
@@ -2052,7 +2053,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
                 {activityRows.length > 10 && (
                   <p className="text-xs text-muted-foreground text-center mt-2">
                     عرض 10 من {activityRows.length} سجلًا — افتح
-                    <Link href={`/audit-logs?entity=employees&entityId=${id}`}>
+                    <Link href={`/audit-logs?entity=employees&entityId=${id}`} asChild>
                       <a className="text-primary hover:underline mx-1">سجل التدقيق الكامل</a>
                     </Link>
                   </p>
@@ -2194,7 +2195,7 @@ export default function EmployeeDetail({ id: propId }: { id?: string }) {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <OperationalStatusBar employeeId={id} />
-            <EntityPrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
+            <PrintButton entityType="employee" entityId={id ?? ""} label="بطاقة الموظف" />
             {id && <EntityPnlButton entityType="employee" entityId={Number(id)} />}
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setShowPrintMenu(!showPrintMenu)}>

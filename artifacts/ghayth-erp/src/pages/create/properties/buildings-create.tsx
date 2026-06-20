@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useApiQuery, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PropertyOwnerSelect } from "@/components/shared/entity-selects";
 import { Building2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -15,8 +16,7 @@ import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/fo
 export default function BuildingsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { data: ownersResp, isLoading, isError } = useApiQuery<any>(["property-owners"], "/properties/owners");
-  const owners = asList(ownersResp);
+  const { isLoading, isError } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const [saving, setSaving] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_buildings_create", {
@@ -107,15 +107,11 @@ export default function BuildingsCreate() {
                 <DatePicker value={form.deedDate} onChange={v => setForm({ ...form, deedDate: v })} />
               </FormFieldWrapper>
               <TextField label="رقم رخصة البناء" dir="ltr" value={form.buildingPermitNumber} onChange={v => setForm({ ...form, buildingPermitNumber: v })} />
-              <FormFieldWrapper label="المالك">
-                <Select value={form.ownerId || "none"} onValueChange={v => setForm({ ...form, ownerId: v === "none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="— بدون —" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— بدون مالك —</SelectItem>
-                    {owners.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </FormFieldWrapper>
+              <PropertyOwnerSelect
+                label="المالك"
+                value={form.ownerId}
+                onChange={(v) => setForm({ ...form, ownerId: v })}
+              />
               <NumberField label="سنة البناء" value={form.yearBuilt} onChange={v => setForm({ ...form, yearBuilt: v })} placeholder="١٤٤٥" min={1800} />
               <NumberField label="المساحة الإجمالية (م²)" value={form.totalArea} onChange={v => setForm({ ...form, totalArea: v })} min={0} />
             </div>

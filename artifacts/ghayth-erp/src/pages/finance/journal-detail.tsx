@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { ScrollText, ArrowLeftRight, ExternalLink, Hash, Calendar, FileText, CheckCircle, Send } from "lucide-react";
 
@@ -246,7 +246,7 @@ export default function JournalDetailPage() {
               ترحيل
             </GuardedButton>
           )}
-          <EntityPrintButton entityType="journal_entry" entityId={id ?? ""} />
+          <PrintButton entityType="journal_entry" entityId={id ?? ""} />
         </div>
       }
     >

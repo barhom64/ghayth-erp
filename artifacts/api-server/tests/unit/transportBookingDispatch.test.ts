@@ -21,6 +21,8 @@ const read = (rel: string) => readFileSync(join(apiSrc, rel), "utf8");
 const BOOKINGS_ROUTE = read("routes/transport-bookings.ts");
 const ROUTES_INDEX = read("routes/index.ts");
 const FEATURE_CATALOG = read("lib/rbac/featureCatalog.ts");
+const CASCADE_LIB = read("lib/transportDispatchCascade.ts");
+const FLEET_ROUTE = read("routes/fleet.ts");
 
 const BOOKING_STATES = [
   "draft", "submitted", "pending_approval", "approved",
@@ -180,6 +182,87 @@ describe("#1733 Booking + Dispatch — state machines", () => {
     expect(block).toMatch(/completed\s*:\s*\[\s*"closed"\s*\]/);
     expect(block).toMatch(/closed\s*:\s*\[\s*\]/);
     expect(block).toMatch(/declined\s*:\s*\[\s*\]/);
+  });
+
+  it("dispatch→booking cascade is a single shared helper (no per-route drift)", () => {
+    // The cascade lives in lib/transportDispatchCascade and is invoked by BOTH
+    // the dispatch board (transport-bookings) and the fleet trip-completion
+    // path (#12), so the two can never disagree on the rules.
+    expect(CASCADE_LIB).toMatch(/export async function cascadeDispatchToBooking/);
+    // accepted (driver took the order) advances a still-"scheduled" booking to
+    // "dispatched"; guarded to "scheduled" so it can't drag one already past
+    // dispatch backwards.
+    expect(CASCADE_LIB).toMatch(
+      /target === "accepted" && lineRow\.bookingStatus === "scheduled"[\s\S]{0,80}nextBookingStatus = "dispatched"/,
+    );
+    // booking only completes/cancels once ALL its lines are terminal.
+    expect(CASCADE_LIB).toMatch(/total > 0 && total === matching/);
+    // dispatch board delegates to the helper instead of an inline cascade.
+    expect(BOOKINGS_ROUTE).toMatch(/await cascadeDispatchToBooking\(tx, \{/);
+    // (the import may carry sibling helpers like cancelTripsForDispatchOrder).
+    expect(BOOKINGS_ROUTE).toMatch(
+      /import \{ cascadeDispatchToBooking[^}]*\} from "\.\.\/lib\/transportDispatchCascade\.js"/,
+    );
+  });
+
+  it("completing a dispatch-linked trip auto-completes the dispatch order (#12)", () => {
+    // A trip created from a dispatch order carries sourceKey
+    // "dispatch:<id>:<token>"; on trip completion fleet.ts must parse that,
+    // complete the still-"executing" dispatch order, and run the shared
+    // booking cascade — so the operator never closes the board entry by hand.
+    expect(FLEET_ROUTE).toMatch(
+      /import \{ cascadeDispatchToBooking \} from "\.\.\/lib\/transportDispatchCascade\.js"/,
+    );
+    expect(FLEET_ROUTE).toMatch(/\/\^dispatch:\(\\d\+\):\//);
+    // only auto-completes an order still "executing" (never force-closes one
+    // the operator already moved past).
+    expect(FLEET_ROUTE).toMatch(/transport_dispatch_orders[\s\S]{0,120}status = 'executing'/);
+    expect(FLEET_ROUTE).toMatch(
+      /cascadeDispatchToBooking\(client, \{[\s\S]{0,120}target: "completed"/,
+    );
+  });
+
+  it("cancelling a dispatch-linked trip re-dispatches (NOT cancels) the order", () => {
+    // Operator decision: a cancelled trip is not a cancelled booking. The
+    // linked order — only when still 'accepted'/'executing' — goes back to
+    // 'pending' (re-pickable by another driver), its accept/start stamps are
+    // cleared, the nav session is cancelled, and the booking LINE returns to
+    // 'pending'. The booking itself is left untouched (mirrors decline).
+    const cancelBlock =
+      FLEET_ROUTE.match(/trips\/:id\/cancel[\s\S]+?event: "fleet\.trip\.cancelled"/)?.[0] ?? "";
+    expect(cancelBlock).toMatch(/\/\^dispatch:\(\\d\+\):\//);
+    // re-assignable, not terminal: order → pending (never 'completed'/'cancelled').
+    expect(cancelBlock).toMatch(
+      /status IN \('accepted', 'executing'\)[\s\S]{0,400}status = 'pending'/,
+    );
+    expect(cancelBlock).toMatch(/"acceptedAt" = NULL, "startedAt" = NULL/);
+    expect(cancelBlock).toMatch(/driver_navigation_sessions[\s\S]{0,120}status = 'cancelled'/);
+    // the operational need survives: line back to 'open' (awaiting re-dispatch),
+    // not 'cancelled'. ('open' is the valid line state; 'pending' is a dispatch-
+    // order status, rejected by the transport_booking_lines CHECK.)
+    expect(cancelBlock).toMatch(/transport_booking_lines[\s\S]{0,120}status = 'open'/);
+    expect(cancelBlock).not.toMatch(/cascadeDispatchToBooking[\s\S]{0,80}target: "cancelled"/);
+  });
+
+  it("cancelling a dispatch order cascades DOWN to cancel the linked trip (shared helper)", () => {
+    // Top-down: cancelling the order from the board must also cancel the trip it
+    // spawned ("dispatch:<id>:<token>" sourceKey) and release its vehicle/driver,
+    // or the trip is orphaned and the resources stay locked. The release lives in
+    // the shared cancelTripsForDispatchOrder helper so the booking-cancel cascade
+    // (PATCH /bookings/:id, "cascade" policy) reuses the IDENTICAL rule instead of
+    // a second copy. Bounded to non-terminal trips → idempotent.
+    expect(CASCADE_LIB).toMatch(/export async function cancelTripsForDispatchOrder/);
+    expect(CASCADE_LIB).toMatch(/UPDATE\s+fleet_trips[\s\S]{0,120}status = 'cancelled'/);
+    expect(CASCADE_LIB).toMatch(/"sourceKey" LIKE \$2/);
+    expect(CASCADE_LIB).toMatch(/`dispatch:\$\{dispatchOrderId\}:%`/);
+    expect(CASCADE_LIB).toMatch(/status IN \('scheduled', 'planned', 'in_progress'\)/);
+    // releases the held resources, mirroring the fleet trip-cancel handler.
+    expect(CASCADE_LIB).toMatch(/fleet_vehicles SET status='available'[\s\S]{0,80}status='in_use'/);
+    expect(CASCADE_LIB).toMatch(/fleet_drivers SET status='available'[\s\S]{0,80}status='on_trip'/);
+    // the dispatch board's cancel branch delegates to the helper (no inline copy).
+    const block =
+      BOOKINGS_ROUTE.match(/if \(target === "cancelled"\) \{[\s\S]{0,400}/)?.[0] ?? "";
+    expect(block).toMatch(/cancelTripsForDispatchOrder\(tx, \{/);
   });
 });
 

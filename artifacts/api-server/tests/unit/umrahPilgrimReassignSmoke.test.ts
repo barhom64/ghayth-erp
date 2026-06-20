@@ -64,7 +64,11 @@ describe("pilgrim-detail page — reassign modal", () => {
   });
 
   it("opens an EntityEditDialog wired to the existing PATCH endpoint", () => {
-    expect(PAGE).toMatch(/EntityEditDialog<PilgrimReassignForm>/);
+    // Was a typed EntityEditDialog JSX generic; that type-arg is mangled by the dev
+    // cartographer plugin into a 500 that freezes the whole preview, so it was dropped
+    // (T is inferred from `schema`). Pin the feature via the schema wiring instead.
+    expect(PAGE).toMatch(/<EntityEditDialog\b/);
+    expect(PAGE).toContain("pilgrimReassignSchema");
     expect(PAGE).toMatch(/endpoint=\{`\/umrah\/pilgrims\/\$\{id\}`\}/);
   });
 

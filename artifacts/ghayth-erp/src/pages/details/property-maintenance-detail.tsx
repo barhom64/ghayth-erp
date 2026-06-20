@@ -16,7 +16,7 @@ import {
   EntityComments,
 } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Wrench, CheckCircle2 } from "lucide-react";
@@ -271,7 +271,7 @@ export default function PropertyMaintenanceDetail() {
       onRetry={refetch}
       actions={
         <>
-          <EntityPrintButton
+          <PrintButton
             entityType="maintenance_request"
             entityId={id ?? 0}
            />
@@ -320,7 +320,7 @@ export default function PropertyMaintenanceDetail() {
       </DialogContent>
     </Dialog>
     {item && id && (
-      <EntityEditDialog<MaintenanceEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل طلب الصيانة"

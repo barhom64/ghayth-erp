@@ -20,15 +20,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { formatDateAr as formatDate } from "@/lib/formatters";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { useApiMutation } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { cn } from "@/lib/utils";
@@ -161,7 +153,7 @@ export default function JournalManualPage() {
 
   return (
     <>
-      <ListPage<JournalManualRow>
+      <ListPage
         title="القيود اليدوية"
         subtitle="إنشاء ومتابعة دورة اعتماد القيود اليدوية (مسودة ← مراجعة ← اعتماد ← ترحيل)"
         breadcrumbs={[
@@ -251,110 +243,61 @@ export default function JournalManualPage() {
         emptyIcon={<ScrollText className="h-6 w-6 text-slate-400" />}
       />
 
-      {actionModal && (
-        <AlertDialog open onOpenChange={() => setActionModal(null)}>
-          <AlertDialogContent dir="rtl">
-            <AlertDialogHeader className="text-right">
-              <AlertDialogTitle>
-                {actionModal.type === "submit" && "إرسال للمراجعة"}
-                {actionModal.type === "review" && "مراجعة القيد"}
-                {actionModal.type === "post" && "ترحيل القيد"}
-              </AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="space-y-3 pt-1 text-start">
-                  {actionModal.type === "submit" && (
-                    <p className="text-sm text-muted-foreground">
-                      هل تريد إرسال القيد{" "}
-                      <span className="font-mono text-foreground">
-                        {actionModal.journal.ref}
-                      </span>{" "}
-                      للمراجعة والاعتماد؟
-                    </p>
-                  )}
-                  {actionModal.type === "post" && (
-                    <p className="text-sm text-muted-foreground">
-                      هل تريد ترحيل القيد{" "}
-                      <span className="font-mono text-foreground">
-                        {actionModal.journal.ref}
-                      </span>
-                      ؟ لا يمكن التراجع عن الترحيل بعد إتمامه.
-                    </p>
-                  )}
-                  {actionModal.type === "review" && (
-                    <div>
-                      <label className="block text-sm font-medium mb-1.5">
-                        ملاحظات
-                      </label>
-                      <Textarea
-                        rows={3}
-                        value={actionNotes}
-                        onChange={(e) => setActionNotes(e.target.value)}
-                        placeholder="ملاحظات الرفض مطلوبة عند الرفض"
-                      />
-                    </div>
-                  )}
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="flex-row justify-start gap-2">
-              {actionModal.type === "submit" && (
-                <GuardedButton
-                  perm="finance:create"
-                  disabled={submitMutation.isPending}
-                  onClick={() =>
-                    submitMutation.mutate({ id: actionModal.journal.id })
-                  }
-                >
-                  {submitMutation.isPending ? "جاري الإرسال..." : "إرسال"}
-                </GuardedButton>
-              )}
-              {actionModal.type === "review" && (
-                <>
-                  <GuardedButton
-                    perm="finance:approve"
-                    variant="outline"
-                    className="border-status-error-surface text-status-error-foreground"
-                    disabled={reviewMutation.isPending}
-                    onClick={() =>
-                      reviewMutation.mutate({
-                        id: actionModal.journal.id,
-                        approved: false,
-                        notes: actionNotes,
-                      })
-                    }
-                  >
-                    رفض
-                  </GuardedButton>
-                  <GuardedButton
-                    perm="finance:approve"
-                    disabled={reviewMutation.isPending}
-                    onClick={() =>
-                      reviewMutation.mutate({
-                        id: actionModal.journal.id,
-                        approved: true,
-                        notes: actionNotes,
-                      })
-                    }
-                  >
-                    موافقة
-                  </GuardedButton>
-                </>
-              )}
-              {actionModal.type === "post" && (
-                <GuardedButton
-                  perm="finance:approve"
-                  disabled={postMutation.isPending}
-                  onClick={() =>
-                    postMutation.mutate({ id: actionModal.journal.id })
-                  }
-                >
-                  {postMutation.isPending ? "جاري الترحيل..." : "ترحيل"}
-                </GuardedButton>
-              )}
-              <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+      {actionModal && actionModal.type === "submit" && (
+        <ConfirmActionDialog
+          open
+          onOpenChange={() => setActionModal(null)}
+          variant="confirm"
+          title="إرسال للمراجعة"
+          description={<>هل تريد إرسال القيد <span className="font-mono text-foreground">{actionModal.journal.ref}</span> للمراجعة والاعتماد؟</>}
+          confirmLabel={submitMutation.isPending ? "جاري الإرسال..." : "إرسال"}
+          pending={submitMutation.isPending}
+          onConfirm={() => submitMutation.mutate({ id: actionModal.journal.id })}
+          confirmPerm="finance:create"
+        />
+      )}
+      {actionModal && actionModal.type === "review" && (
+        <ConfirmActionDialog
+          open
+          onOpenChange={() => setActionModal(null)}
+          variant="confirm"
+          title="مراجعة القيد"
+          description=""
+          confirmLabel={reviewMutation.isPending ? "جاري المعالجة..." : "موافقة"}
+          pending={reviewMutation.isPending}
+          onConfirm={() => reviewMutation.mutate({ id: actionModal.journal.id, approved: true, notes: actionNotes })}
+          confirmPerm="finance:approve"
+          secondaryAction={{
+            label: "رفض",
+            variant: "destructive",
+            onClick: () => reviewMutation.mutate({ id: actionModal.journal.id, approved: false, notes: actionNotes }),
+            disabled: reviewMutation.isPending,
+            perm: "finance:approve",
+          }}
+        >
+          <div>
+            <label className="block text-sm font-medium mb-1.5">ملاحظات</label>
+            <Textarea
+              rows={3}
+              value={actionNotes}
+              onChange={(e) => setActionNotes(e.target.value)}
+              placeholder="ملاحظات الرفض مطلوبة عند الرفض"
+            />
+          </div>
+        </ConfirmActionDialog>
+      )}
+      {actionModal && actionModal.type === "post" && (
+        <ConfirmActionDialog
+          open
+          onOpenChange={() => setActionModal(null)}
+          variant="destructive"
+          title="ترحيل القيد"
+          description={<>هل تريد ترحيل القيد <span className="font-mono text-foreground">{actionModal.journal.ref}</span>؟ لا يمكن التراجع عن الترحيل بعد إتمامه.</>}
+          confirmLabel={postMutation.isPending ? "جاري الترحيل..." : "ترحيل"}
+          pending={postMutation.isPending}
+          onConfirm={() => postMutation.mutate({ id: actionModal.journal.id })}
+          confirmPerm="finance:approve"
+        />
       )}
     </>
   );

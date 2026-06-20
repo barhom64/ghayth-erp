@@ -2,11 +2,12 @@ import { Router } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
-import { handleRouteError, ValidationError, ConflictError,
+import { handleRouteError, ValidationError, ConflictError, NotFoundError,
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
 import { createAuditLog, emitEvent, todayISO, currentYear, currentMonthPadded, toDateISO, roundTo2 } from "../lib/businessHelpers.js";
+import { BI_METRICS, biMetricKeys, computeBiMetric } from "../lib/biMetrics.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -95,6 +96,38 @@ router.post("/kpis", authorize({ feature: "bi", action: "create" }), async (req,
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "bi_kpis", entityId: kpiRow.id as number, after: { name, module } }).catch((e) => logger.error(e, "bi background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "bi.kpi.created", entity: "bi_kpis", entityId: kpiRow.id as number, details: JSON.stringify({ name, module }) }).catch((e) => logger.error(e, "bi background task failed"));
     res.status(201).json({ id: kpiRow.id });
+  } catch (err) { handleRouteError(err, res, "bi"); }
+});
+
+// GET /bi/kpis/metrics — المؤشّرات الحقيقية المتاحة للحساب الآلي (قائمة بيضاء).
+router.get("/kpis/metrics", authorize({ feature: "bi", action: "list" }), async (req, res) => {
+  try {
+    res.json({ data: biMetricKeys() });
+  } catch (err) { handleRouteError(err, res, "bi"); }
+});
+
+// POST /bi/kpis/:id/refresh — يحسب currentValue من مفتاح المؤشّر (formula) ويخزّنه.
+// آمن: مفاتيح قائمة بيضاء فقط (لا تقييم صيغ حرّة). مفتاح غير معروف → 422.
+router.post("/kpis/:id/refresh", authorize({ feature: "bi", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [kpi] = await rawQuery<{ id: number; formula: string | null }>(
+      `SELECT id, formula FROM bi_kpis WHERE id = $1 AND ("companyId" = $2 OR "companyId" IS NULL)`,
+      [id, scope.companyId]
+    );
+    if (!kpi) throw new NotFoundError("مؤشر الأداء غير موجود");
+    const key = String(kpi.formula ?? "");
+    if (!BI_METRICS.has(key)) {
+      throw new ValidationError(
+        `صيغة المؤشّر ليست مؤشّرًا محسوبًا معروفًا: "${key}"`,
+        { field: "formula", fix: "اختر أحد المؤشّرات المتاحة من /bi/kpis/metrics لتفعيل الحساب الآلي.", meta: { availableKeys: biMetricKeys().map((m) => m.key) } }
+      );
+    }
+    const value = await computeBiMetric(key, scope.companyId);
+    await rawExecute(`UPDATE bi_kpis SET "currentValue" = $1 WHERE id = $2 AND ("companyId" = $3 OR "companyId" IS NULL)`, [value, id, scope.companyId]);
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "bi_kpis", entityId: id, after: { currentValue: value, metric: key } }).catch((e) => logger.error(e, "bi background task failed"));
+    res.json({ id, formula: key, currentValue: value });
   } catch (err) { handleRouteError(err, res, "bi"); }
 });
 
@@ -1306,8 +1339,8 @@ router.get("/alert-fatigue/settings", authorize({ feature: "bi", action: "list" 
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1`,
-      [scope.activeAssignmentId]
+      `SELECT * FROM alert_fatigue_settings WHERE "assignmentId" = $1 AND "companyId" = $2`,
+      [scope.activeAssignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "bi query failed"); return []; });
     res.json({ data: rows });
   } catch (err) { handleRouteError(err, res, "Alert fatigue settings"); }
@@ -1351,8 +1384,8 @@ router.get("/alert-fatigue/daily-count", authorize({ feature: "bi", action: "lis
     const scope = req.scope!;
     const [row] = await rawQuery<Record<string, unknown>>(
       `SELECT COUNT(*) AS today_count FROM notifications
-       WHERE "assignmentId" = $1 AND DATE("createdAt") = CURRENT_DATE`,
-      [scope.activeAssignmentId]
+       WHERE "assignmentId" = $1 AND "companyId" = $2 AND DATE("createdAt") = CURRENT_DATE`,
+      [scope.activeAssignmentId, scope.companyId]
     ).catch((e) => { logger.error(e, "bi query failed"); return [{ today_count: 0 }]; });
     const limit = 50;
     const count = Number(row?.today_count ?? 0);

@@ -20,11 +20,8 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useState } from "react";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { apiFetch, useApiQuery } from "@/lib/api";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
+import { apiFetch, useApiQuery, API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -36,9 +33,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
-  RefreshCw, AlertTriangle, AlertOctagon, Activity, Inbox,
+  AlertTriangle, AlertOctagon, Activity, Inbox,
   Plug, Cpu, Clock, Bot, Sparkles, CheckCircle2,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface Anomaly {
   severity: "critical" | "warning" | "info";
@@ -180,7 +178,7 @@ export default function AdminObservability() {
   const metricsQ = useQuery({
     queryKey: ["k8s-metrics-probe"],
     queryFn: async () => {
-      const res = await fetch("/api/metrics", { credentials: "include" });
+      const res = await fetch(`${API_BASE}/api/metrics`, { credentials: "include", headers: { ...nativeAuthHeaders() } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return { ok: true };
     },
@@ -382,9 +380,7 @@ export default function AdminObservability() {
       subtitle="رؤية موحّدة للطوابير، التكاملات، العمّال، خروقات الـ SLA، والشذوذات النشطة"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
@@ -772,20 +768,16 @@ export default function AdminObservability() {
           )}
         </div>
       </PageStateWrapper>
-      <AlertDialog open={confirmResolveId !== null} onOpenChange={(o) => !o && setConfirmResolveId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إزالة الحدث</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم تعليم الحدث كمحلول وحذفه من قائمة الفشل بدون إعادة محاولة. متابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmedResolveEntry}>تأكيد الإزالة</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={confirmResolveId !== null}
+        onOpenChange={(o) => { if (!o) setConfirmResolveId(null); }}
+        variant="caution"
+        title="تأكيد إزالة الحدث"
+        description="سيتم تعليم الحدث كمحلول وحذفه من قائمة الفشل بدون إعادة محاولة. متابعة؟"
+        confirmLabel="تأكيد الإزالة"
+        onConfirm={confirmedResolveEntry}
+      />
     </PageShell>
   );
 }

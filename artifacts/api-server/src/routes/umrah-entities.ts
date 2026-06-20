@@ -42,6 +42,7 @@ import { upsertSetting } from "../lib/settings.js";
 import {
   calculateCommissionForPlan,
   simulateCommission,
+  simulateCommissionAdHoc,
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
 import {
@@ -56,8 +57,16 @@ import {
 } from "../lib/umrahReportsCatalog.js";
 import { logger } from "../lib/logger.js";
 import { renderPrint } from "../lib/print/printService.js";
+// U-07 Phase 1 — journey + recovery reports moved to a dedicated
+// sub-router so the parent file shrinks. The API surface is
+// unchanged: the sub-router mounts on `/` here so its paths still
+// resolve at /umrah/sub-agents/:id/journey, /umrah/groups/:id/journey,
+// /umrah/reports/packages-vs-allocations-pricing-drift, and
+// /umrah/reports/recovery-hub.
+import journeyReportsRouter from "./umrah-journey-reports.js";
 
 const router = Router();
+router.use(journeyReportsRouter);
 
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
@@ -197,6 +206,43 @@ const updateCommissionPlanSchema = z.object({
 const simulateCommissionSchema = z.object({
   month: z.coerce.number({ required_error: "الشهر مطلوب" }),
   year: z.coerce.number({ required_error: "السنة مطلوبة" }),
+  totalMutamers: z.coerce.number().nonnegative().optional(),
+  avgProfitPerVisa: z.coerce.number().nonnegative().optional(),
+  avgSalePrice: z.coerce.number().nonnegative().optional(),
+  salesPercent: z.coerce.number().min(0).max(100).optional(),
+});
+
+const simulatePlanInlineSchema = z.object({
+  plan: z.object({
+    companyId: z.coerce.number().int().optional(),
+    seasonId: z.coerce.number().int(),
+    employeeId: z.coerce.number().int(),
+    commissionType: z.string(),
+    percentageRate: z.coerce.number().nullable().optional(),
+    fixedAmount: z.coerce.number().nullable().optional(),
+    conditionType: z.string().nullable().optional(),
+    minProfitPerVisa: z.coerce.number().nullable().optional(),
+    minSalesPercent: z.coerce.number().nullable().optional(),
+    minAvgPrice: z.coerce.number().nullable().optional(),
+    excludedMonths: z.array(z.coerce.number().int()).optional(),
+    tierUnit: z.string().optional(),
+    partialTiersAllowed: z.boolean().optional(),
+    assignmentId: z.coerce.number().int().nullable().optional(),
+    violationBlocksCommission: z.boolean().optional(),
+  }),
+  tiers: z.array(z.object({
+    fromCount: z.coerce.number().int().nonnegative(),
+    toCount: z.union([z.coerce.number().int().nonnegative(), z.null()]).optional(),
+    bonusPerUnit: z.coerce.number().nonnegative(),
+    isCumulative: z.boolean().optional(),
+    tierOrder: z.coerce.number().int().min(1),
+  })).default([]),
+  month: z.coerce.number(),
+  year: z.coerce.number(),
+  totalMutamers: z.coerce.number().nonnegative().optional(),
+  avgProfitPerVisa: z.coerce.number().nonnegative().optional(),
+  avgSalePrice: z.coerce.number().nonnegative().optional(),
+  salesPercent: z.coerce.number().min(0).max(100).optional(),
 });
 
 const generateInvoiceSchema = z.object({
@@ -1658,13 +1704,13 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
         [id, scope.companyId]
       ),
       rawQuery(
-        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
-        [id]
+        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2 ORDER BY "tierOrder"`,
+        [id, scope.companyId]
       ),
       rawQuery(
         `SELECT * FROM employee_commission_calculations
-         WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
-        [id]
+         WHERE "planId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
+        [id, scope.companyId]
       ),
     ]);
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
@@ -1774,7 +1820,7 @@ router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "upd
           [id, scope.companyId]
         )).rows;
         if (!owned) throw new NotFoundError("خطة العمولة غير موجودة");
-        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1`, [id]);
+        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2`, [id, scope.companyId]);
         for (let i = 0; i < b.tiers.length; i++) {
           const t = b.tiers[i];
           await client.query(
@@ -1796,13 +1842,37 @@ router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "upd
   } catch (err) { handleRouteError(err, res, "Update commission plan"); }
 });
 
+// Ad-hoc simulation (no plan id — used by the editor in create mode before save).
+// Pure what-if math; no DB writes; no audit row intentional (mirrors the
+// description in scripts/audit-coverage-allowlist.txt).
+router.post("/commission-plans/simulate", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const parsed = zodParse(simulatePlanInlineSchema.safeParse(req.body));
+    const { plan, tiers, month, year, totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent } = parsed;
+    const scope = req.scope!;
+    const planForEngine: any = { ...plan, companyId: scope.companyId };
+    const tiersForEngine: any = (tiers ?? []).map((t) => ({
+      ...t,
+      toCount: t.toCount ?? null,
+      isCumulative: t.isCumulative ?? false,
+    }));
+    const result = await simulateCommissionAdHoc(
+      planForEngine, tiersForEngine, month, year,
+      { totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent },
+    );
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Simulate commission (ad-hoc)"); }
+});
+
 router.post("/commission-plans/:id/simulate", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const parsed = zodParse(simulateCommissionSchema.safeParse(req.body));
-    const { month, year } = parsed;
+    const { month, year, totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent } = parsed;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const result = await simulateCommission(id, month, year, scope.companyId);
+    const result = await simulateCommission(id, month, year, scope.companyId, {
+      totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent,
+    });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_commission_plans", entityId: id, after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(result);
@@ -1872,8 +1942,8 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");
     const rows = await rawQuery(
-      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id LIMIT 1000`,
-      [id]
+      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 AND "companyId" = $2 ORDER BY id LIMIT 1000`,
+      [id, scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List batch changes"); }
@@ -4391,6 +4461,20 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
       // by the operator-supplied `from` so the layer surfaces as
       // "today's outstanding overstayers" on the day the operator
       // opens the calendar. Cheap, useful, no schema change.
+      //
+      // NOTE: this layer is NOT date-ranged, so it references neither $3
+      // (toStr) nor the shared `pilgrimSeasonClause` index. Reusing the
+      // 3-element `baseParams` here bound 3 values against a 2-placeholder
+      // statement → Postgres 08P01 ("supplies 3 parameters, but prepared
+      // statement requires 2") whenever no seasonId was supplied (the
+      // default calendar view) → 500. Use a dedicated params array whose
+      // length always matches the placeholders.
+      const overstayParams: unknown[] = [scope.companyId, fromStr];
+      let overstaySeasonClause = "";
+      if (seasonId) {
+        overstayParams.push(seasonId);
+        overstaySeasonClause = ` AND p."seasonId" = $${overstayParams.length}`;
+      }
       runs.overstay = rawQuery<Row>(
         `SELECT $2::text AS date,
                 COUNT(*)::text AS c,
@@ -4398,9 +4482,9 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
            FROM umrah_pilgrims p
           WHERE p."companyId" = $1
             AND p.status IN ('overstayed', 'overstay_penalized')
-            AND p."deletedAt" IS NULL${pilgrimSeasonClause}
+            AND p."deletedAt" IS NULL${overstaySeasonClause}
           HAVING COUNT(*) > 0`,
-        baseParams,
+        overstayParams,
       );
     }
     if (requestedLayers.includes("transport_trip")) {
@@ -4961,12 +5045,13 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
     const scope = req.scope!;
     const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
     const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+    const agentId     = req.query.agentId     ? Number(req.query.agentId)     : null;
     const yearParam   = req.query.year        ? Number(req.query.year)        : null;
     const statusParam = req.query.status      ? String(req.query.status)      : null;
 
     // Year + employee + status filter via cc.* columns. seasonId
-    // chains through employee_commission_plans (the calculations
-    // table doesn't carry seasonId itself).
+    // and agentId chain through employee_commission_plans (the
+    // calculations table doesn't carry either dim itself).
     const params: unknown[] = [scope.companyId];
     let where = `cc."companyId" = $1 AND cc."deletedAt" IS NULL`;
     if (yearParam) {
@@ -4988,6 +5073,18 @@ router.get("/reports/commissions-summary", authorize({ feature: "umrah", action:
          WHERE cp.id = cc."planId"
            AND cp."companyId" = cc."companyId"
            AND cp."seasonId" = $${params.length}
+      )`;
+    }
+    // U-04-P4 — agentId filter (matches the umrahAgentId dim that
+    // U-05-P2 surfaces on the JE). The plan-level column is the
+    // attribution source; cc rows inherit it transitively via planId.
+    if (agentId) {
+      params.push(agentId);
+      where += ` AND EXISTS (
+        SELECT 1 FROM employee_commission_plans cp
+         WHERE cp.id = cc."planId"
+           AND cp."companyId" = cc."companyId"
+           AND cp."agentId" = $${params.length}
       )`;
     }
 
@@ -5136,6 +5233,7 @@ router.get(
       const scope = req.scope!;
       const seasonId    = req.query.seasonId    ? Number(req.query.seasonId)    : null;
       const employeeId  = req.query.employeeId  ? Number(req.query.employeeId)  : null;
+      const agentId     = req.query.agentId     ? Number(req.query.agentId)     : null;
       const yearParam   = req.query.year        ? Number(req.query.year)        : null;
       const statusParam = req.query.status      ? String(req.query.status)      : null;
 
@@ -5160,6 +5258,17 @@ router.get(
            WHERE cp.id = cc."planId"
              AND cp."companyId" = cc."companyId"
              AND cp."seasonId" = $${params.length}
+        )`;
+      }
+      // U-04-P4 — same agentId filter as the summary route so the
+      // CSV export carries the same row set as the on-screen list.
+      if (agentId) {
+        params.push(agentId);
+        where += ` AND EXISTS (
+          SELECT 1 FROM employee_commission_plans cp
+           WHERE cp.id = cc."planId"
+             AND cp."companyId" = cc."companyId"
+             AND cp."agentId" = $${params.length}
         )`;
       }
 
@@ -5202,19 +5311,23 @@ router.get(
         return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       };
 
+      // U-18-P4 — bilingual header policy: Arabic primary with English
+      // in parentheses so partner accounting / payroll systems that
+      // ingest the CSV in EN can map the columns without a separate
+      // glossary. Same convention applied to the pilgrims export.
       const headers: Array<[keyof typeof rows[number], string]> = [
-        ["id",               "رقم"],
-        ["year",             "السنة"],
-        ["month",            "الشهر"],
-        ["employeeName",     "الموظف"],
-        ["planName",         "الخطة"],
-        ["status",           "الحالة"],
-        ["commissionAmount", "العمولة المحتسبة"],
-        ["finalAmount",      "المبلغ النهائي"],
-        ["totalMutamers",    "عدد المعتمرين"],
-        ["conditionMet",     "تحقّق الشرط"],
-        ["hasViolations",    "وجود مخالفات"],
-        ["createdAt",        "تاريخ الإنشاء"],
+        ["id",               "رقم (ID)"],
+        ["year",             "السنة (Year)"],
+        ["month",             "الشهر (Month)"],
+        ["employeeName",     "الموظف (Employee)"],
+        ["planName",         "الخطة (Plan)"],
+        ["status",           "الحالة (Status)"],
+        ["commissionAmount", "العمولة المحتسبة (Calculated Commission)"],
+        ["finalAmount",      "المبلغ النهائي (Final Amount)"],
+        ["totalMutamers",    "عدد المعتمرين (Pilgrim Count)"],
+        ["conditionMet",     "تحقّق الشرط (Condition Met)"],
+        ["hasViolations",    "وجود مخالفات (Has Violations)"],
+        ["createdAt",        "تاريخ الإنشاء (Created At)"],
       ];
 
       const headerRow = headers.map(([, label]) => csvEscape(label)).join(",");
@@ -6081,190 +6194,5 @@ router.put("/settings/policies/:categoryId", authorize({ feature: "umrah", actio
     res.json({ ok: true, categoryId, updated: Object.keys(b.values).length });
   } catch (err) { handleRouteError(err, res, "Save policy"); }
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// U-19-P1 — journey-status helper (read-only)
-//
-// Surfaces the 4-stage journey for a sub-agent:
-//   1. imported   — pilgrims attributed to this sub-agent
-//   2. linked     — whether the sub-agent has a clientId
-//   3. invoiced   — sales invoices issued + total invoiced amount
-//   4. collected  — payments received against those invoices + total
-//
-// Outstanding counts (unlinkedPilgrims / uninvoicedGroups /
-// unpaidInvoices) help the operator triage stuck items without
-// flipping to 4 separate pages.
-//
-// READ-ONLY. No writes. Tenant-scoped via the standard sub-agent
-// existence guard. The audit (#2314 §3.1) proposed adding three
-// helper endpoints (sub-agents/:id/journey, import-batches/:id/journey,
-// groups/:id/journey); this slice ships the sub-agent variant. The
-// other two are P3 follow-ups in the FE rendering phase.
-// ─────────────────────────────────────────────────────────────────────────────
-router.get(
-  "/sub-agents/:id/journey",
-  authorize({ feature: "umrah", action: "view" }),
-  async (req, res): Promise<void> => {
-    try {
-      const scope = req.scope!;
-      const id = parseId(req.params.id, "id");
-
-      // Sub-agent existence + tenant scope. Same guard shape as
-      // /sub-agents/:id (line 303) — leaking journey data through a
-      // stale FK is the failure mode this gates.
-      const [subAgent] = await rawQuery<{ id: number; clientId: number | null; name: string; agentId: number | null }>(
-        `SELECT id, "clientId", name, "agentId"
-           FROM umrah_sub_agents
-          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-        [id, scope.companyId],
-      );
-      if (!subAgent) throw new NotFoundError("الوكيل الفرعي غير موجود");
-
-      // All four stages computed in parallel — 0 sequential awaits.
-      // The queries are independent: import side reads
-      // umrah_pilgrims; invoice side reads umrah_sales_invoices;
-      // payment side reads umrah_payments; outstanding rolls up
-      // partials from the same tables.
-      const [
-        importRow,
-        invoiceRow,
-        paymentRow,
-        unlinkedPilgrimsRow,
-        uninvoicedGroupsRow,
-        unpaidInvoicesRow,
-      ] = await Promise.all([
-        rawQuery<{ count: string; latestAt: string | null }>(
-          `SELECT COUNT(*)::text AS count,
-                  MAX("createdAt")::text AS "latestAt"
-             FROM umrah_pilgrims
-            WHERE "companyId" = $1
-              AND "subAgentId" = $2
-              AND "deletedAt" IS NULL`,
-          [scope.companyId, id],
-        ),
-        rawQuery<{ count: string; total: string; latestAt: string | null }>(
-          `SELECT COUNT(*)::text AS count,
-                  COALESCE(SUM(total), 0)::text AS total,
-                  MAX("createdAt")::text AS "latestAt"
-             FROM umrah_sales_invoices
-            WHERE "companyId" = $1
-              AND "subAgentId" = $2
-              AND "deletedAt" IS NULL`,
-          [scope.companyId, id],
-        ),
-        rawQuery<{ count: string; total: string; latestAt: string | null }>(
-          `SELECT COUNT(*)::text AS count,
-                  COALESCE(SUM("sarAmount"), 0)::text AS total,
-                  MAX("createdAt")::text AS "latestAt"
-             FROM umrah_payments
-            WHERE "companyId" = $1
-              AND "subAgentId" = $2
-              AND "deletedAt" IS NULL`,
-          [scope.companyId, id],
-        ),
-        rawQuery<{ count: string }>(
-          // Pilgrims with subAgentId set but no further attribution
-          // (groupId IS NULL) — recoverable via the import unlink
-          // surface. Mirrors U-08's recovery wiring.
-          `SELECT COUNT(*)::text AS count
-             FROM umrah_pilgrims
-            WHERE "companyId" = $1
-              AND "subAgentId" = $2
-              AND "groupId" IS NULL
-              AND "deletedAt" IS NULL`,
-          [scope.companyId, id],
-        ),
-        rawQuery<{ count: string }>(
-          // Groups belonging to this sub-agent (via pilgrims) with
-          // no sales invoice covering them yet. Hand-rolled NOT IN
-          // because Postgres array semantics here are simpler than
-          // an EXISTS subquery for the JSON text "groupRefs" column.
-          `SELECT COUNT(DISTINCT g.id)::text AS count
-             FROM umrah_groups g
-             JOIN umrah_pilgrims p
-               ON p."groupId" = g.id
-              AND p."companyId" = g."companyId"
-              AND p."deletedAt" IS NULL
-            WHERE g."companyId" = $1
-              AND g."deletedAt" IS NULL
-              AND p."subAgentId" = $2
-              AND NOT EXISTS (
-                SELECT 1 FROM umrah_sales_invoices si
-                 WHERE si."companyId" = g."companyId"
-                   AND si."subAgentId" = $2
-                   AND si."deletedAt" IS NULL
-                   AND si."groupRefs" LIKE '%' || g.id || '%'
-              )`,
-          [scope.companyId, id],
-        ),
-        rawQuery<{ count: string }>(
-          // Invoices where paidAmount < total (or paidAmount NULL).
-          // Includes drafts because the operator's mental model is
-          // "anything I haven't fully collected" — drafts surface as
-          // a separate ratio on the FE, not here.
-          `SELECT COUNT(*)::text AS count
-             FROM umrah_sales_invoices
-            WHERE "companyId" = $1
-              AND "subAgentId" = $2
-              AND "deletedAt" IS NULL
-              AND COALESCE("paidAmount", 0) < COALESCE(total, 0)`,
-          [scope.companyId, id],
-        ),
-      ]);
-
-      const importedCount = Number(importRow[0]?.count ?? 0);
-      const invoicedCount = Number(invoiceRow[0]?.count ?? 0);
-      const invoicedTotal = Number(invoiceRow[0]?.total ?? 0);
-      const collectedCount = Number(paymentRow[0]?.count ?? 0);
-      const collectedTotal = Number(paymentRow[0]?.total ?? 0);
-
-      res.json(
-        maskFields(req, {
-          subAgent: {
-            id: subAgent.id,
-            name: subAgent.name,
-            clientId: subAgent.clientId,
-            agentId: subAgent.agentId,
-          },
-          stages: [
-            {
-              stage: "imported",
-              count: importedCount,
-              ts: importRow[0]?.latestAt ?? null,
-            },
-            {
-              // Linked stage flips on as soon as `clientId IS NOT NULL`.
-              // The audit-log timestamp would be richer but the journey
-              // helper doesn't need to drill that far — the FE shows
-              // a single boolean indicator.
-              stage: "linked",
-              count: subAgent.clientId ? 1 : 0,
-              ts: null,
-            },
-            {
-              stage: "invoiced",
-              count: invoicedCount,
-              total: invoicedTotal,
-              ts: invoiceRow[0]?.latestAt ?? null,
-            },
-            {
-              stage: "collected",
-              count: collectedCount,
-              total: collectedTotal,
-              ts: paymentRow[0]?.latestAt ?? null,
-            },
-          ],
-          outstanding: {
-            unlinkedPilgrims: Number(unlinkedPilgrimsRow[0]?.count ?? 0),
-            uninvoicedGroups: Number(uninvoicedGroupsRow[0]?.count ?? 0),
-            unpaidInvoices: Number(unpaidInvoicesRow[0]?.count ?? 0),
-          },
-        }),
-      );
-    } catch (err) {
-      handleRouteError(err, res, "Sub-agent journey");
-    }
-  },
-);
 
 export default router;

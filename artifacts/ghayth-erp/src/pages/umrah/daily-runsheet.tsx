@@ -8,7 +8,8 @@ import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
-import { PlaneTakeoff, PlaneLanding, AlertTriangle, RefreshCw } from "lucide-react";
+import { PlaneTakeoff, PlaneLanding, AlertTriangle } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { todayLocal } from "@/lib/formatters";
 
 // Daily ops run-sheet — backs GET /api/umrah/reports/daily-runsheet (PR #305).
@@ -110,9 +111,7 @@ export default function UmrahDailyRunsheet() {
               className="w-44"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
-            <RefreshCw className="h-4 w-4" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} />
           <PrintButton
             entityType="umrah_runsheet"
             entityId={date}

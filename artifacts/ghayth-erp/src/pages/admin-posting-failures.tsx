@@ -5,16 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { useMemo, useState } from "react";
 import {
-  RefreshCw, AlertTriangle, CheckCircle, XCircle, PlayCircle, Trash2,
+  AlertTriangle, CheckCircle, XCircle, PlayCircle, Trash2,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { PrintButton } from "@/components/shared/print-button";
 
 type SummaryRow = { sourceType: string; cnt: number; sampleError: string | null; firstAt: string; lastAt: string };
@@ -199,9 +197,7 @@ export default function AdminPostingFailures() {
           <Button variant={showResolved ? "default" : "outline"} size="sm" onClick={() => setShowResolved(!showResolved)}>
             {showResolved ? "المحلولة" : "المفتوحة"}
           </Button>
-          <Button variant="outline" size="sm" onClick={refreshAll}>
-            <RefreshCw className="h-4 w-4 me-1" />تحديث
-          </Button>
+          <RefreshAction onRefresh={refreshAll} />
         </div>
       }
     >
@@ -303,23 +299,21 @@ export default function AdminPostingFailures() {
         </div>
       </PageStateWrapper>
 
-      <AlertDialog open={confirmBulk !== null} onOpenChange={(o) => !o && setConfirmBulk(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد التجاهل (إغلاق دون ترحيل)</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmBulk?.sourceType
-                ? `سيتم إغلاق كل سجلات النوع "${confirmBulk.sourceType}" المفتوحة دون ترحيل أي قيد محاسبي.`
-                : `سيتم إغلاق كل السجلات المفتوحة دون ترحيل أي قيد محاسبي.`}
-              {" "}القيود غير المرحّلة لهذه السجلات لن تُسجَّل في دفتر الأستاذ. استخدم «إعادة محاولة الكل» أولًا لترحيل ما يمكن ترحيله. متابعة؟
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={() => bulkResolve(confirmBulk?.sourceType)}>تأكيد التجاهل</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* GAP_MATRIX P1 UI-unification §6.2 — ConfirmActionDialog replaces raw AlertDialog */}
+      <ConfirmActionDialog
+        open={confirmBulk !== null}
+        onOpenChange={(o) => { if (!o) setConfirmBulk(null); }}
+        variant="caution"
+        title="تأكيد التجاهل (إغلاق دون ترحيل)"
+        description={
+          (confirmBulk?.sourceType
+            ? `سيتم إغلاق كل سجلات النوع "${confirmBulk.sourceType}" المفتوحة دون ترحيل أي قيد محاسبي.`
+            : `سيتم إغلاق كل السجلات المفتوحة دون ترحيل أي قيد محاسبي.`) +
+          " القيود غير المرحّلة لهذه السجلات لن تُسجَّل في دفتر الأستاذ. استخدم «إعادة محاولة الكل» أولًا لترحيل ما يمكن ترحيله. متابعة؟"
+        }
+        confirmLabel="تأكيد التجاهل"
+        onConfirm={() => bulkResolve(confirmBulk?.sourceType)}
+      />
     </PageShell>
   );
 }

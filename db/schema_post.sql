@@ -6320,6 +6320,63 @@ ALTER TABLE ONLY public.tax_codes
 
 
 --
+-- (2026-06-15 schema-conformance batch — third in the series after
+-- migrations 339 + 349 fixes.) The previous pg_dump output dropped
+-- the PRIMARY KEY constraints from these 15 tables; production almost
+-- certainly carries them (the FKs to tax_codes / numbering_schemes /
+-- vendor_contracts wouldn't work otherwise) but the dump did not. Add
+-- them here in the post-baseline block so fresh provisioning via
+-- provision-agent-db.sh / db/bootstrap.sh succeeds at migration 360
+-- (supplier_items → tax_codes(id)).
+--
+
+ALTER TABLE ONLY public.accounting_allocation_results
+    ADD CONSTRAINT accounting_allocation_results_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.accounting_allocation_rules
+    ADD CONSTRAINT accounting_allocation_rules_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.audit_logs_archive
+    ADD CONSTRAINT audit_logs_archive_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.budget_approval_requests
+    ADD CONSTRAINT budget_approval_requests_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.fleet_alerts
+    ADD CONSTRAINT fleet_alerts_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.integration_logs_archive
+    ADD CONSTRAINT integration_logs_archive_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.numbering_assignments
+    ADD CONSTRAINT numbering_assignments_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.numbering_audit_logs
+    ADD CONSTRAINT numbering_audit_logs_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.numbering_counters
+    ADD CONSTRAINT numbering_counters_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.numbering_schemes
+    ADD CONSTRAINT numbering_schemes_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.tax_codes
+    ADD CONSTRAINT tax_codes_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.umrah_attachments
+    ADD CONSTRAINT umrah_attachments_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.umrah_import_mapping_presets
+    ADD CONSTRAINT umrah_import_mapping_presets_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.vendor_contracts
+    ADD CONSTRAINT vendor_contracts_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY public.wht_categories
+    ADD CONSTRAINT wht_categories_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: teams teams_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11200,6 +11257,20 @@ CREATE INDEX idx_party_links_party ON public.party_links USING btree ("partyId")
 --
 
 CREATE INDEX idx_password_reset_pending ON public.password_reset_requests USING btree (status, "createdAt");
+
+
+--
+-- Name: uq_password_reset_token_hash_live; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_password_reset_token_hash_live ON public.password_reset_requests USING btree ("tokenHash") WHERE (("tokenHash" IS NOT NULL) AND ("usedAt" IS NULL));
+
+
+--
+-- Name: idx_password_reset_user_purpose_live; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_password_reset_user_purpose_live ON public.password_reset_requests USING btree ("userId", purpose) WHERE (("userId" IS NOT NULL) AND ("usedAt" IS NULL));
 
 
 --

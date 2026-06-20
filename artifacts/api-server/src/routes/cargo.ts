@@ -95,14 +95,7 @@ const CARGO_TRANSITIONS: Record<typeof CARGO_STATUSES[number], string[]> = {
   cancelled:          [],
 };
 
-const TRANSPORT_SERVICE_TYPES = [
-  "cargo_load",
-  "passenger_umrah",
-  "passenger_general",
-  "equipment_rental",
-  "internal_transfer",
-  "other",
-] as const;
+import { TRANSPORT_SERVICE_TYPES } from "../lib/transportEnums.js";
 
 const BILLING_STATUSES = [
   "not_billable",

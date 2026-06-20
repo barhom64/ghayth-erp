@@ -6,9 +6,10 @@ import { useAppContext } from "@/contexts/app-context";
 import { PageShell } from "@workspace/ui-core";
 import {
   Activity, AlertTriangle, ArrowUpRight, Building, Car, CheckCircle2,
-  Clock, CreditCard, CloudRain, Home, RefreshCw, Shield, Timer, Users,
+  Clock, CreditCard, CloudRain, Home, Shield, Timer, Users,
   Wrench, Zap, ChevronLeft,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -118,9 +119,7 @@ export default function OperationsCenter() {
               <Shield className="w-4 h-4" />
               الإقفال اليومي
             </Link></Button>
-          <Button variant="outline" size="icon" title="تحديث" onClick={() => { setRefreshKey(k => k + 1); refetch(); }}>
-            <RefreshCw className="w-4 h-4" />
-          </Button>
+          <RefreshAction onRefresh={() => { setRefreshKey(k => k + 1); refetch(); }} />
         </div>
       }
     >

@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { verifyToken, type JWTPayload } from "../lib/auth.js";
 import { rawQuery } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
+import { loadFineGrantKeys } from "../lib/rbac/authzEngine.js";
 
 export interface RequestScope {
   userId: number;
@@ -51,6 +52,14 @@ export interface RequestScope {
    * Mutable — set late in the request lifecycle by authorize().
    */
   resolvedScope?: string | null;
+  /**
+   * HR-REV-1 #1: the caller's effective RBAC v2 grants flattened to both
+   * fine `feature:action` and coarse `module:action` keys, loaded once in
+   * buildScope (reusing the authzEngine grant cache). Lets in-handler
+   * authorization use scopeCan(scope, feature, action) instead of parallel
+   * hardcoded role lists, so grants are the single source of truth.
+   */
+  fineGrants?: ReadonlySet<string>;
 }
 
 declare global {
@@ -60,6 +69,16 @@ declare global {
     }
   }
 }
+
+/**
+ * The only paths a `field_tracking`-scoped token may reach. Matched
+ * against `req.path` (already stripped of the `/api` mount prefix). Kept
+ * as a tight allowlist so the native tracker's long-lived credential can
+ * post pings and nothing else.
+ */
+const FIELD_TRACKING_ALLOWED_PATHS = new Set<string>([
+  "/my/field/ping",
+]);
 
 export async function authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   const cookieToken: string | undefined = req.cookies?.erp_access;
@@ -77,6 +96,19 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
 
   try {
     const payload = verifyToken(token);
+    // Capability-scoped tokens (field_tracking): a long-lived credential
+    // issued to the native background tracker. It may only reach the
+    // field-ping endpoint — never the rest of the API — so a token sitting
+    // for hours on a device can't be replayed elsewhere. `req.path` here is
+    // already stripped of the `/api` mount prefix (router mounted at /api).
+    if (payload.scope === "field_tracking" && !FIELD_TRACKING_ALLOWED_PATHS.has(req.path)) {
+      res.status(403).json({
+        error: "هذا التوكن مخصّص للتتبع الميداني فقط",
+        code: "TOKEN_SCOPE_FORBIDDEN",
+        fix: "استخدم جلسة كاملة لهذا الإجراء.",
+      });
+      return;
+    }
     // Header "تغيير الصفة" picker — when the user picks a role in the
     // header dropdown the client sends the chosen key as `x-selected-role`.
     // We validate it against the user's actually-assigned roles inside
@@ -263,7 +295,7 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     }
   }
 
-  return {
+  const scope: RequestScope = {
     userId: payload.userId,
     employeeId: assignment.employeeId,
     companyId: assignment.companyId,
@@ -282,4 +314,9 @@ async function buildScope(payload: JWTPayload, requestedRoleKey: string | null =
     userName: assignment.userName ?? "مستخدم",
     selectedRoleKey,
   };
+  // HR-REV-1 #1 — flatten the caller's grants onto the scope so handlers
+  // authorize from grants (single source of truth) rather than hardcoded
+  // role lists. loadFineGrantKeys never throws (degrades to empty set).
+  scope.fineGrants = await loadFineGrantKeys(scope);
+  return scope;
 }

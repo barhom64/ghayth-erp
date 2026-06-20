@@ -154,7 +154,8 @@ const createProjectSchema = z.object({
 // FISCAL PERIODS — FULL CRUD + OPEN/CLOSE/REOPEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-financeHardeningRouter.get("/fiscal-periods-v2", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+// GAP_MATRIX P0 — fiscal period management; gate at 70 to match close/open mutations.
+financeHardeningRouter.get("/fiscal-periods-v2", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(
@@ -187,7 +188,7 @@ financeHardeningRouter.post("/fiscal-periods-v2", requireMinLevel(70), authorize
       [scope.companyId, name, startDate, endDate, notes ?? null]
     );
     assertInsert(insertId, "financial_periods");
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM financial_periods WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -244,11 +245,47 @@ financeHardeningRouter.post("/fiscal-periods-v2/:id/close", requireMinLevel(70),
       periodId,
       status: closed.status,
       event: "fiscal_period.closed",
+      report: closed.report ?? null,
     });
   } catch (err) {
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Close fiscal period error:");
+  }
+});
+
+// FIN-PERIOD-CLOSE (#2250) — close PREVIEW. Read-only: aggregate ALL integrity
+// blockers + the close report WITHOUT locking the period. Lets an operator see
+// the full work list (and the counts) before committing the close. Same record
+// scope as the close route; list-level authorize (no mutation).
+financeHardeningRouter.get("/fiscal-periods-v2/:id/close-preview", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const periodId = parseId(req.params.id, "id");
+
+    const [period] = await rawQuery<{ id: number; name: string; startDate: string; endDate: string; status: string }>(
+      `SELECT id, name, "startDate"::text AS "startDate", "endDate"::text AS "endDate", status
+         FROM financial_periods
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [periodId, scope.companyId],
+    );
+    if (!period) throw new NotFoundError("الفترة غير موجودة");
+
+    const { collectPeriodCloseBlockers, buildPeriodCloseReport } = await import("../lib/periodCloseCoordinator.js");
+    const window = { startDate: period.startDate, endDate: period.endDate, name: period.name };
+    const blockers = await collectPeriodCloseBlockers({ companyId: scope.companyId, period: window });
+    const report = await buildPeriodCloseReport({ companyId: scope.companyId, periodId, period: window, blockers });
+
+    res.json(maskFields(req, {
+      periodId,
+      periodName: period.name,
+      status: period.status,
+      canClose: blockers.length === 0,
+      blockers,
+      report,
+    }));
+  } catch (err) {
+    handleRouteError(err, res, "Close preview error:");
   }
 });
 
@@ -546,7 +583,7 @@ financeHardeningRouter.post("/journal-manual", requireMinLevel(70), authorize({ 
     const [createdManualJournal] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -557,7 +594,8 @@ financeHardeningRouter.post("/journal-manual", requireMinLevel(70), authorize({ 
   }
 });
 
-financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+// GAP_MATRIX P0 — manual journals expose GL entries; gate at 70 to match mutations.
+financeHardeningRouter.get("/journal-manual", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
@@ -571,7 +609,7 @@ financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hard
               e_apr.name AS "approvedByName",
               e_cre.name AS "createdByName"
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId"=je.id
+       LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_rev ON ea_rev.id=je."reviewedBy"
        LEFT JOIN employees e_rev ON e_rev.id=ea_rev."employeeId" AND e_rev."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_apr ON ea_apr.id=je."approvedBy"
@@ -589,7 +627,7 @@ financeHardeningRouter.get("/journal-manual", authorize({ feature: "finance.hard
   }
 });
 
-financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
+financeHardeningRouter.get("/journal-manual/:id", requireMinLevel(70), authorize({ feature: "finance.hardening", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
@@ -597,7 +635,7 @@ financeHardeningRouter.get("/journal-manual/:id", authorize({ feature: "finance.
       `SELECT je.*, json_agg(jl.*) FILTER (WHERE jl.id IS NOT NULL) AS lines,
               e_cre.name AS "createdByName"
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId"=je.id
+       LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id=je."createdBy"
        LEFT JOIN employees e_cre ON e_cre.id=ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
@@ -906,33 +944,39 @@ financeHardeningRouter.post("/bank-guarantees", authorize({ feature: "finance.ha
     const { ref: bodyRef, bank, beneficiary, amount, issueDate, expiryDate, guaranteeType, notes, attachmentUrl, branchId } = zodParse(createBankGuaranteeSchema.safeParse(req.body ?? {}));
     // Numbering center (Issue #1141) — bank-guarantee ref from authority.
     // Body-supplied ref is preserved for legacy imports only.
-    let issuedBg: Awaited<ReturnType<typeof issueNumber>> | null = null;
     let ref = bodyRef;
-    if (!ref) {
-      issuedBg = await issueNumber({
-        companyId: scope.companyId,
-        branchId: branchId ?? scope.branchId ?? null,
-        moduleKey: "finance",
-        entityKey: "bank_guarantee",
-        entityTable: "bank_guarantees",
-        actorId: scope.userId,
-        expectedTiming: "on_draft",
-      });
-      ref = issuedBg.number;
-    }
-    const { insertId } = await rawExecute(
-      `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
-    );
-    assertInsert(insertId, "bank_guarantees");
+    // Atomic: issue the number and INSERT the guarantee in one transaction so a
+    // failed INSERT can't leave an issued-but-orphaned number. issueNumber's own
+    // (reentrant) withTransaction joins this one via a savepoint.
+    const { insertId, issuedBg } = await withTransaction(async () => {
+      let issuedBg: Awaited<ReturnType<typeof issueNumber>> | null = null;
+      if (!ref) {
+        issuedBg = await issueNumber({
+          companyId: scope.companyId,
+          branchId: branchId ?? scope.branchId ?? null,
+          moduleKey: "finance",
+          entityKey: "bank_guarantee",
+          entityTable: "bank_guarantees",
+          actorId: scope.userId,
+          expectedTiming: "on_draft",
+        });
+        ref = issuedBg.number;
+      }
+      const { insertId } = await rawExecute(
+        `INSERT INTO bank_guarantees ("companyId","branchId",ref,bank,beneficiary,amount,"issueDate","expiryDate","guaranteeType",notes,"attachmentUrl","createdBy")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [scope.companyId, branchId ?? scope.branchId, ref, bank, beneficiary, Number(amount), issueDate, expiryDate, guaranteeType ?? "performance", notes ?? null, attachmentUrl ?? null, scope.activeAssignmentId]
+      );
+      assertInsert(insertId, "bank_guarantees");
+      return { insertId, issuedBg };
+    });
     if (issuedBg) {
       await rawExecute(
         `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
         [insertId, issuedBg.assignmentId]
       ).catch(() => { /* non-blocking link */ });
     }
-    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM bank_guarantees WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, scope.companyId]);
 
     emitEvent({
       companyId: scope.companyId,
@@ -1368,7 +1412,7 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
            COALESCE(SUM(CASE WHEN coa.type='liability' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalLiabilities",
            COALESCE(SUM(CASE WHEN coa.type='equity' THEN jl.credit - jl.debit ELSE 0 END),0) AS "totalEquity"
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id=jl."journalId"
+         JOIN journal_entries je ON je.id=jl."journalId" AND jl."deletedAt" IS NULL
          JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
          WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je.type != 'intercompany'`,
         [companies]
@@ -1384,7 +1428,7 @@ financeHardeningRouter.get("/intercompany/consolidation", authorize({ feature: "
                 COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS revenue,
                 COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit ELSE 0 END),0) AS expenses
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id=jl."journalId"
+         JOIN journal_entries je ON je.id=jl."journalId" AND jl."deletedAt" IS NULL
          JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId"
          JOIN companies c ON c.id=je."companyId"
          WHERE je."companyId" = ANY($1) AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
@@ -1416,7 +1460,7 @@ financeHardeningRouter.get("/projects", authorize({ feature: "finance.hardening"
               p.budget - COALESCE(SUM(jl.debit),0) AS "budgetRemaining"
        FROM projects p
        LEFT JOIN journal_entries je ON je."projectId"=p.id AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
-       LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
+       LEFT JOIN journal_lines jl ON jl."journalId"=je.id AND jl."deletedAt" IS NULL AND jl.debit > 0
        WHERE p."companyId"=$1 AND p."deletedAt" IS NULL
        GROUP BY p.id
        ORDER BY p."createdAt" DESC
@@ -1437,25 +1481,30 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
     // Numbering center (Issue #1141) — project ref from authority.
     // The `projects.ref` column was added in migration 217.
     let projectRef = bodyRef;
-    let issuedProj: Awaited<ReturnType<typeof issueNumber>> | null = null;
-    if (!projectRef) {
-      issuedProj = await issueNumber({
-        companyId: scope.companyId,
-        branchId: scope.branchId ?? null,
-        moduleKey: "projects",
-        entityKey: "project",
-        entityTable: "projects",
-        actorId: scope.userId,
-        expectedTiming: "on_draft",
-      });
-      projectRef = issuedProj.number;
-    }
-    const { insertId } = await rawExecute(
-      `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
-    );
-    assertInsert(insertId, "projects");
+    // Atomic: issue the number and INSERT the project together (see the
+    // bank-guarantees handler above — reentrant withTransaction via savepoint).
+    const { insertId, issuedProj } = await withTransaction(async () => {
+      let issuedProj: Awaited<ReturnType<typeof issueNumber>> | null = null;
+      if (!projectRef) {
+        issuedProj = await issueNumber({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          moduleKey: "projects",
+          entityKey: "project",
+          entityTable: "projects",
+          actorId: scope.userId,
+          expectedTiming: "on_draft",
+        });
+        projectRef = issuedProj.number;
+      }
+      const { insertId } = await rawExecute(
+        `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
+      );
+      assertInsert(insertId, "projects");
+      return { insertId, issuedProj };
+    });
     if (issuedProj) {
       await rawExecute(
         `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
@@ -1517,7 +1566,7 @@ financeHardeningRouter.get("/projects/:id/costs", authorize({ feature: "finance.
               COALESCE(SUM(jl.debit),0) AS amount,
               je."costCenter", je."operationType"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId"=je.id AND jl.debit > 0
+       JOIN journal_lines jl ON jl."journalId"=je.id AND jl."deletedAt" IS NULL AND jl.debit > 0
        WHERE je."projectId"=$1 AND je."companyId"=$2 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND je."reversedById" IS NULL
        GROUP BY je.id
        ORDER BY je."createdAt" DESC`,
@@ -1579,7 +1628,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
       rawQuery<Record<string, unknown>>(
         `SELECT po.ref, po."totalAmount" AS expected, po."expectedDelivery" AS "dueDate", s.name AS "supplierName", 'purchase_order' AS type
          FROM purchase_orders po
-         LEFT JOIN suppliers s ON s.id=po."supplierId"
+         LEFT JOIN suppliers s ON s.id=po."supplierId" AND s."deletedAt" IS NULL
          WHERE po."companyId"=$1 AND po."deletedAt" IS NULL AND po.status IN ('approved','pending')
            AND po."expectedDelivery" BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
          UNION ALL
@@ -1587,7 +1636,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
                 (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')::date AS "dueDate",
                 'رواتب الموظفين' AS "supplierName", 'payroll' AS type
          FROM employee_assignments ea
-         JOIN employees em ON em.id=ea."employeeId"
+         JOIN employees em ON em.id=ea."employeeId" AND em."deletedAt" IS NULL
          WHERE ea."companyId"=$1 AND ea.status='active' AND ea.salary IS NOT NULL
          GROUP BY 1,3,4,5`,
         [scope.companyId]
@@ -1595,7 +1644,7 @@ financeHardeningRouter.get("/cash-flow-forecast", authorize({ feature: "finance.
       rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(jl.debit) - SUM(jl.credit), 0) AS balance
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id=jl."journalId"
+         JOIN journal_entries je ON je.id=jl."journalId" AND jl."deletedAt" IS NULL
          WHERE je."companyId"=$1 AND je."deletedAt" IS NULL AND je."balancesApplied" = true AND jl."accountCode" LIKE '11%'`,
         [scope.companyId]
       ),
@@ -1645,7 +1694,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.
          COALESCE(SUM(CASE WHEN coa.type='expense' THEN jl.debit ELSE 0 END),0) AS "totalExpenses",
          COALESCE(SUM(CASE WHEN coa.type='revenue' THEN jl.credit ELSE 0 END),0) AS "totalRevenue"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId"=je.id
+       JOIN journal_lines jl ON jl."journalId"=je.id AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts coa ON coa.code=jl."accountCode" AND coa."companyId"=je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        GROUP BY je."costCenter"
@@ -1657,7 +1706,7 @@ financeHardeningRouter.get("/cost-center-report", authorize({ feature: "finance.
       `SELECT je.id, je.ref, je.description, je."createdAt" AS date,
               COALESCE(SUM(jl.debit),0) AS debit, COALESCE(SUM(jl.credit),0) AS credit
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId"=je.id
+       JOIN journal_lines jl ON jl."journalId"=je.id AND jl."deletedAt" IS NULL
        WHERE je."companyId"=$1 AND je."costCenter"=$2 AND je."deletedAt" IS NULL AND je."balancesApplied" = true
        GROUP BY je.id
        ORDER BY je."createdAt" DESC LIMIT 50`,

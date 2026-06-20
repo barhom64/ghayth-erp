@@ -6,6 +6,7 @@ const HrServices = lazy(() => import("@/pages/hr/services"));
 const Employees = lazy(() => import("@/pages/employees"));
 const EmployeeDetail = lazy(() => import("@/pages/employee-detail"));
 const EmployeesCreate = lazy(() => import("@/pages/create/employees-create"));
+const EmployeeQuickCreate = lazy(() => import("@/pages/create/hr/employee-quick-create"));
 const Attendance = lazy(() => import("@/pages/hr/attendance"));
 const AttendanceCreate = lazy(() => import("@/pages/create/hr/attendance-create"));
 const Leaves = lazy(() => import("@/pages/hr/leaves"));
@@ -18,7 +19,10 @@ const PerformanceCreate = lazy(() => import("@/pages/create/hr/performance-creat
 const Training = lazy(() => import("@/pages/hr/training"));
 const TrainingDetail = lazy(() => import("@/pages/hr/training-detail"));
 const TrainingCreate = lazy(() => import("@/pages/create/hr/training-create"));
-const Organization = lazy(() => import("@/pages/hr/organization"));
+// HR-REV-2 (ADR-HR-02) — `org-tree` هو الهيكل التنظيمي الموحّد القانوني؛
+// /hr/organization و /hr/organization/structure أُبقِيا redirect إليه (لا 404
+// للروابط القديمة). صفحتا العرض المكرّرتان (مجرّد KPIs وبطاقات) أُزيلتا
+// (retire) لأن org-tree يُغنيهما، وaudit:routes يمنع الصفحات اليتيمة.
 const Recruitment = lazy(() => import("@/pages/hr/recruitment"));
 const RecruitmentCreate = lazy(() => import("@/pages/create/hr/recruitment-create"));
 const JobDetail = lazy(() => import("@/pages/hr/job-detail"));
@@ -44,20 +48,31 @@ const ShiftsCreate = lazy(() => import("@/pages/create/hr/shifts-create"));
 const ShiftDetail = lazy(() => import("@/pages/details/shift-detail"));
 
 const AttendanceReports = lazy(() => import("@/pages/hr/attendance-reports"));
-const LeaveManagement = lazy(() => import("@/pages/hr/leave-management"));
+// (LeaveManagement أُزيل — أرصدة/أنواع الإجازات صارت تبويبات في صفحة الإجازات
+// الموحّدة، و/hr/leaves/management يُعاد توجيهه إليها. HR-REV-2)
 const ApprovalChains = lazy(() => import("@/pages/hr/approval-chains"));
 const FieldTracking = lazy(() => import("@/pages/hr/field-tracking"));
+const TrackingPolicies = lazy(() => import("@/pages/hr/tracking-policies"));
 const QRScanner = lazy(() => import("@/pages/hr/qr-scanner"));
 const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
-const OrganizationStructure = lazy(() => import("@/pages/hr/organization-structure"));
-const PerformanceAdvanced = lazy(() => import("@/pages/hr/performance-advanced"));
-const RecruitmentAdvanced = lazy(() => import("@/pages/hr/recruitment-advanced"));
-const TrainingAdvanced = lazy(() => import("@/pages/hr/training-advanced"));
-const ViolationsManagement = lazy(() => import("@/pages/hr/violations-management"));
-const ShiftsManagement = lazy(() => import("@/pages/hr/shifts-management"));
+const ActivationBoard = lazy(() => import("@/pages/hr/activation-board"));
+const SelfOnboardingReview = lazy(() => import("@/pages/hr/self-onboarding-review"));
+// (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
+// (PerformanceAdvanced أُزيل — توزيع التقييمات + أفضل ١٠ صارا تبويب «التحليلات»
+// في /hr/performance، والمسار /hr/performance/advanced يُعاد توجيهه إليها. HR-REV)
+// (RecruitmentAdvanced أُزيل — كان عرضًا تحليليًّا مكرّرًا مشمولًا بالكامل في
+// /hr/recruitment، والمسار /hr/recruitment/advanced يُعاد توجيهه إليها. HR-REV)
+// (TrainingAdvanced أُزيل — «البرامج حسب الحالة» صار قسمًا في تبويب البرامج بصفحة
+// /hr/training، والمسار /hr/training/advanced يُعاد توجيهه إليها. HR-REV)
+// (ViolationsManagement أُزيل — قائمة المخالفات الخام + الاعتماد + التحليل صارت
+// تبويب «المخالفات الخام» داخل /hr/violations، و/hr/violations/management يُعاد
+// توجيهه إليها. HR-REV-7)
+// (ShiftsManagement أُزيل — نموذج إسناد الموظف لوردية صار في تبويب «التعيينات»
+// بصفحة /hr/shifts (كان التبويب للعرض فقط)، والمسار /hr/shifts/management يُعاد
+// توجيهه إليها. HR-REV)
 const ApplicationList = lazy(() => import("@/pages/hr/application-list"));
 const Evaluation360 = lazy(() => import("@/pages/hr/evaluation-360"));
 const Evaluation360Create = lazy(() => import("@/pages/create/hr/evaluation-360-create"));
@@ -112,7 +127,6 @@ const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
 const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
 const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
 // Phase 2 wiring — orphan pages with existing backends.
-const AccrualsMonthly = lazy(() => import("@/pages/hr/accruals-monthly"));
 const WpsSettings = lazy(() => import("@/pages/hr/saudi-compliance/wps/settings"));
 
 export const hrRoutes = [
@@ -123,6 +137,7 @@ export const hrRoutes = [
   { path: "/hr/services", component: HrServices, subKey: "services" },
   { path: "/employees", component: Employees, subKey: "employees" },
   { path: "/employees/create", component: EmployeesCreate, subKey: "employees" },
+  { path: "/employees/quick-create", component: EmployeeQuickCreate, subKey: "employees" },
   { path: "/employees/:id", component: EmployeeDetail, subKey: "employees" },
   { path: "/hr/attendance", component: Attendance, subKey: "attendance" },
   { path: "/hr/attendance/create", component: AttendanceCreate, subKey: "attendance" },
@@ -131,6 +146,7 @@ export const hrRoutes = [
   // "field-tracking" and "qr-scanner" as an id and shadow these pages.
   { path: "/hr/attendance/reports", component: AttendanceReports, subKey: "attendance" },
   { path: "/hr/attendance/field-tracking", component: FieldTracking, subKey: "attendance" },
+  { path: "/hr/attendance/tracking-policies", component: TrackingPolicies, subKey: "attendance" },
   { path: "/hr/attendance/qr-scanner", component: QRScanner, subKey: "attendance" },
   // ":id/edit" precedes ":id" — defensive ordering (see route-shadowing fix).
   { path: "/hr/attendance/:id/edit", component: AttendanceEdit, subKey: "attendance" },
@@ -138,7 +154,8 @@ export const hrRoutes = [
   { path: "/hr/leaves", component: Leaves, subKey: "leaves" },
   { path: "/hr/leaves/create", component: LeavesCreate, subKey: "leaves" },
   // Literal sub-routes must precede "/hr/leaves/:id" (see attendance above).
-  { path: "/hr/leaves/management", component: LeaveManagement, subKey: "leaves" },
+  // GAP_MATRIX P1 — redirect /management until merged as tab inside base page.
+  { path: "/hr/leaves/management", component: redirectTo("/hr/leaves"), subKey: "leaves" },
   { path: "/hr/leaves/approval-chains", component: ApprovalChains, subKey: "leaves" },
   { path: "/hr/leaves/:id/edit", component: LeavesEdit, subKey: "leaves" },
   { path: "/hr/leaves/:id", component: LeaveDetail, subKey: "leaves" },
@@ -155,8 +172,8 @@ export const hrRoutes = [
   { path: "/hr/training/create", component: TrainingCreate, subKey: "training" },
   { path: "/hr/training/advanced", component: redirectTo("/hr/training"), subKey: "training" },
   { path: "/hr/training/:id", component: TrainingDetail, subKey: "training" },
-  { path: "/hr/organization", component: Organization, subKey: "organization" },
-  { path: "/hr/organization/structure", component: OrganizationStructure, subKey: "organization" },
+  { path: "/hr/organization", component: redirectTo("/hr/org-tree"), subKey: "organization" },
+  { path: "/hr/organization/structure", component: redirectTo("/hr/org-tree"), subKey: "organization" },
   { path: "/hr/recruitment", component: Recruitment, subKey: "recruitment" },
   { path: "/hr/recruitment/create", component: RecruitmentCreate, subKey: "recruitment" },
   { path: "/hr/recruitment/applicants/create", component: ApplicantsCreate, subKey: "recruitment" },
@@ -188,6 +205,8 @@ export const hrRoutes = [
   { path: "/hr/shifts/management", component: redirectTo("/hr/shifts"), subKey: "shifts" },
   { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
+  { path: "/hr/activation-board", component: ActivationBoard, subKey: "employees" },
+  { path: "/hr/self-onboarding-review", component: SelfOnboardingReview, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },
   { path: "/hr/evaluation-360/create", component: Evaluation360Create, subKey: "performance" },
   { path: "/hr/evaluation-360/history/:employeeId", component: Evaluation360History, subKey: "performance" },
@@ -210,7 +229,9 @@ export const hrRoutes = [
   { path: "/hr/org-tree", component: OrgTree, subKey: "employees" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
-  { path: "/hr/accruals/monthly", component: AccrualsMonthly, subKey: "payroll" },
+  // /hr/accruals already previews AND posts the same POST /hr/accruals/monthly;
+  // the standalone run-only page was a functional duplicate (CROSS_MODULE audit 🔴).
+  { path: "/hr/accruals/monthly", component: redirectTo("/hr/accruals"), subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
   { path: "/hr/transfers/:id/edit", component: TransfersEdit, subKey: "employees" },
   { path: "/hr/transfers/:id", component: TransferDetail, subKey: "employees" },

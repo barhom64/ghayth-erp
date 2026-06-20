@@ -28,12 +28,13 @@ import {
 import { broadcastAlert, sendNotification } from "./notificationService.js";
 import { notifyBusinessEvent } from "./notifyBusinessEvent.js";
 import { syncMailbox } from "./mailboxSync.js";
+import { getVendorConfig } from "./vendorSettings.js";
 import {
   TASK_SLA_REMINDER_SETTING_KEY,
   resolveTaskSlaReminderConfig,
   shouldFireSlaReminder,
 } from "./inboxClassifier.js";
-import { processFallbackChains } from "./notificationEngine.js";
+import { processFallbackChains } from "./notificationDispatch.js";
 import {
   resolveSystemSmtpConfig,
   formatFromHeader,
@@ -50,6 +51,8 @@ import { runAllProactiveChecks, registerProactiveEventListeners } from "./proact
 import { eventBus } from "./eventBus.js";
 import { decryptSecret } from "./secrets.js";
 import { processDueRecurringJournals } from "./recurringJournalProcessor.js";
+import { processDueAmortizations } from "./engines/prepaidAmortizationEngine.js";
+import { processDueRecognitions } from "./engines/deferredRevenueEngine.js";
 import {
   fleetTelematicsRetention,
   fleetTelematicsHeartbeat,
@@ -492,6 +495,17 @@ export async function scanVehicleMaintenanceSchedules(): Promise<string> {
     }
   }
   return `vehicle_maintenance_schedule_scan: ${dueCount} due schedule(s) processed`;
+}
+
+/**
+ * TA-GAP-09 Phase 3 — sweep every active maps-usage threshold and
+ * fire warning/critical events when the operator's cap is crossed.
+ * Dedupe is enforced inside the lib via the alerts table UNIQUE.
+ */
+async function mapsUsageThresholdAlerts(): Promise<string> {
+  const { runThresholdAlertCheck } = await import("./fleet/mapsUsageThresholdAlerts.js");
+  const result = await runThresholdAlertCheck(new Date());
+  return `[mapsUsageThresholdAlerts] checked=${result.thresholdsChecked} emitted=${result.alertsEmitted}`;
 }
 
 async function fleetStatusCheck(): Promise<string> {
@@ -2305,6 +2319,18 @@ async function hourlyWorkflowSlaCheck(): Promise<string> {
 }
 
 async function processSmsQueue(): Promise<string> {
+  // Platform-wide SMS credentials from the vendor_secrets hub
+  // (/admin/vendor-settings → SMS card). Resolved ONCE per run and used
+  // only as a FALLBACK: a company's own system_settings SMS keys (read in
+  // the query below) always take precedence, so existing per-company
+  // configs are unaffected. This is what lets SMS be configured from the
+  // same UI as Email + WhatsApp instead of the UI-less system_settings.
+  const vendorSms = await getVendorConfig("sms").catch(() => null);
+  const vc = vendorSms?.active ? vendorSms.config : {};
+  const vendorSid = typeof vc.accountSid === "string" ? vc.accountSid : "";
+  const vendorToken = typeof vc.authToken === "string" ? vc.authToken : "";
+  const vendorFrom = typeof vc.fromNumber === "string" ? vc.fromNumber : "";
+
   // Phase 4 contract slice 6: read from outbound_queue. See
   // processEmailQueue for the rationale.
   const pending = await rawQuery<Record<string, unknown>>(
@@ -2355,21 +2381,27 @@ async function processSmsQueue(): Promise<string> {
   };
 
   for (const sms of pending) {
+    // Per-company system_settings creds win; fall back to the platform-wide
+    // vendor_secrets 'sms' card when a company has none of its own.
+    const accountSid = (typeof sms.accountSid === "string" && sms.accountSid) ? sms.accountSid : vendorSid;
+    const authToken = (typeof sms.authToken === "string" && sms.authToken) ? sms.authToken : vendorToken;
+    const fromNumber = (typeof sms.fromNumber === "string" && sms.fromNumber) ? sms.fromNumber : vendorFrom;
+
     if (sms.channelEnabled === "false") {
       await updateBothSms(sms, { errorMessage: "قناة SMS معطلة — سيتم الإرسال عند التفعيل" }, false);
       skipped++;
       continue;
     }
-    if (!sms.accountSid || !sms.authToken || !sms.fromNumber) {
+    if (!accountSid || !authToken || !fromNumber) {
       await updateBothSms(sms, { errorMessage: "بيانات Twilio غير مضبوطة — يرجى إعداد المفاتيح في الإعدادات" }, false);
       skipped++;
       continue;
     }
 
     try {
-      const credentials = Buffer.from(`${sms.accountSid}:${sms.authToken}`).toString("base64");
+      const credentials = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
       const resp = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${sms.accountSid}/Messages.json`,
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
         {
           method: "POST",
           headers: {
@@ -2378,7 +2410,7 @@ async function processSmsQueue(): Promise<string> {
           },
           body: new URLSearchParams({
             To: sms.recipientPhone as string,
-            From: sms.fromNumber as string,
+            From: fromNumber as string,
             Body: sms.message as string,
           }).toString(),
         }
@@ -3651,7 +3683,58 @@ async function umrahVisaExpiryAlerts(): Promise<string> {
     const enabledRaw = await resolveSettings("umrah.notify.visa_expiry", c.id);
     const enabled = enabledRaw === true || enabledRaw === "true" || enabledRaw === 1;
     if (!enabled) continue;
-    const { notifyInternalVisaExpiring } = await import("./umrahInternalNotifications.js");
+    const { notifyInternalVisaExpiring, resolveInternalRecipients } = await import("./umrahInternalNotifications.js");
+    // U-17-P4 — digest mode. The U-17-P1 catalog exposes
+    // `umrah.notifications.digestMode` with values "per_event"
+    // (default — one notification per expiring pilgrim, the legacy
+    // behaviour preserved below) or "daily_digest" (one aggregated
+    // notification per recipient summarising every expiring pilgrim).
+    // Reading the setting once per company keeps the inner loop cheap.
+    const digestModeRaw = await resolveSettings("umrah.notifications.digestMode", c.id);
+    const digestMode = String(digestModeRaw ?? "per_event");
+    if (digestMode === "daily_digest") {
+      // Daily digest path — emit a single notification per recipient
+      // with a compact summary of every expiring row instead of N
+      // per-event dispatches.
+      const recipients = await resolveInternalRecipients({
+        companyId: c.id,
+        branchId: null,
+        pilgrimId: 0,
+        pilgrimName: null,
+        agentId: null,
+      });
+      if (recipients.length > 0) {
+        const lines = expiring
+          .slice(0, 50)
+          .map(
+            (p, i) =>
+              `${i + 1}. ${(p.fullName as string) ?? "معتمر #" + p.id} — تنتهي خلال ${p.daysRemaining ?? 0} يوم`,
+          )
+          .join("\n");
+        const overflow = expiring.length > 50 ? `\n…و ${expiring.length - 50} حالة أخرى` : "";
+        const title = `🔔 تنبيه يومي مُجمَّع — ${expiring.length} تأشيرة قاربت على الانتهاء`;
+        const body = `إجمالي ${expiring.length} معتمر بحاجة لمتابعة:\n${lines}${overflow}\n\nراجع القائمة الكاملة من شاشة المعتمرين.`;
+        for (const assignmentId of recipients) {
+          try {
+            await createNotification({
+              companyId: c.id,
+              assignmentId,
+              type: "umrah",
+              title,
+              body,
+              priority: "high",
+              refType: "umrah_pilgrims",
+              refId: 0,
+              actionUrl: "/umrah/pilgrims?visaExpiring=1",
+            });
+            notifSent++;
+          } catch (e) {
+            logger.error(e, "[cronScheduler] umrah visa digest notify failed");
+          }
+        }
+      }
+      continue;
+    }
     for (const row of expiring) {
       try {
         const recipients = await notifyInternalVisaExpiring(
@@ -4637,7 +4720,72 @@ async function inboxTaskSlaReminderScan(): Promise<string> {
   return `inbox SLA reminders: ${first} first, ${final} final`;
 }
 
+// آلية منع التفاقم: تستنزف تلقائياً تراكم "فشل القيد المالي" غير المحلول لكل
+// شركة بإعادة استدعاء الترحيل الأصلي عبر retryPostingFailure (idempotent بمفتاح
+// المصدر). أي فشل قابل لإعادة المحاولة (مثل فواتير نسك التي تعطّلت بسبب رمز
+// الحساب 5201/2101) يُرحَّل ويُغلق السجل تلقائياً، فلا يتضخّم الرصيد ولا يقفل
+// النظام بوابة المنع المالي (postingFailuresGuard). يستثني الأنواع غير القابلة
+// لإعادة المحاولة الآلية (تُعالَج يدوياً) ويعمل ضمن دفعات محدودة لكل شركة حتى لا
+// يثقل قاعدة البيانات. يعمل بحدود أمان: لا يلمس السجلات المحلولة مسبقاً، ويُغلق
+// السجل فقط عند نجاح الترحيل فعلياً (result.ok && result.supported).
+async function financialPostingFailureAutoRetry(): Promise<string> {
+  const { retryPostingFailure, UNSUPPORTED_RETRY_SOURCE_TYPES } = await import("./postingFailureRetry.js");
+  const PER_COMPANY_CAP = 500; // bounded drain per run so the cron stays cheap
+  const PAGE = 100;
+  const companies = await rawQuery<{ id: number }>(`SELECT id FROM companies`);
+  let totalResolved = 0, totalStillFailing = 0, totalProcessed = 0;
+  let companiesTouched = 0;
+
+  for (const company of companies) {
+    let cursor = 0;
+    let processedForCompany = 0;
+    let resolvedForCompany = 0;
+    // Walk the retryable backlog one bounded window at a time (cursor by id so
+    // a head of still-failing rows can't stall later resolvable ones), capped
+    // at PER_COMPANY_CAP rows per run.
+    while (processedForCompany < PER_COMPANY_CAP) {
+      const limit = Math.min(PAGE, PER_COMPANY_CAP - processedForCompany);
+      const batch = await rawQuery<{ id: number; sourceType: string; sourceId: number | null }>(
+        `SELECT id, "sourceType", "sourceId" FROM financial_posting_failures
+          WHERE "companyId" = $1 AND resolved = false AND id > $2
+            AND "sourceType" <> ALL($3::text[])
+            AND "sourceId" IS NOT NULL AND "sourceId" > 0
+          ORDER BY id ASC LIMIT $4`,
+        [company.id, cursor, UNSUPPORTED_RETRY_SOURCE_TYPES as unknown as string[], limit],
+      );
+      if (batch.length === 0) break;
+
+      for (const f of batch) {
+        cursor = f.id;
+        processedForCompany++;
+        totalProcessed++;
+        // userId 0 = النظام (آلية تلقائية) — مطابق لنمط resolvedBy في المهام الآلية.
+        const result = await retryPostingFailure(
+          { companyId: company.id, branchId: 0, userId: 0 },
+          { sourceType: f.sourceType, sourceId: f.sourceId },
+        );
+        if (result.ok && result.supported) {
+          await rawExecute(
+            `UPDATE financial_posting_failures SET resolved = true, "resolvedAt" = NOW(), "resolvedBy" = 0
+              WHERE id = $1 AND "companyId" = $2 AND resolved = false`,
+            [f.id, company.id],
+          );
+          resolvedForCompany++;
+          totalResolved++;
+        } else if (result.supported) {
+          totalStillFailing++;
+        }
+      }
+      if (batch.length < limit) break;
+    }
+    if (resolvedForCompany > 0 || processedForCompany > 0) companiesTouched++;
+  }
+
+  return `financial_posting_failure_auto_retry: processed ${totalProcessed} across ${companiesTouched} company(ies) — resolved ${totalResolved}, stillFailing ${totalStillFailing}`;
+}
+
 const JOB_DEFINITIONS: CronJobDef[] = [
+  { name: "financial_posting_failure_auto_retry", description: "آلية منع التفاقم — إعادة ترحيل تراكم فشل القيد المالي تلقائياً وإغلاق السجلات الناجحة لكل شركة", schedule: "*/15 * * * *", handler: financialPostingFailureAutoRetry },
   { name: "inbox_task_sla_reminder_scan", description: "تذكير المسؤولين بمهام صندوق الوارد قبل تجاوز موعد الاستجابة (SLA)", schedule: "*/15 * * * *", handler: inboxTaskSlaReminderScan },
   { name: "warehouse_lot_expiry_alerts", description: "تنبيهات انتهاء صلاحية دفعات المستودع (عتبات المستودع)", schedule: "10 6 * * *", handler: warehouseLotExpiryAlerts },
   { name: "warehouse_cycle_count_plan_scan", description: "فتح الجرد الدوري المستحق وفق خطط الجرد", schedule: "15 6 * * *", handler: warehouseCycleCountPlanScan },
@@ -4646,6 +4794,11 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "document_expiry_alerts", description: "تنبيهات انتهاء وثائق الموظفين", schedule: "0 6 * * *", handler: documentExpiryAlerts },
   { name: "contract_expiry_alerts", description: "تنبيهات انتهاء العقود", schedule: "0 6 * * *", handler: contractExpiryAlerts },
   { name: "fleet_status_check", description: "فحص حالة الأسطول", schedule: "0 6 * * *", handler: fleetStatusCheck },
+  // TA-GAP-09 Phase 3 — maps usage threshold alert sweep (kicks at 80%
+  // warning and 100% critical of the operator-set cap). Runs every
+  // 15 minutes so a sudden burst escalates within a quarter-hour;
+  // dedupe is enforced by the unique constraint on the alerts table.
+  { name: "maps_usage_threshold_alerts", description: "تنبيهات تجاوز عتبة استهلاك الخرائط (TA-GAP-09 Phase 3)", schedule: "*/15 * * * *", handler: mapsUsageThresholdAlerts },
   { name: "vehicle_maintenance_schedule_scan", description: "فحص جداول الصيانة الوقائية المستحقّة (بالتاريخ أو العداد) وإطلاق التنبيهات/الالتزامات", schedule: "0 6 * * *", handler: scanVehicleMaintenanceSchedules },
   { name: "fleet_telematics_retention", description: "تنظيف بيانات Telematics القديمة (مواقع + سجلات مزامنة + جلسات بث منتهية)", schedule: "0 3 * * *", handler: fleetTelematicsRetention },
   { name: "fleet_telematics_heartbeat", description: "كشف الأجهزة غير المتصلة بناءً على آخر موقع", schedule: "*/2 * * * *", handler: fleetTelematicsHeartbeat },
@@ -4725,6 +4878,8 @@ const JOB_DEFINITIONS: CronJobDef[] = [
   { name: "weekly_data_cleanup", description: "تنظيف البيانات المؤقتة وأرشفة السجلات القديمة", schedule: "0 3 * * 0", handler: weeklyDataCleanup },
   { name: "retry_stuck_official_letters", description: "إعادة محاولة إرسال الخطابات المعتمدة العالقة", schedule: "*/15 * * * *", handler: retryStuckOfficialLetters },
   { name: "daily_recurring_journals", description: "تنفيذ القيود المحاسبية الدورية المستحقة", schedule: "0 1 * * *", handler: processDueRecurringJournals },
+  { name: "monthly_prepaid_amortization", description: "إطفاء المصروفات المدفوعة مقدماً المستحقة شهرياً", schedule: "0 2 1 * *", handler: processDueAmortizations },
+  { name: "monthly_deferred_revenue_recognition", description: "تحقّق الإيرادات المؤجلة المستحقة شهرياً", schedule: "0 2 1 * *", handler: processDueRecognitions },
   { name: "hourly_obligations_scan", description: "فحص الالتزامات — ترقية المتأخرات وتصعيد المهام", schedule: "15 * * * *", handler: hourlyObligationsScan },
   { name: "daily_dunning_auto_send", description: "إرسال تلقائي لخطابات التحصيل حسب المرحلة", schedule: "0 9 * * *", handler: dailyDunningAutoSend },
   { name: "monthly_bad_debt_reminder", description: "تذكير CFO باحتساب مخصص الديون المشكوك فيها", schedule: "0 9 1 * *", handler: monthlyBadDebtReminder },

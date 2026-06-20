@@ -422,12 +422,23 @@ const BESPOKE_PRESETS: Record<string, () => PrintTemplate> = {
   fleet_driver: () => buildDriverCardPreset(),
   legal_correspondence: () => buildCorrespondenceCardPreset(),
   // U-14-P1 — umrah_group was aliased to the pilgrim preset (wrong:
-  // a group is a COLLECTION of pilgrims with its own meta). Removing
-  // the key here lets the resolver fall through to universalFallback
-  // (templateResolver line 142: `BESPOKE_PRESETS[entityType]?.() ??
-  // universalFallback(entityType)`), which renders the group row's
-  // actual columns. A bespoke buildUmrahGroupPreset is U-14-P3.
-  umrah_agent_invoice: () => buildUmrahInvoicePreset(),
+  // a group is a COLLECTION of pilgrims with its own meta). U-14-P3
+  // now ships the dedicated builder so the resolver no longer falls
+  // through to universalFallback — operators see the group meta block
+  // + pilgrim manifest.
+  umrah_group: () => buildUmrahGroupPreset(),
+  //
+  // U-14-P2 — `umrah_agent_invoice` used to re-use the buyer-side
+  // sales-invoice preset (pilgrim/group meta block), which was the
+  // wrong reading audience. It now points at its own builder carrying
+  // agent + sub-agent + contract attribution.
+  umrah_agent_invoice: () => buildUmrahAgentInvoicePreset(),
+  // U-14-P3 — Nusk invoice preset (PURCHASE-side document).
+  umrah_nusk_invoice: () => buildUmrahNuskInvoicePreset(),
+  // U-14-P3 — umrah commission-plan preset (employee contract).
+  umrah_commission_plan: () => buildUmrahCommissionPlanPreset(),
+  // U-14-P3 — umrah commission-calculation preset (monthly slip).
+  umrah_commission_calculation: () => buildUmrahCommissionCalculationPreset(),
   // Cargo bill of lading — new bespoke preset wired with loadCargoManifest.
   cargo_manifest: () => buildCargoManifestPreset(),
   manifest: () => buildCargoManifestPreset(),
@@ -2720,6 +2731,327 @@ function buildUmrahPilgrimPreset(): PrintTemplate {
   });
 }
 
+// U-14-P3 — dedicated umrah_group preset.
+//
+// The U-14-P1 fix removed the wrong `umrah_group → buildUmrahPilgrim`
+// alias and let the resolver fall through to universalFallback. That
+// rendered the bare group ROW columns, which is correct but not the
+// usable doc operators wanted: a meta block + the pilgrim manifest.
+//
+// loadUmrahGroup returns:
+//   entity   — group row joined with agentName / subAgentName / seasonName
+//   pilgrims — manifest array (fullName, passport, visa, nationality, ...)
+//
+// The body below renders both. Same totals-style block + table convention
+// the rest of the umrah-side presets use.
+function buildUmrahGroupPreset(): PrintTemplate {
+  return makePreset({
+    id: -107, presetKey: "umrah_group_classic", entityType: "umrah_group",
+    name: "مجموعة عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">مجموعة عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.name}}</div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المجموعة</div>
+      <div>{{entity.name}}</div>
+      <div style="color:#64748b;font-size:9pt">الموسم: {{entity.seasonName}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>الوكيل الرئيسي:</strong> {{entity.agentName}}</div>
+      <div><strong>الوكيل الفرعي:</strong> {{entity.subAgentName}}</div>
+      <div><strong>تاريخ الوصول:</strong> {{entity.arrivalDate}}</div>
+      <div><strong>تاريخ المغادرة:</strong> {{entity.departureDate}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<h3 style="margin:14px 0 6px 0;font-size:11pt;color:#334155">قائمة المعتمرين</h3>
+<table style="width:100%;border-collapse:collapse;margin:6px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">الاسم</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">رقم الجواز</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">التأشيرة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">الجنسية</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:90px">الحالة</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each pilgrims}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.fullName}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left"><span dir="ltr">{{this.passportNumber}}</span></td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left"><span dir="ltr">{{this.visaNumber}}</span></td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.nationality}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.status}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+// U-14-P2 — dedicated agent-invoice preset.
+//
+// The previous resolver mapping pointed `umrah_agent_invoice` at the
+// buyer-side `buildUmrahInvoicePreset()`, which renders the pilgrim /
+// group meta block — totally wrong for the agent-side document which
+// reads to the AGENT, not the pilgrim. The agent invoice carries:
+//   - main agent + sub-agent identification block
+//   - season + contract reference (the agent has a contract; the pilgrim
+//     doesn't)
+//   - same line-items + totals shape so partial-payment math reads
+//     identically
+//
+// `data.entity` is whatever `loadUmrahAgentInvoice(...)` returns. Keys
+// referenced here (`agentName` / `subAgentName` / `contractRef` /
+// `seasonName`) are pulled by that loader.
+// U-14-P3 — Nusk invoice preset.
+//
+// The Nusk invoice is the PURCHASE-side document: the bill the Nusk
+// system issues against the agency for one group's services (ground
+// services, electronic fees, visas, insurance, enrichment, transport,
+// hotel). It's distinct from the buyer-side sales invoice (sub-agent)
+// and the agent invoice (main agent). The body breaks the totals out
+// per service-line so an operator can sanity-check the figure being
+// passed through to the agent.
+function buildUmrahNuskInvoicePreset(): PrintTemplate {
+  return makePreset({
+    id: -108, presetKey: "umrah_nusk_invoice_classic", entityType: "umrah_nusk_invoice",
+    name: "فاتورة نُسُك",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فاتورة نُسُك</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">المجموعة</div>
+      <div>{{entity.groupName}}</div>
+      <div style="color:#64748b;font-size:9pt">الموسم: {{entity.seasonName}}</div>
+      <div style="color:#64748b;font-size:9pt">الوكيل: {{entity.agentName}}</div>
+      <div style="color:#64748b;font-size:9pt">الوكيل الفرعي: {{entity.subAgentName}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم فاتورة نُسُك:</strong> <span dir="ltr">{{entity.nuskInvoiceNumber}}</span></div>
+      <div><strong>تاريخ الإصدار:</strong> {{entity.issueDate}}</div>
+      <div><strong>تاريخ الانتهاء:</strong> {{entity.expiryDate}}</div>
+      <div><strong>عدد المعتمرين:</strong> {{entity.mutamerCount}}</div>
+      <div><strong>الحالة:</strong> {{entity.nuskStatus}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">البند</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:140px;text-align:left">المبلغ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">خدمات أرضية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.groundServices}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">رسوم إلكترونية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.electronicFees}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">رسوم تأشيرات</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.visaFees}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">رسوم تأمين</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.insuranceFees}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">خدمات إثرائية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.enrichmentServices}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">خدمات إضافية</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.additionalServices}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">إجمالي النقل</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.transportTotal}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">إجمالي الفنادق</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.hotelTotal}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">مبلغ الاسترداد</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.refundAmount}}</td></tr>
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">صافي التكلفة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.netCost}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.totalAmount}}</td></tr>
+</table>`,
+  });
+}
+
+// U-14-P3 — umrah commission-plan preset.
+//
+// The commission plan is the EMPLOYEE-side document operators print
+// for the salary-plus-commission contract signature. Body carries
+// the plan meta (employee + season + plan name + status), the
+// computation rules (commissionType / percentageRate / fixedAmount
+// + condition shape), and the tiers ladder iterated via the loader's
+// `tiers` array. Same convention as the other umrah presets.
+function buildUmrahCommissionPlanPreset(): PrintTemplate {
+  return makePreset({
+    id: -109, presetKey: "umrah_commission_plan_classic", entityType: "umrah_commission_plan",
+    name: "خطة عمولات عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">خطة عمولات عمرة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.planName}}</div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{entity.employeeName}}</div>
+      <div style="color:#64748b;font-size:9pt">الموسم: {{entity.seasonName}}</div>
+      <div style="color:#64748b;font-size:9pt">الراتب الأساسي: {{entity.baseSalary}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>اسم الخطة:</strong> {{entity.planName}}</div>
+      <div><strong>نوع العمولة:</strong> {{entity.commissionType}}</div>
+      <div><strong>النسبة المئوية:</strong> {{entity.percentageRate}}</div>
+      <div><strong>المبلغ الثابت:</strong> {{entity.fixedAmount}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<div style="margin:14px 0;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+  <div style="font-weight:bold;margin-bottom:4px">شروط الاحتساب</div>
+  <div><strong>نوع الشرط:</strong> {{entity.conditionType}}</div>
+  <div><strong>الحد الأدنى للربح/تأشيرة:</strong> {{entity.minProfitPerVisa}}</div>
+  <div><strong>الحد الأدنى لنسبة المبيعات:</strong> {{entity.minSalesPercent}}</div>
+  <div><strong>الحد الأدنى لمتوسط السعر:</strong> {{entity.minAvgPrice}}</div>
+  <div><strong>الوحدة:</strong> {{entity.tierUnit}}</div>
+  <div><strong>السماح بشرائح جزئية:</strong> {{entity.partialTiersAllowed}}</div>
+  <div><strong>المخالفات تمنع العمولة:</strong> {{entity.violationBlocksCommission}}</div>
+</div>
+<h3 style="margin:14px 0 6px 0;font-size:11pt;color:#334155">سُلَّم الشرائح</h3>
+<table style="width:100%;border-collapse:collapse;margin:6px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:60px">الترتيب</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">من</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">إلى</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:140px">المكافأة/الوحدة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">تراكمي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each tiers}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.tierOrder}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.fromCount}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.toCount}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.bonusPerUnit}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.isCumulative}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
+// U-14-P3 — umrah commission calculation (monthly slip).
+//
+// The calculation row is the OUTPUT of running a plan against one
+// month: total mutamers, condition met or not, completed tiers,
+// commission amount before final, and the final amount actually
+// payable. Body carries the plan context (name + type + percentage
+// / fixed amount + base salary) so an operator handing the slip to
+// the employee has the full audit context on one page.
+function buildUmrahCommissionCalculationPreset(): PrintTemplate {
+  return makePreset({
+    id: -110, presetKey: "umrah_commission_calculation_classic", entityType: "umrah_commission_calculation",
+    name: "إيصال احتساب عمولة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">إيصال احتساب عمولة</h2>
+<div style="text-align:center;color:#475569;margin-bottom:14px">{{entity.planName}} — {{entity.month}}/{{entity.year}}</div>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الموظف</div>
+      <div>{{entity.employeeName}}</div>
+      <div style="color:#64748b;font-size:9pt">الموسم: {{entity.seasonName}}</div>
+      <div style="color:#64748b;font-size:9pt">الراتب الأساسي: {{entity.baseSalary}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>الخطة:</strong> {{entity.planName}}</div>
+      <div><strong>نوع العمولة:</strong> {{entity.commissionType}}</div>
+      <div><strong>النسبة المئوية:</strong> {{entity.percentageRate}}</div>
+      <div><strong>المبلغ الثابت:</strong> {{entity.fixedAmount}}</div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">البند</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:140px;text-align:left">القيمة</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">إجمالي المعتمرين</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.totalMutamers}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">متوسط الربح/تأشيرة</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.avgProfitPerVisa}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">نسبة المبيعات</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.salesPercent}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">متوسط سعر البيع</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.avgSalePrice}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">تحقَّق الشرط</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.conditionMet}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">الشرائح المكتملة</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.completedTiers}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">المخالفات</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.hasViolations}}</td></tr>
+    <tr><td style="border:1px solid #cbd5e1;padding:6px">شهر مستثنى</td><td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{entity.isExcludedMonth}}</td></tr>
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">مبلغ العمولة المحتسب</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.commissionAmount}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">المبلغ النهائي</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.finalAmount}}</td></tr>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.conditionDetails}}</div>`,
+  });
+}
+
+function buildUmrahAgentInvoicePreset(): PrintTemplate {
+  return makePreset({
+    id: -106, presetKey: "umrah_agent_invoice_classic", entityType: "umrah_agent_invoice",
+    name: "فاتورة وكيل عمرة",
+    body: `
+<h2 style="text-align:center;margin:16px 0 4px 0;padding-bottom:8px;border-bottom:2px solid #334155">فاتورة وكيل عمرة</h2>
+<table style="width:100%;margin-bottom:14px;border-collapse:collapse">
+  <tr>
+    <td style="vertical-align:top;width:50%;padding:0 6px">
+      <div style="font-weight:bold;margin-bottom:4px">الوكيل الرئيسي</div>
+      <div>{{entity.agentName}}</div>
+      <div style="color:#64748b;font-size:9pt">الوكيل الفرعي: {{entity.subAgentName}}</div>
+    </td>
+    <td style="vertical-align:top;width:50%;padding:0 6px;text-align:left">
+      <div><strong>رقم الفاتورة:</strong> <span dir="ltr">{{entity.ref}}</span></div>
+      <div><strong>التاريخ:</strong> {{entity.createdAt}}</div>
+      <div><strong>الموسم:</strong> {{entity.seasonName}}</div>
+      <div><strong>رقم العقد:</strong> <span dir="ltr">{{entity.contractRef}}</span></div>
+      <div><strong>الحالة:</strong> {{entity.status}}</div>
+    </td>
+  </tr>
+</table>
+<table style="width:100%;border-collapse:collapse;margin:14px 0">
+  <thead>
+    <tr style="background:#f1f5f9">
+      <th style="border:1px solid #cbd5e1;padding:6px;width:32px">#</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;text-align:right">الخدمة</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:80px">العدد</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:100px">السعر</th>
+      <th style="border:1px solid #cbd5e1;padding:6px;width:110px">الإجمالي</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+    <tr>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{@index}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px">{{this.description}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:center">{{this.quantity}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.unitPrice}}</td>
+      <td style="border:1px solid #cbd5e1;padding:6px;text-align:left">{{this.totalPrice}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+<table style="width:280px;margin-right:auto;margin-left:0;border-collapse:collapse">
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">قبل الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.subtotal}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">الضريبة</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.vatAmount}}</td></tr>
+  <tr style="background:#f1f5f9;font-weight:bold"><td style="padding:6px 8px;border:1px solid #cbd5e1">الإجمالي</td><td style="padding:6px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.total}} {{entity.currency}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المدفوع</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.paidAmount}}</td></tr>
+  <tr><td style="padding:4px 8px;border:1px solid #cbd5e1">المتبقي</td><td style="padding:4px 8px;border:1px solid #cbd5e1;text-align:left">{{entity.remaining}}</td></tr>
+</table>
+<div style="margin-top:18px;font-size:10pt;color:#475569;white-space:pre-wrap">{{entity.notes}}</div>`,
+  });
+}
+
 function buildUmrahInvoicePreset(): PrintTemplate {
   return makePreset({
     id: -58, presetKey: "umrah_invoice_classic", entityType: "umrah_invoice",
@@ -3811,6 +4143,9 @@ export const ARABIC_TITLES: Record<string, string> = {
   umrah_invoice: "فاتورة عمرة", umrah_statement: "كشف وكيل عمرة",
   umrah_runsheet: "كشف اليوم — عمرة", umrah_agent: "وكيل عمرة",
   umrah_group: "مجموعة عمرة", umrah_agent_invoice: "فاتورة وكيل عمرة",
+  umrah_nusk_invoice: "فاتورة نُسُك",
+  umrah_commission_plan: "خطة عمولات عمرة",
+  umrah_commission_calculation: "إيصال احتساب عمولة",
   fleet_driver: "سائق أسطول", cargo_manifest: "بوليصة شحن", manifest: "بوليصة",
   transport_booking_confirmation: "تأكيد حجز نقل",
   umrah_sub_agent: "وكيل عمرة فرعي", umrah_pilgrim: "معتمر",

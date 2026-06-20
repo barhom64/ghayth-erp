@@ -11,6 +11,13 @@ const Dashboard = lazy(() => import("@/pages/finance/dashboard"));
 const CfoCockpit = lazy(() => import("@/pages/finance/cfo-cockpit"));
 const FinanceWorkflowsHub = lazy(() => import("@/pages/finance/finance-workflows-hub"));
 const MonthlyClosePack = lazy(() => import("@/pages/finance/monthly-close-pack"));
+const Amortization = lazy(() => import("@/pages/finance/amortization"));
+const DeferredRevenue = lazy(() => import("@/pages/finance/deferred-revenue"));
+const SubsidiaryAccountFailures = lazy(() => import("@/pages/finance/subsidiary-account-failures"));
+const MisparentedSubsidiaries = lazy(() => import("@/pages/finance/misparented-subsidiaries"));
+const Cip = lazy(() => import("@/pages/finance/cip"));
+const ClassificationCenter = lazy(() => import("@/pages/finance/classification-center"));
+const InsurancePremium = lazy(() => import("@/pages/finance/insurance-premium"));
 const DailyCloseChecklist = lazy(() => import("@/pages/finance/daily-close-checklist"));
 const GlHealthScore = lazy(() => import("@/pages/finance/gl-health-score"));
 const ApprovalsInbox = lazy(() => import("@/pages/finance/approvals-inbox"));
@@ -67,6 +74,7 @@ const ExpenseBurnRate = lazy(() => import("@/pages/finance/expense-burn-rate"));
 const ExpenseBulkApprovals = lazy(() => import("@/pages/finance/expense-bulk-approvals"));
 const ExpenseDetail = lazy(() => import("@/pages/details/expense-detail"));
 const ExpensesCreate = lazy(() => import("@/pages/create/finance/expenses-create"));
+const VendorInvoiceCreate = lazy(() => import("@/pages/create/finance/vendor-invoice-create"));
 // Duplicate multi-line form removed — the unified expenses-create
 // page now handles multi-line via "حفظ وإضافة آخر" button.
 // The /finance/expenses/multi-line route below redirects there.
@@ -126,7 +134,9 @@ const Custodies = lazy(() => import("@/pages/finance/custodies"));
 const CustodyDetail = lazy(() => import("@/pages/finance/custody-detail"));
 const CustodyAgingReport = lazy(() => import("@/pages/finance/custody-aging-report"));
 const CustodyWorkbench = lazy(() => import("@/pages/finance/custody-workbench"));
-const FiscalPeriods = lazy(() => import("@/pages/finance/fiscal-periods"));
+// (FiscalPeriods v1 أُزيل — كان عرض إحصاءات مشتقّة بلا إنشاء فترة، وكل قدراته
+// (الإقفال/إعادة الفتح) تستدعي endpoints v2 أصلًا؛ v2 هي superset كامل (إنشاء +
+// إقفال + قفل نهائي + السجل). /finance/fiscal-periods يبقى redirect إلى v2.)
 const FiscalPeriodsV2 = lazy(() => import("@/pages/finance/fiscal-periods-v2"));
 const PeriodClosePreflight = lazy(() => import("@/pages/finance/period-close-preflight"));
 const SalaryAdvances = lazy(() => import("@/pages/finance/salary-advances"));
@@ -156,7 +166,7 @@ const JournalQuickTemplates = lazy(() => import("@/pages/create/finance/journal-
 const JournalReversal = lazy(() => import("@/pages/create/finance/journal-reversal"));
 const JournalManualDetail = lazy(() => import("@/pages/finance/journal-manual-detail"));
 const Intercompany = lazy(() => import("@/pages/finance/intercompany"));
-const IntercompanyConsolidationCreate = lazy(() => import("@/pages/create/finance/intercompany-consolidation-create"));
+const IntercompanyConsolidation = lazy(() => import("@/pages/finance/intercompany-consolidation"));
 const CashFlowForecast = lazy(() => import("@/pages/finance/cash-flow-forecast"));
 const CashCalendar = lazy(() => import("@/pages/finance/cash-calendar"));
 const Cash13Week = lazy(() => import("@/pages/finance/cash-13week"));
@@ -285,9 +295,13 @@ export const financeRoutes = [
   { path: "/finance/expense-bulk-approvals", component: ExpenseBulkApprovals },
   { path: "/finance/expense-burn-rate", component: ExpenseBurnRate },
   { path: "/finance/expenses/create", component: ExpensesCreate },
+  // FIN-P11 (#2241) — vendor invoice (supplier bill): a SEPARATE multi-line
+  // entry path from the expense/fuel path; credit leg = supplier payable (آجل)
+  // or money source (paid).
+  { path: "/finance/vendor-invoices/create", component: VendorInvoiceCreate },
   // Legacy multi-line route now redirects to the unified expenses-create
   // form, which supports multi-line via the "حفظ وإضافة آخر" button.
-  { path: "/finance/expenses/multi-line", component: ExpensesCreate },
+  { path: "/finance/expenses/multi-line", component: redirectTo("/finance/expenses/create") },
   { path: "/finance/expenses/split", component: CostSplitter },
   { path: "/finance/expenses/:id", component: ExpenseDetail },
   { path: "/finance/budget", component: Budget },
@@ -376,7 +390,8 @@ export const financeRoutes = [
   { path: "/finance/custodies/:id", component: CustodyDetail },
   // GAP_MATRIX P1 — v1 is a duplicate of v2; redirect so only one URL is canonical.
   { path: "/finance/fiscal-periods", component: redirectTo("/finance/fiscal-periods-v2") },
-  { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2 },
+  // GAP_MATRIX P0 — fiscal period management changes financial reporting boundaries; gate at 70.
+  { path: "/finance/fiscal-periods-v2", component: FiscalPeriodsV2, minRoleLevel: 70 },
   { path: "/finance/period-close-preflight", component: PeriodClosePreflight },
   { path: "/finance/salary-advances", component: SalaryAdvances },
   { path: "/finance/salary-advances/:id", component: SalaryAdvanceDetail },
@@ -398,14 +413,18 @@ export const financeRoutes = [
   { path: "/finance/fixed-assets/:id", component: FixedAssetDetail },
   { path: "/finance/inventory-costing", component: InventoryCosting },
   { path: "/finance/bank-guarantees", component: BankGuarantees },
-  { path: "/finance/journal-manual", component: JournalManual },
-  { path: "/finance/journal-manual/create", component: JournalManualCreate },
-  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates },
-  { path: "/finance/journal/reverse", component: JournalReversal },
-  { path: "/finance/journal-manual/:id", component: JournalManualDetail },
+  // GAP_MATRIX P0 — manual journals touch the GL directly; gate at 70 (managers).
+  { path: "/finance/journal-manual", component: JournalManual, minRoleLevel: 70 },
+  { path: "/finance/journal-manual/create", component: JournalManualCreate, minRoleLevel: 70 },
+  { path: "/finance/journal-quick-templates", component: JournalQuickTemplates, minRoleLevel: 70 },
+  { path: "/finance/journal/reverse", component: JournalReversal, minRoleLevel: 70 },
+  { path: "/finance/journal-manual/:id", component: JournalManualDetail, minRoleLevel: 70 },
   { path: "/finance/gl-posting-queue", component: GLPostingQueue },
   { path: "/finance/intercompany", component: Intercompany },
-  { path: "/finance/intercompany/consolidation/create", component: IntercompanyConsolidationCreate },
+  { path: "/finance/intercompany/consolidation", component: IntercompanyConsolidation },
+  // عرض «القوائم الموحدة» للقراءة فقط (GET فقط في الخلفية — لا إنشاء/ترحيل).
+  // المسار القديم بلاحقة /create مُضلِّل لعرضٍ لا يُنشئ شيئًا؛ يُعاد توجيهه (لا 404 للروابط القديمة).
+  { path: "/finance/intercompany/consolidation/create", component: redirectTo("/finance/intercompany/consolidation") },
   { path: "/finance/cash-flow-forecast", component: CashFlowForecast },
   { path: "/finance/cash-calendar", component: CashCalendar },
   { path: "/finance/cash-13week", component: Cash13Week },
@@ -416,13 +435,22 @@ export const financeRoutes = [
   { path: "/finance/umrah-season-portfolio", component: UmrahSeasonPortfolio },
   { path: "/finance/project-costing/:id", component: ProjectCostingDetail },
   { path: "/finance/cashflow", component: CashflowDashboard },
-  { path: "/finance/opening-balances", component: OpeningBalances },
-  { path: "/finance/opening-balances/create", component: OpeningBalancesCreate },
+  // GAP_MATRIX P0 — opening balances are a one-time GL adjustment; gate at 70.
+  { path: "/finance/opening-balances", component: OpeningBalances, minRoleLevel: 70 },
+  { path: "/finance/opening-balances/create", component: OpeningBalancesCreate, minRoleLevel: 70 },
   { path: "/finance/recurring-journals", component: RecurringJournals },
+  { path: "/finance/amortization", component: Amortization },
+  { path: "/finance/deferred-revenue", component: DeferredRevenue },
+  { path: "/finance/subsidiary-account-failures", component: SubsidiaryAccountFailures },
+  { path: "/finance/datafix/misparented-subsidiaries", component: MisparentedSubsidiaries },
+  { path: "/finance/cip", component: Cip },
+  { path: "/finance/classification-center", component: ClassificationCenter },
+  { path: "/finance/insurance", component: InsurancePremium },
   { path: "/finance/recurring-calendar", component: RecurringCalendar },
   { path: "/finance/recurring-journals/create", component: RecurringJournalsCreate },
   { path: "/finance/recurring-journals/:id", component: RecurringJournalDetail },
-  { path: "/finance/year-end-close", component: YearEndClose },
+  // GAP_MATRIX P0 — year-end close is irreversible; gate at 70.
+  { path: "/finance/year-end-close", component: YearEndClose, minRoleLevel: 70 },
   { path: "/finance/treasury", component: Treasury },
   { path: "/finance/treasury/transfer", component: AccountTransfer },
   // Phase D — non-colliding routes from the enterprise-hardening branch

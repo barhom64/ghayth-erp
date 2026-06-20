@@ -6,7 +6,7 @@ import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace
 import { FormGrid, FormTextField, FormTextareaField, FormNumberField } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Package, AlertTriangle } from "lucide-react";
@@ -255,7 +255,7 @@ export default function WarehouseProductDetail() {
       actions={
         <>
           {product && (
-            <EntityPrintButton
+            <PrintButton
               entityType="item_barcode_label"
               entityId={product.id ?? id}
               formats={["label", "a4"]}
@@ -268,7 +268,7 @@ export default function WarehouseProductDetail() {
       }
     />
     {product && id && (
-      <EntityEditDialog<ProductEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل المنتج"

@@ -10,7 +10,7 @@ import {
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { Router } from "express";
-import { rawQuery, rawExecute } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent, toDateISO, getCompanyVatRate, computeVat } from "../lib/businessHelpers.js";
@@ -742,25 +742,39 @@ zatcaRouter.post("/zatca/invoice/:id/submit", authorize({ feature: "finance.zatc
       responseBody = { error: zatcaErr instanceof Error ? zatcaErr.message : String(zatcaErr) };
     }
 
-    await rawExecute(
-      `UPDATE invoices SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
-      [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
-    );
-
-    const [logRow] = await rawQuery<{ id: number }>(
-      `INSERT INTO zatca_submission_log
-        ("companyId", "entityType", "entityId", "invoiceRef", "zatcaUuid", "zatcaHash",
-         status, environment, "requestPayload", "responsePayload", "submittedAt", "submittedBy")
-       VALUES ($1,'invoice',$2,$3,$4::uuid,$5,$6,$7,$8,$9,NOW(),$10)
-       RETURNING id`,
-      [scope.companyId, id, invoice.ref, uuid, hash,
-        submissionStatus, settings.environment,
-        xml.substring(0, 5000),
-        JSON.stringify(responseBody).substring(0, 8000),
-        scope.activeAssignmentId]
-    );
+    // Atomic: the invoice status update and its submission-log row must
+    // commit together — a half-write (status set but no log, or vice versa)
+    // would leave the ZATCA filing trail inconsistent with the invoice.
+    const [logRow] = await withTransaction(async () => {
+      await rawExecute(
+        `UPDATE invoices SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
+         WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
+        [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
+      );
+      return rawQuery<{ id: number }>(
+        `INSERT INTO zatca_submission_log
+          ("companyId", "entityType", "entityId", "invoiceRef", "zatcaUuid", "zatcaHash",
+           status, environment, "requestPayload", "responsePayload", "submittedAt", "submittedBy")
+         VALUES ($1,'invoice',$2,$3,$4::uuid,$5,$6,$7,$8,$9,NOW(),$10)
+         RETURNING id`,
+        [scope.companyId, id, invoice.ref, uuid, hash,
+          submissionStatus, settings.environment,
+          xml.substring(0, 5000),
+          JSON.stringify(responseBody).substring(0, 8000),
+          scope.activeAssignmentId]
+      );
+    });
     void clearedInvoiceB64;
+
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.invoice_submitted",
+      entity: "invoices",
+      entityId: id,
+      after: { status: submissionStatus, uuid, logId: logRow.id, environment: settings.environment },
+    }).catch((e) => logger.error(e, "finance-zatca invoice-submit audit failed"));
 
     res.json({
       message: submissionStatus === "accepted"
@@ -843,21 +857,35 @@ zatcaRouter.post("/zatca/expense/:id/submit", authorize({ feature: "finance.zatc
     const simulatedSuccess = settings.environment === "sandbox";
     const submissionStatus = simulatedSuccess ? "accepted" : "submitted";
 
-    await rawExecute(
-      `UPDATE journal_entries SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
-       WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
-      [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
-    );
+    // Atomic: the journal-entry zatca-metadata update (no amount/line change —
+    // GL balance is untouched) and its submission-log row commit together so
+    // the filing trail never diverges from the entry.
+    await withTransaction(async () => {
+      await rawExecute(
+        `UPDATE journal_entries SET "zatcaUuid" = $1::uuid, "zatcaHash" = $2, "zatcaStatus" = $3, "zatcaQrCode" = $4
+         WHERE id = $5 AND "companyId" = $6 AND "deletedAt" IS NULL`,
+        [uuid, hash, submissionStatus, qrCode, id, scope.companyId]
+      );
+      await rawQuery<{ id: number }>(
+        `INSERT INTO zatca_submission_log
+          ("companyId", "entityType", "entityId", "invoiceRef", "zatcaUuid", "zatcaHash",
+           status, environment, "submittedAt", "submittedBy")
+         VALUES ($1,'expense',$2,$3,$4::uuid,$5,$6,$7,NOW(),$8)
+         RETURNING id`,
+        [scope.companyId, id, expense.ref || `EXP-${expense.id}`, uuid, hash,
+          submissionStatus, settings.environment, scope.activeAssignmentId]
+      );
+    });
 
-    await rawQuery<{ id: number }>(
-      `INSERT INTO zatca_submission_log
-        ("companyId", "entityType", "entityId", "invoiceRef", "zatcaUuid", "zatcaHash",
-         status, environment, "submittedAt", "submittedBy")
-       VALUES ($1,'expense',$2,$3,$4::uuid,$5,$6,$7,NOW(),$8)
-       RETURNING id`,
-      [scope.companyId, id, expense.ref || `EXP-${expense.id}`, uuid, hash,
-        submissionStatus, settings.environment, scope.activeAssignmentId]
-    );
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.expense_submitted",
+      entity: "journal_entries",
+      entityId: id,
+      after: { status: submissionStatus, uuid, environment: settings.environment },
+    }).catch((e) => logger.error(e, "finance-zatca expense-submit audit failed"));
 
     res.json({
       message: simulatedSuccess ? "تم إرسال بيانات المصروف بنجاح (محاكاة sandbox)" : "تم تسجيل طلب الإرسال",
@@ -971,6 +999,15 @@ zatcaRouter.patch("/zatca/invoice/:id", authorize({ feature: "finance.zatca", ac
       params
     );
     if (!row) { throw new NotFoundError("الفاتورة غير موجودة"); return; }
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.invoice_updated",
+      entity: "invoices",
+      entityId: id,
+      after: { fields: sets.length },
+    }).catch((e) => logger.error(e, "finance-zatca invoice-patch audit failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "ZATCA invoice patch error:");
@@ -1002,6 +1039,15 @@ zatcaRouter.patch("/zatca/expense/:id", authorize({ feature: "finance.zatca", ac
       params
     );
     if (!row) { throw new NotFoundError("المصروف غير موجود"); return; }
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.zatca.expense_updated",
+      entity: "journal_entries",
+      entityId: id,
+      after: { fields: sets.length },
+    }).catch((e) => logger.error(e, "finance-zatca expense-patch audit failed"));
     res.json(row);
   } catch (err) {
     handleRouteError(err, res, "ZATCA expense patch error:");

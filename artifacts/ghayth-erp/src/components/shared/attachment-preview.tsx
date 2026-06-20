@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -6,7 +7,7 @@ import { Download, Maximize2, ExternalLink, FileText, Image as ImageIcon, FileQu
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_BASE;
 
 /**
  * Shape of the attachment a caller passes in. The minimum is `id` + a way to

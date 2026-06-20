@@ -40,6 +40,7 @@ import { SortableTableHead } from "@/components/sortable-table-head";
 import { useSortedData } from "@/hooks/use-sorted-data";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export type Align = "start" | "center" | "end";
 
@@ -162,6 +163,23 @@ interface DataTableProps<T> {
   /** Optional caption above the table (e.g. small helper text). */
   caption?: ReactNode;
 
+  /**
+   * Group rows by this field key. When set, pagination is bypassed (all rows
+   * are shown) and rows are rendered in named groups. Use with
+   * `renderGroupHeader` / `renderGroupSubtotal` to add section headers and
+   * aggregate rows between groups, and `renderGrandTotal` for a bottom total.
+   *
+   * GAP_MATRIX P1 — enables finance/reports pages to adopt DataTable instead
+   * of hand-rolling raw <table> with subtotals.
+   */
+  groupBy?: string;
+  /** Renders a header row before each group. Receives group value + rows. */
+  renderGroupHeader?: (groupValue: string, groupRows: T[]) => ReactNode;
+  /** Renders a subtotal row after each group. Receives group value + rows. */
+  renderGroupSubtotal?: (groupValue: string, groupRows: T[]) => ReactNode;
+  /** Renders a grand-total row at the bottom of the table body. */
+  renderGrandTotal?: (allRows: T[]) => ReactNode;
+
   className?: string;
 }
 
@@ -201,6 +219,10 @@ export function DataTable<T>({
   noToolbar = false,
   renderRowExtras,
   caption,
+  groupBy,
+  renderGroupHeader,
+  renderGroupSubtotal,
+  renderGrandTotal,
   className,
 }: DataTableProps<T>) {
   const visibleColumns = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
@@ -305,6 +327,15 @@ export function DataTable<T>({
   };
 
   const colCount = visibleColumns.length + (selectable ? 1 : 0);
+
+  // Mobile (<768px): render the common (non-grouped) happy-path list as
+  // stacked label:value cards instead of a horizontally-scrolling table, so
+  // every DataTable-based page (~307 of them) is genuinely phone-usable. The
+  // desktop table is untouched; grouped/loading/error/empty stay on the table
+  // path (which already scrolls + shows those states).
+  const isMobile = useIsMobile();
+  const showMobileCards =
+    isMobile && !groupBy && !isLoading && !isError && (pagedData?.length ?? 0) > 0;
 
   return (
     <div className={cn("space-y-3", className)} dir="rtl">
@@ -420,6 +451,54 @@ export function DataTable<T>({
       {caption && <div className="text-xs text-muted-foreground">{caption}</div>}
 
       <div className="rounded-lg border bg-card">
+        {showMobileCards ? (
+          <div className="divide-y" data-testid="data-table-mobile-cards">
+            {(pagedData ?? []).map((row, rowIndex) => {
+              const rowId = (row as any)?.id as number | undefined;
+              const selected = rowId != null && selectedIds.has(rowId);
+              const extras = renderRowExtras?.(row);
+              const key = getRowKey(row, rowIndex);
+              return (
+                <div
+                  key={key}
+                  data-state={selected ? "selected" : undefined}
+                  className={cn("p-3", rowClassName?.(row))}
+                >
+                  {/* Only the field rows are clickable — extras (expansion
+                      panels, nested actions) sit OUTSIDE the row-click area
+                      and stop propagation, matching the desktop table where
+                      extras live in their own non-clickable row. */}
+                  <div
+                    className={cn("space-y-1.5", onRowClick && "cursor-pointer active:bg-surface-subtle")}
+                    onClick={() => onRowClick?.(row)}
+                  >
+                    {selectable && (
+                      <div className="pb-1" onClick={(e) => e.stopPropagation()}>
+                        <BulkCheckbox checked={selected} onChange={() => rowId != null && handleToggleRow(rowId)} />
+                      </div>
+                    )}
+                    {visibleColumns.map((col) => {
+                      const content = col.render ? col.render(row, rowIndex) : ((row as any)[col.key] ?? "-");
+                      return (
+                        <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
+                          <span className="text-muted-foreground shrink-0">{col.header}</span>
+                          <span className={cn("min-w-0 break-words text-end", col.className)} dir={col.ltr ? "ltr" : undefined}>
+                            {content}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {extras && (
+                    <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+                      {extras}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
         <Table>
           <TableHeader>
             <TableRow>
@@ -459,66 +538,127 @@ export function DataTable<T>({
             isError={isError}
             error={error}
             onRetry={onRetry}
-            data={pagedData}
+            data={groupBy ? sortedData : pagedData}
             colCount={colCount}
             emptyMessage={emptyMessage}
             emptyIcon={emptyIcon}
             emptyAction={emptyAction}
           >
-            {(pagedData ?? []).map((row, rowIndex) => {
-              const rowId = (row as any)?.id as number | undefined;
-              const selected = rowId != null && selectedIds.has(rowId);
-              const extraClass = rowClassName?.(row);
-              const extras = renderRowExtras?.(row);
-              const key = getRowKey(row, rowIndex);
-              return (
-                <Fragment key={key}>
-                  <TableRow
-                    data-state={selected ? "selected" : undefined}
-                    className={cn(
-                      onRowClick && "cursor-pointer",
-                      extraClass
-                    )}
-                    onClick={() => onRowClick?.(row)}
-                  >
-                    {selectable && (
-                      <TableCell
-                        className="w-[44px]"
-                        onClick={(e) => e.stopPropagation()}
+            {groupBy
+              ? (() => {
+                  // Build ordered groups preserving first-seen order.
+                  const groupMap = new Map<string, T[]>();
+                  for (const row of sortedData ?? []) {
+                    const gv = String((row as any)[groupBy] ?? "");
+                    if (!groupMap.has(gv)) groupMap.set(gv, []);
+                    groupMap.get(gv)!.push(row);
+                  }
+                  const allGrouped = Array.from(groupMap.entries());
+                  return (
+                    <>
+                      {allGrouped.map(([groupValue, groupRows]) => (
+                        <Fragment key={`group-${groupValue}`}>
+                          {renderGroupHeader && (
+                            <TableRow className="bg-surface-subtle">
+                              <TableCell colSpan={colCount} className="py-1.5 px-3 font-semibold text-sm">
+                                {renderGroupHeader(groupValue, groupRows)}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {groupRows.map((row, rowIndex) => {
+                            const rowId = (row as any)?.id as number | undefined;
+                            const selected = rowId != null && selectedIds.has(rowId);
+                            const extraClass = rowClassName?.(row);
+                            const extras = renderRowExtras?.(row);
+                            const key = getRowKey(row, rowIndex);
+                            return (
+                              <Fragment key={key}>
+                                <TableRow
+                                  data-state={selected ? "selected" : undefined}
+                                  className={cn(onRowClick && "cursor-pointer", extraClass)}
+                                  onClick={() => onRowClick?.(row)}
+                                >
+                                  {selectable && (
+                                    <TableCell className="w-[44px]" onClick={(e) => e.stopPropagation()}>
+                                      <BulkCheckbox checked={selected} onChange={() => rowId != null && handleToggleRow(rowId)} />
+                                    </TableCell>
+                                  )}
+                                  {visibleColumns.map((col) => {
+                                    const content = col.render ? col.render(row, rowIndex) : ((row as any)[col.key] ?? "-");
+                                    return (
+                                      <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                                        {content}
+                                      </TableCell>
+                                    );
+                                  })}
+                                </TableRow>
+                                {extras && (
+                                  <TableRow>
+                                    <TableCell colSpan={colCount} className="p-0">{extras}</TableCell>
+                                  </TableRow>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                          {renderGroupSubtotal && (
+                            <TableRow className="border-t-2 bg-surface-subtle font-medium">
+                              <TableCell colSpan={colCount} className="py-1.5 px-3">
+                                {renderGroupSubtotal(groupValue, groupRows)}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      ))}
+                      {renderGrandTotal && sortedData && sortedData.length > 0 && (
+                        <TableRow className="border-t-4 bg-muted font-bold">
+                          <TableCell colSpan={colCount} className="py-2 px-3">
+                            {renderGrandTotal(sortedData)}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  );
+                })()
+              : (pagedData ?? []).map((row, rowIndex) => {
+                  const rowId = (row as any)?.id as number | undefined;
+                  const selected = rowId != null && selectedIds.has(rowId);
+                  const extraClass = rowClassName?.(row);
+                  const extras = renderRowExtras?.(row);
+                  const key = getRowKey(row, rowIndex);
+                  return (
+                    <Fragment key={key}>
+                      <TableRow
+                        data-state={selected ? "selected" : undefined}
+                        className={cn(onRowClick && "cursor-pointer", extraClass)}
+                        onClick={() => onRowClick?.(row)}
                       >
-                        <BulkCheckbox
-                          checked={selected}
-                          onChange={() => rowId != null && handleToggleRow(rowId)}
-                        />
-                      </TableCell>
-                    )}
-                    {visibleColumns.map((col) => {
-                      const content = col.render
-                        ? col.render(row, rowIndex)
-                        : ((row as any)[col.key] ?? "-");
-                      return (
-                        <TableCell
-                          key={col.key}
-                          className={cn(alignClass(col.align), col.className)}
-                          dir={col.ltr ? "ltr" : undefined}
-                        >
-                          {content}
-                        </TableCell>
-                      );
-                    })}
-                  </TableRow>
-                  {extras && (
-                    <TableRow>
-                      <TableCell colSpan={colCount} className="p-0">
-                        {extras}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </Fragment>
-              );
-            })}
+                        {selectable && (
+                          <TableCell className="w-[44px]" onClick={(e) => e.stopPropagation()}>
+                            <BulkCheckbox checked={selected} onChange={() => rowId != null && handleToggleRow(rowId)} />
+                          </TableCell>
+                        )}
+                        {visibleColumns.map((col) => {
+                          const content = col.render
+                            ? col.render(row, rowIndex)
+                            : ((row as any)[col.key] ?? "-");
+                          return (
+                            <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                              {content}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                      {extras && (
+                        <TableRow>
+                          <TableCell colSpan={colCount} className="p-0">{extras}</TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
           </DataTableWrapper>
         </Table>
+        )}
         {pageSize > 0 && (
           <PaginationBar
             page={currentPage}

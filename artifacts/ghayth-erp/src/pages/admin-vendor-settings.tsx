@@ -28,8 +28,9 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Settings, Phone, MessageSquare, Mail, Bell, Shield, Receipt,
-  CheckCircle2, AlertOctagon, RefreshCw, Save, FlaskConical,
+  CheckCircle2, AlertOctagon, Save, FlaskConical, Smartphone,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface VendorRow {
   id: number;
@@ -92,6 +93,20 @@ const SLUG_META: Record<string, {
       { key: "secure", label: "تشفير TLS (true/false)", type: "text", placeholder: "true (SSL :465) أو false (STARTTLS :587)" },
       { key: "fallbackPort", label: "منفذ احتياطي (اختياري)", type: "number",
         placeholder: "587", hint: "يحاول العامل عليه بـ STARTTLS إذا فشل المنفذ الأساسي." },
+    ],
+  },
+  "sms": {
+    icon: Smartphone,
+    fields: [
+      { key: "accountSid", label: "معرّف الحساب (Account SID)", type: "text",
+        placeholder: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        hint: "من لوحة تحكم Twilio. إعداد الشركة (إن وُجد) يتجاوز هذا الإعداد العام." },
+      { key: "authToken", label: "رمز المصادقة (Auth Token)", type: "password",
+        placeholder: "Twilio Auth Token",
+        hint: "يُشفَّر في قاعدة البيانات ولا يُعرض مرة أخرى." },
+      { key: "fromNumber", label: "رقم المرسل", type: "text",
+        placeholder: "+14155552671",
+        hint: "رقم Twilio بصيغة E.164." },
     ],
   },
   "vapid": {
@@ -161,7 +176,12 @@ export default function AdminVendorSettings() {
   const { data, isLoading, error, refetch } = useApiQuery<{ data: VendorRow[] }>(
     ["vendor-settings"], "/admin/vendor-settings",
   );
-  const vendors = data?.data ?? [];
+  // WhatsApp + push (VAPID) are configured/read from «قنوات الاتصال»
+  // (system_settings) + env at runtime, and ZATCA from «هيئة الزكاة» (zatca_settings).
+  // Their vendor_secrets rows here are dead duplicates, so they're hidden to avoid a
+  // misleading second config surface that the runtime never reads.
+  const MOVED_SLUGS = new Set(["whatsapp", "vapid", "zatca"]);
+  const vendors = (data?.data ?? []).filter((v) => !MOVED_SLUGS.has(v.slug));
 
   return (
     <PageShell
@@ -170,11 +190,9 @@ export default function AdminVendorSettings() {
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "إعدادات المزوّدات الخارجية" },
       ]}
-      subtitle="كل التكاملات الخارجية في مكان واحد — PBX، WhatsApp، Email، Push، SIEM، ZATCA. الأسرار مشفّرة في DB، تُقرأ من البيئة عند فقدان السجل."
+      subtitle="أسرار التكاملات الخلفية — PBX والبريد وSMS وSIEM. مشفّرة في DB، وتُقرأ من البيئة عند فقدان السجل."
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="w-4 h-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && vendors.length === 0} error={error} onRetry={refetch}>
@@ -182,6 +200,9 @@ export default function AdminVendorSettings() {
           {vendors.map((v) => (
             <VendorCard key={v.slug} vendor={v} onChange={refetch} />
           ))}
+          <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            واتساب والإشعارات الفورية تُضبط من «قنوات الاتصال» في الإعدادات، وهيئة الزكاة من تبويب «هيئة الزكاة والضريبة» — هذه الصفحة للأسرار الخلفية فقط.
+          </div>
           {vendors.length === 0 && (
             <Card>
               <CardContent className="p-8 text-center text-sm text-muted-foreground">

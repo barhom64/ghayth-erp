@@ -47,7 +47,10 @@ export type CostCenterEntityType =
   | "vehicle"
   | "department"
   | "property"
-  | "unit";
+  | "unit"
+  | "umrah_agent"
+  | "umrah_season"
+  | "trip";
 
 interface AutoCreateOptions {
   /**
@@ -100,6 +103,11 @@ const PREFIX_BY_TYPE: Record<CostCenterEntityType, string> = {
   department: "D",
   property:   "PR",
   unit:       "UN",
+  umrah_agent: "UA",
+  umrah_season: "US",
+  // Transport trip — a SUB-cost-center nested under the vehicle CC, so
+  // revenue is tracked per-trip and rolls up to the vehicle via parentId.
+  trip:        "TR",
 };
 
 const REASON_BY_TYPE: Record<CostCenterEntityType, string> = {
@@ -110,6 +118,9 @@ const REASON_BY_TYPE: Record<CostCenterEntityType, string> = {
   department: "auto-created on department insert",
   property:   "auto-created on property insert",
   unit:       "auto-created on unit insert",
+  umrah_agent: "auto-created on umrah agent insert",
+  umrah_season: "auto-created on umrah season insert",
+  trip:        "auto-created on transport trip invoicing",
 };
 
 /**

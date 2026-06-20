@@ -10,13 +10,15 @@ import {
   FormPhoneField,
   FormSelectField,
   FormGrid,
+  DataTable,
+  type DataTableColumn,
 } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { Cog, Building, Users, Building2, ScrollText, Plus, X, Save, Pencil, Trash2, Printer, Eye, Shield, SlidersHorizontal, GitBranch, CheckCircle, Settings2, Workflow, Clock, AlertTriangle, BookOpen, ArrowLeftRight, AlertCircle, Zap, MessageSquare, Link2, WifiOff, Wifi, RefreshCw, ToggleLeft, ToggleRight, Key } from "lucide-react";
+import { Cog, Building, Users, Building2, ScrollText, Plus, X, Pencil, Trash2, Printer, Eye, Shield, SlidersHorizontal, GitBranch, CheckCircle, Settings2, Workflow, Clock, AlertTriangle, BookOpen, ArrowLeftRight, AlertCircle, Zap, MessageSquare, Link2, WifiOff, Wifi, RefreshCw, ToggleLeft, ToggleRight, Key } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { cn } from "@/lib/utils";
 import { formatDateAr } from "@/lib/formatters";
@@ -27,7 +29,6 @@ import { useAppContext } from "@/contexts/app-context";
 import { GovIntegrationsTab } from "./settings/gov-integrations-tab";
 import { ZatcaSettingsTab } from "./settings/zatca-settings-tab";
 import { CommunicationChannelsTab } from "./settings/communication-channels-tab";
-import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { BranchesTab } from "./settings/branches-tab";
 import { DepartmentsTab } from "./settings/departments-tab";
 import { CompaniesTab } from "./settings/companies-tab";
@@ -35,6 +36,7 @@ import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
 import { SystemControlsTab } from "./settings/system-controls-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
+import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { NumberingTab } from "./settings/numbering-tab";
 
 // GeneralSettings — 11-field edit form. The server stores values as
@@ -261,25 +263,24 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
           </FormShell>
         </CardContent></Card>
       )}
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-surface-subtle">{fields.map((f) => <th key={f.name} className="p-3 text-right">{f.label}</th>)}<th className="p-3 text-start w-24">إجراءات</th></tr></thead>
-          <tbody>
-            {(Array.isArray(items) ? items : []).map((item: any, idx: number) => (
-              <tr key={item.id || idx} className="border-b hover:bg-surface-subtle">
-                {fields.map((f) => <td key={f.name} className="p-3">{item[f.name] || "-"}</td>)}
-                <td className="p-3">
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="sm" onClick={() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) || "—" })} disabled={deleting === item.id} title="حذف" className="text-status-error hover:text-status-error-foreground"><Trash2 className="h-4 w-4" /></Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {(!Array.isArray(items) || items.length === 0) && <tr><td colSpan={fields.length + 1} className="p-8 text-center text-muted-foreground">لا توجد بيانات</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        data={Array.isArray(items) ? items : []}
+        rowKey={(row) => String(row.id)}
+        columns={[
+          ...fields.map<DataTableColumn<any>>((f) => ({ key: f.name as any, header: f.label, render: (row) => row[f.name] || "-" })),
+          {
+            key: "__actions" as any,
+            header: "إجراءات",
+            render: (item) => (
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" onClick={() => handleEdit(item)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => setDeletingItem({ id: item.id, label: (fields[0] && item[fields[0].name]) || "—" })} disabled={deleting === item.id} title="حذف" className="text-status-error hover:text-status-error-foreground"><Trash2 className="h-4 w-4" /></Button>
+              </div>
+            ),
+          },
+        ]}
+        emptyMessage="لا توجد بيانات"
+      />
 
       <ConfirmDeleteDialog
         open={deletingItem !== null}
@@ -309,14 +310,23 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
 
 
 
-// Multiple routes (/settings/branches, /settings/departments, ...) share this
-// component. Without this seed, every routed URL would land on the "general"
-// tab — same broken-tab pattern fixed on bi / governance / legal.
+// Every tab gets a deep-path so it's directly reachable (URL + nav + search),
+// not only by a manual click inside /settings. The component reads `location`
+// and opens the matching tab.
 const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/branches": "branches",
+  "/settings/letterhead": "letterhead",
   "/settings/departments": "departments",
   "/settings/companies": "companies",
+  "/settings/channels": "channels",
+  "/settings/controls": "controls",
+  "/settings/approvals": "approvals",
+  "/settings/numbering": "numbering",
+  "/settings/accounting": "accounting",
   "/settings/audit-log": "audit",
+  "/settings/resolved": "resolved",
+  "/settings/zatca": "zatca",
+  "/settings/gov": "gov",
 };
 
 export default function SettingsPage() {
@@ -331,36 +341,40 @@ export default function SettingsPage() {
       <Tabs defaultValue={initialTab} dir="rtl">
         <TabsList className="flex flex-wrap gap-1">
           <TabsTrigger value="general">عام</TabsTrigger>
-          <TabsTrigger value="branches">الفروع</TabsTrigger>
-          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
-          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          {/* الهوية والتنظيم */}
           <TabsTrigger value="companies">الشركات</TabsTrigger>
-          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="branches">الفروع</TabsTrigger>
+          <TabsTrigger value="departments">الأقسام</TabsTrigger>
+          <TabsTrigger value="letterhead">الكليشة</TabsTrigger>
+          {/* الحوكمة والإجراءات */}
           <TabsTrigger value="controls">التحكم</TabsTrigger>
-          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
+          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="numbering">الترقيم</TabsTrigger>
+          {/* المالية والامتثال */}
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
-          <TabsTrigger value="audit">التدقيق</TabsTrigger>
-          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
           <TabsTrigger value="zatca">هيئة الزكاة والضريبة</TabsTrigger>
           <TabsTrigger value="gov">التكاملات الحكومية</TabsTrigger>
+          {/* النظام والمراقبة */}
+          <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
+          <TabsTrigger value="audit">التدقيق</TabsTrigger>
+          <TabsTrigger value="resolved">الوراثة</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings /></TabsContent>
-        <TabsContent value="branches"><BranchesTab /></TabsContent>
-        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
-        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
-        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="branches"><BranchesTab /></TabsContent>
+        <TabsContent value="departments"><DepartmentsTab /></TabsContent>
+        <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
-        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
+        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="numbering"><NumberingTab /></TabsContent>
         <TabsContent value="accounting"><AccountingMappingsTab /></TabsContent>
-        <TabsContent value="audit"><AuditLogTab /></TabsContent>
-        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
         <TabsContent value="gov"><GovIntegrationsTab /></TabsContent>
+        <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
+        <TabsContent value="audit"><AuditLogTab /></TabsContent>
+        <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
       </Tabs>
     </PageShell>
   );
@@ -414,24 +428,16 @@ function ResolvedSettingsTab() {
         وراثة الإعدادات (نظام ← شركة ← فرع)
       </h3>
       <p className="text-sm text-muted-foreground">يعرض القيمة الفعلية لكل إعداد ومصدرها — القيم الأقرب (فرع) تتغلب على القيم الأعلى (شركة/نظام)</p>
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-surface-subtle"><th className="p-3 text-start">المفتاح</th><th className="p-3 text-start">القيمة</th><th className="p-3 text-start">المصدر</th></tr></thead>
-          <tbody>
-            {items.map((s: any) => {
-              const src = SOURCE_LABELS[s.source] || SOURCE_LABELS.system;
-              return (
-                <tr key={s.key} className="border-b hover:bg-surface-subtle">
-                  <td className="p-3 font-medium font-mono text-xs">{s.key}</td>
-                  <td className="p-3 text-muted-foreground max-w-xs truncate">{typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "-")}</td>
-                  <td className="p-3"><Badge className={cn(src.bg, src.color, "text-xs")}>{src.label}</Badge></td>
-                </tr>
-              );
-            })}
-            {items.length === 0 && <tr><td colSpan={3} className="p-8 text-center text-muted-foreground">لا توجد إعدادات</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        data={items as any[]}
+        rowKey={(row) => String(row.key)}
+        columns={[
+          { key: "key", header: "المفتاح", render: (s) => <span className="font-mono text-xs">{s.key}</span> },
+          { key: "value", header: "القيمة", render: (s) => <span className="text-muted-foreground truncate max-w-xs block">{typeof s.value === "object" ? JSON.stringify(s.value) : String(s.value ?? "-")}</span> },
+          { key: "source", header: "المصدر", render: (s) => { const src = SOURCE_LABELS[s.source] || SOURCE_LABELS.system; return <Badge className={cn(src.bg, src.color, "text-xs")}>{src.label}</Badge>; } },
+        ]}
+        emptyMessage="لا توجد إعدادات"
+      />
 
       <Card>
         <CardHeader className="pb-2">
@@ -533,22 +539,17 @@ function AuditLogTab() {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">سجل التدقيق</h3>
-      <Card><CardContent className="p-0">
-        <table className="w-full text-sm">
-          <thead><tr className="border-b bg-surface-subtle"><th className="p-3 text-start">المستخدم</th><th className="p-3 text-start">الإجراء</th><th className="p-3 text-start">الوحدة</th><th className="p-3 text-start">التاريخ</th></tr></thead>
-          <tbody>
-            {items.map((log: any) => (
-              <tr key={log.id} className="border-b hover:bg-surface-subtle">
-                <td className="p-3 font-medium">{log.userName || "-"}</td>
-                <td className="p-3">{log.action || "-"}</td>
-                <td className="p-3 text-muted-foreground">{log.module || "-"}</td>
-                <td className="p-3 text-xs text-muted-foreground">{log.createdAt ? formatDateAr(log.createdAt) : "-"}</td>
-              </tr>
-            ))}
-            {items.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-muted-foreground">لا توجد سجلات</td></tr>}
-          </tbody>
-        </table>
-      </CardContent></Card>
+      <DataTable
+        data={items as any[]}
+        rowKey={(row) => String(row.id)}
+        columns={[
+          { key: "userName", header: "المستخدم", render: (log) => log.userName || "-" },
+          { key: "action", header: "الإجراء", render: (log) => log.action || "-" },
+          { key: "module", header: "الوحدة", render: (log) => <span className="text-muted-foreground">{log.module || "-"}</span> },
+          { key: "createdAt", header: "التاريخ", render: (log) => <span className="text-xs text-muted-foreground">{log.createdAt ? formatDateAr(log.createdAt) : "-"}</span> },
+        ]}
+        emptyMessage="لا توجد سجلات"
+      />
     </div>
   );
 }

@@ -149,7 +149,7 @@ export default function ZatcaReportsHubPage() {
 
   return (
     <PageShell
-      title="تقارير الضرائب والمخزون"
+      title="مركز تقارير الزكاة والضريبة"
       subtitle="مركز التقارير الجديدة من حملة الإصلاح المالي — كل شي تحتاجه قبل إقفال الشهر والإقرار الضريبي"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

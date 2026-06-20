@@ -42,6 +42,22 @@ describe("Employees — endpoint registration", () => {
     expect(SRC).toContain('router.get("/documents",');
     expect(SRC).toContain('router.post("/obligations/seed",');
   });
+
+  // HR-REV-4 — completes the job-titles CRUD (was GET/POST/PATCH only).
+  it("registers DELETE /job-titles/:id gated on hr.employees:delete", () => {
+    expect(SRC).toContain('router.delete("/job-titles/:id",');
+    const s = section('router.delete("/job-titles/:id",', 400);
+    expect(s).toContain('authorize({ feature: "hr.employees", action: "delete" })');
+  });
+
+  it("DELETE /job-titles/:id soft-deletes (isActive=FALSE), is company-scoped, and 404s when missing", () => {
+    const s = fullHandler('router.delete("/job-titles/:id",');
+    expect(s).toContain('"isActive" = FALSE');
+    expect(s).toContain('"companyId" = $2');
+    expect(s).toMatch(/result\.affectedRows === 0/);
+    expect(s).toContain("NotFoundError");
+    expect(s).toContain("createAuditLog");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -95,6 +111,14 @@ describe("Employees — companyId scoping", () => {
     expect(s).toContain("enforceBranchScope: true");
   });
 
+  it("GET /:id/finance-summary scopes the employee via an assignment, not companyId IS NULL", () => {
+    const s = fullHandler('router.get("/:id/finance-summary",');
+    // employees.companyId is intentionally NULL; the old `OR companyId IS NULL`
+    // fallback matched any tenant's employee. Must require an assignment row.
+    expect(s).not.toMatch(/"companyId" = \$2 OR "companyId" IS NULL/);
+    expect(s).toMatch(/EXISTS \([\s\S]*?employee_assignments ea[\s\S]*?ea\."companyId" = \$2/);
+  });
+
   it("POST / create derives effectiveCompanyId from scope.allowedCompanies", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("effectiveCompanyId");
@@ -122,6 +146,19 @@ describe("Employees — companyId scoping", () => {
     expect(jt).toContain('"companyId" = $1');
     const docs = section('router.get("/documents",', 3000);
     expect(docs).toContain('"companyId" = $1');
+  });
+
+  it("GET /onboarding-tasks supports ownerRole + mandatory filters (HR-REV-3 per-owner queue)", () => {
+    const ob = section('router.get("/onboarding-tasks",', 3000);
+    // destructured from the query string
+    expect(ob).toContain("ownerRole, mandatory } = req.query");
+    // ownerRole is a parameterized equality, not interpolated
+    expect(ob).toContain('conditions.push(`ot."ownerRole" = $${params.length}`)');
+    // mandatory=true|false maps to the same NULL-tolerant predicate the
+    // activation ready-gate uses (mandatory IS NOT FALSE / IS FALSE)
+    expect(ob).toContain('mandatory === "true"');
+    expect(ob).toContain("ot.mandatory IS NOT FALSE");
+    expect(ob).toContain("ot.mandatory IS FALSE");
   });
 });
 
@@ -358,17 +395,28 @@ describe("Employees — audit, events, and obligations", () => {
     expect(s).toContain('entityKey: "employee_code"');
   });
 
-  it("POST / creates 4 onboarding tasks for the new employee", () => {
+  it("POST / creates the onboarding tasks and reports the real plan count", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("INSERT INTO onboarding_tasks");
-    expect(s).toContain("onboardingTasksCreated: 4");
+    // count comes from the activation plan length, not a hard-coded literal
+    expect(s).toContain("onboardingTasksCreated: onboardingTaskCount");
+    expect(s).not.toContain("onboardingTasksCreated: 4");
   });
 
-  it("POST / auto-creates user account with temp password when email is provided", () => {
+  it("POST / creates the user account with an invitation link, never a raw temp password (#2137)", () => {
     const s = fullHandler('router.post("/",');
     expect(s).toContain("INSERT INTO users");
     expect(s).toContain("hashPassword");
-    expect(s).toContain("tempPassword");
+    // The account is created with an unguessable random password the user
+    // never sees — NOT a known/guessable temp password that gets emailed.
+    expect(s).toContain("randomBytes");
+    expect(s).not.toContain("tempPassword");
+    // Instead, a single-use invitation link is issued and emailed.
+    expect(s).toContain("issueAuthToken");
+    expect(s).toContain('purpose: "invitation"');
+    expect(s).toContain('"auth.new_user_invitation.email"');
+    // And no plaintext "كلمة المرور المؤقتة" is ever put in an email body.
+    expect(s).not.toContain("كلمة المرور المؤقتة");
   });
 
   it("POST / grants the RBAC v2 role (rbac_user_roles) so a new employee's services actually work", () => {

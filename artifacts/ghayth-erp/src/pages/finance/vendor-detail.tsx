@@ -460,7 +460,7 @@ function VendorContactSummaryCard({ vendorId }: { vendorId: string }) {
             {summary.lastContact.subject && (
               <p className="text-sm font-medium line-clamp-1">{summary.lastContact.subject}</p>
             )}
-            <Link href={`/inbox?supplierId=${vendorId}`}>
+            <Link href={`/inbox?supplierId=${vendorId}`} asChild>
               <a className="text-xs text-status-info-foreground hover:underline inline-flex items-center gap-1">
                 <MessageCircle className="h-3 w-3" />
                 عرض كل المراسلات

@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { EntityPnlButton } from "@/components/shared/entity-pnl-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -313,7 +313,7 @@ export default function LegalContractDetail() {
       actions={
         <>
           {contract && (
-            <EntityPrintButton
+            <PrintButton
               entityType="legal_contract"
               entityId={contract.id ?? id}
              />
@@ -386,7 +386,7 @@ export default function LegalContractDetail() {
       </DialogContent>
     </Dialog>
     {contract && id && (
-      <EntityEditDialog<ContractEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل العقد"

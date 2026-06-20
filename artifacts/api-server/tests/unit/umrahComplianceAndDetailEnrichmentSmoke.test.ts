@@ -34,7 +34,7 @@ const ROUTES_TSX = readFileSync(
   "utf8",
 );
 const TABS = readFileSync(
-  join(import.meta.dirname!, "../../../ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -147,7 +147,7 @@ describe("UmrahComplianceDashboard page — registration + UX", () => {
   it("registered under /umrah/compliance + listed in tabs nav", () => {
     expect(ROUTES_TSX).toMatch(/UmrahCompliance = lazy\(\(\) => import\("@\/pages\/umrah\/compliance"\)\)/);
     expect(ROUTES_TSX).toMatch(/path: "\/umrah\/compliance", component: UmrahCompliance/);
-    expect(TABS).toMatch(/href: "\/umrah\/compliance", label: "لوحة الامتثال"/);
+    expect(TABS).toMatch(/label: "امتثال العمرة", path: "\/umrah\/compliance"/);
   });
 
   it("season filter drives the query string (server-side scoping)", () => {

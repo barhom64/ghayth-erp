@@ -13,16 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -30,7 +21,8 @@ import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Download, RefreshCw } from "lucide-react";
+import { Shield, Download } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -204,11 +196,13 @@ export default function UmrahExemptPilgrims() {
     setSelectedIds(next);
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={refetch} />;
-
+  // Rules of Hooks: usePrintRows must run before the early returns below, so
+  // compute rows first then call the hook unconditionally on every render.
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
 
@@ -350,7 +344,7 @@ export default function UmrahExemptPilgrims() {
 
   return (
     <PageShell
-      title="المعتمرون المستثنون من مسح التأخّر"
+      title="المعتمرون المعفون من مسح التأخّر"
       subtitle="تقرير امتثال — يعرض من تم استثناؤه ومن أصدر الاستثناء ومتى"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "استثناءات التأخّر" }]}
       actions={
@@ -368,9 +362,7 @@ export default function UmrahExemptPilgrims() {
               إلغاء استثناء {selectedIds.size}
             </GuardedButton>
           )}
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
-            <RefreshCw className="h-3 w-3" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} />
           <Button
             variant="outline"
             size="sm"
@@ -446,7 +438,7 @@ export default function UmrahExemptPilgrims() {
               لا يوجد معتمرون مستثنون حالياً ضمن هذا الفلتر.
             </div>
           ) : (
-            <DataTable<ExemptRow>
+            <DataTable
               onSortedDataChange={setPrintRows}
         data={rows}
               columns={cols}
@@ -456,35 +448,27 @@ export default function UmrahExemptPilgrims() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={bulkConfirmOpen} onOpenChange={(o) => { if (!o && !bulkRunning) setBulkConfirmOpen(false); }}>
-        <AlertDialogContent data-testid="exempt-bulk-confirm-dialog">
-          <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد إلغاء الاستثناء الجماعي</AlertDialogTitle>
-            <AlertDialogDescription>
-              سيتم إلغاء استثناء {selectedIds.size} معتمر من مسح التأخّر اليومي. كل سطر سيتم تسجيله في سجل التدقيق.
-              {bulkResult && (
-                <span className="block mt-2 text-xs">
-                  آخر تشغيل: نجحت {bulkResult.ok} — فشلت {bulkResult.failed}
-                </span>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={bulkRunning}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={async (e: React.MouseEvent) => {
-                e.preventDefault();
-                await runBulkUnExempt();
-                setBulkConfirmOpen(false);
-              }}
-              disabled={bulkRunning}
-              data-testid="exempt-bulk-confirm-button"
-            >
-              {bulkRunning ? "جاري المعالجة…" : "تأكيد"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionDialog
+        open={bulkConfirmOpen}
+        onOpenChange={(o) => { if (!o && !bulkRunning) setBulkConfirmOpen(false); }}
+        variant="destructive"
+        title="تأكيد إلغاء الاستثناء الجماعي"
+        description={
+          <>
+            سيتم إلغاء استثناء {selectedIds.size} معتمر من مسح التأخّر اليومي. كل سطر سيتم تسجيله في سجل التدقيق.
+            {bulkResult && (
+              <span className="block mt-2 text-xs">
+                آخر تشغيل: نجحت {bulkResult.ok} — فشلت {bulkResult.failed}
+              </span>
+            )}
+          </>
+        }
+        confirmLabel={bulkRunning ? "جاري المعالجة…" : "تأكيد"}
+        pending={bulkRunning}
+        onConfirm={async () => { await runBulkUnExempt(); setBulkConfirmOpen(false); }}
+        contentTestId="exempt-bulk-confirm-dialog"
+        confirmButtonTestId="exempt-bulk-confirm-button"
+      />
     </PageShell>
   );
 }

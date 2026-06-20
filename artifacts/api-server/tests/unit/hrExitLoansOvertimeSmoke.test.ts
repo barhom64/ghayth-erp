@@ -132,7 +132,8 @@ describe("Exit approval flow", () => {
   it("approval restricts to HR/GM/Owner", () => {
     const idx = EXIT_ROUTE.indexOf('"/exit/:id/approve"');
     const section = EXIT_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain("HR_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the HR_ROLES array.
+    expect(section).toContain('scopeCan(scope, "hr.exit", "approve")');
   });
 
   it("approval uses applyTransition for both approve and reject", () => {
@@ -286,7 +287,8 @@ describe("Loan approval flow", () => {
   it("approval restricts roles to manager/HR/finance/owner", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/:id/approve"');
     const section = LOANS_ROUTE.slice(idx, idx + 1000);
-    expect(section).toContain("LOAN_APPROVAL_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the LOAN_APPROVAL_ROLES array.
+    expect(section).toContain('scopeCan(scope, "hr.loans", "approve")');
   });
 
   it("prevents self-approval", () => {
@@ -343,7 +345,8 @@ describe("Loan rejection", () => {
   it("reject restricts roles", () => {
     const idx = LOANS_ROUTE.indexOf('"/loans/:id/reject"');
     const section = LOANS_ROUTE.slice(idx, idx + 500);
-    expect(section).toContain("LOAN_APPROVAL_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the LOAN_APPROVAL_ROLES array.
+    expect(section).toContain('scopeCan(scope, "hr.loans", "reject")');
   });
 
   it("reject only from pending state", () => {
@@ -434,7 +437,10 @@ describe("Overtime creation", () => {
 
   it("initiates approval chain", () => {
     const idx = OVERTIME_ROUTE.indexOf('router.post("/overtime"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 4000);
+    // نافذة المعالِج كاملةً حتى الراوت التالي (بدل طول ثابت هشّ يكسره أي إضافة
+    // مشروعة قبل سلسلة الموافقات — مثل فحص سقف الوقت الإضافي الشهري).
+    const nextRoute = OVERTIME_ROUTE.indexOf("\nrouter.", idx + 10);
+    const section = OVERTIME_ROUTE.slice(idx, nextRoute > -1 ? nextRoute : idx + 8000);
     expect(section).toContain("initiateApprovalChain");
     expect(section).toContain('chainType: "overtime"');
   });
@@ -444,7 +450,8 @@ describe("Overtime approval flow", () => {
   it("approval restricts to manager/HR/GM/Owner", () => {
     const idx = OVERTIME_ROUTE.indexOf('"/overtime/:id/approve"');
     const section = OVERTIME_ROUTE.slice(idx, idx + 600);
-    expect(section).toContain("HR_APPROVAL_ROLES");
+    // HR-REV-1 #1 — grant-derived gate replaced the HR_APPROVAL_ROLES array.
+    expect(section).toContain('scopeCan(scope, "hr.overtime", "approve")');
   });
 
   it("prevents self-approval", () => {

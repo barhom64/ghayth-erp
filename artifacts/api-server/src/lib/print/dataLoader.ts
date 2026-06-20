@@ -277,6 +277,12 @@ async function dispatchLoad(args: LoaderArgs): Promise<Record<string, unknown>> 
       return await loadUmrahSalesInvoice(companyId, entityId);
     case "umrah_agent_invoice":
       return await loadUmrahAgentInvoice(companyId, entityId);
+    case "umrah_nusk_invoice":
+      return await loadUmrahNuskInvoice(companyId, entityId);
+    case "umrah_commission_plan":
+      return await loadUmrahCommissionPlan(companyId, entityId);
+    case "umrah_commission_calculation":
+      return await loadUmrahCommissionCalculation(companyId, entityId);
     case "umrah_penalty":
       return await loadUmrahPenalty(companyId, entityId);
     case "umrah_violation":
@@ -1191,12 +1197,17 @@ async function loadVehicle(companyId: number, id: string) {
 // preset (templateResolver.ts) renders the corresponding template.
 async function loadTransportBookingConfirmation(companyId: number, id: string) {
   const [booking] = await rawQuery<Record<string, unknown>>(
-    `SELECT * FROM transport_bookings
-       WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL
-       LIMIT 1`,
+    `SELECT b.*, c.name AS "linkedCustomerName"
+       FROM transport_bookings b
+       LEFT JOIN clients c ON c.id = b."customerId" AND c."companyId" = b."companyId" AND c."deletedAt" IS NULL
+      WHERE b.id = $1 AND b."companyId" = $2 AND b."deletedAt" IS NULL
+      LIMIT 1`,
     [id, companyId],
   ).catch(() => [null]);
   if (!booking) return { entity: { id } };
+  // #TA-T18 — the printed confirmation shows the LINKED customer (master
+  // data), not the free-text snapshot, matching the on-screen confirmation.
+  if (booking.linkedCustomerName) booking.customerName = booking.linkedCustomerName;
   const lines = await rawQuery<Record<string, unknown>>(
     `SELECT * FROM transport_booking_lines
        WHERE "bookingId" = $1 AND "deletedAt" IS NULL ORDER BY "lineNumber"`,
@@ -1440,11 +1451,13 @@ async function loadUmrahGroup(companyId: number, id: string) {
     `SELECT id, "fullName", "passportNumber", "visaNumber", nationality, gender,
             "arrivalDate", "departureDate", status, "hotelName", "roomNumber"
        FROM umrah_pilgrims
-      WHERE "companyId" = $2
-        AND ("agentId" = $3 OR "seasonId" = $4)
+      WHERE "companyId" = $1
+        AND ("agentId" = $2 OR "seasonId" = $3)
       ORDER BY "fullName"
       LIMIT 500`,
-    [id, companyId, group.agentId, group.seasonId],
+    // group `id` unreferenced here → not bound (was a $1 42P18 the .catch
+    // swallowed, so printed group manifests had an empty pilgrim list).
+    [companyId, group.agentId, group.seasonId],
   ).catch(() => []);
   return { entity: group, pilgrims };
 }
@@ -1492,6 +1505,90 @@ async function loadUmrahAgentInvoice(companyId: number, id: string) {
     [id, companyId]
   ).catch(() => [null]);
   return { entity: invoice ?? { id } };
+}
+
+// U-14-P3 — Nusk invoice loader. The Nusk invoice is the
+// PURCHASE-side document (what the Nusk system charges the agency
+// for one group's services) — distinct from sales invoice (charged
+// to the sub-agent) and agent invoice (charged to the main agent).
+// Joins agent / sub-agent / group / season for the meta block.
+async function loadUmrahNuskInvoice(companyId: number, id: string) {
+  const [invoice] = await rawQuery<Record<string, unknown>>(
+    `SELECT ni.*,
+            a.name AS "agentName",
+            sa.name AS "subAgentName",
+            g.name AS "groupName",
+            s.name AS "seasonName"
+       FROM umrah_nusk_invoices ni
+       LEFT JOIN umrah_agents a
+         ON a.id = ni."agentId" AND a."companyId" = $2 AND a."deletedAt" IS NULL
+       LEFT JOIN umrah_sub_agents sa
+         ON sa.id = ni."subAgentId" AND sa."companyId" = $2 AND sa."deletedAt" IS NULL
+       LEFT JOIN umrah_groups g
+         ON g.id = ni."groupId" AND g."companyId" = $2 AND g."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = g."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE ni.id = $1 AND ni."companyId" = $2
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: invoice ?? { id } };
+}
+
+// U-14-P3 — umrah commission plan loader. Reads the plan + its
+// tiers list + joined employee + season for the printed contract /
+// signature copy. Pure SELECT; tenant-scoped.
+async function loadUmrahCommissionPlan(companyId: number, id: string) {
+  const [plan] = await rawQuery<Record<string, unknown>>(
+    `SELECT cp.*,
+            e.name AS "employeeName",
+            s.name AS "seasonName"
+       FROM employee_commission_plans cp
+       LEFT JOIN employees e
+         ON e.id = cp."employeeId" AND e."companyId" = $2 AND e."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = cp."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE cp.id = $1 AND cp."companyId" = $2 AND cp."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  if (!plan) return { entity: { id } };
+  const tiers = await rawQuery<Record<string, unknown>>(
+    `SELECT "tierOrder", "fromCount", "toCount", "bonusPerUnit", "isCumulative"
+       FROM employee_commission_tiers
+      WHERE "planId" = $1 AND "deletedAt" IS NULL
+      ORDER BY "tierOrder" ASC`,
+    [id],
+  ).catch(() => []);
+  return { entity: plan, tiers };
+}
+
+// U-14-P3 — umrah commission calculation (monthly slip).
+// Joins the plan + employee + season so the receipt carries the
+// human-readable context for one month's calculation result. Pure
+// SELECT; tenant-scoped.
+async function loadUmrahCommissionCalculation(companyId: number, id: string) {
+  const [calc] = await rawQuery<Record<string, unknown>>(
+    `SELECT cc.*,
+            cp."planName",
+            cp."commissionType",
+            cp."percentageRate",
+            cp."fixedAmount",
+            cp."baseSalary",
+            e.name AS "employeeName",
+            s.name AS "seasonName"
+       FROM employee_commission_calculations cc
+       LEFT JOIN employee_commission_plans cp
+         ON cp.id = cc."planId" AND cp."companyId" = $2 AND cp."deletedAt" IS NULL
+       LEFT JOIN employees e
+         ON e.id = cc."employeeId" AND e."companyId" = $2 AND e."deletedAt" IS NULL
+       LEFT JOIN umrah_seasons s
+         ON s.id = cp."seasonId" AND s."companyId" = $2 AND s."deletedAt" IS NULL
+      WHERE cc.id = $1 AND cc."companyId" = $2 AND cc."deletedAt" IS NULL
+      LIMIT 1`,
+    [id, companyId]
+  ).catch(() => [null]);
+  return { entity: calc ?? { id } };
 }
 
 async function loadUmrahPenalty(companyId: number, id: string) {

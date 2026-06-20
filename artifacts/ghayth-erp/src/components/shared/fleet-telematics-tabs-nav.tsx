@@ -11,9 +11,9 @@ const TABS = [
   { href: "/fleet/telematics/sensors", label: "قراءات الحساسات", icon: Activity },
   { href: "/fleet/telematics/evidence", label: "أرشيف الأدلة", icon: Archive },
   { href: "/fleet/telematics/video-evidence", label: "جلسات الفيديو", icon: Video },
-  { href: "/fleet/telematics/devices", label: "أجهزة MDVR", icon: HardDrive },
+  { href: "/fleet/telematics/devices", label: "أجهزة التسجيل (MDVR)", icon: HardDrive },
   { href: "/fleet/telematics/operations", label: "لوحة التشغيل", icon: ShieldCheck },
-  { href: "/fleet/telematics/settings", label: "إعدادات CMSV6", icon: Settings },
+  { href: "/fleet/telematics/settings", label: "إعدادات منصة التتبع", icon: Settings },
 ];
 
 export function FleetTelematicsTabsNav() {
@@ -25,7 +25,7 @@ export function FleetTelematicsTabsNav() {
           const isActive = location === tab.href || location.startsWith(`${tab.href}/`);
           const Icon = tab.icon;
           return (
-            <Link key={tab.href} href={tab.href}>
+            <Link key={tab.href} href={tab.href} asChild>
               <a
                 className={cn(
                   "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",

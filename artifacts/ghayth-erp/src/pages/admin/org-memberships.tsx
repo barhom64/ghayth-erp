@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { TeamSelect, CommitteeSelect, ProjectSelect } from "@/components/shared/entity-selects";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, X, Trash2, Users, Gavel, Briefcase } from "lucide-react";
@@ -74,8 +75,6 @@ const TEAM_ROLE_LABELS = { member: "عضو", lead: "قائد", observer: "مرا
 
 function TeamsMembersTab() {
   const { toast } = useToast();
-  const { data: teamsData } = useApiQuery<{ data: SimpleEntity[] }>(["teams-for-mems"], "/org/teams");
-  const teams = asList<SimpleEntity>(teamsData?.data || []);
   const [teamId, setTeamId] = useState<string>("");
   const [form, setForm] = useState({ assignmentId: "", role: "member" });
 
@@ -121,15 +120,12 @@ function TeamsMembersTab() {
   return (
     <div className="space-y-3">
       <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-        <div>
-          <Label className="text-xs">اختر الفريق</Label>
-          <Select value={teamId} onValueChange={setTeamId}>
-            <SelectTrigger className="mt-1"><SelectValue placeholder="— لم يُختر بعد —" /></SelectTrigger>
-            <SelectContent>
-              {teams.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        <TeamSelect
+          label="اختر الفريق"
+          placeholder="— لم يُختر بعد —"
+          value={teamId}
+          onChange={setTeamId}
+        />
       </div>
 
       {teamId && (
@@ -185,8 +181,6 @@ const COMMITTEE_ROLE_LABELS = { member: "عضو", chair: "رئيس", secretary: 
 
 function CommitteesMembersTab() {
   const { toast } = useToast();
-  const { data: cData } = useApiQuery<{ data: SimpleEntity[] }>(["committees-for-mems"], "/org/committees");
-  const committees = asList<SimpleEntity>(cData?.data || []);
   const [committeeId, setCommitteeId] = useState<string>("");
   const [form, setForm] = useState({ assignmentId: "", role: "member", isVoting: true });
 
@@ -237,15 +231,12 @@ function CommitteesMembersTab() {
 
   return (
     <div className="space-y-3">
-      <div>
-        <Label className="text-xs">اختر اللجنة</Label>
-        <Select value={committeeId} onValueChange={setCommitteeId}>
-          <SelectTrigger className="mt-1"><SelectValue placeholder="— لم تُختر بعد —" /></SelectTrigger>
-          <SelectContent>
-            {committees.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name} {c.type ? `(${c.type})` : ""}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <CommitteeSelect
+        label="اختر اللجنة"
+        placeholder="— لم تُختر بعد —"
+        value={committeeId}
+        onChange={setCommitteeId}
+      />
 
       {committeeId && (
         <>
@@ -298,8 +289,6 @@ function CommitteesMembersTab() {
 // ════════════════════════════════════════════════════════════════════════════
 function ProjectsContributorsTab() {
   const { toast } = useToast();
-  const { data: pData, isError: pErr } = useApiQuery<{ data: Project[] }>(["projects-for-mems"], "/projects");
-  const projects = asList<Project>(pData?.data || []);
   const [projectId, setProjectId] = useState<string>("");
   const [form, setForm] = useState({ assignmentId: "", role: "contributor", allocationPercent: "100" });
 
@@ -361,17 +350,12 @@ function ProjectsContributorsTab() {
 
   return (
     <div className="space-y-3">
-      <div>
-        <Label className="text-xs">اختر المشروع</Label>
-        <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder={pErr ? "تعذّر تحميل المشاريع" : "— لم يُختر بعد —"} />
-          </SelectTrigger>
-          <SelectContent>
-            {projects.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+      <ProjectSelect
+        label="اختر المشروع"
+        placeholder="— لم يُختر بعد —"
+        value={projectId}
+        onChange={setProjectId}
+      />
 
       {projectId && (
         <>

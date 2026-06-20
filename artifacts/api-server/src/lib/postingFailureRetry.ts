@@ -21,7 +21,7 @@
 // (`hr_letter_dispatch`). These keep returning `supported: false` with a
 // specific Arabic reason so the caller steers to manual resolution.
 
-import { rawQuery } from "./rawdb.js";
+import { rawQuery, withTransaction } from "./rawdb.js";
 import { logger } from "./logger.js";
 
 export interface RetryScope {
@@ -207,6 +207,76 @@ export async function retryPostingFailure(
           dedupeKey: `umrah-inv-${sourceId}`,
         });
         return { ok: true, supported: true, message: "تمت إعادة تسجيل الالتزام بنجاح." };
+      }
+
+      // Re-post the AP (and refund-reversal) journal entries for a NUSK
+      // purchase invoice. sourceId is the umrah_nusk_invoices row id. The
+      // original posting lives in postNuskJournalEntries and is idempotent via
+      // createGuardedJournalEntry sourceKey (`umrah_nusk_ap_<id>` /
+      // `umrah_nusk_refund_<id>`) + the existing-JE-id guards, so a retry
+      // either posts the missing entry or no-ops on an already-posted one.
+      // This is the drain path for the 5201/2101 fallback-code class that
+      // parked the entire NUSK backlog (the fallbacks now resolve to seeded
+      // postable leaves 5120 تكلفة الخدمات / 2111 موردون محليون).
+      case "umrah_nusk_invoices": {
+        const [row] = await rawQuery<{
+          id: number; nuskInvoiceNumber: string | null;
+          totalAmount: string | number | null; refundAmount: string | number | null;
+          nuskStatus: string | null; purchaseInvoiceId: number | null;
+          journalEntryId: number | null; branchId: number | null;
+        }>(
+          `SELECT id, "nuskInvoiceNumber", "totalAmount", "refundAmount", "nuskStatus",
+                  "purchaseInvoiceId", "journalEntryId", "branchId"
+             FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [sourceId, scope.companyId],
+        );
+        if (!row) {
+          return { ok: true, supported: true, message: "المصدر غير موجود (محذوف) — تم إغلاق السجل." };
+        }
+        const totalAmount = Number(row.totalAmount) || 0;
+        const refundAmount = Number(row.refundAmount) || 0;
+        const nuskStatus = String(row.nuskStatus ?? "pending").toLowerCase();
+        const needsAp = totalAmount > 0 && nuskStatus !== "cancelled";
+        const needsRefund = nuskStatus === "refunded" && refundAmount > 0;
+        if (!needsAp && !needsRefund) {
+          return { ok: true, supported: true, message: "لا يوجد مبلغ للترحيل — تم الإغلاق." };
+        }
+        const { postNuskJournalEntries } = await import("./umrahImportEngine.js");
+        await withTransaction(async (client) => {
+          await postNuskJournalEntries(
+            client,
+            { companyId: scope.companyId, branchId: row.branchId ?? scope.branchId ?? 0, userId: scope.userId, seasonId: 0 },
+            {
+              nuskId: row.id,
+              nuskInvoiceNumber: String(row.nuskInvoiceNumber ?? `NUSK-${row.id}`),
+              totalAmount,
+              refundAmount,
+              nuskStatus,
+              existingApJeId: row.purchaseInvoiceId ?? null,
+              existingRefundJeId: row.journalEntryId ?? null,
+            },
+          );
+        });
+        // postNuskJournalEntries swallows GL errors (import-resilience), so it
+        // returns even when the entry didn't post. Verify the entries actually
+        // landed (the engine sets purchaseInvoiceId / journalEntryId only on a
+        // successful post) before declaring success — otherwise a still-broken
+        // mapping would falsely resolve the backlog row.
+        const [after] = await rawQuery<{ purchaseInvoiceId: number | null; journalEntryId: number | null }>(
+          `SELECT "purchaseInvoiceId", "journalEntryId"
+             FROM umrah_nusk_invoices WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [row.id, scope.companyId],
+        );
+        const apOk = !needsAp || (after?.purchaseInvoiceId ?? null) !== null;
+        const refundOk = !needsRefund || (after?.journalEntryId ?? null) !== null;
+        if (apOk && refundOk) {
+          return { ok: true, supported: true, message: "تمت إعادة الترحيل بنجاح." };
+        }
+        return {
+          ok: false,
+          supported: true,
+          message: `تعذّر ترحيل قيد فاتورة نسك ${row.nuskInvoiceNumber ?? row.id} — تحقّق من ربط حساب التكلفة/الموردين في إعدادات المحاسبة.`,
+        };
       }
 
       // Deferred: needs the original month/year, which is only encoded in the

@@ -60,6 +60,13 @@ export {
   numberColumn,
 } from "../../../artifacts/ghayth-erp/src/components/data-table-presets";
 
+// ─── Line Items ───────────────────────────────────────────────────────
+export { LineItemsTable } from "../../../artifacts/ghayth-erp/src/components/shared/line-items-table";
+export type {
+  LineItemsColumn,
+  LineItemsTableProps,
+} from "../../../artifacts/ghayth-erp/src/components/shared/line-items-table";
+
 // ─── Forms ────────────────────────────────────────────────────────────
 export {
   FormShell,

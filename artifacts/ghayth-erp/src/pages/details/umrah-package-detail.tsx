@@ -4,7 +4,7 @@ import { useApiQuery } from "@/lib/api";
 import { useDetailEditDelete, DetailActionButtons, InlineEditCard } from "@/components/shared/detail-edit-delete-actions";
 import { DetailPageLayout, type RelatedEntity, EntityComments } from "@workspace/entity-kit";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { EntityPrintButton } from "@/components/shared/entity-print";
+import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Edit, Package, Star, Bus, Utensils, Calendar, Users, Wallet } from "lucide-react";
@@ -341,7 +341,7 @@ export default function UmrahPackageDetail() {
           editPerm="umrah:update"
           deletePerm="umrah:delete"
           extra={
-            <EntityPrintButton
+            <PrintButton
               entityType="umrah_package"
               entityId={id ?? 0}
              />
