@@ -48,6 +48,7 @@
     "check:jsx-generic-component": "node scripts/src/check-jsx-generic-component.mjs",
     "check:responsive-tables": "node scripts/src/check-responsive-tables.mjs",
     "check:api-base": "node scripts/src/check-api-base.mjs",
+    "check:direct-api-fetch": "node scripts/src/check-direct-api-fetch.mjs",
     "check:link-nested-anchor": "node scripts/src/check-link-nested-anchor.mjs",
     "check:usememo-setstate": "node scripts/src/check-usememo-setstate.mjs",
     "check:register-limiter-misuse": "node scripts/src/check-register-limiter-misuse.mjs",
