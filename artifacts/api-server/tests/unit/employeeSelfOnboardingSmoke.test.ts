@@ -91,6 +91,12 @@ describe("الدفعة أ — المسار العام", () => {
   it("الرمز غير الصالح يردّ 410", () => {
     expect(PUBLIC).toMatch(/res\.status\(410\)/);
   });
+  it("يُشعِر مسؤولي الموارد البشرية (hr_manager) داخليًا عند الإرسال", () => {
+    expect(PUBLIC).toMatch(/sendNotification\(\{/);
+    expect(PUBLIC).toMatch(/targetRole:\s*"hr_manager"/);
+    expect(PUBLIC).toMatch(/actionUrl:\s*"\/hr\/self-onboarding-review"/);
+    expect(PUBLIC).toMatch(/channels:\s*\["in_app"\]/);
+  });
 });
 
 describe("الدفعة ب — مراجعة واعتماد البيانات", () => {
