@@ -164,6 +164,18 @@ function tryNativeRefresh(): Promise<boolean> {
   return nativeRefreshPromise;
 }
 
+/**
+ * Rotate the native access token via the SAME de-duped path apiFetch uses
+ * (so concurrent callers don't double-rotate and burn the session). Exposed
+ * for the realtime client, which must reconnect its SSE stream with a FRESH
+ * token — the 15-minute access token is baked into the EventSource URL, so a
+ * reconnect after expiry would otherwise 401 forever. No-op on the web.
+ */
+export function refreshNativeTokenOnce(): Promise<boolean> {
+  if (!isNativeAuth()) return Promise.resolve(true);
+  return tryNativeRefresh();
+}
+
 async function tryRefreshToken(): Promise<boolean> {
   if (isRefreshing && refreshPromise) return refreshPromise;
 

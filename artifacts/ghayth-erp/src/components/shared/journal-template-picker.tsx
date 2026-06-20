@@ -1,4 +1,4 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect, type SelectOption } from "@/components/shared/searchable-select";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { useApiQuery } from "@/lib/api";
 
@@ -10,6 +10,9 @@ import { useApiQuery } from "@/lib/api";
  * returns the template id/name — each template line carries an `accountPurpose`
  * (resolved to a real account by the financial engine). It does NOT decide the
  * journal and NEVER carries a final accountCode.
+ *
+ * يبني على النواة الموحّدة `SearchableSelect` (قاموس المفاهيم §3، دستور 15):
+ * نموذج بحث/اختيار واحد للنظام — أُضيف البحث دون تغيير العقد (onPick يعيد الكائن كاملًا).
  */
 export interface JournalTemplate {
   id: number;
@@ -35,24 +38,22 @@ export function JournalTemplatePicker({
   );
   const templates = data?.data ?? [];
 
+  const options: SelectOption[] = templates.map((t) => ({
+    value: String(t.id),
+    label: t.name,
+    sublabel: t.description ?? undefined,
+  }));
+
   return (
     <FormFieldWrapper label={label}>
-      <Select
+      <SearchableSelect
+        options={options}
         value={value ?? ""}
         onValueChange={(v) => onPick(templates.find((t) => String(t.id) === v) ?? null)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder={templates.length ? "اختر قالبًا محفوظًا" : "لا توجد قوالب محفوظة"} />
-        </SelectTrigger>
-        <SelectContent>
-          {templates.map((t) => (
-            <SelectItem key={t.id} value={String(t.id)}>
-              {t.name}
-              {t.description ? ` — ${t.description}` : ""}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        placeholder={templates.length ? "اختر قالبًا محفوظًا" : "لا توجد قوالب محفوظة"}
+        searchPlaceholder="ابحث عن قالب..."
+        emptyText="لا توجد قوالب محفوظة"
+      />
     </FormFieldWrapper>
   );
 }

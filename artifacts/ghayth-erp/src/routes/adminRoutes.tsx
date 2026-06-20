@@ -23,6 +23,7 @@ const AdminDomainRegistry = lazy(() => import("@/pages/admin-domain-registry"));
 const AdminEventMonitor = lazy(() => import("@/pages/admin-event-monitor"));
 const AdminEventOutbox = lazy(() => import("@/pages/admin-event-outbox"));
 const AdminJourneys = lazy(() => import("@/pages/admin-journeys"));
+const AdminInfraAlerts = lazy(() => import("@/pages/admin-infra-alerts"));
 const AdminPostingFailures = lazy(() => import("@/pages/admin-posting-failures"));
 const AdminLifecycleMonitor = lazy(() => import("@/pages/admin-lifecycle-monitor"));
 const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
@@ -90,6 +91,7 @@ export const adminRoutes = [
   { path: "/admin/event-monitor", component: AdminEventMonitor },
   { path: "/admin/outbox", component: AdminEventOutbox },
   { path: "/admin/journeys", component: AdminJourneys },
+  { path: "/admin/infra-alerts", component: AdminInfraAlerts },
   { path: "/admin/posting-failures", component: AdminPostingFailures },
   { path: "/admin/lifecycle-monitor", component: AdminLifecycleMonitor },
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
