@@ -282,7 +282,13 @@ function CasesTab() {
   const { permissions } = useAppContext();
   const canManage = permissions.canManageLegal;
   const [, setLocation] = useLocation();
-  const { data: casesResp, isLoading, isError, error, refetch } = useApiQuery<any>(["legal-cases"], "/legal/cases");
+  // #2713 (تعميم) — سلة المحذوفات للقضايا.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { toast } = useToast();
+  const { data: casesResp, isLoading, isError, error, refetch } = useApiQuery<any>(
+    ["legal-cases", showDeleted ? "deleted" : "active"],
+    `/legal/cases${showDeleted ? "?deleted=true" : ""}`,
+  );
   const cases = asList(casesResp);
   const [filters, setFilters] = useFilters();
 
@@ -297,6 +303,16 @@ function CasesTab() {
     queryKeys: [["legal-cases"], ["legal-stats"]],
     onSuccess: () => refetch(),
   });
+
+  async function handleRestoreCase(id: number) {
+    try {
+      await apiFetch(`/legal/cases/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع القضية" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
 
   const editFields = [
     { key: "title", label: "العنوان" },
@@ -325,12 +341,16 @@ function CasesTab() {
     {
       key: "actions", header: "الإجراءات",
       render: (c) => (
-        <RowActions
-          canEdit={canManage}
-          onEdit={() => startEdit(c.id, { title: c.title, court: c.court || "", opposingParty: c.opposingParty || "", lawyerName: c.lawyerName || "", status: c.status || "open", priority: c.priority || "medium" })}
-          onDelete={() => startDelete(c.id)}
-          deletePerm="legal:delete"
-        />
+        showDeleted ? (
+          <Button variant="outline" size="sm" onClick={() => handleRestoreCase(c.id)}>استرجاع</Button>
+        ) : (
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(c.id, { title: c.title, court: c.court || "", opposingParty: c.opposingParty || "", lawyerName: c.lawyerName || "", status: c.status || "open", priority: c.priority || "medium" })}
+            onDelete={() => startDelete(c.id)}
+            deletePerm="legal:delete"
+          />
+        )
       ),
     },
   ];
@@ -385,6 +405,9 @@ function CasesTab() {
             })),
           })}
         />
+        <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => setShowDeleted((v) => !v)}>
+          {showDeleted ? "القضايا النشطة" : "سلة المحذوفات"}
+        </Button>
         <Link href="/legal/cases/create"><GuardedButton perm="legal:create" className="gap-2"><Plus className="h-4 w-4" /> قضية جديدة</GuardedButton></Link>
       </div>
       <Card>
