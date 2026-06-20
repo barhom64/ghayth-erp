@@ -1031,6 +1031,8 @@ router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }),
   try {
     const scope = req.scope!;
     const { search, status } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض السائقين المحذوفين فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const filters = parseScopeFilters(req);
     // fleet_drivers has no branchId column; the joined employees +
     // employee_assignments BOTH have one, so an unqualified branch filter
@@ -1040,13 +1042,14 @@ router.get("/drivers", authorize({ feature: "fleet.vehicles", action: "list" }),
     let paramIdx = nextParamIndex;
     if (search) { params.push(`%${search}%`); where += ` AND (d.name ILIKE $${paramIdx} OR d.phone ILIKE $${paramIdx} OR d."licenseNumber" ILIKE $${paramIdx})`; paramIdx++; }
     if (status) { where += ` AND d.status = $${paramIdx}`; params.push(status); paramIdx++; }
+    where += showDeleted ? ` AND d."deletedAt" IS NOT NULL` : ` AND d."deletedAt" IS NULL`;
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT d.*, e.name AS "employeeName", e."empNumber" AS "employeeNumber",
               ea."jobTitle" AS "employeeJobTitle"
        FROM fleet_drivers d
        LEFT JOIN employees e ON e.id = d."employeeId" AND e."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea ON ea."employeeId" = e.id AND ea.status = 'active'
-       WHERE ${where} AND d."deletedAt" IS NULL
+       WHERE ${where}
        ORDER BY d.name LIMIT 500`,
       params
     );
@@ -1680,6 +1683,19 @@ router.delete("/drivers/:id", authorize({ feature: "fleet.vehicles", action: "de
 
     res.json({ message: "تم حذف السائق بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete driver error:"); }
+});
+
+// #2713 (تعميم) — استرجاع سائق محذوف ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/drivers/:id/restore", authorize({ feature: "fleet.vehicles", action: "delete", resource: { table: "fleet_drivers", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE fleet_drivers SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد سائق محذوف بهذا المعرّف");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "fleet.driver.restored", entity: "fleet_drivers", entityId: id }).catch((e) => logger.error(e, "fleet background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "fleet_drivers", entityId: id }).catch((e) => logger.error(e, "fleet background task failed"));
+    res.json({ message: "تم استرجاع السائق" });
+  } catch (err) { handleRouteError(err, res, "Restore driver error:"); }
 });
 
 // ─── Driver portal-account provisioning (#1354) ──────────────────────────
