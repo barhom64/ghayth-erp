@@ -6,7 +6,7 @@
 # new API calls must go through apiFetch. Regenerate:
 #   node scripts/src/check-direct-api-fetch.mjs --write-allowlist
 #
-# Baseline captured: 10 file(s).
+# Baseline captured: 11 file(s).
 artifacts/ghayth-erp/src/components/shared/entity-documents.tsx
 artifacts/ghayth-erp/src/components/shared/export-buttons.tsx
 artifacts/ghayth-erp/src/lib/print-client.ts
@@ -16,4 +16,5 @@ artifacts/ghayth-erp/src/pages/create/documents/version-upload.tsx
 artifacts/ghayth-erp/src/pages/documents-page.tsx
 artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx
 artifacts/ghayth-erp/src/pages/login.tsx
+artifacts/ghayth-erp/src/pages/onboarding-self.tsx
 artifacts/ghayth-erp/src/pages/setup.tsx
