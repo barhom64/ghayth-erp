@@ -263,6 +263,9 @@ const patchPackageSchema = z.object({
   includesZiyarat: z.boolean().optional(),
   duration: z.coerce.number().optional(),
   description: z.string().optional(),
+  // #2718 — قفل تعارض اختياري: النسخة المعروفة للعميل وقت الفتح. لا يكسر
+  // النداءات التي لا ترسله (opt-in)؛ إن أُرسل وتغيّر السجل → 409.
+  updatedAt: z.string().optional(),
 });
 
 // Lets the reassign modal (pilgrim-detail.tsx) ship an empty string
@@ -1036,9 +1039,21 @@ router.patch("/packages/:id", authorize({ feature: "umrah", action: "update" }),
     }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     sets.push(`"updatedAt"=NOW()`);
-    params.push(id); params.push(scope.companyId);
-    const { affectedRows } = await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    if (!affectedRows) throw new NotFoundError("الباقة غير موجودة");
+    // #2718 — قفل تعارض اختياري: إن أرسل العميل النسخة المعروفة (updatedAt)
+    // نفرضها في الشرط؛ اختلافها = عدّل مستخدم آخر السجل بيننا → 409.
+    let versionClause = "";
+    if (b.updatedAt) { params.push(b.updatedAt); versionClause = ` AND "updatedAt"=$${params.length}`; }
+    params.push(id); const idIdx = params.length;
+    params.push(scope.companyId); const coIdx = params.length;
+    const { affectedRows } = await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${idIdx} AND "companyId"=$${coIdx} AND "deletedAt" IS NULL${versionClause}`, params);
+    if (!affectedRows) {
+      // فرّق «غير موجود» عن «تعارض نسخة»: أعد الفحص بلا شرط النسخة.
+      const [stillThere] = await rawQuery<{ id: number }>(`SELECT id FROM umrah_packages WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      if (stillThere && b.updatedAt) {
+        throw new ConflictError("عُدّلت الباقة من مستخدم آخر منذ فتحك لها. أعد التحميل ثم احفظ.", { fix: "أعد تحميل الصفحة لرؤية آخر نسخة قبل الحفظ" });
+      }
+      throw new NotFoundError("الباقة غير موجودة");
+    }
     const [row] = await rawQuery(`SELECT * FROM umrah_packages WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_packages", entityId: id, after: b }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.updated", entity: "umrah_packages", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
