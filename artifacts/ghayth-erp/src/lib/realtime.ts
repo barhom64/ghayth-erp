@@ -8,16 +8,71 @@
 // token as `?access_token=` (no cookies in the WebView); on web the
 // same-origin cookie is sent automatically (withCredentials).
 //
-// Resilience: EventSource auto-reconnects (the server sends `retry:`). If the
-// browser/WebView lacks EventSource the app simply falls back to normal
+// Reconnect (the native gotcha): the access token is 15 minutes and is baked
+// into the EventSource URL. EventSource's BUILT-IN reconnect would reuse that
+// same (expired) URL and 401 forever. So we manage reconnection ourselves:
+// on error we close, refresh the native token (via the same de-duped path
+// apiFetch uses), and reopen with a fresh token — with capped backoff. On the
+// web the cookie is refreshed by apiFetch's own 401 flow, so a plain reopen
+// suffices. If EventSource is unavailable the app simply falls back to
 // fetch-on-focus — realtime is an enhancement, never a hard dependency.
 // ════════════════════════════════════════════════════════════════════════════
 import type { QueryClient } from "@tanstack/react-query";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, refreshNativeTokenOnce } from "@/lib/api";
 import { isNativeAuth, getNativeAccessToken } from "@/lib/native-auth";
 
 let source: EventSource | null = null;
 let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let backoffMs = 3000;
+const MAX_BACKOFF_MS = 30_000;
+let stopped = false;
+
+function buildUrl(): string {
+  let url = `${API_BASE}/api/realtime/stream`;
+  if (isNativeAuth()) {
+    const t = getNativeAccessToken();
+    if (t) url += `?access_token=${encodeURIComponent(t)}`;
+  }
+  return url;
+}
+
+function open(queryClient: QueryClient): void {
+  if (stopped) return;
+  try {
+    source = new EventSource(buildUrl(), { withCredentials: true });
+  } catch {
+    source = null;
+    return;
+  }
+
+  source.onopen = () => { backoffMs = 3000; }; // healthy connection → reset backoff
+
+  source.onmessage = (ev) => {
+    let data: any;
+    try { data = JSON.parse(ev.data); } catch { return; }
+    if (!data || data.type !== "event") return;
+    // Debounce: one action often emits several events. Collect for a beat,
+    // then invalidate once. react-query refetches only ACTIVE (mounted)
+    // queries by default, so idle screens don't thrash the network/battery.
+    if (invalidateTimer) clearTimeout(invalidateTimer);
+    invalidateTimer = setTimeout(() => { queryClient.invalidateQueries(); }, 400);
+  };
+
+  source.onerror = () => {
+    // Take over reconnection: close, refresh the (native) token, reopen with a
+    // fresh URL after a capped backoff. Prevents the expired-token-in-URL
+    // death-loop on native.
+    if (source) { source.close(); source = null; }
+    if (stopped || reconnectTimer) return;
+    reconnectTimer = setTimeout(async () => {
+      reconnectTimer = null;
+      try { await refreshNativeTokenOnce(); } catch { /* reopen anyway */ }
+      backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+      open(queryClient);
+    }, backoffMs);
+  };
+}
 
 /**
  * Open the realtime stream and wire incoming change-events to react-query
@@ -31,42 +86,16 @@ export function connectRealtime(queryClient: QueryClient): () => void {
   // never resolves. Realtime is a pure enhancement (own unit coverage), so the
   // test build simply skips it.
   if (import.meta.env.VITE_DISABLE_REALTIME === "1") return () => {};
-  if (source) return disconnectRealtime;
-
-  let url = `${API_BASE}/api/realtime/stream`;
-  if (isNativeAuth()) {
-    const t = getNativeAccessToken();
-    if (t) url += `?access_token=${encodeURIComponent(t)}`;
-  }
-
-  try {
-    source = new EventSource(url, { withCredentials: true });
-  } catch {
-    source = null;
-    return () => {};
-  }
-
-  source.onmessage = (ev) => {
-    let data: any;
-    try { data = JSON.parse(ev.data); } catch { return; }
-    if (!data || data.type !== "event") return;
-    // Debounce: a single action often emits several events. Collect them for a
-    // beat, then invalidate once so active screens refetch the latest data.
-    if (invalidateTimer) clearTimeout(invalidateTimer);
-    invalidateTimer = setTimeout(() => {
-      queryClient.invalidateQueries();
-    }, 400);
-  };
-
-  // onerror: EventSource reconnects itself per the server's `retry:` hint —
-  // nothing to do but let it. (A hard auth failure just keeps retrying; the
-  // app still works via fetch-on-focus.)
-  source.onerror = () => { /* auto-reconnect */ };
-
+  if (source || reconnectTimer) return disconnectRealtime;
+  stopped = false;
+  backoffMs = 3000;
+  open(queryClient);
   return disconnectRealtime;
 }
 
 export function disconnectRealtime(): void {
+  stopped = true;
   if (invalidateTimer) { clearTimeout(invalidateTimer); invalidateTimer = null; }
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
   if (source) { source.close(); source = null; }
 }
