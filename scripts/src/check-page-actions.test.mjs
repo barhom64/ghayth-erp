@@ -12,7 +12,7 @@
 // Exits 0 on pass, 1 on any assertion failure.
 //
 
-import { fileHasManualRefresh, fileManualActions } from "./check-page-actions.mjs";
+import { fileHasManualRefresh, fileManualActions, fileManualActionCounts } from "./check-page-actions.mjs";
 const hasPrint = (t) => fileManualActions(t).has("print");
 const hasExport = (t) => fileManualActions(t).has("export");
 
@@ -116,6 +116,24 @@ assert(
 assert(
   !hasExport(`<a href={url} download><Download className="h-4 w-4" /> تصدير</a>`),
   "download <a> link, not a <Button>",
+);
+
+// ── occurrence counts: a file's count rises with each bespoke button, so a NEW
+//    one inside an already-allowlisted file still trips the gate (the baseline
+//    count is recorded in the allowlist) ───────────────────────────────────
+console.log("counts — occurrences per file/action");
+assert(
+  fileManualActionCounts(
+    `<Button onClick={p1}><Printer /> طباعة</Button>\n<div/>\n<Button onClick={p2}><Printer className="h-4 w-4 me-1" />طباعة</Button>`,
+  ).get("print") === 2,
+  "two bespoke print buttons in one file count as 2",
+);
+const mixed = fileManualActionCounts(
+  `<Button onClick={r}><RefreshCw /> تحديث</Button>\n<Button onClick={p}><Printer /> طباعة</Button>`,
+);
+assert(
+  mixed.get("refresh") === 1 && mixed.get("print") === 1,
+  "different actions in one file are counted independently",
 );
 
 if (failed) {

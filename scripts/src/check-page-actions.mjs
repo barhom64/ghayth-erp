@@ -60,25 +60,33 @@ const ACTIONS = [
 const bareRe = (label) => new RegExp(`(?:^|>|\\s)${label}\\s*(?:<|\\{|$)`);
 const RE_CACHE = new Map(ACTIONS.map((a) => [a.key, bareRe(a.label)]));
 
-/** Returns the Set of action keys for which `text` has a hand-rolled button —
- *  a Button/button element pairing the action's icon with its bare label. */
-export function fileManualActions(text) {
-  const hits = new Set();
+/** Map<actionKey, count> — how many hand-rolled buttons (a Button/button
+ *  pairing the action's icon with its bare label) `text` has, per action.
+ *  Counting (not a boolean) lets the allowlist record a per-file baseline so a
+ *  NEW occurrence in an already-allowlisted file still trips the gate. */
+export function fileManualActionCounts(text) {
+  const counts = new Map();
   for (const a of ACTIONS) {
     if (!text.includes(a.icon) || !text.includes(a.label)) continue;
     const re = RE_CACHE.get(a.key);
-    let m;
+    let m, n = 0;
     BTN_RE.lastIndex = 0;
     while ((m = BTN_RE.exec(text))) {
-      if (m[2].includes(a.icon) && re.test(m[2])) { hits.add(a.key); break; }
+      if (m[2].includes(a.icon) && re.test(m[2])) n++;
     }
+    if (n > 0) counts.set(a.key, n);
   }
-  return hits;
+  return counts;
+}
+
+/** The set of action keys for which `text` has ≥1 hand-rolled button. */
+export function fileManualActions(text) {
+  return new Set(fileManualActionCounts(text).keys());
 }
 
 /** Back-compat: true when `text` has a hand-rolled refresh button. */
 export function fileHasManualRefresh(text) {
-  return fileManualActions(text).has("refresh");
+  return fileManualActionCounts(text).has("refresh");
 }
 
 async function walkTsx(dir, out) {
@@ -100,84 +108,101 @@ async function walkTsx(dir, out) {
   return out;
 }
 
-/** Offenders as sorted `action:relpath` strings. */
+/** Offenders as a Map<`action:relpath`, count>, sorted by key. */
 async function findOffenders() {
-  const offenders = [];
+  const offenders = new Map();
   const abs = join(REPO_ROOT, SRC_DIR);
   if (!existsSync(abs)) return offenders;
   const files = await walkTsx(abs, []);
   for (const f of files) {
     const text = await readFile(f, "utf8");
     const rel = relative(REPO_ROOT, f).split("\\").join("/");
-    for (const key of fileManualActions(text)) offenders.push(`${key}:${rel}`);
+    for (const [key, n] of fileManualActionCounts(text)) offenders.set(`${key}:${rel}`, n);
   }
-  offenders.sort();
-  return offenders;
+  return new Map([...offenders].sort((a, b) => a[0].localeCompare(b[0])));
 }
 
+/** Map<`action:path`, allowedCount>. A line is `action:path` (allows 1) or
+ *  `action:path N` (allows N occurrences of that action in that file). */
 function loadAllowlist() {
-  if (!existsSync(ALLOWLIST_PATH)) return new Set();
-  const set = new Set();
+  const map = new Map();
+  if (!existsSync(ALLOWLIST_PATH)) return map;
   for (const line of readFileSync(ALLOWLIST_PATH, "utf8").split("\n")) {
     const t = line.trim();
     if (!t || t.startsWith("#")) continue;
-    set.add(t);
+    const sp = t.split(/\s+/);
+    map.set(sp[0], sp[1] ? Math.max(1, parseInt(sp[1], 10) || 1) : 1);
   }
-  return set;
+  return map;
 }
 
 async function main() {
-  const offenders = await findOffenders();
+  const offenders = await findOffenders(); // Map<`action:path`, count>
 
   if (process.argv.includes("--write-allowlist")) {
+    const lines = [...offenders].map(([id, n]) => (n > 1 ? `${id} ${n}` : id));
     const header = [
       "# page-actions-allowlist.txt",
       "#",
       "# Accepted hand-rolled page-action buttons, one `action:path` per line",
-      "# (action ∈ refresh|print|export). These are deliberately NOT the unified",
-      "# component — a section/card-header control or a per-row table action.",
-      "# The guard only fails on an `action:path` NOT listed here. Regenerate:",
-      "#   node scripts/src/check-page-actions.mjs --write-allowlist",
+      "# (action ∈ refresh|print|export), with an optional trailing occurrence",
+      "# count `action:path N` (default 1). These are deliberately NOT the unified",
+      "# component — a framework mechanism, a section/card-header control, or a",
+      "# per-row table action. The guard fails on an `action:path` NOT listed, OR",
+      "# when a listed file gains MORE occurrences than its baseline count.",
+      "#   node scripts/src/check-page-actions.mjs --write-allowlist   # regenerate",
       "#",
-      `# Baseline captured: ${offenders.length} entr${offenders.length === 1 ? "y" : "ies"}.`,
+      `# Baseline captured: ${lines.length} file/action entr${lines.length === 1 ? "y" : "ies"}.`,
       "",
     ].join("\n");
-    await writeFile(ALLOWLIST_PATH, header + offenders.join("\n") + "\n", "utf8");
-    console.log(`[check:page-actions] wrote ${offenders.length} entries to ${relative(REPO_ROOT, ALLOWLIST_PATH)}`);
+    await writeFile(ALLOWLIST_PATH, header + lines.join("\n") + "\n", "utf8");
+    console.log(`[check:page-actions] wrote ${lines.length} entries to ${relative(REPO_ROOT, ALLOWLIST_PATH)}`);
     return;
   }
 
-  const allow = loadAllowlist();
-  const fresh = offenders.filter((o) => !allow.has(o));
-  const stale = [...allow].filter((o) => !offenders.includes(o)).sort();
+  const allow = loadAllowlist(); // Map<`action:path`, allowedCount>
+  // fresh = a file/action whose CURRENT count exceeds its allowlisted baseline
+  // (0 if unlisted) — so a brand-new offender OR a new occurrence inside an
+  // already-allowlisted file both fail the gate.
+  const fresh = [];
+  for (const [id, count] of offenders) {
+    const allowed = allow.get(id) ?? 0;
+    if (count > allowed) fresh.push({ id, count, allowed });
+  }
+  const stale = [...allow.keys()].filter((id) => !offenders.has(id)).sort();
 
   if (stale.length) {
     console.log(
       `[check:page-actions] NOTE: ${stale.length} allowlist entr${stale.length === 1 ? "y is" : "ies are"} stale ` +
         `(file changed or removed) — prune from ${relative(REPO_ROOT, ALLOWLIST_PATH)}:`,
     );
-    for (const o of stale) console.log(`    - ${o}`);
+    for (const id of stale) console.log(`    - ${id}`);
   }
 
   if (fresh.length) {
-    const byAction = (k) => fresh.filter((o) => o.startsWith(`${k}:`)).map((o) => o.slice(k.length + 1));
     console.error(`\n[check:page-actions] FAIL: ${fresh.length} NEW hand-rolled page-action button(s):`);
     for (const a of ACTIONS) {
-      const hits = byAction(a.key);
+      const hits = fresh.filter((o) => o.id.startsWith(`${a.key}:`));
       if (!hits.length) continue;
       console.error(`\n  «${a.label}» (use ${a.fix}):`);
-      for (const f of hits) console.error(`    ✗ ${f}`);
+      for (const o of hits) {
+        const path = o.id.slice(a.key.length + 1);
+        const extra = o.allowed > 0 ? `  (found ${o.count}, allowlisted ${o.allowed} — a NEW one was added)` : "";
+        console.error(`    ✗ ${path}${extra}`);
+      }
     }
     console.error(
       "\n  Fix: use the unified component so the action looks/behaves the same\n" +
-        "  everywhere. If this is genuinely a section/per-row control, add the\n" +
-        "  `action:path` line to scripts/page-actions-allowlist.txt with a reason.",
+        "  everywhere. If this is genuinely a framework/section/per-row control, add\n" +
+        "  the `action:path` line (with a count if >1) to scripts/page-actions-allowlist.txt.",
     );
     process.exit(1);
   }
 
+  const total = [...offenders.values()].reduce((s, n) => s + n, 0);
   console.log(
-    `[check:page-actions] OK — ${offenders.length} baseline exception(s) allowlisted, 0 new (refresh/print/export).`,
+    `[check:page-actions] OK — ${offenders.size} baseline file/action exception(s) ` +
+      `(${total} occurrence(s)) allowlisted, 0 new (refresh/print/export).`,
   );
 }
 
