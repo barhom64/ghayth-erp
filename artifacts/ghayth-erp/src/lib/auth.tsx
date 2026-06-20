@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { useLocation } from "wouter";
 import { apiFetch } from "./api";
+import { clearNativeTokens } from "./native-auth";
 import { setObsUser } from "./observability";
 
 interface UserRole {
@@ -143,6 +144,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     apiFetch("/auth/logout", { method: "POST" }).catch(() => {});
     localStorage.removeItem("erp_assignments");
+    // Native: drop the Bearer pair too, or the next app open re-authenticates
+    // off a stale token instead of showing the login screen.
+    clearNativeTokens();
     setUser(null);
     setAssignments([]);
     setObsUser(null);

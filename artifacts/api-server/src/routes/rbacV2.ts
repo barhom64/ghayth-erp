@@ -1188,7 +1188,7 @@ const jitDecisionSchema = z.object({
 router.post("/jit/request", async (req, res) => {
   try {
     const scope = req.scope!;
-    const body = jitRequestSchema.parse(req.body);
+    const body = zodParse(jitRequestSchema.safeParse(req.body));
 
     // Validate against the feature catalog: feature must exist, action
     // must be in availableActions, and scope must be in availableScopes.
@@ -1288,7 +1288,7 @@ router.post("/jit/:id/approve", authorize({ feature: "admin.roles", action: "upd
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const body = jitDecisionSchema.parse(req.body || {});
+    const body = zodParse(jitDecisionSchema.safeParse(req.body || {}));
 
     await withTransaction(async (client) => {
       const { rows: [j] } = await client.query<Record<string, unknown>>(
@@ -1376,7 +1376,7 @@ router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "upda
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const body = jitDecisionSchema.parse(req.body || {});
+    const body = zodParse(jitDecisionSchema.safeParse(req.body || {}));
 
     const { affectedRows } = await rawExecute(
       `UPDATE rbac_jit_requests

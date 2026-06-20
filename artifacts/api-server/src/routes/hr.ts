@@ -3345,6 +3345,18 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
     const totalOtherDeductions = roundTo2(lines.reduce((s, l) => s + l.lateDeduction + l.absenceDeduction + l.violationDeduction + l.loanDeduction, 0));
     const totalBankPayout = roundTo2(totalNet);
     const totalGosiPayable = roundTo2(totalGosiEmployer + totalGosiEmployee);
+    // WHT totals — net pay drops by whtAmount per employee; recompute total bank
+    // payout net of WHT so the engine sees the correct cash CR. Umrah commission
+    // total drives a dedicated DR on the commission-expense account. Both are
+    // derived from `lines` up-front because the accrual JE is now posted INSIDE
+    // the creation transaction below.
+    const totalWht = roundTo2(lines.reduce((s, l) => s + l.whtAmount, 0));
+    const totalBankPayoutNetOfWht = roundTo2(totalBankPayout - totalWht);
+    const totalCommission = roundTo2(lines.reduce((s, l) => s + l.commission, 0));
+    // HR-002 (atomicity) — resolve the engine before the tx so the accrual GL is
+    // posted INSIDE it. The old flow posted after commit, so a GL failure left a
+    // committed run with consumed loans/overtime but no ledger entry.
+    const { hrEngine } = await import("../lib/engines/index.js");
 
     const runId = await withTransaction(async (client) => {
       // RACE-2 (HR audit P1): two concurrent `POST /hr/payroll` calls
@@ -3506,71 +3518,56 @@ router.post("/payroll", authorize({ feature: "hr.payroll.runs", action: "create"
         );
       }
 
+      // HR-002 (atomicity) — accrual JE INSIDE the creation transaction. The
+      // engine's internal postJournalEntry joins THIS transaction via SAVEPOINT
+      // (reentrant withTransaction), so the run, its lines, the loan/installment/
+      // overtime side-effects, and the GL all commit together or all roll back.
+      // A GL failure now aborts the whole creation instead of orphaning the run.
+      try {
+        await hrEngine.postPayrollRunGL(
+          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+          {
+            runId: newRunId,
+            period: targetPeriod,
+            employeeCount: lines.length,
+            totalGross,
+            totalOvertime,
+            totalGosiEmployer,
+            totalBankPayout: totalBankPayoutNetOfWht,
+            totalGosiPayable,
+            totalOtherDeductions,
+            totalWht,
+            totalCommission,
+            // Per-employee breakdown — splits salary + OT + GOSI + commission DR
+            // lines per employee (departmentId/branchId stamped) so payroll cost
+            // is dimensional; liabilities stay aggregated. #2303 deduction split:
+            // loan repayment closes the receivable, late/absence/violation hit
+            // their contra-expense leaves — Σ unchanged, entry stays balanced.
+            breakdown: lines.map((l) => ({
+              employeeId: l.employeeId,
+              departmentId: l.departmentId,
+              branchId: l.branchId,
+              basic: l.gross,
+              overtime: l.overtime,
+              gosiEmployer: l.gosiEmployer,
+              whtAmount: l.whtAmount,
+              commission: l.commission,
+              loanRepayment: l.loanDeduction,
+              lateDeduction: l.lateDeduction,
+              absenceDeduction: l.absenceDeduction,
+              violationDeduction: l.violationDeduction,
+            })),
+          }
+        );
+      } catch (journalErr) {
+        throw new IntegrationError(
+          "فشل القيد المحاسبي للرواتب — أُلغيت العملية بالكامل. راجع المدير المالي",
+          { meta: { integration: "journal", period: targetPeriod }, cause: journalErr },
+        );
+      }
+
       return newRunId;
     });
-
-    // WHT totals — net pay drops by whtAmount per employee; we recompute
-    // total bank payout net of WHT here so the engine sees the correct
-    // cash CR. The engine writes a separate CR line on the WHT-payable
-    // account (default 2330, configurable via accounting_mappings).
-    const totalWht = roundTo2(lines.reduce((s, l) => s + l.whtAmount, 0));
-    const totalBankPayoutNetOfWht = roundTo2(totalBankPayout - totalWht);
-    // Umrah commission total — the engine emits a dedicated DR on the
-    // commission-expense account (op payroll_commission_expense → 5240).
-    const totalCommission = roundTo2(lines.reduce((s, l) => s + l.commission, 0));
-
-    try {
-      const { hrEngine } = await import("../lib/engines/index.js");
-      await hrEngine.postPayrollRunGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
-        {
-          runId,
-          period: targetPeriod,
-          employeeCount: lines.length,
-          totalGross,
-          totalOvertime,
-          totalGosiEmployer,
-          totalBankPayout: totalBankPayoutNetOfWht,
-          totalGosiPayable,
-          totalOtherDeductions,
-          totalWht,
-          totalCommission,
-          // Per-employee breakdown — the engine splits salary + OT +
-          // GOSI + commission debit lines per employee with departmentId
-          // stamped on each, so payroll cost is dimensional. Liabilities
-          // stay aggregated.
-          breakdown: lines.map((l) => ({
-            employeeId: l.employeeId,
-            departmentId: l.departmentId,
-            branchId: l.branchId,
-            // Use the GROSS (basic + allowances) as the salary-expense
-            // basis so the per-employee split matches the totalGross
-            // aggregate the engine computes from credit liabilities.
-            basic: l.gross,
-            overtime: l.overtime,
-            gosiEmployer: l.gosiEmployer,
-            whtAmount: l.whtAmount,
-            commission: l.commission,
-            // #2303 — per-employee deduction split: loan repayment CLOSES the
-            // loan receivable (1143), late/absence/violation hit their
-            // contra-expense leaves (5215/5216/5217). Σ == totalOtherDeductions
-            // above, so the credit total and the entry's balance are unchanged.
-            loanRepayment: l.loanDeduction,
-            lateDeduction: l.lateDeduction,
-            absenceDeduction: l.absenceDeduction,
-            violationDeduction: l.violationDeduction,
-          })),
-        }
-      );
-    } catch (journalErr) {
-      throw new IntegrationError(
-        "تم صرف الرواتب لكن فشل القيد المحاسبي. راجع المدير المالي",
-        {
-          meta: { integration: "journal", period: targetPeriod },
-          cause: journalErr,
-        },
-      );
-    }
 
     emitEvent({
       companyId: scope.companyId, userId: scope.userId,
@@ -5136,17 +5133,17 @@ router.patch("/payroll/:id", authorize({ feature: "hr.payroll.runs", action: "up
       const totalGosiPayable = totalGosiEmployee + totalGosiEmployer;
       const totalBankPayout = Math.max(0, totalNet);
 
-      const [updatedRun] = await rawQuery<Record<string, unknown>>(
-        `UPDATE payroll_runs SET status = $1 WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL AND status = $4 RETURNING *`,
-        [status, id, scope.companyId, existing.status]
+      // HR-002 (atomicity) — flip the run to 'posted' AND post its payment JE
+      // in ONE transaction (reentrant withTransaction) so a GL failure can
+      // never leave the run posted-without-entry, nor a status flip without a
+      // settlement. Returns null when no row matched the expected status (a
+      // concurrent post / vanished run) → same 404 as before; no JE is posted.
+      const { hrEngine } = await import("../lib/engines/index.js");
+      const updatedRun = await hrEngine.postPayrollRunWithGL(
+        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
+        { runId: id, period, totalBankPayout, fromStatus: existing.status as string }
       );
       if (!updatedRun) throw new NotFoundError("دورة الرواتب غير موجودة");
-
-      const { hrEngine } = await import("../lib/engines/index.js");
-      await hrEngine.postPayrollPostGL(
-        { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.activeAssignmentId },
-        { runId: id, period, totalBankPayout }
-      );
 
       // Register monthly GOSI submission obligation (due 14th of NEXT month)
       try {

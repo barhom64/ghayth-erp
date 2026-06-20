@@ -81,6 +81,11 @@ if (!config.isProduction) {
   allowedOrigins.add("http://localhost:5173");
   allowedOrigins.add("http://localhost:80");
 }
+// Capacitor native shells: Android WebView uses Origin `https://localhost`
+// (already allowed above); iOS WKWebView uses the `capacitor://localhost`
+// scheme. Allow it so the native app's API calls aren't CORS-blocked. The
+// app ships the same SPA bundle — this is the only origin difference.
+allowedOrigins.add("capacitor://localhost");
 
 const isProduction = config.isProduction;
 

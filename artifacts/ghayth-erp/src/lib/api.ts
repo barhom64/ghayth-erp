@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef } from "react";
+import { isNativeAuth, getNativeAccessToken, nativeRefresh } from "@/lib/native-auth";
 import { toast } from "@/hooks/use-toast";
 import { notifyRateLimited } from "./rate-limit-toast";
 import { useAppContextOptional } from "@/contexts/app-context";
@@ -89,7 +90,39 @@ function inferCodeFromStatus(status: number): string {
   return "UNKNOWN";
 }
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+// API origin resolution. On the web the bundle is served from the same
+// origin as the API, so a relative `${BASE_URL}/api` is correct. Inside a
+// Capacitor native app the bundle is served from https://localhost (Android)
+// / capacitor://localhost (iOS), so a relative `/api` would hit the app
+// itself — every request must target the absolute server origin instead.
+// VITE_API_ORIGIN is baked at build time (e.g. https://hr.door.sa). Without
+// it on native we fall back to the relative base and log loudly, since the
+// data layer cannot work.
+function resolveApiBase(): string {
+  const cap = (globalThis as any)?.Capacitor;
+  if (cap && typeof cap.isNativePlatform === "function" && cap.isNativePlatform()) {
+    const origin = (import.meta as any).env?.VITE_API_ORIGIN as string | undefined;
+    if (origin) return origin.replace(/\/$/, "");
+    // eslint-disable-next-line no-console
+    console.error(
+      "[api] running natively but VITE_API_ORIGIN is unset — API calls will fail. " +
+        "Build with VITE_API_ORIGIN=https://your-server.",
+    );
+  }
+  return import.meta.env.BASE_URL.replace(/\/$/, "");
+}
+
+const BASE = resolveApiBase();
+
+/**
+ * The resolved API origin — native-aware (absolute server origin inside a
+ * Capacitor app, relative same-origin base on the web). Every direct
+ * `fetch(...)` to the API MUST build its URL from this (or use apiUrl /
+ * apiFetch), never from `import.meta.env.BASE_URL` directly, or it will hit
+ * the app bundle (https://localhost) instead of the server in the native app.
+ * Enforced by scripts/src/check-api-base.mjs.
+ */
+export const API_BASE = BASE;
 
 /**
  * Build a full API URL respecting Vite's BASE_URL — for direct browser
@@ -103,6 +136,16 @@ export function apiUrl(path: string): string {
 
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
+
+// Native Bearer-refresh dedupe: concurrent 401s must NOT each rotate the
+// refresh token — the server's reuse-detection would burn the session and
+// log the user out spuriously. Mirror the web `refreshPromise` singleton.
+let nativeRefreshPromise: Promise<boolean> | null = null;
+function tryNativeRefresh(): Promise<boolean> {
+  if (nativeRefreshPromise) return nativeRefreshPromise;
+  nativeRefreshPromise = nativeRefresh(BASE).finally(() => { nativeRefreshPromise = null; });
+  return nativeRefreshPromise;
+}
 
 async function tryRefreshToken(): Promise<boolean> {
   if (isRefreshing && refreshPromise) return refreshPromise;
@@ -160,6 +203,12 @@ export async function apiFetch<T = any>(
       // localStorage may be unavailable (SSR, private mode) — non-fatal.
     }
   }
+  // Native (Capacitor): cookies don't cross the WebView origin, so carry the
+  // Bearer token from native storage. Inert on the web (isNativeAuth=false).
+  if (isNativeAuth()) {
+    const t = getNativeAccessToken();
+    if (t) headers["Authorization"] = `Bearer ${t}`;
+  }
 
   let res: Response;
   try {
@@ -171,9 +220,16 @@ export async function apiFetch<T = any>(
     throw networkErr;
   }
 
-  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
-    const refreshed = await tryRefreshToken();
+  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh" && path !== "/auth/mobile/login") {
+    // Native rotates via the Bearer refresh endpoint; web uses the cookie
+    // refresh. On success the native path re-stamps the Authorization header
+    // with the freshly-rotated access token before the retry.
+    const refreshed = isNativeAuth() ? await tryNativeRefresh() : await tryRefreshToken();
     if (refreshed) {
+      if (isNativeAuth()) {
+        const t = getNativeAccessToken();
+        if (t) headers["Authorization"] = `Bearer ${t}`;
+      }
       res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
     } else {
       localStorage.removeItem("erp_assignments");

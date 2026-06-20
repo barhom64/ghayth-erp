@@ -181,6 +181,14 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # Pure-logic fixtures guard the detector.
 run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
 run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
+# Native API origin: a relative `/api` or local `const BASE =
+# import.meta.env.BASE_URL` hits the app bundle (https://localhost), not the
+# server, inside the Capacitor native shell — so the whole data layer fails in
+# the app. The single native-aware source is API_BASE in lib/api.ts. OFFLINE
+# source scan; empty baseline in scripts/api-base-allowlist.txt. Fixtures guard
+# the detector.
+run_step "check:api-base:tests" node scripts/src/check-api-base.test.mjs
+run_step "check:api-base"       node scripts/src/check-api-base.mjs
 # Nested anchors: a wouter <Link> WITHOUT `asChild` directly wrapping <a>
 # renders <a><a> (the OUTER <a> carries href+onClick, the author's INNER <a>
 # carries content but no href). Invalid HTML — React logs a validateDOMNesting
