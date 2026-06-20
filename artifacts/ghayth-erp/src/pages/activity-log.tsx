@@ -11,6 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import { RefreshAction } from "@/components/page-actions";
 import {
   Activity, FileText, Users, DollarSign, MessageCircle, Calendar,
   CreditCard, ClipboardList, RefreshCw,
@@ -315,10 +316,7 @@ export default function ActivityLogPage() {
       subtitle="جميع العمليات والتغييرات عبر وحدات النظام مع تفاصيل التغييرات"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
-          <RefreshCw className="w-4 h-4" />
-          تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       {activeAlerts.length > 0 && (

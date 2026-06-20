@@ -21,7 +21,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
-import { Activity, RefreshCw, AlertCircle } from "lucide-react";
+import { Activity, AlertCircle } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface UsageRow {
   callDate: string;
@@ -123,10 +124,7 @@ export default function MapsUsagePage() {
             </Button>
           ))}
         </div>
-        <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isLoading}>
-          <RefreshCw className={`h-3.5 w-3.5 me-1 ${isLoading ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} disabled={isLoading} />
       </div>
 
       {/* Summary tiles */}

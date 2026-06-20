@@ -10,6 +10,7 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 import {
   AlertTriangle, TrendingDown, FileSignature, RefreshCw,
   Info, CheckCircle2, Lock,
@@ -192,9 +193,7 @@ export default function BadDebtProvisionPage() {
               <RefreshCw className="w-4 h-4 ml-1" />
               نسب افتراضية
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => refetch()}>
-              تحديث
-            </Button>
+            <RefreshAction onRefresh={() => refetch()} />
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">

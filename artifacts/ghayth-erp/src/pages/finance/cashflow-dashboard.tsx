@@ -7,7 +7,7 @@ import { formatDateAr, formatCurrency } from "@/lib/formatters";
 import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle, ChevronLeft,
   BarChart3, ArrowUpRight, ArrowDownRight, Wallet, Receipt,
-  Target, Activity, RefreshCw,
+  Target, Activity,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { PageShell } from "@workspace/ui-core";
 
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 function MiniBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
@@ -85,7 +86,7 @@ export default function CashflowDashboard() {
       loading={summaryLoading}
       actions={
         <>
-          <Button variant="outline" size="sm" onClick={() => refetchSummary()}><RefreshCw className="h-3.5 w-3.5 me-1" />تحديث</Button>
+          <RefreshAction onRefresh={() => refetchSummary()} />
           <Button asChild variant="outline" size="sm" className="gap-1"><Link href="/finance">الوحدة المالية <ArrowUpRight className="w-3 h-3" /></Link></Button>
           <PrintButton
             entityType="report_finance_cashflow_dashboard"

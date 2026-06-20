@@ -13,10 +13,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import {
-  RefreshCw, Database, Layers, Shield, Activity, AlertTriangle,
+  Database, Layers, Shield, Activity, AlertTriangle,
   Zap, BarChart3, CheckCircle2, XCircle, ChevronDown, ChevronUp,
   Bell, Printer,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 function FeatureDot({ active, title }: { active: boolean; title: string }) {
   return (
@@ -186,9 +187,7 @@ export default function AdminSystemRegistry() {
       subtitle="فهرس شامل لكل النطاقات والكيانات والإجراءات والصلاحيات والأحداث في النظام"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetchReg()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetchReg()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !registry} error={error} onRetry={refetchReg}>

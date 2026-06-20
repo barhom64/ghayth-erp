@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatNumber } from "@/lib/formatters";
-import { ShieldAlert, RefreshCw, Globe, Calendar, AlertTriangle } from "lucide-react";
+import { ShieldAlert, Globe, Calendar, AlertTriangle } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
@@ -127,10 +128,7 @@ export default function ApprovalOverridesReportPage() {
       ]}
       actions={
         <>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
-            تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} disabled={isFetching} />
           <PrintButton
             entityType="report_admin_approval_overrides"
             entityId="list"

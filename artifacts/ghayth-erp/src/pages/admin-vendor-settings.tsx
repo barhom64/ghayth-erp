@@ -28,8 +28,9 @@ import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import {
   Settings, Phone, MessageSquare, Mail, Bell, Shield, Receipt,
-  CheckCircle2, AlertOctagon, RefreshCw, Save, FlaskConical, Smartphone,
+  CheckCircle2, AlertOctagon, Save, FlaskConical, Smartphone,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface VendorRow {
   id: number;
@@ -191,9 +192,7 @@ export default function AdminVendorSettings() {
       ]}
       subtitle="أسرار التكاملات الخلفية — PBX والبريد وSMS وSIEM. مشفّرة في DB، وتُقرأ من البيئة عند فقدان السجل."
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="w-4 h-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && vendors.length === 0} error={error} onRetry={refetch}>
