@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { apiFetch } from "@/lib/api";
@@ -78,7 +78,7 @@ export default function DocumentsUpload() {
     try {
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...nativeAuthHeaders(), "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });

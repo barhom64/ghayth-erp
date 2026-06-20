@@ -18,7 +18,7 @@
  * `direct-pdf-generation` lint rule (docs/architecture/print-platform.md).
  */
 
-import { apiFetch, ApiError, API_BASE } from "@/lib/api";
+import { apiFetch, ApiError, API_BASE, nativeAuthHeaders } from "@/lib/api";
 
 export type PrintFormat = "a4" | "thermal_80" | "thermal_58" | "label" | "excel" | "csv";
 
@@ -138,7 +138,7 @@ export async function previewDocument(input: {
   // apiFetch parses JSON by default.
   const res = await fetch(`${API_BASE}/api/print/preview`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-csrf-token": readCsrf() ?? "" },
+    headers: { ...nativeAuthHeaders(), "Content-Type": "application/json", "x-csrf-token": readCsrf() ?? "" },
     credentials: "include",
     body: JSON.stringify({
       entityType: input.entityType,
