@@ -154,12 +154,14 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
     // الاستكمال الذاتي (الدفعة ب) أضاف 3 (GET /self-submissions + POST approve/reject
     // -self-data، كلها gated). 228→231. (مسارا /onboarding العامان في publicData
     // خارج مجموعة ملفات HR فلا يُحتسبان هنا.)
-    expect(ALL_REGISTRATIONS.length).toBe(231);
+    // إعادة إرسال رابط الاستكمال (الدفعة هـ) أضاف 1 (POST /:id/resend-onboarding-link،
+    // gated). 231→232.
+    expect(ALL_REGISTRATIONS.length).toBe(232);
   });
 
   it("authorize()-gated endpoint count matches snapshot (currently 100%)", () => {
     const gated = ALL_REGISTRATIONS.filter((r) => r.hasAuthorize).length;
-    expect(gated).toBe(231);
+    expect(gated).toBe(232);
   });
 
   it("per-file count pin (catches a router losing or gaining endpoints)", () => {
@@ -172,7 +174,8 @@ describe("HR-Wave-0 / 0.3 — endpoint count pin (snapshot moves only with inten
       // HR-REV-4 (#2222) added DELETE /job-titles/:id (gated). 19→20.
       // الاستكمال الذاتي (الدفعة ب) أضاف 3 (GET /self-submissions +
       // POST approve/reject-self-data، gated). 20→23.
-      "employees.ts": 23,
+      // الدفعة هـ أضافت POST /:id/resend-onboarding-link (gated). 23→24.
+      "employees.ts": 24,
       // main merged 4 endpoints (121→125); PR-9 (#2077) added the
       // field-ping eligibility mirror (125→126). HR-REV-9 (#2222) added
       // PATCH+DELETE /employee-documents/:id (126→128). All gated.

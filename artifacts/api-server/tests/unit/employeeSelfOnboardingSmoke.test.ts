@@ -126,3 +126,19 @@ describe("الدفعة ب — مراجعة واعتماد البيانات", () 
     expect(EMPLOYEES).toMatch(/reject-self-data", authorize\(\{ feature: "hr\.employees", action: "update"/);
   });
 });
+
+describe("الدفعة هـ — إعادة إرسال الرابط", () => {
+  it("نقطة resend-onboarding-link مُعرّفة ومحميّة بصلاحية التعديل", () => {
+    expect(EMPLOYEES).toMatch(/router\.post\("\/:id\/resend-onboarding-link", authorize\(\{ feature: "hr\.employees", action: "update"/);
+  });
+  it("تُبطِل القديم وتُصدِر رمزًا جديدًا (تعيد استخدام issueOnboardingToken)", () => {
+    const block = EMPLOYEES.match(/resend-onboarding-link[\s\S]*?handleRouteError\(err, res, "إعادة إرسال رابط الاستكمال"\)/)?.[0] || "";
+    expect(block).toMatch(/issueOnboardingToken\(\{ companyId: scope\.companyId, employeeId: id/);
+    expect(block).toMatch(/onboardingLink: issued\.url/);
+  });
+  it("ترفض الموظف المفعّل والموظف بلا بريد", () => {
+    const block = EMPLOYEES.match(/resend-onboarding-link[\s\S]*?handleRouteError\(err, res, "إعادة إرسال رابط الاستكمال"\)/)?.[0] || "";
+    expect(block).toMatch(/emp\.status === "active"/);
+    expect(block).toMatch(/if \(!emp\.email\)/);
+  });
+});
