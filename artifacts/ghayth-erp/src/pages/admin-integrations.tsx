@@ -194,9 +194,13 @@ function IntegrationsList() {
                   values.type === "github"
                     ? { token: (values.githubToken ?? "").trim(), repo: (values.githubRepo ?? "").trim() || "barhom64/ghayth-erp" }
                     : JSON.parse(values.config ?? "{}");
-                // githubToken/githubRepo are UI-only helpers — never persist as columns.
-                const { githubToken: _gt, githubRepo: _gr, config: _cfg, ...rest } = values;
-                await createMut.mutateAsync({ ...rest, config });
+                // Send only real columns — githubToken/githubRepo are UI-only helpers.
+                await createMut.mutateAsync({
+                  name: values.name,
+                  type: values.type,
+                  status: values.status,
+                  config,
+                });
                 ctx.reset();
                 setShowForm(false);
               }}
