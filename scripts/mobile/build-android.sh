@@ -31,7 +31,7 @@ pnpm add \
   @capacitor/core @capacitor/cli @capacitor/android \
   @capacitor-community/background-geolocation
 
-# ── 2) بناء النظام الكامل (Vite) — ينتج dist/ = webDir ───────────────────────
+# ── 2) بناء النظام الكامل (Vite) — ينتج dist/public = webDir ───────────────────────
 echo "▶ [2/6] بناء النظام الكامل…"
 # BASE_PATH=/ is REQUIRED (vite.config throws without it) and MUST be root for
 # the native app, so the bundle's asset URLs resolve from the WebView origin.
