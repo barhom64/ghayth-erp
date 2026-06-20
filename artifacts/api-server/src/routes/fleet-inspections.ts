@@ -105,7 +105,7 @@ router.get("/inspections", authorize({ feature: "fleet.vehicles", action: "list"
               (SELECT COUNT(*)::int FROM fleet_inspection_photos p
                 WHERE p."inspectionId" = i.id AND p."deletedAt" IS NULL) AS "photoCount"
          FROM fleet_vehicle_inspections i
-         LEFT JOIN fleet_vehicles v ON v.id = i."vehicleId"
+         LEFT JOIN fleet_vehicles v ON v.id = i."vehicleId" AND v."deletedAt" IS NULL
         WHERE ${where}
         ORDER BY i."createdAt" DESC
         LIMIT 500`,
@@ -123,7 +123,7 @@ router.get("/inspections/:id", authorize({ feature: "fleet.vehicles", action: "v
     const [inspection] = await rawQuery<Record<string, unknown>>(
       `SELECT i.*, v."plateNumber"
          FROM fleet_vehicle_inspections i
-         LEFT JOIN fleet_vehicles v ON v.id = i."vehicleId"
+         LEFT JOIN fleet_vehicles v ON v.id = i."vehicleId" AND v."deletedAt" IS NULL
         WHERE i.id = $1 AND i."companyId" = $2 AND i."deletedAt" IS NULL`,
       [id, scope.companyId],
     );
@@ -259,7 +259,7 @@ router.get("/me/inspections", authorize({ feature: "fleet.driver.me", action: "v
               (SELECT COUNT(*)::int FROM fleet_inspection_photos p
                 WHERE p."inspectionId" = i.id AND p."deletedAt" IS NULL) AS "photoCount"
          FROM fleet_vehicle_inspections i
-         LEFT JOIN fleet_vehicles v ON v.id = i."vehicleId"
+         LEFT JOIN fleet_vehicles v ON v.id = i."vehicleId" AND v."deletedAt" IS NULL
         WHERE i."companyId" = $1 AND i."driverId" = $2 AND i."deletedAt" IS NULL
         ORDER BY (i."status" = 'pending') DESC, i."createdAt" DESC
         LIMIT 100`,
