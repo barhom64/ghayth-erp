@@ -42,7 +42,7 @@ export default defineConfig({
   testIgnore: ["**/double-click-idempotency.spec.ts"],
   timeout: 30_000,
   expect: { timeout: 5_000 },
-  retries: process.env.CI ? 2 : 0,
+  retries: 0, // DIAGNOSTIC(temp): 0 on CI so the suite completes and prints the full failing-test list
   // Single worker in CI: all persona specs authenticate as the SAME admin
   // account, and the server rotates refresh tokens per-user. Two parallel
   // workers logging in as that account invalidate each other's session
@@ -50,7 +50,7 @@ export default defineConfig({
   // all 401 within 1s → SPA bounces to /login), which flakes the longest
   // multi-page navigations. Serializing removes the cross-worker contention.
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? [["github"], ["html"]] : "list",
+  reporter: process.env.CI ? [["github"], ["list"], ["html"]] : "list",
   use: {
     baseURL: BASE_URL,
     trace: "on-first-retry",
