@@ -18,11 +18,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_DIR="$REPO_ROOT/artifacts/ghayth-erp"
 # أصل الـAPI للتطبيق الأصلي (الحزمة محلية، فالمسار النسبي لا يكفي).
 API_ORIGIN="${VITE_API_ORIGIN:-https://hr.door.sa}"
+# debug (افتراضي، تثبيت مباشر) أو release (إصدار موقّع للمتجر: AAB + APK موقّعان).
+BUILD_MODE="${BUILD_MODE:-debug}"
 
 echo "▶ غيث — بناء تطبيق الجوال (النظام الكامل)"
 echo "  المستودع : $REPO_ROOT"
 echo "  التطبيق  : $APP_DIR"
 echo "  API      : $API_ORIGIN"
+echo "  الوضع    : $BUILD_MODE"
 cd "$APP_DIR"
 
 # ── 1) تثبيت Capacitor + plugin التتبع الخلفي (MIT مجاني) ────────────────────
@@ -53,21 +56,57 @@ npx cap sync android
 echo "▶ [5/6] حقن أذونات الموقع الخلفي…"
 node "$REPO_ROOT/scripts/mobile/inject-android-permissions.mjs"
 
-# ── 6) البناء النهائي للـAPK (يتطلب Android SDK) ─────────────────────────────
-echo "▶ [6/6] بناء APK…"
-if [ -d "$APP_DIR/android" ] && command -v sdkmanager >/dev/null 2>&1 || [ -n "${ANDROID_HOME:-}" ]; then
-  ( cd "$APP_DIR/android" && ./gradlew assembleDebug )
-  APK="$APP_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
-  if [ -f "$APK" ]; then
-    echo "✅ تم! ملف التطبيق:"
-    echo "   $APK"
-    echo "   ثبّته على جوال الموظف (فعّل «مصادر غير معروفة»)."
+# ── 6) البناء النهائي (يتطلب Android SDK) ────────────────────────────────────
+HAVE_SDK=false
+if command -v sdkmanager >/dev/null 2>&1 || [ -n "${ANDROID_HOME:-}" ]; then
+  HAVE_SDK=true
+fi
+
+if [ "$BUILD_MODE" = "release" ]; then
+  # ── إصدار موقّع للمتجر: AAB لـGoogle Play + APK موقّع للتثبيت المباشر ───────
+  echo "▶ [6/6] بناء إصدار موقّع للمتجر (release)…"
+  : "${KEYSTORE_PATH:?مطلوب KEYSTORE_PATH — مسار ملف التوقيع (.jks/.keystore)}"
+  : "${KEYSTORE_PASSWORD:?مطلوب KEYSTORE_PASSWORD — كلمة مرور ملف التوقيع}"
+  : "${KEY_ALIAS:?مطلوب KEY_ALIAS — اسم المفتاح داخل ملف التوقيع}"
+  : "${KEY_PASSWORD:?مطلوب KEY_PASSWORD — كلمة مرور المفتاح}"
+  if [ ! -f "$KEYSTORE_PATH" ]; then
+    echo "✗ ملف التوقيع غير موجود: $KEYSTORE_PATH"; exit 1
   fi
+  if [ "$HAVE_SDK" != true ]; then
+    echo "✗ بناء الإصدار يتطلب Android SDK (ANDROID_HOME). جهّزه ثم أعد التشغيل."
+    echo "  أو افتح المشروع: npx cap open android  →  Build › Generate Signed Bundle/APK"
+    exit 1
+  fi
+  # مسار مطلق لملف التوقيع (gradle يعمل من داخل android/).
+  KS_ABS="$(cd "$(dirname "$KEYSTORE_PATH")" && pwd)/$(basename "$KEYSTORE_PATH")"
+  # توقيع محقون (injected signing) — لا يتطلب تعديل app/build.gradle.
+  ( cd "$APP_DIR/android" && ./gradlew bundleRelease assembleRelease \
+      -Pandroid.injected.signing.store.file="$KS_ABS" \
+      -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+      -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+      -Pandroid.injected.signing.key.password="$KEY_PASSWORD" )
+  AAB="$APP_DIR/android/app/build/outputs/bundle/release/app-release.aab"
+  APK="$APP_DIR/android/app/build/outputs/apk/release/app-release.apk"
+  echo "✅ تم بناء الإصدار الموقّع:"
+  [ -f "$AAB" ] && echo "   AAB (ارفعه على Google Play Console): $AAB"
+  [ -f "$APK" ] && echo "   APK (تثبيت مباشر موقّع):              $APK"
 else
-  echo "ℹ️  Android SDK غير مضبوط (ANDROID_HOME). تم تجهيز كل شيء عدا التجميع."
-  echo "   أكمل البناء بأحد الطريقتين:"
-  echo "     • Android Studio:  npx cap open android  →  Build › Build APK"
-  echo "     • سطر الأوامر:      cd artifacts/ghayth-erp/android && ./gradlew assembleDebug"
+  # ── debug: تثبيت مباشر للاختبار ──────────────────────────────────────────
+  echo "▶ [6/6] بناء APK (debug)…"
+  if [ "$HAVE_SDK" = true ]; then
+    ( cd "$APP_DIR/android" && ./gradlew assembleDebug )
+    APK="$APP_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+    if [ -f "$APK" ]; then
+      echo "✅ تم! ملف التطبيق:"
+      echo "   $APK"
+      echo "   ثبّته على جوال الموظف (فعّل «مصادر غير معروفة»)."
+    fi
+  else
+    echo "ℹ️  Android SDK غير مضبوط (ANDROID_HOME). تم تجهيز كل شيء عدا التجميع."
+    echo "   أكمل البناء بأحد الطريقتين:"
+    echo "     • Android Studio:  npx cap open android  →  Build › Build APK"
+    echo "     • سطر الأوامر:      cd artifacts/ghayth-erp/android && ./gradlew assembleDebug"
+  fi
 fi
 
 echo "▶ انتهى."
