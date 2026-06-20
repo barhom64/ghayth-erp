@@ -27,7 +27,6 @@ export const BASELINE = new Set([
   "journal-template-picker.tsx",
   "location-kind-picker.tsx",
   "map-location-picker.tsx",
-  "supplier-item-picker.tsx",
   "umrah-group-picker.tsx",
 ]);
 
