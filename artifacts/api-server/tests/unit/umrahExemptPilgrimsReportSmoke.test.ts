@@ -23,7 +23,7 @@ const ROUTES_TSX = readFileSync(
   "utf8",
 );
 const TABS = readFileSync(
-  join(import.meta.dirname!, "../../../ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -87,11 +87,10 @@ describe("exempt-pilgrims page — registration + reachability", () => {
     expect(ROUTES_TSX).toMatch(/path: "\/umrah\/exempt-pilgrims", component: UmrahExemptPilgrims/);
   });
 
-  it("listed in the umrah tabs nav (next to 'كشف اليوم' so audit lives with ops reports)", () => {
-    // Without the tab the page is reachable only by URL — operators
-    // wouldn't find it. Placement next to daily-runsheet pairs it
-    // with the other compliance/operational reports.
-    expect(TABS).toMatch(/href: "\/umrah\/exempt-pilgrims", label: "المعفون"/);
+  it("listed in the umrah nav (in the registry the bar mirrors, so it's reachable)", () => {
+    // The umrah bar now derives from the sidebar registry — the entry's
+    // presence in the registry IS its presence in the in-page bar.
+    expect(TABS).toMatch(/label: "المعتمرون المعفون", path: "\/umrah\/exempt-pilgrims"/);
   });
 });
 

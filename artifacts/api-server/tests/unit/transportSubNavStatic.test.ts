@@ -21,9 +21,11 @@ describe("transport sub-nav (القائمة السفلية)", () => {
     }
   });
 
-  it("FleetTabsNav mounts the sub-nav only on the transport cluster", () => {
-    expect(FLEET_TABS).toMatch(/import \{ TransportTabsNav \} from "\.\/transport-tabs-nav"/);
-    expect(FLEET_TABS).toMatch(/location\.startsWith\("\/fleet\/transport"\)/);
-    expect(FLEET_TABS).toMatch(/inTransport && <TransportTabsNav \/>/);
+  it("FleetTabsNav derives the transport sub-tabs from the registry (no separate sub-nav component)", () => {
+    // The bar mirrors the sidebar via ModuleTabsNav; the «النقل والإرسال» group's
+    // pages become the sub-tab row automatically on /fleet/transport routes, so
+    // the old hand-mounted TransportTabsNav is gone.
+    expect(FLEET_TABS).toMatch(/<ModuleTabsNav\s+section="الأسطول والنقل"/);
+    expect(FLEET_TABS).not.toMatch(/inTransport/);
   });
 });

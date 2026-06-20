@@ -37,7 +37,7 @@ const ROUTES_TSX = readFileSync(
   "utf8",
 );
 const TABS = readFileSync(
-  join(import.meta.dirname!, "../../../ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -166,8 +166,8 @@ describe("reports hub + new pages — registration + nav", () => {
   });
 
   it("'التقارير' tab added to umrah nav", () => {
-    expect(TABS).toMatch(/href: "\/umrah\/reports", label: "التقارير"/);
-    expect(TABS).toMatch(/BarChart3/);
+    expect(TABS).toMatch(/label: "التقارير", path: "\/umrah\/reports"/);
+    expect(TABS).toMatch(/FileBarChart/);
   });
 
   it("hub page exposes category + status filters (§11 of #1870)", () => {
