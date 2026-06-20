@@ -6,6 +6,7 @@ import "@/styles/login.css";
 import { GhaythLogo } from "@/components/shared/ghayth-logo";
 import { useAuth } from "@/lib/auth";
 import { apiFetch, API_BASE } from "@/lib/api";
+import { isNativeAuth, setNativeTokens } from "@/lib/native-auth";
 import { notifyRateLimited } from "@/lib/rate-limit-toast";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { formatDateAr } from "@/lib/formatters";
@@ -280,11 +281,24 @@ export default function Login() {
   const handleLogin = async (values: LoginForm) => {
     setLoginError("");
     try {
-      const data = await apiFetch("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email: values.email, password: values.password }),
-      });
-      login(data.assignments);
+      // Native (Capacitor): cookies don't cross the WebView origin, so use the
+      // Bearer flow — /auth/mobile/login returns the tokens in the body, which
+      // we store for apiFetch to send as Authorization: Bearer. Web keeps the
+      // httpOnly-cookie flow unchanged.
+      if (isNativeAuth()) {
+        const data = await apiFetch("/auth/mobile/login", {
+          method: "POST",
+          body: JSON.stringify({ email: values.email, password: values.password }),
+        });
+        setNativeTokens(data.accessToken, data.refreshToken);
+        login(data.assignments);
+      } else {
+        const data = await apiFetch("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email: values.email, password: values.password }),
+        });
+        login(data.assignments);
+      }
     } catch (err: any) {
       setLoginError(err.message || "بيانات الدخول غير صحيحة");
     }

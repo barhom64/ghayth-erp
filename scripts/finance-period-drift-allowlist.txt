@@ -37,8 +37,8 @@ artifacts/ghayth-erp/src/pages/properties-dashboard.tsx:227
 
 # Display-only: footer copyright year on the public login page. UTC
 # vs Riyadh boundary is at most 3 hours of "wrong year" once a year.
-artifacts/ghayth-erp/src/pages/login.tsx:449
-artifacts/ghayth-erp/src/pages/login.tsx:569
+artifacts/ghayth-erp/src/pages/login.tsx:463
+artifacts/ghayth-erp/src/pages/login.tsx:583
 
 # Calendar widget initial view: which month the picker should open
 # on. The user can flip months freely; no business reporting depends
