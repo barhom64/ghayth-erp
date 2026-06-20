@@ -1,4 +1,4 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect, type SelectOption } from "@/components/shared/searchable-select";
 import { FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { useApiQuery } from "@/lib/api";
 
@@ -11,6 +11,9 @@ import { useApiQuery } from "@/lib/api";
  * itemId/name/unit/taxCode/accountPurpose/lastPrice — it does NOT decide the
  * journal entry and NEVER returns a final accountCode (the item carries an
  * `accountPurpose`; financialEngine/preflight resolves it to a real account).
+ *
+ * يبني على النواة الموحّدة `SearchableSelect` (قاموس المفاهيم §3، دستور 15):
+ * نموذج بحث/اختيار واحد للنظام — أُضيف البحث دون تغيير العقد (onPick يعيد الكائن كاملًا).
  */
 export interface SupplierItem {
   id: number;
@@ -48,25 +51,29 @@ export function SupplierItemPicker({
   const items = data?.data ?? [];
   if (!enabled) return null;
 
+  const options: SelectOption[] = items.map((it) => ({
+    value: String(it.id),
+    label: it.name,
+    sublabel: [
+      it.defaultUnit ?? null,
+      it.lastPrice != null ? `آخر سعر ${Number(it.lastPrice).toLocaleString("ar-SA")}` : null,
+    ].filter(Boolean).join(" — ") || undefined,
+  }));
+
+  const emptyOrPlaceholder = items.length
+    ? "اختر بندًا معروفًا لهذا المورد"
+    : "لا توجد بنود محفوظة لهذا المورد";
+
   return (
     <FormFieldWrapper label={label}>
-      <Select
+      <SearchableSelect
+        options={options}
         value={value ?? ""}
         onValueChange={(v) => onPick(items.find((it) => String(it.id) === v) ?? null)}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder={items.length ? "اختر بندًا معروفًا لهذا المورد" : "لا توجد بنود محفوظة لهذا المورد"} />
-        </SelectTrigger>
-        <SelectContent>
-          {items.map((it) => (
-            <SelectItem key={it.id} value={String(it.id)}>
-              {it.name}
-              {it.defaultUnit ? ` — ${it.defaultUnit}` : ""}
-              {it.lastPrice != null ? ` — آخر سعر ${Number(it.lastPrice).toLocaleString("ar-SA")}` : ""}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        placeholder={emptyOrPlaceholder}
+        searchPlaceholder="ابحث عن بند..."
+        emptyText="لا توجد بنود محفوظة لهذا المورد"
+      />
     </FormFieldWrapper>
   );
 }
