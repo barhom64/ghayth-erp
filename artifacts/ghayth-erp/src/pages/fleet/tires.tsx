@@ -25,6 +25,7 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { VehicleSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
@@ -51,11 +52,7 @@ export default function TiresPage() {
   const { data: tiresResp, isLoading, isError, refetch } = useApiQuery<any>(
     ["fleet-tires"], "/fleet/tires"
   );
-  const { data: vehiclesResp } = useApiQuery<any>(
-    ["fleet-vehicles-for-tires"], "/fleet/vehicles?limit=500"
-  );
   const tires = asList(tiresResp);
-  const vehicles = asList(vehiclesResp);
   const [filters, setFilters] = useFilters();
   const [showCreate, setShowCreate] = useState(false);
   const [editingTire, setEditingTire] = useState<any | null>(null);
@@ -199,20 +196,13 @@ export default function TiresPage() {
         <div className="rounded-lg border bg-white p-4 mb-4 space-y-3" data-testid="form-create-tire">
           <h3 className="text-lg font-semibold">تسجيل إطار جديد</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>المركبة *</Label>
-              <select
-                className="w-full h-10 border rounded-md px-2"
-                data-testid="select-vehicle"
-                value={form.vehicleId}
-                onChange={(e) => setForm((v) => ({ ...v, vehicleId: e.target.value }))}
-              >
-                <option value="">— اختر مركبة —</option>
-                {vehicles.map((v: any) => (
-                  <option key={v.id} value={v.id}>{v.plateNumber} {v.brand ? `(${v.brand})` : ""}</option>
-                ))}
-              </select>
-            </div>
+            <VehicleSelect
+              label="المركبة"
+              required
+              placeholder="— اختر مركبة —"
+              value={form.vehicleId}
+              onChange={(v) => setForm((x) => ({ ...x, vehicleId: v }))}
+            />
             <div>
               <Label>الموقع *</Label>
               <select
