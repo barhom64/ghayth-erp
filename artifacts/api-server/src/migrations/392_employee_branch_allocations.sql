@@ -49,6 +49,10 @@ SELECT ea."companyId", ea."employeeId", ea.id, ea."branchId", 100.00, TRUE, COAL
   FROM employee_assignments ea
  WHERE ea.status = 'active'
    AND ea."branchId" IS NOT NULL
+   -- استبعاد تعيينات منح الوصول (migration 289): ليست تعيينات رواتب حقيقية،
+   -- وترحيل الرواتب يصفّيها (routes/hr.ts: isAccessGrant = FALSE). إدراجها
+   -- يخلق تخصيصًا أساسيًا وهميًا قد يفوز عشوائيًا عند الاشتقاق بالموظف.
+   AND COALESCE(ea."isAccessGrant", FALSE) = FALSE
    AND NOT EXISTS (
      SELECT 1 FROM employee_branch_allocations eba
       WHERE eba."assignmentId" = ea.id AND eba."isPrimary" = TRUE AND eba."endDate" IS NULL

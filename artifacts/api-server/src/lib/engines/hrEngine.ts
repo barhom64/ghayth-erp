@@ -529,28 +529,47 @@ class HREngineImpl implements DomainEngine {
     // توازن القيد. موظف بلا تخصيص (أو breakdown غير موثوق) يبقى بلا مركز تكلفة
     // كما هو سلوك اليوم — توافق خلفي تام. (الدفعة 2ب لاحقًا: التوزيع متعدد الفروع).
     if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
-      const empIds = [...new Set(payroll.breakdown.map((e) => e.employeeId))];
+      // المصدر الموثوق لفرع كل موظف هو سطر breakdown (تعيين الرواتب الحالي،
+      // المُصفّى من منح الوصول في routes/hr.ts). يبقى صحيحًا حتى لو تغيّر الفرع
+      // عبر PATCH أو لم يُنشأ تخصيص بعد (موظف التفعيل السريع). جدول التخصيصات
+      // يقدّم فقط تجاوزًا صريحًا لمركز التكلفة، مُقيّدًا بمطابقة فرع الرواتب —
+      // فلا يفوز صف منح وصول في فرع آخر.
+      const empBranch = new Map<number, number | null>();
+      for (const e of payroll.breakdown) empBranch.set(e.employeeId, e.branchId ?? null);
+      const empIds = [...empBranch.keys()];
+
       const allocRows = await rawQuery<{ employeeId: number; branchId: number | null; costCenterId: number | null }>(
         `SELECT eba."employeeId", eba."branchId", eba."costCenterId"
            FROM employee_branch_allocations eba
           WHERE eba."companyId" = $1
-            AND eba."isPrimary" = TRUE
             AND eba."endDate" IS NULL
+            AND eba."costCenterId" IS NOT NULL
             AND eba."employeeId" = ANY($2::int[])`,
         [ctx.companyId, empIds]
       );
-      const branchCcCache = new Map<number, number | null>();
-      const empDims = new Map<number, { branchId: number | null; costCenterId: number | null }>();
+      const empOverride = new Map<number, number>();
       for (const r of allocRows) {
-        let cc = r.costCenterId ?? null;
-        if (cc == null && r.branchId != null) {
-          if (!branchCcCache.has(r.branchId)) {
-            branchCcCache.set(r.branchId, await deriveBranchCostCenter(ctx.companyId, r.branchId));
-          }
-          cc = branchCcCache.get(r.branchId) ?? null;
+        if (r.costCenterId != null && r.branchId === empBranch.get(r.employeeId)) {
+          empOverride.set(r.employeeId, r.costCenterId);
         }
-        empDims.set(r.employeeId, { branchId: r.branchId, costCenterId: cc });
       }
+
+      const branchCcCache = new Map<number, number | null>();
+      const ccForBranch = async (branchId: number | null): Promise<number | null> => {
+        if (branchId == null) return null;
+        if (!branchCcCache.has(branchId)) {
+          branchCcCache.set(branchId, await deriveBranchCostCenter(ctx.companyId, branchId));
+        }
+        return branchCcCache.get(branchId) ?? null;
+      };
+
+      const empDims = new Map<number, { branchId: number | null; costCenterId: number | null }>();
+      for (const empId of empIds) {
+        const branchId = empBranch.get(empId) ?? null;
+        const costCenterId = empOverride.get(empId) ?? (await ccForBranch(branchId));
+        empDims.set(empId, { branchId, costCenterId });
+      }
+
       const stamp = (l: { employeeId?: number; costCenterId?: number; branchId?: number }) => {
         if (l.employeeId == null) return;
         const d = empDims.get(l.employeeId);
