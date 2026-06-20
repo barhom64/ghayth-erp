@@ -67,6 +67,7 @@
     "check:ledger-posting-single-path": "node scripts/src/check-ledger-posting-single-path.mjs",
     "check:ledger-immutability": "node scripts/src/check-ledger-immutability.mjs",
     "check:engine-home": "node scripts/src/check-engine-home.mjs",
+    "check:entity-picker-unified": "node scripts/src/check-entity-picker-unified.mjs",
     "audit:migrations": "node scripts/src/check-migration-policy.mjs",
     "audit:boundaries": "node scripts/src/audit-domain-boundaries.mjs",
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
