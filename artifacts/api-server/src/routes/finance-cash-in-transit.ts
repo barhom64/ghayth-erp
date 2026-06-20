@@ -56,6 +56,11 @@ cashInTransitRouter.post("/cash-in-transit", authorize({ feature: "finance.journ
     const scope = req.scope!;
     const b = zodParse(initiateSchema.safeParse(req.body ?? {}));
     if (b.sourceAccountCode === b.destinationAccountCode) throw new ValidationError("المصدر والهدف لا يكونان نفس الحساب", { field: "destinationAccountCode" });
+    // حساب المقاصّة (النقد في الطريق) يجب أن يتمايز عن الطرفين، وإلا أصبح أحد القيدين
+    // غسلًا والمال «يصل» أو «يخرج» في الطور الخطأ — يُفرِغ معنى التتبّع العابر.
+    if (b.clearingAccountCode === b.sourceAccountCode || b.clearingAccountCode === b.destinationAccountCode) {
+      throw new ValidationError("حساب النقد في الطريق يجب أن يختلف عن المصدر والهدف", { field: "clearingAccountCode" });
+    }
     await assertPostableMoneyAccount(scope.companyId, b.sourceAccountCode, "sourceAccountCode");
     await assertPostableMoneyAccount(scope.companyId, b.destinationAccountCode, "destinationAccountCode");
     await assertPostableMoneyAccount(scope.companyId, b.clearingAccountCode, "clearingAccountCode");

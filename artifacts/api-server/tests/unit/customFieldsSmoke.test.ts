@@ -41,6 +41,9 @@ describe("custom fields — definitions CRUD (settings RBAC)", () => {
     expect(CF).toMatch(/SELECT id FROM custom_field_definitions WHERE "companyId"=\$1 AND "entityType"=\$2 AND "fieldKey"=\$3 AND "deletedAt" IS NULL/);
     expect(CF).toMatch(/fieldType === "select" && \(!b\.options \|\| b\.options\.length === 0\)/);
     expect(CF).toMatch(/auditFromRequest\(req, "create", "custom_field_definitions"/);
+    // F4: PATCH must re-validate select-needs-options against the effective (merged) value.
+    expect(CF).toMatch(/const effType = b\.fieldType \?\? cur\.fieldType/);
+    expect(CF).toMatch(/effType === "select" && effOptions\.length === 0/);
   });
 });
 

@@ -79,6 +79,20 @@ customFieldsRouter.patch("/definitions/:id", authorize({ feature: "settings", ac
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(defSchema.partial().omit({ entityType: true, fieldKey: true }).safeParse(req.body ?? {}));
+    // كمرآة لتحقّق POST: حقل القائمة (select) يتطلب خيارات. عند تعديل النوع و/أو
+    // الخيارات نحسب القيمة الفعّالة (الواردة أو المخزَّنة) ونمنع select بلا خيارات.
+    if (b.fieldType !== undefined || b.options !== undefined) {
+      const [cur] = await rawQuery<{ fieldType: string; options: string[] | null }>(
+        `SELECT "fieldType", options FROM custom_field_definitions WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!cur) throw new NotFoundError("تعريف الحقل غير موجود");
+      const effType = b.fieldType ?? cur.fieldType;
+      const effOptions = b.options ?? (Array.isArray(cur.options) ? cur.options : []);
+      if (effType === "select" && effOptions.length === 0) {
+        throw new ValidationError("حقل القائمة (select) يتطلب خيارات", { field: "options", fix: "أضف خيارًا واحدًا على الأقل" });
+      }
+    }
     const sets: string[] = [];
     const params: unknown[] = [];
     const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };

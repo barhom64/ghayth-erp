@@ -44,6 +44,15 @@ describe("appointments — CRUD + restore + ics routes (calendar.ts)", () => {
     expect(CALENDAR).toMatch(/action: "appointment\.restored"/);
   });
 
+  it("PATCH re-validates start/end ordering against the effective (merged) values (F1)", () => {
+    // POST validates endsAt >= startsAt; PATCH must too, or a partial update can
+    // set startsAt after endsAt. PATCH loads current values and checks the merged pair.
+    expect(CALENDAR).toMatch(/const effStart = b\.startsAt \?\? cur\.startsAt/);
+    expect(CALENDAR).toMatch(/const effEnd = b\.endsAt \?\? cur\.endsAt/);
+    // both POST and PATCH now carry the inverted-ordering guard
+    expect((CALENDAR.match(/\)\.getTime\(\) < new Date\([^)]*\)\.getTime\(\)/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
+
   it("emits a valid iCalendar (.ics) document with escaped fields", () => {
     expect(CALENDAR).toMatch(/BEGIN:VCALENDAR/);
     expect(CALENDAR).toMatch(/BEGIN:VEVENT/);

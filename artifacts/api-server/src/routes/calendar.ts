@@ -475,6 +475,20 @@ calendarRouter.patch("/appointments/:id", authorize({ feature: "calendar.my", ac
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(appointmentSchema.partial().safeParse(req.body ?? {}));
+    // كمرآة لتحقّق POST: لا يجوز أن تصبح النهاية قبل البداية بعد التعديل الجزئي.
+    // نحمّل القيم الحالية لحساب القيمة الفعّالة (الجديدة إن وُجدت، وإلا المخزَّنة).
+    if (b.startsAt !== undefined || b.endsAt !== undefined) {
+      const [cur] = await rawQuery<{ startsAt: string; endsAt: string }>(
+        `SELECT "startsAt", "endsAt" FROM appointments WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!cur) throw new NotFoundError("الموعد غير موجود");
+      const effStart = b.startsAt ?? cur.startsAt;
+      const effEnd = b.endsAt ?? cur.endsAt;
+      if (new Date(effEnd).getTime() < new Date(effStart).getTime()) {
+        throw new ValidationError("وقت النهاية قبل وقت البداية", { field: "endsAt", fix: "اجعل وقت النهاية بعد البداية" });
+      }
+    }
     const sets: string[] = [];
     const params: unknown[] = [];
     const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };

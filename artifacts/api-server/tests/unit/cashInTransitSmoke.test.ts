@@ -40,6 +40,8 @@ describe("cash-in-transit — phase 1 (send): DR clearing / CR source, balanced"
     expect(sendHandler).toMatch(/assertPostableMoneyAccount\(scope\.companyId, b\.destinationAccountCode/);
     expect(sendHandler).toMatch(/assertPostableMoneyAccount\(scope\.companyId, b\.clearingAccountCode/);
     expect(sendHandler).toMatch(/sourceAccountCode === b\.destinationAccountCode/); // no self-transfer
+    // F2: clearing must differ from BOTH source and destination, else one leg is a wash.
+    expect(sendHandler).toMatch(/b\.clearingAccountCode === b\.sourceAccountCode \|\| b\.clearingAccountCode === b\.destinationAccountCode/);
   });
   it("posts a balanced JE via the existing engine (clearing debit = source credit)", () => {
     expect(sendHandler).toMatch(/financialEngine\.postJournalEntry\(/);
