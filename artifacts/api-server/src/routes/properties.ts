@@ -525,6 +525,8 @@ router.get("/units", authorize({ feature: "properties.units", action: "list" }),
   try {
     const scope = req.scope!;
     const { status, search, buildingId } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض الوحدات المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const conditions = [`u."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`u.status = $${params.length}`); }
@@ -538,7 +540,7 @@ router.get("/units", authorize({ feature: "properties.units", action: "list" }),
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 100));
     const offset = (page - 1) * limit;
-    conditions.push(`u."deletedAt" IS NULL`);
+    conditions.push(showDeleted ? `u."deletedAt" IS NOT NULL` : `u."deletedAt" IS NULL`);
     const countParams = [...params];
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
@@ -896,6 +898,19 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
 
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
+});
+
+// #2713 (تعميم) — استرجاع وحدة محذوفة ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/units/:id/restore", authorize({ feature: "properties.units", action: "delete", resource: { table: "property_units", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE property_units SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا توجد وحدة محذوفة بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "property_units", entityId: id }).catch((e) => logger.error(e, "properties background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "property.unit.restored", entity: "property_units", entityId: id }).catch((e) => logger.error(e, "properties background task failed"));
+    res.json({ message: "تم استرجاع الوحدة" });
+  } catch (err) { handleRouteError(err, res, "Restore unit error:"); }
 });
 
 // Preview from Ejar — Mock-First read by ejarNumber. The form calls
