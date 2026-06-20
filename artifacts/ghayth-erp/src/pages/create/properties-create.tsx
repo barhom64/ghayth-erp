@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BuildingSelect, PropertyOwnerSelect } from "@/components/shared/entity-selects";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -22,9 +22,6 @@ export default function PropertiesCreate() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { data: buildingsResp, isLoading: loadingB, isError: errorB } = useApiQuery<any>(["property-buildings"], "/properties/buildings");
   const buildings = asList(buildingsResp);
-
-  const { data: ownersResp, isLoading: loadingO, isError: errorO } = useApiQuery<any>(["property-owners"], "/properties/owners");
-  const owners = asList(ownersResp);
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
@@ -53,8 +50,8 @@ export default function PropertiesCreate() {
     ownerId: "",
   });
 
-  if (loadingB || loadingO) return <LoadingSpinner />;
-  if (errorB || errorO) return <ErrorState />;
+  if (loadingB) return <LoadingSpinner />;
+  if (errorB) return <ErrorState />;
 
   const AMENITIES_LIST = [
     "مصعد", "موقف سيارة", "حراسة أمنية", "مسبح", "صالة رياضية",
@@ -138,21 +135,12 @@ export default function PropertiesCreate() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="رقم الوحدة" required value={form.unitNumber} onChange={(v) => set("unitNumber", v)} placeholder="مثل: A-101" error={fieldErrors.unitNumber} />
-          <FormFieldWrapper label="المبنى / المجمع">
-            {buildings.length > 0 ? (
-              <Select value={form.buildingId} onValueChange={v => set("buildingId", v)}>
-                <SelectTrigger><SelectValue placeholder="اختر مبنى (اختياري)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— بدون مبنى —</SelectItem>
-                  {buildings.map((b: any) => (
-                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input value={form.buildingName} onChange={e => set("buildingName", e.target.value)} placeholder="اسم المبنى" />
-            )}
-          </FormFieldWrapper>
+          <BuildingSelect
+            label="المبنى / المجمع"
+            placeholder="اختر مبنى (اختياري)"
+            value={form.buildingId}
+            onChange={(v) => set("buildingId", v)}
+          />
           <FormFieldWrapper label="النوع">
             <Select value={form.type} onValueChange={v => set("type", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -250,15 +238,12 @@ export default function PropertiesCreate() {
             <Checkbox id="hasKitchen" checked={form.hasKitchen} onCheckedChange={(v) => { setForm(prev => ({ ...prev, hasKitchen: v === true })); }} />
             <Label htmlFor="hasKitchen">مطبخ مجهز</Label>
           </div>
-          <FormFieldWrapper label="المالك">
-            <Select value={form.ownerId || "none"} onValueChange={v => set("ownerId", v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="— بدون —" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— بدون مالك —</SelectItem>
-                {owners.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          <PropertyOwnerSelect
+            label="المالك"
+            placeholder="— بدون مالك —"
+            value={form.ownerId}
+            onChange={(v) => set("ownerId", v)}
+          />
         </div>
 
         <TextField label="العنوان" value={form.address} onChange={(v) => set("address", v)} placeholder="المدينة، الحي، الشارع" />
