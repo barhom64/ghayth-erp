@@ -150,7 +150,7 @@ export default function FxRatesPage() {
 
   return (
     <PageShell
-      title="أسعار صرف العملات (FX Rates)"
+      title="أسعار صرف العملات"
       subtitle="إدارة أسعار الصرف للفواتير متعددة العملات + إعادة التقييم الشهري"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

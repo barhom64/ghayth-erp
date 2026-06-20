@@ -256,7 +256,7 @@ export default function ReconciliationHubPage() {
 
   return (
     <PageShell
-      title="مركز التسوية المحاسبية (Reconciliation Hub)"
+      title="مركز التسوية المحاسبية"
       subtitle="فحص تطابق الـ GL مع الـ sub-ledgers — لكل ضابط محاسبي: هل دفتر الأستاذ يطابق المصدر الفرعي؟"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

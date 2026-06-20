@@ -39,10 +39,10 @@ describe("Menu cleanup — HR section restructure (HR-011)", () => {
   // The 9 canonical top-level labels from inventory §D.2.
   const canonicalLabels = [
     "لوحة الموارد البشرية",
-    "الموظفون",
+    "شؤون الموظفين",
     "النشاط والحضور",
     "الطلبات",
-    "الامتثال والجزاءات",
+    "المخالفات والجزاءات",
     "الأداء والتطوير",
     "الرواتب والمستحقات",
     "التقارير",
@@ -102,8 +102,9 @@ describe("Menu cleanup — HR section restructure (HR-011)", () => {
   });
 
   it("HR Services Catalog is the «الطلبات» landing entry", () => {
+    // Unified to «خدمات الموارد البشرية» by the UX Nav Governance wave.
     expect(hrSection).toMatch(
-      /\{\s*label:\s*"كتالوج الخدمات"\s*,\s*path:\s*"\/hr\/services"/,
+      /\{\s*label:\s*"خدمات الموارد البشرية"\s*,\s*path:\s*"\/hr\/services"/,
     );
   });
 });

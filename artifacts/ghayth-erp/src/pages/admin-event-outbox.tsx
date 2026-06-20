@@ -59,7 +59,7 @@ export default function AdminEventOutbox() {
 
   return (
     <PageShell
-      title="صندوق الأحداث الصادرة (Outbox)"
+      title="صندوق الأحداث الصادرة"
       subtitle="مراقبة الأحداث المُلتقطة في الـoutbox المعاملاتي — قيد الانتظار مقابل المُعالَجة — وتفريغها عند الطلب"
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },

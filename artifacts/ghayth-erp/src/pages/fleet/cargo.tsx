@@ -129,7 +129,7 @@ export default function FleetCargoPage() {
 
   return (
     <PageShell
-      title="نقل البضائع"
+      title="الشحن والبضائع"
       subtitle="بوالص الشحن البري وإدارة الأصناف"
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "نقل البضائع" }]}
       actions={

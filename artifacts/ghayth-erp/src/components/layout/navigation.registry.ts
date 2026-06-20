@@ -62,9 +62,6 @@ export interface NavSection {
 
 export const allNavSections: NavSection[] = [
   // ══════════════════════════════════════════════════════════════════════
-  // 1. الرئيسية
-  // ══════════════════════════════════════════════════════════════════════
-  // ══════════════════════════════════════════════════════════════════════
   // 1. الرئيسية — لوحات + مراكز التحكم + بوابة الموظف
   // ══════════════════════════════════════════════════════════════════════
   // Restructured from a flat 10-item list into three logical sub-groups
@@ -85,12 +82,12 @@ export const allNavSections: NavSection[] = [
       { label: "كل الخدمات", path: "/services", icon: LayoutGrid },
       { label: "التقويم الموحد", path: "/calendar", icon: Calendar },
       { label: "مساحاتي", path: "/my-space", icon: User, children: [
-        { label: "ما ينتظر إجراءاتي", path: "/work-inbox", icon: ListChecks },
+        { label: "مساحتي", path: "/my-space", icon: User },
+        { label: "صندوق الأعمال", path: "/work-inbox", icon: ListChecks },
         // PR-9 (#2077) — رفيق الميدان. The page itself checks the
         // category-policy eligibility; non-field categories see the
         // «فئتك لا تخضع للتتبع» banner and never get a location prompt.
         { label: "رفيق الميدان", path: "/my/field-companion", icon: MapPin },
-        { label: "مساحتي", path: "/my-space", icon: User },
         { label: "مساحة العمل", path: "/workspace", icon: LayoutGrid },
         { label: "إشعاراتي", path: "/notifications", icon: Bell },
       ]},
@@ -119,7 +116,7 @@ export const allNavSections: NavSection[] = [
         // HR-010 / #1799 priority #4 — صفحة كتالوج خدمات HR الموحّدة:
         // بدل أن يبحث الموظف عن كل طلب في صفحة مختلفة، يفتح صفحة
         // واحدة فيها كل ما يمكن طلبه من HR كبطاقات منظّمة بالفئة.
-        { label: "كتالوج خدمات HR", path: "/hr/services", icon: ClipboardCheck },
+        { label: "خدمات الموارد البشرية", path: "/hr/services", icon: ClipboardCheck },
         { label: "طلب إجازة", path: "/hr/leaves/create", icon: Calendar },
       ]},
       { label: "معلوماتي", path: "/my-attendance", icon: User, children: [
@@ -168,13 +165,8 @@ export const allNavSections: NavSection[] = [
 
       // 2. الموظفون — gathers recruitment, employees, onboarding,
       // org structure, transfers, documents, contracts, letters, exit
-      { label: "الموظفون", path: "/employees", icon: Users, module: "hr", children: [
+      { label: "شؤون الموظفين", path: "/employees", icon: Users, module: "hr", children: [
         { label: "قائمة الموظفين", path: "/employees", icon: Users, subKey: "employees" },
-        { label: "وظائف التوظيف", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
-        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
-        { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
-        { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
-        { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
         { label: "نقل الموظفين", path: "/hr/transfers", icon: ArrowLeftRight, subKey: "employees" },
         { label: "الوثائق المنتهية", path: "/hr/expiring-documents", icon: AlertTriangle, subKey: "employees" },
         // ADR-HR-02 (#2221) — توحيد القائمة: مدخل هيكل واحد → org-tree (canonical،
@@ -184,16 +176,23 @@ export const allNavSections: NavSection[] = [
         // و«العلاقات» إلى org-tree كتبويبات ثم retire الصفحتين.
         { label: "الهيكل التنظيمي", path: "/hr/org-tree", icon: Network, subKey: "organization" },
         { label: "التفويضات", path: "/hr/delegations", icon: Users2, subKey: "organization" },
-        { label: "وثائق الموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
+        { label: "وثائق المنشأة والموظفين", path: "/hr/documents", icon: FileText, subKey: "employees" },
         { label: "عقود الموظفين", path: "/hr/contracts", icon: FileSignature, subKey: "employees" },
         { label: "الخطابات الرسمية", path: "/hr/official-letters", icon: FileSignature2, subKey: "employees" },
         { label: "نهاية الخدمة", path: "/hr/exit", icon: LogOut, subKey: "employees" },
+      ]},
+      { label: "التوظيف والتعيين", path: "/hr/recruitment", icon: Briefcase, module: "hr", children: [
+        { label: "التوظيف والاستقطاب", path: "/hr/recruitment", icon: Briefcase, subKey: "recruitment" },
+        { label: "المتقدمين", path: "/hr/recruitment/applications", icon: Users2, subKey: "recruitment" },
+        { label: "تفعيل الموظفين", path: "/hr/employee-activation", icon: UserPlus, subKey: "employees" },
+        { label: "لوحة قيد التفعيل", path: "/hr/activation-board", icon: ListChecks, subKey: "employees" },
+        { label: "مراجعة التعيين", path: "/hr/onboarding-review", icon: ClipboardCheck, subKey: "employees" },
       ]},
 
       // 3. النشاط والحضور — gathers shifts + attendance + tracking
       // (previously 2 separate top-level entries)
       { label: "النشاط والحضور", path: "/hr/attendance", icon: Clock, module: "hr", children: [
-        { label: "السجل اليومي", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
+        { label: "الحضور والانصراف", path: "/hr/attendance", icon: Clock, subKey: "attendance" },
         // HR-REV-2 §4.6 — «تقارير الحضور» تعيش في مجموعة «التقارير» الموحّدة
         // (التي صُمِّمت لتجميع تقارير الحضور/الأداء/الرواتب)؛ أُزيل المكرّر هنا.
         { label: "التتبع الحي (الميداني)", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
@@ -207,11 +206,11 @@ export const allNavSections: NavSection[] = [
       // 4. الطلبات — single inbox for leaves/OT/excuses + the new
       // Services Catalog landing
       { label: "الطلبات", path: "/hr/services", icon: ClipboardCheck, module: "hr", children: [
-        { label: "كتالوج الخدمات", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
-        { label: "صندوق الواردات HR", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
+        { label: "خدمات الموارد البشرية", path: "/hr/services", icon: ClipboardCheck, subKey: "services" },
+        { label: "صندوق موافقات الموارد البشرية", path: "/hr/approvals", icon: Bell, subKey: "leaves" },
         { label: "طلبات الإجازة", path: "/hr/leaves", icon: Calendar, subKey: "leaves" },
         { label: "الوقت الإضافي", path: "/hr/overtime", icon: Timer, subKey: "attendance" },
-        { label: "طلبات الأعذار", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
+        { label: "طلبات الاستئذان", path: "/hr/excuse-requests", icon: ClipboardCheck, subKey: "attendance" },
         { label: "سلاسل الموافقات", path: "/hr/leaves/approval-chains", icon: GitBranch, subKey: "leaves" },
       ]},
 
@@ -224,7 +223,7 @@ export const allNavSections: NavSection[] = [
       // this just keeps «نظهرَ ثم 403» out of the UX. السعودة + WPS
       // children stay on their own permissions so finance/payroll
       // personas can still reach them.
-      { label: "الامتثال والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
+      { label: "المخالفات والجزاءات", path: "/hr/violations", icon: Scale, module: "hr",
         perm: ["hr.violations:view", "hr.violations:list", "hr.discipline:view", "hr.discipline:list"], permMode: "any",
         children: [
         // HR-REV-7 (#2226) — توحيد المخالفات: /hr/violations (المبوّبة، canonical)
@@ -237,8 +236,8 @@ export const allNavSections: NavSection[] = [
         { label: "تصعيد العقوبات", path: "/hr/violations/penalty-escalation", icon: TrendingUp, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
         { label: "لائحة الانضباط", path: "/hr/discipline/regulation", icon: ScrollText, subKey: "violations", perm: ["hr.discipline:view","hr.discipline:list"], permMode: "any" },
         { label: "السعودة (نطاقات)", path: "/hr/saudization", icon: Flag, subKey: "employees", perm: ["hr.saudization:view","hr.saudization:list"], permMode: "any" },
-        { label: "WPS / مدد / بنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
-        { label: "إعدادات WPS", path: "/hr/saudi-compliance/wps/settings", icon: Settings, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
+        { label: "حماية الأجور / مدد / البنوك", path: "/hr/saudi-compliance", icon: Flag, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
+        { label: "إعدادات حماية الأجور", path: "/hr/saudi-compliance/wps/settings", icon: Settings, subKey: "payroll", perm: ["hr.payroll.wps:view","hr.payroll.wps:list"], permMode: "any" },
       ]},
 
       // 6. الأداء والتطوير — gathers performance + 360 + IDP + training
@@ -260,8 +259,7 @@ export const allNavSections: NavSection[] = [
         { label: "سلف الموظفين", path: "/hr/loans", icon: Wallet, subKey: "payroll" },
         { label: "مكافأة نهاية الخدمة", path: "/hr/gratuity", icon: Banknote, subKey: "payroll" },
         { label: "الاستحقاقات الشهرية", path: "/hr/accruals", icon: ListChecks, subKey: "payroll" },
-        { label: "ترحيل الاستحقاقات الشهرية", path: "/hr/accruals/monthly", icon: ListChecks, subKey: "payroll" },
-        { label: "نظام حماية الأجور (WPS)", path: "/hr/wps", icon: Send, subKey: "payroll" },
+        { label: "نظام حماية الأجور", path: "/hr/wps", icon: Send, subKey: "payroll" },
       ]},
 
       // 8. التقارير — single entry, surfaces reports that lived under
@@ -277,10 +275,12 @@ export const allNavSections: NavSection[] = [
       { label: "إعدادات الموارد البشرية", path: "/hr/attendance-policy", icon: Settings, module: "hr", children: [
         { label: "سياسة الحضور", path: "/hr/attendance-policy", icon: Settings, subKey: "attendance" },
         { label: "الإجازات الرسمية", path: "/hr/public-holidays", icon: CalendarClock, subKey: "leaves" },
-        { label: "نموذج المؤسسة التشغيلي", path: "/admin/org-model", icon: Network, subKey: "settings" },
-        { label: "عضويات المؤسسة (فرق/لجان/مشاريع)", path: "/admin/org-memberships", icon: Users2, subKey: "settings" },
+        // /admin/org-model + /admin/org-memberships removed from the sidebar:
+        // the legal_entities/positions/teams overlay (migration 274) is a parallel
+        // org model consumed nowhere outside org.ts — the load-bearing structure is
+        // companies/branches/departments (settings). Kept URL-reachable (off-sidebar)
+        // because hr/org-tree still links org-memberships for team/committee CRUD.
         { label: "أوزان التقييم وترتيب الأداء", path: "/hr/scoring-weights", icon: TrendingUp, subKey: "performance" },
-        { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, subKey: "settings" },
         { label: "فئات الموظفين وسياسات الحضور", path: "/hr/attendance-categories", icon: Users, subKey: "attendance" },
       ]},
     ],
@@ -301,9 +301,15 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة المدير المالي", path: "/finance/cfo-cockpit", icon: BarChart3 },
         { label: "فحص الإغلاق اليومي", path: "/finance/daily-close-checklist", icon: ListChecks },
         { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart },
+        { label: "إطفاء المصروفات المقدمة", path: "/finance/amortization", icon: CalendarClock },
+        { label: "الإيراد المؤجل", path: "/finance/deferred-revenue", icon: TrendingUp },
+        { label: "تسجيل قسط تأمين", path: "/finance/insurance", icon: ShieldCheck },
       ]},
       // (2) الحسابات والقيود
-      { label: "الحسابات والقيود", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
+      // F-2 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ②) — فُكّت «الحسابات والقيود»
+      // (20 مدخلاً) إلى مجموعتين: الحسابات/مراكز التكلفة، والقيود/الترحيل. إعادة
+      // تجميع فقط — لم يتغيّر أي مسار/صلاحية/تسمية ابن.
+      { label: "الحسابات ومراكز التكلفة", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
         { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
         { label: "فجوات تصنيف الحسابات", path: "/finance/usage-gaps", icon: ShieldAlert },
         { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
@@ -311,6 +317,9 @@ export const allNavSections: NavSection[] = [
         { label: "شجرة مراكز التكلفة", path: "/finance/cost-centers/tree", icon: Network },
         { label: "ترتيب مراكز التكلفة", path: "/finance/cost-centers/ranking", icon: BarChart3 },
         { label: "كشف الحساب التحليلي", path: "/finance/entity-statements", icon: FileText },
+        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus, minRoleLevel: 70 },
+      ]},
+      { label: "القيود والترحيل", path: "/finance/journal", icon: ScrollText, module: "finance", children: [
         { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
         { label: "ميزان مع تتبّع", path: "/finance/trial-balance-drilldown", icon: Scale },
         { label: "مقارنة ميزان", path: "/finance/trial-balance-comparison", icon: BarChart3 },
@@ -323,7 +332,6 @@ export const allNavSections: NavSection[] = [
         { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
         { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
         { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
-        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus, minRoleLevel: 70 },
       ]},
       { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [
         { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
@@ -340,9 +348,9 @@ export const allNavSections: NavSection[] = [
         { label: "منضدة دفعات العملاء المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
       ]},
       { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
-        { label: "طلبات الشراء (PR)", path: "/finance/purchase-requests", icon: ClipboardList },
-        { label: "أوامر الشراء (PO)", path: "/finance/purchase-orders", icon: ShoppingCart },
-        { label: "الموردين", path: "/finance/vendors", icon: Users },
+        { label: "طلبات الشراء", path: "/finance/purchase-requests", icon: ClipboardList },
+        { label: "أوامر الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
+        { label: "الموردون", path: "/finance/vendors", icon: Users },
         { label: "مستندات الموردين", path: "/finance/vendor-documents", icon: FileText },
         { label: "منضدة التسوية", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
         { label: "كشف حساب مورد للطباعة", path: "/finance/vendor-statement-print", icon: Printer },
@@ -353,26 +361,29 @@ export const allNavSections: NavSection[] = [
         { label: "عقود الموردين", path: "/finance/contracts", icon: FileSignature },
         { label: "متابعة عقود الموردين", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
       ]},
-      { label: "النقد والذمم", path: "/finance/treasury", icon: Building, module: "finance", children: [
+      { label: "النقد والخزينة", path: "/finance/treasury", icon: Building, module: "finance", children: [
         { label: "مراقبة البنوك", path: "/finance/bank-accounts-watch", icon: Banknote },
         { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
         { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
         { label: "ورقة عمل تسوية حساب", path: "/finance/account-recon-workpaper", icon: FileSignature },
-        { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
-        { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
-        { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
-        { label: "مخصص ديون مشكوك فيها", path: "/finance/bad-debt-provision", icon: TrendingUp },
-        { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
         { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
         { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
         { label: "تقويم النقدية", path: "/finance/cash-calendar", icon: Calendar },
         { label: "توقعات النقد (13 أسبوع)", path: "/finance/cash-13week", icon: TrendingUp },
         { label: "حاسبة الوضع النقدي", path: "/finance/cash-position-calculator", icon: Calculator },
       ]},
+      { label: "الذمم والعملاء", path: "/finance/customer-statement-print", icon: Users, module: "finance", children: [
+        { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
+        { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
+        { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
+        { label: "ورقة عمل مخصص الديون", path: "/finance/bad-debt-provision", icon: TrendingUp },
+        { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
+      ]},
       { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
         { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
-        { label: "سجل الأصول التحليلي", path: "/finance/fixed-asset-register", icon: BarChart3 },
+        { label: "سجل الأصول الثابتة", path: "/finance/fixed-asset-register", icon: BarChart3 },
         { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
+        { label: "الأعمال الرأسمالية تحت التنفيذ", path: "/finance/cip", icon: Building2 },
         { label: "العهد", path: "/finance/custodies", icon: KeyRound },
         { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
         { label: "تقرير العهد", path: "/finance/custodies/report", icon: FileBarChart },
@@ -396,29 +407,37 @@ export const allNavSections: NavSection[] = [
         { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
         { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
         { label: "قائمة الدخل حسب مركز التكلفة", path: "/finance/cost-center-pnl", icon: BarChart3 },
-        { label: "تقييم المخزون", path: "/finance/inventory-costing", icon: Package },
+        { label: "تقييم المخزون (المتوسط المرجح)", path: "/finance/inventory-costing", icon: Package },
         { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
       ]},
-      { label: "الضرائب والتقارير", path: "/finance/tax", icon: Scale, module: "finance", children: [
+      // F-1 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ①) — فُكّت مجموعة «الضرائب
+      // والتقارير» المتضخّمة (34 مدخلاً تخلط الضرائب بالتقارير) إلى مجموعتين:
+      // الضرائب/الزكاة، والتقارير/التحليلات. إعادة تجميع فقط — لم يتغيّر أي مسار
+      // أو صلاحية أو تسمية ابن (بوّابة check-sidebar-coverage تبقى خضراء).
+      { label: "الزكاة والضريبة", path: "/finance/tax", icon: Scale, module: "finance", children: [
         { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
         { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
         { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
-        { label: "فئات WHT", path: "/finance/wht-categories", icon: Percent },
+        { label: "فئات ضريبة الاستقطاع", path: "/finance/wht-categories", icon: Percent },
         { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
-        { label: "جاهزية ZATCA", path: "/finance/vat-filing-readiness", icon: FileCheck },
-        { label: "ZATCA Reports Hub", path: "/finance/reports/zatca", icon: FileCheck },
-        { label: "فواتير B2C موجهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
+        { label: "جاهزية إقرار ضريبة القيمة المضافة", path: "/finance/vat-filing-readiness", icon: FileCheck },
+        { label: "مركز تقارير الزكاة والضريبة", path: "/finance/reports/zatca", icon: FileCheck },
+        { label: "فواتير الأفراد موجَّهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
         { label: "عملاء بلا رقم ضريبي", path: "/finance/zatca/missing-tax", icon: AlertTriangle },
-        { label: "تسوية VAT", path: "/finance/reports/vat-reconciliation", icon: Scale },
-        { label: "ملخص WHT", path: "/finance/reports/wht-summary", icon: Percent },
-        { label: "إعداد إقرار WHT", path: "/finance/wht-filing-workbench", icon: FileCheck },
+        { label: "تسوية ضريبة القيمة المضافة", path: "/finance/reports/vat-reconciliation", icon: Scale },
+        { label: "ملخص ضريبة الاستقطاع", path: "/finance/reports/wht-summary", icon: Percent },
+        { label: "إعداد إقرار ضريبة الاستقطاع", path: "/finance/wht-filing-workbench", icon: FileCheck },
+      ]},
+      { label: "القوائم المالية", path: "/finance/reports", icon: FileBarChart, module: "finance", children: [
         { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
-        { label: "P&L مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
+        { label: "قائمة الدخل مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
         { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
         { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
         { label: "المقارنة السنوية (سنة/سنة)", path: "/finance/reports/yoy", icon: BarChart2 },
+      ]},
+      { label: "تقارير الربحية والمحافظ", path: "/finance/expense-burn-rate", icon: TrendingUp, module: "finance", children: [
         { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
-        { label: "GL Health Score", path: "/finance/gl-health", icon: ShieldAlert },
+        { label: "مؤشر صحة النظام المالي", path: "/finance/gl-health", icon: ShieldAlert },
         { label: "محفظة ربحية المشاريع", path: "/finance/project-portfolio", icon: BarChart2 },
         { label: "محفظة ربحية العقارات", path: "/finance/property-portfolio", icon: BarChart2 },
         { label: "محفظة ربحية وكلاء العمرة", path: "/finance/umrah-agent-portfolio", icon: BarChart2 },
@@ -426,29 +445,31 @@ export const allNavSections: NavSection[] = [
         { label: "محفظة مواسم العمرة", path: "/finance/umrah-season-portfolio", icon: BarChart2 },
         { label: "محلّل مزيج الإيرادات", path: "/finance/revenue-mix", icon: TrendingUp },
         { label: "محلّل مزيج المصاريف", path: "/finance/expense-mix", icon: TrendingUp },
-        { label: "اتجاه DSO للسيولة", path: "/finance/reports/dso-trend", icon: Activity },
-        // (9) دمج «تقارير محاسبية متقدمة» (CoGS/تقييم/دوران/صلاحيات/مخزون سالب
-        // + انحرافات واعتماد الموازنة) في نفس مجموعة التقارير.
-        { label: "ملخص التكلفة (CoGS)", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
-        { label: "تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
+      ]},
+      { label: "تقارير المخزون والتكلفة", path: "/finance/reports/cogs-summary", icon: Package, module: "finance", children: [
+        { label: "ملخص تكلفة المبيعات", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
+        { label: "تقرير تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
         { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
         { label: "تنبيهات صلاحية الدفعات", path: "/finance/reports/lot-expiry-alerts", icon: AlertTriangle },
         { label: "مخزون سالب", path: "/finance/reports/negative-stock", icon: AlertTriangle },
+      ]},
+      { label: "تقارير الذمم والموازنة", path: "/finance/reports/dso-trend", icon: BarChart3, module: "finance", children: [
+        { label: "اتجاه فترة التحصيل", path: "/finance/reports/dso-trend", icon: Activity },
         { label: "انحرافات الميزانية", path: "/finance/budget-variance", icon: BarChart3 },
         { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
       ]},
       // (10) الصناديق والارتباطات — دمج «صناديق الواردات» مع «ارتباطات الموظفين».
       { label: "الصناديق والارتباطات", path: "/finance/intake", icon: Bell, module: "finance", children: [
         { label: "مركز التلقّي المالي", path: "/finance/intake", icon: Truck },
-        { label: "Approvals Inbox", path: "/finance/approvals-inbox", icon: Bell },
+        { label: "صندوق الموافقات الموحّد", path: "/finance/approvals-inbox", icon: Bell },
         { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
         { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
         { label: "الجهات الخاملة", path: "/finance/dormant-entities", icon: Clock },
         { label: "صدق دفتر الأستاذ (قياس)", path: "/finance/reports/ledger-truth", icon: AlertTriangle },
-        { label: "GL Integrity Gaps", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
+        { label: "فجوات سلامة دفتر الأستاذ", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
         { label: "فجوات العمليات المالية", path: "/finance/reports/operation-gaps", icon: AlertTriangle },
-        { label: "Unmapped Lines", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
-        { label: "Posting Activity", path: "/finance/journal/activity", icon: Activity },
+        { label: "البنود غير المُوجَّهة", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
+        { label: "نشاط الترحيل المحاسبي", path: "/finance/journal/activity", icon: Activity },
         { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
         { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
       ]},
@@ -457,14 +478,14 @@ export const allNavSections: NavSection[] = [
       // مرتبطة بالـsidebar؛ مجمَّعة هنا الآن في مدخل واحد لتسهيل الوصول.
       { label: "التحصيل والديون", path: "/finance/collections", icon: AlertTriangle, module: "finance", children: [
         { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: DollarSign },
-        { label: "تقادم الذمم", path: "/finance/ar-aging", icon: Clock },
-        { label: "متابعة Dunning", path: "/finance/dunning", icon: Bell },
+        { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
+        { label: "متابعة التحصيل", path: "/finance/dunning", icon: Bell },
         { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
-        { label: "الديون المعدومة", path: "/finance/bad-debt", icon: ShieldAlert },
+        { label: "مخصص الديون المشكوك فيها", path: "/finance/bad-debt", icon: ShieldAlert },
       ]},
       // F6 (audit) — العملات الأجنبية: rates + revaluation + history في
       // مجموعة واحدة بدلاً من تركها كلها off-sidebar.
-      { label: "العملات الأجنبية (FX)", path: "/finance/fx-rates", icon: Globe, module: "finance", children: [
+      { label: "العملات الأجنبية", path: "/finance/fx-rates", icon: Globe, module: "finance", children: [
         { label: "أسعار الصرف", path: "/finance/fx-rates", icon: Globe },
         { label: "إعادة التقييم", path: "/finance/fx-revaluation", icon: RefreshCw },
         { label: "سجل إعادة التقييم", path: "/finance/fx-revaluation/history", icon: Activity },
@@ -481,6 +502,9 @@ export const allNavSections: NavSection[] = [
         { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
         { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
         { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
+        { label: "مركز التصنيف", path: "/finance/classification-center", icon: Layers },
+        { label: "فشل الحسابات الفرعية", path: "/finance/subsidiary-account-failures", icon: ShieldAlert },
+        { label: "تشخيص أبوّة الحسابات", path: "/finance/datafix/misparented-subsidiaries", icon: GitBranch },
         { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
         { label: "تجاوزات الإلزام", path: "/finance/allocation-override-log", icon: ShieldAlert },
       ]},
@@ -495,7 +519,7 @@ export const allNavSections: NavSection[] = [
       { label: "المشاريع والمهام", path: "/projects", icon: Activity, module: "operations", children: [
         { label: "قائمة المشاريع", path: "/projects?tab=list", icon: Target },
         { label: "مخطط غانت", path: "/projects/gantt", icon: BarChart2 },
-        { label: "المخاطر", path: "/projects/risks", icon: ShieldAlert },
+        { label: "مخاطر المشاريع", path: "/projects/risks", icon: ShieldAlert },
         // "مهام المشاريع" → /projects/tasks removed: it rendered the GENERAL
         // operations Tasks page (the `tasks` table), mislabelling operations work
         // as project tasks. Per-project tasks (project_tasks) live in the project
@@ -563,17 +587,17 @@ export const allNavSections: NavSection[] = [
           { label: "الإطارات", path: "/fleet/tires", icon: Settings, perm: "fleet.maintenance:list" },
         ]},
         // 4) التتبع (Telematics) — المركز + الخريطة الحيّة والأجهزة والأدلة.
-        { label: "التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, children: [
-          { label: "نظام التتبع (Telematics)", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
+        { label: "التتبع", path: "/fleet/telematics", icon: Satellite, children: [
+          { label: "نظام التتبع", path: "/fleet/telematics", icon: Satellite, perm: "fleet.telematics.live:list" },
           { label: "التتبع المباشر", path: "/fleet/telematics/live-map", icon: Satellite, perm: "fleet.telematics.live:list" },
           { label: "تنبيهات السلامة الذكية", path: "/fleet/telematics/ai-alerts", icon: Bot, perm: "fleet.telematics.ai_alerts:list" },
           { label: "بطاقة أداء السائقين", path: "/fleet/telematics/scorecard", icon: Award, perm: "fleet.telematics.ai_alerts:list" },
           { label: "قراءات الحساسات", path: "/fleet/telematics/sensors", icon: Activity, perm: "fleet.telematics.sensors:list" },
           { label: "أرشيف الأدلة", path: "/fleet/telematics/evidence", icon: Archive, perm: "fleet.telematics.ai_alerts:list" },
           { label: "أدلة الفيديو", path: "/fleet/telematics/video-evidence", icon: VideoIcon, perm: "fleet.telematics.video:list" },
-          { label: "أجهزة MDVR", path: "/fleet/telematics/devices", icon: HardDrive, perm: "fleet.telematics.devices:list" },
+          { label: "أجهزة التسجيل المتنقلة", path: "/fleet/telematics/devices", icon: HardDrive, perm: "fleet.telematics.devices:list" },
           { label: "لوحة التشغيل", path: "/fleet/telematics/operations", icon: ShieldAlert, perm: "fleet.telematics.sync:list" },
-          { label: "إعدادات CMSV6", path: "/fleet/telematics/settings", icon: Settings, perm: "fleet.telematics.configure:list" },
+          { label: "إعدادات منصة التتبع", path: "/fleet/telematics/settings", icon: Settings, perm: "fleet.telematics.configure:list" },
         ]},
         // 5) النقل والإرسال — دورة الحجز ← الإرسال ← المسارات.
         // النقل والمواصلات (#1812) — كانت هذه الصفحات مركّبة لكن بلا مدخل في
@@ -581,7 +605,7 @@ export const allNavSections: NavSection[] = [
         // والإرسال/المسارات/لوحة العمليات/المُحسِّن عبر fleet.dispatch.
         { label: "النقل والإرسال", path: "/fleet/transport/bookings", icon: Send, children: [
           { label: "حجوزات النقل", path: "/fleet/transport/bookings", icon: ClipboardList, perm: "fleet.bookings:list" },
-          { label: "الإرسال (Dispatch)", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
+          { label: "الإرسال", path: "/fleet/transport/dispatch", icon: Send, perm: "fleet.dispatch:list" },
           { label: "خطط المسارات", path: "/fleet/transport/itineraries", icon: Navigation, perm: "fleet.dispatch:list" },
           // TA-T18-VRP Phase 2 — مُحسِّن إسناد الأسطول (Fleet Optimizer batch-mode).
           { label: "مُحسِّن الإسناد", path: "/fleet/optimizer/runs", icon: Calculator, perm: "fleet.dispatch:list" },
@@ -601,7 +625,7 @@ export const allNavSections: NavSection[] = [
         // 6) التقارير والتكاليف.
         { label: "التقارير والتكاليف", path: "/fleet/reports", icon: FileBarChart, children: [
           { label: "التقارير", path: "/fleet/reports", icon: FileBarChart, perm: "fleet.vehicles:list" },
-          { label: "تكلفة الملكية (TCO)", path: "/fleet/tco", icon: DollarSign, perm: "fleet.vehicles:list" },
+          { label: "إجمالي تكلفة الملكية", path: "/fleet/tco", icon: DollarSign, perm: "fleet.vehicles:list" },
           // TA-GAP-09 Phase 2 — استهلاك واجهة الخرائط (مراقبة حصة Google Maps).
           // الـAPI الخلفية تستخدم fleet.bookings:view؛ هنا نُبقي القائمة مرئية
           // لنفس أدوار التخطيط النقلي.
@@ -633,17 +657,15 @@ export const allNavSections: NavSection[] = [
         { label: "المخزون والحركات", path: "/warehouse/movements", icon: Activity, children: [
           { label: "حركات المخزون", path: "/warehouse/movements", icon: Activity },
           { label: "الفئات", path: "/warehouse/categories", icon: FolderOpen },
-          { label: "الموردين", path: "/warehouse/suppliers", icon: Users },
+          { label: "الموردون", path: "/warehouse/suppliers", icon: Users },
           { label: "جرد المخزون", path: "/warehouse/inventory-count", icon: ClipboardCheck },
         ]},
-        // 2) الدفعات والتسلسلات والجرد المتقدّم.
-        { label: "الدفعات والتسلسلات", path: "/warehouse/advanced", icon: Layers, children: [
-          { label: "عمليات متقدّمة (دفعات/تسلسلات/ABC)", path: "/warehouse/advanced", icon: BarChart3 },
-          { label: "الدفعات", path: "/warehouse/lots", icon: Package },
-          { label: "الأرقام التسلسلية", path: "/warehouse/serials", icon: ListChecks },
-          { label: "الجرد الدوري", path: "/warehouse/cycle-counts", icon: ClipboardCheck },
-          { label: "تصنيف ABC", path: "/warehouse/abc", icon: BarChart3 },
-        ]},
+        // 2) الدفعات والتسلسلات والجرد المتقدّم — صفحة قشرة بتبويبات
+        // (warehouse-advanced.tsx) تضمّ الدفعات/التسلسلات/الجرد الدوري/ABC. أُزيلت
+        // المداخل المنفصلة المكرّرة معها (CROSS_MODULE_DUPLICATION_AUDIT — قرار
+        // المالك «أبقِ القشرة، احذف الإخوة»). مساراتها تبقى مُركَّبة وقابلة للبحث،
+        // ومُدرجة في SUPERSEDED_BY_SHELL بحارس التغطية فلا تُعدّ أيتامًا.
+        { label: "عمليات متقدّمة (دفعات/تسلسلات/جرد/تصنيف أ ب ج)", path: "/warehouse/advanced", icon: Layers },
         // 3) التقارير.
         { label: "التقارير", path: "/warehouse/reports/accuracy", icon: FileBarChart, children: [
           { label: "تقرير دقة الجرد", path: "/warehouse/reports/accuracy", icon: BarChart3 },
@@ -696,8 +718,11 @@ export const allNavSections: NavSection[] = [
         { label: "التقارير والأدلة", path: "/properties/occupancy-report", icon: BarChart3, children: [
           { label: "تقرير الإشغال", path: "/properties/occupancy-report", icon: BarChart3 },
           { label: "دليل العقارات", path: "/properties/guide", icon: BookOpen },
-          // «دليل إرشادي مصور» (/guide/properties) أُزيل: مسارٌ قديم يعيد التوجيه
-          // إلى /properties/guide أعلاه — بندٌ مكرّر مسدود (نفس الصفحة، نفس المجموعة).
+          // UX Nav Governance (شريحة 12) — أُزيل المدخل المكرّر «دليل إرشادي مصور»
+          // (كان → /guide/properties، وهو redirect إلى /properties/guide). يكفي
+          // مدخل «دليل العقارات» الواحد؛ الاسم البديل محفوظ للبحث في
+          // navigation.canonical-map.ts، والمسار /guide/properties يبقى redirect
+          // (لا حذف). الحارس المُرقّى يعدّه off-sidebar فلا يصير orphan.
         ]},
       ]},
     ],
@@ -761,14 +786,14 @@ export const allNavSections: NavSection[] = [
         ]},
         // 6) الالتزام والمخالفات.
         { label: "الالتزام والمخالفات", path: "/umrah/compliance", icon: FileCheck, children: [
-          { label: "الامتثال", path: "/umrah/compliance", icon: FileCheck },
+          { label: "امتثال العمرة", path: "/umrah/compliance", icon: FileCheck },
           { label: "المخالفات النظامية", path: "/umrah/violations", icon: Shield },
           { label: "الغرامات", path: "/umrah/penalties", icon: AlertTriangle },
         ]},
         // 7) التسوية والبيانات.
         { label: "التسوية والبيانات", path: "/umrah/reconciliation", icon: RefreshCw, children: [
           { label: "التسوية والمطابقة", path: "/umrah/reconciliation", icon: RefreshCw },
-          { label: "استيراد البيانات", path: "/umrah/import", icon: FileText },
+          { label: "استيراد بيانات العمرة", path: "/umrah/import", icon: FileText },
           { label: "المرفقات", path: "/umrah/attachments", icon: Paperclip },
         ]},
         // 8) التقارير — مجموعة قائمة، تبقى كما هي.
@@ -827,14 +852,16 @@ export const allNavSections: NavSection[] = [
       { label: "مركز الطلبات", path: "/requests", icon: ClipboardCheck, module: "requests", children: [
         { label: "تقديم طلب", path: "/requests", icon: ClipboardCheck },
         { label: "أنواع الطلبات", path: "/requests/types", icon: ListTodo },
-        { label: "سير العمل", path: "/requests/workflows", icon: GitBranch },
+        // «سير العمل» (/requests/workflows) dropped from the sidebar: its `workflows`
+        // table has no executor (the live approval engine is approval_chains), so it
+        // surfaced a non-functional feature. Route kept reachable (off-sidebar).
       ]},
       { label: "المستندات", path: "/documents", icon: FileText, module: "documents", children: [
         { label: "جميع المستندات", path: "/documents", icon: FileText },
         { label: "المجلدات", path: "/documents/folders", icon: FolderOpen },
         { label: "الأرشيف", path: "/documents/archive", icon: Archive },
-        { label: "صندوق OCR", path: "/documents/ocr-inbox", icon: FileText },
-        { label: "مراجعة OCR", path: "/documents/ocr/review", icon: FileCheck },
+        { label: "صندوق المسح الضوئي", path: "/documents/ocr-inbox", icon: FileText },
+        { label: "مراجعة المسح الضوئي", path: "/documents/ocr/review", icon: FileCheck },
         { label: "القوالب", path: "/documents/templates", icon: FilePlus },
         { label: "رفع مستند", path: "/documents/upload", icon: FilePlus },
       ]},
@@ -861,9 +888,9 @@ export const allNavSections: NavSection[] = [
       { label: "الحوكمة والامتثال", path: "/governance/policies", icon: Shield, module: "governance", minRoleLevel: 60, children: [
         { label: "نظرة عامة", path: "/governance", icon: Shield },
         { label: "السياسات", path: "/governance/policies", icon: FileCheck },
-        { label: "المخاطر", path: "/governance/risks", icon: AlertTriangle },
+        { label: "مخاطر الحوكمة", path: "/governance/risks", icon: AlertTriangle },
         { label: "التدقيق", path: "/governance/audits", icon: ClipboardCheck },
-        { label: "الامتثال", path: "/governance/compliance", icon: CheckCircle },
+        { label: "الامتثال المؤسسي", path: "/governance/compliance", icon: CheckCircle },
         { label: "الإجراءات التصحيحية", path: "/governance/capa", icon: Wrench },
       ]},
       { label: "الإقفال اليومي", path: "/daily-close", icon: CheckSquare, minRoleLevel: 50 },
@@ -879,13 +906,16 @@ export const allNavSections: NavSection[] = [
         { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
         { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
         { label: "التقارير الإدارية", path: "/bi/admin-reports", icon: FileBarChart },
-        // BI de-dup — «مؤشرات الأداء» (/bi/kpis)، «التقارير التحليلية» (/bi/reports)
-        // و«لوحات BI» (/bi/dashboards) كانت بنوداً مكرّرة: مساراتها الثلاثة تعيد
-        // التوجيه إلى /bi، وهذه العروض أصلاً تبويبات داخل صفحة /bi نفسها. أُزيلت
-        // البنود الخارجية المسدودة (وأُبقيت مسارات إعادة التوجيه للروابط القديمة).
+        // UX Nav Governance (موجة التنقّل، شريحة 6) — أُزيلت 3 مداخل كانت تؤول
+        // جميعها إلى /bi عبر redirect: «مؤشرات الأداء» (/bi/kpis)، «التقارير
+        // التحليلية» (/bi/reports)، «لوحات BI» (/bi/dashboards). صار «ذكاء
+        // الأعمال» مدخلاً واحداً بدل أربعة بنفس الوجهة. الأسماء الثلاثة محفوظة
+        // كأسماء بحث في navigation.canonical-map.ts (المبدأ #6)، والمسارات تبقى
+        // مُركَّبة كـ redirect (لا حذف — المبدأ #3). check-sidebar-coverage رُقِّي
+        // ليعدّ مسارات الـ redirect off-sidebar مشروعة فلا تصير orphan.
         { label: "الرؤى الذكية", path: "/insights", icon: Sparkles },
         { label: "لوحة الذكاء", path: "/intelligence", icon: Brain },
-        { label: "منصة AI", path: "/intelligence/ai-workbench", icon: Sparkles },
+        { label: "منصة الذكاء الاصطناعي", path: "/intelligence/ai-workbench", icon: Sparkles },
       ]},
       // 17-item "مدير النظام" was one flat list — broke into 4 themed
       // sub-groups so an admin can find a specific tool without scanning
@@ -895,11 +925,11 @@ export const allNavSections: NavSection[] = [
         { label: "المستخدمين والصلاحيات", path: "/admin/users", icon: KeyRound, children: [
           { label: "المستخدمين", path: "/admin/users", icon: Users, perm: ["admin:list", "admin:update"], permMode: "any" },
           { label: "إنشاء سريع وصلاحيات", path: "/admin/user-onboarding", icon: UserPlus, perm: ["admin:update"], permMode: "any" },
-          { label: "الأدوار والصلاحيات (v2)", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+          { label: "الأدوار والصلاحيات", path: "/admin", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
           { label: "مصفوفة الأدوار", path: "/admin/rbac-matrix", icon: Shield, perm: "admin.roles:view" },
-          { label: "مُركّب الأدوار", path: "/admin/roles-simple", icon: Shield, perm: "admin.roles:update" },
           { label: "قوالب المسميات الوظيفية", path: "/admin/job-titles", icon: Shield, perm: "hr.employees:update" },
-          { label: "الأدوار (الكلاسيكي)", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+          { label: "الأدوار", path: "/admin/roles", icon: KeyRound, perm: ["admin.roles:view", "admin.roles:update"], permMode: "any" },
+          { label: "الصلاحيات الفعلية للمستخدم", path: "/admin/effective-permissions", icon: ShieldCheck, perm: ["admin:view", "admin:list"], permMode: "any" },
         ]},
         { label: "المراقبة والمتابعة", path: "/admin/monitoring", icon: Activity, children: [
           { label: "مركز المراقبة", path: "/admin/monitoring", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
@@ -907,7 +937,7 @@ export const allNavSections: NavSection[] = [
           { label: "مرصد المراقبة الموحّد", path: "/admin/observability", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "خارطة #1139 الحيّة", path: "/admin/master-plan", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تقرير المخالفات", path: "/admin/violations-report", icon: AlertTriangle, perm: ["hr:approve", "admin:view"], permMode: "any" },
-          { label: "مراقبة الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "كتالوج الأحداث", path: "/admin/event-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "صندوق الأحداث الصادرة", path: "/admin/outbox", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تتبّع الرحلات الحيّة", path: "/admin/journeys", icon: GitBranch, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مراقبة دورة الحياة", path: "/admin/lifecycle-monitor", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
@@ -915,30 +945,29 @@ export const allNavSections: NavSection[] = [
           { label: "سجل الكيانات", path: "/admin/system-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "سجل النطاقات", path: "/admin/domain-registry", icon: Network, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
-        { label: "السياسات والحوكمة", path: "/admin/policy-engine", icon: Shield, children: [
-          { label: "محرك السياسات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
+        { label: "حوكمة الصلاحيات", path: "/admin/policy-engine", icon: Shield, children: [
+          { label: "محرك سياسات الصلاحيات", path: "/admin/policy-engine", icon: Shield, perm: "admin:update" },
           { label: "تجاوزات الموافقات", path: "/admin/approval-overrides", icon: Bell, perm: "admin:update" },
-          { label: "حماية البيانات (PDPL)", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "حماية البيانات الشخصية", path: "/admin/pdpl", icon: Shield, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "التوقيع الرقمي", path: "/admin/digital-signature", icon: FileSignature, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
         { label: "تشخيص محاسبي", path: "/admin/gl-reconciliation", icon: ShieldAlert, children: [
-          { label: "تسوية GL", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "تسوية دفتر الأستاذ", path: "/admin/gl-reconciliation", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "إخفاقات الترحيل", path: "/admin/posting-failures", icon: AlertTriangle, perm: ["admin:list", "admin:view"], permMode: "any" },
         ]},
         { label: "التكاملات والاتصالات", path: "/admin/integrations", icon: Mail, children: [
           { label: "مركز التكاملات", path: "/admin/integrations", icon: Mail, perm: "admin:update" },
           { label: "مركز التحكّم بالاتصالات", path: "/admin/communication-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "مركز التحكّم بالـ PBX", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
-          { label: "توجيه الإشعارات", path: "/admin/notification-routing", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "مركز التحكم بالمقسم الهاتفي", path: "/admin/pbx-control", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "إعدادات المزوّدات", path: "/admin/vendor-settings", icon: Activity, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "تشخيص التكاملات", path: "/admin/integrations-diagnostics", icon: Activity, perm: "admin:update" },
-          { label: "مراجعات ZATCA", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
+          { label: "مراجعات الفوترة الإلكترونية", path: "/admin/zatca-audits", icon: ShieldAlert, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "حوكمة الذكاء الاصطناعي", path: "/admin/ai-governance", icon: Brain, perm: ["admin:list", "admin:view"], permMode: "any" },
           { label: "مختبر الذكاء", path: "/admin/intelligence-playground", icon: Brain, perm: "admin:update" },
-          { label: "استيراد البيانات", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
+          { label: "استيراد البيانات (إداري)", path: "/admin/data-import", icon: FilePlus, perm: "admin:update" },
         ]},
         { label: "سجلات التدقيق", path: "/admin/logs", icon: ScrollText, children: [
-          { label: "سجل المراجعة", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
+          { label: "سجل تدقيق النظام", path: "/admin/logs", icon: ScrollText, perm: ["audit:read", "admin:read"], permMode: "any", minRoleLevel: 90 },
           { label: "سجل الحركات", path: "/activity-log", icon: Activity },
         ]},
       ]},
@@ -956,13 +985,12 @@ export const allNavSections: NavSection[] = [
       { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 50, children: [
         { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 50, perm: "print_jobs:read" },
         { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 50, perm: "print:reprint:approve" },
-        // Two entry points to the SAME page (/admin/print-templates) for two
-        // distinct perm audiences: settings users (L70 + templates:read) and
-        // admins (L90 + admin:*). The settings entry now lands directly instead
-        // of bouncing through the /settings/print-templates redirect alias (that
-        // route stays mounted in settingsRoutes for old bookmarks).
+        // مدخلان لنفس الصفحة (/admin/print-templates) لجمهورَي صلاحية مختلفين:
+        // مستخدمو الإعدادات (L70 + templates:read) والمدراء (L90 + admin:*). مدخل
+        // الإعدادات يهبط مباشرة بدل المرور عبر redirect المسار /settings/print-templates
+        // (يبقى ذلك المسار مُركَّبًا في settingsRoutes للروابط القديمة).
         { label: "قوالب الطباعة", path: "/admin/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
-        { label: "قوالب الطباعة (admin)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
+        { label: "قوالب الطباعة (الإدارة)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
       ]},
       // كانت orphan: إدارة اشتراك المنشأة (الحالة/التفعيل/تمديد التجربة) — صفحة
@@ -974,7 +1002,7 @@ export const allNavSections: NavSection[] = [
         { label: "الشركات", path: "/settings/companies", icon: Building2, perm: "settings:write" },
         { label: "الأقسام", path: "/settings/departments", icon: Network, perm: "settings:write" },
         { label: "قواعد الأعمال", path: "/settings/rules", icon: Zap, perm: "settings:write" },
-        { label: "سجل المراجعة", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
+        { label: "سجل مراجعة الإعدادات", path: "/settings/audit-log", icon: ScrollText, perm: ["audit:read", "settings:write"], permMode: "any" },
       ]},
     ],
   },

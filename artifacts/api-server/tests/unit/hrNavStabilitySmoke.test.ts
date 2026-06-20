@@ -139,11 +139,11 @@ describe("HR top-nav stability — static guard", () => {
     // HR-REV — the horizontal bar now mirrors the sidebar's top-level groups
     // 1:1 (dashboard + the 8 functional groups) instead of a flat entity list.
     expect(labelOrder).toEqual([
-      "لوحة HR",
+      "لوحة الموارد البشرية",
       "الموظفون",
       "النشاط والحضور",
       "الطلبات",
-      "الامتثال والجزاءات",
+      "المخالفات والجزاءات",
       "الأداء والتطوير",
       "الرواتب والمستحقات",
       "التقارير",

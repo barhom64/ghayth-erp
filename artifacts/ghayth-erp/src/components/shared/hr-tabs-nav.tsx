@@ -10,7 +10,7 @@ import {
 // same structure. Each tab's `match` lists the sub-paths that live under that
 // sidebar group, so the right tab highlights wherever you are inside HR.
 const TABS = [
-  { href: "/hr", label: "لوحة HR", icon: Briefcase, match: ["/hr"], exact: true },
+  { href: "/hr", label: "لوحة الموارد البشرية", icon: Briefcase, match: ["/hr"], exact: true },
   {
     href: "/employees", label: "الموظفون", icon: Users,
     match: [
@@ -29,7 +29,7 @@ const TABS = [
     match: ["/hr/services", "/hr/approvals", "/hr/leaves", "/hr/overtime", "/hr/excuse-requests"],
   },
   {
-    href: "/hr/violations", label: "الامتثال والجزاءات", icon: Scale,
+    href: "/hr/violations", label: "المخالفات والجزاءات", icon: Scale,
     match: ["/hr/violations", "/hr/discipline", "/hr/saudization", "/hr/saudi-compliance"],
   },
   {

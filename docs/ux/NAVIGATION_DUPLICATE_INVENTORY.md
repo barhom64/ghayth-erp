@@ -1,280 +1,341 @@
-# NAVIGATION_DUPLICATE_INVENTORY
+# جرد تكرار التنقّل — NAVIGATION_DUPLICATE_INVENTORY
 
-> **UX Navigation Governance wave — SLICE 1 (DOCS-ONLY inventory).**
-> Branch: `claude/ux-nav-governance-inventory` · Date: 2026-06-16
-> **No application code, routes, navigation, permissions or logic were changed in this slice.**
-> This document audits the navigation surfaces and tabulates every duplicate / confusing / non-standard name so that Slice 2+ can fix them safely.
-
----
-
-## 0. Binding principles (the wave's hard rules)
-
-1. `navigation.registry.ts` stays the **single source of truth**. No alternative menu.
-2. No route deleted or broken.
-3. Create / edit / detail pages must **not** appear in menus or tabs except by a documented exception.
-4. Each function has **ONE** official Arabic name + **ONE** official path. Alias names are search-only.
+> موجة **UX Navigation Governance** — الشريحة الأولى (تقرير فقط، بلا تعديل كود).
+> التاريخ: 2026-06-16 · الفرع: `claude/vigilant-pasteur-mje1sm`
+> **النطاق:** جرد التكرار والالتباس والأسماء غير المنضبطة في طبقة التنقّل.
+> **لا يحتوي هذا التقرير على أي تغيير كود، ولا حذف مسار، ولا تغيير صلاحية، ولا تغيير منطق عمل.**
 
 ---
 
-## 1. Surfaces audited
+## 0. المنهجية والمصادر
 
-| Surface | File | Notes |
+فُحِصت المصادر الخمسة التالية بالكامل:
+
+| المصدر | المسار | الحجم |
 |---|---|---|
-| Canonical menu | `artifacts/ghayth-erp/src/components/layout/navigation.registry.ts` (1091 lines) | `allNavSections` — the only menu tree. |
-| Filter pipeline + quick-actions + page-title | `artifacts/ghayth-erp/src/components/layout/sidebar-layout.tsx` | `useFilteredNavSections` (filter), `pageQuickActions` (L480–685), `getPageTitle` (L462–468). |
-| In-page tab bars (15) | `artifacts/ghayth-erp/src/components/shared/*-tabs-nav.tsx` | allocation, bi, crm, finance, fleet, fleet-telematics, hr, legal, projects, property, store, support, transport, umrah, warehouse. |
-| Page header titles | `PageShell title=` / `<h1>` inside `artifacts/ghayth-erp/src/pages/**` | Sampled; the systematic mismatch is structural — see §2.5. |
-| Route table | `artifacts/ghayth-erp/src/App.tsx` + `src/routes/*.tsx` + `src/routes/registry.ts` | redirect helper: `src/components/shared/redirect-to.tsx`. |
+| سجل التنقّل (مصدر الحقيقة) | `artifacts/ghayth-erp/src/components/layout/navigation.registry.ts` | 1091 سطر |
+| تخطيط القائمة الجانبية + الإجراءات السريعة | `artifacts/ghayth-erp/src/components/layout/sidebar-layout.tsx` | 1101 سطر (`pageQuickActions` ‎L480‑685) |
+| كل ملفات التبويبات الداخلية | `artifacts/ghayth-erp/src/components/shared/*-tabs-nav.tsx` | 15 ملفًّا |
+| عناوين الصفحات | `PageShell title="…"` عبر `artifacts/ghayth-erp/src/pages/**` | ~300 عنوان |
+| حارس التغطية القائم | `scripts/src/check-sidebar-coverage.mjs` | 229 سطر |
 
-### Structural fact #1 — the header title is NOT independent of the menu
+**قائمة إعادة التوجيه المرجعية** (16 مسارًا، مستخرجة من `routes/*.tsx` عبر `redirectTo(...)`)، وهي حجر الزاوية في تصنيف الحالات أدناه:
 
-`sidebar-layout.tsx` `getPageTitle()` (L462–468) walks `allNavItems` and returns the **menu label** of the nav node matching the current location. So for any path that exists in the registry, **the header chip text == the menu label by construction**. This means problem-class **#5 (menu label != page title)** cannot occur for registry-registered destinations *in the header chip*. It DOES occur between the menu label and the **in-page `PageShell` title** that pages render themselves (a second, independent title). Both are user-visible. See §2.5.
+| المسار (redirect) | يؤول إلى | الملف:السطر |
+|---|---|---|
+| `/hr/leaves/management` | `/hr/leaves` | hrRoutes:152 |
+| `/hr/performance/advanced` | `/hr/performance` | hrRoutes:163 |
+| `/hr/training/advanced` | `/hr/training` | hrRoutes:167 |
+| `/hr/organization` | `/hr/org-tree` | hrRoutes:169 |
+| `/hr/organization/structure` | `/hr/org-tree` | hrRoutes:170 |
+| `/hr/recruitment/advanced` | `/hr/recruitment` | hrRoutes:175 |
+| `/hr/violations/management` | `/hr/violations` | hrRoutes:189 |
+| `/hr/shifts/management` | `/hr/shifts` | hrRoutes:199 |
+| `/bi/dashboards` | `/bi` | biRoutes:17 |
+| `/bi/kpis` | `/bi` | biRoutes:19 |
+| `/bi/reports` | `/bi` | biRoutes:21 |
+| `/finance/fiscal-periods` | `/finance/fiscal-periods-v2` | financeRoutes:385 |
+| `/settings/print-templates` | `/admin/print-templates` | settingsRoutes:15 |
+| `/admin/attendance-categories` | `/hr/attendance-categories` | adminRoutes:105 |
+| `/admin/scoring-weights` | `/hr/scoring-weights` | adminRoutes:107 |
+| `/guide/properties` | `/properties/guide` | propertyRoutes:67 |
 
-### Structural fact #2 — tabs use distinct routes, never `?tab=`
+> **مفتاح الخطورة:** 🔴 عالية · 🟠 متوسطة · 🟡 منخفضة.
+> **عمود الأمان:** «آمن» = تغيير نص تسمية فقط، بلا مسّ مسار/صلاحية/منطق. «قرار مالك» = يلزم قرار مالك النظام (دمج مدخل، اعتماد اسم رسمي واحد بين بدائل، أو تعريب مصطلح قانوني/تقني راسخ).
 
-All 15 `*-tabs-nav.tsx` files render `<Link href="/distinct/route">` per tab (active state via an `exact` flag or a `match[]` prefix array). None use `?tab=` query params. So every tab is its own route and is independently cross-checkable against the route table. (The registry, by contrast, *does* use `?tab=` for some entries, e.g. `/module-dashboards?tab=hr`, `/hr/violations?tab=memos`.)
-
----
-
-## 2. Findings by problem class
-
-Severity key: **high** = user-facing wrong destination / dead-ish / English in core nav; **med** = same function two names (confusing but both work); **low** = cosmetic wording drift.
-Disposition key: **SAFE** = rename/realign with no owner call needed; **OWNER** = needs an owner decision (which name/path is canonical, or whether to retire a page).
-
-### 2.1 Class 1 — Same path, more than one label (menu vs tab vs page-title vs quick-action)
-
-| # | Path | Menu label (registry) | Tab label | Page `PageShell` title | Quick-action label | Proposed canonical AR | Sev | Disp |
-|---|---|---|---|---|---|---|---|---|
-| 1.1 | `/finance/cfo-cockpit` | لوحة المدير المالي | — | **لوحة المدير المالي اليومية (CFO Cockpit)** | — | **لوحة المدير المالي** | high | SAFE |
-| 1.2 | `/hr/attendance` | السجل اليومي (child) / النشاط والحضور (group) | الحضور | (page title) | — | السجل اليومي | low | OWNER |
-| 1.3 | `/finance/expenses` | المصروفات | المصروفات | — | **مصروف جديد** (action, OK) | المصروفات | low | SAFE |
-| 1.4 | `/employees` | قائمة الموظفين (child) / الموظفون (group) | الموظفون | (page title) | — | الموظفون | low | SAFE |
-| 1.5 | `/hr/violations` | نظرة عامة على المخالفات (child) / الامتثال والجزاءات (group) | المخالفات | — | — | المخالفات | med | OWNER |
-| 1.6 | `/finance/tax` | نظام الضرائب | الزكاة والضريبة | — | — | الزكاة والضريبة | med | OWNER |
-| 1.7 | `/finance/dimensional-routing` | التوجيه البُعدي | **التأصيل المالي** | — | — | التوجيه البُعدي | med | OWNER |
-| 1.8 | `/properties` | الوحدات العقارية | الوحدات | — | وحدة جديدة | الوحدات العقارية | low | SAFE |
-| 1.9 | `/fleet/telematics/video-evidence` | أدلة الفيديو | **جلسات الفيديو** | — | — | أدلة الفيديو | low | SAFE |
-| 1.10 | `/properties/sales` | المبيعات العقارية | **بيع العقارات** | — | — | المبيعات العقارية | low | SAFE |
-| 1.11 | `/fleet/transport/service-lines` | طابور تسعير بنود النقل | **أوامر الفوترة** | — | — | طابور تسعير بنود النقل | med | OWNER |
-| 1.12 | `/fleet/transport/rules` | قواعد استقبال النقل | قواعد الاستقبال | — | — | قواعد استقبال النقل | low | SAFE |
-
-> Note: the recurring "group label vs leaf label" rows (1.2, 1.4, 1.5) come from the registry pattern where a sub-group leader points at the same path as its first child but carries a *cluster* label. Header chip shows the **leaf** label (longest match). These are mostly acceptable-by-design but listed for owner awareness.
-
-### 2.2 Class 2 — Same label pointing to different paths
-
-| # | Label | Paths it points to | Where | Sev | Disp |
-|---|---|---|---|---|---|
-| 2.1 | **لوحة التحكم** | `/dashboard`, `/module-dashboards?tab=fleet`, `/module-dashboards?tab=warehouse`, `/module-dashboards?tab=store`, `/module-dashboards?tab=crm`, `/module-dashboards?tab=support` | registry (≥6 entries) | med | OWNER |
-| 2.2 | **التقارير** | `/finance/reports`, `/fleet/reports`, `/warehouse/reports/accuracy`, `/umrah/reports`, `/bi/reports`, `/properties/occupancy-report` (tab) | registry + tabs | low | OWNER |
-| 2.3 | **نظرة عامة** | `/legal`, `/governance`, `/properties/dashboard`, `/bi` (tab) | registry + tabs | low | SAFE |
-| 2.4 | **المدفوعات** | `/finance/payments`, `/umrah/payments`, `/properties/payments` | registry | low | SAFE |
-| 2.5 | **الموردون / الموردين** | `/finance/vendors`, `/warehouse/suppliers` | registry + tabs | low | OWNER |
-| 2.6 | **استيراد البيانات** | `/umrah/import`, `/admin/data-import` | registry | low | SAFE |
-| 2.7 | **سجل المراجعة** | `/admin/logs`, `/settings/audit-log` | registry | med | OWNER |
-| 2.8 | **التأمين / التنبيهات / المخالفات** | fleet vs umrah vs hr namespaces (`/fleet/...` vs `/umrah/...` vs `/hr/...`) | registry + tabs | low | SAFE |
-| 2.9 | **تقييم المخزون** | `/finance/inventory-costing` AND `/finance/reports/inventory-valuation` | registry (both in finance) | med | OWNER |
-
-> 2.1 is the highest-value Class 2 item: six menu entries all read **«لوحة التحكم»** but go to different module dashboards. Most are module-scoped so the user only sees one at a time, but `/dashboard` (global) and the module dashboards can both be reachable for power users → ambiguous. Proposed: make each module's dashboard label module-qualified (e.g. «لوحة الأسطول», «لوحة المخزون») and reserve «لوحة التحكم» for `/dashboard`.
-
-### 2.3 Class 3 — Same FUNCTION under different names (the expense/multi-expense family + others)
-
-| # | Function | Names found | Paths | Sev | Disp |
-|---|---|---|---|---|---|
-| 3.1 | Org structure | «الهيكل التنظيمي» (registry → `/hr/org-tree`) vs tab «الهيكل» (→ `/hr/organization`, **redirect**) | see §2.4 | high | SAFE |
-| 3.2 | Vendors/suppliers | «الموردين» (finance) vs «الموردون» (warehouse) — same concept, two spellings + two namespaces | `/finance/vendors`, `/warehouse/suppliers` | med | OWNER |
-| 3.3 | Inventory valuation | «تقييم المخزون» appears twice as different pages (costing vs report) | `/finance/inventory-costing`, `/finance/reports/inventory-valuation` | med | OWNER |
-| 3.4 | Dispatch | «الإرسال (Dispatch)» (registry) vs «الإرسال» (transport tab) | `/fleet/transport/dispatch` | low | SAFE |
-| 3.5 | Collections | «التحصيل والديون» (group) + «منضدة التحصيل» + «مراحل التصعيد» (`/finance/collection`) + «متابعة Dunning» — collection cycle named four ways | `/finance/collections`, `/finance/ar-collection-workbench`, `/finance/collection`, `/finance/dunning` | med | OWNER |
-| 3.6 | Reconciliation | «مركز التسويات» (`/finance/reconciliation-hub`) vs «التسوية البنكية» vs «ورقة عمل تسوية حساب» vs «تسوية GL» (admin) | multiple | low | OWNER |
-
-> **Expense/multi-expense class:** the earlier cleanup landed — the registry now has a single «المصروفات» → `/finance/expenses` plus clearly-distinct siblings («اعتماد مصاريف بالجملة», «موزّع التكاليف», «معدل الحرق», «محلّل مزيج المصاريف»). **No remaining duplicate of the core expenses page was found.** The quick-action `/finance/expenses?action=new` correctly reuses the same page. ✅
-
-### 2.4 Class 4 — Tabs pointing to a redirect / retired / legacy page
-
-| # | Tab (file:line) | Tab path | Resolves to | Sev | Disp |
-|---|---|---|---|---|---|
-| 4.1 | `hr-tabs-nav.tsx:18` «الهيكل» | `/hr/organization` | **REDIRECT → `/hr/org-tree`** (hrRoutes.tsx:169) | high | SAFE |
-| 4.2 | `fleet-tabs-nav.tsx:31` «التتبع المباشر» | `/fleet/telematics/live-map` | live (OK) — but the tab `match` also covers `/fleet/telematics` (live) | low | SAFE |
-
-> 4.1 is the only **tab → redirect** found. It is safe to retarget the tab to `/hr/org-tree` (the canonical path the registry already uses) — the redirect keeps old bookmarks working, but a tab should never point through a redirect. All other 13 tab files point at live, non-redirect routes.
+> **تنبيه حوكمي حاسم (يحمي شروط القبول) — مقيس فعليًا:**
+> تشغيل البوّابة على الأساس الحالي يُظهر حالتين:
+> - `pnpm audit:sidebar` (الوضع الافتراضي، report-only) → **خروج 0**.
+> - `pnpm gate:nav` (‎`--strict`‎) → **خروج 1**، إذ يرصد **14 صفحة orphan موجودة مسبقًا** (قبل هذه الشريحة وبلا علاقة بها)، أبرزها **8 مسارات redirect في HR** غير مُدرجة في القائمة: `/hr/leaves/management`, `/hr/organization`, `/hr/organization/structure`, `/hr/performance/advanced`, `/hr/recruitment/advanced`, `/hr/shifts/management`, `/hr/training/advanced`, `/hr/violations/management` — إضافةً إلى `/finance/customer-advances/quick-create`, `/finance/expenses/multi-line`, `/finance/fiscal-periods`, `/admin/attendance-categories`, `/admin/scoring-weights`, `/my/work-queue`.
+> - أما مداخل redirect الظاهرة **داخل** القائمة (`/bi/dashboards`, `/bi/kpis`, `/bi/reports`, `/guide/properties`) فهي مُغطّاة الآن لأنها مُسجَّلة كمداخل؛ **حذفها المباشر سيرفع عدّاد الـ orphan من 14 إلى 17** ويزيد فشل `gate:nav` (لأن المُوجِّهات ليست ضمن استثناءات `isLegitimatelyOffSidebar`).
 >
-> **No tab points to a retired/unregistered page.** (Retired families — `/driver-portal/*`, FiscalPeriods v1, classic roles — are not referenced by any tab.)
+> **الخلاصة:** الإصلاح الصحيح ليس الحذف، بل **التوحيد عبر `navigation.canonical-map.ts` + ترقية الحارس ليعتبر مسارات الـ redirect «off‑sidebar مشروعة»** — وهذا يُسقِط الـ14 orphan القائمة أيضًا. موثّق في §10. هذه الشريحة (توثيق فقط) **لا تُغيّر هذا العدّاد إطلاقًا** (لا تمسّ السجل ولا المسارات ولا الحارس).
 
-### 2.5 Class 5 — Menu label != page title (same destination)
+---
 
-Because the header chip == menu label (Structural fact #1), the only real Class-5 drift is **menu label vs the page's own `PageShell title=`**. Confirmed examples:
+## 1. نفس المسار بأكثر من اسم (Same path, multiple labels)
 
-| # | Path | Menu label | In-page `PageShell` title | Sev | Disp |
+### 1.أ — التباسات حقيقية (تتطلب توحيدًا)
+
+| المسار | الأسماء الحالية | الاسم المقترح | السبب | الخطورة | آمن/قرار مالك |
 |---|---|---|---|---|---|
-| 5.1 | `/finance/cfo-cockpit` | لوحة المدير المالي | لوحة المدير المالي اليومية (CFO Cockpit) | high | SAFE |
-| 5.2 | `/finance/gl-health` | GL Health Score | مؤشر صحة النظام المالي (GL Health Score) | high | SAFE |
-| 5.3 | `/finance/entity-360` | ملف الجهة 360° | نظرة شاملة على كيان (Entity 360) | med | SAFE |
-| 5.4 | `/finance/workflows-hub` | مركز سير العمل المالي | مركز سير عمل المالية | low | SAFE |
+| `/work-inbox` | «صندوق الأعمال» (الرئيسية، L84) + «ما ينتظر إجراءاتي» (مساحاتي، L88) | **«صندوق الأعمال»** للمدخلين، أو الإبقاء على الثاني كاسم بحث فقط | مدخلان منفصلان في القائمة لنفس الصفحة باسمين مختلفين يوهمان بوجود شاشتين | 🟠 | قرار مالك (أيّهما الرسمي) |
+| `/my-space` | «مساحاتي» (parent، L87) + «مساحتي» (child، L93) — وعنوان الصفحة `my-space.tsx` = **«مساحتي»** | توحيد على **«مساحتي»** (مطابقة عنوان الصفحة) | اختلاف صرفي بين الأب والابن لنفس المسار؛ والصفحة تستخدم «مساحتي» | 🟠 | آمن |
+| `/hr/services` | «كتالوج خدمات HR» (L122) + «الطلبات» (قائد المجموعة، L208) + «كتالوج الخدمات» (L209) — والصفحة = «خدمات الموارد البشرية» | اسم رسمي واحد: **«كتالوج خدمات الموارد البشرية»**، والبقية للبحث | أربعة أسماء لنفس المسار (٣ في القائمة + عنوان الصفحة) | 🔴 | قرار مالك |
+| `/bi` | «لوحة التحليلات» (L873) + «ذكاء الأعمال» (قائد المجموعة، L872) + عنوان الصفحة «ذكاء الأعمال» + تبويب «نظرة عامة» | اسم رسمي واحد: **«ذكاء الأعمال»** | ثلاثة أسماء + تبويب رابع لنفس المسار | 🟠 | قرار مالك |
+| `/admin` | «مدير النظام» (قائد، L887) + «الأدوار والصلاحيات (v2)» (L891) + عنوان الصفحة «لوحة الإدارة» | فصل: قائد المجموعة «مدير النظام»، والمدخل الفرعي يصف وظيفته الحقيقية | ثلاثة أسماء لنفس المسار `/admin` تُربك «أين أنا؟» | 🟠 | قرار مالك |
+| `/properties/guide` ↔ `/guide/properties` | «دليل العقارات» (L694، canonical) + «دليل إرشادي مصور» (L695، عبر redirect) | إبقاء «دليل العقارات» فقط؛ نقل «دليل إرشادي مصور» إلى أسماء البحث | مدخلان بقائمة واحدة يصلان لنفس الصفحة (الثاني عبر redirect) باسمين | 🟠 | قرار مالك (انظر §4 و§10) |
 
-> Recommendation (Slice 2): the in-page `PageShell title` should equal the canonical Arabic name; English/parenthetical glosses move to `subtitle` or are dropped. A guard can assert `PageShell title === canonicalName(path)` for registry paths.
+### 1.ب — نمط «قائد المجموعة = نظرة عامة الابن» (مقبول بالتصميم — للتوثيق لا للإصلاح)
 
-### 2.6 Class 6 — Tab label != page title/name
+النمط السائد: المدخل الحاوي (group) يحمل اسم المجموعة ويقود لأول ابن، والابن الأول يحمل اسم «النظرة العامة». هذا **سلوك أكورديون مقصود** (موثّق في تعليقات السجل #1715/#1799/#2488…) وليس تكرارًا يُصلَح. أمثلة (عيّنة): `/finance` («اللوحات والإقفال»/«لوحة المالية») · `/employees` («الموظفون»/«قائمة الموظفين») · `/hr/payroll` («الرواتب والمستحقات»/«مسيرات الرواتب») · `/fleet/drivers` · `/warehouse/movements` · `/umrah/pilgrims` · `/legal/cases` («الشؤون القانونية»/«القضايا») … (≈ 30 زوجًا).
 
-| # | Tab (file:line) | Path | Tab label | Canonical/registry name | Sev | Disp |
-|---|---|---|---|---|---|---|
-| 6.1 | `finance-tabs-nav.tsx:34` | `/finance/dimensional-routing` | التأصيل المالي | التوجيه البُعدي | med | OWNER |
-| 6.2 | `fleet-telematics-tabs-nav.tsx:13` | `/fleet/telematics/video-evidence` | جلسات الفيديو | أدلة الفيديو | low | SAFE |
-| 6.3 | `property-tabs-nav.tsx:15` | `/properties/sales` | بيع العقارات | المبيعات العقارية | low | SAFE |
-| 6.4 | `transport-tabs-nav.tsx:22` | `/fleet/transport/service-lines` | أوامر الفوترة | طابور تسعير بنود النقل | med | OWNER |
-| 6.5 | `finance-tabs-nav.tsx:27` | `/finance/tax` | الزكاة والضريبة | نظام الضرائب | med | OWNER |
-| 6.6 | `transport-tabs-nav.tsx:20` | `/fleet/transport/rules` | قواعد الاستقبال | قواعد استقبال النقل | low | SAFE |
-| 6.7 | `fleet-tabs-nav.tsx:33` | `/fleet/reports` (+`/fleet/tco`) | التقارير | التقارير والتكاليف | low | SAFE |
+> **توصية الحوكمة:** يُسجَّل هذا النمط كـ **استثناء موثّق** في `navigation.canonical-map.ts` (حقل `groupLeader: true`) كي لا يرصده الحارس الآلي كازدواج.
 
-### 2.7 Class 7 — Quick-action buttons pointing to retired / redirect pages
+---
 
-`pageQuickActions` in `sidebar-layout.tsx` (L480–685). Cross-checked every `link:`:
+## 2. نفس الاسم لمسارات مختلفة (Same label, different paths)
 
-| # | Quick-action (line) | Link | Status | Sev | Disp |
+| الاسم المكرَّر | المسارات | الاسم المقترح | السبب | الخطورة | آمن/قرار مالك |
 |---|---|---|---|---|---|
-| 7.1 | L500 «إدارة الإجازات» | `/hr/leaves/management` | **REDIRECT → `/hr/leaves`** | high | SAFE |
-| 7.2 | L560 «إدارة المخالفات» | `/hr/violations/management` | **REDIRECT → `/hr/violations`** | high | SAFE |
-| 7.3 | L569–572 (whole `/hr/violations/management` action set) | keyed on a redirect path | the *key* `/hr/violations/management` only matches after the redirect already fired; effectively dead config | med | SAFE |
-| 7.4 | L494–497 (whole `/hr/leaves/management` action set) | keyed on redirect path `/hr/leaves/management` | same as 7.3 — dead key | med | SAFE |
-| 7.5 | L528, L530–533 «تقييم متقدم» / `/hr/performance/advanced` | `/hr/performance/advanced` | **REDIRECT → `/hr/performance`** (both as link and as a key) | high | SAFE |
-| 7.6 | L580 «إدارة الورديات» | `/hr/shifts/management` | **REDIRECT → `/hr/shifts`** | high | SAFE |
-| 7.7 | L582–585 (`/hr/shifts/management` action set) | keyed on redirect path | dead key | med | SAFE |
-| 7.8 | L539, L543 «المتقدمين»/«الوظائف» recruitment | live (`/hr/recruitment/applications`, `/hr/recruitment`) | OK | — | — |
-
-> **Highest-severity quick-action problems:** 7.1, 7.2, 7.5, 7.6 — visible buttons that route the user **through a redirect**. Functionally they still land somewhere valid, but they violate hard-rule "quick-actions point to live non-redirect routes". Also several `pageQuickActions` **keys** are redirect paths (7.3, 7.4, 7.7) so those action sets never actually display (the page redirects before the key can match) — dead config to be removed in Slice 2.
-
-### 2.8 Class 8 — Non-Arabic / non-standardized terms still USER-VISIBLE
-
-These appear as **menu labels** (registry) and therefore also as the header chip — fully user-visible. (Plus the in-page titles in §2.5.)
-
-| # | Surface (file:line) | Path | Current visible text | Proposed canonical AR | Sev | Disp |
-|---|---|---|---|---|---|---|
-| 8.1 | registry L408 | `/finance/reports/zatca` | **ZATCA Reports Hub** | مركز تقارير ZATCA (الفوترة الإلكترونية) | high | SAFE |
-| 8.2 | registry L420 | `/finance/gl-health` | **GL Health Score** | مؤشر صحة دفتر الأستاذ | high | SAFE |
-| 8.3 | registry L442 | `/finance/approvals-inbox` | **Approvals Inbox** | صندوق الاعتمادات | high | SAFE |
-| 8.4 | registry L447 | `/finance/reports/gl-integrity-gaps` | **GL Integrity Gaps** | فجوات سلامة دفتر الأستاذ | high | SAFE |
-| 8.5 | registry L449 | `/finance/reports/unmapped-lines` | **Unmapped Lines** | بنود غير مُوجَّهة | high | SAFE |
-| 8.6 | registry L450 | `/finance/journal/activity` | **Posting Activity** | نشاط الترحيل | high | SAFE |
-| 8.7 | registry L415 | `/finance/reports/is-vs-budget` | **P&L مقابل الميزانية** | قائمة الدخل مقابل الموازنة | med | SAFE |
-| 8.8 | registry L418 | `/finance/reports/yoy` | المقارنة السنوية (سنة/سنة) | المقارنة السنوية (مقبول) | low | SAFE |
-| 8.9 | registry L431 | `/finance/reports/cogs-summary` | ملخص التكلفة (CoGS) | ملخص تكلفة المبيعات | low | SAFE |
-| 8.10 | registry L300 | `/finance/cfo-cockpit` | لوحة المدير المالي (label OK) — but page title has «CFO Cockpit» (§5.1) | — | high | SAFE |
-| 8.11 | registry L565–576 | `/fleet/telematics*` | «التتبع (Telematics)», «نظام التتبع (Telematics)», «إعدادات CMSV6», «أجهزة MDVR» | التتبع المباشر / إعدادات الكاميرات / أجهزة التسجيل (مع إبقاء الرمز الفني كقوس) | med | OWNER |
-| 8.12 | registry L460 | `/finance/dunning` | متابعة Dunning | متابعة التذكير بالتحصيل | low | SAFE |
-| 8.13 | registry L583 | `/fleet/transport/dispatch` | الإرسال (Dispatch) | الإرسال | low | SAFE |
-| 8.14 | registry L299, L318, L443, L455 | various | «...workflows-hub / reconciliation-hub / entity-360 hub» rendered AR but the page titles carry «Hub/360» English (§2.5) | — | med | SAFE |
-
-> The cluster of **fully-English finance menu labels** (8.1–8.6) is the single biggest standardization gap and the highest-severity Class-8 group: these are core navigation labels the user reads every day. All are SAFE to rename (label-only change; path untouched).
+| **«تقييم المخزون»** | `/finance/inventory-costing` (صفحة: «تقييم المخزون بالمتوسط المرجح») + `/finance/reports/inventory-valuation` (صفحة: «تقييم المخزون») | الأول «تقييم المخزون (المتوسط المرجح)» · الثاني «تقرير تقييم المخزون» | اسمان متطابقان في القائمة لوظيفتين ماليتين مختلفتين | 🔴 | آمن |
+| **«سجل المراجعة»** | `/admin/logs` (صفحة «سجل التدقيق») + `/settings/audit-log` | تمييز: «سجل تدقيق النظام» مقابل «سجل مراجعة الإعدادات» | اسم واحد لسجلّين مختلفين | 🟠 | قرار مالك |
+| **«استيراد البيانات»** | `/umrah/import` (صفحة «معالج استيراد العمرة») + `/admin/data-import` (صفحة «استيراد البيانات (إداري)») | «استيراد بيانات العمرة» مقابل «استيراد البيانات (إداري)» | اسم واحد لمستوردين مختلفين | 🟠 | آمن |
+| **«الموردين/الموردون»** | `/finance/vendors` («الموردين») + `/warehouse/suppliers` («الموردين») | «موردو المالية» مقابل «موردو المستودع» (أو توضيح بالسياق) | نفس الاسم لكيانين مختلفين (Vendors مالي ≠ Suppliers مخزني) | 🟠 | قرار مالك |
+| **«لوحة التحكم»** | `/dashboard` + `/module-dashboards?tab=fleet|warehouse|store|crm|support` (6+ مداخل) | اسم اللوحة العامة «لوحة التحكم»؛ ولوحات المسارات «لوحة <المسار>» | «لوحة التحكم» مكرّرة لكل وحدة عبر نفس الصفحة `module-dashboards` بمعاملات tab مختلفة | 🟡 | آمن |
+| **«نظرة عامة»** | `/legal` + `/governance` + `/properties/dashboard` | «نظرة عامة — القانونية/الحوكمة/الأملاك» | اسم عام يتكرر بلا تمييز السياق | 🟡 | آمن |
+| **«التقارير»** | `/hr/turnover-report` + `/fleet/reports` + `/warehouse/reports/accuracy` + `/umrah/reports` (قادة مجموعات) | يُقبل ضمن نمط قائد‑المجموعة، لكن يُفضّل «تقارير <المسار>» | عنوان عام يتكرر؛ مقبول جزئيًا بحكم التجميع | 🟡 | آمن |
+| **«المدفوعات»** / **«الفواتير»** | `/finance/payments`+`/properties/payments`+`/umrah/payments` · `/finance/invoices`+`/umrah/invoices` | إبقاء الاسم العام داخل سياق الوحدة (مقبول) | تكرار اسمي بين وحدات، لكن السياق (الوحدة) يفصلها بصريًا | 🟡 | آمن |
+| **«الامتثال»** | `/umrah/compliance` + `/governance/compliance` | «الامتثال — عمرة» مقابل «الامتثال — الحوكمة» | اسم واحد لمفهومي امتثال مختلفين | 🟡 | آمن |
 
 ---
 
-## 3. Dead-link & redirect cross-check (summary)
+## 3. نفس الوظيفة بأسماء مختلفة (Same function, divergent names)
 
-- **Dead links (nav/tab/quick-action → unregistered route): 0.** Every referenced path resolves. ✅ (`check-sidebar-coverage.mjs` exits 0.)
-- **Redirect targets referenced as destinations:** the menu deliberately points to canonical paths; the *leaks* are the tab in §2.4 (4.1) and the quick-actions in §2.7 (7.1, 7.2, 7.5, 7.6) plus the dead `pageQuickActions` keys.
-- **Full redirect map** (from `routes/*.tsx`, all built via `redirect-to.tsx`):
-
-  | SOURCE | TARGET |
-  |---|---|
-  | `/finance/fiscal-periods` | `/finance/fiscal-periods-v2` |
-  | `/hr/leaves/management` | `/hr/leaves` |
-  | `/hr/performance/advanced` | `/hr/performance` |
-  | `/hr/training/advanced` | `/hr/training` |
-  | `/hr/organization` | `/hr/org-tree` |
-  | `/hr/organization/structure` | `/hr/org-tree` |
-  | `/hr/recruitment/advanced` | `/hr/recruitment` |
-  | `/hr/violations/management` | `/hr/violations` |
-  | `/hr/shifts/management` | `/hr/shifts` |
-  | `/guide/properties` | `/properties/guide` |
-  | `/admin/attendance-categories` | `/hr/attendance-categories` |
-  | `/admin/scoring-weights` | `/hr/scoring-weights` |
-  | `/settings/print-templates` | `/admin/print-templates` |
-  | `/bi/dashboards` `/bi/kpis` `/bi/reports` | `/bi` |
-
-  > ⚠️ The registry itself lists `/bi/dashboards`, `/bi/kpis`, `/bi/reports` as **menu children** (L876–877) and the BI tabs list them too — but routes redirect all three to `/bi`. That is **menu/tabs → redirect** (a Class-4/Class-7 variant inside BI). Flagged: **bi-tabs-nav L7/L8/L9** and **registry L876–877** point through redirects. Sev: med, Disp: OWNER (decide whether BI sub-pages are real or should be dropped from the menu).
+| الوظيفة | الأسماء المتعددة (المسار) | الاسم المقترح | السبب | الخطورة | آمن/قرار مالك |
+|---|---|---|---|---|---|
+| لوحة BI الواحدة `/bi` | «لوحة التحليلات» + «لوحات BI» (`/bi/dashboards`→redirect) + «مؤشرات الأداء» (`/bi/kpis`→redirect) + «التقارير التحليلية» (`/bi/reports`→redirect) — **أربعة مداخل تصل فعليًا لـ `/bi`** | مدخل واحد «ذكاء الأعمال»؛ الثلاثة المُوجَّهة → أسماء بحث فقط | المستخدم يرى ٤ مداخل لوظيفة واحدة (٣ منها redirect) | 🔴 | قرار مالك (+ §10) |
+| منضدة/مركز الموافقات | «صندوق الواردات HR» (`/hr/approvals`) + «Approvals Inbox» (`/finance/approvals-inbox`) + «صندوق الأعمال» (`/work-inbox`) | توحيد المعجم: «صندوق الموافقات — <المجال>» | نفس مفهوم «صندوق الموافقات» بثلاثة أسماء مختلفة (أحدها إنجليزي) | 🟠 | قرار مالك |
+| مركز التسويات المالي | «مركز التسويات» (`/finance/reconciliation-hub`) + «التسوية البنكية» + «مركز التلقّي المالي» | معجم تسويات موحّد | تقارب دلالي يستحق توحيد المصطلح | 🟡 | قرار مالك |
+| التتبّع الميداني للموظف | «التتبع الحي (الميداني)» (`/hr/attendance/field-tracking`) + «رفيق الميدان» (`/my/field-companion`) + «تتبع ميداني» (إجراء سريع) | تثبيت مصطلح «التتبّع الميداني» عبر كل المداخل | ثلاث صياغات لمفهوم الميدان | 🟡 | آمن |
 
 ---
 
-## 4. Finding counts
+## 4. تبويبات/مداخل تشير إلى redirect أو صفحات قديمة
 
-| Class | Title | Count | Highest sev |
-|---|---|---:|---|
-| 1 | same path, >1 label | 12 | high (×1) |
-| 2 | same label, different paths | 9 | med |
-| 3 | same function, different names | 6 | high (×1) |
-| 4 | tab → redirect/retired | 2 (+3 BI) | high (×1) |
-| 5 | menu label != page title | 4 | high (×2) |
-| 6 | tab label != page title | 7 | med |
-| 7 | quick-action → redirect/dead | 8 | high (×4) |
-| 8 | non-Arabic user-visible | 14 | high (×6) |
-| **Total** | | **~62 findings** | |
+| الموضع | المدخل/التبويب → المسار | الحالة | الإصلاح المقترح | الخطورة | آمن/قرار مالك |
+|---|---|---|---|---|---|
+| `bi-tabs-nav.tsx` L137 | «اللوحات» → `/bi/dashboards` | **redirect → /bi** | إزالة التبويب أو توجيهه للتبويب الداخلي الحقيقي | 🔴 | قرار مالك |
+| `bi-tabs-nav.tsx` L138 | «المؤشرات» → `/bi/kpis` | **redirect → /bi** | كما أعلاه | 🔴 | قرار مالك |
+| `bi-tabs-nav.tsx` L139 | «التقارير» → `/bi/reports` | **redirect → /bi** | كما أعلاه | 🔴 | قرار مالك |
+| `navigation.registry.ts` L876‑878 | «مؤشرات الأداء»/«التقارير التحليلية»/«لوحات BI» → `/bi/*` | **3 مداخل redirect في القائمة** | توحيد عبر canonical-map (لا حذف قبل ترقية الحارس) | 🔴 | قرار مالك (+ §10) |
+| `navigation.registry.ts` L695 | «دليل إرشادي مصور» → `/guide/properties` | **redirect → /properties/guide** (المُسجَّل أصلًا كـ«دليل العقارات» L694) | نقله لأسماء البحث | 🟠 | قرار مالك (+ §10) |
+| `hr-tabs-nav.tsx` L421 (`match`) | يتضمّن `/hr/organization` ضمن مطابقة تبويب «الموظفون» | `/hr/organization`→redirect (مجرّد إبراز، الـ`href` سليم=`/employees`) | لا فعل ضروري (إبراز فقط) | 🟡 | آمن |
 
-### Highest-severity duplicates (the things to fix first in Slice 2)
-1. **English finance menu labels** (8.1–8.6): `ZATCA Reports Hub`, `GL Health Score`, `Approvals Inbox`, `GL Integrity Gaps`, `Unmapped Lines`, `Posting Activity`. — SAFE label-only renames.
-2. **Quick-actions through redirects** (7.1/7.2/7.5/7.6) + **dead quick-action keys** (7.3/7.4/7.7): retarget to canonical live paths, delete dead keys. — SAFE.
-3. **Org-structure tab → redirect** (4.1): `hr-tabs-nav` «الهيكل» → `/hr/organization` should become `/hr/org-tree`. — SAFE.
-4. **Page titles carrying English** (5.1/5.2): CFO Cockpit, GL Health Score in-page titles. — SAFE.
-5. **«لوحة التحكم» × 6 destinations** (2.1): module-qualify the labels. — OWNER.
+> **ملاحظة:** لا يوجد أي **رابط ميت** (dead-link) — كل المسارات أعلاه مُركَّبة فعليًا كـ redirect، لذا `check-sidebar-coverage` يبقى أخضر. المشكلة تجربةُ مستخدمٍ (أسماء متعددة لنفس الوجهة)، لا انكسار توجيه.
 
 ---
 
-## 5. Proposals (Slice 2+) — DESIGN ONLY, not implemented in this slice
+## 5. اختلاف اسم القائمة عن عنوان الصفحة (Menu label ≠ PageShell title)
 
-Nothing below is wired. These are the artifacts the next slices would add.
+عيّنة تمثيلية (الحالات الأوضح؛ القائمة الكاملة تُولَّد آليًا بالحارس المقترح §8):
 
-### 5.1 `docs/ux/ARABIC_NAVIGATION_GLOSSARY.md` ✅ created in this slice
-A starting catalog of the canonical Arabic term per function, seeded from the findings above and reconciled with the existing `docs/ux/ARABIC_BUSINESS_TERMS.md`. See that file.
+| المسار | اسم القائمة | عنوان الصفحة (PageShell) | المقترح | الخطورة | آمن/قرار مالك |
+|---|---|---|---|---|---|
+| `/finance/gl-health` | «GL Health Score» | «مؤشر صحة النظام المالي (GL Health Score)» | اعتماد اسم الصفحة العربي في القائمة | 🔴 | آمن |
+| `/finance/approvals-inbox` | «Approvals Inbox» | «صندوق الموافقات الموحد (Approvals Inbox)» | اعتماد «صندوق الموافقات الموحّد» | 🔴 | آمن |
+| `/finance/reports/gl-integrity-gaps` | «GL Integrity Gaps» | «فجوات سلامة الـ GL (قبل إقفال الفترة)» | اعتماد العربي | 🔴 | آمن |
+| `/finance/reports/unmapped-lines` | «Unmapped Lines» | «البنود غير المُوجَّهة (قبل الإقفال)» | اعتماد العربي | 🔴 | آمن |
+| `/finance/journal/activity` | «Posting Activity» | «نشاط الترحيل المحاسبي اليومي» | اعتماد العربي | 🔴 | آمن |
+| `/finance/reports/zatca` | «ZATCA Reports Hub» | «تقارير الضرائب والمخزون» | «مركز تقارير ZATCA» أو اسم الصفحة | 🟠 | قرار مالك |
+| `/hr` | «مركز الموارد البشرية» | «الموارد البشرية» (تبويب: «لوحة HR») | توحيد على «مركز الموارد البشرية» | 🟠 | آمن |
+| `/hr/org-tree` | «الهيكل التنظيمي» | «الشجرة التنظيمية» | توحيد المصطلح | 🟠 | آمن |
+| `/hr/recruitment` | «وظائف التوظيف» | «التوظيف والاستقطاب» | توحيد | 🟡 | آمن |
+| `/hr/excuse-requests` | «طلبات الأعذار» | «طلبات الاستئذان» | توحيد المصطلح | 🟡 | آمن |
+| `/hr/turnover-report` | «تقرير الدوران» | «تقرير دوران الموظفين» | توحيد | 🟡 | آمن |
+| `/fleet/cargo` | «الشحن والبضائع» | «نقل البضائع» | توحيد | 🟡 | آمن |
+| `/fleet/traffic-violations` | «مخالفات المرور» | «المخالفات المرورية» | توحيد | 🟡 | آمن |
+| `/fleet/tco` | «تكلفة الملكية (TCO)» | «تحليل التكلفة الكلية للمركبة» | توحيد | 🟡 | آمن |
+| `/umrah/accommodations` | «السكن والإقامة» | «الإقامة الفندقية» (تبويب «الإقامة») | توحيد ثلاثي | 🟡 | آمن |
+| `/umrah/daily-runsheet` | «البرنامج اليومي» | «كشف اليوم التشغيلي — عمرة» (تبويب «كشف اليوم») | توحيد ثلاثي | 🟡 | آمن |
+| `/umrah/exempt-pilgrims` | «المعتمرون المعفون» | «المعتمرون المستثنون…» (تبويب «المستثنون») | «المعفون» أم «المستثنون»؟ | 🟡 | قرار مالك |
+| `/requests` | «تقديم طلب»/«مركز الطلبات» | «طلبات المشتريات» | توضيح: هل الصفحة عامة أم مشتريات؟ | 🟠 | قرار مالك |
+| `/governance` | «نظرة عامة» | «الحوكمة والامتثال» | توحيد | 🟡 | آمن |
+| `/insights` | «الرؤى الذكية» | «رؤى ذكية» | توحيد | 🟡 | آمن |
+| `/intelligence/ai-workbench` | «منصة AI» | «منصة الذكاء الاصطناعي» | اعتماد العربي | 🟠 | آمن |
 
-### 5.2 `navigation.canonical-map.ts` — shape & location (design only)
-- **Where:** `artifacts/ghayth-erp/src/components/layout/navigation.canonical-map.ts` (next to the registry, same import surface).
-- **What:** a single exported const keyed by a stable **function id** (not by path, so a function that later moves keeps its identity).
+---
+
+## 6. اختلاف اسم التبويب عن اسم القائمة/الصفحة (Tab label ≠ menu/page)
+
+| المسار | اسم التبويب | اسم القائمة | عنوان الصفحة | الخطورة | آمن/قرار مالك |
+|---|---|---|---|---|---|
+| `/bi` | «نظرة عامة» | «لوحة التحليلات» | «ذكاء الأعمال» | 🟠 | قرار مالك |
+| `/bi/operations` | «العمليات» | «تحليل الأداء» | «تحليل الأداء التشغيلي» | 🟡 | آمن |
+| `/bi/admin-reports` | «تقارير الإدارة» | «التقارير الإدارية» | «التقارير الإدارية» | 🟡 | آمن |
+| `/fleet` | «المركبات» | «إدارة الأسطول» | «إدارة الأسطول» | 🟡 | آمن |
+| `/fleet/transport/dispatch` | «الإرسال» | «الإرسال (Dispatch)» | «لوحة توزيع الرحلات» | 🟡 | آمن |
+| `/fleet/transport/ops-dashboard` | «لوحة العمليات» | «لوحة عمليات النقل» | «لوحة تشغيل اليوم» | 🟡 | آمن |
+| `/fleet/transport/service-lines` | «أوامر الفوترة» | «طابور تسعير بنود النقل» | «طابور تسعير بنود النقل» | 🟠 | آمن |
+| `/fleet/transport/rules` | «قواعد الاستقبال» | «قواعد استقبال النقل» | «قواعد العمليات والنفقات» | 🟡 | آمن |
+| `/crm` | «الفرص» | «الفرص التجارية» | «إدارة علاقات العملاء» | 🟡 | آمن |
+| `/umrah` | «نظرة عامة» | «لوحة التشغيل» | «لوحة تشغيل العمرة» | 🟡 | آمن |
+| `/umrah/violations` | «المخالفات» | «المخالفات النظامية» | «المخالفات» | 🟡 | آمن |
+| `/umrah/reconciliation` | «المطابقة» | «التسوية والمطابقة» | «تقرير المطابقة — نسك ↔ النظام» | 🟡 | آمن |
+| `/warehouse` | «الأصناف» | «لوحة التحكم»/«المستودعات» | — | 🟡 | آمن |
+| `/fleet/drivers` | «السائقون» | «السائقين» | — | 🟡 | آمن (صرفي) |
+
+> **نمط متكرّر:** التبويبات الأفقية تستخدم اختصارًا للاسم (مثل «الإرسال»، «المطابقة») بينما القائمة تستخدم الاسم الكامل. مقبول كنمط، لكن يجب أن يكون **اشتقاقًا منضبطًا** من الاسم الرسمي عبر canonical-map، لا اجتهادًا منفصلًا.
+
+---
+
+## 7. أزرار الإجراءات السريعة → صفحات retired/redirect
+
+من `pageQuickActions` في `sidebar-layout.tsx`:
+
+| موضع الزر (page key) | الزر → الوجهة | حالة الوجهة | الإصلاح المقترح | الخطورة | آمن/قرار مالك |
+|---|---|---|---|---|---|
+| `/hr/violations` (L560) | «إدارة المخالفات» → `/hr/violations/management` | **redirect → /hr/violations** | إزالة الزر (الصفحة الأم نفسها) أو توجيهه لتبويب «المخالفات الخام» | 🔴 | آمن |
+| `/hr/shifts` (L580) | «إدارة الورديات» → `/hr/shifts/management` | **redirect → /hr/shifts** | إزالة الزر (يعيد لنفس الصفحة) | 🔴 | آمن |
+| `/hr/performance` (L528) | «تقييم متقدم» → `/hr/performance/advanced` | **redirect → /hr/performance** | إزالة الزر أو توجيهه لتبويب التحليلات | 🔴 | آمن |
+| `/hr/leaves/approval-chains` (L500) | «إدارة الإجازات» → `/hr/leaves/management` | **redirect → /hr/leaves** | توجيهه إلى `/hr/leaves` مباشرة | 🟠 | آمن |
+| `/hr/violations/management` (L569‑573) | كتلة إجراءات كاملة مفتاحها مسار redirect | **config ميت** (الصفحة تُوجِّه قبل العرض) | حذف الكتلة | 🟠 | آمن |
+| `/hr/shifts/management` (L582‑585) | كتلة إجراءات مفتاحها redirect | **config ميت** | حذف الكتلة | 🟠 | آمن |
+| `/hr/performance/advanced` (L530‑533) | كتلة إجراءات مفتاحها redirect | **config ميت** | حذف الكتلة | 🟠 | آمن |
+| `/hr/leaves/management` (L494‑497) | كتلة إجراءات مفتاحها redirect | **config ميت** | حذف الكتلة | 🟠 | آمن |
+
+> الأربعة الأولى أزرار **يراها المستخدم** وتقوده لإعادة توجيه ترتدّ لنفس الصفحة (تجربة دائرية). الأربعة الأخيرة كتل تهيئة ميتة لا تُعرض إطلاقًا (مفتاحها مسار يُوجِّه قبل أن يصل الـ shell). جميعها آمنة الإصلاح (تعديل تهيئة، بلا مسّ مسار/صلاحية).
+
+---
+
+## 8. مصطلحات غير عربية / غير موحّدة (ظاهرة للمستخدم)
+
+استُخرجت كل التسميات الحاوية حروفًا لاتينية من القائمة والتبويبات. صُنِّفت إلى:
+
+### 8.أ — إنجليزي صرف بلا مقابل عربي ظاهر (🔴 — أولوية التعريب)
+
+| المسار | الاسم الحالي | الاسم المقترح | ملاحظة | آمن/قرار مالك |
+|---|---|---|---|---|
+| `/finance/approvals-inbox` | «Approvals Inbox» | «صندوق الموافقات الموحّد» | الصفحة تحمله عربيًا أصلًا | آمن |
+| `/finance/gl-health` | «GL Health Score» | «مؤشر صحة النظام المالي» | الصفحة تحمله عربيًا أصلًا | آمن |
+| `/finance/reports/gl-integrity-gaps` | «GL Integrity Gaps» | «فجوات سلامة دفتر الأستاذ» | الصفحة تحمله عربيًا أصلًا | آمن |
+| `/finance/reports/unmapped-lines` | «Unmapped Lines» | «البنود غير المُوجَّهة» | الصفحة تحمله عربيًا أصلًا | آمن |
+| `/finance/journal/activity` | «Posting Activity» | «نشاط الترحيل المحاسبي» | الصفحة تحمله عربيًا أصلًا | آمن |
+| `/finance/reports/zatca` | «ZATCA Reports Hub» | «مركز تقارير ZATCA» | إبقاء ZATCA كعلم؛ تعريب «Reports Hub» | قرار مالك |
+| `/bi/dashboards` | «لوحات BI» | «لوحات ذكاء الأعمال» | تعريب «BI» | قرار مالك |
+
+> هذه الحالات تطابق حرفيًا ما طلبه التكليف (Cockpit / Hub / GL Health). لاحظ أن `/finance/cfo-cockpit` تسميته في القائمة عربية («لوحة المدير المالي») لكن **عنوان الصفحة** يضيف «(CFO Cockpit)» — تُعالَج ضمن §5.
+
+### 8.ب — مزيج عربي/إنجليزي بمصطلح راسخ بين قوسين (🟡 — قرار مالك: إبقاء أم تعريب)
+
+هذه مصطلحات قانونية/تقنية سعودية راسخة، والقوس العربي حاضر غالبًا. **التوصية: الإبقاء** ما لم يقرّر المالك خلاف ذلك:
+
+`نظام حماية الأجور (WPS)` · `WPS / مدد / بنوك` · `إعدادات WPS` · `إعداد إقرار WHT` · `فئات WHT` · `ملخص WHT` · `جاهزية ZATCA` · `مراجعات ZATCA` · `حماية البيانات (PDPL)` · `العملات الأجنبية (FX)` · `تكلفة الملكية (TCO)` · `اتجاه DSO للسيولة` · `ملخص التكلفة (CoGS)` · `P&L مقابل الميزانية` · `تسوية VAT` · `تسوية GL` · `تصنيف ABC` · `التتبع (Telematics)` / `نظام التتبع (Telematics)` · `الإرسال (Dispatch)` · `إعدادات CMSV6` · `أجهزة MDVR` · `مركز التحكّم بالـ PBX` · `فواتير B2C موجهة خطأ` · `أوامر الشراء (PO)` · `طلبات الشراء (PR)` · `صندوق OCR` / `مراجعة OCR` · `الأدوار والصلاحيات (v2)` · `قوالب الطباعة (admin)` · `كتالوج خدمات HR` · `صندوق الواردات HR` · `منصة AI`.
+
+> **«منصة AI»** و**«صندوق الواردات HR»** و**«كتالوج خدمات HR»** مرشّحة للتعريب الكامل (AI→«الذكاء الاصطناعي»، HR→«الموارد البشرية») لأن المقابل العربي واضح وغير قانوني — أولوية أعلى من بقية المجموعة.
+
+---
+
+## 9. ملخّص الأرقام
+
+| الفئة | عدد الحالات | منها 🔴 | منها يحتاج قرار مالك |
+|---|---|---|---|
+| §1 نفس المسار/أسماء متعددة (التباسات حقيقية) | 6 | 1 | 5 |
+| §2 نفس الاسم/مسارات مختلفة | 8 | 1 | 3 |
+| §3 نفس الوظيفة/أسماء متعددة | 4 | 1 | 3 |
+| §4 مداخل/تبويبات → redirect | 6 مجموعات | 4 | 5 |
+| §5 اسم القائمة ≠ عنوان الصفحة | 21+ (عيّنة) | 5 | 4 |
+| §6 اسم التبويب ≠ القائمة/الصفحة | 14 | 0 | 1 |
+| §7 إجراءات سريعة → redirect/retired | 8 | 3 | 0 |
+| §8 مصطلحات غير عربية | 7 (صرف) + ~30 (مزيج) | 7 | معظم المزيج |
+
+**الخلاصة:** التكرار الأخطر متركّز في (أ) المالية وBI حيث مداخل redirect متعددة + تسميات إنجليزية صرفة لصفحات تحمل أسماءً عربية جاهزة، و(ب) أزرار HR السريعة التي تقود لإعادة توجيه دائرية. **كلها قابلة للإصلاح بتغيير نص/تهيئة فقط، بلا مسّ مسار أو صلاحية أو منطق.**
+
+---
+
+## 10. المقترحات للشرائح القادمة (Proposals — لا تُنفَّذ في الشريحة الأولى)
+
+> الشريحة الأولى تقريرٌ فقط. ما يلي **مواصفات مقترحة** للأدوات الأربع المطلوبة؛ تُنشأ كـ«كود» في شرائح لاحقة صغيرة قابلة للمراجعة.
+
+### 10.1 `docs/ux/ARABIC_NAVIGATION_GLOSSARY.md`
+معجم تنقّل عربي يمتدّ من `ARABIC_BUSINESS_TERMS.md` (الموجود) ويتخصّص في **تسميات التنقّل**: لكل وظيفة سطرٌ واحد فيه: الاسم الرسمي العربي · المسار الرسمي · الأسماء البديلة (للبحث فقط، طبقًا للمبدأ #6) · المصدر (قائمة/تبويب/صفحة). يصبح المرجع الذي يحتكم إليه الحارسان أدناه. (سابقة موجودة: `UMRAH_CANONICAL_GLOSSARY.md`.)
+
+### 10.2 `artifacts/ghayth-erp/src/components/layout/navigation.canonical-map.ts`
+خريطة مشتقّة (لا قائمة بديلة — احترامًا للمبدأ #2)، تربط كل مسار باسمه الرسمي الواحد + بدائله + أعلام الحوكمة:
 
 ```ts
-// DESIGN SKETCH — do NOT create as an active file in Slice 1.
+// مقترح (هيكل فقط — لا يُضاف كملف في الشريحة الأولى)
 export interface CanonicalEntry {
-  /** stable function id, e.g. "finance.gl_health" */
-  fn: string;
-  /** THE one official Arabic name shown in menu + tab + page title */
-  arabicName: string;
-  /** THE one official path (must be a live, non-redirect route) */
-  path: string;
-  /** search-only alternative names (English term, old AR label, abbreviations) */
-  aliases: string[];
+  path: string;            // المسار الرسمي الواحد
+  canonicalLabel: string;  // الاسم العربي الرسمي الوحيد
+  aliases?: string[];      // أسماء بديلة — للبحث فقط، لا كمدخل قائمة
+  groupLeader?: boolean;   // استثناء موثّق لنمط «قائد المجموعة = نظرة عامة»
+  redirectFrom?: string[]; // مسارات redirect تؤول لهذا المسار
 }
-
-export const NAVIGATION_CANONICAL_MAP: Record<string, CanonicalEntry> = {
-  "finance.gl_health": {
-    fn: "finance.gl_health",
-    arabicName: "مؤشر صحة دفتر الأستاذ",
-    path: "/finance/gl-health",
-    aliases: ["GL Health Score", "صحة GL"],
-  },
-  // ... one entry per function
-};
+export const NAVIGATION_CANONICAL_MAP: CanonicalEntry[] = [ /* مولّد من السجل + هذا التقرير */ ];
 ```
 
-- **Consumers (later slices):** the registry, the tab navs, and `PageShell` would read `arabicName` from this map instead of hard-coding labels; the command palette would index `aliases` for search-only matching. **Not wired in Slice 1** — registry stays the source of truth until the map is reviewed.
+### 10.3 `scripts/src/check-tabs-coverage.mjs` (على نمط `check-sidebar-coverage.mjs`)
+بوّابة آلية للتبويبات الداخلية. **HARD:** أي `href` في `*-tabs-nav.tsx` يشير إلى (أ) مسار غير مُركَّب، أو (ب) مسار **redirect** (مثل تبويبات BI الثلاثة §4)، أو (ج) صفحة create/edit/detail. **SOFT:** اسم تبويب لا يطابق `canonicalLabel` ولا أحد `aliases`. وضع `--strict` يُسقِط البناء عند HARD.
 
-### 5.3 `scripts/src/check-tabs-coverage.mjs` — what it would assert (design only)
-- Parse every `artifacts/ghayth-erp/src/components/shared/*-tabs-nav.tsx`, extract `{label, path}` per tab.
-- **Assert A:** every tab `path` is a **registered route** (reuse `routes/registry.ts` `isRegisteredRoute`).
-- **Assert B:** every tab `path` is **NOT a redirect source** (cross-check against the redirect table derived from `routes/*.tsx` / `redirect-to.tsx`). → would catch §2.4 (4.1) and BI tabs.
-- **Assert C:** tab `label` == canonical `arabicName` for that path (from `navigation.canonical-map.ts`). → would catch §2.6.
-- **Assert D:** no tab points at a **create/detail** page (path ending `/create`, `/new`, or containing `:`) unless the path is in an explicit `TAB_EXCEPTION_ALLOWLIST`.
-- Exit non-zero with a per-violation report; wired into CI next to `check-sidebar-coverage.mjs`.
-
-### 5.4 `scripts/src/check-quick-actions-coverage.mjs` — what it would assert (design only)
-- Parse `pageQuickActions` from `sidebar-layout.tsx` (object literal → `{key, label, link}` rows).
-- **Assert A:** every quick-action `link` (after stripping `?query`) is a **live, registered, non-redirect** route. → would catch §2.7 (7.1/7.2/7.5/7.6).
-- **Assert B:** every `pageQuickActions` **key** is itself a live non-redirect route (so action sets aren't keyed on a path that redirects away before they show). → would catch the dead keys 7.3/7.4/7.7.
-- **Assert C:** create/`?action=new` style links are allowed (that's the point of a quick-action) but their **destination page** must exist; non-create links' labels should match the canonical `arabicName`.
-- Exit non-zero with a per-violation report; wired into CI.
+### 10.4 `scripts/src/check-quick-actions-coverage.mjs`
+بوّابة لأزرار `pageQuickActions`. **HARD:** أي `link` (بعد تجريد `?query`) يشير إلى مسار redirect/غير مُركَّب (يرصد كل حالات §7). **SOFT:** كتلة إجراءات مفتاحها مسار redirect (config ميت). `--strict` للبناء.
 
 ---
 
-## 6. Slice-1 acceptance
+## 11. تأكيد شروط القبول (للشريحة الأولى)
 
-- ✅ Report shows where duplication / confusion / unruly names live (§2–§4).
-- ✅ **No code changed, no routes touched** — only `docs/ux/` files created.
-- ✅ `node scripts/src/check-sidebar-coverage.mjs` exits **0** (unaffected by docs).
-- ✅ `git status` shows only `docs/ux/` additions (this file + the glossary).
-- ✅ The `.ts` canonical map and the two `.mjs` guards are **described only**, not created as active files.
+| الشرط | الحالة |
+|---|---|
+| لا روابط ميتة | ✅ لم يُنشأ/يُكسر أي رابط؛ كل المسارات المرصودة مُركَّبة (بعضها redirect) |
+| لا حذف مسارات | ✅ لم يُحذف أي مسار |
+| لا كسر `check-sidebar-coverage` | ✅ نتيجة الحارس **غير متغيّرة بهذه الشريحة**: `audit:sidebar`=خروج 0، و`gate:nav --strict` يبقى عند 14 orphan **موجودة مسبقًا** (0 مُضافة، 0 مُزالة). الحارس يقرأ السجل/المسارات لا `docs/`. ملاحظة أمانة: الوضع `--strict` ليس أخضر أصلًا — وهذا دَين قائم موثّق في §0/§10 لا يخصّ هذه الشريحة |
+| لا تغيير صلاحيات | ✅ لم تُمسّ أي `perm`/`module`/`minRoleLevel` |
+| لا تغيير منطق عمل | ✅ تقرير توثيقي فقط (`docs/ux/`) |
+| التقرير يوضّح التكرار/الالتباس/الأسماء غير المنضبطة | ✅ §1–§8 مع المسار/الاسم الحالي/المقترح/السبب/الخطورة/قرار المالك |
+
+> **الملف الوحيد المُضاف في هذه الشريحة:** هذا التقرير (`docs/ux/NAVIGATION_DUPLICATE_INVENTORY.md`). لا غير.
+
+---
+
+## 12. تحديث 2026-06-17 — جرد المتبقّي بعد تنفيذ الموجة (re-scan)
+
+> **السياق:** الموجة نُفِّذت بالكامل بعد كتابة §0–§11 (شرائح 1/2/8/9/12 + تقسيم مجموعات المالية F-1/F-2 + dedup المستودع + تعريب كامل + إصلاح my-space/roles/module-dashboards). هذا القسم **مسحٌ جديد للوضع الحالي** (نفس منهجية الشريحة 1، نفس المصادر الخمسة) ليرصد ما **بقي مفتوحًا** أو **استُجدّ**. **لا تغيير كود في هذا القسم — توثيق فقط.**
+
+### 12.أ — ما أغلقته الموجة (مُتحقَّق في الكود الحالي)
+
+| بند التقرير | الدليل الحالي | الحالة |
+|---|---|---|
+| §8 مصطلحات لاتينية في **السجل** (GL Health, Approvals Inbox, GL Integrity, Unmapped Lines, Posting Activity, CMSV6, Cockpit) | بحثٌ في `navigation.registry.ts` = **0 تطابق لكلٍّ** | ✅ مُغلق |
+| §1 `/my-space` (مساحاتي/مساحتي) | كوميت `0d035ee` (اليوم) — «lead مساحاتي with its namesake landing» | ✅ مُغلق |
+| §1 `/hr/services` (4 أسماء) | مُوحَّد على «خدمات الموارد البشرية» | ✅ مُغلق |
+| §2 «تقييم المخزون» 🔴 | «تقييم المخزون (المتوسط المرجح)» مقابل «تقرير تقييم المخزون» | ✅ مُغلق |
+| §4 تبويبات → redirect · §7 إجراءات سريعة → redirect | `check-tabs-coverage` و`check-quick-actions-coverage` **ينجحان strict** | ✅ مُغلق |
+| دَين 14 orphan (§0) | `check-sidebar-coverage` = **0 orphan / 0 dead-link** | ✅ مُغلق |
+
+### 12.ب — المتبقّي المفتوح (حالات جديدة من المسح)
+
+> أبرزها **تأخّر التبويبات عن تعريب السجل**: السجل عُرِّب بالكامل، لكن 3 تسميات لاتينية بقيت في ملفات `*-tabs-nav.tsx` (خارج نطاق تعريب السجل).
+
+| # | الموضع (file:line) | الاسم الحالي | الاسم المقترح | السبب | الخطورة | آمن/قرار مالك |
+|---|---|---|---|---|---|---|
+| R1 | `fleet-telematics-tabs-nav.tsx:16` | «إعدادات CMSV6» | «إعدادات منصة التتبع» | **تناقض**: السجل عرّب CMSV6→«منصة التتبع» (كوميت `162bb6f`) والتبويب ما زال لاتينيًا | 🟠 | آمن (نص) |
+| R2 | `fleet-telematics-tabs-nav.tsx:14` | «أجهزة MDVR» | إبقاء «MDVR» (مصطلح عتاد راسخ) أو «أجهزة التسجيل (MDVR)» | اختصار عتاد تقني؛ §8.ب أوصى بالإبقاء | 🟡 | قرار مالك |
+| R3 | `hr-tabs-nav.tsx:13` | «لوحة HR» | «لوحة الموارد البشرية» | السجل يستخدم «مركز الموارد البشرية»؛ التبويب وحده يُبقي «HR» | 🟠 | آمن (نص) |
+| R4 | `navigation.registry.ts` (مدخلان لـ`/work-inbox`) | «صندوق الأعمال» **مرّتين** (مستقل + داخل «مساحاتي») | إبقاء واحد؛ الآخر اسم بحث فقط | بعد توحيد slice 9 صار المدخلان بنفس الاسم ونفس المسار = مدخل زائد | 🟡 | قرار مالك (أيّهما يبقى) |
+| R5 | `finance/vendors:355` + `warehouse/suppliers:652` | «الموردين» (لكليهما) | «موردو المالية» مقابل «موردو المستودع» | نفس الاسم لكيانين (Vendors مالي ≠ Suppliers مخزني)؛ slice 8 عالج الصفحة لا تسمية القائمة | 🟠 | قرار مالك |
+| R6 | §5 (اسم القائمة ≠ عنوان الصفحة) — **العربية منها** | مثال: `/hr/org-tree` قائمة «الهيكل التنظيمي» ≠ صفحة «الشجرة التنظيمية» | اعتماد مصطلح واحد عبر canonical-map | بقايا §5 اللاتينية أُغلقت؛ التباينات **العربية** التجميلية (🟡) ما زالت مفتوحة | 🟡 | آمن (معظمها) |
+
+### 12.ج — مكرّرات موثّقة-مقبولة (لا فعل — للتسجيل فقط)
+
+مسح السجل الحالي يُظهر **11 اسمًا متكرّرًا لمسارات مختلفة**، منها **10 محصورة بسياق وحدتها** ومقبولة بالتصميم (مُصنّفة 🟡 في §2): «لوحة التحكم» (العامة + 5 لوحات وحدات عبر `module-dashboards?tab=`)، «التقارير»/«الفواتير»/«المدفوعات»/«نظرة عامة» (قادة مجموعات لكل وحدة)، «الطلبات»، «الامتثال»، «لوحة التشغيل»، «الإعدادات». الوحيد المرشّح للتوضيح هو **R5 «الموردين»** أعلاه. كما أن **لا تبويب** في `*-tabs-nav.tsx` يشير إلى مسار redirect (مُتحقَّق)، و**لا إجراء سريع** يحمل تسمية لاتينية (مُتحقَّق).
+
+### 12.د — ملخّص المتبقّي
+
+| الفئة | عدد | الأنفع |
+|---|---|---|
+| لاتيني في التبويبات (R1, R3) | 2 | **آمن** — توحيد نص ليطابق السجل المُعرَّب |
+| قرار مالك (R2 MDVR · R4 work-inbox · R5 الموردين) | 3 | يلزم اعتماد اسم رسمي واحد |
+| تباينات عربية تجميلية §5/§6 (R6) | ~15 | آمنة، أولوية منخفضة |
+| مكرّرات مقبولة موثّقة | 10 | لا فعل |
+
+**الخلاصة:** الموجة أغلقت كل البنود 🔴 والدَّين الحوكمي. المتبقّي **صغير ومنضبط**: ركيزتاه الآمنتان (R1, R3) توحيدُ نصِّ تبويبَين ليطابقا السجل المُعرَّب، والباقي قرارات تسمية أو تجميل منخفض الأولوية. لا روابط ميتة، لا حذف مسارات، الحارسون الثلاثة خُضر — **عدّاد التغطية غير متغيّر بهذا القسم** (توثيق في `docs/` فقط).
+
+### 12.هـ — تنفيذ المتبقّي (أمر «اصلحها كلها»، 2026-06-17)
+
+نُفِّذ إغلاق R1–R6 كشرائح نصّية صغيرة. **المنهج الحوكمي:** بدل الاجتهاد، أُجري **فرقٌ مسارًا-بمسار** بين السجل و`navigation.canonical-map.ts` (مصدر الحقيقة) — فرَصد **10 انحرافات**؛ وُوئِمت كالتالي:
+
+| البند | الإجراء | النتيجة |
+|---|---|---|
+| R1 `إعدادات CMSV6` (تبويب) | → «إعدادات منصة التتبع» (يطابق تعريب السجل) | ✅ |
+| R2 `أجهزة MDVR` (تبويب) | → «أجهزة التسجيل (MDVR)» (اختصار عتاد بين قوسين) | ✅ |
+| R3 `لوحة HR` (تبويب) | → «لوحة الموارد البشرية» | ✅ |
+| R4 `/work-inbox` مدخلان | **لا تغيير** — canonical-map يوثّقه **قرار مالك** (slice 9): المدخلان قصدًا «صندوق الأعمال» | ✅ (مُصحَّح التصنيف) |
+| R5 «الموردين» | → «الموردون» للسجلّين (محاذاة للقانوني؛ السياق يميّز — قرار مالك موثّق) | ✅ |
+| R6 تباينات §5 المحكومة | محاذاة السجل للقانوني: `/hr/recruitment`→«التوظيف والاستقطاب» · `/hr/violations` (القائد)→«المخالفات والجزاءات» | ✅ |
+
+**محاذاة عكسية** (السجل عُرِّب اليوم بلا‑لاتيني، فحُدِّث القانوني ليتبعه): `/finance/reports/zatca`→«مركز تقارير الفوترة الإلكترونية» · `/warehouse/advanced`→«…تصنيف أ ب ج» (ZATCA/ABC بقيا aliases للبحث).
+
+**5 انحرافات متبقّية = نمط «قائد المجموعة» المقبول** (§1.ب): `/admin` · `/bi` · `/hr/performance` · `/hr/violations` (طفل النظرة العامة) · `/admin/logs` — في كلٍّ القائدُ قانوني والطفلُ الأول تسميةٌ وصفية للهبوط. لا تُغيَّر.
+
+> **شروط القبول (12.هـ):** لا حذف مسار · لا تغيير صلاحية/منطق (تعديل نصوص تسميات فقط) · الحارسون الثلاثة (sidebar/tabs/quick-actions) **خُضر strict** · 0 orphan · 0 تسمية لاتينية في السجل (وفي التبويبات عدا «MDVR» المقصود بين قوسين). الكوميتات: تعريب التبويبات + مصالحة السجل↔canonical-map.

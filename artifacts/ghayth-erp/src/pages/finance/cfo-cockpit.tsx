@@ -155,7 +155,7 @@ export default function CfoCockpitPage() {
 
   return (
     <PageShell
-      title="لوحة المدير المالي اليومية (CFO Cockpit)"
+      title="لوحة المدير المالي اليومية"
       subtitle="نظرة واحدة لحالة الشركة المالية الآن — نقد + ذمم + التزامات قادمة + اعتمادات تنتظرك"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

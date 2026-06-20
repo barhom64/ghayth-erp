@@ -2,9 +2,9 @@ import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { LayoutDashboard, Zap, Shield } from "lucide-react";
 
-// BI de-dup — the /bi/dashboards, /bi/kpis, /bi/reports tabs pointed at routes
-// that all redirectTo("/bi"); those views are /bi's own in-page tabs. Dropped to
-// match the sidebar cleanup, leaving the three real BI pages.
+// UX Nav Governance (موجة التنقّل، شريحة 6) — أُزيلت 3 تبويبات كانت href لها
+// مسارات redirect تؤول إلى /bi: «اللوحات» (/bi/dashboards)، «المؤشرات»
+// (/bi/kpis)، «التقارير» (/bi/reports). تبقى المسارات مُركَّبة كـ redirect.
 const TABS = [
   { href: "/bi", label: "نظرة عامة", icon: LayoutDashboard, match: ["/bi"], exact: true },
   { href: "/bi/operations", label: "العمليات", icon: Zap, match: ["/bi/operations"] },

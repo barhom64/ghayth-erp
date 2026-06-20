@@ -69,6 +69,17 @@ const CREATE_IN_SIDEBAR_ALLOWLIST = new Set([
   "/hr/leaves/create", // employee self-service "طلب إجازة" entry point
 ]);
 
+// Pages intentionally OFF the sidebar because a tab-shell page supersets them —
+// the shell re-implements their endpoints as in-page tabs, so the standalone
+// route stays mounted for deep-links + command-palette search but must NOT count
+// as an orphan. See CROSS_MODULE_DUPLICATION_AUDIT.md (Warehouse «عمليات متقدّمة»).
+const SUPERSEDED_BY_SHELL = new Set([
+  "/warehouse/lots",         // → /warehouse/advanced · tab "lots"
+  "/warehouse/serials",      // → /warehouse/advanced · tab "serials"
+  "/warehouse/cycle-counts", // → /warehouse/advanced · tab "cycle-counts"
+  "/warehouse/abc",          // → /warehouse/advanced · tab "abc"
+]);
+
 // Routes intentionally kept off the sidebar that the structural heuristics
 // (detail / create / redirect-stub) can't classify. Keep this list tiny and
 // justified — every entry is an explicit exception.
@@ -84,6 +95,28 @@ const OFF_SIDEBAR_ALLOWLIST = new Set([
   // يُفتح من زر «القوائم الموحدة» على /finance/intercompany، لا من القائمة. كان
   // مسبقًا تحت لاحقة /create المُضلِّلة فصُنّف تلقائيًا؛ بعد إسقاط اللاحقة يحتاج إدراجًا صريحًا.
   "/finance/intercompany/consolidation",
+  // create variant — reuses ExpensesCreate, opened from the expenses list.
+  "/finance/expenses/multi-line",
+  // Settings-hub tab deep-paths: each opens a tab of /settings by URL / command
+  // palette / search without adding a separate sidebar entry (the hub is one
+  // page). branches/companies/departments/audit-log DO have sidebar entries; the
+  // rest are deep-link-only so the sidebar stays uncluttered.
+  "/settings/letterhead",
+  "/settings/channels",
+  "/settings/controls",
+  "/settings/approvals",
+  "/settings/numbering",
+  "/settings/accounting",
+  "/settings/resolved",
+  "/settings/zatca",
+  "/settings/gov",
+  // Parallel org-model overlay (legal_entities/positions/teams) retired from the
+  // sidebar as a duplicate of companies/branches/departments; kept URL-reachable
+  // (hr/org-tree links org-memberships for team/committee CRUD).
+  "/admin/org-model",
+  "/admin/org-memberships",
+  // «سير العمل» — workflows table has no executor; dropped from sidebar, route kept.
+  "/requests/workflows",
 ]);
 
 /** Strip a trailing query string / hash so nav paths compare to route paths. */
@@ -168,7 +201,7 @@ function getSidebarPaths() {
  */
 export function isLegitimatelyOffSidebar(routePath) {
   if (routePath.includes(":")) return true;
-  if (/[/-](create|new|edit)$/.test(routePath)) return true;
+  if (/[/-](create|new|edit)$/.test(routePath)) return true; // /create OR quick-create, bulk-new …
   if (routePath === "/login") return true;
   if (routePath === "/") return true;
   if (routePath === "/dashboard") return true; // home shell
@@ -191,13 +224,23 @@ function main() {
   // ── coverage: routes with no nav entry ────────────────────────────────
   const missing = [];
   let legitimatelyOff = 0;
+  let redirectOff = 0;
+  let supersededOff = 0;
   for (const r of routes) {
     if (sidebarSet.has(r)) continue;
-    // Redirect stubs bounce to a canonical page — aliases, not pages, so they
-    // don't need their own nav entry (same treatment as detail/create pages).
-    // OFF_SIDEBAR_ALLOWLIST covers the few that the heuristics can't classify.
-    if (OFF_SIDEBAR_ALLOWLIST.has(r) || redirectPaths.has(r) || isLegitimatelyOffSidebar(r)) {
+    // Redirect-only routes are intentional deep-link aliases, not orphans.
+    if (redirectPaths.has(r)) {
+      redirectOff++;
+      continue;
+    }
+    // OFF_SIDEBAR_ALLOWLIST covers the few the heuristics can't classify.
+    if (OFF_SIDEBAR_ALLOWLIST.has(r) || isLegitimatelyOffSidebar(r)) {
       legitimatelyOff++;
+      continue;
+    }
+    // Superseded by a tab-shell page — intentional off-sidebar, not an orphan.
+    if (SUPERSEDED_BY_SHELL.has(r)) {
+      supersededOff++;
       continue;
     }
     missing.push(r);
@@ -243,6 +286,8 @@ function main() {
   console.log(`total mounted routes:                    ${routes.length}`);
   console.log(`entries in sidebar:                      ${sidebarSet.size}`);
   console.log(`legitimately off-sidebar (detail/create): ${legitimatelyOff}`);
+  console.log(`redirect routes (off-sidebar, legit):    ${redirectOff}`);
+  console.log(`superseded by tab-shell (off-sidebar):   ${supersededOff}`);
   console.log(`[HARD] orphan pages (missing from nav):  ${missing.length}`);
   console.log(`[HARD] dead links (nav → no route):      ${deadLinks.length}`);
   console.log(`[HARD] create/edit pages in nav drawer:  ${createInSidebar.length}`);
