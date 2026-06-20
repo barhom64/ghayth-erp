@@ -1,5 +1,9 @@
-// حارس/جرد المرآة: يشتقّ التبويبات المتوقَّعة لكل شريط أفقي من مجموعات الجانبية
-// في navigation.registry.ts ويقارنها بالموجود فعلًا. قراءة فقط.
+// حارس المرآة: يضمن أن كل شريط أفقي رئيسي يطابق مجموعات قسمه في القائمة الجانبية
+// (navigation.registry.ts). الأشرطة التي تفوّض إلى <ModuleTabsNav> مشتقّة من السجل
+// فلا تنحرف بنيويًّا؛ أي شريط يدوي ينحرف عن مجموعات الجانبية يُرصد، ويُرفض تحت --strict.
+//
+//   node scripts/src/check-nav-mirror.mjs           # تقرير
+//   node scripts/src/check-nav-mirror.mjs --strict  # بوابة: exit 1 عند أي انحراف
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, "..", "..");
 const src = fs.readFileSync(path.join(REPO, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"), "utf8");
 const SHARED = path.join(REPO, "artifacts/ghayth-erp/src/components/shared");
+const STRICT = process.argv.includes("--strict");
 
 function parseItemsBlock(s, startAfterBracket) {
   let i = startAfterBracket, depth = 1;
@@ -86,3 +91,11 @@ for (const [file, cfg] of Object.entries(BARS)) {
 }
 const n = Object.keys(BARS).length;
 console.log(`\n═══════════ ${derived}/${n} مشتقّ (مرآة مضمونة) · ${totalMismatch} فرق متبقٍّ في الأشرطة اليدوية ═══════════`);
+
+if (STRICT && totalMismatch > 0) {
+  console.error(
+    `\n✗ بوابة المرآة فشلت: ${totalMismatch} انحراف بين شريط أفقي ومجموعات الجانبية. ` +
+      `حوّل الشريط ليفوّض إلى <ModuleTabsNav> أو طابق تسمياته مع مجموعات قسمه.`,
+  );
+  process.exit(1);
+}

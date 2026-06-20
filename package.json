@@ -25,6 +25,8 @@
     "gate:nav-titles": "node scripts/src/check-nav-title-consistency.mjs --strict",
     "audit:subtabs": "node scripts/src/check-subtab-hygiene.mjs",
     "gate:subtabs": "node scripts/src/check-subtab-hygiene.mjs --strict",
+    "audit:nav-mirror": "node scripts/src/check-nav-mirror.mjs",
+    "gate:nav-mirror": "node scripts/src/check-nav-mirror.mjs --strict",
     "audit:wiring": "node scripts/src/check-frontend-backend-wiring.mjs",
     "audit:runtime": "ALL=1 node scripts/src/runtime-audit.cjs",
     "audit:schema": "node scripts/src/audit-schema-drift.mjs",
