@@ -1,5 +1,9 @@
 import { rawQuery } from "./rawdb.js";
 
+// policyEngine — سياسة RBAC وفصل المهام (SoD) وقواعد أعلى صلاحية. **ليست «سياسة عامة»**:
+// لا علاقة لها بـrulesEngine (أتمتة بالأحداث) ولا attendancePolicyEngine (حضور HR).
+// مفهوم حوكمة صلاحيات مستقل (قاموس المفاهيم §3: أسماء متشابهة ≠ تكرار).
+
 // ─── Separation of Duties ─────────────────────────────────────────────────
 // Defines role pairs that must NOT coexist on the same user.
 
