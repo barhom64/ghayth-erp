@@ -22,7 +22,7 @@ export const BASELINE = new Set([
   "aiEngine.ts", "attendancePolicyEngine.ts", "autoViolationEngine.ts",
   "disciplineEngine.ts", "employeeLifecycleEngine.ts", "employeeScoringEngine.ts",
   "employeeSignalsEngine.ts", "genericImportEngine.ts", "journeyEngine.ts",
-  "kpiEngine.ts", "lifecycleEngine.ts", "notificationEngine.ts",
+  "kpiEngine.ts", "lifecycleEngine.ts",
   "obligationsEngine.ts", "policyEngine.ts", "proactiveEngine.ts",
   "rulesEngine.ts", "selfAuditEngine.ts", "umrahAssistantEngine.ts",
   "umrahCommissionEngine.ts", "umrahImportEngine.ts", "umrahInvoicingEngine.ts",
