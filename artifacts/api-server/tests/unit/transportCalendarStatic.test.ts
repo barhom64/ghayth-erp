@@ -35,8 +35,11 @@ const TABS = readFileSync(
   join(repoRoot, "artifacts/ghayth-erp/src/components/shared/fleet-tabs-nav.tsx"),
   "utf8",
 );
+// transport-tabs-nav was retired — the transport sub-tabs are now DERIVED from
+// the «النقل والإرسال» group in the sidebar registry (via ModuleTabsNav), so we
+// assert reachability against the registry (the single source the bar mirrors).
 const SUBNAV = readFileSync(
-  join(repoRoot, "artifacts/ghayth-erp/src/components/shared/transport-tabs-nav.tsx"),
+  join(repoRoot, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 void TABS;
@@ -129,6 +132,6 @@ describe("TR-022 — SPA route + tab wired", () => {
   it("surfaces the calendar in the transport sub-nav (القائمة السفلية)", () => {
     // Calendar moved from the top fleet tabs into the transport sub-nav
     // (TransportTabsNav) to avoid the dual-active-tab overlap.
-    expect(SUBNAV).toMatch(/href:\s*"\/fleet\/transport\/calendar"/);
+    expect(SUBNAV).toMatch(/path:\s*"\/fleet\/transport\/calendar"/);
   });
 });
