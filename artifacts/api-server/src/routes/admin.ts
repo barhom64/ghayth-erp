@@ -106,7 +106,8 @@ const bulkRolePermissionsSchema = z.object({
 
 const createIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب"),
-  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
+  // "github" — توكن مزامنة تذاكر الدعم مع المستودع (lib/integrations/githubSupportSync).
+  type: z.enum(["email", "sms", "whatsapp", "webhook", "github"]),
   config: z.any().optional(),
   enabled: z.boolean().optional(),
   status: z.enum(["active", "inactive", "error"]).optional(),
@@ -123,7 +124,7 @@ const createCustomRoleSchema = z.object({
 
 const updateIntegrationSchema = z.object({
   name: z.string().min(1, "اسم التكامل مطلوب").optional(),
-  type: z.enum(["email", "sms", "whatsapp", "webhook"]).optional(),
+  type: z.enum(["email", "sms", "whatsapp", "webhook", "github"]).optional(),
   config: z.any().optional(),
   status: z.enum(["active", "inactive", "error"]).optional(),
   maxRetries: z.coerce.number().int().min(0).optional(),
