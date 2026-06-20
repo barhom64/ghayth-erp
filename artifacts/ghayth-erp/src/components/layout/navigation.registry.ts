@@ -161,10 +161,14 @@ export const allNavSections: NavSection[] = [
     items: [
       // 1. لوحة HR
       // PR-1 / #2163 — was module:"bi" (FU-2). hr_manager owns hr, not bi.
-      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr" },
+      // RBAC-REV-STD — لوحتا HR الإداريتان بلا subKey، فلا يحرسهما
+      // canAccessSubPage. minRoleLevel:25 يُخفيهما عن الموظف الاستاندر (10)
+      // والسائق (15) — اللذين تظهر وحدتهما «hr» عبر منحة ذاتية فقط — مع
+      // إبقائهما للأدوار الوظيفية في HR (payroll_officer 25، مدير القسم 50…).
+      { label: "لوحة الموارد البشرية", path: "/module-dashboards?tab=hr", icon: LayoutDashboard, module: "hr", minRoleLevel: 25 },
       // بوابة /hr — لوحة تشغيلية خاصة بفريق الموارد البشرية (مؤشرات وروابط
       // سريعة لا تظهر في اللوحة العامة). كانت مركّبة بلا مدخل (orphan).
-      { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr" },
+      { label: "مركز الموارد البشرية", path: "/hr", icon: Briefcase, module: "hr", minRoleLevel: 25 },
 
       // 2. الموظفون — gathers recruitment, employees, onboarding,
       // org structure, transfers, documents, contracts, letters, exit
