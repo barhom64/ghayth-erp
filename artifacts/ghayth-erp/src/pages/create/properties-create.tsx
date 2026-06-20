@@ -20,7 +20,10 @@ export default function PropertiesCreate() {
   const { toast } = useToast();
   const addUnit = useApiMutation("/properties/units", "POST", [["property-units"], ["properties-stats"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { data: buildingsResp, isLoading: loadingB, isError: errorB } = useApiQuery<any>(["property-buildings"], "/properties/buildings");
+  // Share BuildingSelect's exact query key so that creating a building inline
+  // (which invalidates "property-buildings-list") also refetches this list —
+  // otherwise buildingName below stays blank for inline-created buildings.
+  const { data: buildingsResp, isLoading: loadingB, isError: errorB } = useApiQuery<any>(["property-buildings-list"], "/properties/buildings");
   const buildings = asList(buildingsResp);
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
@@ -91,10 +94,17 @@ export default function PropertiesCreate() {
       toast({ variant: "destructive", title: firstError });
       return;
     }
+    // Resolve buildingName from the (post-create-refetched) list as a backstop
+    // for buildings created inline via BuildingSelect, where the select-time
+    // derivation in set() ran before the new building landed in the list.
+    const selectedBuilding = form.buildingId
+      ? buildings.find((b: any) => String(b.id) === String(form.buildingId))
+      : null;
+    const resolvedBuildingName = selectedBuilding?.name || form.buildingName || undefined;
     addUnit.mutate({
       unitNumber: form.unitNumber,
       buildingId: form.buildingId ? Number(form.buildingId) : undefined,
-      buildingName: form.buildingName || undefined,
+      buildingName: resolvedBuildingName,
       type: form.type,
       status: form.status,
       area: Number(form.area) || undefined,
