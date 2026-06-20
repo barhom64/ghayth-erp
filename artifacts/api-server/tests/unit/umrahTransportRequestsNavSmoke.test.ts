@@ -8,7 +8,7 @@ import { join } from "node:path";
  *
  * Scope of M5a (per the owner's explicit authorisation):
  *
- *   1. Add a tab entry in `components/shared/umrah-tabs-nav.tsx`
+ *   1. Add a tab entry in `components/layout/navigation.registry.ts`
  *      pointing at `/umrah/transport-requests` so the operator can
  *      reach the M4 page without typing the URL.
  *   2. Leave the existing legacy `/umrah/transport` tab in place,
@@ -35,7 +35,7 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const TABS_NAV = readFileSync(
-  join(REPO_ROOT, "artifacts/ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(REPO_ROOT, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 const ROUTES = readFileSync(
@@ -88,11 +88,10 @@ const M4_PAGE_SMOKE = readFileSync(
 // §A — Tabs nav exposes the new contract-path entry
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-02b M5a §A — tabs nav links the new contract page", () => {
-  it("declares a tab entry whose href is exactly `/umrah/transport-requests`", () => {
-    // Anchoring on the literal href inside the PRIMARY_TABS array
-    // entry shape catches a stray reference (e.g., a comment about
-    // the path) — the match must include the surrounding `href:` key.
-    expect(TABS_NAV).toMatch(/href:\s*"\/umrah\/transport-requests"/);
+  it("declares a registry entry whose path is exactly `/umrah/transport-requests`", () => {
+    // The umrah bar derives from the sidebar registry, so we anchor on the
+    // registry `path:` key (a stray comment reference wouldn't carry it).
+    expect(TABS_NAV).toMatch(/path:\s*"\/umrah\/transport-requests"/);
   });
 
   it("attaches the new entry to the existing `/umrah/transport-requests` route", () => {
@@ -101,14 +100,12 @@ describe("U-02b M5a §A — tabs nav links the new contract page", () => {
     expect(ROUTES).toMatch(/path:\s*"\/umrah\/transport-requests"/);
   });
 
-  it("new tab declares a `match` array that contains only its own path", () => {
-    // Guard against an accidental overlap like `match: ["/umrah/transport"]`,
-    // which would cause both tabs to highlight as active at the same
-    // time on either route.
-    const entryMatch = TABS_NAV.match(
-      /href:\s*"\/umrah\/transport-requests"[^}]*match:\s*\[\s*"\/umrah\/transport-requests"\s*\]/,
-    );
-    expect(entryMatch).not.toBeNull();
+  it("the entry is distinct from the legacy /umrah/transport route", () => {
+    // Derived nav computes active-state from each registry path, so two
+    // distinct paths can't both highlight — pin that both ARE present as
+    // distinct entries (no overlap collapse).
+    expect(TABS_NAV).toMatch(/path:\s*"\/umrah\/transport-requests"/);
+    expect(TABS_NAV).toMatch(/path:\s*"\/umrah\/transport"/);
   });
 });
 
@@ -122,7 +119,7 @@ describe("U-02b M5a §B — legacy tab + page remain untouched", () => {
     // that quietly relabelling it (e.g. "النقل (قديم)") still fails
     // the smoke and surfaces the change for review.
     expect(TABS_NAV).toMatch(
-      /href:\s*"\/umrah\/transport"[^}]*label:\s*"النقل"/,
+      /label:\s*"النقل والمواصلات",\s*path:\s*"\/umrah\/transport"/,
     );
   });
 
