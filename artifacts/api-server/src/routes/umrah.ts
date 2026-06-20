@@ -1105,7 +1105,11 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
   try {
     const scope = req.scope!;
     const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
-    let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض المعتمرين المحذوفين فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
+    let where = showDeleted
+      ? `p."companyId"=$1 AND p."deletedAt" IS NOT NULL`
+      : `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
@@ -1701,6 +1705,19 @@ router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" })
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.deleted", entity: "umrah_pilgrims", entityId: id, details: JSON.stringify({ fullName: existing.fullName }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete pilgrim error"); }
+});
+
+// #2713 (تعميم) — استرجاع معتمر محذوف ناعمًا (سلة المحذوفات). صلاحية تعديل + Audit.
+router.post("/pilgrims/:id/restore", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE umrah_pilgrims SET "deletedAt"=NULL, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد معتمر محذوف بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "restore", entity: "umrah_pilgrims", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.restored", entity: "umrah_pilgrims", entityId: id, details: JSON.stringify({ restored: true }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Restore pilgrim error"); }
 });
 
 router.post("/import/preview", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
