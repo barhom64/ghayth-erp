@@ -567,7 +567,11 @@ export const allNavSections: NavSection[] = [
         // page requires, so a role lacking the grant (e.g. driver) never sees a
         // link that would 403 into "حدث خطأ في تحميل البيانات". Owner bypasses
         // via can() (isOwnerRole), so the owner still sees every link.
-        { label: "المركبات والتشغيل", path: "/fleet/drivers", icon: Car, children: [
+        { label: "المركبات والتشغيل", path: "/fleet", icon: Car, children: [
+          // المركبات — قائمة الأسطول (تبويب المركبات في /fleet) وبها زر «إضافة مركبة».
+          // أُعيدت بعد سقوطها من المجموعة في إعادة تنظيم الأسطول، إذ اختفت قائمة
+          // المركبات وزر الإضافة من القائمة رغم بقاء الصفحة قائمةً تعمل.
+          { label: "المركبات", path: "/fleet", icon: Car, perm: "fleet.vehicles:list" },
           { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
           { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
           { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
