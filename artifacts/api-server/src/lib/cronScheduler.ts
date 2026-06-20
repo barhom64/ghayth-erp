@@ -34,7 +34,7 @@ import {
   resolveTaskSlaReminderConfig,
   shouldFireSlaReminder,
 } from "./inboxClassifier.js";
-import { processFallbackChains } from "./notificationEngine.js";
+import { processFallbackChains } from "./notificationDispatch.js";
 import {
   resolveSystemSmtpConfig,
   formatFromHeader,

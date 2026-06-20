@@ -16,7 +16,7 @@ test("يتجاهل .d.ts", () => {
 });
 
 test("لا مخالفة على محرّك في الأساس", () => {
-  assert.deepEqual(violationsFrom(["notificationEngine.ts", "policyEngine.ts"]), []);
+  assert.deepEqual(violationsFrom(["workflowEngine.ts", "policyEngine.ts"]), []);
 });
 
 test("يرصد محرّكًا جديدًا خارج البيت وليس في الأساس", () => {
@@ -28,8 +28,10 @@ test("Service لا يُرصد (قدرة محايدة)", () => {
 });
 
 test("الأساس يضم المحرّكات المنثورة المعروفة", () => {
-  for (const n of ["notificationEngine.ts", "workflowEngine.ts", "umrahPenaltyEngine.ts", "lifecycleEngine.ts"]) {
+  for (const n of ["workflowEngine.ts", "umrahPenaltyEngine.ts", "lifecycleEngine.ts"]) {
     assert.ok(BASELINE.has(n), `يجب أن يكون ${n} في الأساس`);
   }
-  assert.equal(BASELINE.size, 24);
+  // notificationEngine أُعيد تسميته notificationDispatch (B3) فخرج من الأساس.
+  assert.ok(!BASELINE.has("notificationEngine.ts"));
+  assert.equal(BASELINE.size, 23);
 });

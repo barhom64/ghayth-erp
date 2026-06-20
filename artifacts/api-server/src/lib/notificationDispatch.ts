@@ -1,3 +1,8 @@
+// notificationDispatch — نواة الإرسال الداخلية لمسار الإشعارات (قاموس المفاهيم §3).
+// الواجهة العامة الوحيدة للإشعارات هي notificationService؛ هذا الملف آليّات
+// الإرسال (القنوات، ساعات الهدوء، سلاسل fallback، القوالب، الإحصاءات) التي
+// يبني عليها notificationService. أُعيد تسميته من notificationEngine لإزالة
+// التباس «Engine مقابل Service» — لا نِدّ لـService، بل نواته. (مادة 5: خادم.)
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { sendPushToCompany } from "./pushService.js";
 import crypto from "node:crypto";
