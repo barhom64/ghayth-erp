@@ -85,21 +85,31 @@ const roleKeySubPages: Record<string, Record<string, string[]>> = {
 const SELF_FEATURE_SUFFIXES = [".self", ".checkin", ".my"] as const;
 
 /**
- * هل يملك المستخدم منحة إدارية فعلية (غير ذاتية) داخل هذه الوحدة؟
- * تتجاهل المنح الذاتية (التي تنتهي بلاحقة ذاتية) فلا تُعَدّ تخويلًا
- * للصفحات الإدارية. `*` (المالك) يمرّ دائمًا.
+ * هل يملك المستخدم منحة فعلية تُخوّله رؤية صفحة فرعية معيّنة (subKey) داخل
+ * وحدة؟ بوابة دقيقة **على مستوى الصفحة الفرعية** لا الوحدة — تطابق ما
+ * يعتمده الباك تمامًا، فتمنع تسريب «ظاهر+403»:
+ *
+ *   • منحة شاملة (`*` أو الوحدة `hr` أو `hr.*`) ⇒ كل الصفحات الفرعية.
+ *   • منحة محدّدة (`hr.attendance`) ⇒ صفحتها فقط (لا الرواتب ولا المخالفات).
+ *   • منحة ذاتية (`hr.employees.self` / `.checkin` / `.my`) ⇒ لا صفحة إدارية.
+ *
+ * بهذا: الموظف الاستاندر (منح ذاتية فقط) لا يرى صفحات HR الإدارية، ومسؤول
+ * الحضور (`hr.attendance` فقط) يرى الحضور فقط، ومدير HR (`hr.*`) يرى الكل —
+ * كلها مشتقّة من المنح، بلا قوائم أدوار ثابتة. RBAC-REV-STD.
  */
-export function hasManagementGrantInModule(
+export function hasGrantForSubPage(
   rawPermissions: readonly string[],
   module: string,
+  subKey: string,
 ): boolean {
+  const subFeature = `${module}.${subKey}`; // "hr.attendance"
   for (const p of rawPermissions) {
-    if (p === "*") return true;
-    const scope = p.split(":")[0]; // "hr.employees" | "hr.employees.self" | "hr"
+    const scope = p.split(":")[0]; // feature_key: "hr" | "hr.*" | "hr.attendance" | "hr.employees.self"
     if (!scope) continue;
-    if (scope.split(".")[0] !== module) continue;
-    if (SELF_FEATURE_SUFFIXES.some((s) => scope.endsWith(s))) continue;
-    return true; // منحة غير ذاتية ضمن الوحدة
+    if (scope === "*") return true; // مالك/وكيل شامل
+    if (scope === module || scope === `${module}.*`) return true; // منحة وحدة شاملة
+    if (SELF_FEATURE_SUFFIXES.some((s) => scope.endsWith(s))) continue; // ذاتية ⇒ ليست إدارية
+    if (scope === subFeature || scope.startsWith(`${subFeature}.`)) return true; // الصفحة الفرعية بالضبط (أو أعمق: hr.payroll.wps)
   }
   return false;
 }
@@ -539,12 +549,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // الخريطة هي المرجع للأدوار المُسجَّلة: تُظهر الصفحات المُصرَّح بها فقط.
       if (moduleSubs) return moduleSubs.includes(subKey);
     }
-    // RBAC-REV-STD — منع افتراضي للأدوار/الوحدات غير المُسجَّلة. السلوك القديم
-    // (allowedModules.includes(module)) كان يسرّب كل صفحات HR الفرعية للموظف
-    // الاستاندر الذي تظهر وحدته «hr» فقط عبر منحة ذاتية
-    // (hr.employees.self / hr.attendance.checkin). نُظهر الصفحة الإدارية فقط
-    // عند امتلاك منحة إدارية فعلية (غير ذاتية) داخل الوحدة.
-    return hasManagementGrantInModule(rawPermissions, module);
+    // RBAC-REV-STD — منع افتراضي مشتقّ من المنح، دقيق على مستوى الصفحة الفرعية.
+    // السلوك القديم (allowedModules.includes(module)) كان يسرّب كل صفحات HR
+    // للموظف الاستاندر؛ كما أن فحص الوحدة وحده كان يُظهر كل صفحات HR لدور
+    // ضيّق المنح (مسؤول الحضور `hr.attendance` يرى الرواتب → 403). نُظهر كل
+    // صفحة فرعية فقط عند وجود منحة فعلية تُخوّلها (شاملة أو محدّدة بها).
+    return hasGrantForSubPage(rawPermissions, module, subKey);
   }, [selectedRole, isOwnerRole, rawPermissions]);
 
   return (
