@@ -210,6 +210,15 @@ const createEmployeeSchema = z.object({
   projectId: z.coerce.number().int().positive().optional().nullable(),
   costCenterId: z.coerce.number().int().positive().optional().nullable(),
   committeeId: z.coerce.number().int().positive().optional().nullable(),
+  // الدفعة 3 — توزيع الموظف على عدة فروع (اختياري). حين يُرسَل بأكثر من فرع،
+  // يُستبدل التخصيص الأساسي المفرد بهذه القائمة (مجموع النِسَب يجب = 100).
+  // كل عنصر: الفرع + الصفة في الفرع + النسبة + مركز تكلفة اختياري (تجاوز).
+  branchAllocations: z.array(z.object({
+    branchId: z.coerce.number().int().positive(),
+    capacity: z.string().trim().max(80).optional().nullable(),
+    allocationPercent: z.coerce.number().positive().max(100),
+    costCenterId: z.coerce.number().int().positive().optional().nullable(),
+  })).optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -668,6 +677,8 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       sourceApplicationId,
       // PR-1 institutional binding (#2077).
       positionId, categoryKey, teamId, projectId, costCenterId, committeeId,
+      // الدفعة 3 — توزيع الفروع الاختياري.
+      branchAllocations,
       // as-any-reason: justified-pragmatic - zodParse inferred type is widened so subsequent destructure does not require explicit per-field generics; behavior unchanged
     } = body as any;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
@@ -1012,6 +1023,56 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
     const internalEmailIn = ((body as any).internalEmail as string | null | undefined) || null;
     const personalEmailIn = ((body as any).personalEmail as string | null | undefined) || null;
 
+    // ── الدفعة 3 — التحقق من توزيع الفروع (قبل المعاملة لرسالة خطأ نظيفة) ──
+    // حين يختار المُعيِّن «توزيع متعدد»، نتحقق: نِسَب مجموعها 100%، بلا فرع
+    // مكرر، وكل فرع (ومركز التكلفة إن حُدّد) تابع للشركة. هذا يضمن أن محرّك
+    // الرواتب (الدفعة 2ب) يجد تخصيصات سليمة قابلة للتوزيع.
+    let normalizedAllocations:
+      | Array<{ branchId: number; capacity: string | null; percent: number; costCenterId: number | null }>
+      | null = null;
+    if (Array.isArray(branchAllocations) && branchAllocations.length > 0) {
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const sumPct = round2(branchAllocations.reduce((s: number, a: any) => s + Number(a.allocationPercent || 0), 0));
+      if (sumPct !== 100) {
+        throw new ValidationError("مجموع نِسَب توزيع الفروع يجب أن يساوي 100%", {
+          field: "branchAllocations",
+          fix: `المجموع الحالي ${sumPct}%. عدّل النِسَب لتساوي 100%.`,
+        });
+      }
+      const branchIds = branchAllocations.map((a: any) => Number(a.branchId));
+      if (new Set(branchIds).size !== branchIds.length) {
+        throw new ValidationError("لا يجوز تكرار الفرع في التوزيع", {
+          field: "branchAllocations",
+          fix: "اجعل لكل فرع صفًا واحدًا فقط في التوزيع.",
+        });
+      }
+      const validBranches = await rawQuery<{ id: number }>(
+        `SELECT id FROM branches WHERE id = ANY($1::int[]) AND "companyId" = $2`,
+        [[...new Set(branchIds)], effectiveCompanyId]
+      );
+      const validBranchSet = new Set(validBranches.map((b) => b.id));
+      const ccIds = branchAllocations.map((a: any) => (a.costCenterId ? Number(a.costCenterId) : null)).filter((x: number | null): x is number => x != null);
+      const validCcSet = new Set<number>();
+      if (ccIds.length > 0) {
+        const validCcs = await rawQuery<{ id: number }>(
+          `SELECT id FROM cost_centers WHERE id = ANY($1::int[]) AND "companyId" = $2 AND "deletedAt" IS NULL`,
+          [[...new Set(ccIds)], effectiveCompanyId]
+        );
+        for (const c of validCcs) validCcSet.add(c.id);
+      }
+      normalizedAllocations = branchAllocations.map((a: any) => {
+        const bId = Number(a.branchId);
+        if (!validBranchSet.has(bId)) {
+          throw new ValidationError(`الفرع رقم ${bId} غير موجود`, { field: "branchAllocations", fix: "اختر فروعًا تابعة لشركتك." });
+        }
+        const ccId = a.costCenterId ? Number(a.costCenterId) : null;
+        if (ccId != null && !validCcSet.has(ccId)) {
+          throw new ValidationError(`مركز التكلفة رقم ${ccId} غير موجود`, { field: "branchAllocations", fix: "اختر مركز تكلفة تابعًا لشركتك أو اتركه فارغًا ليُشتق من الفرع." });
+        }
+        return { branchId: bId, capacity: a.capacity ? String(a.capacity) : null, percent: round2(Number(a.allocationPercent)), costCenterId: ccId };
+      });
+    }
+
     const result = await withTransaction(async (client) => {
       const finalEmpNumber = preIssuedEmpNumber!;
 
@@ -1094,12 +1155,27 @@ router.post("/", authorize({ feature: "hr.employees", action: "create" }), async
       );
       const assignmentId = assignRes.rows[0].id;
 
-      // ── الدفعة 1 — تخصيص الفرع الرئيسي ──
-      // النموذج الموحّد لاشتقاق مركز التكلفة: الموظف يُربط بفرعه الرئيسي
-      // كصف تخصيص أساسي (100%). مركز التكلفة يُترك NULL ليُشتق آليًا من
-      // الفرع وقت ترحيل الرواتب (الدفعة 2). فروع إضافية بصفات/نِسَب مختلفة
-      // تُضاف لاحقًا عبر تخصيصات أخرى. لا يُنشأ إن غاب الفرع (بيانات حدّية).
-      if (targetBranchId) {
+      // ── تخصيص الفروع (الدفعة 1 + 3) ──
+      // النموذج الموحّد لاشتقاق مركز التكلفة: علاقة الموظف↔الفرع كتخصيصات.
+      //   • توزيع متعدد (الدفعة 3): المُعيِّن اختار عدة فروع بنِسَب مجموعها 100%
+      //     — نُدرج صفًا لكل فرع، والأساسي هو فرع الموظف الرئيسي إن كان ضمنها
+      //     وإلا أول صف. مركز التكلفة لكل صف: تجاوز صريح أو يُشتق وقت الترحيل.
+      //   • الافتراضي (الدفعة 1): فرع رئيسي واحد (100%). مركز التكلفة NULL
+      //     ليُشتق آليًا من الفرع وقت ترحيل الرواتب. لا يُنشأ إن غاب الفرع.
+      if (normalizedAllocations && normalizedAllocations.length > 0) {
+        const primaryBranchId = normalizedAllocations.some((a) => a.branchId === targetBranchId)
+          ? targetBranchId
+          : normalizedAllocations[0].branchId;
+        for (const a of normalizedAllocations) {
+          await client.query(
+            `INSERT INTO employee_branch_allocations
+               ("companyId","employeeId","assignmentId","branchId",capacity,"allocationPercent","costCenterId","isPrimary","startDate","createdBy")
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             ON CONFLICT ("assignmentId","branchId","startDate") DO NOTHING`,
+            [effectiveCompanyId, empId, assignmentId, a.branchId, a.capacity, a.percent, a.costCenterId, a.branchId === primaryBranchId, effectiveHireDate, scope.activeAssignmentId ?? null]
+          );
+        }
+      } else if (targetBranchId) {
         await client.query(
           `INSERT INTO employee_branch_allocations
              ("companyId","employeeId","assignmentId","branchId",capacity,"allocationPercent","isPrimary","startDate","createdBy")
