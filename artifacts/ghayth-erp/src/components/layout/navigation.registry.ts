@@ -304,222 +304,227 @@ export const allNavSections: NavSection[] = [
   {
     title: "المالية والمحاسبة",
     items: [
-      // #1715 موجة 6 — تصنيف المالية إلى 13 مجموعة حسب دورة العمل. المجموعات
-      // حاويات فقط: لم يتغيّر أو يُحذف أي مسار، فلا أيتام ولا روابط ميتة،
-      // والإعدادات آخراً، والتقارير مجمَّعة.
-      // (1) اللوحات والإقفال — اللوحات الخمس الإفرادية مجمَّعة في مدخل واحد.
-      { label: "اللوحات والإقفال", path: "/finance", icon: BarChart3, module: "finance", children: [
-        { label: "لوحة المالية", path: "/finance", icon: BarChart3 },
-        { label: "مركز سير العمل المالي", path: "/finance/workflows-hub", icon: Sparkles },
-        { label: "لوحة المدير المالي", path: "/finance/cfo-cockpit", icon: BarChart3 },
-        { label: "فحص الإغلاق اليومي", path: "/finance/daily-close-checklist", icon: ListChecks },
-        { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart },
-        { label: "إطفاء المصروفات المقدمة", path: "/finance/amortization", icon: CalendarClock },
-        { label: "الإيراد المؤجل", path: "/finance/deferred-revenue", icon: TrendingUp },
-        { label: "تسجيل قسط تأمين", path: "/finance/insurance", icon: ShieldCheck },
-      ]},
-      // (2) الحسابات والقيود
-      // F-2 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ②) — فُكّت «الحسابات والقيود»
-      // (20 مدخلاً) إلى مجموعتين: الحسابات/مراكز التكلفة، والقيود/الترحيل. إعادة
-      // تجميع فقط — لم يتغيّر أي مسار/صلاحية/تسمية ابن.
-      { label: "الحسابات ومراكز التكلفة", path: "/finance/accounts", icon: GitBranch, module: "finance", children: [
-        { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
-        { label: "فجوات تصنيف الحسابات", path: "/finance/usage-gaps", icon: ShieldAlert },
-        { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
-        { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: Network },
-        { label: "شجرة مراكز التكلفة", path: "/finance/cost-centers/tree", icon: Network },
-        { label: "ترتيب مراكز التكلفة", path: "/finance/cost-centers/ranking", icon: BarChart3 },
-        { label: "كشف الحساب التحليلي", path: "/finance/entity-statements", icon: FileText },
-        { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus, minRoleLevel: 70 },
-      ]},
-      { label: "القيود والترحيل", path: "/finance/journal", icon: ScrollText, module: "finance", children: [
-        { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
-        { label: "ميزان مع تتبّع", path: "/finance/trial-balance-drilldown", icon: Scale },
-        { label: "مقارنة ميزان", path: "/finance/trial-balance-comparison", icon: BarChart3 },
-        { label: "كاشف الشذوذ", path: "/finance/gl-anomaly-detector", icon: ShieldAlert },
-        { label: "طابور الترحيل", path: "/finance/gl-posting-queue", icon: Clock },
-        { label: "مركز التسويات", path: "/finance/reconciliation-hub", icon: RefreshCw },
-        { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature, minRoleLevel: 70 },
-        { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
-        { label: "قوالب قيود سريعة", path: "/finance/journal-quick-templates", icon: Zap },
-        { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
-        { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
-        { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
-      ]},
-      { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, module: "finance", children: [
-        { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
-        { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
-        { label: "السندات", path: "/finance/vouchers", icon: FileText },
-        { label: "المصروفات", path: "/finance/expenses", icon: Wallet },
-        { label: "اعتماد مصاريف بالجملة", path: "/finance/expense-bulk-approvals", icon: CheckSquare },
-        { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
-        { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
-        { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
-        { label: "سند قبض العميل (تطبيق تلقائي)", path: "/finance/receivables/receipt", icon: DollarSign },
-        { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
-        { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
-        { label: "منضدة دفعات العملاء المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
-      ]},
-      { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, module: "finance", children: [
-        { label: "طلبات الشراء", path: "/finance/purchase-requests", icon: ClipboardList },
-        { label: "أوامر الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
-        { label: "الموردون", path: "/finance/vendors", icon: Users },
-        { label: "مستندات الموردين", path: "/finance/vendor-documents", icon: FileText },
-        { label: "منضدة التسوية", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
-        { label: "كشف حساب مورد للطباعة", path: "/finance/vendor-statement-print", icon: Printer },
-        { label: "ملف المورد 360°", path: "/finance/vendor-360-sheet", icon: Users },
-        { label: "إنفاق الموردين", path: "/finance/vendor-spend", icon: BarChart3 },
-        { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
-        { label: "تقويم الدفعات", path: "/finance/ap-payment-calendar", icon: Calendar },
-        { label: "عقود الموردين", path: "/finance/contracts", icon: FileSignature },
-        { label: "متابعة عقود الموردين", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
-      ]},
-      { label: "النقد والخزينة", path: "/finance/treasury", icon: Building, module: "finance", children: [
-        { label: "مراقبة البنوك", path: "/finance/bank-accounts-watch", icon: Banknote },
-        { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
-        { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
-        { label: "ورقة عمل تسوية حساب", path: "/finance/account-recon-workpaper", icon: FileSignature },
-        { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
-        { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
-        { label: "تقويم النقدية", path: "/finance/cash-calendar", icon: Calendar },
-        { label: "توقعات النقد (13 أسبوع)", path: "/finance/cash-13week", icon: TrendingUp },
-        { label: "حاسبة الوضع النقدي", path: "/finance/cash-position-calculator", icon: Calculator },
-      ]},
-      { label: "الذمم والعملاء", path: "/finance/customer-statement-print", icon: Users, module: "finance", children: [
-        { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
-        { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
-        { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
-        { label: "ورقة عمل مخصص الديون", path: "/finance/bad-debt-provision", icon: TrendingUp },
-        { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
-      ]},
-      { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, module: "finance", children: [
-        { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
-        { label: "سجل الأصول الثابتة", path: "/finance/fixed-asset-register", icon: BarChart3 },
-        { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
-        { label: "الأعمال الرأسمالية تحت التنفيذ", path: "/finance/cip", icon: Building2 },
-        { label: "العهد", path: "/finance/custodies", icon: KeyRound },
-        { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
-        { label: "تقرير العهد", path: "/finance/custodies/report", icon: FileBarChart },
-      ]},
-      // (7) الموازنة والفترات والالتزامات — دمج «الفترات والميزانية» مع
-      // «الالتزامات والضمانات» في مجموعة دورة موازنة واحدة.
-      { label: "الموازنة والفترات والالتزامات", path: "/finance/budget", icon: FileBarChart, module: "finance", children: [
-        { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
-        { label: "خريطة حرارية", path: "/finance/budget-heatmap", icon: BarChart3 },
-        // مدخل واحد للفترات المالية → الصفحة v2 (تُنشئ/تعرض/تُقفل/تقفل نهائيًّا).
-        // أُزيل المدخل المكرّر «الفترات المالية» الذي كان يرتدّ لنفس v2 (صفحة v1
-        // مُقاعَدة)، وأُبقي بوّابة الصلاحية. /finance/fiscal-periods يبقى redirect.
-        { label: "الفترات المالية", path: "/finance/fiscal-periods-v2", icon: Calendar, minRoleLevel: 70 },
-        { label: "فحص قبل الإقفال", path: "/finance/period-close-preflight", icon: ShieldAlert, minRoleLevel: 70 },
-        { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive, minRoleLevel: 70 },
-        { label: "الالتزامات", path: "/finance/commitments", icon: FileSignature },
-        { label: "الضمانات البنكية", path: "/finance/bank-guarantees", icon: Shield },
-      ]},
-      // (8) التكاليف والتسويات
-      { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, module: "finance", children: [
-        { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
-        { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
-        { label: "قائمة الدخل حسب مركز التكلفة", path: "/finance/cost-center-pnl", icon: BarChart3 },
-        { label: "تقييم المخزون (المتوسط المرجح)", path: "/finance/inventory-costing", icon: Package },
-        { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
-      ]},
-      // F-1 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ①) — فُكّت مجموعة «الضرائب
-      // والتقارير» المتضخّمة (34 مدخلاً تخلط الضرائب بالتقارير) إلى مجموعتين:
-      // الضرائب/الزكاة، والتقارير/التحليلات. إعادة تجميع فقط — لم يتغيّر أي مسار
-      // أو صلاحية أو تسمية ابن (بوّابة check-sidebar-coverage تبقى خضراء).
-      { label: "الزكاة والضريبة", path: "/finance/tax", icon: Scale, module: "finance", children: [
-        { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
-        { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
-        { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
-        { label: "فئات ضريبة الاستقطاع", path: "/finance/wht-categories", icon: Percent },
-        { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
-        { label: "جاهزية إقرار ضريبة القيمة المضافة", path: "/finance/vat-filing-readiness", icon: FileCheck },
-        { label: "مركز تقارير الزكاة والضريبة", path: "/finance/reports/zatca", icon: FileCheck },
-        { label: "فواتير الأفراد موجَّهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
-        { label: "عملاء بلا رقم ضريبي", path: "/finance/zatca/missing-tax", icon: AlertTriangle },
-        { label: "تسوية ضريبة القيمة المضافة", path: "/finance/reports/vat-reconciliation", icon: Scale },
-        { label: "ملخص ضريبة الاستقطاع", path: "/finance/reports/wht-summary", icon: Percent },
-        { label: "إعداد إقرار ضريبة الاستقطاع", path: "/finance/wht-filing-workbench", icon: FileCheck },
-      ]},
-      { label: "القوائم المالية", path: "/finance/reports", icon: FileBarChart, module: "finance", children: [
-        { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
-        { label: "قائمة الدخل مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
-        { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
-        { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
-        { label: "المقارنة السنوية (سنة/سنة)", path: "/finance/reports/yoy", icon: BarChart2 },
-      ]},
-      { label: "تقارير الربحية والمحافظ", path: "/finance/expense-burn-rate", icon: TrendingUp, module: "finance", children: [
-        { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
-        { label: "مؤشر صحة النظام المالي", path: "/finance/gl-health", icon: ShieldAlert },
-        { label: "محفظة ربحية المشاريع", path: "/finance/project-portfolio", icon: BarChart2 },
-        { label: "محفظة ربحية العقارات", path: "/finance/property-portfolio", icon: BarChart2 },
-        { label: "محفظة ربحية وكلاء العمرة", path: "/finance/umrah-agent-portfolio", icon: BarChart2 },
-        { label: "محفظة مجموعات العمرة", path: "/finance/umrah-group-portfolio", icon: BarChart2 },
-        { label: "محفظة مواسم العمرة", path: "/finance/umrah-season-portfolio", icon: BarChart2 },
-        { label: "محلّل مزيج الإيرادات", path: "/finance/revenue-mix", icon: TrendingUp },
-        { label: "محلّل مزيج المصاريف", path: "/finance/expense-mix", icon: TrendingUp },
-      ]},
-      { label: "تقارير المخزون والتكلفة", path: "/finance/reports/cogs-summary", icon: Package, module: "finance", children: [
-        { label: "ملخص تكلفة المبيعات", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
-        { label: "تقرير تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
-        { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
-        { label: "تنبيهات صلاحية الدفعات", path: "/finance/reports/lot-expiry-alerts", icon: AlertTriangle },
-        { label: "مخزون سالب", path: "/finance/reports/negative-stock", icon: AlertTriangle },
-      ]},
-      { label: "تقارير الذمم والموازنة", path: "/finance/reports/dso-trend", icon: BarChart3, module: "finance", children: [
-        { label: "اتجاه فترة التحصيل", path: "/finance/reports/dso-trend", icon: Activity },
-        { label: "انحرافات الميزانية", path: "/finance/budget-variance", icon: BarChart3 },
-        { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
-      ]},
-      // (10) الصناديق والارتباطات — دمج «صناديق الواردات» مع «ارتباطات الموظفين».
-      { label: "الصناديق والارتباطات", path: "/finance/intake", icon: Bell, module: "finance", children: [
-        { label: "مركز التلقّي المالي", path: "/finance/intake", icon: Truck },
-        { label: "صندوق الموافقات الموحّد", path: "/finance/approvals-inbox", icon: Bell },
-        { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
-        { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
-        { label: "الجهات الخاملة", path: "/finance/dormant-entities", icon: Clock },
-        { label: "صدق دفتر الأستاذ (قياس)", path: "/finance/reports/ledger-truth", icon: AlertTriangle },
-        { label: "فجوات سلامة دفتر الأستاذ", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
-        { label: "فجوات العمليات المالية", path: "/finance/reports/operation-gaps", icon: AlertTriangle },
-        { label: "البنود غير المُوجَّهة", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
-        { label: "نشاط الترحيل المحاسبي", path: "/finance/journal/activity", icon: Activity },
-        { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
-        { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
-      ]},
-      // (11) التحصيل والديون
-      // F6 (audit) — التحصيل والديون المعدومة كانت موجودة كصفحات لكن غير
-      // مرتبطة بالـsidebar؛ مجمَّعة هنا الآن في مدخل واحد لتسهيل الوصول.
-      { label: "التحصيل والديون", path: "/finance/collections", icon: AlertTriangle, module: "finance", children: [
-        { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: DollarSign },
-        { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
-        { label: "متابعة التحصيل", path: "/finance/dunning", icon: Bell },
-        { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
-        { label: "مخصص الديون المشكوك فيها", path: "/finance/bad-debt", icon: ShieldAlert },
-      ]},
-      // F6 (audit) — العملات الأجنبية: rates + revaluation + history في
-      // مجموعة واحدة بدلاً من تركها كلها off-sidebar.
-      { label: "العملات الأجنبية", path: "/finance/fx-rates", icon: Globe, module: "finance", children: [
-        { label: "أسعار الصرف", path: "/finance/fx-rates", icon: Globe },
-        { label: "إعادة التقييم", path: "/finance/fx-revaluation", icon: RefreshCw },
-        { label: "سجل إعادة التقييم", path: "/finance/fx-revaluation/history", icon: Activity },
-      ]},
-      // محرك التوجيه المحاسبي (الإعدادات) — مُبقاة في آخر مجموعة المالية
-      // اتساقاً مع معيار #1715 «الإعدادات في آخر القائمة». صفحات Line-Level
-      // Allocation cluster (PRs 1291, 1297, 1304, 1307, 1309, 1311) مترابطة
-      // عبر AllocationTabsNav و AllocationHealthCard، وهذا المدخل يخلي الكلستر
-      // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
-      { label: "محرك التوجيه المحاسبي", path: "/finance/settings", icon: Network, module: "finance", children: [
-        { label: "مركز الإعدادات", path: "/finance/settings", icon: Settings },
-        { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
-        { label: "التوجيه البُعدي", path: "/finance/dimensional-routing", icon: Network },
-        { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
-        { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
-        { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
-        { label: "مركز التصنيف", path: "/finance/classification-center", icon: Layers },
-        { label: "فشل الحسابات الفرعية", path: "/finance/subsidiary-account-failures", icon: ShieldAlert },
-        { label: "تشخيص أبوّة الحسابات", path: "/finance/datafix/misparented-subsidiaries", icon: GitBranch },
-        { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
-        { label: "تجاوزات الإلزام", path: "/finance/allocation-override-log", icon: ShieldAlert },
+      // إدارة المالية والمحاسبة — مدخل وحدة واحد يجمع مجموعات المالية الفرعية (نفس نمط
+      // «إدارة الأسطول»/«إدارة العمرة»). كانت 19 مجموعة مسطّحة، فأُعيد تجميعها تحت
+      // مدخل واحد. إعادة تجميع فقط — module:"finance" انتقل إلى المدخل الأب.
+      { label: "إدارة المالية والمحاسبة", path: "/finance", icon: BarChart3, module: "finance", children: [
+        // #1715 موجة 6 — تصنيف المالية إلى 13 مجموعة حسب دورة العمل. المجموعات
+        // حاويات فقط: لم يتغيّر أو يُحذف أي مسار، فلا أيتام ولا روابط ميتة،
+        // والإعدادات آخراً، والتقارير مجمَّعة.
+        // (1) اللوحات والإقفال — اللوحات الخمس الإفرادية مجمَّعة في مدخل واحد.
+        { label: "اللوحات والإقفال", path: "/finance", icon: BarChart3, children: [
+          { label: "لوحة المالية", path: "/finance", icon: BarChart3 },
+          { label: "مركز سير العمل المالي", path: "/finance/workflows-hub", icon: Sparkles },
+          { label: "لوحة المدير المالي", path: "/finance/cfo-cockpit", icon: BarChart3 },
+          { label: "فحص الإغلاق اليومي", path: "/finance/daily-close-checklist", icon: ListChecks },
+          { label: "حزمة الإقفال الشهري", path: "/finance/monthly-close-pack", icon: FileBarChart },
+          { label: "إطفاء المصروفات المقدمة", path: "/finance/amortization", icon: CalendarClock },
+          { label: "الإيراد المؤجل", path: "/finance/deferred-revenue", icon: TrendingUp },
+          { label: "تسجيل قسط تأمين", path: "/finance/insurance", icon: ShieldCheck },
+        ]},
+        // (2) الحسابات والقيود
+        // F-2 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ②) — فُكّت «الحسابات والقيود»
+        // (20 مدخلاً) إلى مجموعتين: الحسابات/مراكز التكلفة، والقيود/الترحيل. إعادة
+        // تجميع فقط — لم يتغيّر أي مسار/صلاحية/تسمية ابن.
+        { label: "الحسابات ومراكز التكلفة", path: "/finance/accounts", icon: GitBranch, children: [
+          { label: "شجرة الحسابات", path: "/finance/accounts", icon: GitBranch },
+          { label: "فجوات تصنيف الحسابات", path: "/finance/usage-gaps", icon: ShieldAlert },
+          { label: "حسابات فرعية", path: "/finance/subsidiary-accounts", icon: Layers },
+          { label: "مراكز التكلفة", path: "/finance/cost-centers", icon: Network },
+          { label: "شجرة مراكز التكلفة", path: "/finance/cost-centers/tree", icon: Network },
+          { label: "ترتيب مراكز التكلفة", path: "/finance/cost-centers/ranking", icon: BarChart3 },
+          { label: "كشف الحساب التحليلي", path: "/finance/entity-statements", icon: FileText },
+          { label: "أرصدة افتتاحية", path: "/finance/opening-balances", icon: FilePlus, minRoleLevel: 70 },
+        ]},
+        { label: "القيود والترحيل", path: "/finance/journal", icon: ScrollText, children: [
+          { label: "القيود اليومية", path: "/finance/journal", icon: ScrollText },
+          { label: "ميزان مع تتبّع", path: "/finance/trial-balance-drilldown", icon: Scale },
+          { label: "مقارنة ميزان", path: "/finance/trial-balance-comparison", icon: BarChart3 },
+          { label: "كاشف الشذوذ", path: "/finance/gl-anomaly-detector", icon: ShieldAlert },
+          { label: "طابور الترحيل", path: "/finance/gl-posting-queue", icon: Clock },
+          { label: "مركز التسويات", path: "/finance/reconciliation-hub", icon: RefreshCw },
+          { label: "القيود اليدوية", path: "/finance/journal-manual", icon: FileSignature, minRoleLevel: 70 },
+          { label: "قوالب القيود", path: "/finance/journal-templates", icon: FileText },
+          { label: "قوالب قيود سريعة", path: "/finance/journal-quick-templates", icon: Zap },
+          { label: "معالج عكس قيد", path: "/finance/journal/reverse", icon: ArrowLeftRight },
+          { label: "قيود دورية", path: "/finance/recurring-journals", icon: CalendarClock },
+          { label: "تقويم الدورية", path: "/finance/recurring-calendar", icon: Calendar },
+        ]},
+        { label: "الفواتير والسندات", path: "/finance/invoices", icon: Receipt, children: [
+          { label: "الفواتير", path: "/finance/invoices", icon: Receipt },
+          { label: "صف الإرسال", path: "/finance/invoice-send-queue", icon: Send },
+          { label: "السندات", path: "/finance/vouchers", icon: FileText },
+          { label: "المصروفات", path: "/finance/expenses", icon: Wallet },
+          { label: "اعتماد مصاريف بالجملة", path: "/finance/expense-bulk-approvals", icon: CheckSquare },
+          { label: "موزّع التكاليف", path: "/finance/expenses/split", icon: Layers },
+          { label: "تحويل بين الحسابات", path: "/finance/treasury/transfer", icon: ArrowLeftRight },
+          { label: "المقبوضات", path: "/finance/receivables", icon: DollarSign },
+          { label: "سند قبض العميل (تطبيق تلقائي)", path: "/finance/receivables/receipt", icon: DollarSign },
+          { label: "المدفوعات", path: "/finance/payments", icon: Wallet },
+          { label: "دفعات مقدمة من العملاء", path: "/finance/customer-advances", icon: ArrowLeftRight },
+          { label: "منضدة دفعات العملاء المقدمة", path: "/finance/customer-advances-workbench", icon: Briefcase },
+        ]},
+        { label: "المشتريات والموردين", path: "/finance/purchase-orders", icon: ShoppingCart, children: [
+          { label: "طلبات الشراء", path: "/finance/purchase-requests", icon: ClipboardList },
+          { label: "أوامر الشراء", path: "/finance/purchase-orders", icon: ShoppingCart },
+          { label: "الموردون", path: "/finance/vendors", icon: Users },
+          { label: "مستندات الموردين", path: "/finance/vendor-documents", icon: FileText },
+          { label: "منضدة التسوية", path: "/finance/vendor-settlement-workbench", icon: Briefcase },
+          { label: "كشف حساب مورد للطباعة", path: "/finance/vendor-statement-print", icon: Printer },
+          { label: "ملف المورد 360°", path: "/finance/vendor-360-sheet", icon: Users },
+          { label: "إنفاق الموردين", path: "/finance/vendor-spend", icon: BarChart3 },
+          { label: "دفعة الدفع", path: "/finance/payment-run", icon: Banknote },
+          { label: "تقويم الدفعات", path: "/finance/ap-payment-calendar", icon: Calendar },
+          { label: "عقود الموردين", path: "/finance/contracts", icon: FileSignature },
+          { label: "متابعة عقود الموردين", path: "/finance/vendor-contracts-tracker", icon: FileSignature },
+        ]},
+        { label: "النقد والخزينة", path: "/finance/treasury", icon: Building, children: [
+          { label: "مراقبة البنوك", path: "/finance/bank-accounts-watch", icon: Banknote },
+          { label: "الخزينة", path: "/finance/treasury", icon: Wallet },
+          { label: "التسوية البنكية", path: "/finance/bank-reconciliation", icon: Building },
+          { label: "ورقة عمل تسوية حساب", path: "/finance/account-recon-workpaper", icon: FileSignature },
+          { label: "لوحة التدفق النقدي", path: "/finance/cashflow", icon: LineChart },
+          { label: "توقعات التدفق النقدي", path: "/finance/cash-flow-forecast", icon: TrendingUp },
+          { label: "تقويم النقدية", path: "/finance/cash-calendar", icon: Calendar },
+          { label: "توقعات النقد (13 أسبوع)", path: "/finance/cash-13week", icon: TrendingUp },
+          { label: "حاسبة الوضع النقدي", path: "/finance/cash-position-calculator", icon: Calculator },
+        ]},
+        { label: "الذمم والعملاء", path: "/finance/customer-statement-print", icon: Users, children: [
+          { label: "كشف حساب عميل للطباعة", path: "/finance/customer-statement-print", icon: Printer },
+          { label: "ملف العميل 360°", path: "/finance/customer-360-sheet", icon: Users },
+          { label: "مخاطر العملاء", path: "/finance/customer-risk", icon: AlertTriangle },
+          { label: "ورقة عمل مخصص الديون", path: "/finance/bad-debt-provision", icon: TrendingUp },
+          { label: "تقادم الذمم الدائنة", path: "/finance/ap-aging", icon: Clock },
+        ]},
+        { label: "الأصول والعهد", path: "/finance/fixed-assets", icon: Building2, children: [
+          { label: "الأصول الثابتة", path: "/finance/fixed-assets", icon: Building2 },
+          { label: "سجل الأصول الثابتة", path: "/finance/fixed-asset-register", icon: BarChart3 },
+          { label: "إهلاك دفعة واحدة", path: "/finance/fixed-assets/batch-depreciate", icon: TrendingUp },
+          { label: "الأعمال الرأسمالية تحت التنفيذ", path: "/finance/cip", icon: Building2 },
+          { label: "العهد", path: "/finance/custodies", icon: KeyRound },
+          { label: "منضدة العُهد", path: "/finance/custody-workbench", icon: KeyRound },
+          { label: "تقرير العهد", path: "/finance/custodies/report", icon: FileBarChart },
+        ]},
+        // (7) الموازنة والفترات والالتزامات — دمج «الفترات والميزانية» مع
+        // «الالتزامات والضمانات» في مجموعة دورة موازنة واحدة.
+        { label: "الموازنة والفترات والالتزامات", path: "/finance/budget", icon: FileBarChart, children: [
+          { label: "الميزانية", path: "/finance/budget", icon: FileBarChart },
+          { label: "خريطة حرارية", path: "/finance/budget-heatmap", icon: BarChart3 },
+          // مدخل واحد للفترات المالية → الصفحة v2 (تُنشئ/تعرض/تُقفل/تقفل نهائيًّا).
+          // أُزيل المدخل المكرّر «الفترات المالية» الذي كان يرتدّ لنفس v2 (صفحة v1
+          // مُقاعَدة)، وأُبقي بوّابة الصلاحية. /finance/fiscal-periods يبقى redirect.
+          { label: "الفترات المالية", path: "/finance/fiscal-periods-v2", icon: Calendar, minRoleLevel: 70 },
+          { label: "فحص قبل الإقفال", path: "/finance/period-close-preflight", icon: ShieldAlert, minRoleLevel: 70 },
+          { label: "إقفال السنة المالية", path: "/finance/year-end-close", icon: Archive, minRoleLevel: 70 },
+          { label: "الالتزامات", path: "/finance/commitments", icon: FileSignature },
+          { label: "الضمانات البنكية", path: "/finance/bank-guarantees", icon: Shield },
+        ]},
+        // (8) التكاليف والتسويات
+        { label: "التكاليف والتسويات", path: "/finance/project-costing", icon: FolderOpen, children: [
+          { label: "تكاليف المشاريع", path: "/finance/project-costing", icon: FolderOpen },
+          { label: "محفظة المركبات", path: "/finance/vehicle-portfolio", icon: BarChart3 },
+          { label: "قائمة الدخل حسب مركز التكلفة", path: "/finance/cost-center-pnl", icon: BarChart3 },
+          { label: "تقييم المخزون (المتوسط المرجح)", path: "/finance/inventory-costing", icon: Package },
+          { label: "المعاملات البينية", path: "/finance/intercompany", icon: ArrowLeftRight },
+        ]},
+        // F-1 (FINANCE_INVENTORY_AND_ORGANIZATION §4.أ①) — فُكّت مجموعة «الضرائب
+        // والتقارير» المتضخّمة (34 مدخلاً تخلط الضرائب بالتقارير) إلى مجموعتين:
+        // الضرائب/الزكاة، والتقارير/التحليلات. إعادة تجميع فقط — لم يتغيّر أي مسار
+        // أو صلاحية أو تسمية ابن (بوّابة check-sidebar-coverage تبقى خضراء).
+        { label: "الزكاة والضريبة", path: "/finance/tax", icon: Scale, children: [
+          { label: "نظام الضرائب", path: "/finance/tax", icon: Scale },
+          { label: "رموز الضريبة", path: "/finance/tax-codes", icon: Percent },
+          { label: "قواعد التسعير", path: "/finance/pricing-rules", icon: Percent },
+          { label: "فئات ضريبة الاستقطاع", path: "/finance/wht-categories", icon: Percent },
+          { label: "تقويم الإقرارات", path: "/finance/tax-filing-calendar", icon: Calendar },
+          { label: "جاهزية إقرار ضريبة القيمة المضافة", path: "/finance/vat-filing-readiness", icon: FileCheck },
+          { label: "مركز تقارير الزكاة والضريبة", path: "/finance/reports/zatca", icon: FileCheck },
+          { label: "فواتير الأفراد موجَّهة خطأ", path: "/finance/zatca/misrouted", icon: ShieldAlert },
+          { label: "عملاء بلا رقم ضريبي", path: "/finance/zatca/missing-tax", icon: AlertTriangle },
+          { label: "تسوية ضريبة القيمة المضافة", path: "/finance/reports/vat-reconciliation", icon: Scale },
+          { label: "ملخص ضريبة الاستقطاع", path: "/finance/reports/wht-summary", icon: Percent },
+          { label: "إعداد إقرار ضريبة الاستقطاع", path: "/finance/wht-filing-workbench", icon: FileCheck },
+        ]},
+        { label: "القوائم المالية", path: "/finance/reports", icon: FileBarChart, children: [
+          { label: "التقارير المالية", path: "/finance/reports", icon: FileBarChart },
+          { label: "قائمة الدخل مقابل الميزانية", path: "/finance/reports/is-vs-budget", icon: Scale },
+          { label: "اتجاه قائمة الدخل", path: "/finance/reports/is-trend", icon: TrendingUp },
+          { label: "قائمة التدفقات النقدية", path: "/finance/reports/cash-flow-statement", icon: Banknote },
+          { label: "المقارنة السنوية (سنة/سنة)", path: "/finance/reports/yoy", icon: BarChart2 },
+        ]},
+        { label: "تقارير الربحية والمحافظ", path: "/finance/expense-burn-rate", icon: TrendingUp, children: [
+          { label: "معدل الحرق", path: "/finance/expense-burn-rate", icon: Activity },
+          { label: "مؤشر صحة النظام المالي", path: "/finance/gl-health", icon: ShieldAlert },
+          { label: "محفظة ربحية المشاريع", path: "/finance/project-portfolio", icon: BarChart2 },
+          { label: "محفظة ربحية العقارات", path: "/finance/property-portfolio", icon: BarChart2 },
+          { label: "محفظة ربحية وكلاء العمرة", path: "/finance/umrah-agent-portfolio", icon: BarChart2 },
+          { label: "محفظة مجموعات العمرة", path: "/finance/umrah-group-portfolio", icon: BarChart2 },
+          { label: "محفظة مواسم العمرة", path: "/finance/umrah-season-portfolio", icon: BarChart2 },
+          { label: "محلّل مزيج الإيرادات", path: "/finance/revenue-mix", icon: TrendingUp },
+          { label: "محلّل مزيج المصاريف", path: "/finance/expense-mix", icon: TrendingUp },
+        ]},
+        { label: "تقارير المخزون والتكلفة", path: "/finance/reports/cogs-summary", icon: Package, children: [
+          { label: "ملخص تكلفة المبيعات", path: "/finance/reports/cogs-summary", icon: TrendingDown2 },
+          { label: "تقرير تقييم المخزون", path: "/finance/reports/inventory-valuation", icon: Package },
+          { label: "دوران المخزون", path: "/finance/reports/inventory-turnover", icon: RefreshCw },
+          { label: "تنبيهات صلاحية الدفعات", path: "/finance/reports/lot-expiry-alerts", icon: AlertTriangle },
+          { label: "مخزون سالب", path: "/finance/reports/negative-stock", icon: AlertTriangle },
+        ]},
+        { label: "تقارير الذمم والموازنة", path: "/finance/reports/dso-trend", icon: BarChart3, children: [
+          { label: "اتجاه فترة التحصيل", path: "/finance/reports/dso-trend", icon: Activity },
+          { label: "انحرافات الميزانية", path: "/finance/budget-variance", icon: BarChart3 },
+          { label: "اعتماد الميزانية", path: "/finance/budget-approvals", icon: ClipboardCheck },
+        ]},
+        // (10) الصناديق والارتباطات — دمج «صناديق الواردات» مع «ارتباطات الموظفين».
+        { label: "الصناديق والارتباطات", path: "/finance/intake", icon: Bell, children: [
+          { label: "مركز التلقّي المالي", path: "/finance/intake", icon: Truck },
+          { label: "صندوق الموافقات الموحّد", path: "/finance/approvals-inbox", icon: Bell },
+          { label: "ملف الجهة 360°", path: "/finance/entity-360", icon: Sparkles },
+          { label: "ترتيب الجهات", path: "/finance/entity-ranking", icon: BarChart3 },
+          { label: "الجهات الخاملة", path: "/finance/dormant-entities", icon: Clock },
+          { label: "صدق دفتر الأستاذ (قياس)", path: "/finance/reports/ledger-truth", icon: AlertTriangle },
+          { label: "فجوات سلامة دفتر الأستاذ", path: "/finance/reports/gl-integrity-gaps", icon: AlertTriangle },
+          { label: "فجوات العمليات المالية", path: "/finance/reports/operation-gaps", icon: AlertTriangle },
+          { label: "البنود غير المُوجَّهة", path: "/finance/reports/unmapped-lines", icon: AlertTriangle },
+          { label: "نشاط الترحيل المحاسبي", path: "/finance/journal/activity", icon: Activity },
+          { label: "سلف الرواتب", path: "/finance/salary-advances", icon: DollarSign },
+          { label: "الطلبات المالية", path: "/finance/financial-requests", icon: ClipboardCheck },
+        ]},
+        // (11) التحصيل والديون
+        // F6 (audit) — التحصيل والديون المعدومة كانت موجودة كصفحات لكن غير
+        // مرتبطة بالـsidebar؛ مجمَّعة هنا الآن في مدخل واحد لتسهيل الوصول.
+        { label: "التحصيل والديون", path: "/finance/collections", icon: AlertTriangle, children: [
+          { label: "منضدة التحصيل", path: "/finance/ar-collection-workbench", icon: DollarSign },
+          { label: "تقادم الذمم المدينة", path: "/finance/ar-aging", icon: Clock },
+          { label: "متابعة التحصيل", path: "/finance/dunning", icon: Bell },
+          { label: "مراحل التصعيد", path: "/finance/collection", icon: AlertTriangle },
+          { label: "مخصص الديون المشكوك فيها", path: "/finance/bad-debt", icon: ShieldAlert },
+        ]},
+        // F6 (audit) — العملات الأجنبية: rates + revaluation + history في
+        // مجموعة واحدة بدلاً من تركها كلها off-sidebar.
+        { label: "العملات الأجنبية", path: "/finance/fx-rates", icon: Globe, children: [
+          { label: "أسعار الصرف", path: "/finance/fx-rates", icon: Globe },
+          { label: "إعادة التقييم", path: "/finance/fx-revaluation", icon: RefreshCw },
+          { label: "سجل إعادة التقييم", path: "/finance/fx-revaluation/history", icon: Activity },
+        ]},
+        // محرك التوجيه المحاسبي (الإعدادات) — مُبقاة في آخر مجموعة المالية
+        // اتساقاً مع معيار #1715 «الإعدادات في آخر القائمة». صفحات Line-Level
+        // Allocation cluster (PRs 1291, 1297, 1304, 1307, 1309, 1311) مترابطة
+        // عبر AllocationTabsNav و AllocationHealthCard، وهذا المدخل يخلي الكلستر
+        // قابلاً للوصول من أي صفحة في النظام (ليس من finance فقط).
+        { label: "محرك التوجيه المحاسبي", path: "/finance/settings", icon: Network, children: [
+          { label: "مركز الإعدادات", path: "/finance/settings", icon: Settings },
+          { label: "قواعد التوجيه", path: "/finance/allocation-rules", icon: Network },
+          { label: "التوجيه البُعدي", path: "/finance/dimensional-routing", icon: Network },
+          { label: "كتالوج المنتجات", path: "/finance/product-catalog", icon: Package },
+          { label: "تشخيص التغطية", path: "/finance/allocation-coverage", icon: Target },
+          { label: "سجل التوجيه", path: "/finance/allocation-results", icon: Activity },
+          { label: "مركز التصنيف", path: "/finance/classification-center", icon: Layers },
+          { label: "فشل الحسابات الفرعية", path: "/finance/subsidiary-account-failures", icon: ShieldAlert },
+          { label: "تشخيص أبوّة الحسابات", path: "/finance/datafix/misparented-subsidiaries", icon: GitBranch },
+          { label: "التعديلات اليدوية", path: "/finance/overrides-report", icon: BookOpen },
+          { label: "تجاوزات الإلزام", path: "/finance/allocation-override-log", icon: ShieldAlert },
+        ]},
       ]},
     ],
   },
