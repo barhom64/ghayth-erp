@@ -123,6 +123,13 @@ function makeIsAuditedByMiddleware(prefixes) {
 // handler logs who/what/when directly.
 const AUDIT_PRIMITIVE = /createAuditLog\s*\(|auditFromRequest\s*\(|auditMutation\s*\(|emitEvent\s*\(/;
 
+// Cross-file audit wrappers: library helpers (imported, not file-local) that
+// UNCONDITIONALLY write an audit_logs row internally, so any handler calling
+// them is audited even with no inline primitive. `applyTransition`
+// (lib/lifecycleEngine.ts) always calls createAuditLog after every committed
+// state change — see lifecycleEngine.ts. Calling it counts as coverage.
+const KNOWN_AUDIT_WRAPPERS = /(?<!\.)\b(?:applyTransition)\s*\(/;
+
 // Many routers funnel every write through a thin file-local wrapper instead of
 // calling the primitive inline — e.g. org.ts `audit(req, …)` and
 // inboxConversations.ts `recordConversationAction(req, …)`, both of which call
@@ -217,6 +224,7 @@ function scanFile(file, mountMap, isAuditedByMiddleware) {
         line: i + 1,
         hasAudit:
           AUDIT_PRIMITIVE.test(win) ||
+          KNOWN_AUDIT_WRAPPERS.test(win) ||
           (wrapperRe !== null && wrapperRe.test(win)) ||
           isAuditedByMiddleware(joined),
       });
