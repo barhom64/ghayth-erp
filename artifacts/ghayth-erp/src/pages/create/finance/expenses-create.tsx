@@ -335,6 +335,13 @@ export default function ExpensesCreate() {
     }
   }, [isFuelScenario, fuelDerivedAmount]);
 
+  // #2238 — the journal-preview verdict gates save: a critical blocker (account
+  // not found / unbalanced / required dimension missing / illegal money source)
+  // disables the save button so the operator fixes the routing before posting,
+  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
+  // Rules of Hooks: this useState MUST be declared before the early returns below.
+  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
+
   if (accountsLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -368,12 +375,6 @@ export default function ExpensesCreate() {
   // description / account / allocation, preserving shared header fields
   // (date, branch, payment method, source treasury). Operators get the
   // multi-line workflow without a second form.
-  // #2238 — the journal-preview verdict gates save: a critical blocker (account
-  // not found / unbalanced / required dimension missing / illegal money source)
-  // disables the save button so the operator fixes the routing before posting,
-  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
-  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
-
   const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
       accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
