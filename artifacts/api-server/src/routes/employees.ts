@@ -795,6 +795,50 @@ router.post("/:id/reject-self-data", authorize({ feature: "hr.employees", action
   }
 });
 
+// إعادة إصدار رابط الاستكمال الذاتي (الدفعة هـ). الرابط يُصدَر أول مرة عند
+// الإضافة السريعة وينتهي خلال ٧ أيام؛ لو انتهى أو لم يتصرّف الموظف، يعيد HR
+// إصداره من هنا. يُبطِل الرمز السابق ويرسل رابطًا جديدًا. لا يُسمح للموظف
+// المفعّل (status=active) لأن الاستكمال الذاتي مرحلة ما قبل التفعيل.
+router.post("/:id/resend-onboarding-link", authorize({ feature: "hr.employees", action: "update", resource: { table: "employees", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [emp] = await rawQuery<{ id: number; name: string; email: string | null; status: string }>(
+      `SELECT id, name, email, status FROM employees WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [id, scope.companyId],
+    );
+    if (!emp) throw new NotFoundError("الموظف غير موجود");
+    if (emp.status === "active") {
+      throw new ValidationError("الموظف مفعّل بالفعل — لا حاجة لرابط استكمال", { field: "id", fix: "رابط الاستكمال للموظفين قبل التفعيل فقط." });
+    }
+    if (!emp.email) {
+      throw new ValidationError("لا يمكن إرسال الرابط: الموظف بلا بريد إلكتروني", { field: "email", fix: "أضف بريد الموظف أولًا من ملفه." });
+    }
+    const issued = await issueOnboardingToken({ companyId: scope.companyId, employeeId: id, createdBy: scope.userId });
+    void sendMessage({
+      channel: "email",
+      recipient: emp.email,
+      recipientName: emp.name,
+      subject: "استكمال بيانات التوظيف",
+      body: `أهلاً ${emp.name},\n\nيرجى استكمال بياناتك الوظيفية عبر الرابط التالي خلال 7 أيام:\n${issued.url}\n\nبعد إرسالك للبيانات ستتم مراجعتها واعتمادها لتفعيل حسابك.`,
+      companyId: scope.companyId,
+      userId: scope.userId,
+      relatedType: "employee",
+      relatedId: id,
+      templateKey: "employee.self_onboarding",
+    }).catch((e) => logger.error(e, "resend onboarding email failed"));
+    void createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "employee.onboarding_link_resent", entity: "employees", entityId: id,
+      activeRoleKey: scope.selectedRoleKey ?? null,
+      after: { resent: true },
+    }).catch((e) => logger.error(e, "resend-onboarding-link audit failed"));
+    res.json({ ok: true, onboardingLink: issued.url, message: "أُعيد إرسال رابط الاستكمال للموظف بالبريد" });
+  } catch (err) {
+    handleRouteError(err, res, "إعادة إرسال رابط الاستكمال");
+  }
+});
+
 router.post("/", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
   try {
     const body = zodParse(createEmployeeSchema.safeParse(req.body));

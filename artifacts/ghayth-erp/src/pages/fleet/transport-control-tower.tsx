@@ -23,8 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import {
-  AlertTriangle, RefreshCw, Car, Users, Activity, Clipboard, ArrowLeft,
+  AlertTriangle, Car, Users, Activity, Clipboard, ArrowLeft,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface ControlTowerSnapshot {
   date: string;
@@ -107,10 +108,7 @@ export default function ControlTowerPage() {
             اليوم
           </Button>
         </div>
-        <Button size="sm" variant="outline" onClick={() => refetch()} disabled={isFetching}>
-          <RefreshCw className={`h-3.5 w-3.5 me-1 ${isFetching ? "animate-spin" : ""}`} />
-          تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} disabled={isFetching} />
       </div>
 
       {/* Alerts */}

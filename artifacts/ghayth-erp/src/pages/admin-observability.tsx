@@ -33,9 +33,10 @@ import { Badge } from "@/components/ui/badge";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
-  RefreshCw, AlertTriangle, AlertOctagon, Activity, Inbox,
+  AlertTriangle, AlertOctagon, Activity, Inbox,
   Plug, Cpu, Clock, Bot, Sparkles, CheckCircle2,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface Anomaly {
   severity: "critical" | "warning" | "info";
@@ -379,9 +380,7 @@ export default function AdminObservability() {
       subtitle="رؤية موحّدة للطوابير، التكاملات، العمّال، خروقات الـ SLA، والشذوذات النشطة"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
