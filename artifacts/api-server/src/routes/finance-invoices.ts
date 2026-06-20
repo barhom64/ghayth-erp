@@ -193,6 +193,8 @@ const createCustomerReceiptSchema = z.object({
   })).max(200).default([]),
   branchId: z.coerce.number().optional(),
   lineAllocation: z.record(z.string(), z.any()).optional(),
+  // #2698 — خزنة/بنك الإيداع صراحةً (يتجاوز الحلّ الآلي بالطريقة في سند القبض).
+  cashAccountCode: z.string().max(40).optional(),
 });
 
 const impactPreviewSchema = z.object({
@@ -4219,6 +4221,7 @@ invoicesRouter.post("/customer-receipts", authorize({ feature: "finance.invoices
       clientId: body.clientId,
       amount: body.amount,
       method: body.method === "bank" || body.method === "transfer" ? "bank_transfer" : body.method,
+      cashAccountCode: body.cashAccountCode ?? null,
       receiptKey: body.receiptKey,
       receivedDate: body.date,
       reference: body.reference ?? null,
