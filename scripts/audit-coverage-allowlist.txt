@@ -33,8 +33,22 @@
 # ── Non-mutating tombstone (kept; returns HTTP 410, performs no write — no audit needed):
 #      • POST /finance/fiscal-periods/:period/close    → 410 Gone, redirects to fiscal-periods-v2/:id/close
 #
+# ── Audited via an IMPORTED lib helper (the wrapper-detector only sees file-local
+#    wrappers, so a helper defined in lib/ stays invisible — these ARE audited):
+#      • POST /inbox/send, POST /inbox/threads/:id/reply, POST /inbox/drafts/:id/send
+#                                       → lib/messageSender.sendMessage (emitEvent + createAuditLog + communications_log)
+#      • POST /umrah/reclassify-revenue → lib/umrahReclassifyEngine (emitEvent + createAuditLog)
+#      • POST /umrah/groups/:id/transport-requests → lib/umrahTransportContract (createAuditLog)
+#      • POST /umrah/import/vouchers    → lib/umrahImportEngine (emitEvent)
+#
+# ── Low-sensitivity PERSONAL / UI state (kept; the constitution requires audit for
+#    "important operational actions" — these are personal scratch/preferences/UI
+#    toggles, not operational mutations, so an audit row would be noise):
+#      • inbox email drafts CRUD, email signatures CRUD (per-user content/prefs)
+#      • inbox messages :id/read, :id/star; threads .../read, .../snooze (read-state)
+#      • umrah import/presets (per-user CSV column-mapping templates)
+#
 # Baseline captured: 199 unaudited write endpoint(s).
-DELETE /admin/governance/event-dlq/:id
 DELETE /admin/pricing/rules/:id
 DELETE /admin/saudi/wps/credentials/:bankCode
 DELETE /documents/pricing/rules/:id
@@ -74,7 +88,6 @@ PATCH /warehouse/zatca/missing-tax-numbers/:id
 POST /admin/:id/ocr/rerun
 POST /admin/ai-governance/prompts/:id/simulate
 POST /admin/communication-control/dlp-rules/test
-POST /admin/governance/event-dlq/:id/replay
 POST /admin/ocr/extractions/:id/confirm
 POST /admin/ocr/extractions/:id/reject
 POST /admin/pbx-control/ivr-test
@@ -111,7 +124,6 @@ POST /finance/pricing/resolve
 POST /finance/pricing/rules
 POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
-POST /fleet/rental-contracts/:id/payments
 POST /hr/:id/ocr/rerun
 POST /hr/attendance/field-ping
 POST /hr/discipline/memos/:id/appeal
@@ -153,7 +165,6 @@ POST /warehouse/ocr/extractions/:id/confirm
 POST /warehouse/ocr/extractions/:id/reject
 POST /warehouse/pricing/resolve
 POST /warehouse/pricing/rules
-POST /warehouse/suppliers/:id/items
 PUT /admin/pricing/rules/:id
 PUT /admin/saudi/wps/credentials/:bankCode
 PUT /documents/pricing/rules/:id
