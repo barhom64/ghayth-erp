@@ -23,7 +23,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Plug, Mail, MessageSquare, Webhook, Phone, Plus, X, Play,
-  RefreshCw, AlertCircle, CheckCircle, Clock, Settings,
+  RefreshCw, AlertCircle, CheckCircle, Clock, Settings, Github,
 } from "lucide-react";
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -31,6 +31,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   sms: "رسائل نصية",
   whatsapp: "واتساب",
   webhook: "ويب هوك",
+  github: "GitHub",
 };
 
 const CHANNEL_ICONS: Record<string, any> = {
@@ -38,6 +39,7 @@ const CHANNEL_ICONS: Record<string, any> = {
   sms: Phone,
   whatsapp: MessageSquare,
   webhook: Webhook,
+  github: Github,
 };
 
 // Zod schema enforces JSON validity BEFORE submit (the old flow only
@@ -47,7 +49,7 @@ const CHANNEL_ICONS: Record<string, any> = {
 // the textarea.
 const integrationFormSchema = z.object({
   name: z.string().trim().min(1, "الاسم مطلوب"),
-  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
+  type: z.enum(["email", "sms", "whatsapp", "webhook", "github"]),
   config: z
     .string()
     .refine((s) => {
@@ -146,12 +148,13 @@ function IntegrationsList() {
                     { value: "sms", label: "رسائل نصية" },
                     { value: "whatsapp", label: "واتساب" },
                     { value: "webhook", label: "خطاف استدعاء" },
+                    { value: "github", label: "GitHub" },
                   ]}
                 />
                 <FormTextareaField
                   name="config"
                   label="الإعدادات (بصيغة JSON)"
-                  description='يجب أن تكون JSON صالحًا. مثال للبريد: host, port, user, password, from'
+                  description='JSON صالح. بريد: host, port, user, password, from · GitHub: token, repo (مثال repo: barhom64/ghayth-erp)'
                   rows={5}
                   className="md:col-span-2"
                 />
