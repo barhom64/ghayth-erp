@@ -39,13 +39,7 @@ const TONE: Record<Tone, string> = {
   danger: "text-destructive border-destructive/40 hover:bg-destructive/5",
 };
 
-/**
- * زر إجراء موحّد: أيقونة فقط افتراضيًّا، تتمدّد لتُظهر النص عند المرور/التركيز.
- * يقبل onClick أو href (رابط داخلي عبر wouter).
- */
-export function PageActionButton({
-  icon: Icon, label, onClick, href, tone = "default", disabled, testid, perm, permMode = "all",
-}: {
+type ActionProps = {
   icon: any;
   label: string;
   onClick?: () => void;
@@ -56,10 +50,13 @@ export function PageActionButton({
   /** صلاحية مطلوبة — يُخفى الزر إن لم يملكها المستخدم (كـ GuardedButton). */
   perm?: string | string[];
   permMode?: "all" | "any";
-}) {
-  // يُستدعى دائمًا (قاعدة الـhooks)؛ مصفوفة فارغة = مسموح.
-  const allowed = usePermission(perm ?? [], permMode);
-  if (perm && !allowed) return null;
+};
+
+/** العرض الفعلي للزر — بلا أي hook صلاحية، فيُؤمَن في أي بيئة (ومنها الاختبارات
+ *  التي بلا AppContext). */
+function ActionButtonView({
+  icon: Icon, label, onClick, href, tone = "default", disabled, testid,
+}: Omit<ActionProps, "perm" | "permMode">) {
   const className = cn(
     "group/pa inline-flex items-center rounded-md border bg-background px-2.5 py-2 transition-all",
     "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -98,6 +95,23 @@ export function PageActionButton({
       {body}
     </button>
   );
+}
+
+/** غلاف صلاحية — يُستدعى usePermission فقط حين تُمرَّر perm فعلًا، فلا تنكسر
+ *  الصفحات التي لا تستخدم صلاحيات في بيئات بلا AppContext. */
+function PermGatedButton({ perm, permMode = "all", ...rest }: ActionProps & { perm: string | string[] }) {
+  const allowed = usePermission(perm, permMode);
+  if (!allowed) return null;
+  return <ActionButtonView {...rest} />;
+}
+
+/**
+ * زر إجراء موحّد: أيقونة فقط افتراضيًّا، تتمدّد لتُظهر النص عند المرور/التركيز.
+ * يقبل onClick أو href. عند تمرير perm يُغلّف بفحص صلاحية (يُخفى إن لم تُتح).
+ */
+export function PageActionButton({ perm, permMode, ...rest }: ActionProps) {
+  if (perm) return <PermGatedButton perm={perm} permMode={permMode} {...rest} />;
+  return <ActionButtonView {...rest} />;
 }
 
 // ── الأفعال الموحّدة الشائعة ─────────────────────────────────────────────────
