@@ -15,6 +15,7 @@ artifacts/ghayth-erp/src/pages/admin/print-templates.tsx
 artifacts/ghayth-erp/src/pages/create/documents/version-upload.tsx
 artifacts/ghayth-erp/src/pages/documents-page.tsx
 artifacts/ghayth-erp/src/pages/documents/documents-upload.tsx
+artifacts/ghayth-erp/src/pages/hr/self-onboarding-review.tsx
 artifacts/ghayth-erp/src/pages/login.tsx
 artifacts/ghayth-erp/src/pages/onboarding-self.tsx
 artifacts/ghayth-erp/src/pages/setup.tsx

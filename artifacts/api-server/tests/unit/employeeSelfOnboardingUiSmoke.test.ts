@@ -23,6 +23,11 @@ const HR_ROUTES = read(`${FE}/routes/hrRoutes.tsx`);
 const NAV = read(`${FE}/components/layout/navigation.registry.ts`);
 const MODAL = read(`${FE}/pages/hr/employee-activation.tsx`);
 const BOARD = read(`${FE}/pages/hr/activation-board.tsx`);
+const API = "artifacts/api-server/src";
+const PUBLIC_ROUTE = read(`${API}/routes/publicData.ts`);
+const OBJSTORE = read(`${API}/lib/objectStorage.ts`);
+const APP_TS = read(`${API}/app.ts`);
+const STORAGE_ROUTE = read(`${API}/routes/storage.ts`);
 
 describe("الدفعة ج — الصفحة العامة", () => {
   it("تقرأ الرمز من الـURL وتنادي مسار العام", () => {
@@ -75,5 +80,51 @@ describe("الدفعة هـ — إعادة إرسال الرابط من لوحة
   it("الزر يظهر لحالات الاستكمال الذاتي فقط ومحميّ بـ hr:update", () => {
     expect(BOARD).toMatch(/e\.activationStatus === "self_invited" \|\| e\.activationStatus === "self_submitted"/);
     expect(BOARD).toMatch(/resendMut\.mutate\(\{ id: e\.id \}\)/);
+  });
+});
+
+describe("الدفعة و — عدّاد الطلبات بانتظار المراجعة", () => {
+  it("لوحة التفعيل تعرض KPI لعدد المُرسِلين (self_submitted)", () => {
+    expect(BOARD).toMatch(/بانتظار استكمال البيانات/);
+    expect(BOARD).toMatch(/pending\.filter\(\(e: any\) => e\.activationStatus === "self_submitted"\)\.length/);
+  });
+  it("صفحة المراجعة تُظهر العدد في الترويسة", () => {
+    expect(REVIEW).toMatch(/\$\{rows\.length\} طلب بانتظار المراجعة/);
+  });
+});
+
+describe("الدفعة ز — رفع وثائق الاستكمال (نموذج خادمي base64)", () => {
+  it("نقطة الرفع العامة محميّة بالرمز وتتحقق من النوع والحجم خادميًا", () => {
+    expect(PUBLIC_ROUTE).toMatch(/router\.post\("\/onboarding\/:token\/document"/);
+    expect(PUBLIC_ROUTE).toMatch(/verifyOnboardingToken/);
+    expect(PUBLIC_ROUTE).toMatch(/ALLOWED_DOC_MIME = \["image\/jpeg", "image\/png", "image\/webp", "application\/pdf"\]/);
+    expect(PUBLIC_ROUTE).toMatch(/MAX_DOC_BYTES = 5 \* 1024 \* 1024/);
+    expect(PUBLIC_ROUTE).toMatch(/buffer\.length > MAX_DOC_BYTES/);
+    expect(PUBLIC_ROUTE).toMatch(/objectStorage\.uploadBytes\(buffer, body\.mimeType\)/);
+    expect(PUBLIC_ROUTE).toMatch(/employee\.self_onboarding_document_uploaded/);
+  });
+  it("الرفع خادمي (لا رابط موقّع يُسلَّم لِحامل الرمز)", () => {
+    expect(OBJSTORE).toMatch(/async uploadBytes\(buffer: Buffer, contentType: string\): Promise<string>/);
+    expect(OBJSTORE).toMatch(/await file\.save\(buffer, \{ contentType, resumable: false \}\)/);
+    expect(PUBLIC_ROUTE).not.toMatch(/getObjectEntityUploadURL/);
+  });
+  it("App يرفع حد الجسم لمسار الرفع فقط (base64 ≤ 8mb)", () => {
+    expect(APP_TS).toMatch(/app\.use\("\/api\/public\/onboarding", express\.json\(\{ limit: "8mb" \}\)\)/);
+  });
+  it("مسار عرض الكائن المُصادَق يسمح بمرفقات الاستكمال ضمن نطاق الشركة", () => {
+    expect(STORAGE_ROUTE).toMatch(/"selfSubmittedData"\)::text LIKE/);
+    expect(STORAGE_ROUTE).toMatch(/onboardingRef\.length === 0/);
+  });
+  it("الصفحة العامة ترفع base64 وتُرفق المخرجات في الإرسال", () => {
+    expect(PUBLIC_PAGE).toMatch(/\/document/);
+    expect(PUBLIC_PAGE).toMatch(/readAsDataURL/);
+    expect(PUBLIC_PAGE).toMatch(/JSON\.stringify\(\{ \.\.\.form, attachments \}\)/);
+    expect(PUBLIC_PAGE).toMatch(/MAX_DOC_BYTES = 5 \* 1024 \* 1024/);
+  });
+  it("صفحة المراجعة تعرض المرفقات وتفتحها عبر مسار مُصادَق", () => {
+    expect(REVIEW).toMatch(/viewAttachment/);
+    expect(REVIEW).toMatch(/\/api\/storage\/objects\//);
+    expect(REVIEW).toMatch(/nativeAuthHeaders/);
+    expect(REVIEW).toMatch(/submitted\.attachments/);
   });
 });

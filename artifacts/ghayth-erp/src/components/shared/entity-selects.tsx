@@ -231,6 +231,8 @@ interface EntitySelectProps {
   error?: string;
   allowCreate?: boolean;
   filter?: (item: any) => boolean;
+  /** Visually hide the label (sr-only) for dense inline/toolbar contexts. */
+  hideLabel?: boolean;
 }
 
 function buildEntitySelect(config: EntitySelectConfig) {
@@ -244,6 +246,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
     error,
     allowCreate = true,
     filter,
+    hideLabel,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
     // #2134 — entities created from «+ جديد» are appended locally so they
@@ -308,6 +311,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           label={label}
           required={required}
           error={error}
+          hideLabel={hideLabel}
           options={options}
           value={value}
           onValueChange={onChange}

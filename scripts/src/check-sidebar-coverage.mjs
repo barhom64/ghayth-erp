@@ -67,6 +67,7 @@ const STRICT = process.argv.includes("--strict");
 // "no create/edit in the nav drawer" convention.
 const CREATE_IN_SIDEBAR_ALLOWLIST = new Set([
   "/hr/leaves/create", // employee self-service "طلب إجازة" entry point
+  "/employees/quick-create", // "إنشاء موظف سريع" — intentional quick-access HR entry point (mirrors the leave self-service precedent)
 ]);
 
 // Pages intentionally OFF the sidebar because a tab-shell page supersets them —

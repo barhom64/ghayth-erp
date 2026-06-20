@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UmrahAgentSelect, UmrahSeasonSelect } from "@/components/shared/entity-selects";
 import { useToast } from "@/hooks/use-toast";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Receipt, DollarSign, FileText, Plus, X, Trash2 } from "lucide-react";
@@ -62,8 +63,6 @@ export default function UmrahInvoices() {
 function AgentInvoicesTab() {
   const [, navigate] = useLocation();
   const { data: resp, refetch, isLoading, isError, error } = useApiQuery<any>(["umrah-agent-invoices"], "/umrah/agent-invoices");
-  const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
-  const { data: seasons } = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const items = resp?.data || [];
   const [filters, setFilters] = useFilters();
   const [genAgent, setGenAgent] = useState("");
@@ -127,22 +126,20 @@ function AgentInvoicesTab() {
       <Card>
         <CardContent className="p-4 flex gap-4 items-end flex-wrap">
           <div className="flex-1 min-w-[180px]">
-            <Label>الوكيل</Label>
-            <Select value={genAgent} onValueChange={setGenAgent}>
-              <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-              <SelectContent>
-                {(agents?.data || []).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <UmrahAgentSelect
+              label="الوكيل"
+              placeholder="اختر الوكيل"
+              value={genAgent}
+              onChange={setGenAgent}
+            />
           </div>
           <div className="flex-1 min-w-[180px]">
-            <Label>الموسم</Label>
-            <Select value={genSeason} onValueChange={setGenSeason}>
-              <SelectTrigger><SelectValue placeholder="اختر الموسم" /></SelectTrigger>
-              <SelectContent>
-                {(seasons?.data || []).map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <UmrahSeasonSelect
+              label="الموسم"
+              placeholder="اختر الموسم"
+              value={genSeason}
+              onChange={setGenSeason}
+            />
           </div>
           <GuardedButton perm="umrah:create" onClick={generate} disabled={!genAgent || !genSeason} className="gap-2">
             <Receipt className="h-4 w-4" />إنشاء فاتورة
@@ -434,7 +431,6 @@ function NuskInvoicesTab() {
   const { toast } = useToast();
 
   const { data, isLoading, isError, refetch, error } = useApiQuery<any>(["umrah-nusk-invoices"], "/umrah/nusk-invoices");
-  const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
   const items = asList(data?.data || data);
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
@@ -619,15 +615,12 @@ function NuskInvoicesTab() {
           <CardContent className="p-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div><Label>رقم فاتورة نسك *</Label><Input value={form.nuskInvoiceNumber} onChange={(e) => setField("nuskInvoiceNumber")(e.target.value)} className="mt-1" /></div>
-              <div>
-                <Label>الوكيل *</Label>
-                <Select value={form.agentId} onValueChange={setField("agentId")}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-                  <SelectContent>
-                    {asList(agents?.data).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <UmrahAgentSelect
+                label="الوكيل *"
+                placeholder="اختر الوكيل"
+                value={form.agentId}
+                onChange={setField("agentId")}
+              />
               <div>
                 <Label>الوكيل الفرعي</Label>
                 <Select value={form.subAgentId || "none"} onValueChange={(v) => setField("subAgentId")(v === "none" ? "" : v)}>
