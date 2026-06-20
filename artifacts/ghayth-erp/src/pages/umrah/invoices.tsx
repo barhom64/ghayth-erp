@@ -431,7 +431,6 @@ function NuskInvoicesTab() {
   const { toast } = useToast();
 
   const { data, isLoading, isError, refetch, error } = useApiQuery<any>(["umrah-nusk-invoices"], "/umrah/nusk-invoices");
-  const { data: agents } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
   const { data: subAgents } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
   const items = asList(data?.data || data);
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
@@ -616,15 +615,12 @@ function NuskInvoicesTab() {
           <CardContent className="p-4 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div><Label>رقم فاتورة نسك *</Label><Input value={form.nuskInvoiceNumber} onChange={(e) => setField("nuskInvoiceNumber")(e.target.value)} className="mt-1" /></div>
-              <div>
-                <Label>الوكيل *</Label>
-                <Select value={form.agentId} onValueChange={setField("agentId")}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-                  <SelectContent>
-                    {asList(agents?.data).map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <UmrahAgentSelect
+                label="الوكيل *"
+                placeholder="اختر الوكيل"
+                value={form.agentId}
+                onChange={setField("agentId")}
+              />
               <div>
                 <Label>الوكيل الفرعي</Label>
                 <Select value={form.subAgentId || "none"} onValueChange={(v) => setField("subAgentId")(v === "none" ? "" : v)}>
