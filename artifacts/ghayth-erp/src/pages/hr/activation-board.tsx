@@ -10,7 +10,7 @@ import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { UserCheck, Clock, AlertTriangle, ListChecks, CheckCircle, Send } from "lucide-react";
+import { UserCheck, Clock, AlertTriangle, ListChecks, CheckCircle, Send, Inbox } from "lucide-react";
 
 /**
  * /hr/activation-board — لوحة «قيد التفعيل» (HR-REV-3 §5).
@@ -114,6 +114,7 @@ export default function ActivationBoardPage() {
     { label: "بنود إلزامية ناقصة", value: rows.reduce((s, r) => s + r.mandatoryRemaining, 0), icon: ListChecks, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "بنود متأخّرة (SLA)", value: rows.reduce((s, r) => s + r.overdue, 0), icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "جاهزون للمراجعة", value: rows.filter((r) => r.total > 0 && r.mandatoryRemaining === 0).length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "بانتظار استكمال البيانات", value: pending.filter((e: any) => e.activationStatus === "self_submitted").length, icon: Inbox, color: "text-purple-700 bg-purple-100" },
   ];
 
   return (
