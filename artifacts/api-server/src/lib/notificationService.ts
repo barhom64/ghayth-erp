@@ -1,6 +1,6 @@
 import { rawQuery, rawExecute } from "./rawdb.js";
 import { sendPushToCompany } from "./pushService.js";
-import { dispatchNotification, interpolateTemplate, type EngineChannel } from "./notificationEngine.js";
+import { dispatchNotification, interpolateTemplate, type EngineChannel } from "./notificationDispatch.js";
 import { logger } from "./logger.js";
 
 export type NotificationChannel = "in_app" | "email" | "sms" | "whatsapp";

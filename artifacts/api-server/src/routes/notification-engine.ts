@@ -5,7 +5,7 @@ import { handleRouteError, ValidationError, ForbiddenError,
 } from "../lib/errorHandler.js";
 import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
-import { getDeliveryStats } from "../lib/notificationEngine.js";
+import { getDeliveryStats } from "../lib/notificationDispatch.js";
 import { requireMinLevel } from "../middlewares/roleGuard.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";

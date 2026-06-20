@@ -125,6 +125,23 @@ const BASE = resolveApiBase();
 export const API_BASE = BASE;
 
 /**
+ * Auth headers for DIRECT `fetch` calls to the API that bypass apiFetch
+ * (blob downloads, file uploads, print preview). On the web these rely on the
+ * cookie (`credentials: "include"`); inside the native app there are no
+ * cookies, so they must carry `Authorization: Bearer` like apiFetch does —
+ * otherwise the request is unauthenticated and 401s. Inert on the web
+ * (returns `{}`), so the cookie flow is unchanged. Spread into the fetch
+ * headers:  `headers: { ...nativeAuthHeaders(), ... }`.
+ */
+export function nativeAuthHeaders(): Record<string, string> {
+  if (isNativeAuth()) {
+    const t = getNativeAccessToken();
+    if (t) return { Authorization: `Bearer ${t}` };
+  }
+  return {};
+}
+
+/**
  * Build a full API URL respecting Vite's BASE_URL — for direct browser
  * navigation (file downloads, image src, iframe src). Don't use this for
  * fetch — use apiFetch / useApiQuery which already prepend BASE/api.
@@ -233,7 +250,13 @@ export async function apiFetch<T = any>(
       res = await fetch(`${BASE}/api${path}`, { ...options, headers, credentials: "include" });
     } else {
       localStorage.removeItem("erp_assignments");
-      window.location.href = `${BASE}/login`;
+      // Redirect to the in-app login route, NOT `${BASE}/login`: on native
+      // BASE is the absolute server origin, so that would navigate the WebView
+      // OUT of the app to the live website. The login page lives in the bundle
+      // at the SPA router base (import.meta.env.BASE_URL), same origin as the
+      // app on web and native alike.
+      const appBase = import.meta.env.BASE_URL.replace(/\/$/, "");
+      window.location.href = `${appBase}/login`;
       throw new Error("انتهت الجلسة، يرجى تسجيل الدخول مجدداً");
     }
   }
