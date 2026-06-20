@@ -344,7 +344,13 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
     const walk = (items: NavItem[], ancestors: { label: string; path: string }[]) => {
       for (const item of items) {
         if (item.path === "/dashboard") continue;
-        const trail = [...ancestors, { label: item.label, path: item.path }];
+        // Virtual wrappers (path "#…") are visual sidebar containers, not pages:
+        // recurse through them but keep them OUT of the trail, so a multi-module
+        // wrapper never becomes a breadcrumb link to a protected route (e.g. /admin)
+        // that a non-admin child's user could click into AccessDenied.
+        const trail = item.path.startsWith("#")
+          ? ancestors
+          : [...ancestors, { label: item.label, path: item.path }];
         const onPath = location === item.path || location.startsWith(item.path + "/");
         if (onPath && (!best || item.path.length > best.matchLen)) {
           best = { trail, matchLen: item.path.length, exact: location === item.path };

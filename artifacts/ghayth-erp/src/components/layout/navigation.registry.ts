@@ -873,8 +873,10 @@ export const allNavSections: NavSection[] = [
     items: [
       // مركز الإدارة والحوكمة — مدخل واحد يجمع وحدات الإدارة (الطلبات، المستندات،
       // التواصل، القانونية، الحوكمة، الإقفال). قسم متعدّد الوحدات، فالمدخل بلا module
-      // والأبناء يحملون وحداتهم. إعادة تجميع بصري فقط — لا مسار/صلاحية تغيّر.
-      { label: "مركز الإدارة والحوكمة", path: "/governance", icon: Briefcase, children: [
+      // والأبناء يحملون وحداتهم. مساره افتراضي (#governance) لأنه حاوية بصرية لا صفحة
+      // (النقر يوسّع، ولا يظهر في breadcrumb) فلا يصير رابطًا لمسار محمي (/governance)
+      // قد يضغطه مستخدم طلبات/مستندات لا يملك وحدة الحوكمة فيصطدم بمنع الوصول.
+      { label: "مركز الإدارة والحوكمة", path: "#governance", icon: Briefcase, children: [
         { label: "مركز الطلبات", path: "/requests", icon: ClipboardCheck, module: "requests", children: [
           { label: "تقديم طلب", path: "/requests", icon: ClipboardCheck },
           { label: "أنواع الطلبات", path: "/requests/types", icon: ListTodo },
@@ -931,8 +933,10 @@ export const allNavSections: NavSection[] = [
     items: [
       // إدارة النظام — مدخل وحدة واحد يجمع أدوات النظام (ذكاء الأعمال، الإدارة، الأتمتة،
       // الطباعة، الاشتراك، الإعدادات). قسم متعدّد الوحدات، فالمدخل بلا module والأبناء
-      // يحملون وحداتهم وصلاحياتهم كما هي. إعادة تجميع بصري فقط — لا مسار/صلاحية تغيّر.
-      { label: "إدارة النظام", path: "/admin", icon: Shield, children: [
+      // يحملون وحداتهم وصلاحياتهم كما هي. مساره افتراضي (#system) لأنه حاوية بصرية لا
+      // صفحة: النقر يوسّع لا يُبحر، ولا يظهر في مسار التنقّل (breadcrumb) فلا يصير
+      // رابطًا لمسار محمي (/admin) قد يضغطه مستخدم bi/settings فيصطدم بمنع الوصول.
+      { label: "إدارة النظام", path: "#system", icon: Shield, children: [
         { label: "ذكاء الأعمال", path: "/bi", icon: LineChart, module: "bi", minRoleLevel: 50, children: [
           { label: "لوحة التحليلات", path: "/bi", icon: LineChart },
           { label: "تحليل الأداء", path: "/bi/operations", icon: Activity },
