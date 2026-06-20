@@ -3,6 +3,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { verifyOnboardingToken, markOnboardingTokenUsed } from "../lib/employeeOnboarding.js";
+import { sendNotification } from "../lib/notificationService.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import rateLimit from "express-rate-limit";
 import { makeRateLimitStore } from "../lib/rateLimitStore.js";
@@ -234,13 +235,29 @@ router.post("/onboarding/:token", publicLimiter, async (req, res) => {
       return;
     }
     const data = zodParse(selfOnboardingSchema.safeParse(req.body ?? {}));
-    await rawExecute(
+    const updated = await rawQuery<{ name: string }>(
       `UPDATE employees
           SET "selfSubmittedData" = $1::jsonb, "selfSubmittedAt" = NOW(), "activationStatus" = 'self_submitted'
-        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL`,
+        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
+        RETURNING name`,
       [JSON.stringify(data), verified.employeeId, verified.companyId],
     );
     await markOnboardingTokenUsed(verified.tokenId);
+    const empName = updated[0]?.name ?? "موظف";
+    // إغلاق الحلقة: إشعار داخلي لمسؤولي الموارد البشرية بأن طلبًا بانتظار المراجعة.
+    // الإشعارات مسار خادم (إرسال فقط) — لا قرار ولا سياسة هنا.
+    void sendNotification({
+      companyId: verified.companyId,
+      type: "hr",
+      title: "طلب استكمال بيانات جديد",
+      body: `أرسل الموظف ${empName} بياناته الشخصية — بانتظار المراجعة والاعتماد.`,
+      priority: "normal",
+      targetRole: "hr_manager",
+      refType: "employees",
+      refId: verified.employeeId,
+      actionUrl: "/hr/self-onboarding-review",
+      channels: ["in_app"],
+    }).catch((e) => logger.error(e, "self-onboarding notify failed"));
     void createAuditLog({
       companyId: verified.companyId, branchId: undefined, userId: 0,
       action: "employee.self_onboarding_submitted", entity: "employees", entityId: verified.employeeId,
