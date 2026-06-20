@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery, asList } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BuildingSelect, PropertyOwnerSelect } from "@/components/shared/entity-selects";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CreatePageLayout } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -20,11 +20,11 @@ export default function PropertiesCreate() {
   const { toast } = useToast();
   const addUnit = useApiMutation("/properties/units", "POST", [["property-units"], ["properties-stats"]]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const { data: buildingsResp, isLoading: loadingB, isError: errorB } = useApiQuery<any>(["property-buildings"], "/properties/buildings");
+  // Share BuildingSelect's exact query key so that creating a building inline
+  // (which invalidates "property-buildings-list") also refetches this list —
+  // otherwise buildingName below stays blank for inline-created buildings.
+  const { data: buildingsResp, isLoading: loadingB, isError: errorB } = useApiQuery<any>(["property-buildings-list"], "/properties/buildings");
   const buildings = asList(buildingsResp);
-
-  const { data: ownersResp, isLoading: loadingO, isError: errorO } = useApiQuery<any>(["property-owners"], "/properties/owners");
-  const owners = asList(ownersResp);
 
   const { fieldErrors, validate, setApiError } = useFieldErrors();
 
@@ -53,8 +53,8 @@ export default function PropertiesCreate() {
     ownerId: "",
   });
 
-  if (loadingB || loadingO) return <LoadingSpinner />;
-  if (errorB || errorO) return <ErrorState />;
+  if (loadingB) return <LoadingSpinner />;
+  if (errorB) return <ErrorState />;
 
   const AMENITIES_LIST = [
     "مصعد", "موقف سيارة", "حراسة أمنية", "مسبح", "صالة رياضية",
@@ -94,10 +94,17 @@ export default function PropertiesCreate() {
       toast({ variant: "destructive", title: firstError });
       return;
     }
+    // Resolve buildingName from the (post-create-refetched) list as a backstop
+    // for buildings created inline via BuildingSelect, where the select-time
+    // derivation in set() ran before the new building landed in the list.
+    const selectedBuilding = form.buildingId
+      ? buildings.find((b: any) => String(b.id) === String(form.buildingId))
+      : null;
+    const resolvedBuildingName = selectedBuilding?.name || form.buildingName || undefined;
     addUnit.mutate({
       unitNumber: form.unitNumber,
       buildingId: form.buildingId ? Number(form.buildingId) : undefined,
-      buildingName: form.buildingName || undefined,
+      buildingName: resolvedBuildingName,
       type: form.type,
       status: form.status,
       area: Number(form.area) || undefined,
@@ -138,21 +145,12 @@ export default function PropertiesCreate() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <TextField label="رقم الوحدة" required value={form.unitNumber} onChange={(v) => set("unitNumber", v)} placeholder="مثل: A-101" error={fieldErrors.unitNumber} />
-          <FormFieldWrapper label="المبنى / المجمع">
-            {buildings.length > 0 ? (
-              <Select value={form.buildingId} onValueChange={v => set("buildingId", v)}>
-                <SelectTrigger><SelectValue placeholder="اختر مبنى (اختياري)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">— بدون مبنى —</SelectItem>
-                  {buildings.map((b: any) => (
-                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input value={form.buildingName} onChange={e => set("buildingName", e.target.value)} placeholder="اسم المبنى" />
-            )}
-          </FormFieldWrapper>
+          <BuildingSelect
+            label="المبنى / المجمع"
+            placeholder="اختر مبنى (اختياري)"
+            value={form.buildingId}
+            onChange={(v) => set("buildingId", v)}
+          />
           <FormFieldWrapper label="النوع">
             <Select value={form.type} onValueChange={v => set("type", v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -250,15 +248,12 @@ export default function PropertiesCreate() {
             <Checkbox id="hasKitchen" checked={form.hasKitchen} onCheckedChange={(v) => { setForm(prev => ({ ...prev, hasKitchen: v === true })); }} />
             <Label htmlFor="hasKitchen">مطبخ مجهز</Label>
           </div>
-          <FormFieldWrapper label="المالك">
-            <Select value={form.ownerId || "none"} onValueChange={v => set("ownerId", v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="— بدون —" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">— بدون مالك —</SelectItem>
-                {owners.map((o: any) => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          <PropertyOwnerSelect
+            label="المالك"
+            placeholder="— بدون مالك —"
+            value={form.ownerId}
+            onChange={(v) => set("ownerId", v)}
+          />
         </div>
 
         <TextField label="العنوان" value={form.address} onChange={(v) => set("address", v)} placeholder="المدينة، الحي، الشارع" />
