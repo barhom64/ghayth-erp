@@ -666,7 +666,12 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
 router.get("/agents", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض الوكلاء المحذوفين فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
+    const sql = showDeleted
+      ? `SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NOT NULL ORDER BY name LIMIT 500`
+      : `SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`;
+    const rows = await rawQuery(sql, [scope.companyId]);
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
@@ -835,6 +840,19 @@ router.delete("/agents/:id", authorize({ feature: "umrah", action: "delete" }), 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.deleted", entity: "umrah_agents", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete agent error"); }
+});
+
+// #2713 (تعميم) — استرجاع وكيل محذوف ناعمًا (سلة المحذوفات). صلاحية تعديل + Audit.
+router.post("/agents/:id/restore", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE umrah_agents SET "deletedAt"=NULL, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد وكيل محذوف بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "restore", entity: "umrah_agents", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.restored", entity: "umrah_agents", entityId: id, details: JSON.stringify({ restored: true }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Restore agent error"); }
 });
 
 // BILL-MAIN P3 (#2080) — explicit-confirmation linker that ties a main
