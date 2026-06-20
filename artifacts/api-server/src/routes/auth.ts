@@ -1,4 +1,4 @@
-import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, zodParse } from "../lib/errorHandler.js";
+import { handleRouteError, ValidationError, ForbiddenError, NotFoundError, ConflictError, zodParse } from "../lib/errorHandler.js";
 import { Router, type Response as ExpressResponse } from "express";
 import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -20,6 +20,15 @@ import {
   createUserSession,
   rotateUserSession,
 } from "../lib/authSession.js";
+import { encryptField, decryptField } from "../lib/fieldEncryption.js";
+import {
+  generateSecret,
+  otpauthURL,
+  verifyTOTP,
+  generateBackupCodes,
+  hashBackupCode,
+} from "../lib/totp.js";
+import QRCode from "qrcode";
 
 const router = Router();
 
@@ -764,6 +773,129 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Change password error:");
+  }
+});
+
+// ─────────────────────── #2712 — المصادقة الثنائية (2FA / TOTP) ─────────────
+// الدفعة 1أ: التسجيل فقط (إعداد/تفعيل/تعطيل/حالة). الإنفاذ عند تسجيل الدخول
+// دفعة لاحقة منفصلة (1ب) — هذه الدفعة لا تلمس /login فلا خطر إقفال. السرّ
+// يُخزَّن مشفّرًا (fieldEncryption AES) والرموز الاحتياطية مُجزّأة (SHA-256).
+// كل النقاط محميّة بـauthMiddleware + authedUserLimiter (نفس /me و/logout).
+const TOTP_ISSUER = "Ghayth ERP";
+
+interface User2faRow {
+  id: number;
+  email: string | null;
+  passwordHash: string;
+  twoFactorEnabled: boolean;
+  twoFactorSecret: string | null;
+  twoFactorEnrolledAt: string | null;
+  twoFactorBackupCodes: Array<{ hash: string; usedAt: string | null }> | null;
+}
+
+const enable2faSchema = z.object({ token: z.string().min(6, "رمز التحقق مطلوب") });
+const disable2faSchema = z.object({
+  password: z.string().min(1, "كلمة المرور مطلوبة"),
+  token: z.string().optional(),
+});
+
+// POST /2fa/setup — يولّد سرًّا (غير مفعّل) ويعيد QR + السرّ للإدخال اليدوي.
+router.post("/2fa/setup", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [user] = await rawQuery<Pick<User2faRow, "id" | "email" | "twoFactorEnabled">>(
+      `SELECT id, email, "twoFactorEnabled" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    if (user.twoFactorEnabled) throw new ConflictError("المصادقة الثنائية مفعّلة بالفعل", { fix: "عطّلها أولًا إن أردت إعادة التسجيل" });
+
+    const secret = generateSecret();
+    await rawExecute(
+      `UPDATE users SET "twoFactorSecret"=$1, "twoFactorEnabled"=FALSE WHERE id=$2`,
+      [encryptField(secret), scope.userId]);
+
+    const label = user.email || `user-${scope.userId}`;
+    const otpauthUrl = otpauthURL({ secret, label, issuer: TOTP_ISSUER });
+    const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "2fa_setup_started" } }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ secret, otpauthUrl, qrDataUrl });
+  } catch (err) {
+    handleRouteError(err, res, "2FA setup error:");
+  }
+});
+
+// POST /2fa/enable — يتحقق من أول رمز ثم يفعّل ويُصدر الرموز الاحتياطية مرة واحدة.
+router.post("/2fa/enable", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { token } = zodParse(enable2faSchema.safeParse(req.body ?? {}));
+    const [user] = await rawQuery<Pick<User2faRow, "id" | "twoFactorEnabled" | "twoFactorSecret">>(
+      `SELECT id, "twoFactorEnabled", "twoFactorSecret" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    if (user.twoFactorEnabled) throw new ConflictError("المصادقة الثنائية مفعّلة بالفعل");
+    if (!user.twoFactorSecret) throw new ValidationError("ابدأ بإعداد المصادقة الثنائية أولًا", { fix: "اطلب /2fa/setup ثم امسح رمز QR" });
+
+    const secret = decryptField(user.twoFactorSecret);
+    if (!verifyTOTP(secret, token)) throw new ForbiddenError("رمز التحقق غير صحيح");
+
+    const backupCodes = generateBackupCodes();
+    const hashed = backupCodes.map((c) => ({ hash: hashBackupCode(c), usedAt: null }));
+    await rawExecute(
+      `UPDATE users SET "twoFactorEnabled"=TRUE, "twoFactorEnrolledAt"=NOW(), "twoFactorBackupCodes"=$1 WHERE id=$2`,
+      [JSON.stringify(hashed), scope.userId]);
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "2fa_enabled" } }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.2fa.enabled", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, backupCodes, message: "تم تفعيل المصادقة الثنائية. احفظ الرموز الاحتياطية في مكان آمن — لن تظهر مرة أخرى." });
+  } catch (err) {
+    handleRouteError(err, res, "2FA enable error:");
+  }
+});
+
+// POST /2fa/disable — يتطلب كلمة المرور (+ رمزًا حاليًا إن كانت مفعّلة).
+router.post("/2fa/disable", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const { password, token } = zodParse(disable2faSchema.safeParse(req.body ?? {}));
+    const [user] = await rawQuery<Pick<User2faRow, "id" | "passwordHash" | "twoFactorEnabled" | "twoFactorSecret">>(
+      `SELECT id, "passwordHash", "twoFactorEnabled", "twoFactorSecret" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    const valid = await verifyPassword(password, user.passwordHash);
+    if (!valid) throw new ForbiddenError("كلمة المرور غير صحيحة");
+    // إن كانت مفعّلة، اطلب رمزًا حاليًا صحيحًا أيضًا (دفاع ضد جلسة مخطوفة).
+    if (user.twoFactorEnabled && user.twoFactorSecret) {
+      if (!token || !verifyTOTP(decryptField(user.twoFactorSecret), token)) {
+        throw new ForbiddenError("رمز التحقق غير صحيح");
+      }
+    }
+    await rawExecute(
+      `UPDATE users SET "twoFactorEnabled"=FALSE, "twoFactorSecret"=NULL, "twoFactorBackupCodes"=NULL, "twoFactorEnrolledAt"=NULL WHERE id=$1`,
+      [scope.userId]);
+
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "users", entityId: scope.userId, after: { reason: "2fa_disabled" } }).catch((e) => logger.error(e, "auth background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.2fa.disabled", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    res.json({ success: true, message: "تم تعطيل المصادقة الثنائية" });
+  } catch (err) {
+    handleRouteError(err, res, "2FA disable error:");
+  }
+});
+
+// GET /2fa/status — حالة التفعيل + عدد الرموز الاحتياطية المتبقية.
+router.get("/2fa/status", authMiddleware, authedUserLimiter, async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const [user] = await rawQuery<Pick<User2faRow, "twoFactorEnabled" | "twoFactorEnrolledAt" | "twoFactorBackupCodes">>(
+      `SELECT "twoFactorEnabled", "twoFactorEnrolledAt", "twoFactorBackupCodes" FROM users WHERE id=$1`, [scope.userId]);
+    if (!user) throw new NotFoundError("المستخدم غير موجود");
+    const codes = Array.isArray(user.twoFactorBackupCodes) ? user.twoFactorBackupCodes : [];
+    const remaining = codes.filter((c) => c && !c.usedAt).length;
+    res.json({
+      enabled: !!user.twoFactorEnabled,
+      enrolledAt: user.twoFactorEnrolledAt ?? null,
+      backupCodesRemaining: remaining,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "2FA status error:");
   }
 });
 
