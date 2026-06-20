@@ -32,6 +32,8 @@ echo "$(date -Is) new commit detected: ${LOCAL:0:8} -> ${REMOTE:0:8}" >> "$LOG_F
 
 git reset --hard "origin/$BRANCH" >> "$LOG_FILE" 2>&1
 
+# Bake the deployed revision into the api image (GET /api/version reports it).
+export APP_COMMIT="$REMOTE"
 docker compose -f "$COMPOSE_FILE" up -d --build >> "$LOG_FILE" 2>&1
 
 sleep 20
