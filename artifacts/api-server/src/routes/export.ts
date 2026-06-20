@@ -116,8 +116,8 @@ exportRouter.get("/pdf/trial-balance", financeGuard, authorize({ feature: "finan
 exportRouter.get("/pdf/fleet-trips",   fleetGuard,   authorize({ feature: "fleet",           action: "export" }), (req, res) => proxyReport(req, res, "report_fleet_trips",   "a4", "fleet-trips.pdf"));
 
 // ─── Single-entity PDFs (proxied to Print Engine v2) ─────────────────────────
+// invoice/voucher/payroll single-entity PDFs were retired — the frontend renders
+// them via PrintButton → POST /print/render (renderPrint) directly. Only the
+// purchase-order proxy remains wired (FE export button still links it).
 
-exportRouter.get("/pdf/invoice/:id",        financeGuard, authorize({ feature: "finance.invoices", action: "export" }), (req, res) => proxyEntity(req, res, "invoice",         "invoice"));
 exportRouter.get("/pdf/purchase-order/:id", financeGuard, authorize({ feature: "finance.purchase", action: "export" }), (req, res) => proxyEntity(req, res, "purchase_order",  "purchase-order"));
-exportRouter.get("/pdf/voucher/:id",        financeGuard, authorize({ feature: "finance.reports",  action: "export" }), (req, res) => proxyEntity(req, res, "payment_voucher", "voucher"));
-exportRouter.get("/pdf/payroll/:id",        hrGuard,      authorize({ feature: "hr.payroll",       action: "export" }), (req, res) => proxyEntity(req, res, "payroll",         "payroll-slip"));

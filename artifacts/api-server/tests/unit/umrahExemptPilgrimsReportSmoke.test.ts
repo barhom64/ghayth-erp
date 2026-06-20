@@ -91,7 +91,7 @@ describe("exempt-pilgrims page — registration + reachability", () => {
     // Without the tab the page is reachable only by URL — operators
     // wouldn't find it. Placement next to daily-runsheet pairs it
     // with the other compliance/operational reports.
-    expect(TABS).toMatch(/href: "\/umrah\/exempt-pilgrims", label: "المستثنون"/);
+    expect(TABS).toMatch(/href: "\/umrah\/exempt-pilgrims", label: "المعفون"/);
   });
 });
 

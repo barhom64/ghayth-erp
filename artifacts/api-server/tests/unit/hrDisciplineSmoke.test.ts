@@ -364,7 +364,9 @@ describe("Appeal workflow", () => {
 
   it("appeal notifies employee of result", () => {
     const idx = DISCIPLINE_ROUTE.indexOf('"/memos/:id/appeal-decision"');
-    const section = DISCIPLINE_ROUTE.slice(idx, idx + 2000);
+    // 4000-char window: HR-REV-7 (#2222) added the payroll-deduction reversal
+    // block to this handler, pushing the notification text past the old 2000.
+    const section = DISCIPLINE_ROUTE.slice(idx, idx + 5000);
     expect(section).toContain("تم قبول الاستئناف");
     expect(section).toContain("تم رفض الاستئناف");
   });

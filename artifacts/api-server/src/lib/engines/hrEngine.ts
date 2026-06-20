@@ -42,8 +42,8 @@ class HREngineImpl implements DomainEngine {
     const [salaryExpense, allowanceExpense, deductionAccount, salaryPayable] =
       await Promise.all([
         financialEngine.resolveAccountCode(ctx.companyId, "salary_expense", "debit", "5210"),
-        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "5820"),
-        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2120"),
+        financialEngine.resolveAccountCode(ctx.companyId, "allowance_expense", "debit", "5220"),
+        financialEngine.resolveAccountCode(ctx.companyId, "employee_deductions", "credit", "2150"),
         financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       ]);
 
@@ -148,7 +148,7 @@ class HREngineImpl implements DomainEngine {
     const [eosExpense, leaveExpense, settlementPayable] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "eos_expense", "debit", "5260"),
       financialEngine.resolveAccountCode(ctx.companyId, "leave_settlement_expense", "debit", "5270"),
-      financialEngine.resolveAccountCode(ctx.companyId, "settlement_payable", "credit", "2140"),
+      financialEngine.resolveAccountCode(ctx.companyId, "settlement_payable", "credit", "2120"),
     ]);
 
     const lines = [];
@@ -339,7 +339,7 @@ class HREngineImpl implements DomainEngine {
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_overtime_expense", "debit", "5230"),
       financialEngine.resolveAccountCode(ctx.companyId, "salary_payable", "credit", "2120"),
       financialEngine.resolveAccountCode(ctx.companyId, "payroll_gosi_payable", "credit", "2140"),
-      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2120"),
+      financialEngine.resolveAccountCode(ctx.companyId, "payroll_deductions_payable", "credit", "2150"),
       financialEngine.resolveAccountCode(ctx.companyId, "wht_payable", "credit", "2132"),
       // Umrah commission expense — seeded by migration 288 to 5240
       // (المكافآت والحوافز); the fallback matches the seed.
@@ -583,6 +583,109 @@ class HREngineImpl implements DomainEngine {
         { accountCode: bankCode, debit: 0, credit: amount, description: "سداد رواتب — بنك" },
       ],
     });
+  }
+
+  // #2303 — settlement-on-payment leg. postPayrollRunGL accrues the payroll
+  // liabilities (CR 2140 GOSI / CR 2132 WHT / CR 2150 deductions-residual); this
+  // settles ONE of them when the company remits to the authority: DR the liability
+  // / CR the bank, zeroing the accrued balance. Idempotent per (run, liability) so
+  // a re-submit can't double-pay, and capped at the run's accrued balance (read
+  // from the accrual JE — the GL itself) so it can never over-debit the liability.
+  // The recorded ledger row (payroll_liability_settlements) links the remittance to
+  // its settlement JE. WHT (2132) is the payroll-sourced withholding only; #2280's
+  // unified tax engine settles invoice-sourced WHT/VAT/Zakat under its own keys —
+  // each clears its own accrual, never the same one twice.
+  async postPayrollLiabilitySettlementGL(
+    ctx: HRGLContext,
+    settlement: {
+      runId: number;
+      period: string;
+      liabilityType: "gosi" | "wht" | "deductions";
+      amount: number;
+      paymentDate: string; // YYYY-MM-DD — drives the period gate
+      referenceNumber?: string | null; // external receipt (GOSI/ZATCA)
+    }
+  ): Promise<{ journalEntryId: number; settlementId: number; alreadyExists: boolean; amount: number }> {
+    const LIABILITY_CONFIG = {
+      gosi: { op: "payroll_gosi_payable", fallback: "2140", label: "التأمينات الاجتماعية" },
+      wht: { op: "wht_payable", fallback: "2132", label: "ضريبة الاستقطاع" },
+      deductions: { op: "payroll_deductions_payable", fallback: "2150", label: "استقطاعات الرواتب" },
+    } as const;
+    const cfg = LIABILITY_CONFIG[settlement.liabilityType];
+    if (!cfg) throw new Error(`[hrEngine] نوع التزام غير معروف: ${settlement.liabilityType}`);
+
+    const amount = roundTo2(settlement.amount);
+    if (amount <= 0) throw new Error("[hrEngine] مبلغ السداد يجب أن يكون أكبر من صفر");
+
+    // Idempotent short-circuit — one ACTIVE settlement per (company, run, liability)
+    // (enforced by the partial-unique index). Re-submit returns the existing row
+    // and skips the over-settlement guard so the JE's idempotency holds.
+    const [existing] = await rawQuery<{ id: number; journalEntryId: number | null }>(
+      `SELECT id, "journalEntryId" FROM payroll_liability_settlements
+        WHERE "companyId" = $1 AND "payrollRunId" = $2 AND "liabilityType" = $3 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [ctx.companyId, settlement.runId, settlement.liabilityType]
+    );
+
+    const liabilityCode = await financialEngine.resolveAccountCode(ctx.companyId, cfg.op, "debit", cfg.fallback);
+
+    if (existing) {
+      return { journalEntryId: existing.journalEntryId ?? 0, settlementId: existing.id, alreadyExists: true, amount };
+    }
+
+    // Over-settlement guard: the DR must not exceed what the run accrued on this
+    // liability (CR − DR on the liability account in the run's accrual JE). No
+    // active settlement exists yet (checked above), so accrued == outstanding.
+    const [accr] = await rawQuery<{ accrued: string | null }>(
+      `SELECT COALESCE(SUM(jl.credit) - SUM(jl.debit), 0)::text AS accrued
+         FROM journal_entries je
+         JOIN journal_lines jl ON jl."journalId" = je.id
+        WHERE je."companyId" = $1 AND je."sourceKey" = $2 AND je."deletedAt" IS NULL
+          AND jl."accountCode" = $3 AND jl."deletedAt" IS NULL`,
+      [ctx.companyId, `hr:payroll_run:${settlement.runId}`, liabilityCode]
+    );
+    const accrued = roundTo2(Number(accr?.accrued ?? 0));
+    if (accrued <= 0) {
+      throw new Error(`[hrEngine] لا يوجد رصيد مستحق على ${cfg.label} لدورة الرواتب #${settlement.runId}`);
+    }
+    if (amount - accrued > 0.01) {
+      throw new Error(`[hrEngine] مبلغ السداد (${amount.toFixed(2)}) يتجاوز المستحق (${accrued.toFixed(2)}) على ${cfg.label}`);
+    }
+
+    const bankCode = await financialEngine.resolveAccountCode(ctx.companyId, "payroll_bank_payout", "credit", "1124");
+
+    const posted = await financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `PAYROLL-LIAB-${settlement.liabilityType.toUpperCase()}-${settlement.runId}`,
+      description: `سداد ${cfg.label} — دورة ${settlement.period} (${amount.toFixed(2)} ريال)`,
+      type: "general",
+      sourceType: "payroll_liability_settlement",
+      sourceId: settlement.runId,
+      sourceKey: `hr:liab_settle:${settlement.liabilityType}:${settlement.runId}`,
+      guardTable: "payroll_runs",
+      guardId: settlement.runId,
+      postingDate: settlement.paymentDate,
+      lines: [
+        { accountCode: liabilityCode, debit: amount, credit: 0, description: `إقفال ${cfg.label} المستحقة` },
+        { accountCode: bankCode, debit: 0, credit: amount, description: `سداد ${cfg.label} — بنك` },
+      ],
+    });
+
+    const [rec] = await rawQuery<{ id: number }>(
+      `INSERT INTO payroll_liability_settlements
+         ("companyId","branchId","payrollRunId",period,"liabilityType",amount,"paymentDate","referenceNumber","bankAccountCode","journalEntryId","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+       ON CONFLICT ("companyId","payrollRunId","liabilityType") WHERE "deletedAt" IS NULL
+       DO UPDATE SET "journalEntryId" = COALESCE(payroll_liability_settlements."journalEntryId", EXCLUDED."journalEntryId"),
+                     "updatedAt" = now()
+       RETURNING id`,
+      [ctx.companyId, ctx.branchId, settlement.runId, settlement.period, settlement.liabilityType,
+       amount, settlement.paymentDate, settlement.referenceNumber ?? null, bankCode, posted.journalId, ctx.createdBy]
+    );
+
+    return { journalEntryId: posted.journalId, settlementId: rec.id, alreadyExists: posted.alreadyExists, amount };
   }
 
   async postMonthlyAccrualsGL(

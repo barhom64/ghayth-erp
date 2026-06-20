@@ -617,7 +617,7 @@ export default function VoucherDetail() {
         onOpenChange={(o) => !o && setPreviewAttachment(null)}
       />
       {voucher && id && (
-        <EntityEditDialog<VoucherEditForm>
+        <EntityEditDialog
           open={editOpen}
           onClose={() => setEditOpen(false)}
           title="تعديل وصف السند"

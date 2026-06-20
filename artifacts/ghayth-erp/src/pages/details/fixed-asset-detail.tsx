@@ -365,7 +365,7 @@ export default function FixedAssetDetail() {
       />
     )}
     {item && id && (
-      <EntityEditDialog<FixedAssetEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل الأصل الثابت"

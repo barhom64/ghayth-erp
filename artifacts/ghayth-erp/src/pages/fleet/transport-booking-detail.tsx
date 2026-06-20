@@ -417,7 +417,7 @@ export default function TransportBookingDetail() {
               مصدر: {SOURCE_LABEL[b.bookingSource] ?? b.bookingSource}
             </Badge>
             {b.umrahGroupId && (
-              <Link href={`/umrah/groups/${b.umrahGroupId}`}>
+              <Link href={`/umrah/groups/${b.umrahGroupId}`} asChild>
                 <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                   <Users className="h-3 w-3" />مجموعة عمرة #{b.umrahGroupId}
                 </a>
@@ -439,7 +439,7 @@ export default function TransportBookingDetail() {
               </span>
             )}
             {b.customerId && (
-              <Link href={`/clients/${b.customerId}`}>
+              <Link href={`/clients/${b.customerId}`} asChild>
                 <a className="inline-flex items-center gap-1 text-status-info-foreground hover:underline">
                   <User className="h-3 w-3" />عميل #{b.customerId}
                 </a>
@@ -581,7 +581,7 @@ export default function TransportBookingDetail() {
               لا توجد سطور بعد. أضف سطراً لكل مركبة مطلوبة قبل التوزيع.
             </div>
           ) : (
-            <DataTable<BookingLine>
+            <DataTable
               columns={lineColumns}
               data={b.lines}
               emptyMessage="لا توجد سطور"
@@ -603,7 +603,7 @@ export default function TransportBookingDetail() {
               لم يتم توزيع هذا الحجز على سائق بعد.
             </div>
           ) : (
-            <DataTable<DispatchOrder>
+            <DataTable
               columns={dispatchColumns}
               data={b.dispatchOrders}
               emptyMessage="لا توجد أوامر توزيع"

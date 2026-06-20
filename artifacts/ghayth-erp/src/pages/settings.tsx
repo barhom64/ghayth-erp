@@ -36,6 +36,7 @@ import { LetterheadSettings } from "./settings/letterhead-tab";
 import { AccountingMappingsTab } from "./settings/accounting-mappings-tab";
 import { SystemControlsTab } from "./settings/system-controls-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
+import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { NumberingTab } from "./settings/numbering-tab";
 
 // GeneralSettings — 11-field edit form. The server stores values as
@@ -262,7 +263,7 @@ function CrudSection({ title, endpoint, queryKey, fields }: {
           </FormShell>
         </CardContent></Card>
       )}
-      <DataTable<any>
+      <DataTable
         data={Array.isArray(items) ? items : []}
         rowKey={(row) => String(row.id)}
         columns={[
@@ -348,6 +349,7 @@ export default function SettingsPage() {
           {/* الحوكمة والإجراءات */}
           <TabsTrigger value="controls">التحكم</TabsTrigger>
           <TabsTrigger value="approvals">الموافقات</TabsTrigger>
+          <TabsTrigger value="workflows">الإجراءات</TabsTrigger>
           <TabsTrigger value="numbering">الترقيم</TabsTrigger>
           {/* المالية والامتثال */}
           <TabsTrigger value="accounting">التوجيه المحاسبي</TabsTrigger>
@@ -365,6 +367,7 @@ export default function SettingsPage() {
         <TabsContent value="letterhead"><LetterheadSettings /></TabsContent>
         <TabsContent value="controls"><SystemControlsTab /></TabsContent>
         <TabsContent value="approvals"><ApprovalWorkflowsTab /></TabsContent>
+        <TabsContent value="workflows"><WorkflowDefinitionsTab /></TabsContent>
         <TabsContent value="numbering"><NumberingTab /></TabsContent>
         <TabsContent value="accounting"><AccountingMappingsTab /></TabsContent>
         <TabsContent value="zatca"><ZatcaSettingsTab /></TabsContent>
@@ -425,8 +428,8 @@ function ResolvedSettingsTab() {
         وراثة الإعدادات (نظام ← شركة ← فرع)
       </h3>
       <p className="text-sm text-muted-foreground">يعرض القيمة الفعلية لكل إعداد ومصدرها — القيم الأقرب (فرع) تتغلب على القيم الأعلى (شركة/نظام)</p>
-      <DataTable<any>
-        data={items}
+      <DataTable
+        data={items as any[]}
         rowKey={(row) => String(row.key)}
         columns={[
           { key: "key", header: "المفتاح", render: (s) => <span className="font-mono text-xs">{s.key}</span> },
@@ -536,8 +539,8 @@ function AuditLogTab() {
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">سجل التدقيق</h3>
-      <DataTable<any>
-        data={items}
+      <DataTable
+        data={items as any[]}
         rowKey={(row) => String(row.id)}
         columns={[
           { key: "userName", header: "المستخدم", render: (log) => log.userName || "-" },

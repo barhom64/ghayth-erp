@@ -1,32 +1,27 @@
 import { useState, useEffect, useMemo } from "react";
-import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building, Plus, X, Pencil, Trash2 } from "lucide-react";
+import { Building, Plus, X, Pencil, Trash2, AlertTriangle, Loader2, ArrowRightLeft } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
 import { useAppContext } from "@/contexts/app-context";
 import {
   DataTable,
   type DataTableColumn,
-  FormShell,
-  FormTextField,
-  FormSelectField,
-  FormGrid,
 } from "@workspace/ui-core";
-import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ApiError } from "@/lib/api";
 import { PrintButton } from "@/components/shared/print-button";
-
-const branchFormSchema = z.object({
-  name: z.string().trim().min(1, "اسم الفرع مطلوب"),
-  nameEn: z.string().trim(),
-  city: z.string().trim(),
-  phone: z.string().trim(),
-  companyId: z.string().min(1, "اختر شركة"),
-});
-type BranchForm = z.infer<typeof branchFormSchema>;
+import { BranchForm, type BranchFormValues } from "./branch-form";
 
 export function BranchesTab() {
   const { refreshFilters } = useAppContext();
@@ -36,50 +31,20 @@ export function BranchesTab() {
   const { toast } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  // GET /settings/branches/:id — fetches the latest server-side state of
-  // a single branch when the operator opens the edit form. The list
-  // payload is a denormalised summary; this gives us the full row
-  // (including coordinates, opening hours, etc).
-  const editingBranchQ = useApiQuery<any>(
-    ["settings-branch-detail", String(editingId ?? "")],
-    editingId ? `/settings/branches/${editingId}` : null,
-    { enabled: editingId !== null },
-  );
-  void editingBranchQ.data;
+  const [editingValues, setEditingValues] = useState<BranchFormValues | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [filterCompanyId, setFilterCompanyId] = useState<number | "">("");
-  // Default companyId picks the first company; changes when companies
-  // load or when the user clicks "تعديل" on an existing branch.
-  const [formInitial, setFormInitial] = useState<BranchForm>({
-    name: "", nameEn: "", city: "", phone: "", companyId: "",
-  });
-  const [deletingBranch, setDeletingBranch] = useState<{ id: number; name: string } | null>(null);
+  const [deletingBranch, setDeletingBranch] = useState<{ id: number; name: string; companyId: number } | null>(null);
   const items = asList(data);
   const filteredItems = filterCompanyId
     ? items.filter((b: any) => b.companyId === filterCompanyId)
     : items;
 
-  // Memoise the company options array so FormSelectField doesn't see a
-  // new array reference every render (causes spurious re-mounts).
-  const companyOptions = useMemo(
-    () => companies.map((c: any) => ({ value: String(c.id), label: c.name })),
-    [companies],
-  );
-
   const resetForm = () => {
-    setFormInitial({
-      name: "", nameEn: "", city: "", phone: "",
-      companyId: companies[0]?.id?.toString() || "",
-    });
     setEditingId(null);
+    setEditingValues(null);
     setShowForm(false);
   };
-
-  useEffect(() => {
-    if (companies.length > 0 && !formInitial.companyId) {
-      setFormInitial((f) => ({ ...f, companyId: companies[0]?.id?.toString() || "" }));
-    }
-  }, [companies]);
 
   const branchColumns: DataTableColumn<any>[] = [
     {
@@ -117,7 +82,7 @@ export function BranchesTab() {
           <Button variant="ghost" size="sm" onClick={() => handleEdit(r)} title="تعديل"><Pencil className="h-4 w-4" /></Button>
           <Button
             variant="ghost" size="sm"
-            onClick={() => setDeletingBranch({ id: r.id, name: r.name || "—" })}
+            onClick={() => setDeletingBranch({ id: r.id, name: r.name || "—", companyId: r.companyId })}
             disabled={deleting === r.id}
             title="حذف"
             className="text-status-error hover:text-status-error-foreground"
@@ -133,7 +98,7 @@ export function BranchesTab() {
   if (isError || companiesError) return <DataTable columns={branchColumns} data={[]} isError={true} searchPlaceholder={null} noToolbar />;
 
   const handleEdit = (item: any) => {
-    setFormInitial({
+    setEditingValues({
       name: item.name || "",
       nameEn: item.nameEn || "",
       city: item.city || "",
@@ -142,29 +107,6 @@ export function BranchesTab() {
     });
     setEditingId(item.id);
     setShowForm(true);
-  };
-
-  const handleSave = async (values: BranchForm) => {
-    try {
-      if (editingId) {
-        await apiFetch(`/settings/branches/${editingId}`, {
-          method: "PUT",
-          body: JSON.stringify(values),
-        });
-        toast({ title: "تم التعديل", description: "تم تعديل الفرع بنجاح" });
-      } else {
-        await apiFetch("/settings/branches", {
-          method: "POST",
-          body: JSON.stringify(values),
-        });
-        toast({ title: "تمت الإضافة", description: "تمت إضافة الفرع بنجاح" });
-      }
-      resetForm();
-      refetch();
-      refreshFilters();
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message || "فشلت العملية", variant: "destructive" });
-    }
   };
 
   const handleDelete = async (id: number) => {
@@ -220,28 +162,12 @@ export function BranchesTab() {
             <CardTitle className="text-sm">{editingId ? "تعديل الفرع" : "إضافة فرع جديد"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <FormShell
-              key={editingId ?? "new"}
-              schema={branchFormSchema}
-              defaultValues={formInitial}
-              submitLabel={editingId ? "تحديث الفرع" : "إضافة الفرع"}
-              secondaryActions={
-                <Button type="button" size="sm" variant="ghost" onClick={resetForm}>
-                  إلغاء
-                </Button>
-              }
-              onSubmit={async (values) => {
-                await handleSave(values);
-              }}
-            >
-              <FormGrid cols={2}>
-                <FormSelectField name="companyId" label="الشركة" required options={companyOptions} />
-                <FormTextField name="name" label="اسم الفرع (عربي)" required placeholder="مثال: الفرع الرئيسي - الرياض" />
-                <FormTextField name="nameEn" label="اسم الفرع (إنجليزي)" placeholder="الفرع الرئيسي — الرياض" />
-                <FormTextField name="city" label="المدينة" placeholder="الرياض" />
-                <FormTextField name="phone" label="الهاتف" placeholder="+966 11 xxx xxxx" />
-              </FormGrid>
-            </FormShell>
+            <BranchForm
+              editingId={editingId}
+              initialValues={editingValues ?? undefined}
+              onSaved={() => { resetForm(); refetch(); refreshFilters(); }}
+              onCancel={resetForm}
+            />
           </CardContent>
         </Card>
       )}
@@ -270,19 +196,207 @@ export function BranchesTab() {
         pageSize={0}
       />
 
-      <ConfirmDeleteDialog
-        open={deletingBranch !== null}
+      <BranchDeleteDialog
+        branch={deletingBranch}
+        branches={items}
         onOpenChange={(v) => { if (!v) setDeletingBranch(null); }}
-        entity={{
-          type: "branch",
-          id: deletingBranch?.id ?? 0,
-          name: deletingBranch?.name ?? "",
-        }}
-        deletePath={`/settings/branches/${deletingBranch?.id}`}
-        invalidateKeys={[["settings-branches"]]}
-        successMessage="تم الحذف"
         onDeleted={() => { setDeletingBranch(null); refetch(); refreshFilters(); }}
       />
     </div>
+  );
+}
+
+// Branch retirement (soft-disable). Unlike the generic ConfirmDeleteDialog,
+// a branch sits at the root of many FK relations, so the server refuses to
+// disable one that still has active employees or open purchase orders. When
+// that happens, the server returns CONFLICT + meta.blockers + canReassign,
+// and this dialog lets the operator move that active data to another active
+// branch (e.g. the newly-opened one) and retire the old branch in one step.
+function BranchDeleteDialog({
+  branch,
+  branches,
+  onOpenChange,
+  onDeleted,
+}: {
+  branch: { id: number; name: string; companyId: number } | null;
+  branches: any[];
+  onOpenChange: (open: boolean) => void;
+  onDeleted: () => void;
+}) {
+  const { toast } = useToast();
+  const [blockers, setBlockers] = useState<string[] | null>(null);
+  const [canReassign, setCanReassign] = useState(false);
+  const [reassignTo, setReassignTo] = useState<string>("");
+  const [pending, setPending] = useState(false);
+
+  const open = branch !== null;
+
+  useEffect(() => {
+    if (open) {
+      setBlockers(null);
+      setCanReassign(false);
+      setReassignTo("");
+      setPending(false);
+    }
+  }, [open, branch?.id]);
+
+  // Candidate destinations: other active branches in the same company.
+  const targetOptions = useMemo(
+    () =>
+      branches.filter(
+        (b: any) =>
+          b.id !== branch?.id &&
+          b.companyId === branch?.companyId &&
+          (b.status ?? "active") !== "inactive",
+      ),
+    [branches, branch],
+  );
+
+  const doDelete = async (reassignToBranchId?: number) => {
+    if (!branch) return;
+    setPending(true);
+    try {
+      await apiFetch(`/settings/branches/${branch.id}`, {
+        method: "DELETE",
+        ...(reassignToBranchId
+          ? { body: JSON.stringify({ reassignToBranchId }) }
+          : {}),
+      });
+      toast({
+        title: "تم التعطيل",
+        description: reassignToBranchId
+          ? "تم نقل البيانات النشطة وتعطيل الفرع القديم"
+          : "تم تعطيل الفرع",
+      });
+      onDeleted();
+    } catch (e: any) {
+      const err = e as ApiError;
+      const meta = (err?.meta ?? {}) as Record<string, unknown>;
+      const list = Array.isArray(meta.blockers)
+        ? (meta.blockers as unknown[]).filter(
+            (b): b is string => typeof b === "string" && b.length > 0,
+          )
+        : [];
+      if (err?.code === "CONFLICT" && list.length > 0) {
+        setBlockers(list);
+        setCanReassign(Boolean(meta.canReassign));
+      } else {
+        toast({
+          title: "خطأ",
+          description: err?.message || "فشل تعطيل الفرع",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent dir="rtl" className="max-w-lg">
+        <AlertDialogHeader className="text-right">
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-status-error-foreground" />
+            تعطيل الفرع &ldquo;{branch?.name}&rdquo;
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 pt-1 text-start">
+              {!blockers && (
+                <p className="text-xs text-muted-foreground">
+                  سيتم تعطيل الفرع وإخفاؤه من القوائم، مع الاحتفاظ بكل السجلات
+                  التاريخية المرتبطة به. هل تريد المتابعة؟
+                </p>
+              )}
+
+              {blockers && blockers.length > 0 && (
+                <div className="rounded-md border border-status-error-surface bg-status-error-surface p-3">
+                  <p className="text-xs font-semibold text-status-error-foreground">
+                    لا يمكن تعطيل الفرع — يجب معالجة ما يلي أولاً:
+                  </p>
+                  <ul className="mt-1.5 space-y-1 text-xs text-status-error-foreground">
+                    {blockers.map((b, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-status-error-foreground" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {blockers && canReassign && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium flex items-center gap-1.5">
+                    <ArrowRightLeft className="h-3.5 w-3.5" />
+                    نقل البيانات النشطة إلى فرع آخر ثم التعطيل:
+                  </Label>
+                  {targetOptions.length > 0 ? (
+                    <select
+                      className="w-full border rounded-md p-1.5 text-sm"
+                      value={reassignTo}
+                      onChange={(e) => setReassignTo(e.target.value)}
+                    >
+                      <option value="">— اختر الفرع البديل —</option>
+                      {targetOptions.map((b: any) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      لا يوجد فرع نشط آخر في نفس الشركة لنقل البيانات إليه — أنشئ
+                      فرعاً بديلاً أولاً.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="flex-row justify-start gap-2">
+          {!blockers ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => doDelete()}
+              disabled={pending}
+              className="gap-1.5"
+            >
+              {pending ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" />جاري التعطيل…</>
+              ) : (
+                <><Trash2 className="h-3.5 w-3.5" />تعطيل الفرع</>
+              )}
+            </Button>
+          ) : (
+            canReassign && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => doDelete(Number(reassignTo))}
+                disabled={pending || !reassignTo}
+                className="gap-1.5"
+              >
+                {pending ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" />جاري النقل والتعطيل…</>
+                ) : (
+                  <><ArrowRightLeft className="h-3.5 w-3.5" />نقل البيانات وتعطيل الفرع</>
+                )}
+              </Button>
+            )
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            إلغاء
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

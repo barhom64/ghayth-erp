@@ -63,30 +63,35 @@ describe("umrah tabs nav — restructure", () => {
     expect(primaryBlock).not.toContain("/umrah/reconciliation");
   });
 
-  it("renders the dropdown trigger with a stable testid", () => {
-    expect(TABS).toContain('data-testid="umrah-tab-monitoring-dropdown"');
-    expect(TABS).toContain('data-testid="umrah-monitoring-menu"');
+  it("renders the dropdown trigger with stable testids (forwarded to the DOM by TabDropdown)", () => {
+    // The monitoring dropdown is rendered via the reusable <TabDropdown>;
+    // the trigger + menu testids are passed as props and forwarded onto the
+    // real DOM nodes, so e2e selectors stay stable.
+    expect(TABS).toContain('testid="umrah-tab-monitoring-dropdown"');
+    expect(TABS).toContain('menuTestid="umrah-monitoring-menu"');
+    expect(TABS).toMatch(/data-testid=\{testid\}/);
+    expect(TABS).toMatch(/data-testid=\{menuTestid\}/);
   });
 
   it("dropdown opens on hover AND click (operator can use either)", () => {
-    expect(TABS).toMatch(/onMouseEnter=\{\(\) => setMonitoringOpen\(true\)\}/);
-    expect(TABS).toMatch(/onClick=\{\(\) => setMonitoringOpen\(\(v\) => !v\)\}/);
+    expect(TABS).toMatch(/onMouseEnter=\{\(\) => setOpen\(true\)\}/);
+    expect(TABS).toMatch(/onClick=\{\(\) => setOpen\(\(v\) => !v\)\}/);
   });
 
   it("dropdown closes on mouse-leave from the container (no permanent hover state)", () => {
-    expect(TABS).toMatch(/onMouseLeave=\{\(\) => setMonitoringOpen\(false\)\}/);
+    expect(TABS).toMatch(/onMouseLeave=\{\(\) => setOpen\(false\)\}/);
   });
 
-  it("dropdown trigger highlights when any of the 4 monitoring pages is active", () => {
-    // monitoringActive is the boolean that drives the trigger
-    // styling — pin its derivation so a future refactor that
-    // forgets to highlight the trigger fails this test.
-    expect(TABS).toMatch(/const monitoringActive = MONITORING_TABS\.some\(\(t\) => isActive\(t, location\)\)/);
+  it("dropdown trigger highlights when any of its pages is active", () => {
+    // `active` is the boolean that drives the trigger styling inside
+    // TabDropdown — pin its derivation so a future refactor that forgets
+    // to highlight the trigger fails this test.
+    expect(TABS).toMatch(/const active = tabs\.some\(\(t\) => isActive\(t, location\)\)/);
   });
 
   it("settings gear is a separate icon link to /umrah/settings (was hidden before)", () => {
     expect(TABS).toContain('data-testid="umrah-tab-settings-gear"');
-    expect(TABS).toMatch(/<Link href="\/umrah\/settings">/);
+    expect(TABS).toMatch(/<Link href="\/umrah\/settings"[^>]*>/);
   });
 
   it("isActive helper is a pure function — used by every renderable", () => {

@@ -31,6 +31,7 @@ export type VendorSlug =
   | "pbx-webhook"
   | "whatsapp"
   | "smtp"
+  | "sms"
   | "vapid"
   | "siem"
   | "zatca"
@@ -106,6 +107,12 @@ function envFallback(slug: VendorSlug): Record<string, string> {
         from: appConfig.smtp.from ?? "",
         secure: String(appConfig.smtp.secure ?? false),
       };
+    case "sms":
+      // SMS historically had no env support (config lived only in the
+      // per-company system_settings table). No env fallback today; the
+      // operator configures it via the vendor-settings card, and the cron
+      // worker still honours per-company system_settings overrides first.
+      return {};
     case "vapid":
       return {
         publicKey: appConfig.vapid.publicKey ?? "",
@@ -150,7 +157,9 @@ export async function getVendorConfig(slug: VendorSlug): Promise<VendorConfig> {
   let result: VendorConfig;
   try {
     const [row] = await rawQuery<{ status: string; config: Record<string, unknown> }>(
-      `SELECT status, config FROM vendor_secrets WHERE slug = $1 LIMIT 1`,
+      // Platform row only — per-company overrides (migration 389) are read
+      // via getCompanyVendorConfig, never through this platform resolver.
+      `SELECT status, config FROM vendor_secrets WHERE slug = $1 AND "companyId" IS NULL LIMIT 1`,
       [slug],
     );
     if (row && row.status === "active") {
@@ -177,6 +186,33 @@ export async function getVendorConfig(slug: VendorSlug): Promise<VendorConfig> {
 
   cache.set(slug, { value: result, expiresAt: Date.now() + TTL_MS });
   return result;
+}
+
+/**
+ * Per-company variant of a vendor secret — a `vendor_secrets` row whose
+ * "companyId" matches the caller (migration 389). Used for per-company
+ * overrides such as "بريد الشركة" (per-company SMTP). NOT cached (the
+ * platform cache is keyed by slug only); per-company reads are rare
+ * (queue worker, send path) and already gated by their own callers.
+ * Returns active=false when the company has no active row, so the caller
+ * falls back to the platform config.
+ */
+export async function getCompanyVendorConfig(
+  slug: VendorSlug,
+  companyId: number,
+): Promise<VendorConfig> {
+  try {
+    const [row] = await rawQuery<{ status: string; config: Record<string, unknown> }>(
+      `SELECT status, config FROM vendor_secrets WHERE slug = $1 AND "companyId" = $2 LIMIT 1`,
+      [slug, companyId],
+    );
+    if (row && row.status === "active") {
+      return { active: true, config: decryptConfigInPlace(row.config), source: "db" };
+    }
+  } catch (err) {
+    logger.warn(err, `[vendorSettings] getCompanyVendorConfig(${slug}, ${companyId}) failed`);
+  }
+  return { active: false, config: {}, source: "none" };
 }
 
 /**
@@ -226,13 +262,15 @@ export async function ensureVendorSecretsSeed(): Promise<void> {
         'disabled', '{"accessToken":"","verifyToken":"","phoneId":"","appSecret":""}'::jsonb),
        ('smtp', 'Email (SMTP)', 'SMTP relay used by notificationEngine for outbound email.',
         'disabled', '{"host":"","port":"587","user":"","password":"","from":"","secure":"false"}'::jsonb),
+       ('sms', 'SMS (Twilio)', 'Twilio credentials for outbound SMS. Per-company system_settings override this platform-wide default.',
+        'disabled', '{"accountSid":"","authToken":"","fromNumber":""}'::jsonb),
        ('vapid', 'Web Push (VAPID)', 'VAPID keys used by lib/notificationService for browser push notifications.',
         'disabled', '{"publicKey":"","privateKey":"","subject":"mailto:admin@ghayth.app"}'::jsonb),
        ('siem', 'SIEM forwarder', 'Optional webhook RBAC violations get mirrored to.',
         'disabled', '{"webhookUrl":"","authHeader":""}'::jsonb),
        ('zatca', 'ZATCA Fatoora', 'Saudi e-invoice clearance endpoints + provider.',
         'disabled', '{"defaultProvider":"","prodUrl":"","sandboxUrl":""}'::jsonb)
-     ON CONFLICT (slug) DO NOTHING`,
+     ON CONFLICT (slug) WHERE "companyId" IS NULL DO NOTHING`,
   );
 }
 
@@ -242,6 +280,6 @@ export async function ensureVendorSecretsSeed(): Promise<void> {
  * without depending on the request's timing. Called from app boot.
  */
 export async function warmVendorSettingsCache(): Promise<void> {
-  const slugs: VendorSlug[] = ["pbx-webhook", "whatsapp", "smtp", "vapid", "siem", "zatca", "microsoft365"];
+  const slugs: VendorSlug[] = ["pbx-webhook", "whatsapp", "smtp", "sms", "vapid", "siem", "zatca", "microsoft365"];
   await Promise.all(slugs.map((s) => getVendorConfig(s)));
 }

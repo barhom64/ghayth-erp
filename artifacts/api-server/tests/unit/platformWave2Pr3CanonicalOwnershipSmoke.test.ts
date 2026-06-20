@@ -104,7 +104,10 @@ describe("PR-3 (#2163) — vendor/supplier wrapper-split", () => {
   it("a shared form body lives at components/shared/vendor-party-form.tsx", () => {
     expect(existsSync(join(FE, "components/shared/vendor-party-form.tsx"))).toBe(true);
     expect(FORM).toMatch(/export\s+(interface|type)\s+VendorPartyFormIntent/);
-    expect(FORM).toMatch(/export\s+default\s+function\s+VendorPartyForm\(\{\s*intent\s*\}/);
+    // The shared form gained an `embedded` mode (+ onCreated/onCancel) for the
+    // inline AllowCreateDrawer, so the signature now destructures more than just
+    // `intent`; the assertion still pins `intent` as the leading prop.
+    expect(FORM).toMatch(/export\s+default\s+function\s+VendorPartyForm\(\{\s*intent\s*[,}]/);
     // Intent shape carries per-domain config.
     for (const field of ["title", "backPath", "postUrl", "draftKey", "showWht", "invalidateKeys"]) {
       expect(FORM, `intent.${field} pin`).toMatch(new RegExp(`${field}\\s*:`));

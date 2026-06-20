@@ -1,0 +1,13 @@
+# Allowlist for check:scoped-branch-qualified.
+#
+# One vetted exception per line, format:
+#   <relFile>::<line>::<companyColumnValue>
+# Lines starting with `#` are comments.
+#
+# A line here means: "this buildScopedWhere call qualifies its companyColumn but
+# intentionally leaves branchColumn on the default, and that is provably safe
+# (e.g. the FROM has a single relation carrying branchId so the bare reference is
+# unambiguous)." Prefer fixing the call (qualify branchColumn or set
+# disableBranchScope:true) over allowlisting.
+#
+# Currently EMPTY — the whole routes+lib tree satisfies the guard.

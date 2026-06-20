@@ -495,7 +495,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
                   AND aa.action = 'approved' AND aa."companyId" = je."companyId"
                 ORDER BY aa.id DESC LIMIT 1) AS "approvedByName"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
@@ -872,8 +872,8 @@ journalRouter.post("/expenses/impact-preview", authorize({ feature: "finance.jou
     if (costCenter) {
       const [budget] = await rawQuery<Record<string, unknown>>(
         `SELECT cc.name, cc."allocatedAmount",
-                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE je."companyId" = $2 AND jl."costCenter" = cc.name AND je."deletedAt" IS NULL), 0) AS "usedAmount"
-         FROM cost_centers cc WHERE cc.name = $1 AND cc."companyId" = $2 LIMIT 1`,
+                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl JOIN journal_entries je ON je.id = jl."journalId" WHERE je."companyId" = $2 AND jl."costCenter" = cc.name AND jl."deletedAt" IS NULL AND je."deletedAt" IS NULL), 0) AS "usedAmount"
+         FROM cost_centers cc WHERE cc.name = $1 AND cc."companyId" = $2 AND cc."deletedAt" IS NULL LIMIT 1`,
         [costCenter, scope.companyId]
       );
       if (budget) {
@@ -1421,7 +1421,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     const [createdExpense] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, effectiveCompanyId]
@@ -1716,7 +1716,7 @@ journalRouter.post("/vendor-invoices", authorize({ feature: "finance.journal", a
     const [created] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, effectiveCompanyId],
@@ -1941,21 +1941,26 @@ journalRouter.post("/expenses/:id/request-attachment", authorize({ feature: "fin
     );
     if (!exp) throw new NotFoundError("المصروف غير موجود");
 
-    await rawExecute(
-      `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
-       VALUES ('expense',$1,'request_attachment',$2,$3,$4)`,
-      [expenseId, String(notes).trim(), scope.userId, scope.companyId]
-    );
+    // Atomic: record the approval action and flip the expense status together,
+    // so a failure between them can't leave an action row with the wrong state
+    // (or a returned expense with no audit-trail action).
+    await withTransaction(async () => {
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId")
+         VALUES ('expense',$1,'request_attachment',$2,$3,$4)`,
+        [expenseId, String(notes).trim(), scope.userId, scope.companyId]
+      );
 
-    // Move it back to "returned" so the submitter sees it needs work — reuses
-    // the SAME state the approve handler's return path lands on. Guarded to the
-    // pending family so we never re-open a decided expense.
-    await rawExecute(
-      `UPDATE journal_entries SET status = 'returned'
-        WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'
-          AND status IN ('draft','pending_approval','returned','pending')`,
-      [expenseId, scope.companyId]
-    );
+      // Move it back to "returned" so the submitter sees it needs work — reuses
+      // the SAME state the approve handler's return path lands on. Guarded to the
+      // pending family so we never re-open a decided expense.
+      await rawExecute(
+        `UPDATE journal_entries SET status = 'returned'
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND ref LIKE 'EXP%'
+            AND status IN ('draft','pending_approval','returned','pending')`,
+        [expenseId, scope.companyId]
+      );
+    });
 
     await createAuditLog({
       companyId: scope.companyId,
@@ -2050,7 +2055,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
               je."documentStatus", je."paymentStatus", je."postingStatus",
               e_cre.name AS "createdByName"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        LEFT JOIN employee_assignments ea_cre ON ea_cre.id = je."createdBy"
        LEFT JOIN employees e_cre ON e_cre.id = ea_cre."employeeId" AND e_cre."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
@@ -2090,7 +2095,7 @@ journalRouter.get("/vouchers/:id", authorize({ feature: "finance.journal", actio
               COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt", je.status,
               je."documentStatus", je."paymentStatus", je."postingStatus"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
          AND (je.ref LIKE 'RV%' OR je.ref LIKE 'PV%')
        GROUP BY je.id`,
@@ -2591,7 +2596,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     const [createdVoucher] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -2708,7 +2713,7 @@ journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", ac
     // postingStatus='posted' here — where status alone would mislabel it.
     // (This list never exposed isPaid; not added — paymentStatus conveys the
     // payment state truthfully, gated by the canBePaid rule.)
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status, je."documentStatus", je."paymentStatus", je."postingStatus" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."documentStatus", je."paymentStatus", je."postingStatus", je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
+    const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status, je."documentStatus", je."paymentStatus", je."postingStatus" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."documentStatus", je."paymentStatus", je."postingStatus", je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } }));
   } catch (err) {
     res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
@@ -2735,7 +2740,7 @@ journalRouter.get("/salary-advances/:id", authorize({ feature: "finance.journal"
               COALESCE(SUM(jl.debit), 0) AS amount,
               CONCAT('SA-', je.id) AS "refDisplay"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%'
        GROUP BY je.id, je.ref, je.description, je.status, je."createdAt", je."updatedAt",
                 je."documentStatus", je."paymentStatus", je."postingStatus", je."branchId", je."companyId"`,
@@ -2760,8 +2765,8 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
     let advanceAccountCode = await financialEngine.resolveAccountCode(scope.companyId, "salary_advance_receivable", "debit", "1141");
     if (employeeId) {
       const [subAcc] = await rawQuery<Record<string, unknown>>(
-        `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-         WHERE sa."companyId" = $1 AND sa."entityType" = 'employee' AND sa."entityId" = $2 AND sa."accountType" = 'advance'`,
+        `SELECT ca.code FROM subsidiary_accounts sa JOIN chart_of_accounts ca ON ca.id = sa."accountId" AND ca."deletedAt" IS NULL
+         WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."entityType" = 'employee' AND sa."entityId" = $2 AND sa."accountType" = 'advance'`,
         [scope.companyId, Number(employeeId)]
       );
       if (subAcc) advanceAccountCode = subAcc.code as string;
@@ -2817,7 +2822,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
     const [createdAdvance] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -2915,7 +2920,7 @@ journalRouter.get("/journal", authorize({ feature: "finance.journal", action: "l
               COALESCE(SUM(jl.credit), 0) AS "totalCredit",
               COALESCE(json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) FILTER (WHERE jl.id IS NOT NULL), '[]') AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE ${where} AND je."deletedAt" IS NULL
        GROUP BY je.id
        ORDER BY je."createdAt" DESC LIMIT 200`,
@@ -3089,7 +3094,7 @@ journalRouter.post("/journal", requireMinLevel(50), authorize({ feature: "financ
     const [createdJournal] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [insertId, scope.companyId]
@@ -3127,7 +3132,7 @@ journalRouter.get("/journal/:id", authorize({ feature: "finance.journal", action
       `SELECT jl.*, coa.name AS "accountName"
        FROM journal_lines jl
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = $2 AND coa."deletedAt" IS NULL
-       WHERE jl."journalId" = $1
+       WHERE jl."journalId" = $1 AND jl."deletedAt" IS NULL
        ORDER BY jl.id ASC`,
       [id, je.companyId]
     );
@@ -3173,7 +3178,7 @@ journalRouter.post("/journal/:id/approve", requireMinLevel(60), authorize({ feat
     const linkLines = await rawQuery<Record<string, unknown>>(
       `SELECT "vehicleId", "propertyId", "assetId", "employeeId",
               "driverId", "unitId", "contractId"
-         FROM journal_lines WHERE "journalId" = $1`,
+         FROM journal_lines WHERE "journalId" = $1 AND "deletedAt" IS NULL`,
       [id],
     );
     const operationallyLinked = isOperationallyLinkedEntry(linkLines as any, header ?? null);
@@ -3489,7 +3494,7 @@ journalRouter.post("/journal/:id/reverse", requireMinLevel(70), authorize({ feat
     const [createdReversal] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [newJournalId, scope.companyId]
@@ -3517,7 +3522,7 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
     `SELECT coa.code, coa.name,
             COALESCE(SUM(jl.credit), 0) - COALESCE(SUM(jl.debit), 0) AS balance
      FROM chart_of_accounts coa
-     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code AND jl."deletedAt" IS NULL
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true AND je."reversedById" IS NULL
@@ -3532,7 +3537,7 @@ async function buildYearEndClosingLines(companyId: number, year: number, retaine
     `SELECT coa.code, coa.name,
             COALESCE(SUM(jl.debit), 0) - COALESCE(SUM(jl.credit), 0) AS balance
      FROM chart_of_accounts coa
-     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code
+     LEFT JOIN journal_lines jl ON jl."accountCode" = coa.code AND jl."deletedAt" IS NULL
      LEFT JOIN journal_entries je ON je.id = jl."journalId"
           AND je."companyId" = $1 AND je."deletedAt" IS NULL
           AND je."balancesApplied" = true AND je."reversedById" IS NULL
@@ -3745,7 +3750,7 @@ journalRouter.post("/fiscal-periods/:period/year-end-close", requireMinLevel(70)
     const [createdYearEnd] = await rawQuery<Record<string, unknown>>(
       `SELECT je.*, json_agg(json_build_object('accountCode', jl."accountCode", 'debit', jl.debit, 'credit', jl.credit, 'description', jl.description)) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je.id = $1 AND je."companyId" = $2 AND je."deletedAt" IS NULL
        GROUP BY je.id`,
       [journalId, scope.companyId]
@@ -3801,7 +3806,7 @@ journalRouter.get("/opening-balances", requireMinLevel(70), authorize({ feature:
                 'credit', jl.credit
               ) ORDER BY jl.id) AS lines
        FROM journal_entries je
-       LEFT JOIN journal_lines jl ON jl."journalId" = je.id
+       LEFT JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        LEFT JOIN chart_of_accounts coa ON coa.code = jl."accountCode" AND coa."companyId" = je."companyId" AND coa."deletedAt" IS NULL
        WHERE ${where}${extraWhere}
        GROUP BY je.id, je.ref, je.description, je."createdAt", je.status,
@@ -3914,6 +3919,11 @@ journalRouter.post("/opening-balances", requireMinLevel(70), authorize({ feature
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.created", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", lineCount: (lines ?? []).length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances audit failed"));
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "Create opening balances error:");
@@ -3957,6 +3967,11 @@ journalRouter.post("/opening-balances/import-csv", requireMinLevel(70), authoriz
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.imported_csv", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", linesCount: parsed.length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances-csv audit failed"));
     res.status(201).json({ ...result, linesCount: parsed.length });
   } catch (err) {
     handleRouteError(err, res, "Import opening balances CSV error:");

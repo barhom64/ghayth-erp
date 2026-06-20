@@ -57,8 +57,8 @@ function isActive(tab: Tab, location: string): boolean {
   return tab.match.some((m) => location === m || location.startsWith(`${m}/`));
 }
 
-function TabDropdown({ label, icon: Icon, tabs, location, testid }: {
-  label: string; icon: any; tabs: Tab[]; location: string; testid: string;
+function TabDropdown({ label, icon: Icon, tabs, location, testid, menuTestid }: {
+  label: string; icon: any; tabs: Tab[]; location: string; testid: string; menuTestid?: string;
 }) {
   const [open, setOpen] = useState(false);
   const active = tabs.some((t) => isActive(t, location));
@@ -79,12 +79,12 @@ function TabDropdown({ label, icon: Icon, tabs, location, testid }: {
         <ChevronDown className="h-3 w-3" />
       </button>
       {open && (
-        <div className="absolute top-full right-0 mt-1 bg-popover border rounded-md shadow-md py-1 min-w-[200px] z-50">
+        <div data-testid={menuTestid} className="absolute top-full right-0 mt-1 bg-popover border rounded-md shadow-md py-1 min-w-[200px] z-50">
           {tabs.map((tab) => {
             const a = isActive(tab, location);
             const TabIcon = tab.icon;
             return (
-              <Link key={tab.href} href={tab.href}>
+              <Link key={tab.href} href={tab.href} asChild>
                 <a
                   onClick={() => setOpen(false)}
                   className={cn(
@@ -114,7 +114,7 @@ export function UmrahTabsNav() {
           const active = isActive(tab, location);
           const Icon = tab.icon;
           return (
-            <Link key={tab.href} href={tab.href}>
+            <Link key={tab.href} href={tab.href} asChild>
               <a
                 data-testid={`umrah-tab-${tab.href.replace(/\//g, "-").replace(/^-/, "")}`}
                 className={cn(
@@ -130,10 +130,10 @@ export function UmrahTabsNav() {
         })}
 
         <TabDropdown label="المزيد" icon={MoreHorizontal} tabs={MORE_TABS} location={location} testid="umrah-tab-more-dropdown" />
-        <TabDropdown label="الرقابة" icon={Shield} tabs={MONITORING_TABS} location={location} testid="umrah-tab-monitoring-dropdown" />
+        <TabDropdown label="الرقابة" icon={Shield} tabs={MONITORING_TABS} location={location} testid="umrah-tab-monitoring-dropdown" menuTestid="umrah-monitoring-menu" />
 
         {/* زر ⚙ منفصل لصفحة إعدادات العمرة */}
-        <Link href="/umrah/settings">
+        <Link href="/umrah/settings" asChild>
           <a
             data-testid="umrah-tab-settings-gear"
             title="إعدادات العمرة"

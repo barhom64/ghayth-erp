@@ -42,6 +42,7 @@ import { upsertSetting } from "../lib/settings.js";
 import {
   calculateCommissionForPlan,
   simulateCommission,
+  simulateCommissionAdHoc,
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
 import {
@@ -205,6 +206,43 @@ const updateCommissionPlanSchema = z.object({
 const simulateCommissionSchema = z.object({
   month: z.coerce.number({ required_error: "الشهر مطلوب" }),
   year: z.coerce.number({ required_error: "السنة مطلوبة" }),
+  totalMutamers: z.coerce.number().nonnegative().optional(),
+  avgProfitPerVisa: z.coerce.number().nonnegative().optional(),
+  avgSalePrice: z.coerce.number().nonnegative().optional(),
+  salesPercent: z.coerce.number().min(0).max(100).optional(),
+});
+
+const simulatePlanInlineSchema = z.object({
+  plan: z.object({
+    companyId: z.coerce.number().int().optional(),
+    seasonId: z.coerce.number().int(),
+    employeeId: z.coerce.number().int(),
+    commissionType: z.string(),
+    percentageRate: z.coerce.number().nullable().optional(),
+    fixedAmount: z.coerce.number().nullable().optional(),
+    conditionType: z.string().nullable().optional(),
+    minProfitPerVisa: z.coerce.number().nullable().optional(),
+    minSalesPercent: z.coerce.number().nullable().optional(),
+    minAvgPrice: z.coerce.number().nullable().optional(),
+    excludedMonths: z.array(z.coerce.number().int()).optional(),
+    tierUnit: z.string().optional(),
+    partialTiersAllowed: z.boolean().optional(),
+    assignmentId: z.coerce.number().int().nullable().optional(),
+    violationBlocksCommission: z.boolean().optional(),
+  }),
+  tiers: z.array(z.object({
+    fromCount: z.coerce.number().int().nonnegative(),
+    toCount: z.union([z.coerce.number().int().nonnegative(), z.null()]).optional(),
+    bonusPerUnit: z.coerce.number().nonnegative(),
+    isCumulative: z.boolean().optional(),
+    tierOrder: z.coerce.number().int().min(1),
+  })).default([]),
+  month: z.coerce.number(),
+  year: z.coerce.number(),
+  totalMutamers: z.coerce.number().nonnegative().optional(),
+  avgProfitPerVisa: z.coerce.number().nonnegative().optional(),
+  avgSalePrice: z.coerce.number().nonnegative().optional(),
+  salesPercent: z.coerce.number().min(0).max(100).optional(),
 });
 
 const generateInvoiceSchema = z.object({
@@ -1666,13 +1704,13 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
         [id, scope.companyId]
       ),
       rawQuery(
-        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 ORDER BY "tierOrder"`,
-        [id]
+        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2 ORDER BY "tierOrder"`,
+        [id, scope.companyId]
       ),
       rawQuery(
         `SELECT * FROM employee_commission_calculations
-         WHERE "planId" = $1 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
-        [id]
+         WHERE "planId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY year DESC, month DESC LIMIT 12`,
+        [id, scope.companyId]
       ),
     ]);
     if (!plan) { throw new NotFoundError("الخطة غير موجودة"); }
@@ -1782,7 +1820,7 @@ router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "upd
           [id, scope.companyId]
         )).rows;
         if (!owned) throw new NotFoundError("خطة العمولة غير موجودة");
-        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1`, [id]);
+        await client.query(`DELETE FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2`, [id, scope.companyId]);
         for (let i = 0; i < b.tiers.length; i++) {
           const t = b.tiers[i];
           await client.query(
@@ -1804,13 +1842,37 @@ router.patch("/commission-plans/:id", authorize({ feature: "umrah", action: "upd
   } catch (err) { handleRouteError(err, res, "Update commission plan"); }
 });
 
+// Ad-hoc simulation (no plan id — used by the editor in create mode before save).
+// Pure what-if math; no DB writes; no audit row intentional (mirrors the
+// description in scripts/audit-coverage-allowlist.txt).
+router.post("/commission-plans/simulate", authorize({ feature: "umrah", action: "list" }), async (req, res): Promise<void> => {
+  try {
+    const parsed = zodParse(simulatePlanInlineSchema.safeParse(req.body));
+    const { plan, tiers, month, year, totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent } = parsed;
+    const scope = req.scope!;
+    const planForEngine: any = { ...plan, companyId: scope.companyId };
+    const tiersForEngine: any = (tiers ?? []).map((t) => ({
+      ...t,
+      toCount: t.toCount ?? null,
+      isCumulative: t.isCumulative ?? false,
+    }));
+    const result = await simulateCommissionAdHoc(
+      planForEngine, tiersForEngine, month, year,
+      { totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent },
+    );
+    res.json(result);
+  } catch (err) { handleRouteError(err, res, "Simulate commission (ad-hoc)"); }
+});
+
 router.post("/commission-plans/:id/simulate", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const parsed = zodParse(simulateCommissionSchema.safeParse(req.body));
-    const { month, year } = parsed;
+    const { month, year, totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent } = parsed;
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const result = await simulateCommission(id, month, year, scope.companyId);
+    const result = await simulateCommission(id, month, year, scope.companyId, {
+      totalMutamers, avgProfitPerVisa, avgSalePrice, salesPercent,
+    });
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.commission.simulated", entity: "employee_commission_plans", entityId: id, details: JSON.stringify({ month, year }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "preview", entity: "umrah_commission_plans", entityId: id, after: { month, year } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(result);
@@ -1880,8 +1942,8 @@ router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: 
     );
     if (!batch) throw new NotFoundError("الدفعة غير موجودة");
     const rows = await rawQuery(
-      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 ORDER BY id LIMIT 1000`,
-      [id]
+      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 AND "companyId" = $2 ORDER BY id LIMIT 1000`,
+      [id, scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List batch changes"); }
@@ -4399,6 +4461,20 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
       // by the operator-supplied `from` so the layer surfaces as
       // "today's outstanding overstayers" on the day the operator
       // opens the calendar. Cheap, useful, no schema change.
+      //
+      // NOTE: this layer is NOT date-ranged, so it references neither $3
+      // (toStr) nor the shared `pilgrimSeasonClause` index. Reusing the
+      // 3-element `baseParams` here bound 3 values against a 2-placeholder
+      // statement → Postgres 08P01 ("supplies 3 parameters, but prepared
+      // statement requires 2") whenever no seasonId was supplied (the
+      // default calendar view) → 500. Use a dedicated params array whose
+      // length always matches the placeholders.
+      const overstayParams: unknown[] = [scope.companyId, fromStr];
+      let overstaySeasonClause = "";
+      if (seasonId) {
+        overstayParams.push(seasonId);
+        overstaySeasonClause = ` AND p."seasonId" = $${overstayParams.length}`;
+      }
       runs.overstay = rawQuery<Row>(
         `SELECT $2::text AS date,
                 COUNT(*)::text AS c,
@@ -4406,9 +4482,9 @@ router.get("/calendar/events", authorize({ feature: "umrah", action: "list" }), 
            FROM umrah_pilgrims p
           WHERE p."companyId" = $1
             AND p.status IN ('overstayed', 'overstay_penalized')
-            AND p."deletedAt" IS NULL${pilgrimSeasonClause}
+            AND p."deletedAt" IS NULL${overstaySeasonClause}
           HAVING COUNT(*) > 0`,
-        baseParams,
+        overstayParams,
       );
     }
     if (requestedLayers.includes("transport_trip")) {

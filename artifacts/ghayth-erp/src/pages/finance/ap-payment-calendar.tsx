@@ -397,7 +397,7 @@ export default function ApPaymentCalendarPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
                       <th className="text-start py-2 px-2">المورد</th>
@@ -426,7 +426,7 @@ export default function ApPaymentCalendarPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
           )}

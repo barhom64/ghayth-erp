@@ -13,6 +13,8 @@ import { logger } from "../lib/logger.js";
 import { config } from "../lib/config.js";
 import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { seedRolesAndGrantsV2 } from "../lib/rbac/autoMigrate.js";
+import { consumeAuthToken } from "../lib/authTokens.js";
+import { sendAuthEmail } from "../lib/authNotifications.js";
 import {
   authenticateUserByPassword,
   createUserSession,
@@ -102,14 +104,23 @@ const switchAssignmentSchema = z.object({
   assignmentId: z.coerce.number({ required_error: "التعيين مطلوب" }),
 });
 
+// Shared strong-password rule (mirrors change-password).
+const newPasswordRule = z.string()
+  .min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
+  .regex(/[A-Z]/, "يجب أن تحتوي على حرف كبير واحد على الأقل")
+  .regex(/[a-z]/, "يجب أن تحتوي على حرف صغير واحد على الأقل")
+  .regex(/[0-9]/, "يجب أن تحتوي على رقم واحد على الأقل")
+  .regex(/[^a-zA-Z0-9]/, "يجب أن تحتوي على رمز خاص واحد على الأقل");
+
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "كلمة المرور الحالية مطلوبة"),
-  newPassword: z.string()
-    .min(8, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
-    .regex(/[A-Z]/, "يجب أن تحتوي على حرف كبير واحد على الأقل")
-    .regex(/[a-z]/, "يجب أن تحتوي على حرف صغير واحد على الأقل")
-    .regex(/[0-9]/, "يجب أن تحتوي على رقم واحد على الأقل")
-    .regex(/[^a-zA-Z0-9]/, "يجب أن تحتوي على رمز خاص واحد على الأقل"),
+  newPassword: newPasswordRule,
+});
+
+// #2137 slice 2 — token-driven account recovery (public, token-authenticated).
+const tokenResetSchema = z.object({
+  token: z.string().min(16, "الرمز غير صالح").max(200),
+  newPassword: newPasswordRule,
 });
 
 // NOTE: A router-wide per-IP authRouteLimiter previously sat here. It has
@@ -143,8 +154,8 @@ const loginLimiter = rateLimit({
     !config.isProduction && req.headers["x-e2e-test"] === "1",
 });
 
-// Per-user limiter for the authenticated /auth/* endpoints (/me, /logout,
-// /switch-assignment). The /auth router is mounted in routes/index.ts
+// Per-user limiter for the authenticated /auth/(me,logout,switch) endpoints
+// (/me, /logout, /switch-assignment). The /auth router is mounted in routes/index.ts
 // BEFORE the global authMiddleware mount, so the per-route authMiddleware
 // must run first inside each route chain to set req.scope. Owner/admin
 // exempt — these are routine session management calls.
@@ -193,6 +204,27 @@ const registerLimiter = rateLimit({
   store: makeRateLimitStore("auth:register"),
 });
 
+// Dedicated limiter for the PUBLIC GET /setup-state boot probe. It MUST NOT
+// reuse `registerLimiter` (max 5/hour): the login page polls /setup-state on
+// every mount, so a strict account-creation budget — shared across all
+// visitors behind one egress IP and lacking the automated-suite bypass —
+// 429s the probe after a handful of page loads, breaking first-run detection
+// and spraying console errors across the app. A read-only COUNT(*) probe that
+// leaks nothing needs only light bot-deterrence, plus the same non-prod e2e
+// bypass loginLimiter/refreshLimiter carry so the runtime audit / Playwright
+// walks don't trip it.
+const setupStateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "تم تجاوز الحد الأقصى للطلبات. يرجى المحاولة بعد دقيقة" },
+  validate: { ip: false, trustProxy: false },
+  store: makeRateLimitStore("auth:setup-state"),
+  skip: (req) =>
+    !config.isProduction && req.headers["x-e2e-test"] === "1",
+});
+
 router.post("/register", registerLimiter, async (_req, res) => {
   emitEvent({ companyId: 0, userId: 0, action: "auth.register", entity: "users", entityId: 0 }).catch((e) => logger.error(e, "auth background task failed"));
   createAuditLog({ companyId: 0, userId: 0, action: "create", entity: "users", entityId: 0, after: { blocked: true, reason: "self_registration_not_permitted" } }).catch((e) => logger.error(e, "auth background task failed"));
@@ -209,7 +241,7 @@ router.post("/register", registerLimiter, async (_req, res) => {
 // (login as usual), and neither leaks anything sensitive. Rate-limited
 // to deter bots that would otherwise probe to figure out if a fresh
 // install exists.
-router.get("/setup-state", registerLimiter, async (_req, res) => {
+router.get("/setup-state", setupStateLimiter, async (_req, res) => {
   try {
     const [row] = await rawQuery<{ companyCount: string }>(
       `SELECT COUNT(*)::text AS "companyCount" FROM companies`,
@@ -727,9 +759,124 @@ router.post("/change-password", authMiddleware, changePasswordLimiter, async (re
     }).catch((e) => logger.error(e, "auth background task failed"));
     clearAuthCookies(res);
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "auth.password.changed", entity: "users", entityId: scope.userId }).catch((e) => logger.error(e, "auth background task failed"));
+    // Security notice (best-effort, no secret) — #2137 slice 2.
+    void notifyPasswordChanged(scope.companyId, scope.userId).catch((e) => logger.warn(e, "password-changed notice"));
     res.json({ success: true, message: "تم تغيير كلمة المرور بنجاح" });
   } catch (err) {
     handleRouteError(err, res, "Change password error:");
+  }
+});
+
+// ─────────────────────── #2137 slice 2 — account recovery ─────────────────
+
+interface AccountRow {
+  userId: number;
+  email: string;
+  companyId: number;
+  name: string;
+}
+
+/**
+ * Resolve a login account by email → its user id, company, and display
+ * name (for templated emails). Email is the login identity (users.email).
+ * Returns null when no active user matches — callers MUST stay silent
+ * about which case occurred (no user enumeration).
+ */
+async function lookupAccountByEmail(email: string): Promise<AccountRow | null> {
+  const [row] = await rawQuery<AccountRow>(
+    `SELECT u.id AS "userId", u.email AS email,
+            COALESCE(ea."companyId", 0) AS "companyId",
+            COALESCE(e.name, u.email) AS name
+       FROM users u
+       LEFT JOIN employees e ON e.id = u."employeeId"
+       LEFT JOIN employee_assignments ea ON ea."employeeId" = u."employeeId" AND ea.status = 'active'
+      WHERE LOWER(u.email) = LOWER($1) AND u."isActive" = TRUE
+      ORDER BY ea."isPrimary" DESC NULLS LAST
+      LIMIT 1`,
+    [email],
+  );
+  return row ?? null;
+}
+
+/**
+ * Best-effort password-changed security notice. No secret.
+ *
+ * Looks the user up by their globally-unique PK (users.id) only — no
+ * tenant-scoped join — because this runs in public token-auth contexts
+ * (reset/activate) that have no company scope. The greeting uses the
+ * email; a display-name join would pull in the tenant-scoped employees
+ * table for no security benefit on a self-addressed notice.
+ */
+async function notifyPasswordChanged(companyId: number, userId: number): Promise<void> {
+  const [row] = await rawQuery<{ email: string }>(
+    `SELECT email FROM users WHERE id = $1 LIMIT 1`,
+    [userId],
+  );
+  if (!row?.email) return;
+  await sendAuthEmail({
+    companyId, userId,
+    recipientEmail: row.email,
+    recipientName: row.email,
+    templateKey: "auth.password_changed.email",
+    vars: { userName: row.email, changedAt: new Date().toISOString() },
+  });
+}
+
+/**
+ * POST /auth/reset-password — consume a password-reset token (single-use,
+ * unexpired) and set the new password. Public + token-authenticated, so
+ * CSRF-exempt and per-IP rate-limited like login. Atomically rotates the
+ * password and revokes all refresh tokens, then sends the password-changed
+ * security notice. A bad/expired/used token yields ONE generic error.
+ */
+router.post("/reset-password", loginLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = zodParse(tokenResetSchema.safeParse(req.body));
+    const consumed = await consumeAuthToken({ rawToken: token, purpose: "password_reset" });
+    if (!consumed || !consumed.userId) {
+      throw new ForbiddenError("رابط إعادة التعيين غير صالح أو منتهي الصلاحية. اطلب رابطاً جديداً.");
+    }
+    const hashed = await hashPassword(newPassword);
+    await withTransaction(async (client) => {
+      const { rowCount } = await client.query(`UPDATE users SET "passwordHash"=$1 WHERE id=$2`, [hashed, consumed.userId]);
+      if (!rowCount) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(`UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`, [consumed.userId]);
+    });
+    void createAuditLog({ companyId: 0, userId: consumed.userId, action: "password_reset_completed", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "audit reset"));
+    void emitEvent({ companyId: 0, branchId: 0, userId: consumed.userId, action: "auth.password.reset_completed", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "event reset"));
+    void notifyPasswordChanged(0, consumed.userId).catch((e) => logger.warn(e, "password-changed notice"));
+    res.json({ success: true, message: "تم تعيين كلمة المرور الجديدة. يمكنك تسجيل الدخول الآن." });
+  } catch (err) {
+    handleRouteError(err, res, "reset-password");
+  }
+});
+
+/**
+ * POST /auth/activate — consume an activation/invitation token and set the
+ * account's first password. Public + token-authenticated. Same single-use
+ * + revoke + notice flow as reset-password; accepts either purpose.
+ */
+router.post("/activate", loginLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = zodParse(tokenResetSchema.safeParse(req.body));
+    // Try invitation first, then activation — both grant first-password set.
+    const consumed =
+      (await consumeAuthToken({ rawToken: token, purpose: "invitation" })) ??
+      (await consumeAuthToken({ rawToken: token, purpose: "activation" }));
+    if (!consumed || !consumed.userId) {
+      throw new ForbiddenError("رابط التفعيل غير صالح أو منتهي الصلاحية. اطلب دعوة جديدة.");
+    }
+    const hashed = await hashPassword(newPassword);
+    await withTransaction(async (client) => {
+      const { rowCount } = await client.query(`UPDATE users SET "passwordHash"=$1, "isActive"=TRUE WHERE id=$2`, [hashed, consumed.userId]);
+      if (!rowCount) throw new NotFoundError("المستخدم غير موجود");
+      await client.query(`UPDATE refresh_tokens SET "revokedAt"=NOW() WHERE "userId"=$1 AND "revokedAt" IS NULL`, [consumed.userId]);
+    });
+    void createAuditLog({ companyId: 0, userId: consumed.userId, action: "account_activated", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "audit activate"));
+    void emitEvent({ companyId: 0, branchId: 0, userId: consumed.userId, action: "auth.account.activated", entity: "users", entityId: consumed.userId }).catch((e) => logger.warn(e, "event activate"));
+    res.json({ success: true, message: "تم تفعيل حسابك وتعيين كلمة المرور. يمكنك تسجيل الدخول الآن." });
+  } catch (err) {
+    handleRouteError(err, res, "activate");
   }
 });
 

@@ -39,10 +39,10 @@ describe("Menu cleanup — HR section restructure (HR-011)", () => {
   // The 9 canonical top-level labels from inventory §D.2.
   const canonicalLabels = [
     "لوحة الموارد البشرية",
-    "الموظفون",
+    "شؤون الموظفين",
     "النشاط والحضور",
     "الطلبات",
-    "الامتثال والجزاءات",
+    "المخالفات والجزاءات",
     "الأداء والتطوير",
     "الرواتب والمستحقات",
     "التقارير",

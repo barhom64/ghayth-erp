@@ -42,8 +42,14 @@ const createProjectSchema = z.object({
   description: z.string().optional().nullable(),
   clientId: z.coerce.number().optional().nullable(),
   managerId: z.coerce.number().optional().nullable(),
-  startDate: z.string().min(1, "تاريخ بداية المشروع مطلوب"),
-  endDate: z.string().min(1, "تاريخ نهاية المشروع مطلوب"),
+  // #institutional-link — dates were hard-required, but the inline
+  // quick-create dialog (the «+ مشروع جديد» in ProjectSelect, used by the
+  // employee-create institutional-link picker) only supplies name. Made
+  // optional here and defaulted in the handler so a minimal quick-create
+  // succeeds (today → +1 year, editable later); the full project-create
+  // page still enforces dates via its own client-side validation.
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
   budget: z.union([z.coerce.number(), z.string()]).optional().nullable(),
   status: z.string().optional(),
   phases: z.array(z.object({
@@ -418,11 +424,16 @@ router.post("/", authorize({ feature: "projects.list", action: "create" }), asyn
     if (!b.name || typeof b.name !== "string" || !b.name.trim()) {
       throw new ValidationError("اسم المشروع مطلوب", { field: "name", fix: "أدخل اسماً واضحاً للمشروع" });
     }
-    if (!b.startDate) {
-      throw new ValidationError("تاريخ بداية المشروع مطلوب", { field: "startDate", fix: "حدد تاريخ بداية المشروع" });
+    // #institutional-link — the inline quick-create («+ مشروع جديد» in the
+    // employee-link picker) supplies only a name. Default the dates to
+    // today → +1 year so a minimal create succeeds; the full project-create
+    // page always sends real dates (enforced client-side), so this default
+    // only ever applies to the lightweight inline path.
+    if (!b.startDate || !String(b.startDate).trim()) {
+      b.startDate = todayISO();
     }
-    if (!b.endDate) {
-      throw new ValidationError("تاريخ نهاية المشروع مطلوب", { field: "endDate", fix: "حدد تاريخ التسليم المخطط للمشروع" });
+    if (!b.endDate || !String(b.endDate).trim()) {
+      b.endDate = toDateISO(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000));
     }
     const startD = new Date(b.startDate);
     const endD = new Date(b.endDate);
@@ -2439,8 +2450,8 @@ router.post("/:id/close", authorize({ feature: "projects.list", action: "update"
     try {
       const teamRows = await rawQuery<{ employeeId: number }>(
         `SELECT DISTINCT pr."employeeId" FROM project_resources pr
-         WHERE pr."projectId" = $1 AND pr."employeeId" IS NOT NULL`,
-        [projectId]
+         WHERE pr."projectId" = $1 AND pr."companyId" = $2 AND pr."employeeId" IS NOT NULL`,
+        [projectId, scope.companyId]
       );
       const managerRow = await rawQuery<{ id: number }>(
         `SELECT ea.id FROM employee_assignments ea

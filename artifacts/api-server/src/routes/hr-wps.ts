@@ -489,8 +489,8 @@ router.post(
       // 3. Record skipped entries for the operator
       if (skipped.length > 0) {
         await rawQuery(
-          `UPDATE wps_runs SET "skippedEntries" = $1::jsonb WHERE id = $2`,
-          [JSON.stringify(skipped), wpsRunId],
+          `UPDATE wps_runs SET "skippedEntries" = $1::jsonb WHERE id = $2 AND "companyId" = $3`,
+          [JSON.stringify(skipped), wpsRunId, scope.companyId],
         );
       }
 

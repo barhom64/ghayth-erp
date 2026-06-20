@@ -268,7 +268,7 @@ export default function WarehouseProductDetail() {
       }
     />
     {product && id && (
-      <EntityEditDialog<ProductEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل المنتج"

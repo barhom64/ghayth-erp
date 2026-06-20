@@ -1,0 +1,245 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PROPOSED NEW WORKFLOW — .github/workflows/e2e.yml
+#
+# WHY a separate file lives in e2e/: the Replit GitHub connector token lacks the
+# `workflows` OAuth scope, so `.github/workflows/*` can NOT be pushed via the
+# sync scripts (see replit.md Gotchas). Create this workflow BY HAND on GitHub:
+# add a new file `.github/workflows/e2e.yml` (GitHub web UI "Add file" → paste
+# everything BELOW this header block), or push it from a machine whose token
+# carries the `workflows` scope.
+#
+# WHAT it does: boots a real stack (postgres + api-server + ghayth-erp frontend
+# behind a localhost:80 reverse proxy that mimics the Replit shared proxy) and
+# runs the Playwright e2e suite (`pnpm --filter @workspace/e2e test`) on every
+# push/PR to main. This closes the gap the e2e layer was deliberately kept out
+# of `guard.yml` for: guard.yml is pure static analysis with NO browser and NO
+# running services, so a UI regression — e.g. the admin infra-alert paging
+# screen (`e2e/tests/admin-infra-alert-paging-settings.spec.ts`) losing its
+# save path, perma-disabling its button, or breaking the reset-to-default
+# round-trip — currently ships unnoticed. The whole suite (paging spec + all
+# sibling persona/auth/dashboard specs) now runs here.
+#
+# WHY a SEPARATE workflow and not folded into guard.yml: guard.yml is
+# intentionally browser-free / fast and has a 30-min budget already spent on the
+# static + integration + operational-core gates. E2E needs Chromium + a built
+# frontend + two long-running services, which is the exact shape of the existing
+# audit-runtime.yml job — this workflow mirrors that boot sequence.
+#
+# Boot mirrors .github/workflows/audit-runtime.yml:
+#   1. postgres:16 service container (api-server self-applies migrations on
+#      startup, so no schema dump load is needed — an empty DB self-bootstraps).
+#   2. api-server bootstraps the test admin from ADMIN_EMAIL/ADMIN_PASSWORD;
+#      these match the e2e login defaults (admin@ghayth.com / Admin@123456 in
+#      e2e/tests/_helpers/login.ts), so `login(page)` authenticates.
+#   3. ghayth-erp is `vite build` → `vite preview` (the script is named `serve`).
+#   4. A tiny http-proxy on :80 routes /api → api-server (8080), everything else
+#      → the Vite preview (5173). The e2e config defaults E2E_BASE_URL /
+#      E2E_API_URL to http://localhost:80, so no per-spec URL override is needed.
+#
+# OUTPUTS (uploaded on failure): the Playwright HTML report + server logs.
+#
+# GATING: this job's pass/fail is the gate. To make a red run BLOCK merge, add
+# `e2e` to the main-protection ruleset's required status checks on GitHub (it is
+# NOT folded into the `guard` status — keep it independent so a slow/flaky e2e
+# run never silently blocks the fast guard lane). Until then it still surfaces
+# clearly as a failed check on the PR.
+# ─────────────────────────────────────────────────────────────────────────────
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    # 45-min budget (was 30). The 30-min cap was too tight ONLY because the
+    # browser-install step hung (see "Install Playwright Chromium" below); once
+    # that is fixed the real run is build(~2m)+install(~1m, 0 when cached)+
+    # suite(~3-5m). 45 mirrors audit-runtime.yml's headroom (60) more closely
+    # and leaves room for the retry(2) budget without ever silently capping.
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ghayth
+          POSTGRES_PASSWORD: ghayth
+          POSTGRES_DB: ghayth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://ghayth:ghayth@localhost:5432/ghayth
+      # api-server bootstraps this admin on a fresh DB; the values match the
+      # e2e login defaults in e2e/tests/_helpers/login.ts so login() works.
+      ADMIN_EMAIL: admin@ghayth.com
+      ADMIN_PASSWORD: Admin@123456
+      # auth.ts refuses to load with a JWT_SECRET shorter than 32 chars.
+      # CI-only value — never authenticates a production session.
+      JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
+      # NODE_ENV intentionally unset: `vite build` derives its own
+      # NODE_ENV=production internally (see audit-runtime.yml Task #404 note).
+      HUSKY: '0'
+      # vite.config.ts requires BASE_PATH at build time (normally injected by
+      # the Replit workflow runner). PORT is set per-step, not globally, so each
+      # service binds its own port.
+      BASE_PATH: '/'
+      # ghayth-erp bundles ~1.4MB of vendor code; give Node enough heap so
+      # minification doesn't OOM on the runner.
+      NODE_OPTIONS: '--max-old-space-size=4096'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        # Skips the ~170MB Chromium download on re-runs. Keyed on the pinned
+        # Playwright version so a version bump busts the cache automatically.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-1.59.1
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright Chromium
+        # REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE is unset in CI, so the e2e
+        # config falls back to Playwright's own managed browser.
+        #
+        # ⚠️ INCIDENT FIX (2026-06-19): the install-browsers script previously
+        # ran `playwright install --with-deps chromium`. The `--with-deps`
+        # path shells out to `apt-get` and HUNG for 29m on a GitHub-hosted
+        # ubuntu-latest runner — the job was SIGKILL'd at the 30-min cap and
+        # the Playwright suite NEVER RAN (proven empirically: the run's
+        # "Install Playwright browsers" step = 29.15m / cancelled, "Run
+        # Playwright tests" = skipped). The script now runs
+        # `playwright install chromium` WITHOUT `--with-deps`: the
+        # ubuntu-latest image already ships the Chromium runtime libraries
+        # (the same image audit-runtime.yml runs headless Chromium on), so the
+        # apt step is unnecessary. A step-level timeout makes any future
+        # install stall fail FAST and visibly instead of eating the whole job.
+        timeout-minutes: 10
+        run: pnpm --filter @workspace/e2e run install-browsers
+
+      - name: Build ghayth-erp frontend
+        # PORT is read by vite.config.ts at build time but doesn't bind a
+        # socket; any value satisfies the assertion.
+        env:
+          PORT: '5173'
+        run: pnpm --filter @workspace/ghayth-erp run build
+
+      - name: Start api-server
+        env:
+          PORT: '8080'
+        run: |
+          pnpm --filter @workspace/api-server start > /tmp/api-server.log 2>&1 &
+          echo $! > /tmp/api-server.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/api/healthz >/dev/null 2>&1; then
+              echo "api-server up"; break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/healthz || (echo "api-server failed to start"; tail -200 /tmp/api-server.log; exit 1)
+
+      - name: Start ghayth-erp (preview)
+        env:
+          # The vite preview script in artifacts/ghayth-erp/package.json is
+          # named `serve` (not `preview`). vite preview honours PORT.
+          PORT: '5173'
+        run: |
+          pnpm --filter @workspace/ghayth-erp run serve > /tmp/ghayth-erp.log 2>&1 &
+          echo $! > /tmp/ghayth-erp.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:5173/ >/dev/null 2>&1; then
+              echo "ghayth-erp up"; break
+            fi
+            sleep 2
+          done
+          curl -fsS http://localhost:5173/ >/dev/null || (echo "ghayth-erp failed to start"; tail -200 /tmp/ghayth-erp.log; exit 1)
+
+      - name: Start reverse proxy (api on /api, frontend on /)
+        run: |
+          # Mimic the Replit shared proxy: route /api/* to api-server (8080)
+          # and everything else to the Vite preview (5173) on localhost:80.
+          npm install -g http-proxy@1.18.1
+          node -e "
+            const http = require('http');
+            const httpProxy = require('http-proxy');
+            const api = httpProxy.createProxyServer({ target: 'http://localhost:8080' });
+            const fe  = httpProxy.createProxyServer({ target: 'http://localhost:5173' });
+            http.createServer((req, res) => {
+              if (req.url.startsWith('/api')) return api.web(req, res, {}, e => { res.statusCode = 502; res.end(String(e)); });
+              return fe.web(req, res, {}, e => { res.statusCode = 502; res.end(String(e)); });
+            }).listen(80, () => console.log('proxy on :80'));
+          " > /tmp/proxy.log 2>&1 &
+          echo $! > /tmp/proxy.pid
+          sleep 2
+          curl -fsS http://localhost/api/healthz || (echo "proxy failed"; tail -200 /tmp/proxy.log; exit 1)
+
+      - name: Run e2e suite
+        # CI is set by GitHub Actions, so the e2e config enables retries(2),
+        # the github + html reporters, and workers(1). Single-worker is
+        # deliberate: every persona spec logs in as the SAME admin account and
+        # the server rotates refresh tokens per-user, so two parallel workers
+        # invalidate each other's session mid-test (see the workers note in
+        # playwright.config.ts). Serializing trades wall-clock for determinism —
+        # the full suite still finishes well inside the 30-min budget.
+        run: pnpm --filter @workspace/e2e test
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          if-no-files-found: warn
+
+      - name: Upload Playwright traces/screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: e2e/test-results/
+          if-no-files-found: warn
+
+      - name: Tail server logs on failure
+        if: failure()
+        run: |
+          echo "=== api-server.log (tail) ==="; tail -200 /tmp/api-server.log || true
+          echo "=== ghayth-erp.log (tail) ==="; tail -200 /tmp/ghayth-erp.log || true
+          echo "=== proxy.log (tail) ===";       tail -200 /tmp/proxy.log     || true
+
+      - name: Stop services
+        if: always()
+        run: |
+          for f in /tmp/api-server.pid /tmp/ghayth-erp.pid /tmp/proxy.pid; do
+            [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+          done

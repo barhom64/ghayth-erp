@@ -58,7 +58,7 @@ export function FinanceTabsNav() {
           const active = isActive(tab, location);
           const Icon = tab.icon;
           return (
-            <Link key={tab.href} href={tab.href}>
+            <Link key={tab.href} href={tab.href} asChild>
               <a
                 className={cn(
                   "inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
@@ -98,7 +98,7 @@ export function FinanceTabsNav() {
                 const active = isActive(tab, location);
                 const Icon = tab.icon;
                 return (
-                  <Link key={tab.href} href={tab.href}>
+                  <Link key={tab.href} href={tab.href} asChild>
                     <a
                       onClick={() => setMoreOpen(false)}
                       className={cn(

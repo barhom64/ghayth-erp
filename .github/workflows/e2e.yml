@@ -1,206 +1,254 @@
-# E2E (Playwright) workflow
-#
-# Runs the Playwright spec files under e2e/tests/ against a freshly-booted
-# stack:
-#   1. postgres:16 service (matches db/schema.sql)
-#   2. api-server built and started on port 8080
-#   3. ghayth-erp frontend built and served on port 5173
-#
-# The guard.yml workflow already covers unit / golden-path / typecheck.
-# This workflow is the UI-level regression net — it catches things like
-# "the dashboard now throws on first paint" that HTTP tests miss.
-#
-# Designed to be opt-in for now via workflow_dispatch + the e2e label, so
-# it doesn't block every PR while the Playwright suite is still small.
-# Promote to `on: pull_request` once the suite stabilises.
-
 name: e2e
 
 on:
-  workflow_dispatch:
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
-  playwright:
-    # Run on PRs only when the `e2e` label is present, plus all pushes to
-    # main and manual dispatches. The label gate keeps default PR latency
-    # low — flip to `if: true` to make every PR run E2E.
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      || github.event_name == 'push'
-      || contains(github.event.pull_request.labels.*.name, 'e2e')
+  e2e:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45-min budget (was 30). The 30-min cap was too tight ONLY because the
+    # browser-install step hung (see "Install Playwright Chromium" below); once
+    # that is fixed the real run is build(~2m)+install(~1m, 0 when cached)+
+    # suite(~3-5m). 45 mirrors audit-runtime.yml's headroom (60) more closely
+    # and leaves room for the retry(2) budget without ever silently capping.
+    timeout-minutes: 45
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16
         env:
-          POSTGRES_DB: ghayth_erp
-          POSTGRES_USER: ghayth_erp
-          POSTGRES_PASSWORD: ghayth_erp
+          POSTGRES_USER: ghayth
+          POSTGRES_PASSWORD: ghayth
+          POSTGRES_DB: ghayth
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U ghayth_erp -d ghayth_erp"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
-      DATABASE_URL: postgres://ghayth_erp:ghayth_erp@localhost:5432/ghayth_erp
-      JWT_SECRET: ci-test-secret-not-for-prod-use-64-chars-of-padding-padding-pad
-      FIELD_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
-      SECRETS_ENCRYPTION_KEY: 1111111111111111111111111111111111111111111111111111111111111111
-      NODE_ENV: development
-      CORS_ORIGINS: http://localhost:5173
-      SEED_DEMO_DATA: 'true'
-      # Frontend build needs these at config-eval time.
-      BASE_PATH: /
-      # E2E config picks these up.
-      E2E_BASE_URL: http://localhost:5173
-      E2E_API_URL: http://localhost:8080
-      E2E_USER_EMAIL: owner@local.test
-      E2E_USER_PASSWORD: Test1234!
+      DATABASE_URL: postgres://ghayth:ghayth@localhost:5432/ghayth
+      # api-server bootstraps this admin on a fresh DB; the values match the
+      # e2e login defaults in e2e/tests/_helpers/login.ts so login() works.
+      ADMIN_EMAIL: admin@ghayth.com
+      ADMIN_PASSWORD: Admin@123456
+      # auth.ts refuses to load with a JWT_SECRET shorter than 32 chars.
+      # CI-only value — never authenticates a production session.
+      JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
+      # NODE_ENV intentionally unset: `vite build` derives its own
+      # NODE_ENV=production internally (see audit-runtime.yml Task #404 note).
+      HUSKY: '0'
+      # vite.config.ts requires BASE_PATH at build time (normally injected by
+      # the Replit workflow runner). PORT is set per-step, not globally, so each
+      # service binds its own port.
+      BASE_PATH: '/'
+      # ghayth-erp bundles ~1.4MB of vendor code; give Node enough heap so
+      # minification doesn't OOM on the runner.
+      NODE_OPTIONS: '--max-old-space-size=4096'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.33.0
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: pnpm
+          node-version: '22'
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Load DB schema
-        run: |
-          set -ex
-          psql --version
-          psql "$DATABASE_URL" -c "SELECT version();"
-          psql "$DATABASE_URL" -f db/schema.sql
-          echo "::notice::schema load OK — $(psql -tA "$DATABASE_URL" -c "SELECT count(*) FROM pg_tables WHERE schemaname='public'") tables"
+      - name: Cache Playwright browsers
+        # Skips the ~170MB Chromium download on re-runs. Keyed on the pinned
+        # Playwright version so a version bump busts the cache automatically.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-1.59.1
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright Chromium
+        # REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE is unset in CI, so the e2e
+        # config falls back to Playwright's own managed browser.
+        #
+        # ⚠️ INCIDENT FIX (2026-06-19): the install-browsers script previously
+        # ran `playwright install --with-deps chromium`. The `--with-deps`
+        # path shells out to `apt-get` and HUNG for 29m on a GitHub-hosted
+        # ubuntu-latest runner — the job was SIGKILL'd at the 30-min cap and
+        # the Playwright suite NEVER RAN (proven empirically: the run's
+        # "Install Playwright browsers" step = 29.15m / cancelled, "Run
+        # Playwright tests" = skipped). The script now runs
+        # `playwright install chromium` WITHOUT `--with-deps`: the
+        # ubuntu-latest image already ships the Chromium runtime libraries
+        # (the same image audit-runtime.yml runs headless Chromium on), so the
+        # apt step is unnecessary. A step-level timeout makes any future
+        # install stall fail FAST and visibly instead of eating the whole job.
+        timeout-minutes: 10
+        run: pnpm --filter @workspace/e2e run install-browsers
+
+      - name: Build ghayth-erp frontend
+        # PORT is read by vite.config.ts at build time but doesn't bind a
+        # socket; any value satisfies the assertion.
         env:
-          PGPASSWORD: ghayth_erp
+          PORT: '5173'
+        run: pnpm --filter @workspace/ghayth-erp run build
 
       - name: Build api-server
-        run: |
-          set -ex
-          pnpm --filter @workspace/api-server build
-          ls -la artifacts/api-server/dist/index.mjs
-          echo "::notice::api-server build OK"
+        # The `start` script runs `node ./dist/index.mjs`, so the server MUST be
+        # built first — there is no build-on-start. Without this step the start
+        # step fails instantly with "Cannot find module dist/index.mjs" and the
+        # healthz poll below never succeeds (the job fails at the ~120s poll cap
+        # with the suite skipped). Verified locally: build (~5s) then a fresh
+        # empty-DB boot self-applies migrations and serves healthz 200 in ~19s.
+        run: pnpm --filter @workspace/api-server run build
 
-      - name: Build frontend
+      - name: Load DB schema
+        # The refactor dropped the schema load betting on an empty-DB self-migrate;
+        # but the app queries `system_settings` during boot and the boot-migration
+        # runner re-applies migrations that conflict with a fresh DB. Load the dump
+        # the same robust way guard.yml does:
+        #   - the `psql -f db/schema.sql` wrapper can't be used in CI — schema_pre.sql
+        #     opens with `\restrict <token>` which blocks the wrapper's later
+        #     `\ir schema_post.sql`, leaving FKs/indexes unloaded. So load the two
+        #     halves as separate (unrestricted) psql invocations.
+        #   - then mark every migration as already-applied so api-server's boot
+        #     runner doesn't re-run them on a baseline that already has the columns
+        #     ("relation roles does not exist" / duplicate-key on a loaded schema).
         run: |
-          set -ex
-          PORT=5173 BASE_PATH=/ pnpm --filter @workspace/ghayth-erp build
-          ls -la artifacts/ghayth-erp/dist/public/index.html
-          echo "::notice::frontend build OK"
-
-      - name: Install Playwright browsers
-        run: |
-          set -ex
-          pnpm --filter @workspace/e2e exec playwright install --with-deps chromium
-          echo "::notice::playwright browsers installed"
+          set -euo pipefail
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f db/schema_pre.sql
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=0 -q -f db/schema_post.sql > /tmp/schema_post.log 2>&1 || true
+          expected_fks=$(grep -c 'FOREIGN KEY' db/schema_post.sql)
+          actual_fks=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_constraint c JOIN pg_class r ON c.conrelid=r.oid JOIN pg_namespace n ON r.relnamespace=n.oid WHERE c.contype='f' AND n.nspname='public';")
+          echo "::notice::schema loaded — $actual_fks FKs (dump declares $expected_fks)"
+          if [ "$actual_fks" -lt "$expected_fks" ]; then echo "FK shortfall — schema_post.log:"; cat /tmp/schema_post.log; exit 1; fi
+          # NOTE: unlike guard.yml we do NOT pre-mark migrations as applied. The
+          # dump is a point-in-time baseline that lags newer migrations (e.g.
+          # `vendor_secrets.companyId`), so the booting api-server MUST run its
+          # idempotent migrations (ADD COLUMN IF NOT EXISTS / ON CONFLICT) on top
+          # of the loaded schema to add any post-dump columns the runtime queries.
 
       - name: Start api-server
+        env:
+          PORT: '8080'
         run: |
-          # The api-server bundle writes its log to stdout; redirect to file
-          # so the workflow log stays focused on test output.
-          PORT=8080 node artifacts/api-server/dist/index.mjs > api-server.log 2>&1 &
-          echo $! > api-server.pid
-          # Wait for healthz to respond before continuing.
+          pnpm --filter @workspace/api-server start > /tmp/api-server.log 2>&1 &
+          echo $! > /tmp/api-server.pid
           for i in $(seq 1 60); do
             if curl -fsS http://localhost:8080/api/healthz >/dev/null 2>&1; then
-              echo "api-server up after ${i}s"
-              exit 0
+              echo "api-server up"; break
             fi
-            sleep 1
+            sleep 2
           done
-          echo "api-server failed to start in 60s" >&2
-          cat api-server.log >&2
-          exit 1
+          curl -fsS http://localhost:8080/api/healthz || (echo "api-server failed to start"; tail -200 /tmp/api-server.log; exit 1)
 
-      - name: Start frontend
+      - name: Start ghayth-erp (preview)
+        env:
+          # The vite preview script in artifacts/ghayth-erp/package.json is
+          # named `serve` (not `preview`). vite preview honours PORT.
+          PORT: '5173'
         run: |
-          # Vite preview serves the dist/public bundle on the same port as
-          # the dev server, matching what the Playwright config expects.
-          PORT=5173 BASE_PATH=/ pnpm --filter @workspace/ghayth-erp serve > frontend.log 2>&1 &
-          echo $! > frontend.pid
+          pnpm --filter @workspace/ghayth-erp run serve > /tmp/ghayth-erp.log 2>&1 &
+          echo $! > /tmp/ghayth-erp.pid
           for i in $(seq 1 60); do
-            if curl -fsS http://localhost:5173 >/dev/null 2>&1; then
-              echo "frontend up after ${i}s"
-              exit 0
+            if curl -fsS http://localhost:5173/ >/dev/null 2>&1; then
+              echo "ghayth-erp up"; break
             fi
+            sleep 2
+          done
+          curl -fsS http://localhost:5173/ >/dev/null || (echo "ghayth-erp failed to start"; tail -200 /tmp/ghayth-erp.log; exit 1)
+
+      - name: Start reverse proxy (api on /api, frontend on /)
+        run: |
+          # Mimic the Replit shared proxy: route /api/* to api-server (8080)
+          # and everything else to the Vite preview (5173) on localhost:80.
+          # DEPENDENCY-FREE: uses only Node's built-in `http` module (no
+          # `npm install -g http-proxy` + NODE_PATH global-module resolution,
+          # which is what made this step error out before the suite ran).
+          #
+          # ⚠️ INCIDENT FIX (2026-06-19): port 80 is privileged and the runner
+          # user is non-root, so binding it directly threw
+          # `listen EACCES: permission denied 0.0.0.0:80` — the proxy crashed on
+          # listen, `curl localhost:80` failed, and the Playwright suite NEVER
+          # ran (api-server + frontend were up; only the proxy died). Lower the
+          # unprivileged-port floor so the non-root proxy can bind :80
+          # (GitHub-hosted runners allow passwordless `sudo sysctl`).
+          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+          node -e '
+            const http = require("http");
+            const pipe = (req, res, port) => {
+              const p = http.request(
+                { host: "127.0.0.1", port, path: req.url, method: req.method, headers: req.headers },
+                (pr) => { res.writeHead(pr.statusCode || 502, pr.headers); pr.pipe(res); }
+              );
+              p.on("error", (e) => { res.statusCode = 502; res.end(String(e)); });
+              req.pipe(p);
+            };
+            const srv = http.createServer((req, res) => pipe(req, res, req.url.startsWith("/api") ? 8080 : 5173));
+            // Fail FAST and VISIBLY on a listen error (e.g. EACCES/EADDRINUSE)
+            // instead of an unhandled "error" event that crashes opaquely.
+            srv.on("error", (e) => { console.error("proxy listen error:", e); process.exit(1); });
+            srv.listen(80, () => console.log("proxy on :80"));
+          ' > /tmp/proxy.log 2>&1 &
+          echo $! > /tmp/proxy.pid
+          for i in $(seq 1 15); do
+            if curl -fsS http://localhost/api/healthz >/dev/null 2>&1; then echo "proxy up"; break; fi
             sleep 1
           done
-          echo "frontend failed to start in 60s" >&2
-          cat frontend.log >&2
-          exit 1
+          curl -fsS http://localhost/api/healthz || (echo "proxy failed"; tail -200 /tmp/proxy.log; exit 1)
 
-      - name: Run Playwright tests
+      - name: Run e2e suite
+        # CI is set by GitHub Actions, so the e2e config enables retries(2),
+        # the github + html reporters, and workers(1). Single-worker is
+        # deliberate: every persona spec logs in as the SAME admin account and
+        # the server rotates refresh tokens per-user, so two parallel workers
+        # invalidate each other's session mid-test (see the workers note in
+        # playwright.config.ts). Serializing trades wall-clock for determinism —
+        # the full suite still finishes well inside the 30-min budget.
         run: pnpm --filter @workspace/e2e test
 
-      - name: Diagnostics on failure
-        if: failure()
-        run: |
-          echo "::group::process list"
-          ps -ef | grep -E "node|vite|psql" | grep -v grep || true
-          echo "::endgroup::"
-          echo "::group::tail api-server.log"
-          tail -200 api-server.log 2>/dev/null || echo "(no api-server.log)"
-          echo "::endgroup::"
-          echo "::group::tail frontend.log"
-          tail -200 frontend.log 2>/dev/null || echo "(no frontend.log)"
-          echo "::endgroup::"
-          echo "::group::dist contents"
-          ls -la artifacts/api-server/dist 2>/dev/null | head -20 || echo "(no api-server dist)"
-          ls -la artifacts/ghayth-erp/dist/public 2>/dev/null | head -20 || echo "(no frontend dist)"
-          echo "::endgroup::"
-          echo "::group::playwright report root"
-          ls -la e2e/playwright-report 2>/dev/null | head -20 || echo "(no playwright-report)"
-          ls -la e2e/test-results 2>/dev/null | head -20 || echo "(no test-results)"
-          echo "::endgroup::"
-
-      - name: Upload Playwright report
+      - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: e2e/playwright-report/
-          retention-days: 14
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
-      - name: Upload server logs (on failure)
-        if: failure()
+      - name: Upload Playwright traces/screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: server-logs
-          path: |
-            api-server.log
-            frontend.log
-          retention-days: 7
-          if-no-files-found: ignore
+          name: playwright-test-results
+          path: e2e/test-results/
+          if-no-files-found: warn
 
-      - name: Tear down
+      - name: Tail server logs on failure
+        if: failure()
+        run: |
+          echo "=== api-server.log (tail) ==="; tail -200 /tmp/api-server.log || true
+          echo "=== ghayth-erp.log (tail) ==="; tail -200 /tmp/ghayth-erp.log || true
+          echo "=== proxy.log (tail) ===";       tail -200 /tmp/proxy.log     || true
+
+      - name: Stop services
         if: always()
         run: |
-          [ -f api-server.pid ] && kill "$(cat api-server.pid)" 2>/dev/null || true
-          [ -f frontend.pid ] && kill "$(cat frontend.pid)" 2>/dev/null || true
+          for f in /tmp/api-server.pid /tmp/ghayth-erp.pid /tmp/proxy.pid; do
+            [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+          done

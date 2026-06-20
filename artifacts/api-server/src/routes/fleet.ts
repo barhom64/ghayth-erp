@@ -2450,8 +2450,10 @@ router.post("/trips/:id/cancel", authorize({ feature: "fleet.trips", action: "up
         // accept/start stamps cleared; driverId/vehicleId are NOT NULL columns
         // so they linger as the last assignment until the order is re-notified
         // or reassigned via the assignment endpoint), its live navigation
-        // session is cancelled, and the booking line returns to "pending"
-        // (re-pickable). The booking itself is left unchanged — mirroring the
+        // session is cancelled, and the booking line returns to "open"
+        // (re-pickable; 'open' is the valid awaiting-dispatch booking-line
+        // state — 'pending' is a dispatch-ORDER status, not a line one).
+        // The booking itself is left unchanged — mirroring the
         // driver-decline flow. A silent no-op for ad-hoc trips or orders already
         // terminal. Runs on the transition client → atomic with the cancel.
         const tripSourceKey = typeof row.sourceKey === "string" ? row.sourceKey : "";
@@ -2483,7 +2485,7 @@ router.post("/trips/:id/cancel", authorize({ feature: "fleet.trips", action: "up
             );
             await client.query(
               `UPDATE transport_booking_lines
-                  SET status = 'pending', "updatedAt" = NOW()
+                  SET status = 'open', "updatedAt" = NOW()
                 WHERE id = $1 AND "companyId" = $2`,
               [disp.bookingLineId, scope.companyId],
             );
@@ -4209,18 +4211,30 @@ router.post("/traffic-violations", authorize({ feature: "fleet.vehicles", action
     if (!vehicleRow) {
       throw new ValidationError("المركبة غير موجودة", { field: "vehicleId", fix: "اختر مركبة مسجلة" });
     }
+    let driverEmployeeId: number | null = null;
     if (b.driverId) {
-      const [driverRow] = await rawQuery<Record<string, unknown>>(
-        `SELECT id FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      const [driverRow] = await rawQuery<{ id: number; employeeId: number | null }>(
+        `SELECT id, "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
         [b.driverId, scope.companyId]
       );
       if (!driverRow) {
         throw new ValidationError("السائق غير موجود", { field: "driverId", fix: "اختر سائقاً مسجلاً في النظام" });
       }
+      driverEmployeeId = driverRow.employeeId ?? null;
     }
     // "company" (default) = company pays the fine → GL expense.
     // "driver" = fine liability shifted to driver → payroll deduction in current period.
     const liability: 'company' | 'driver' = b.liability === 'driver' ? 'driver' : 'company';
+    // Guard the silent-drop: a driver-liability fine can only be docked if the
+    // driver is linked to an employee record. Without this the deduction step
+    // skips quietly — no GL (liability isn't company), no payroll row, no error
+    // — and the fine vanishes from both ledgers. Fail fast at validation time.
+    if (liability === 'driver' && fineAmount > 0 && driverEmployeeId == null) {
+      throw new ValidationError(
+        "السائق غير مرتبط بسجل موظف — لا يمكن حسم الغرامة من راتبه",
+        { field: "driverId", fix: "اربط السائق بموظف، أو غيّر المسؤولية إلى «الشركة» لترحيلها كمصروف." }
+      );
+    }
 
     const { insertId } = await rawExecute(
       `INSERT INTO fleet_traffic_violations

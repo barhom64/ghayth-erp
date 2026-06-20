@@ -303,7 +303,7 @@ export default function AdminSystemRegistry() {
               {pages.length > 0 && (
                 <Card>
                   <CardContent className="p-0">
-                    <DataTable<any>
+                    <DataTable
                       data={pages}
                       rowKey={(p) => p.path}
                       noToolbar
@@ -490,8 +490,8 @@ export default function AdminSystemRegistry() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
-                      <DataTable<any>
-                        data={filteredGaps}
+                      <DataTable
+                        data={filteredGaps as any[]}
                         rowKey={(_g, i) => String(i)}
                         noToolbar
                         pageSize={0}

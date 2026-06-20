@@ -1,5 +1,5 @@
 /**
- * PR-10 (#2077) — Closure Gate: «الامتثال والجزاءات» link gated
+ * PR-10 (#2077) — Closure Gate: «المخالفات والجزاءات» link gated
  * behind explicit discipline/violations grants.
  *
  * The product rule is «لا تظهر للمستخدم شيئًا لا يستطيع فتحه». The
@@ -21,16 +21,16 @@ const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const NAV = readFileSync(
   join(REPO_ROOT, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"), "utf8");
 
-/** Slice the «الامتثال والجزاءات» group block from the registry. */
+/** Slice the «المخالفات والجزاءات» group block from the registry. */
 function complianceGroup(): string {
-  const start = NAV.indexOf('label: "الامتثال والجزاءات"');
+  const start = NAV.indexOf('label: "المخالفات والجزاءات"');
   expect(start, "compliance group not found in registry").toBeGreaterThan(-1);
   // Group block ends at the next `]},` after `children: [`.
   const end = NAV.indexOf("]},", start);
   return NAV.slice(start, end + 3);
 }
 
-describe("PR-10 (#2077) — «الامتثال والجزاءات» gate", () => {
+describe("PR-10 (#2077) — «المخالفات والجزاءات» gate", () => {
   const block = complianceGroup();
 
   it("parent gate is permMode:any over the violations/discipline feature keys", () => {
@@ -59,7 +59,7 @@ describe("PR-10 (#2077) — «الامتثال والجزاءات» gate", () =>
 
   it("Saudization + WPS stay on their own perms (finance/payroll personas keep them)", () => {
     expect(block).toMatch(/السعودة \(نطاقات\)[\s\S]*perm: \["hr\.saudization:view","hr\.saudization:list"\]/);
-    expect(block).toMatch(/WPS \/ مدد \/ بنوك[\s\S]*perm: \["hr\.payroll\.wps:view","hr\.payroll\.wps:list"\]/);
+    expect(block).toMatch(/حماية الأجور \/ مدد \/ البنوك[\s\S]*perm: \["hr\.payroll\.wps:view","hr\.payroll\.wps:list"\]/);
   });
 
   it("group still routes at /hr/violations (registry path-doubling guard)", () => {

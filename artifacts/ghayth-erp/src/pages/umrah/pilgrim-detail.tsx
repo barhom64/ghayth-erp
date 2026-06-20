@@ -119,6 +119,11 @@ export default function PilgrimDetail() {
   const agents = asList(agentsResp?.data || agentsResp) as Array<{ id: number; name: string }>;
   const { data: subAgentsResp } = useApiQuery<any>(["umrah-sub-agents"], "/umrah/sub-agents");
   const subAgents = asList(subAgentsResp?.data || subAgentsResp) as Array<{ id: number; name: string }>;
+  // U-15-P3 — هوتل picker على edit dialog (matches pilgrim-create). يحفظ
+  // اسم الفندق كنص حر فيهديك حقل hotelName موجود schema-level. التحويل
+  // إلى hotelId-FK مؤجل إلى U-15-P6.
+  const { data: hotelsResp } = useApiQuery<any>(["umrah-hotels"], "/umrah/hotels");
+  const hotels = asList(hotelsResp?.data || hotelsResp) as Array<{ id: number; name: string; city?: string }>;
 
   // DELETE /umrah/pilgrims/:id soft-delete. Edit happens through the
   // status select above, so we only expose delete here.
@@ -501,7 +506,7 @@ export default function PilgrimDetail() {
       />
     )}
     {id && data && (
-      <EntityEditDialog<PilgrimEditForm>
+      <EntityEditDialog
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title="تعديل بيانات المعتمر"
@@ -532,14 +537,22 @@ export default function PilgrimDetail() {
             ]}
           />
           <FormTextField name="phone" label="الهاتف" />
-          <FormTextField name="hotelName" label="الفندق" />
+          <FormSelectField
+            name="hotelName"
+            label="الفندق"
+            options={hotels.map((h) => ({
+              value: h.name,
+              label: h.city ? `${h.name} — ${h.city}` : h.name,
+            }))}
+            placeholder="اختر الفندق"
+          />
           <FormTextField name="roomNumber" label="رقم الغرفة" />
           <FormTextareaField name="notes" label="ملاحظات" className="md:col-span-2" />
         </FormGrid>
       </EntityEditDialog>
     )}
     {id && data && (
-      <EntityEditDialog<PilgrimReassignForm>
+      <EntityEditDialog
         open={reassignOpen}
         onClose={() => setReassignOpen(false)}
         title="إعادة إسناد المعتمر"

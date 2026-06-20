@@ -50,6 +50,8 @@ interface SearchableSelectProps {
    * misses; cmdk still filters the merged options client-side.
    */
   onSearchChange?: (text: string) => void;
+  /** Optional `data-testid` forwarded to the trigger button (testability). */
+  testId?: string;
 }
 
 export function SearchableSelect({
@@ -64,6 +66,7 @@ export function SearchableSelect({
   onCreateNew,
   createNewLabel = "إضافة جديد",
   onSearchChange,
+  testId,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.value === value);
@@ -76,6 +79,7 @@ export function SearchableSelect({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
+          data-testid={testId}
           className={cn(
             "w-full justify-between font-normal h-9",
             !selected && "text-muted-foreground",

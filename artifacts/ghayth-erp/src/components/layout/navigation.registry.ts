@@ -196,6 +196,7 @@ export const allNavSections: NavSection[] = [
         // HR-REV-2 §4.6 — «تقارير الحضور» تعيش في مجموعة «التقارير» الموحّدة
         // (التي صُمِّمت لتجميع تقارير الحضور/الأداء/الرواتب)؛ أُزيل المكرّر هنا.
         { label: "التتبع الحي (الميداني)", path: "/hr/attendance/field-tracking", icon: MapPin, subKey: "attendance" },
+        { label: "سياسات التتبع", path: "/hr/attendance/tracking-policies", icon: ShieldCheck, subKey: "attendance" },
         { label: "تسجيل بالرمز المصوّر", path: "/hr/attendance/qr-scanner", icon: QrCode, subKey: "attendance" },
         { label: "جدول الورديات", path: "/hr/shifts", icon: CalendarClock, subKey: "shifts" },
         // HR-REV — أُزيل «إدارة الورديات» المكرّر: /hr/shifts/management يرتدّ إلى
@@ -613,6 +614,9 @@ export const allNavSections: NavSection[] = [
           // #2079 TA-T18-04 — قوالب الحجوزات المتكررة (cargo recurring).
           { label: "قوالب المسارات المتكررة", path: "/fleet/transport/route-patterns", icon: CalendarClock, perm: "fleet.bookings:list" },
           { label: "لوحة عمليات النقل", path: "/fleet/transport/ops-dashboard", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
+          // Control Tower — audit doc file 22 + #1812. One-shot fleet
+          // snapshot. Same RBAC scope as ops-dashboard.
+          { label: "برج المراقبة", path: "/fleet/transport/control-tower", icon: LayoutDashboard, perm: "fleet.dispatch:list" },
           // كانت orphan: صفحة مركّبة بلا مدخل في القائمة. طابور المحاسب لتسعير
           // وفوترة بنود خدمة النقل — GET /transport/service-lines مبوّب على
           // finance.transport_billing:list (إجراءات التسعير/الفوترة على :approve).
@@ -864,6 +868,7 @@ export const allNavSections: NavSection[] = [
       { label: "التواصل", path: "/inbox", icon: Mail, module: "comms", children: [
         { label: "صندوقي الموحّد", path: "/inbox", icon: Mail },
         { label: "الصناديق المتصلة", path: "/mailboxes", icon: Send },
+        { label: "بريد الشركة", path: "/company-email", icon: Mail, perm: "admin:update" },
         { label: "الصادر والوارد", path: "/correspondence", icon: FileText },
         // Phase 5: communications dashboard is admin-only — non-managers
         // get redirected to /inbox automatically. Sidebar hides it for
@@ -980,7 +985,11 @@ export const allNavSections: NavSection[] = [
       { label: "الطباعة والمطبوعات", path: "/reports/print-log", icon: Printer, minRoleLevel: 50, children: [
         { label: "سجل المطبوعات", path: "/reports/print-log", icon: Printer, module: "bi", minRoleLevel: 50, perm: "print_jobs:read" },
         { label: "موافقات إعادة الطباعة", path: "/manager-board/reprint-approvals", icon: Printer, minRoleLevel: 50, perm: "print:reprint:approve" },
-        { label: "قوالب الطباعة", path: "/settings/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
+        // مدخلان لنفس الصفحة (/admin/print-templates) لجمهورَي صلاحية مختلفين:
+        // مستخدمو الإعدادات (L70 + templates:read) والمدراء (L90 + admin:*). مدخل
+        // الإعدادات يهبط مباشرة بدل المرور عبر redirect المسار /settings/print-templates
+        // (يبقى ذلك المسار مُركَّبًا في settingsRoutes للروابط القديمة).
+        { label: "قوالب الطباعة", path: "/admin/print-templates", icon: Printer, module: "settings", minRoleLevel: 70, perm: "templates:read" },
         { label: "قوالب الطباعة (الإدارة)", path: "/admin/print-templates", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
         { label: "تشخيص الطباعة", path: "/admin/print-diagnostics", icon: Printer, module: "admin", minRoleLevel: 90, perm: ["admin:list", "admin:view"], permMode: "any" },
       ]},

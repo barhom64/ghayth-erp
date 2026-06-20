@@ -2918,8 +2918,8 @@ router.get("/tenants/:id", authorize({ feature: "properties.tenants", action: "v
     const contractIds = contracts.map((c) => c.id);
     const payments = contractIds.length > 0
       ? await rawQuery<Record<string, unknown>>(
-          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
-          [contractIds]
+          `SELECT rp.*, c."tenantName", u."unitNumber" FROM rent_payments rp JOIN rental_contracts c ON c.id=rp."contractId" AND c."companyId" = $2 LEFT JOIN property_units u ON u.id=c."unitId" AND u."deletedAt" IS NULL WHERE rp."contractId" = ANY($1::int[]) ORDER BY rp."dueDate" DESC LIMIT 500`,
+          [contractIds, scope.companyId]
         )
       : [];
 

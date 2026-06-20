@@ -277,7 +277,7 @@ export default function TransportOpsDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
                     <thead className="bg-surface-subtle text-xs text-muted-foreground">
                       <tr>
                         <th className="px-3 py-2 text-start">المركبة</th>
@@ -317,7 +317,7 @@ export default function TransportOpsDashboard() {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table></div>
                 </CardContent>
               </Card>
             </>
@@ -407,7 +407,7 @@ export default function TransportOpsDashboard() {
               </div>
             ) : (
               dash.late.map((t) => (
-                <Link key={t.id} href={`/fleet/transport/bookings/${t.bookingId}`}>
+                <Link key={t.id} href={`/fleet/transport/bookings/${t.bookingId}`} asChild>
                   <a className="block p-2 rounded-md border bg-rose-50 border-rose-200 hover:bg-rose-100 text-xs">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-mono">حجز #{t.bookingNumber}</span>
@@ -464,7 +464,7 @@ export default function TransportOpsDashboard() {
               </div>
             ) : (
               dash.unassigned.map((b) => (
-                <Link key={b.id} href={`/fleet/transport/bookings/${b.id}`}>
+                <Link key={b.id} href={`/fleet/transport/bookings/${b.id}`} asChild>
                   <a className="block p-2 rounded-md border bg-status-warning-surface border-status-warning-foreground/30 hover:bg-status-warning-surface/80 text-xs">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-mono">حجز #{b.bookingNumber}</span>

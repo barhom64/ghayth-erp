@@ -463,7 +463,7 @@ financeAlgorithmsRouter.get("/customer-360/:clientId", authorize({ feature: "fin
       rawQuery<{ ref: string; date: string; amount: string }>(
         `SELECT je.ref, je."createdAt" AS date, COALESCE(SUM(jl.debit), 0)::text AS amount
            FROM journal_entries je
-           JOIN journal_lines jl ON jl."journalId" = je.id AND jl."clientId" = $2
+           JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL AND jl."clientId" = $2
           WHERE je."companyId" = $1
             AND je."deletedAt" IS NULL
             AND je.type = 'payment'
@@ -588,7 +588,7 @@ financeAlgorithmsRouter.get("/ap-aging", authorize({ feature: "finance.algorithm
          NULL::text AS "supplierPhone",
          NULL::text AS "supplierEmail"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je."companyId" = $2
          AND je."deletedAt" IS NULL
          AND je."balancesApplied" = true
@@ -760,7 +760,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/auto-match", authorize({ feat
       const [jLine] = await rawQuery<Record<string, unknown>>(
         `SELECT jl.id, je."createdAt"
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId"
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
          WHERE je."companyId" = $1
            AND jl."accountCode" = $2
            AND je."deletedAt" IS NULL
@@ -827,8 +827,8 @@ financeAlgorithmsRouter.get("/bank-reconciliation/:batchId", authorize({ feature
               jl.debit AS "jeDebit", jl.credit AS "jeCredit",
               je.ref AS "jeRef", je.description AS "jeDescription", je."createdAt" AS "jeDate"
        FROM bank_statements bs
-       LEFT JOIN journal_lines jl ON jl.id = bs."matchedJournalLineId"
-       LEFT JOIN journal_entries je ON je.id = jl."journalId"
+       LEFT JOIN journal_lines jl ON jl.id = bs."matchedJournalLineId" AND jl."deletedAt" IS NULL
+       LEFT JOIN journal_entries je ON je.id = jl."journalId" AND je."deletedAt" IS NULL
        WHERE bs."companyId" = $1 AND bs."importBatchId" = $2
        ORDER BY bs."statementDate" ASC
        LIMIT 500`,
@@ -892,7 +892,7 @@ financeAlgorithmsRouter.post("/bank-reconciliation/manual-match", authorize({ fe
 
     const [jl] = await rawQuery<Record<string, unknown>>(
       `SELECT jl.id FROM journal_lines jl
-       JOIN journal_entries je ON je.id = jl."journalId"
+       JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL
        WHERE jl.id=$1 AND je."companyId"=$2
          AND je."deletedAt" IS NULL
          AND jl."accountCode"=$3
@@ -1007,7 +1007,7 @@ financeAlgorithmsRouter.get("/journal-lines/search", authorize({ feature: "finan
       `SELECT jl.id, jl."accountCode", jl.debit, jl.credit, jl.description,
               je.ref AS "jeRef", je.description AS "jeDescription", je."createdAt" AS "jeDate"
        FROM journal_lines jl
-       JOIN journal_entries je ON je.id=jl."journalId"
+       JOIN journal_entries je ON je.id=jl."journalId" AND jl."deletedAt" IS NULL
        WHERE ${conditions.join(" AND ")}
        ORDER BY je."createdAt" DESC
        LIMIT $${params.length}`,
@@ -2065,8 +2065,8 @@ financeAlgorithmsRouter.get("/cip/:id", authorize({ feature: "finance.algorithms
     );
     if (!cip) throw new NotFoundError("مشروع CIP غير موجود");
     const costs = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM cip_costs WHERE "cipId"=$1 AND "deletedAt" IS NULL ORDER BY "costDate" ASC, id ASC`,
-      [id]
+      `SELECT * FROM cip_costs WHERE "cipId"=$1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "costDate" ASC, id ASC`,
+      [id, scope.companyId]
     );
     res.json({ ...cip, costs });
   } catch (err) {
@@ -2114,7 +2114,7 @@ financeAlgorithmsRouter.post("/cip", authorize({ feature: "finance.algorithms", 
     }).catch((e) => logger.error(e, "cip create audit failed"));
 
     const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT * FROM construction_in_progress WHERE id=$1 AND "companyId"=$2`,
+      `SELECT * FROM construction_in_progress WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
       [insertId, scope.companyId]
     );
     res.status(201).json(row);
@@ -2190,6 +2190,15 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
       );
     });
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.cip.cost_added",
+      entity: "construction_in_progress",
+      entityId: id,
+      after: { costId, journalEntryId: journalId, amount: amt, costDate: b.costDate },
+    }).catch((e) => logger.error(e, "finance-algorithms cip-cost audit failed"));
     res.status(201).json({ costId, journalEntryId: journalId, amount: amt, cipId: id });
   } catch (err) {
     handleRouteError(err, res, "Add CIP cost error:");
@@ -2654,7 +2663,7 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
        WHERE "companyId"=$1
          AND currency IS NOT NULL AND currency <> 'SAR'
          AND status <> 'paid' AND status <> 'cancelled'
-         AND COALESCE("deletedAt", NULL) IS NULL
+         AND "deletedAt" IS NULL
          AND "createdAt"::date <= $2::date`,
       [scope.companyId, periodEnd]
     );
@@ -2788,7 +2797,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       `SELECT id, ref, currency, "exchangeRate", total, "paidAmount"
        FROM invoices
        WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR'
-         AND status NOT IN ('paid','cancelled') AND COALESCE("deletedAt",NULL) IS NULL
+         AND status NOT IN ('paid','cancelled') AND "deletedAt" IS NULL
          AND "createdAt"::date <= $2::date`,
       [scope.companyId, periodEnd]
     );
@@ -3013,14 +3022,14 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithm
               SUM(CASE WHEN jl.debit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.debit ELSE 0 END) AS "cashIn",
               SUM(CASE WHEN jl.credit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.credit ELSE 0 END) AS "cashOut"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je."companyId" = $1
          AND je."deletedAt" IS NULL
          AND je."balancesApplied" = true
          AND je."createdAt" >= $2
          AND EXISTS (
            SELECT 1 FROM journal_lines jl2
-           WHERE jl2."journalId" = je.id AND (jl2."accountCode" LIKE '11%' OR jl2."accountCode" LIKE '12%')
+           WHERE jl2."journalId" = je.id AND jl2."deletedAt" IS NULL AND (jl2."accountCode" LIKE '11%' OR jl2."accountCode" LIKE '12%')
          )
        GROUP BY je.id
        ORDER BY je."createdAt" DESC
@@ -3033,7 +3042,7 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithm
               SUM(CASE WHEN jl.debit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.debit ELSE 0 END) AS "totalIn",
               SUM(CASE WHEN jl.credit > 0 AND (jl."accountCode" LIKE '11%' OR jl."accountCode" LIKE '12%') THEN jl.credit ELSE 0 END) AS "totalOut"
        FROM journal_entries je
-       JOIN journal_lines jl ON jl."journalId" = je.id
+       JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
        WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
          AND je."balancesApplied" = true
          AND je."createdAt" >= $2
@@ -3050,11 +3059,11 @@ financeAlgorithmsRouter.get("/treasury", authorize({ feature: "finance.algorithm
        FROM (
          SELECT je.id,
                 SUM(CASE WHEN jl.debit > 0 THEN jl.debit ELSE 0 END)
-                - COALESCE((SELECT SUM(jl2.credit) FROM journal_lines jl2 JOIN journal_entries je2 ON je2.id = jl2."journalId"
+                - COALESCE((SELECT SUM(jl2.credit) FROM journal_lines jl2 JOIN journal_entries je2 ON je2.id = jl2."journalId" AND jl2."deletedAt" IS NULL
                    WHERE je2."companyId" = $1 AND je2."deletedAt" IS NULL AND je2."balancesApplied" = true AND je2.ref LIKE 'CUSTODY-SETTLE%'
                    AND je2.description LIKE '%' || je.ref || '%'), 0) AS remaining
          FROM journal_entries je
-         JOIN journal_lines jl ON jl."journalId" = je.id
+         JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL
          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
            AND je."balancesApplied" = true
            AND je.ref LIKE 'CUSTODY-%' AND je.ref NOT LIKE 'CUSTODY-SETTLE%'
@@ -3129,11 +3138,11 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
       rawQuery<Record<string, unknown>>(
         `SELECT sa.*, ca.code AS "accountCode", ca.name AS "accountName", ca.type AS "accountType",
                 COALESCE((SELECT SUM(jl.debit) - SUM(jl.credit) FROM journal_lines jl
-                  JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+                  JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL AND je."companyId" = $1
                   WHERE jl."accountCode" = ca.code AND je."balancesApplied" = true AND je."deletedAt" IS NULL), 0) AS balance
          FROM subsidiary_accounts sa
          JOIN chart_of_accounts ca ON ca.id = sa."accountId"
-         WHERE sa."companyId" = $1 AND sa."entityType" = $2 AND sa."entityId" = $3`,
+         WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL AND sa."entityType" = $2 AND sa."entityId" = $3`,
         [cid, entityType, eid]
       ),
 
@@ -3143,7 +3152,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
                 jl."accountCode", ca.name AS "accountName",
                 jl.debit, jl.credit
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
          WHERE ${safeCol} = $2 AND je."deletedAt" IS NULL
          ORDER BY je."createdAt" DESC
@@ -3158,7 +3167,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
                 SUM(jl.debit) - SUM(jl.credit) AS "netAmount",
                 COUNT(*) AS "transactionCount"
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL AND je."companyId" = $1
          LEFT JOIN chart_of_accounts ca ON ca.code = jl."accountCode" AND ca."companyId" = $1
          WHERE ${safeCol} = $2 AND je."balancesApplied" = true AND je."deletedAt" IS NULL
          GROUP BY ca.code, ca.name
@@ -3175,7 +3184,7 @@ financeAlgorithmsRouter.get("/entity-financial-profile", authorize({ feature: "f
            MIN(je."createdAt") AS "firstTransaction",
            MAX(je."createdAt") AS "lastTransaction"
          FROM journal_lines jl
-         JOIN journal_entries je ON je.id = jl."journalId" AND je."companyId" = $1
+         JOIN journal_entries je ON je.id = jl."journalId" AND jl."deletedAt" IS NULL AND je."companyId" = $1
          WHERE ${safeCol} = $2 AND je."balancesApplied" = true AND je."deletedAt" IS NULL`,
         [cid, eid]
       ),

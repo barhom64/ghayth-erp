@@ -171,7 +171,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
               "totalRevenue", "expectedRevenue", "isBlacklisted", "createdAt"
        FROM clients
        WHERE ${where}
-       ORDER BY name ASC
+       ORDER BY "createdAt" DESC, name ASC
        LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
@@ -354,12 +354,14 @@ router.get("/:id", authorize({ feature: "crm.clients", action: "view", resource:
     const activeServices = {
       activeContracts: await rawQuery<{ id: number; title: string; endDate: string | null }>(
         `SELECT id, title, "endDate" FROM legal_contracts
-         WHERE "companyId" = $2 AND status = 'active' AND "deletedAt" IS NULL
-           AND ("partyName" = $3 OR id IN (
-             SELECT id FROM rental_contracts WHERE "tenantName" = $3 AND "companyId" = $2 AND "deletedAt" IS NULL
+         WHERE "companyId" = $1 AND status = 'active' AND "deletedAt" IS NULL
+           AND ("partyName" = $2 OR id IN (
+             SELECT id FROM rental_contracts WHERE "tenantName" = $2 AND "companyId" = $1 AND "deletedAt" IS NULL
            ))
          LIMIT 10`,
-        [id, scope.companyId, client.name]
+        // client `id` unreferenced here → not bound (was a $1 42P18 the .catch
+        // swallowed, so "active contracts" always reported none).
+        [scope.companyId, client.name]
       ).catch((e) => { logger.error(e, "clients query failed"); return []; }),
       activeProjects: projects.filter((p) => p.status === 'active'),
       openTickets: tickets.filter((t) => t.status === 'open' || t.status === 'in_progress'),

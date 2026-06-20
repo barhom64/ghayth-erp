@@ -1451,11 +1451,13 @@ async function loadUmrahGroup(companyId: number, id: string) {
     `SELECT id, "fullName", "passportNumber", "visaNumber", nationality, gender,
             "arrivalDate", "departureDate", status, "hotelName", "roomNumber"
        FROM umrah_pilgrims
-      WHERE "companyId" = $2
-        AND ("agentId" = $3 OR "seasonId" = $4)
+      WHERE "companyId" = $1
+        AND ("agentId" = $2 OR "seasonId" = $3)
       ORDER BY "fullName"
       LIMIT 500`,
-    [id, companyId, group.agentId, group.seasonId],
+    // group `id` unreferenced here → not bound (was a $1 42P18 the .catch
+    // swallowed, so printed group manifests had an empty pilgrim list).
+    [companyId, group.agentId, group.seasonId],
   ).catch(() => []);
   return { entity: group, pilgrims };
 }

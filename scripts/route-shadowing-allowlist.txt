@@ -1,0 +1,11 @@
+# check:route-shadowing allowlist
+#
+# One `<file>::<METHOD> <path>` per line for an INTENTIONAL static route that is
+# registered after a `:param` route which would otherwise capture it. `#`
+# comments and blank lines are ignored.
+#
+# Empty today: the sweep that introduced this guard relocated the only known
+# shadow (GET /cost-centers/ranking, which was being captured by
+# /cost-centers/:id and 422'ing «معرف غير صالح: id») above its param route, and
+# a full scan of artifacts/api-server/src/routes (1488 routes) found no others.
+# Add a line here only when a shadow is deliberate; prefer reordering the route.

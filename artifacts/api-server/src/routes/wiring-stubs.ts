@@ -133,6 +133,12 @@ hrStubsRouter.get("/saudi/mudad/settlements", requireMinLevel(10), authorize({ f
   const period = (req.query.period as string) || null;
   res.json({ data: [], period, note: "Mudad integration not configured" });
 });
+hrStubsRouter.get("/saudi/wps/credentials", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "list" }), async (_req, res) => {
+  // Collection view for the WPS bank-credentials settings page. WPS direct
+  // delivery is not configured yet, so no banks are returned; the page renders
+  // its empty-state. Shape matches the page's CredentialsResponse contract.
+  res.json({ data: [], fieldSpecs: {} });
+});
 hrStubsRouter.get("/saudi/wps/credentials/:bankCode", requireMinLevel(10), authorize({ feature: "hr.payroll.wps", action: "view" }), async (req, res) => {
   res.json({
     bankCode: req.params.bankCode,
@@ -176,14 +182,32 @@ financeStubsRouter.post("/pricing/resolve", requireMinLevel(10), authorize({ fea
 financeStubsRouter.get("/zatca/missing-tax-numbers", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);
+    // A "B2C candidate" is the exact class the spike-pause gate
+    // (checkB2cSpike in lib/zatca/worker.ts) watches: a tax-linked,
+    // unreported invoice (zatcaStatus IS NULL && zatcaReportedAt IS NULL)
+    // belonging to a client whose taxNumber is missing/short — i.e. an
+    // invoice that would ship through the wrong (Simplified/B2C) UBL
+    // endpoint. We surface one row per offending client so finance can
+    // backfill the tax number and unblock the drain.
+    //   - todayCount  = candidates created today (worst-offender signal)
+    //   - pendingCount = all outstanding candidates for the client
+    //   - lastInvoiceAt = most recent candidate invoice
     const data = await rawQuery(
-      `SELECT c.id as "clientId", c.code, c.name, c.phone, c.email,
-              COUNT(i.id) as "invoiceCount", COALESCE(SUM(i.total),0) as "totalAmount"
+      `SELECT c.id AS "clientId", c.name AS "clientName",
+              c.email, c.phone,
+              COUNT(*) FILTER (WHERE i."createdAt" >= date_trunc('day', NOW()))::int AS "todayCount",
+              COUNT(*)::int AS "pendingCount",
+              MAX(i."createdAt") AS "lastInvoiceAt"
        FROM clients c
-       LEFT JOIN invoices i ON i."clientId"=c.id AND i."deletedAt" IS NULL
-       WHERE c."companyId"=$1 AND c."deletedAt" IS NULL
-         AND (c."taxNumber" IS NULL OR c."taxNumber"='' OR LENGTH(c."taxNumber") < 15)
-       GROUP BY c.id ORDER BY "invoiceCount" DESC LIMIT 100`,
+       JOIN invoices i ON i."clientId" = c.id AND i."deletedAt" IS NULL
+       WHERE c."companyId" = $1 AND c."deletedAt" IS NULL
+         AND (c."taxNumber" IS NULL OR c."taxNumber" = '' OR LENGTH(c."taxNumber") < 15)
+         AND i."isTaxLinked" = TRUE
+         AND i."zatcaStatus" IS NULL
+         AND i."zatcaReportedAt" IS NULL
+       GROUP BY c.id, c.name, c.email, c.phone
+       ORDER BY "todayCount" DESC, c.id ASC
+       LIMIT 200`,
       [companyId]
     ).catch(() => []);
     res.json({ data, total: data.length });
@@ -205,8 +229,43 @@ financeStubsRouter.patch("/zatca/missing-tax-numbers/:id", requireMinLevel(10), 
     res.json({ id, taxNumber, ok: true });
   } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
-financeStubsRouter.get("/zatca/pause-history", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "list" }), async (_req, res) => {
-  res.json({ data: [], total: 0 });
+financeStubsRouter.get("/zatca/pause-history", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "update" }), async (req, res) => {
+  try {
+    const { companyId } = scope(req as any);
+    // One row per (company, calendar day) the B2C spike gate paused the
+    // drain (see migration 178_zatca_b2c_pause_events). Snapshot fields
+    // are refreshed on every tick, so this is the live evidence finance
+    // uses to tune ZATCA_B2C_SPIKE_MULTIPLIER / ZATCA_B2C_SPIKE_MIN_ABS.
+    const data = await rawQuery(
+      `SELECT id, "pauseDate", "createdAt", "todayCount", "baseline",
+              "multiplier", "minAbs", "topClientId", "topClientName",
+              "topClientCount", "reason"
+       FROM zatca_b2c_pause_events
+       WHERE "companyId" = $1
+       ORDER BY "pauseDate" DESC, id DESC
+       LIMIT 100`,
+      [companyId]
+    ).catch(() => []);
+    // "invoices prevented" == the day's candidate count (one paused day
+    // == one saved batch from the wrong UBL endpoint).
+    const kpiRows = await rawQuery(
+      `SELECT
+         COUNT(*) FILTER (WHERE "pauseDate" >= CURRENT_DATE - INTERVAL '7 days')::int  AS "pauses7d",
+         COUNT(*) FILTER (WHERE "pauseDate" >= CURRENT_DATE - INTERVAL '30 days')::int AS "pauses30d",
+         COALESCE(SUM("todayCount") FILTER (WHERE "pauseDate" >= CURRENT_DATE - INTERVAL '7 days'), 0)::int  AS "invoicesPrevented7d",
+         COALESCE(SUM("todayCount") FILTER (WHERE "pauseDate" >= CURRENT_DATE - INTERVAL '30 days'), 0)::int AS "invoicesPrevented30d"
+       FROM zatca_b2c_pause_events
+       WHERE "companyId" = $1`,
+      [companyId]
+    ).catch(() => []);
+    const kpi = kpiRows[0] ?? {
+      pauses7d: 0,
+      pauses30d: 0,
+      invoicesPrevented7d: 0,
+      invoicesPrevented30d: 0,
+    };
+    res.json({ data, total: data.length, kpi });
+  } catch (e) { handleRouteError(e, res, "wiring-stubs"); }
 });
 financeStubsRouter.get("/zatca/misrouted-b2c-invoices", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {

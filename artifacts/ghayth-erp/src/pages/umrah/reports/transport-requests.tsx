@@ -163,7 +163,7 @@ export default function UmrahTransportReport() {
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <div data-testid="transport-empty">
-          <DataTable<TransportRow>
+          <DataTable
             data={rows}
             rowKey={(r) => String(r.bookingId)}
             noToolbar

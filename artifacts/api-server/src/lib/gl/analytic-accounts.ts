@@ -206,12 +206,16 @@ export async function linkAnalyticAccount(opts: LinkAnalyticOptions): Promise<vo
     }
   }
 
-  // Auto-clear needsLinking when a partyId is now set
+  // Auto-clear needsLinking when a partyId is now set. Guard each
+  // auto-assignment against an already-present key in `updates` so we
+  // never emit `SET status=$x, status='active'` (Postgres error
+  // "multiple assignments to same column").
   const newPartyId = updates.partyId ?? (before.partyId as number | null);
   if (newPartyId && (before.needsLinking as boolean)) {
-    const alreadyClearing = "needsLinking" in updates;
-    if (!alreadyClearing) {
+    if (!("needsLinking" in updates)) {
       setClauses.push(`"needsLinking" = false`);
+    }
+    if (!("status" in updates)) {
       setClauses.push(`status = 'active'`);
     }
   }

@@ -165,8 +165,11 @@ type ApiFn = (method: string, path: string, body?: unknown) => Promise<ApiResult
 
 // Shared, mutable context threaded across the write loop so dependent fixtures
 // (e.g. createInvoice → needs a clientId) can reuse what an earlier create
-// seeded.
-type WriteCtx = { tag: string; today: string; clientId: number | null };
+// seeded. `positionId` is the id of an active system-level position (#2077
+// PR-1 made positionId a required field on createEmployee) — resolved once in
+// the it block from the seeded positions catalog and reused for every
+// employee-create driven below.
+type WriteCtx = { tag: string; today: string; clientId: number | null; positionId: number | null };
 
 type WriteFixture = {
   // Expected success status (201 for resource creates).
@@ -219,6 +222,10 @@ const WRITE_FIXTURES: Record<string, WriteFixture> = {
       jobTitle: "منسق",
       role: "employee",
       salary: 5000,
+      // #2077 PR-1 made positionId required on createEmployee. The id is
+      // resolved once in the it block (system 'staff' position) so the
+      // fixture stays synchronous.
+      positionId: ctx.positionId,
     }),
     getById: {
       operationId: "getEmployee",
@@ -433,6 +440,22 @@ const DRIFT_ALLOWLIST = new Set<string>([
   "updateInvoice $.amendedToInvoiceId — returned by server but absent from spec",
   "updateInvoice $.amendmentReason — returned by server but absent from spec",
   "updateInvoice $.amendedAt — returned by server but absent from spec",
+  // ── New columns shipped without a paired spec update (clear as the
+  // owning module ships the spec edit + regen). Each entry names the
+  // migration so the trail is auditable.
+  // employees.activationStatus — added by the HR activation flow; GET
+  // /employees/:id selects e."activationStatus" (routes/employees.ts L356).
+  "getEmployee $.activationStatus — returned by server but absent from spec",
+  // umrah_pilgrims.notifications_opt_out — migration 368, returned by
+  // GET /umrah/pilgrims/:id which selects the full pilgrim row.
+  "getUmrahPilgrim $.notifications_opt_out — returned by server but absent from spec",
+  // umrah_agents/sub_agents.contactEmployeeId — migration 367. Both
+  // detail GETs return the full row via SELECT *.
+  "getUmrahAgent $.contactEmployeeId — returned by server but absent from spec",
+  "getUmrahSubAgent $.contactEmployeeId — returned by server but absent from spec",
+  // journal_lines.analyticAccountId — migration 341 added the column;
+  // GET /finance/journal/:id aggregates lines via json_agg.
+  "getJournalEntry $.lines[].analyticAccountId — returned by server but absent from spec",
 ]);
 
 // ─── Extra-key (server returns a field the spec doesn't describe) scan ─────────
@@ -822,10 +845,19 @@ d("OpenAPI spec ↔ server response contract drift — CI pre-merge gate (Task #
     console.log(`[spec-contract-drift] validating ${WRITE_ENDPOINTS.length} auto-discovered write endpoints: ${WRITE_ENDPOINTS.map((e) => e.operationId).join(", ")}`);
 
     const findings: DriftFinding[] = [];
+    // #2077 PR-1 made positionId required on createEmployee. Resolve a
+    // system-level position id from the seeded catalog (migration 274 seeds
+    // the 9 system positions with companyId IS NULL) so the createEmployee
+    // fixture has a valid id without each fixture body needing an extra
+    // round-trip.
+    const [staffPos] = await rawQuery<{ id: number }>(
+      `SELECT id FROM positions WHERE "positionKey" = 'staff' AND "isActive" = TRUE LIMIT 1`,
+    );
     const ctx: WriteCtx = {
       tag: String(Date.now()).slice(-7),
       today: new Date().toISOString().slice(0, 10),
       clientId: null,
+      positionId: staffPos?.id ?? null,
     };
 
     for (const ep of WRITE_ENDPOINTS) {

@@ -112,10 +112,15 @@ describe("HR-019 — Org Memberships frontend", () => {
     expect(ORG_MEM_SRC).toMatch(/يتجاوز 100%/);
   });
 
-  it("registered at /admin/org-memberships + nav entry", () => {
+  it("registered at /admin/org-memberships (route-reachable; intentionally off-sidebar)", () => {
     expect(ADMIN_ROUTES_SRC).toMatch(/const AdminOrgMemberships = lazy/);
     expect(ADMIN_ROUTES_SRC).toMatch(/path: "\/admin\/org-memberships"/);
-    expect(NAV_SRC).toMatch(/path: "\/admin\/org-memberships"/);
+    // UX Nav Governance — the parallel org-model overlay (legal_entities/
+    // positions/teams) was retired from the sidebar as a duplicate of
+    // companies/branches/departments. The route stays mounted (deep-link
+    // reachable; hr/org-tree links it for team/committee CRUD) but carries no
+    // sidebar entry — pinned in check-sidebar-coverage's OFF_SIDEBAR_ALLOWLIST.
+    expect(NAV_SRC).not.toMatch(/path: "\/admin\/org-memberships"/);
   });
 });
 

@@ -70,6 +70,20 @@ function AgentInvoicesTab() {
   const [genSeason, setGenSeason] = useState("");
   const { toast } = useToast();
 
+  // NOTE: usePrintRows (and the derived filteredItems it consumes) MUST run
+  // before any early return — it calls useState internally, so gating it behind
+  // the isLoading/isError returns below changes the hook count between renders
+  // and crashes with React error #310 (see memory: useprintrows-hooks-crash).
+  const filteredItems = items.filter((inv: any) => {
+    if (filters.status && inv.status !== filters.status) return false;
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      return inv.ref?.toLowerCase().includes(q) || inv.agentName?.toLowerCase().includes(q) || inv.seasonTitle?.toLowerCase().includes(q);
+    }
+    return true;
+  });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -82,16 +96,6 @@ function AgentInvoicesTab() {
       toast({ variant: "destructive", title: err?.message || "تعذر إنشاء الفاتورة", description: err?.fix });
     }
   };
-
-  const filteredItems = items.filter((inv: any) => {
-    if (filters.status && inv.status !== filters.status) return false;
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      return inv.ref?.toLowerCase().includes(q) || inv.agentName?.toLowerCase().includes(q) || inv.seasonTitle?.toLowerCase().includes(q);
-    }
-    return true;
-  });
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
 
   const totalAmount = items.reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);
   const paidAmount = items.filter((inv: any) => inv.status === "paid").reduce((sum: number, inv: any) => sum + Number(inv.total || 0), 0);

@@ -811,7 +811,7 @@ purchaseRouter.post("/purchase-requests/:id/convert", authorize({ feature: "fina
       after: { status: "converted", purchaseOrderId: poId, poRef, totalAmount },
     }).catch((e) => logger.error(e, "finance-purchase background task failed"));
 
-    const [po] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [poId, scope.companyId]);
+    const [po] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [poId, scope.companyId]);
     res.status(201).json({ message: "تم تحويل طلب الشراء إلى أمر شراء", ...(po || { purchaseOrderId: poId, poRef, totalAmount }) });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -970,7 +970,7 @@ purchaseRouter.post("/purchase-orders", authorize({ feature: "finance.purchase",
     }
 
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "purchase_order.created", entity: "purchase_orders", entityId: insertId, details: JSON.stringify({ ref, totalAmount, supplierId }) }).catch((e) => logger.error(e, "finance-purchase background task failed"));
-    const [po] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2`, [insertId, effectiveCompanyId]);
+    const [po] = await rawQuery<Record<string, unknown>>(`SELECT * FROM purchase_orders WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [insertId, effectiveCompanyId]);
     res.status(201).json({ ...po, approval: approvalResult });
   } catch (err) {
     const lcErr = lifecycleErrorResponse(err);
@@ -2857,6 +2857,12 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
     });
     markIdempotencyReplay(req, res, vadvAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_advance.created", entity: "vendor_advances", entityId: advanceId ?? 0,
+      after: { ref: advRef, supplierId, amount: amt, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-advance-create audit failed"));
+
     res.status(201).json({ advanceId, ref: advRef, supplierId, amount: amt, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Vendor advance create error:");
@@ -2952,6 +2958,11 @@ purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.
 
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_advance.applied", entity: "vendor_advances", entityId: advanceId,
+      after: { poId, amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-advance-apply audit failed"));
     res.json({ advanceId, poId, amount: applyAmt, journalId });
   } catch (err) {
     handleRouteError(err, res, "Apply vendor advance error:");
@@ -3086,6 +3097,11 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     });
     markIdempotencyReplay(req, res, vcmAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_credit.created", entity: "vendor_credit_memos", entityId: memoId ?? 0,
+      after: { ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-credit-create audit failed"));
     res.status(201).json({ memoId, ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Vendor credit memo create error:");
@@ -3175,6 +3191,11 @@ purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.p
 
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_credit.applied", entity: "vendor_credit_memos", entityId: memoId,
+      after: { poId, amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-credit-apply audit failed"));
     res.json({ memoId, poId, amount: applyAmt, journalId });
   } catch (err) {
     handleRouteError(err, res, "Apply vendor credit error:");
@@ -3194,7 +3215,7 @@ purchaseRouter.get("/vendor-advances", authorize({ feature: "finance.purchase", 
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT va.*, s.name AS "supplierName"
          FROM vendor_advances va
-         LEFT JOIN suppliers s ON s.id = va."supplierId"
+         LEFT JOIN suppliers s ON s.id = va."supplierId" AND s."deletedAt" IS NULL
         WHERE ${conds.join(" AND ")}
         ORDER BY va.id DESC
         LIMIT 500`,
@@ -3219,7 +3240,7 @@ purchaseRouter.get("/vendor-credits", authorize({ feature: "finance.purchase", a
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT vcm.*, s.name AS "supplierName"
          FROM vendor_credit_memos vcm
-         LEFT JOIN suppliers s ON s.id = vcm."supplierId"
+         LEFT JOIN suppliers s ON s.id = vcm."supplierId" AND s."deletedAt" IS NULL
         WHERE ${conds.join(" AND ")}
         ORDER BY vcm.id DESC
         LIMIT 500`,
@@ -3438,6 +3459,12 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
     });
     markIdempotencyReplay(req, res, vinvAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_invoice.created", entity: "vendor_invoices", entityId: invoiceId ?? 0,
+      after: { ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-invoice-create audit failed"));
+
     res.status(201).json({ invoiceId, ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId, status: "approved" });
   } catch (err) {
     handleRouteError(err, res, "Vendor invoice create error:");
@@ -3457,7 +3484,7 @@ purchaseRouter.get("/vendor-invoices", authorize({ feature: "finance.purchase", 
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT vi.*, s.name AS "supplierName"
          FROM vendor_invoices vi
-         LEFT JOIN suppliers s ON s.id = vi."supplierId"
+         LEFT JOIN suppliers s ON s.id = vi."supplierId" AND s."deletedAt" IS NULL
         WHERE ${conds.join(" AND ")}
         ORDER BY vi.id DESC
         LIMIT 500`,
@@ -3477,7 +3504,7 @@ purchaseRouter.get("/vendor-invoices/:id", authorize({ feature: "finance.purchas
     const [inv] = await rawQuery<Record<string, unknown>>(
       `SELECT vi.*, s.name AS "supplierName", s.phone AS "supplierPhone", s.email AS "supplierEmail"
          FROM vendor_invoices vi
-         LEFT JOIN suppliers s ON s.id = vi."supplierId"
+         LEFT JOIN suppliers s ON s.id = vi."supplierId" AND s."deletedAt" IS NULL
         WHERE vi.id = $1 AND vi."companyId" = $2 AND vi."deletedAt" IS NULL`,
       [id, scope.companyId]
     );

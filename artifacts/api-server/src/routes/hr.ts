@@ -24,6 +24,7 @@ import {
   createNotification,
   emitEvent,
   createAuditLog,
+  auditFromRequest,
   getManagerAssignmentId,
   initiateApprovalChain,
   processApprovalStep,
@@ -617,11 +618,11 @@ router.post("/check-in", checkInLimiter, authorize({ feature: "hr.attendance.che
     const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s.id, s."startTime", s."endTime", s.days, s."shiftType", s."remoteAllowed", s."flexStartEarliest", s."flexStartLatest"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $3
        WHERE esa."assignmentId" = $1
          AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
        ORDER BY esa.id DESC LIMIT 1`,
-      [scope.activeAssignmentId, today]
+      [scope.activeAssignmentId, today, scope.companyId]
     );
     let shift = shiftAssignment;
     if (!shift) {
@@ -1001,11 +1002,11 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     const [shiftAssignment] = await rawQuery<Record<string, unknown>>(
       `SELECT s."endTime", s."startTime"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $3
        WHERE esa."assignmentId" = $1
          AND (esa."endDate" IS NULL OR esa."endDate" >= $2)
        ORDER BY esa.id DESC LIMIT 1`,
-      [scope.activeAssignmentId, today]
+      [scope.activeAssignmentId, today, scope.companyId]
     );
     if (shiftAssignment) {
       shift = shiftAssignment;
@@ -1077,9 +1078,9 @@ router.post("/check-out", authorize({ feature: "hr.attendance.checkin", action: 
     if (earlyDepartureMinutes > 0) {
       const [approvedExcuse] = await rawQuery<Record<string, unknown>>(
         `SELECT id, "estimatedMinutes" FROM hr_excuse_requests
-         WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
+         WHERE "companyId" = $1 AND "assignmentId" = $2 AND "excuseDate" = $3 AND status = 'approved' AND "excuseType" IN ('early_leave', 'personal')
          LIMIT 1`,
-        [scope.activeAssignmentId, today]
+        [scope.companyId, scope.activeAssignmentId, today]
       ).catch((e) => { logger.error(e, "hr query failed"); return [null]; });
       if (approvedExcuse) {
         excusedEarlyLeave = true;
@@ -1310,8 +1311,8 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
           fix: "يجب أن يكون لديك تعيين نشط في الشركة لإرسال نقاط الموقع.",
         });
       case "forbidden":
-        throw new ForbiddenError("فئة الموظف لا تخضع للتتبع اللحظي", {
-          fix: "التتبع الميداني مفعّل فقط للسائقين والموظفين الميدانيين. راجع فئة الموظف في إعدادات الحضور.",
+        throw new ForbiddenError("لا توجد سياسة تتبع فعّالة لهذا الموظف", {
+          fix: "يتطلب التتبع الميداني سياسة تتبع صريحة ومفعّلة لهذا الموظف. تواصل مع المسؤول لتفعيل سياسة التتبع.",
           meta: { categoryKey: r.categoryKey, trackingFrequencySeconds: r.freq },
         });
       case "throttled":
@@ -1329,11 +1330,16 @@ router.post("/attendance/field-ping", authorize({ feature: "hr.attendance.checki
   }
 });
 
-router.get("/attendance/field-track", authorize({ feature: "hr.attendance", action: "list" }), async (req, res) => {
+router.get("/attendance/field-track", authorize({ feature: "hr.attendance.tracking_view", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
     const { assignmentId, date } = req.query as { assignmentId?: string; date?: string };
     const day = date || todayISO();
+    // Per-policy viewer restriction: an empty/NULL allowedViewerRoles means
+    // "any tracking_view holder", otherwise the caller's active role must be a
+    // member. scope.role is the always-populated active role (reflects any
+    // role-picker downgrade); NULL viewerRole never satisfies a restricted policy.
+    const viewerRole = scope.role ?? null;
 
     // Two modes:
     //   - assignmentId set  → one employee's full breadcrumb for the day
@@ -1352,10 +1358,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
           WHERE ftp."assignmentId" = $1
             AND ftp."companyId" = $2
             AND ftp."capturedAt"::date = $3::date
+            AND EXISTS (
+              SELECT 1 FROM employee_tracking_policies etp
+               WHERE etp."companyId" = ftp."companyId"
+                 AND etp."employeeId" = ea."employeeId"
+                 AND etp."deletedAt" IS NULL
+                 AND etp."trackingEnabled" = TRUE
+                 AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+                 AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+                 AND (
+                   jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                   OR etp."allowedViewerRoles" ? $4
+                 )
+            )
           ORDER BY ftp."capturedAt" ASC
           LIMIT 5000`,
-        [aid, scope.companyId, day],
+        [aid, scope.companyId, day, viewerRole],
       );
+      // Location is a sensitive view — audit every breadcrumb read.
+      await auditFromRequest(req, "tracking.view", "field_tracking_points", aid, {
+        after: { mode: "breadcrumb", date: day, points: points.length },
+      });
       res.json(maskFields(req, { data: points, total: points.length, mode: "breadcrumb", date: day }));
       return;
     }
@@ -1371,10 +1394,27 @@ router.get("/attendance/field-track", authorize({ feature: "hr.attendance", acti
          JOIN employees e ON e.id = ea."employeeId"
         WHERE ftp."companyId" = $1
           AND ftp."capturedAt"::date = $2::date
+          AND EXISTS (
+            SELECT 1 FROM employee_tracking_policies etp
+             WHERE etp."companyId" = ftp."companyId"
+               AND etp."employeeId" = ea."employeeId"
+               AND etp."deletedAt" IS NULL
+               AND etp."trackingEnabled" = TRUE
+               AND (etp."startsAt" IS NULL OR etp."startsAt" <= NOW())
+               AND (etp."endsAt" IS NULL OR etp."endsAt" >= NOW())
+               AND (
+                 jsonb_array_length(COALESCE(etp."allowedViewerRoles", '[]'::jsonb)) = 0
+                 OR etp."allowedViewerRoles" ? $3
+               )
+          )
         ORDER BY ftp."assignmentId", ftp."capturedAt" DESC
         LIMIT 2000`,
-      [scope.companyId, day],
+      [scope.companyId, day, viewerRole],
     );
+    // Live map is a sensitive multi-employee location view — audit it.
+    await auditFromRequest(req, "tracking.view", "field_tracking_points", 0, {
+      after: { mode: "live", date: day, points: latest.length },
+    });
     res.json(maskFields(req, { data: latest, total: latest.length, mode: "live", date: day }));
   } catch (err) {
     handleRouteError(err, res, "Field track error:");
@@ -1900,9 +1940,9 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     } else {
       const [usedRow] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(SUM(days), 0) AS used FROM hr_leave_requests
-         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status IN ('approved','pending')
-           AND EXTRACT(YEAR FROM "startDate") = $3 AND "deletedAt" IS NULL`,
-        [scope.employeeId, leaveTypeId, year]
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND status IN ('approved','pending')
+           AND EXTRACT(YEAR FROM "startDate") = $4 AND "deletedAt" IS NULL`,
+        [scope.companyId, scope.employeeId, leaveTypeId, year]
       );
       // Saudi Labor Law Article 109: 21 days during the first 5 years
       // of service, 30 days after 5 years. Auto-upgrade based on the
@@ -1941,9 +1981,9 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     // ── Validation 3: No overlapping requests ──
     const [overlap] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_leave_requests
-       WHERE "employeeId" = $1 AND status IN ('pending','approved')
-         AND "startDate" <= $2 AND "endDate" >= $3 AND "deletedAt" IS NULL`,
-      [scope.employeeId, endDate, startDate]
+       WHERE "companyId" = $1 AND "employeeId" = $2 AND status IN ('pending','approved')
+         AND "startDate" <= $3 AND "endDate" >= $4 AND "deletedAt" IS NULL`,
+      [scope.companyId, scope.employeeId, endDate, startDate]
     );
     if (overlap) {
       throw new ConflictError("يوجد طلب إجازة متداخل في هذه الفترة", {
@@ -2013,8 +2053,8 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
     if (leaveType.oncePerCareer) {
       const [prevHajj] = await rawQuery<Record<string, unknown>>(
         `SELECT id FROM hr_leave_requests
-         WHERE "employeeId" = $1 AND "leaveTypeId" = $2 AND status = 'approved' AND "deletedAt" IS NULL`,
-        [scope.employeeId, leaveTypeId]
+         WHERE "companyId" = $1 AND "employeeId" = $2 AND "leaveTypeId" = $3 AND status = 'approved' AND "deletedAt" IS NULL`,
+        [scope.companyId, scope.employeeId, leaveTypeId]
       );
       if (prevHajj) {
         throw new ConflictError(
@@ -2040,10 +2080,11 @@ router.post("/leave-requests", authorize({ feature: "hr.leaves.my", action: "cre
       );
       const [deptAbsent] = await rawQuery<Record<string, unknown>>(
         `SELECT COUNT(DISTINCT lr."employeeId") AS cnt FROM hr_leave_requests lr
-         JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId" AND ea."departmentId" = $1
-         WHERE lr.status = 'approved' AND lr."startDate" <= $2 AND lr."endDate" >= $3
-           AND lr."employeeId" != $4 AND lr."deletedAt" IS NULL`,
-        [assignment.departmentId, endDate, startDate, scope.employeeId]
+         JOIN employee_assignments ea ON ea."employeeId" = lr."employeeId"
+           AND ea."companyId" = $1 AND ea."departmentId" = $2
+         WHERE lr.status = 'approved' AND lr."startDate" <= $3 AND lr."endDate" >= $4
+           AND lr."employeeId" != $5 AND lr."deletedAt" IS NULL`,
+        [scope.companyId, assignment.departmentId, endDate, startDate, scope.employeeId]
       );
       const totalDept = Number(deptTotal?.cnt ?? 1);
       const absentDept = Number(deptAbsent?.cnt ?? 0);
@@ -4653,8 +4694,8 @@ router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "
       `SELECT esa.*, s.name AS "shiftName", s."startTime", s."endTime",
               e.name AS "employeeName", e."empNumber"
        FROM employee_shift_assignments esa
-       JOIN shifts s ON s.id = esa."shiftId"
-       JOIN employee_assignments ea ON ea.id = esa."assignmentId"
+       JOIN shifts s ON s.id = esa."shiftId" AND s."companyId" = $1
+       JOIN employee_assignments ea ON ea.id = esa."assignmentId" AND ea."companyId" = $1
        JOIN employees e ON e.id = ea."employeeId"
        WHERE s."companyId" = $1
        ORDER BY esa."startDate" DESC LIMIT 200`,
@@ -8123,7 +8164,17 @@ router.get("/employee-documents", authorize({ feature: "hr.employees", action: "
     const offsetParam = paramIdx++;
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT ed.*, e.name AS "employeeName"
+      // computedStatus derives expiry health from "expiryDate" vs today (Riyadh)
+      // so the client never has to recompute it: expired / expiring_soon (≤30d)
+      // / valid. daysToExpiry is signed (negative = already past).
+      `SELECT ed.*, e.name AS "employeeName",
+              (ed."expiryDate" - CURRENT_DATE) AS "daysToExpiry",
+              CASE
+                WHEN ed."expiryDate" IS NULL THEN 'valid'
+                WHEN ed."expiryDate" < CURRENT_DATE THEN 'expired'
+                WHEN ed."expiryDate" <= CURRENT_DATE + INTERVAL '30 days' THEN 'expiring_soon'
+                ELSE 'valid'
+              END AS "computedStatus"
        FROM employee_documents ed
        JOIN employees e ON e.id=ed."employeeId"
        ${where}
@@ -8160,6 +8211,71 @@ router.post("/employee-documents", authorize({ feature: "hr.employees", action: 
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json(row || { id: insertId, message: "تم إضافة وثيقة الموظف" });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
+});
+
+router.patch("/employee-documents/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2 AND status != 'deleted'`,
+      [id, scope.companyId]
+    );
+    if (!before) throw new NotFoundError("وثيقة الموظف غير موجودة");
+    // Partial update — only the fields the editor sends are touched. employeeId
+    // is intentionally NOT editable (a document belongs to one employee).
+    const b = zodParse(employeeDocumentSchema.partial().safeParse(req.body)) as any;
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    let idx = 1;
+    const setField = (col: string, val: unknown) => { sets.push(`"${col}"=$${idx++}`); params.push(val); };
+    if (b.documentType !== undefined) { setField("type", b.documentType); setField("name", b.documentType); }
+    if (b.documentNumber !== undefined) setField("number", b.documentNumber || null);
+    if (b.issueDate !== undefined) setField("issueDate", b.issueDate || null);
+    if (b.expiryDate !== undefined) setField("expiryDate", b.expiryDate || null);
+    if (b.notes !== undefined) setField("notes", b.notes || null);
+    if (sets.length === 0) throw new ValidationError("لا توجد حقول للتحديث");
+    sets.push(`"updatedAt"=NOW()`);
+    params.push(id, scope.companyId);
+    await rawExecute(
+      `UPDATE employee_documents SET ${sets.join(", ")} WHERE id=$${idx++} AND "companyId"=$${idx++}`,
+      params
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "update", entity: "employee_documents", entityId: id,
+      before: { type: before.type, number: before.number, expiryDate: before.expiryDate },
+      after: { documentType: b.documentType, documentNumber: b.documentNumber, expiryDate: b.expiryDate },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    res.json(row || { id, message: "تم تحديث وثيقة الموظف" });
+  } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
+});
+
+router.delete("/employee-documents/:id", authorize({ feature: "hr.employees", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [before] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM employee_documents WHERE id=$1 AND "companyId"=$2 AND status != 'deleted'`,
+      [id, scope.companyId]
+    );
+    if (!before) throw new NotFoundError("وثيقة الموظف غير موجودة");
+    // Hard delete — the table's status CHECK only allows valid/expired/
+    // expiring_soon (no 'deleted' state) and there is no deletedAt column, so
+    // a soft delete isn't representable. The audit log below preserves the
+    // record of what was removed.
+    await rawExecute(
+      `DELETE FROM employee_documents WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
+    );
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "delete", entity: "employee_documents", entityId: id,
+      before: { employeeId: before.employeeId, type: before.type, number: before.number },
+    }).catch((e) => logger.error(e, "hr background task failed"));
+    res.json({ id, message: "تم حذف وثيقة الموظف" });
   } catch (err) { handleRouteError(err, res, "Employee documents error:"); }
 });
 
@@ -8225,8 +8341,8 @@ router.post("/excuse-requests", authorize({ feature: "hr.attendance", action: "c
 
     const [existing] = await rawQuery<Record<string, unknown>>(
       `SELECT id FROM hr_excuse_requests
-       WHERE "assignmentId" = $1 AND "excuseDate" = $2 AND status != 'rejected'`,
-      [effectiveAssignmentId, excuseDate]
+       WHERE "companyId" = $1 AND "assignmentId" = $2 AND "excuseDate" = $3 AND status != 'rejected'`,
+      [scope.companyId, effectiveAssignmentId, excuseDate]
     );
     if (existing) throw new ConflictError("يوجد طلب استئذان مسجل لنفس اليوم");
 

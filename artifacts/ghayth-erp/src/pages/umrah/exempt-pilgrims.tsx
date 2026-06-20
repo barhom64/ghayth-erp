@@ -437,7 +437,7 @@ export default function UmrahExemptPilgrims() {
               لا يوجد معتمرون مستثنون حالياً ضمن هذا الفلتر.
             </div>
           ) : (
-            <DataTable<ExemptRow>
+            <DataTable
               onSortedDataChange={setPrintRows}
         data={rows}
               columns={cols}
