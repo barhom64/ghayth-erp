@@ -282,6 +282,12 @@ const completeMaintenanceSchema = z.object({
   zeroCostConfirmed: z.boolean().optional().nullable(),
   materialsUsed: z.array(z.any()).optional().nullable(),
   coveredByContract: z.boolean().optional().nullable(),
+  // V1 (FIN-PROP-OWNER) — من يتحمّل تكلفة الصيانة. الافتراضي "company" (سلوك
+  // قائم بلا تغيير). "owner" يوجّه القيد لفوترة المالك بدل مصروف الشركة،
+  // ومحروس: يُرفض ما لم يوجد مالك مسجّل على الوحدة/المبنى.
+  costResponsibility: z.enum(["company", "owner"]).optional().nullable(),
+  // عند تحميلها على المالك: هل تُصدَر فاتورة ضريبية (ضريبة بمعدل الشركة)؟
+  ownerVatApplicable: z.boolean().optional().nullable(),
 });
 
 const createTenantSchema = z.object({
@@ -2639,6 +2645,32 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
 
     const cost = resolvedCost ?? 0;
 
+    // V1 (FIN-PROP-OWNER) — توجيه مسؤولية التكلفة. الافتراضي = الشركة (سلوك
+    // قائم). عند اختيار "owner" صراحةً: تُفوتَر على مالك العقار المسجَّل (ذمة
+    // مدينة) لا كمصروف شركة — مع حارس يرفض "owner" ما لم يوجد مالك مسجَّل على
+    // الوحدة أو مبناها. يُنفَّذ قبل applyTransition ليفشل قبل إكمال البلاغ.
+    let billToOwner = false;
+    let maintOwnerId: number | null = null;
+    if (b.costResponsibility === "owner") {
+      const ownerLookup = mr.unitId
+        ? await rawQuery<{ ownerId: number | null }>(
+            `SELECT COALESCE(u."ownerId", bld."ownerId") AS "ownerId"
+               FROM property_units u
+               LEFT JOIN property_buildings bld ON bld.id = u."buildingId" AND bld."companyId" = $2
+              WHERE u.id = $1 AND u."companyId" = $2`,
+            [Number(mr.unitId), scope.companyId]
+          )
+        : [];
+      maintOwnerId = ownerLookup[0]?.ownerId ?? null;
+      if (!maintOwnerId) {
+        throw new ValidationError("لا يمكن تحميل الصيانة على المالك: لا يوجد مالك مسجَّل لهذا العقار", {
+          field: "costResponsibility",
+          fix: "سجّل مالك العقار (الوحدة أو المبنى) أولاً، أو اجعل التكلفة على الشركة.",
+        });
+      }
+      billToOwner = true;
+    }
+
     // Build setExtras for the completion columns
     const completionExtras: Record<string, any> = {
       completedAt: { raw: "NOW()" },
@@ -2647,6 +2679,7 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
     if (b.closureReport) completionExtras.closureReport = b.closureReport;
     if (b.afterPhotos) completionExtras.afterPhotos = JSON.stringify(b.afterPhotos);
     if (b.materialsUsed) completionExtras.materialsUsed = JSON.stringify(b.materialsUsed);
+    if (b.costResponsibility) completionExtras.costResponsibility = b.costResponsibility;
 
     // Derive allowed fromStates for "completed" from the local state machine
     const completionFromStates = Object.entries(MAINT_REQUEST_TRANSITIONS)
@@ -2665,8 +2698,10 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
 
     // --- Post-commit side-effects ---
 
+    // فاتورة المستأجر التلقائية تُتخطّى عند تحميل التكلفة على المالك (يُفوتَر
+    // المالك عبر قيد فوترة المالك أدناه، لا المستأجر).
     let invoiceId: number | null = null;
-    if (cost > 0 && !b.coveredByContract) {
+    if (cost > 0 && !b.coveredByContract && !billToOwner) {
       const monthNum = currentMonthPadded();
       const yearShort = String(currentYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
@@ -2740,12 +2775,23 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
         const propertyId = unitDimRow?.buildingId ?? 0;
         const unitId = mr.unitId ? Number(mr.unitId) : null;
         const tenantId = unitDimRow?.tenantId ?? null;
-        const glResult = await propertiesEngine.postMaintenanceExpenseGL(
-          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-          { id, propertyId, unitId, tenantId, totalCost: cost, type: mr.category as string | undefined }
-        );
-        journalEntryId = glResult.journalId;
-      } catch (e) { logger.error(e, "maintenance expense GL posting failed"); journalEntryId = null; }
+        if (billToOwner && maintOwnerId) {
+          // V1 — مُدارة لطرف ثالث: التكلفة ذمة على المالك لا مصروف شركة.
+          // مدين ذمة المالك (الإجمالي) / دائن مستحق صيانة (الصافي) / دائن ضريبة (اختياري).
+          const ownerVat = b.ownerVatApplicable ? computeVat(cost, await getCompanyVatRate(scope.companyId)) : 0;
+          const glResult = await propertiesEngine.postMaintenanceOwnerBillingGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            { id, propertyId, unitId, ownerId: maintOwnerId, totalCost: cost, vatAmount: ownerVat, type: mr.category as string | undefined }
+          );
+          journalEntryId = glResult.journalId;
+        } else {
+          const glResult = await propertiesEngine.postMaintenanceExpenseGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            { id, propertyId, unitId, tenantId, totalCost: cost, type: mr.category as string | undefined }
+          );
+          journalEntryId = glResult.journalId;
+        }
+      } catch (e) { logger.error(e, "maintenance GL posting failed"); journalEntryId = null; }
     }
 
     let followUpTaskId: number | null = null;
