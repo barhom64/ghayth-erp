@@ -22,6 +22,7 @@ const REVIEW = read(`${FE}/pages/hr/self-onboarding-review.tsx`);
 const HR_ROUTES = read(`${FE}/routes/hrRoutes.tsx`);
 const NAV = read(`${FE}/components/layout/navigation.registry.ts`);
 const MODAL = read(`${FE}/pages/hr/employee-activation.tsx`);
+const BOARD = read(`${FE}/pages/hr/activation-board.tsx`);
 
 describe("الدفعة ج — الصفحة العامة", () => {
   it("تقرأ الرمز من الـURL وتنادي مسار العام", () => {
@@ -64,5 +65,15 @@ describe("الدفعة ج — مودال التفعيل السريع", () => {
   it("يعرض رابط الاستكمال العائد من الخلفية", () => {
     expect(MODAL).toMatch(/res\?\.onboardingLink/);
     expect(MODAL).toMatch(/setQuickLink/);
+  });
+});
+
+describe("الدفعة هـ — إعادة إرسال الرابط من لوحة التفعيل", () => {
+  it("لوحة التفعيل تنادي resend-onboarding-link", () => {
+    expect(BOARD).toMatch(/\/employees\/\$\{b\.id\}\/resend-onboarding-link/);
+  });
+  it("الزر يظهر لحالات الاستكمال الذاتي فقط ومحميّ بـ hr:update", () => {
+    expect(BOARD).toMatch(/e\.activationStatus === "self_invited" \|\| e\.activationStatus === "self_submitted"/);
+    expect(BOARD).toMatch(/resendMut\.mutate\(\{ id: e\.id \}\)/);
   });
 });
