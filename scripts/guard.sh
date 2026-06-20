@@ -184,12 +184,13 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # Pure-logic fixtures guard the detector.
 run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
 run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
-# Page action-bar consistency (refresh): a hand-rolled refresh control (a
-# <Button> pairing the RefreshCw icon with the bare «تحديث» label) instead of
-# the unified <RefreshAction onRefresh={…}/> — so the same action looked and
-# behaved differently on every page before unification. OFFLINE source scan;
-# deliberate section/per-row exceptions in
-# scripts/page-actions-refresh-allowlist.txt, fails only on a NEW offender.
+# Page action-bar consistency (refresh/print/export): a hand-rolled control —
+# a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
+# / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
+# (<RefreshAction/> / <PrintButton/> / <ExportAction/>), so the same action looked
+# and behaved differently on every page before unification. OFFLINE source scan;
+# deliberate framework/section/per-row exceptions (action:path) in
+# scripts/page-actions-allowlist.txt, fails only on a NEW offender.
 # Pure-logic fixtures guard the detector.
 run_step "check:page-actions:tests" node scripts/src/check-page-actions.test.mjs
 run_step "check:page-actions" node scripts/src/check-page-actions.mjs
