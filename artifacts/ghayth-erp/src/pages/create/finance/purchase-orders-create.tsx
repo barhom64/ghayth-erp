@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
@@ -12,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { CostCenterSelect, SupplierSelect, BranchSelect } from "@/components/shared/entity-selects";
+import { ProductSelect } from "@/components/shared/product-select";
 import { useAppContext } from "@/contexts/app-context";
 import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
@@ -41,8 +40,6 @@ export default function PurchaseOrdersCreate() {
   // procurement, manager-direct issuance, etc).
   const createDirectMut = useApiMutation("/finance/purchase-orders", "POST", [["purchase-orders"]]);
   const [createMode, setCreateMode] = useState<"request" | "direct">("request");
-  const { data: productsData, isLoading, isError } = useApiQuery<{ data: any[] }>(["warehouse-products"], "/warehouse/products");
-  const products = productsData?.data || [];
   const { data: copySource } = useApiQuery<any>(["po-copy", copyFromId || ""], `/finance/purchase-orders/${copyFromId}`, !!copyFromId);
 
   const INITIAL = { supplierId: "", notes: "", branchId: selectedBranchId ? String(selectedBranchId) : "", companyId: selectedCompanyIds.length === 1 ? String(selectedCompanyIds[0]) : "", costCenter: "", expectedDelivery: "", date: todayLocal() };
@@ -81,9 +78,6 @@ export default function PurchaseOrdersCreate() {
       }
     }
   }, [copySource, copied, setForm]);
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const addItem = () => setItems([...items, {
     productId: "", quantity: "1", unitPrice: "",
@@ -202,15 +196,13 @@ export default function PurchaseOrdersCreate() {
             <div className="grid grid-cols-4 gap-2 items-end">
               <div>
                 <Label className="text-xs">المنتج</Label>
-                <Select value={item.productId || "_none"} onValueChange={(v) => updateItem(idx, "productId", v === "_none" ? "" : v)}>
-                  <SelectTrigger className="text-sm">
-                    <SelectValue placeholder="اختر من المخزون" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">اختر من المخزون</SelectItem>
-                    {products.map((p: any) => <SelectItem key={p.id} value={String(p.id)}>{p.sku ? `${p.sku} - ` : ""}{p.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <ProductSelect
+                  value={item.productId}
+                  onChange={(v) => updateItem(idx, "productId", v)}
+                  placeholder="اختر من المخزون"
+                  allowCreate
+                  className="text-sm"
+                />
               </div>
               <NumberField label="الكمية" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
               <NumberField label="سعر الوحدة" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
