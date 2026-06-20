@@ -15,7 +15,8 @@ import {
   applyFilters,
   exportToCSV,
 } from "@workspace/ui-core";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
   FolderKanban, Plus, Activity, CheckCircle, DollarSign, Eye,
@@ -232,9 +233,12 @@ function ProjectListTab() {
   const pageSize = 20;
   const canManage = roleLevel >= 50;
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
+  // #2713 (تعميم) — سلة المحذوفات للمشاريع.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { toast } = useToast();
   const { data: projectsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["projects", String(page), scopeQueryString],
-    `/projects?page=${page}&limit=${pageSize}${scopeSuffix}`
+    ["projects", String(page), scopeQueryString, showDeleted ? "deleted" : "active"],
+    `/projects?page=${page}&limit=${pageSize}${scopeSuffix}${showDeleted ? "&deleted=true" : ""}`
   );
   const projects = asList(projectsResp);
   const total = projectsResp?.total || projects.length;
@@ -250,6 +254,16 @@ function ProjectListTab() {
     queryKeys: [["projects", String(page)], ["projects-stats"]],
     onSuccess: () => refetch(),
   });
+
+  async function handleRestoreProject(id: number) {
+    try {
+      await apiFetch(`/projects/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع المشروع" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
 
   const editFields = [
     { key: "name", label: "المشروع" },
@@ -282,13 +296,19 @@ function ProjectListTab() {
       key: "actions", header: "الإجراءات",
       render: (p) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button asChild variant="ghost" size="sm" title="عرض"><Link href={`/projects/${p.id}`}><Eye className="h-4 w-4" /></Link></Button>
-          <RowActions
-            canEdit={canManage}
-            onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}
-            onDelete={() => startDelete(p.id)}
-            deletePerm="projects:delete"
-          />
+          {showDeleted ? (
+            <Button variant="outline" size="sm" onClick={() => handleRestoreProject(p.id)}>استرجاع</Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" size="sm" title="عرض"><Link href={`/projects/${p.id}`}><Eye className="h-4 w-4" /></Link></Button>
+              <RowActions
+                canEdit={canManage}
+                onEdit={() => startEdit(p.id, { name: p.name, budget: p.budget || 0, progress: p.progress || 0, status: p.status || "active" })}
+                onDelete={() => startDelete(p.id)}
+                deletePerm="projects:delete"
+              />
+            </>
+          )}
         </div>
       ),
     },
@@ -345,7 +365,12 @@ function ProjectListTab() {
       />
 
       <Card>
-        <CardHeader><CardTitle className="gap-2 flex items-center"><FolderKanban className="h-5 w-5" /> المشاريع</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="gap-2 flex items-center"><FolderKanban className="h-5 w-5" /> {showDeleted ? "المشاريع المحذوفة" : "المشاريع"}</CardTitle>
+          <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => { setShowDeleted((v) => !v); setPage(1); }}>
+            {showDeleted ? "المشاريع النشطة" : "سلة المحذوفات"}
+          </Button>
+        </CardHeader>
         <CardContent>
           <DataTable
             columns={columns}
