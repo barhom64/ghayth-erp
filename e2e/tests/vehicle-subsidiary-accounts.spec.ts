@@ -61,7 +61,10 @@ test.describe("Vehicle subsidiary accounts — operational UI", () => {
     // 3) UI: open the vehicle detail page and switch to the finance tab.
     await login(page);
     await page.goto(`/fleet/${vehicleId}`);
-    await page.getByRole("button", { name: "المالية" }).click();
+    // exact:true keeps this off the sidebar's "القوائم المالية" menu button,
+    // which also contains "المالية" as a substring (default getByRole name
+    // matching is substring) and would otherwise be clicked instead of the tab.
+    await page.getByRole("button", { name: "المالية", exact: true }).click();
 
     // 4) The subsidiary-accounts section renders with the linked account.
     await expect(page.getByText("الحسابات الفرعية للمركبة")).toBeVisible();

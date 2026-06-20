@@ -138,6 +138,15 @@ jobs:
           actual_fks=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_constraint c JOIN pg_class r ON c.conrelid=r.oid JOIN pg_namespace n ON r.relnamespace=n.oid WHERE c.contype='f' AND n.nspname='public';")
           echo "::notice::schema loaded — $actual_fks FKs (dump declares $expected_fks)"
           if [ "$actual_fks" -lt "$expected_fks" ]; then echo "FK shortfall — schema_post.log:"; cat /tmp/schema_post.log; exit 1; fi
+          # --- e2e genesis tenant: the schema dump is data-free, so `companies` is
+          # empty. The numbering-scheme seed migrations (213-232) seed `FROM companies`,
+          # and bootstrapCompany clones from an existing template tenant — NEITHER can
+          # seed the first-ever company on an empty DB. Pre-seed company id=1 + a branch
+          # so the booting api-server's migration replay seeds its numbering schemes and
+          # bootstrapAdminUser (needs company+branch+hr/employee_code scheme) can create
+          # admin@ghayth.com. Without this every login 403s and the whole suite fails.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "INSERT INTO companies (id, name) VALUES (1, 'E2E Company') ON CONFLICT (id) DO NOTHING; SELECT setval(pg_get_serial_sequence('companies','id'), 1, true); INSERT INTO branches (id, \"companyId\", name) VALUES (1, 1, 'الفرع الرئيسي') ON CONFLICT (id) DO NOTHING; SELECT setval(pg_get_serial_sequence('branches','id'), 1, true);"
+          echo "::notice::e2e genesis tenant pre-seeded (company id=1 + branch id=1)"
           # NOTE: unlike guard.yml we do NOT pre-mark migrations as applied. The
           # dump is a point-in-time baseline that lags newer migrations (e.g.
           # `vendor_secrets.companyId`), so the booting api-server MUST run its
