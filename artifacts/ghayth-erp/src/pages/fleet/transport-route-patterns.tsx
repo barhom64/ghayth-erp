@@ -47,8 +47,9 @@ import {
   PageStatusBadge, DataTable, type DataTableColumn, PageShell,
 } from "@workspace/ui-core";
 import {
-  Plus, Pencil, Trash2, Play, CalendarRange, RefreshCw, Route as RouteIcon,
+  Plus, Pencil, Trash2, Play, CalendarRange, Route as RouteIcon,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -504,9 +505,7 @@ export default function TransportRoutePatternsPage() {
       ]}
       actions={
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 me-1" />تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} />
           <GuardedButton perm="fleet.bookings:create" size="sm" onClick={openCreate}>
             <Plus className="h-4 w-4 me-1" />قالب جديد
           </GuardedButton>

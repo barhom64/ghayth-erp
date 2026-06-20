@@ -15,7 +15,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, ShieldAlert, CheckCircle, AlertTriangle, Info, CheckCheck, BellRing, Save } from "lucide-react";
+import { ShieldAlert, CheckCircle, AlertTriangle, Info, CheckCheck, BellRing, Save } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 type InfraAlert = {
   id: number;
@@ -281,9 +282,7 @@ export default function AdminInfraAlerts() {
           <Button variant={showAcknowledged ? "default" : "outline"} size="sm" onClick={() => setShowAcknowledged(!showAcknowledged)}>
             {showAcknowledged ? "المعتمدة" : "المفتوحة"}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 me-1" />تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} />
         </div>
       }
     >

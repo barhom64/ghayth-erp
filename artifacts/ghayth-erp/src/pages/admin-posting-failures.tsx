@@ -10,8 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { useMemo, useState } from "react";
 import {
-  RefreshCw, AlertTriangle, CheckCircle, XCircle, PlayCircle, Trash2,
+  AlertTriangle, CheckCircle, XCircle, PlayCircle, Trash2,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { PrintButton } from "@/components/shared/print-button";
 
 type SummaryRow = { sourceType: string; cnt: number; sampleError: string | null; firstAt: string; lastAt: string };
@@ -196,9 +197,7 @@ export default function AdminPostingFailures() {
           <Button variant={showResolved ? "default" : "outline"} size="sm" onClick={() => setShowResolved(!showResolved)}>
             {showResolved ? "المحلولة" : "المفتوحة"}
           </Button>
-          <Button variant="outline" size="sm" onClick={refreshAll}>
-            <RefreshCw className="h-4 w-4 me-1" />تحديث
-          </Button>
+          <RefreshAction onRefresh={refreshAll} />
         </div>
       }
     >
