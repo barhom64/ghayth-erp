@@ -27,7 +27,8 @@
 import { rawQuery, rawExecute, withTransaction } from "./rawdb.js";
 import { signToken, signRefreshToken, verifyPassword } from "./auth.js";
 import { ForbiddenError, TooManyRequestsError } from "./errorHandler.js";
-import { createAuditLog } from "./businessHelpers.js";
+import { createAuditLog, emitEvent } from "./businessHelpers.js";
+import { sendAuthEmail } from "./authNotifications.js";
 import { logger } from "./logger.js";
 import { canonicalizeModules } from "./rbac/roleModulesCatalog.js";
 
@@ -298,11 +299,31 @@ export async function createUserSession(
   const refreshToken = signRefreshToken();
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
 
+  // #2712 (الدفعة 3) — كشف الدخول من جهاز جديد قبل تسجيل الجلسة: هل سبق
+  // لهذا المستخدم الدخول بنفس بصمة الجهاز (User-Agent)؟ الكشف قبل الإدراج
+  // حتى لا تُحتسب الجلسة الجديدة نفسها «سابقة». بصمة الجهاز أدلّ من الـIP
+  // (الذي يتغيّر كثيرًا) فأقلّ ضجيجًا.
+  let newDeviceEmail: string | null = null;
+  if (params.userAgent) {
+    const [probe] = await rawQuery<{ email: string | null; seen: boolean }>(
+      `SELECT u.email AS email,
+              EXISTS(SELECT 1 FROM refresh_tokens rt WHERE rt."userId"=$1 AND rt."userAgent"=$2) AS seen
+         FROM users u WHERE u.id=$1`,
+      [params.userId, params.userAgent],
+    );
+    if (probe && !probe.seen) newDeviceEmail = probe.email ?? "";
+  }
+
   await rawExecute(
     `INSERT INTO refresh_tokens (token, "userId", "expiresAt", "userAgent", "ipAddress")
      VALUES ($1, $2, $3, $4, $5)`,
     [refreshToken, params.userId, expiresAt.toISOString(), params.userAgent ?? null, params.ipAddress ?? null],
   );
+
+  // تنبيه دخول من جهاز جديد — best-effort، لا يحجب إصدار الجلسة.
+  if (newDeviceEmail !== null) {
+    void alertNewDeviceLogin(params.userId, newDeviceEmail, params.ipAddress ?? null, params.userAgent ?? null);
+  }
 
   return {
     accessToken,
@@ -311,6 +332,39 @@ export async function createUserSession(
     accessTokenExpiresIn: ACCESS_TOKEN_TTL_SECONDS,
     refreshTokenExpiresIn: REFRESH_TOKEN_TTL_SECONDS,
   };
+}
+
+/**
+ * #2712 (3) — أثر + تنبيه «دخول من جهاز جديد». الأثر (Audit + Event) بلا
+ * هجرة ويعطي إشارة أمنية فورية في سجل التدقيق/النشاط. البريد best-effort:
+ * يصمت بهدوء إن لم يُهيَّأ قالب «auth.new_device_login.email» (يحتاج seed
+ * باعتماد لاحق). كل شيء داخل try فلا يكسر الدخول أبدًا.
+ */
+async function alertNewDeviceLogin(
+  userId: number,
+  email: string,
+  ip: string | null,
+  userAgent: string | null,
+): Promise<void> {
+  try {
+    void createAuditLog({
+      companyId: 0, userId, action: "login_new_device", entity: "users", entityId: userId,
+      after: { ip, userAgent },
+    }).catch(() => {});
+    void emitEvent({
+      companyId: 0, userId, action: "auth.login.new_device", entity: "users", entityId: userId,
+      ip: ip ?? "unknown", details: JSON.stringify({ userAgent }),
+    }).catch(() => {});
+    if (email) {
+      await sendAuthEmail({
+        companyId: 0, userId, recipientEmail: email, recipientName: email,
+        templateKey: "auth.new_device_login.email",
+        vars: { userName: email, ip: ip ?? "—", device: userAgent ?? "—", at: new Date().toISOString() },
+      });
+    }
+  } catch (e) {
+    logger.warn(e, "[authSession] new-device login alert failed (non-blocking)");
+  }
 }
 
 /**
