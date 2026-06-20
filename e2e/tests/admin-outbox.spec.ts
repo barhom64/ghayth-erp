@@ -20,7 +20,7 @@ test.describe("Admin event outbox — operational UI", () => {
 
     // Title renders as the page heading (the only h1 in <main>).
     await expect(
-      main.getByRole("heading", { name: "صندوق الأحداث الصادرة (Outbox)" }),
+      main.getByRole("heading", { name: "صندوق الأحداث الصادرة" }),
     ).toBeVisible();
 
     // The pending/processed gauge labels render. `exact` keeps these off the
