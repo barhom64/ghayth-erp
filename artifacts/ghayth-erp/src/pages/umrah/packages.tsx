@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UmrahSeasonSelect } from "@/components/shared/entity-selects";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/formatters";
 import { Package, Check, X, Plus, Pencil, Trash2 } from "lucide-react";
@@ -65,10 +65,8 @@ export default function UmrahPackages() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const packagesQ = useApiQuery<any>(["umrah-packages"], "/umrah/packages");
-  const seasonsQ = useApiQuery<any>(["umrah-seasons"], "/umrah/seasons");
   const rows = asList(packagesQ.data?.data || packagesQ.data);
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
-  const seasons = asList(seasonsQ.data?.data || seasonsQ.data);
 
   const [editing, setEditing] = useState<UmrahPackage | null>(null);
   const [isNew, setIsNew] = useState(false);
@@ -201,15 +199,7 @@ export default function UmrahPackages() {
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div>
-              <Label>الموسم</Label>
-              <Select value={form.seasonId} onValueChange={(v) => setForm({ ...form, seasonId: v })}>
-                <SelectTrigger><SelectValue placeholder="اختر الموسم" /></SelectTrigger>
-                <SelectContent>
-                  {seasons.map((s: any) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <UmrahSeasonSelect label="الموسم" value={form.seasonId} onChange={(v) => setForm({ ...form, seasonId: v })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
