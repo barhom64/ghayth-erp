@@ -44,6 +44,11 @@ jobs:
       # auth.ts refuses to load with a JWT_SECRET shorter than 32 chars.
       # CI-only value — never authenticates a production session.
       JWT_SECRET: ci-only-jwt-secret-thirty-two-chars-aaaaaaaaaaaaaaaa
+      # Seed the canonical company+branch (db/seed-admin-user.sql) so
+      # bootstrapAdminUser() finds company id=1 and creates the admin@ghayth.com
+      # owner that the e2e login() helper authenticates as. Without this the
+      # seed is skipped, no admin user exists, and every authenticated spec 403s.
+      SEED_DEMO_DATA: 'true'
       # NODE_ENV intentionally unset: `vite build` derives its own
       # NODE_ENV=production internally (see audit-runtime.yml Task #404 note).
       HUSKY: '0'
