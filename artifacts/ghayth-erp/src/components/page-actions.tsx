@@ -114,9 +114,13 @@ export function ExportAction({ onExport, disabled, perm, permMode }: {
   return <PageActionButton icon={Download} label="تصدير" onClick={onExport} disabled={disabled} perm={perm} permMode={permMode} testid="action-export" />;
 }
 
-/** طباعة الصفحة. افتراضيًّا window.print()، أو معالج مخصّص. */
-export function PrintAction({ onPrint }: { onPrint?: () => void }) {
-  return <PageActionButton icon={Printer} label="طباعة" onClick={onPrint ?? (() => window.print())} testid="action-print" />;
+/**
+ * طباعة عبر معالج رسمي مُمرَّر فقط. للوثائق استخدم <PrintButton/> — وهو المسار
+ * الرسمي الوحيد عبر محرّك الطباعة (تدقيق + ترويسة)، وقد وُحِّد شكله ليطابق هذا
+ * الشريط. لا نطبع من المتصفّح مباشرة (حارس stop-ship يمنع أنظمة الطباعة الموازية).
+ */
+export function PrintAction({ onPrint }: { onPrint: () => void }) {
+  return <PageActionButton icon={Printer} label="طباعة" onClick={onPrint} testid="action-print" />;
 }
 
 /** رجوع للخلف (التاريخ)، أو إلى مسار محدّد عبر `to`. */
