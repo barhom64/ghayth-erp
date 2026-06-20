@@ -4918,6 +4918,11 @@ router.post("/rental-contracts/:id/payments", authorize({ feature: "fleet.vehicl
        VALUES ($1,$2,$3,$4,'pending',$5)`,
       [scope.companyId, id, b.data.dueDate, b.data.amount, b.data.notes ?? null]
     );
+    createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "fleet.rental_payment.scheduled", entity: "fleet_rental_payments", entityId: insertId,
+      after: { contractId: id, dueDate: b.data.dueDate, amount: b.data.amount },
+    }).catch(() => undefined);
     res.status(201).json({ id: insertId, ok: true });
   } catch (err) { handleRouteError(err, res, "rental schedule error"); }
 });
