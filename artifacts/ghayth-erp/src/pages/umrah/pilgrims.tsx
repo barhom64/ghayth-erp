@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { UmrahAgentSelect } from "@/components/shared/entity-selects";
 import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -120,8 +121,6 @@ export default function UmrahPilgrims() {
   // least one row is selected.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkAgentId, setBulkAgentId] = useState<string>("");
-  const { data: agentsResp } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
-  const agents = asList(agentsResp?.data || agentsResp);
   const bulkAssignMut = useApiMutation<unknown, { pilgrimIds: number[]; agentId: number }>(
     "/umrah/assign-bulk",
     "POST",
@@ -433,12 +432,14 @@ export default function UmrahPilgrims() {
               <span className="font-semibold">{selectedIds.size}</span>
               <span className="text-muted-foreground">معتمر محدّد للإسناد</span>
             </div>
-            <Select value={bulkAgentId} onValueChange={setBulkAgentId}>
-              <SelectTrigger className="w-56 h-8 text-xs"><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-              <SelectContent>
-                {agents.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <UmrahAgentSelect
+              label="الوكيل"
+              hideLabel
+              className="w-56"
+              placeholder="اختر الوكيل"
+              value={bulkAgentId}
+              onChange={setBulkAgentId}
+            />
             <GuardedButton
               perm="umrah:create"
               size="sm"
