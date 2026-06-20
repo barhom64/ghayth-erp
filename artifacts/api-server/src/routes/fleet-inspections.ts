@@ -16,6 +16,7 @@ import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { resolveDriverFromScope } from "./fleet.js";
 import { z } from "zod";
 
 const router = Router();
@@ -232,6 +233,99 @@ router.post("/inspections/:id/reject", authorize({ feature: "fleet.vehicles", ac
     }).catch((e) => logger.error(e, "fleet-inspections reject audit failed"));
     res.json({ ok: true, status: "rejected" });
   } catch (err) { handleRouteError(err, res, "Reject inspection error:"); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// بوابة السائق — يفي طلب الفحص اليومي بنفسه (PR2). يُحلّ السائق من نطاق الطلب،
+// وكل عملية محصورة على فحوص هذا السائق فقط.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const driverSubmitSchema = z.object({
+  odometer: z.coerce.number().int().nonnegative(),
+  fuelLevel: z.coerce.number().min(0).max(1).optional(),
+  notes: z.string().max(2000).optional(),
+});
+
+// ─── GET /me/inspections — فحوص السائق (المعلّقة + الأخيرة) ───────────────────
+router.get("/me/inspections", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT i.id, i."vehicleId", v."plateNumber", i."inspectionType", i."odometer",
+              i."status", i."dueDate", i."createdAt",
+              (SELECT COUNT(*)::int FROM fleet_inspection_photos p
+                WHERE p."inspectionId" = i.id AND p."deletedAt" IS NULL) AS "photoCount"
+         FROM fleet_vehicle_inspections i
+         LEFT JOIN fleet_vehicles v ON v.id = i."vehicleId"
+        WHERE i."companyId" = $1 AND i."driverId" = $2 AND i."deletedAt" IS NULL
+        ORDER BY (i."status" = 'pending') DESC, i."createdAt" DESC
+        LIMIT 100`,
+      [scope.companyId, driver.id],
+    );
+    res.json({ data: rows });
+  } catch (err) { handleRouteError(err, res, "Driver inspections list error:"); }
+});
+
+// ─── POST /me/inspections/:id/submit — السائق يفي الفحص (عداد + يرسله) ────────
+router.post("/me/inspections/:id/submit", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(driverSubmitSchema.safeParse(req.body));
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+
+    const { affectedRows } = await rawExecute(
+      `UPDATE fleet_vehicle_inspections
+          SET "odometer" = $1, "fuelLevel" = $2, "notes" = $3, "status" = 'submitted',
+              "capturedByUserId" = $4, "capturedByRole" = 'driver', "capturedAt" = NOW(), "updatedAt" = NOW()
+        WHERE id = $5 AND "companyId" = $6 AND "driverId" = $7 AND "deletedAt" IS NULL
+          AND "status" = 'pending'`,
+      [b.odometer, b.fuelLevel ?? null, b.notes ?? null, scope.userId, id, scope.companyId, driver.id],
+    );
+    if (!affectedRows) throw new NotFoundError("الطلب غير موجود أو لا يخصّك أو لم يعد معلّقًا");
+
+    auditFromRequest(req, "fleet.inspection.driver_submitted", "fleet_vehicle_inspections", id, {
+      after: { odometer: b.odometer },
+    }).catch((e) => logger.error(e, "fleet-inspections driver-submit audit failed"));
+    res.json({ ok: true, status: "submitted" });
+  } catch (err) { handleRouteError(err, res, "Driver submit inspection error:"); }
+});
+
+// ─── POST /me/inspections/:id/photos — السائق يرفع صورة لفحصه ─────────────────
+router.post("/me/inspections/:id/photos", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(addPhotoSchema.safeParse(req.body));
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+
+    // الفحص يجب أن يخصّ هذا السائق وغير معتمد/مرفوض.
+    const [inspection] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM fleet_vehicle_inspections
+        WHERE id = $1 AND "companyId" = $2 AND "driverId" = $3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, driver.id],
+    );
+    if (!inspection) throw new NotFoundError("الفحص غير موجود أو لا يخصّك");
+    if (inspection.status === "approved" || inspection.status === "rejected") {
+      throw new ValidationError("لا يمكن إضافة صور بعد اعتماد الفحص أو رفضه");
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_inspection_photos
+         ("companyId","inspectionId","photoType","storageKey","fileName","mimeType","fileSize","capturedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+      [scope.companyId, id, b.photoType, b.storageKey, b.fileName ?? null, b.mimeType ?? null, b.fileSize ?? null],
+    );
+    assertInsert(insertId, "fleet_inspection_photos");
+    auditFromRequest(req, "fleet.inspection.driver_photo_added", "fleet_vehicle_inspections", id, {
+      after: { photoId: insertId, photoType: b.photoType },
+    }).catch((e) => logger.error(e, "fleet-inspections driver-photo audit failed"));
+    res.status(201).json({ id: insertId });
+  } catch (err) { handleRouteError(err, res, "Driver add inspection photo error:"); }
 });
 
 export default router;
