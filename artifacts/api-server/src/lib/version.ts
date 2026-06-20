@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { config } from "./config.js";
 
 /**
  * Build-time revision baked into the production bundle by `build.mjs` via
@@ -54,7 +55,7 @@ function readGitCommit(): string {
 const COMMIT: string =
   typeof __APP_COMMIT__ !== "undefined" && __APP_COMMIT__
     ? __APP_COMMIT__
-    : process.env.APP_COMMIT?.trim() || readGitCommit();
+    : readGitCommit();
 
 const BUILT_AT: string =
   typeof __APP_BUILT_AT__ !== "undefined" && __APP_BUILT_AT__
@@ -77,7 +78,7 @@ export function getVersionInfo(): VersionInfo {
     builtAt: BUILT_AT,
     startedAt: PROCESS_STARTED_AT,
     node: process.version,
-    env: process.env.NODE_ENV ?? "development",
+    env: config.nodeEnv,
   };
 }
 
