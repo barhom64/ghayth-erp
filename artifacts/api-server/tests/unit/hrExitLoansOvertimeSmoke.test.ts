@@ -437,7 +437,10 @@ describe("Overtime creation", () => {
 
   it("initiates approval chain", () => {
     const idx = OVERTIME_ROUTE.indexOf('router.post("/overtime"');
-    const section = OVERTIME_ROUTE.slice(idx, idx + 4000);
+    // نافذة المعالِج كاملةً حتى الراوت التالي (بدل طول ثابت هشّ يكسره أي إضافة
+    // مشروعة قبل سلسلة الموافقات — مثل فحص سقف الوقت الإضافي الشهري).
+    const nextRoute = OVERTIME_ROUTE.indexOf("\nrouter.", idx + 10);
+    const section = OVERTIME_ROUTE.slice(idx, nextRoute > -1 ? nextRoute : idx + 8000);
     expect(section).toContain("initiateApprovalChain");
     expect(section).toContain('chainType: "overtime"');
   });
