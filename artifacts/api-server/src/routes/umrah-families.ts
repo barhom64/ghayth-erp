@@ -35,7 +35,7 @@ import {
   parseId,
   zodParse,
 } from "../lib/errorHandler.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -141,9 +141,7 @@ router.post("/families", authorize({ feature: "umrah", action: "create" }), asyn
       [scope.companyId, b.familyName, b.headPilgrimId ?? null, b.contactPhone ?? null, b.contactName ?? null, b.notes ?? null],
     );
     if (!rows[0]) throw new NotFoundError("فشل في إنشاء العائلة");
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "umrah_families", entityId: rows[0].id as number,
+    auditFromRequest(req, "create", "umrah_families", rows[0].id as number, {
       after: { familyName: b.familyName, headPilgrimId: b.headPilgrimId ?? null },
     }).catch((e) => logger.error(e, "umrah-families background task failed"));
     emitEvent({
@@ -194,9 +192,7 @@ router.patch("/families/:id", authorize({ feature: "umrah", action: "update" }),
       params,
     );
     if (result.affectedRows === 0) throw new NotFoundError("العائلة غير موجودة");
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "update", entity: "umrah_families", entityId: id,
+    auditFromRequest(req, "update", "umrah_families", id, {
       after: b,
     }).catch((e) => logger.error(e, "umrah-families background task failed"));
     res.json({ ok: true });
@@ -218,9 +214,8 @@ router.delete("/families/:id", authorize({ feature: "umrah", action: "delete" })
       [id, scope.companyId],
     );
     if (result.affectedRows === 0) throw new NotFoundError("العائلة غير موجودة");
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "delete", entity: "umrah_families", entityId: id, after: null,
+    auditFromRequest(req, "delete", "umrah_families", id, {
+      after: null,
     }).catch((e) => logger.error(e, "umrah-families background task failed"));
     res.status(204).end();
   } catch (err) { handleRouteError(err, res, "Delete family"); }
