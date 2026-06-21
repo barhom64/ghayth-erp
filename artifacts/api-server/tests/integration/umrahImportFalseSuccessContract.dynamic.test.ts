@@ -40,6 +40,7 @@
 //     tests/integration/umrahImportFalseSuccessContract.dynamic.test.ts
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { encryptField, blindIndex } from "../../src/lib/fieldEncryption.js";
 
 const TEST_URL_MARKERS = ["_test", "localhost:54329", "127.0.0.1:54329"];
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -183,14 +184,15 @@ d("Umrah import — false-success-prevention contract (U-08-CLOSE, #2080)", () =
     for (const seed of [SEEDED_UPD_1, SEEDED_UPD_2, SEEDED_SKIP_1]) {
       await rawQuery(
         `INSERT INTO umrah_pilgrims
-         ("companyId","branchId","seasonId","nuskNumber","fullName","passportNumber",nationality,status,
+         ("companyId","branchId","seasonId","nuskNumber","fullName","passportNumber","passportNumber_hash",nationality,status,
           "programDuration","overstayDays","isInsideKingdom","hasUmrahPermit",
           "createdBy","createdAt","updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',14,0,false,false,$8,NOW(),NOW())`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',14,0,false,false,$9,NOW(),NOW())`,
         [
           ids.companyId, ids.branchId, ids.seasonId,
-          seed.nuskNumber, seed.fullName, seed.passportNumber, seed.nationality,
-          ids.userId,
+          seed.nuskNumber, seed.fullName,
+          encryptField(String(seed.passportNumber)), blindIndex(String(seed.passportNumber)),
+          seed.nationality, ids.userId,
         ],
       );
     }
@@ -314,14 +316,7 @@ d("Umrah import — false-success-prevention contract (U-08-CLOSE, #2080)", () =
     expect(afterOverride.clientLinkagePolicy).toBe("sub_agent_client_required");
   });
 
-  // SKIPPED: revived from a never-run state (the suite's setup was broken by
-  // schema drift). With setup fixed, §A–§D pass, but this idempotency invariant
-  // does NOT hold today: a re-preview after confirm still reports the 3 inserted
-  // rows as `newRows` instead of skipping them — exactly the gap the audit flags
-  // above ("the idempotency proof … missing today"). That is an import-engine
-  // concern (confirm→re-preview nuskNumber matching), not a test-seed bug, so it
-  // is tracked for separate product investigation rather than masked or left red.
-  it.skip("§E — re-preview after confirm reports zero new rows (idempotency proof)", async () => {
+  it("§E — re-preview after confirm reports zero new rows (idempotency proof)", async () => {
     // The §C test already confirmed the 7 rows. Re-importing the
     // SAME file must classify all non-error rows as skipped (their
     // existing DB row already matches), zero new rows, zero updates.
