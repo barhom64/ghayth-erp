@@ -45,7 +45,6 @@ routes/recruitment.ts:job_postings
 routes/settings.ts:approval_chains
 routes/storage.ts:documents
 routes/training.ts:training_enrollments
-routes/umrah-entities.ts:employee_commission_tiers
 routes/umrah-entities.ts:umrah_agents
 routes/umrah-entities.ts:umrah_groups
 routes/umrah-entities.ts:umrah_import_changes

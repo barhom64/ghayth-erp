@@ -153,6 +153,7 @@ router.get("/commission-plans", authorize({ feature: "umrah", action: "list" }),
       `WITH tier_counts AS (
          SELECT "planId", COUNT(*) AS "tierCount"
          FROM employee_commission_tiers
+         WHERE "deletedAt" IS NULL
          GROUP BY "planId"
        )
        SELECT cp.*,
@@ -182,7 +183,7 @@ router.get("/commission-plans/:id", authorize({ feature: "umrah", action: "view"
         [id, scope.companyId]
       ),
       rawQuery(
-        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2 ORDER BY "tierOrder"`,
+        `SELECT * FROM employee_commission_tiers WHERE "planId" = $1 AND "companyId" = $2 AND "deletedAt" IS NULL ORDER BY "tierOrder"`,
         [id, scope.companyId]
       ),
       rawQuery(
