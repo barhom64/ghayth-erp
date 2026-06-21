@@ -28,6 +28,7 @@ import {
   ProjectSelect,
   CostCenterMasterSelect,
 } from "@/components/shared/entity-selects";
+import { AdvancedSection } from "@/components/shared/advanced-section";
 
 const OPERATIONS = [
   { key: "employee", label: "إنشاء سجل الموظف", icon: User },
@@ -73,14 +74,14 @@ const WIZARD_STEPS: WizardStep[] = [
     isComplete: (f) => Boolean(f.contractType && f.salary && Number(f.salary) > 0),
   },
   {
-    // PR-1 (#2077) — institutional binding step. The five mandatory
-    // fields close «الموظف ككيان تشغيلي مؤسسي» at create time so the
-    // engineer never has to remember a follow-up step.
+    // النظام يَحضُر لا يُحضَر له — الربط المؤسسي الجوهري للموظف هو المنصب
+    // وفئة الحضور والمدير المباشر فقط. الفريق والمشروع أمور عارضة تُسنَد
+    // لاحقًا عبر عقود العضوية، ومركز التكلفة يُشتق آليًا من الفرع والصفة.
     key: "institutional",
     label: "الربط المؤسسي",
     icon: Network,
     isComplete: (f) => Boolean(
-      f.positionId && f.categoryKey && f.teamId && f.projectId && f.costCenterId && f.managerId,
+      f.positionId && f.categoryKey && f.managerId,
     ),
   },
   {
@@ -244,6 +245,12 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
     committeeId: "",
   });
 
+  // الدفعة 3 — توزيع الموظف على عدة فروع (اختياري، داخل النمذجة المتقدمة).
+  // مطفأ افتراضيًا → الموظف على فرعه الرئيسي. عند تفعيله: صفوف فرع + صفة + نسبة.
+  const [multiBranch, setMultiBranch] = useState(false);
+  const [branchAllocs, setBranchAllocs] = useState<Array<{ branchId: string; capacity: string; allocationPercent: string }>>([]);
+  const allocPctTotal = branchAllocs.reduce((s, a) => s + (Number(a.allocationPercent) || 0), 0);
+
   // Fleet vehicles — only fetched when role implies driver, but the
   // hook needs a stable dependency so we always fetch (light query).
   const { data: vehiclesData } = useApiQuery<{ data: any[] }>(["fleet-vehicles-employee-create"], "/fleet/vehicles?limit=500");
@@ -350,20 +357,37 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
       jobTitle: form.jobTitle ? null : "يرجى اختيار المسمى الوظيفي",
       contractType: form.contractType ? null : "يرجى اختيار نوع العقد",
       salary: !form.salary || Number(form.salary) <= 0 ? "يرجى إدخال الراتب الأساسي" : null,
-      // PR-1 (#2077) — institutional mandatoriness. The backend has a
-      // bootstrap carve-out for the first employee in a company; the
-      // UI doesn't, because once the company has any employees, every
-      // new hire must be bound to the institutional matrix.
+      // النظام يَحضُر لا يُحضَر له — الربط المؤسسي الجوهري وقت التعيين هو
+      // المنصب وفئة الحضور والمدير المباشر فقط. الفريق والمشروع أمور عارضة
+      // تُسنَد لاحقًا عبر عقود العضوية، ومركز التكلفة يُشتق آليًا من الفرع
+      // والصفة — فلا تُطلَب من المُعيِّن وقت الإنشاء.
       managerId: form.managerId ? null : "يرجى اختيار المدير المباشر",
       positionId: form.positionId ? null : "يرجى اختيار المنصب الإداري",
       categoryKey: form.categoryKey ? null : "يرجى اختيار فئة الموظف",
-      teamId: form.teamId ? null : "يرجى اختيار الفريق",
-      projectId: form.projectId ? null : "يرجى اختيار المشروع",
-      costCenterId: form.costCenterId ? null : "يرجى اختيار مركز التكلفة",
     });
     if (firstError) {
       toast({ variant: "destructive", title: firstError });
       return;
+    }
+    // الدفعة 3 — تحقق توزيع الفروع قبل الإرسال (رسالة عربية واضحة).
+    if (multiBranch) {
+      const rows = branchAllocs.filter((a) => a.branchId);
+      if (rows.length < 2) {
+        toast({ variant: "destructive", title: "أضف فرعين على الأقل للتوزيع، أو أطفئ الوضع المتعدد" });
+        return;
+      }
+      if (new Set(rows.map((a) => a.branchId)).size !== rows.length) {
+        toast({ variant: "destructive", title: "لا يجوز تكرار الفرع في التوزيع" });
+        return;
+      }
+      if (rows.some((a) => !(Number(a.allocationPercent) > 0))) {
+        toast({ variant: "destructive", title: "أدخل نسبة موجبة لكل فرع" });
+        return;
+      }
+      if (Math.round(allocPctTotal * 100) / 100 !== 100) {
+        toast({ variant: "destructive", title: `مجموع نِسَب الفروع يجب أن يساوي 100% (الحالي ${allocPctTotal}%)` });
+        return;
+      }
     }
     try {
       const result = await createMut.mutateAsync({
@@ -388,6 +412,18 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
         projectId: form.projectId ? Number(form.projectId) : undefined,
         costCenterId: form.costCenterId ? Number(form.costCenterId) : undefined,
         committeeId: form.committeeId ? Number(form.committeeId) : undefined,
+        // الدفعة 3 — توزيع الفروع (يُرسَل فقط عند تفعيل الوضع المتعدد).
+        ...(multiBranch && branchAllocs.some((a) => a.branchId)
+          ? {
+              branchAllocations: branchAllocs
+                .filter((a) => a.branchId)
+                .map((a) => ({
+                  branchId: Number(a.branchId),
+                  capacity: a.capacity || undefined,
+                  allocationPercent: Number(a.allocationPercent) || 0,
+                })),
+            }
+          : {}),
         ...(attachments.length > 0 ? { attachments } : {}),
         ...(sourceApplicationId ? { sourceApplicationId: Number(sourceApplicationId) } : {}),
       });
@@ -495,6 +531,8 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
               teamId: "", projectId: "", costCenterId: "",
               committeeId: "",
             });
+            setMultiBranch(false);
+            setBranchAllocs([]);
           }}>
             إضافة موظف آخر
           </Button>
@@ -717,17 +755,18 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
         <NumberField label="الراتب الأساسي" value={form.salary} onChange={(v) => setForm((f) => ({ ...f, salary: v }))} error={fieldErrors.salary} />
         <FormFieldWrapper label="تاريخ التعيين"><DatePicker value={form.hireDate} onChange={(v) => setForm((f) => ({ ...f, hireDate: v }))} /></FormFieldWrapper>
 
-        {/* PR-1 (#2077) — institutional binding. Five mandatory bindings
-            + 1 optional. The wizard step indicator (above) tracks
-            completion via WIZARD_STEPS[institutional].isComplete. */}
+        {/* النظام يَحضُر لا يُحضَر له — الربط المؤسسي الجوهري وقت التعيين هو
+            المنصب وفئة الحضور (والمدير المباشر في خطوة الوظيفة). الفريق
+            والمشروع ومركز التكلفة أمور عارضة/مشتقة، نُقلت إلى «نمذجة متقدمة»
+            المطوية افتراضيًا والتي لا تُفتح إلا لذوي صلاحية النمذجة. */}
         <div id="wizard-step-institutional" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">
           <h3 className="text-sm font-semibold text-status-info-foreground mb-1 flex items-center gap-2">
             <Network className="w-4 h-4" />
             الربط المؤسسي
           </h3>
           <p className="text-xs text-muted-foreground mb-3">
-            هذه الحقول تربط الموظف بهيكل المؤسسة (المنصب الإداري، فريق العمل، المشروع، مركز التكلفة، فئة القوى العاملة).
-            بدونها لا تظهر تقاريرك مكتملة ولا تتفعّل سياسة الحضور بالفئة.
+            تربط هذه الحقول الموظف بهيكل المؤسسة: المنصب الإداري وفئة القوى العاملة (لتفعيل سياسة الحضور).
+            الفريق والمشروع يُسنَدان لاحقًا عند الحاجة، ومركز التكلفة يُشتق آليًا من فرع الموظف وصفته فيه.
           </p>
         </div>
         <FormFieldWrapper label="المنصب الإداري" required error={fieldErrors.positionId}>
@@ -746,38 +785,127 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
             allowCreate={false}
           />
         </FormFieldWrapper>
-        <FormFieldWrapper label="الفريق" required error={fieldErrors.teamId}>
-          <TeamSelect
-            value={form.teamId}
-            onChange={(v) => setForm((f) => ({ ...f, teamId: v }))}
-            error={fieldErrors.teamId}
-            allowCreate={!embedded}
-          />
-        </FormFieldWrapper>
-        <FormFieldWrapper label="المشروع" required error={fieldErrors.projectId}>
-          <ProjectSelect
-            value={form.projectId}
-            onChange={(v) => setForm((f) => ({ ...f, projectId: v }))}
-            error={fieldErrors.projectId}
-            allowCreate={!embedded}
-          />
-        </FormFieldWrapper>
-        <FormFieldWrapper label="مركز التكلفة" required error={fieldErrors.costCenterId}>
-          <CostCenterMasterSelect
-            value={form.costCenterId}
-            onChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
-            error={fieldErrors.costCenterId}
-            allowCreate={!embedded}
-          />
-        </FormFieldWrapper>
-        <FormFieldWrapper label="اللجنة (اختياري)" error={fieldErrors.committeeId}>
-          <CommitteeSelect
-            value={form.committeeId}
-            onChange={(v) => setForm((f) => ({ ...f, committeeId: v }))}
-            error={fieldErrors.committeeId}
-            allowCreate={!embedded}
-          />
-        </FormFieldWrapper>
+        <div className="md:col-span-2">
+          <AdvancedSection
+            perm="hr:update"
+            title="إسناد عارض ونمذجة (اختياري)"
+            summary="الفريق والمشروع يُسنَدان لاحقًا عبر عضوياتهما المستقلة، ومركز التكلفة يُشتق تلقائيًا من فرع الموظف وصفته. افتح هذا القسم فقط للإسناد اليدوي المبكر."
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormFieldWrapper label="الفريق (اختياري)" error={fieldErrors.teamId}>
+                <TeamSelect
+                  value={form.teamId}
+                  onChange={(v) => setForm((f) => ({ ...f, teamId: v }))}
+                  error={fieldErrors.teamId}
+                  allowCreate={!embedded}
+                />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="المشروع (اختياري)" error={fieldErrors.projectId}>
+                <ProjectSelect
+                  value={form.projectId}
+                  onChange={(v) => setForm((f) => ({ ...f, projectId: v }))}
+                  error={fieldErrors.projectId}
+                  allowCreate={!embedded}
+                />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="مركز التكلفة (يُشتق تلقائيًا — تجاوز يدوي)" error={fieldErrors.costCenterId}>
+                <CostCenterMasterSelect
+                  value={form.costCenterId}
+                  onChange={(v) => setForm((f) => ({ ...f, costCenterId: v }))}
+                  error={fieldErrors.costCenterId}
+                  allowCreate={!embedded}
+                />
+              </FormFieldWrapper>
+              <FormFieldWrapper label="اللجنة (اختياري)" error={fieldErrors.committeeId}>
+                <CommitteeSelect
+                  value={form.committeeId}
+                  onChange={(v) => setForm((f) => ({ ...f, committeeId: v }))}
+                  error={fieldErrors.committeeId}
+                  allowCreate={!embedded}
+                />
+              </FormFieldWrapper>
+            </div>
+
+            {/* الدفعة 3 — توزيع الموظف على عدة فروع. مطفأ افتراضيًا: الموظف
+                على فرعه الرئيسي ومركز تكلفته يُشتق منه. عند التفعيل: صفوف
+                فرع + صفة + نسبة (مجموعها 100%) فيُوزَّع راتبه محاسبيًا. */}
+            <div className="mt-4 border-t border-border pt-3">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4"
+                  checked={multiBranch}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setMultiBranch(on);
+                    setBranchAllocs(on && branchAllocs.length === 0
+                      ? [
+                          { branchId: form.branchId || "", capacity: form.categoryKey || "", allocationPercent: "" },
+                          { branchId: "", capacity: "", allocationPercent: "" },
+                        ]
+                      : branchAllocs);
+                  }}
+                />
+                توزيع الموظف على عدة فروع (محاسبيًا)
+              </label>
+              {multiBranch && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    يُوزَّع راتب الموظف على مراكز تكلفة الفروع حسب النسبة وصفته في كل فرع. مجموع النِسَب يجب أن يساوي 100%.
+                  </p>
+                  {branchAllocs.map((a, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      <Select
+                        value={a.branchId || "_none"}
+                        onValueChange={(v) => setBranchAllocs((rows) => rows.map((r, j) => j === i ? { ...r, branchId: v === "_none" ? "" : v } : r))}
+                      >
+                        <SelectTrigger className="w-40"><SelectValue placeholder="الفرع" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">— الفرع —</SelectItem>
+                          {branches.map((b: { id: number; name: string }) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        className="w-36"
+                        placeholder="الصفة في الفرع"
+                        value={a.capacity}
+                        onChange={(e) => setBranchAllocs((rows) => rows.map((r, j) => j === i ? { ...r, capacity: e.target.value } : r))}
+                      />
+                      <Input
+                        className="w-24"
+                        type="number"
+                        placeholder="النسبة %"
+                        value={a.allocationPercent}
+                        onChange={(e) => setBranchAllocs((rows) => rows.map((r, j) => j === i ? { ...r, allocationPercent: e.target.value } : r))}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setBranchAllocs((rows) => rows.filter((_, j) => j !== i))}
+                      >
+                        حذف
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBranchAllocs((rows) => [...rows, { branchId: "", capacity: "", allocationPercent: "" }])}
+                    >
+                      + إضافة فرع
+                    </Button>
+                    <span className={`text-xs ${Math.round(allocPctTotal * 100) / 100 === 100 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>
+                      المجموع: {allocPctTotal}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </AdvancedSection>
+        </div>
 
         {/* Integrated HR — accounts + finance binding section. */}
         <div id="wizard-step-accounts" className="md:col-span-2 border-t pt-4 mt-2 scroll-mt-24">

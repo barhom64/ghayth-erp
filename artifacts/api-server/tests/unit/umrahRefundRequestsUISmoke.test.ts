@@ -19,7 +19,7 @@ const read = (p: string) => readFileSync(resolve(ROOT, p), "utf8");
 const PAGE = read("artifacts/ghayth-erp/src/pages/umrah/refund-requests.tsx");
 const STATUS_LIB = read("artifacts/ghayth-erp/src/lib/umrah-refund-status.ts");
 const ROUTES = read("artifacts/ghayth-erp/src/routes/umrahRoutes.tsx");
-const TABS = read("artifacts/ghayth-erp/src/components/shared/umrah-tabs-nav.tsx");
+const TABS = read("artifacts/ghayth-erp/src/components/layout/navigation.registry.ts");
 const SIDEBAR = read("artifacts/ghayth-erp/src/components/layout/navigation.registry.ts");
 const BACKEND_WF = read("artifacts/api-server/src/lib/umrahRefundWorkflow.ts");
 
@@ -81,8 +81,8 @@ describe("navigation — reachable, no orphan", () => {
     expect(ROUTES).toContain('{ path: "/umrah/refund-requests", component: UmrahRefundRequests, module: "operations" }');
   });
   it("umrah tabs nav carries the tab next to الغرامات", () => {
-    expect(TABS).toContain('href: "/umrah/refund-requests"');
-    expect(TABS).toContain('label: "الاستردادات"');
+    expect(TABS).toContain('path: "/umrah/refund-requests"');
+    expect(TABS).toContain('label: "طلبات الاسترداد"');
   });
   it("sidebar registry carries the entry", () => {
     expect(SIDEBAR).toContain('path: "/umrah/refund-requests"');

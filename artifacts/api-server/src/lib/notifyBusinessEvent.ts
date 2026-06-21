@@ -12,7 +12,7 @@
  *
  * Used by: lib/eventListeners.ts hooks.
  */
-import { dispatchNotification, type EngineChannel } from "./notificationEngine.js";
+import { dispatchNotification, type EngineChannel } from "./notificationDispatch.js";
 import { resolveRecipient, shouldCcPersonalEmail, type ResolvableEntity } from "./recipientResolver.js";
 import { logger } from "./logger.js";
 

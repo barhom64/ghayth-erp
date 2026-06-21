@@ -10,7 +10,7 @@ import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { UserCheck, Clock, AlertTriangle, ListChecks, CheckCircle } from "lucide-react";
+import { UserCheck, Clock, AlertTriangle, ListChecks, CheckCircle, Send, Inbox } from "lucide-react";
 
 /**
  * /hr/activation-board — لوحة «قيد التفعيل» (HR-REV-3 §5).
@@ -55,6 +55,15 @@ export default function ActivationBoardPage() {
     "PATCH",
     [["employees"], ["employees-onboarding-tasks"]],
     { successMessage: "تم تفعيل الموظف" },
+  );
+
+  // إعادة إرسال رابط الاستكمال الذاتي لموظف لم يُكمل بياناته (الرابط ينتهي خلال
+  // ٧ أيام). يُبطِل القديم ويرسل جديدًا — الخادم يرفض المفعّل أو من بلا بريد.
+  const resendMut = useApiMutation<{ onboardingLink?: string }, { id: number }>(
+    (b) => `/employees/${b.id}/resend-onboarding-link`,
+    "POST",
+    [["employees"]],
+    { successMessage: "أُعيد إرسال رابط الاستكمال للموظف" },
   );
 
   // Owner-role filter — narrow the board to employees still waiting on one
@@ -105,6 +114,7 @@ export default function ActivationBoardPage() {
     { label: "بنود إلزامية ناقصة", value: rows.reduce((s, r) => s + r.mandatoryRemaining, 0), icon: ListChecks, color: "text-status-warning-foreground bg-status-warning-surface" },
     { label: "بنود متأخّرة (SLA)", value: rows.reduce((s, r) => s + r.overdue, 0), icon: AlertTriangle, color: "text-status-error-foreground bg-status-error-surface" },
     { label: "جاهزون للمراجعة", value: rows.filter((r) => r.total > 0 && r.mandatoryRemaining === 0).length, icon: CheckCircle, color: "text-status-success-foreground bg-status-success-surface" },
+    { label: "بانتظار استكمال البيانات", value: pending.filter((e: any) => e.activationStatus === "self_submitted").length, icon: Inbox, color: "text-purple-700 bg-purple-100" },
   ];
 
   return (
@@ -186,6 +196,19 @@ export default function ActivationBoardPage() {
                       </>
                     ) : (
                       <Badge className="bg-status-warning-surface text-status-warning-foreground">{mandatoryRemaining} بند إلزامي ناقص</Badge>
+                    )}
+                    {(e.activationStatus === "self_invited" || e.activationStatus === "self_submitted") && (
+                      <GuardedButton
+                        perm="hr:update"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1"
+                        disabled={resendMut.isPending}
+                        onClick={() => resendMut.mutate({ id: e.id })}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        إعادة إرسال الرابط
+                      </GuardedButton>
                     )}
                     {overdue > 0 && (
                       <Badge className="bg-status-error-surface text-status-error-foreground">{overdue} متأخّر</Badge>

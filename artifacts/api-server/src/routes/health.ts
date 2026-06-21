@@ -7,6 +7,7 @@ import { getLiveness, getReadiness } from "../lib/health.js";
 import { getObservabilitySnapshot } from "../lib/observability.js";
 import { renderPrometheus } from "../lib/metrics.js";
 import { describeConfig } from "../lib/config.js";
+import { getVersionInfo, getShortCommit } from "../lib/version.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requirePermission } from "../middlewares/permissionMiddleware.js";
 
@@ -16,9 +17,25 @@ router.get("/healthz", (_req, res) => {
   // Validate the spec'd subset, then add operator-only diagnostics that
   // aren't part of the OpenAPI contract. `redisRateLimit` lets external
   // monitors notice when caps have silently degraded to per-replica memory
-  // (see artifacts/api-server/src/lib/rateLimitStore.ts).
+  // (see artifacts/api-server/src/lib/rateLimitStore.ts). `commit` is the
+  // short build revision so an operator can eyeball whether this instance is
+  // on the latest main (full info at /api/version).
   const data = HealthCheckResponse.parse({ status: "ok" });
-  res.json({ ...data, redisRateLimit: getRedisRateLimitStatus() });
+  res.json({
+    ...data,
+    redisRateLimit: getRedisRateLimitStatus(),
+    commit: getShortCommit(),
+  });
+});
+
+/**
+ * Build/version probe - anonymous. Reports the exact source revision this
+ * instance is running (baked into the bundle at build time by build.mjs).
+ * Compare against `git rev-parse origin/main` to know whether prod/main are in
+ * sync. Never touches the DB or any dependency.
+ */
+router.get("/version", (_req, res) => {
+  res.json(getVersionInfo());
 });
 
 /**

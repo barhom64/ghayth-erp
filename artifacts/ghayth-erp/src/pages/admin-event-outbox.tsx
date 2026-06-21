@@ -5,7 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useToast } from "@/hooks/use-toast";
-import { RefreshCw, Zap, Clock, Inbox, CheckCircle2 } from "lucide-react";
+import { Zap, Clock, Inbox, CheckCircle2 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 /**
  * Admin / Event Outbox monitor (#1603, under #1594).
@@ -68,9 +69,7 @@ export default function AdminEventOutbox() {
       loading={isLoading}
       actions={
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 me-1" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} />
           <GuardedButton
             perm="admin:update"
             size="sm"

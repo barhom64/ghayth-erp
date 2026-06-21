@@ -21,7 +21,8 @@ import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Download, RefreshCw } from "lucide-react";
+import { Shield, Download } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 
@@ -195,11 +196,13 @@ export default function UmrahExemptPilgrims() {
     setSelectedIds(next);
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={refetch} />;
-
+  // Rules of Hooks: usePrintRows must run before the early returns below, so
+  // compute rows first then call the hook unconditionally on every render.
   const rows = data?.data ?? [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={refetch} />;
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
 
@@ -359,9 +362,7 @@ export default function UmrahExemptPilgrims() {
               إلغاء استثناء {selectedIds.size}
             </GuardedButton>
           )}
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
-            <RefreshCw className="h-3 w-3" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} />
           <Button
             variant="outline"
             size="sm"

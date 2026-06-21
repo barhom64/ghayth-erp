@@ -100,6 +100,20 @@ export class ObjectStorageService {
     return new Response(webStream, { headers });
   }
 
+  // رفع خادمي للبايتات مباشرة (لا رابط موقّع مكشوف). يُستخدم للمسارات العامة
+  // المحميّة برمز، حيث يستلم الخادم المحتوى ويتحقق منه ثم يرفعه بصلاحياته.
+  // يعيد المسار المرجعي القياسي `/objects/uploads/<id>` للحفظ والعرض لاحقًا.
+  async uploadBytes(buffer: Buffer, contentType: string): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const objectId = randomUUID();
+    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+    const bucket = objectStorageClient.bucket(bucketName);
+    const file = bucket.file(objectName);
+    await file.save(buffer, { contentType, resumable: false });
+    return `/objects/uploads/${objectId}`;
+  }
+
   async getObjectEntityUploadURL(): Promise<string> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {

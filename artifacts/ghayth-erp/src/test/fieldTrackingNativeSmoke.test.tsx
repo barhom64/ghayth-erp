@@ -31,11 +31,14 @@ describe("field-tracking native bridge — inert on web", () => {
     expect(isNativeFieldTracking()).toBe(false);
   });
 
-  it("never statically imports the Capacitor plugin (dynamic import only)", () => {
-    // no top-level `import ... from "@capacitor..."` — keeps the web build clean
+  it("never imports the Capacitor plugin — reads it from the global registry", () => {
+    // no static OR dynamic module import of the plugin: a static import would
+    // force the web build to depend on it, and a bare-specifier dynamic
+    // import doesn't resolve in the native WebView. Loaded from
+    // window.Capacitor.Plugins instead.
     expect(SRC).not.toMatch(/^\s*import\s+[^\n]*from\s+["']@capacitor/m);
-    // it DOES load the plugin via a guarded dynamic import
-    expect(SRC).toMatch(/await import\(\/\* @vite-ignore \*\/ spec\)/);
+    expect(SRC).not.toMatch(/await\s+import\(/);
+    expect(SRC).toMatch(/\.Plugins\?\.BackgroundGeolocation/);
   });
 
   it("posts native pings with source:'native' and a Bearer token", () => {

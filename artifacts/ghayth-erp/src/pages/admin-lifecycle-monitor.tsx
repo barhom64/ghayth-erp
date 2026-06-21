@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import {
-  RefreshCw, GitBranch, ArrowRight,
+  GitBranch, ArrowRight,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 export default function AdminLifecycleMonitor() {
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -28,9 +29,7 @@ export default function AdminLifecycleMonitor() {
       subtitle="آلات الحالة (State Machines) لجميع كيانات النظام"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>

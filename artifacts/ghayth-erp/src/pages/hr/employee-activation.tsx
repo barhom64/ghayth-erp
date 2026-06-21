@@ -112,6 +112,7 @@ export default function EmployeeActivationPage() {
   const emptyQuickForm = {
     name: "",
     phone: "",
+    email: "",
     nationalId: "",
     nationality: "",
     departmentId: "",
@@ -120,6 +121,8 @@ export default function EmployeeActivationPage() {
   };
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickForm, setQuickForm] = useState(emptyQuickForm);
+  // عند توفّر بريد، تُرجِع الخلفية رابط الاستكمال الذاتي لنسخه/مشاركته يدويًا.
+  const [quickLink, setQuickLink] = useState<string | null>(null);
 
   const quickActivateMutation = useApiMutation<any, Record<string, any>>(
     "/employees/quick-activate",
@@ -127,9 +130,15 @@ export default function EmployeeActivationPage() {
     [["employees"]],
     {
       successMessage: false,
-      onSuccess: () => {
-        toast({ title: 'تم إنشاء الموظف بحالة "غير مفعّل" مع خطة المهام — فعّله من القائمة' });
-        setQuickOpen(false);
+      onSuccess: (res: any) => {
+        const link = res?.onboardingLink ?? null;
+        if (link) {
+          setQuickLink(link);
+          toast({ title: "أُنشئ الموظف وأُرسل له رابط استكمال البيانات بالبريد" });
+        } else {
+          toast({ title: 'تم إنشاء الموظف بحالة "غير مفعّل" مع خطة المهام — فعّله من القائمة' });
+          setQuickOpen(false);
+        }
         setQuickForm(emptyQuickForm);
         refetch();
       },
@@ -147,6 +156,7 @@ export default function EmployeeActivationPage() {
       hireDate: quickForm.hireDate || undefined,
     };
     if (quickForm.phone.trim()) body.phone = quickForm.phone.trim();
+    if (quickForm.email.trim()) body.email = quickForm.email.trim();
     if (quickForm.nationalId.trim()) body.nationalId = quickForm.nationalId.trim();
     if (quickForm.nationality.trim()) body.nationality = quickForm.nationality.trim();
     if (quickForm.departmentId.trim()) body.departmentId = Number(quickForm.departmentId);
@@ -446,6 +456,16 @@ export default function EmployeeActivationPage() {
                 />
               </div>
               <div className="grid gap-1.5">
+                <Label htmlFor="qa-email">البريد (لإرسال رابط الاستكمال)</Label>
+                <Input
+                  id="qa-email"
+                  type="email"
+                  dir="ltr"
+                  value={quickForm.email}
+                  onChange={(e) => setQuickField("email", e.target.value)}
+                />
+              </div>
+              <div className="grid gap-1.5">
                 <Label htmlFor="qa-nationalId">رقم الهوية</Label>
                 <Input
                   id="qa-nationalId"
@@ -488,14 +508,25 @@ export default function EmployeeActivationPage() {
                 />
               </div>
             </div>
+            {quickLink && (
+              <div className="rounded-lg border border-status-success-border bg-status-success-surface p-3 text-sm space-y-2">
+                <p className="text-status-success-foreground font-medium">رابط الاستكمال الذاتي (أُرسل بالبريد — يمكنك نسخه ومشاركته):</p>
+                <div className="flex items-center gap-2">
+                  <Input readOnly dir="ltr" value={quickLink} className="flex-1 text-xs" onFocus={(e) => e.currentTarget.select()} />
+                  <Button type="button" variant="outline" size="sm" onClick={() => { void navigator.clipboard?.writeText(quickLink); toast({ title: "نُسخ الرابط" }); }}>
+                    نسخ
+                  </Button>
+                </div>
+              </div>
+            )}
             <DialogFooter className="gap-2">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setQuickOpen(false)}
+                onClick={() => { setQuickOpen(false); setQuickLink(null); }}
                 disabled={quickActivateMutation.isPending}
               >
-                إلغاء
+                {quickLink ? "إغلاق" : "إلغاء"}
               </Button>
               <Button
                 type="submit"

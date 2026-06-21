@@ -6,6 +6,7 @@ const HrServices = lazy(() => import("@/pages/hr/services"));
 const Employees = lazy(() => import("@/pages/employees"));
 const EmployeeDetail = lazy(() => import("@/pages/employee-detail"));
 const EmployeesCreate = lazy(() => import("@/pages/create/employees-create"));
+const EmployeeQuickCreate = lazy(() => import("@/pages/create/hr/employee-quick-create"));
 const Attendance = lazy(() => import("@/pages/hr/attendance"));
 const AttendanceCreate = lazy(() => import("@/pages/create/hr/attendance-create"));
 const Leaves = lazy(() => import("@/pages/hr/leaves"));
@@ -58,6 +59,7 @@ const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 const ActivationBoard = lazy(() => import("@/pages/hr/activation-board"));
+const SelfOnboardingReview = lazy(() => import("@/pages/hr/self-onboarding-review"));
 // (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
 // (PerformanceAdvanced أُزيل — توزيع التقييمات + أفضل ١٠ صارا تبويب «التحليلات»
 // في /hr/performance، والمسار /hr/performance/advanced يُعاد توجيهه إليها. HR-REV)
@@ -128,11 +130,14 @@ const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
 const WpsSettings = lazy(() => import("@/pages/hr/saudi-compliance/wps/settings"));
 
 export const hrRoutes = [
-  { path: "/hr", component: HR },
+  // RBAC-REV-STD — مركز HR لوحة إدارية بلا subKey؛ minRoleLevel:25 يحرس
+  // الوصول المباشر بالرابط (لا الواجهة فقط) فلا يصله الاستاندر (10)/السائق (15).
+  { path: "/hr", component: HR, minRoleLevel: 25 },
   // HR-010 / #1799 priority #4 — Services Catalog landing page.
   { path: "/hr/services", component: HrServices, subKey: "services" },
   { path: "/employees", component: Employees, subKey: "employees" },
   { path: "/employees/create", component: EmployeesCreate, subKey: "employees" },
+  { path: "/employees/quick-create", component: EmployeeQuickCreate, subKey: "employees" },
   { path: "/employees/:id", component: EmployeeDetail, subKey: "employees" },
   { path: "/hr/attendance", component: Attendance, subKey: "attendance" },
   { path: "/hr/attendance/create", component: AttendanceCreate, subKey: "attendance" },
@@ -201,6 +206,7 @@ export const hrRoutes = [
   { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
   { path: "/hr/activation-board", component: ActivationBoard, subKey: "employees" },
+  { path: "/hr/self-onboarding-review", component: SelfOnboardingReview, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },
   { path: "/hr/evaluation-360/create", component: Evaluation360Create, subKey: "performance" },
   { path: "/hr/evaluation-360/history/:employeeId", component: Evaluation360History, subKey: "performance" },

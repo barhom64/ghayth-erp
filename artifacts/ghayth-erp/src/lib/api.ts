@@ -125,6 +125,23 @@ const BASE = resolveApiBase();
 export const API_BASE = BASE;
 
 /**
+ * Auth headers for DIRECT `fetch` calls to the API that bypass apiFetch
+ * (blob downloads, file uploads, print preview). On the web these rely on the
+ * cookie (`credentials: "include"`); inside the native app there are no
+ * cookies, so they must carry `Authorization: Bearer` like apiFetch does —
+ * otherwise the request is unauthenticated and 401s. Inert on the web
+ * (returns `{}`), so the cookie flow is unchanged. Spread into the fetch
+ * headers:  `headers: { ...nativeAuthHeaders(), ... }`.
+ */
+export function nativeAuthHeaders(): Record<string, string> {
+  if (isNativeAuth()) {
+    const t = getNativeAccessToken();
+    if (t) return { Authorization: `Bearer ${t}` };
+  }
+  return {};
+}
+
+/**
  * Build a full API URL respecting Vite's BASE_URL — for direct browser
  * navigation (file downloads, image src, iframe src). Don't use this for
  * fetch — use apiFetch / useApiQuery which already prepend BASE/api.
@@ -145,6 +162,18 @@ function tryNativeRefresh(): Promise<boolean> {
   if (nativeRefreshPromise) return nativeRefreshPromise;
   nativeRefreshPromise = nativeRefresh(BASE).finally(() => { nativeRefreshPromise = null; });
   return nativeRefreshPromise;
+}
+
+/**
+ * Rotate the native access token via the SAME de-duped path apiFetch uses
+ * (so concurrent callers don't double-rotate and burn the session). Exposed
+ * for the realtime client, which must reconnect its SSE stream with a FRESH
+ * token — the 15-minute access token is baked into the EventSource URL, so a
+ * reconnect after expiry would otherwise 401 forever. No-op on the web.
+ */
+export function refreshNativeTokenOnce(): Promise<boolean> {
+  if (!isNativeAuth()) return Promise.resolve(true);
+  return tryNativeRefresh();
 }
 
 async function tryRefreshToken(): Promise<boolean> {

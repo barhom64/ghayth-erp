@@ -155,30 +155,12 @@ hrStubsRouter.delete("/saudi/wps/credentials/:bankCode", requireMinLevel(10), au
 });
 
 /* ============================================================
- * Finance — pricing rules (6) + ZATCA (4). Mounted under /finance.
+ * Finance — ZATCA (4). Mounted under /finance.
+ *
+ * Pricing rules (6) graduated out of stubs — the real CRUD + engine
+ * preview now lives in routes/finance-pricing.ts (pricingRouter, mounted
+ * BEFORE financeStubsRouter in routes/index.ts).
  * ============================================================ */
-financeStubsRouter.get("/pricing/rules", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "list" }), async (_req, res) => {
-  res.json({ data: [], total: 0 });
-});
-financeStubsRouter.post("/pricing/rules", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "create" }), async (_req, res) => {
-  notImplemented(res, "finance.pricingRules.create");
-});
-financeStubsRouter.get("/pricing/rules/:id", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "view" }), async (req, res) => {
-  // Read-only stub — returning an empty rule lets a detail page render
-  // without crashing, but the user sees "active: false" so they know it
-  // isn't doing anything.
-  res.json({ id: Number(req.params.id), name: "", active: false, conditions: [] });
-});
-financeStubsRouter.put("/pricing/rules/:id", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "update" }), async (_req, res) => {
-  notImplemented(res, "finance.pricingRules.update");
-});
-financeStubsRouter.delete("/pricing/rules/:id", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "delete" }), async (_req, res) => {
-  notImplemented(res, "finance.pricingRules.delete");
-});
-financeStubsRouter.post("/pricing/resolve", requireMinLevel(10), authorize({ feature: "finance.invoices", action: "view" }), async (_req, res) => {
-  notImplemented(res, "finance.pricingRules.resolve");
-});
-
 financeStubsRouter.get("/zatca/missing-tax-numbers", requireMinLevel(10), authorize({ feature: "finance.zatca", action: "list" }), async (req, res) => {
   try {
     const { companyId } = scope(req as any);

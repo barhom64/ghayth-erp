@@ -1,6 +1,16 @@
-import { rawQuery, rawExecute } from "./rawdb.js";
-import { logger } from "./logger.js";
-import { todayISO } from "./businessHelpers.js";
+// ─── Pricing Rules Engine — محرّك قواعد التسعير ──────────────────────────
+// Revived (PR: pricing-rules wiring) from src/_archive/lib/pricingEngine.ts.
+// Resolves a unit price for an invoice/quote line by walking the normalized
+// migration-171 tables (pricing_rules / pricing_conditions / pricing_actions)
+// ordered by priority, evaluating each rule's stacked conditions against the
+// pricing context, then applying the matched rule's action.
+//
+// Boundary note: this engine is a SERVANT to the finance lead path. It only
+// reads its own pricing_* tables + records into pricing_rule_applications.
+// It never posts to the ledger and never decides finance policy.
+import { rawQuery, rawExecute } from "../rawdb.js";
+import { logger } from "../logger.js";
+import { todayISO } from "../businessHelpers.js";
 
 export type ConditionField =
   | "clientId"
@@ -46,14 +56,14 @@ interface RuleRow {
   createdAt: string;
 }
 
-interface ConditionRow {
+export interface ConditionRow {
   ruleId: number;
   field: ConditionField;
   operator: ConditionOperator;
   value: string;
 }
 
-interface ActionRow {
+export interface ActionRow {
   ruleId: number;
   actionType: ActionType;
   value: string;
@@ -64,7 +74,10 @@ function parseValue(raw: string): unknown {
   try { return JSON.parse(raw); } catch { return raw; }
 }
 
-function evalCondition(c: ConditionRow, ctx: PricingContext): boolean {
+// Pure — exported so the unit suite can exercise condition evaluation without
+// a database. `c.value` is the JSON-encoded scalar/array stored in
+// pricing_conditions.value.
+export function evalCondition(c: ConditionRow, ctx: PricingContext): boolean {
   const fieldVal: unknown = (() => {
     switch (c.field) {
       case "clientId": return ctx.clientId ?? null;
@@ -95,7 +108,10 @@ function evalCondition(c: ConditionRow, ctx: PricingContext): boolean {
   }
 }
 
-function applyAction(action: ActionRow, ctx: PricingContext): { price: number; discount: number } {
+// Pure — exported for the unit suite. Returns the resolved unit price plus the
+// derived discount (clamped at >= 0). `action.value` is the NUMERIC stored in
+// pricing_actions.value (arrives as a string from node-postgres).
+export function applyAction(action: ActionRow, ctx: PricingContext): { price: number; discount: number } {
   const base = ctx.basePrice;
   const qty = Number(ctx.quantity ?? 1);
   const value = Number(action.value);

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useRoute } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
@@ -56,7 +56,7 @@ export default function VersionUploadPage() {
     try {
       const urlRes = await fetch(`${BASE}/api/storage/uploads/request-url`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...nativeAuthHeaders(), "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
       });

@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import {
-  Activity, Clock, TrendingUp, RefreshCw, ExternalLink,
+  Activity, Clock, TrendingUp, ExternalLink,
   AlertCircle, Calendar,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
@@ -254,10 +255,7 @@ export default function PostingActivityPage() {
       ]}
       actions={
         <>
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={`h-4 w-4 me-1 ${isFetching ? "animate-spin" : ""}`} />
-            تحديث
-          </Button>
+          <RefreshAction onRefresh={() => refetch()} disabled={isFetching} />
           <PrintButton
             entityType="report_finance_posting_activity"
             entityId="list"

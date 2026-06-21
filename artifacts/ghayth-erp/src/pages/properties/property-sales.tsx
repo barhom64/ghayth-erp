@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
+import { BuildingSelect } from "@/components/shared/entity-selects";
 import { Plus, TrendingUp, Building2, Banknote } from "lucide-react";
 
 const EMPTY_FORM = {
@@ -41,9 +42,6 @@ export default function PropertySalesPage() {
     "/properties/sales"
   );
   const sales: any[] = resp?.data || [];
-
-  const { data: buildingsResp } = useApiQuery<any>(["property-buildings-list"], "/properties/buildings");
-  const buildings: any[] = buildingsResp?.data || buildingsResp || [];
 
   async function handleSave() {
     if (!form.buyerName.trim() || !form.salePrice || !form.saleDate) {
@@ -170,19 +168,12 @@ export default function PropertySalesPage() {
             <DialogTitle>تسجيل بيع عقار</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2 text-sm">
-            <div>
-              <Label className="text-xs">العقار / المبنى (اختياري)</Label>
-              <select
-                className="w-full mt-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-                value={form.buildingId}
-                onChange={e => setForm(f => ({ ...f, buildingId: e.target.value }))}
-              >
-                <option value="">— اختر مبنى —</option>
-                {buildings.map((b: any) => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
+            <BuildingSelect
+              label="العقار / المبنى (اختياري)"
+              placeholder="— اختر مبنى —"
+              value={form.buildingId}
+              onChange={(v) => setForm(f => ({ ...f, buildingId: v }))}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">اسم المشتري *</Label>
