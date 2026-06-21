@@ -36,7 +36,15 @@ vi.mock("@/lib/api", () => ({
   asList: (resp: any) => (Array.isArray(resp?.data) ? resp.data : Array.isArray(resp) ? resp : []),
   apiFetch: vi.fn().mockResolvedValue({}),
 }));
-vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
+vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: toastSpy }) }));
+
+// Batch B header tests mount the `project` kind only to exercise the drawer
+// chrome (context line + full-page link). Stub its page-derived form so the
+// test isolates the drawer, not the heavy ProjectCreateForm provider graph.
+vi.mock("@/pages/create/project-create-form", () => ({
+  ProjectCreateForm: () => <div data-testid="stub-project-form" />,
+}));
 
 import { useState } from "react";
 import { AllowCreateDrawer } from "./allow-create-drawer";
@@ -64,6 +72,32 @@ describe("AllowCreateDrawer", () => {
     await user.click(screen.getByTestId("button-submit-dept"));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 101 })));
+  });
+});
+
+// ── الدفعة B — رأس السياق + رابط الصفحة الكاملة + تأكيد بعد الحفظ ──────────────
+describe("الدفعة B — chrome الدرج", () => {
+  it("يعرض سطر السياق و«فتح الصفحة الكاملة» لكيان له صفحة إنشاء مستقلة (مشروع)", async () => {
+    render(
+      <AllowCreateDrawer kind="project" open contextLabel="لاستخدامه في الفاتورة الحالية" onOpenChange={() => {}} onCreated={() => {}} />,
+    );
+    expect(await screen.findByRole("button", { name: /فتح الصفحة الكاملة/ })).toBeInTheDocument();
+    expect(screen.getByText("لاستخدامه في الفاتورة الحالية")).toBeInTheDocument();
+  });
+
+  it("يخفي «فتح الصفحة الكاملة» لكيان يُدار داخل تبويب بلا مسار إنشاء (قسم)", async () => {
+    render(<AllowCreateDrawer kind="department" open onOpenChange={() => {}} onCreated={() => {}} />);
+    await screen.findByTestId("input-dept-name");
+    expect(screen.queryByRole("button", { name: /فتح الصفحة الكاملة/ })).not.toBeInTheDocument();
+  });
+
+  it("ينبّه «تم الإنشاء» بعد الحفظ", async () => {
+    toastSpy.mockClear();
+    const user = userEvent.setup();
+    render(<AllowCreateDrawer kind="department" open onOpenChange={() => {}} onCreated={() => {}} />);
+    await user.type(await screen.findByTestId("input-dept-name"), "قسم جديد");
+    await user.click(screen.getByTestId("button-submit-dept"));
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "تم الإنشاء" })));
   });
 });
 
