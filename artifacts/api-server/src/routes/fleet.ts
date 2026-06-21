@@ -666,7 +666,7 @@ router.post("/vehicles", authorize({ feature: "fleet.vehicles", action: "create"
 // chase. The operator-side fleet.cargo + fleet.trips features stay
 // invisible to the driver because the role doesn't carry them.
 // ─────────────────────────────────────────────────────────────────────────
-async function resolveDriverFromScope(req: import("express").Request): Promise<{ id: number; companyId: number; status: string } | null> {
+export async function resolveDriverFromScope(req: import("express").Request): Promise<{ id: number; companyId: number; status: string } | null> {
   const scope = req.scope!;
   if (!scope.employeeId) return null;
   const [driver] = await rawQuery<{ id: number; companyId: number; status: string }>(
