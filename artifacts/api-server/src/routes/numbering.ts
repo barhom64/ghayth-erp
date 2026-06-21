@@ -12,7 +12,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { rawQuery } from "../lib/rawdb.js";
+import { rawQuery, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -168,25 +168,31 @@ router.patch(
       sets.push(`"updatedAt" = NOW()`);
       params.push(id, scope.companyId);
 
-      const [updated] = await rawQuery<Record<string, unknown>>(
-        `UPDATE numbering_schemes SET ${sets.join(", ")}
-          WHERE id = $${params.length - 1} AND "companyId" = $${params.length}
-          RETURNING *`,
-        params,
-      );
+      // Scheme change + its audit-log record are written atomically: a
+      // committed scheme edit must never be left without its numbering audit
+      // row. rawQuery joins the ambient transaction (txStore).
+      const updated = await withTransaction(async () => {
+        const [row] = await rawQuery<Record<string, unknown>>(
+          `UPDATE numbering_schemes SET ${sets.join(", ")}
+            WHERE id = $${params.length - 1} AND "companyId" = $${params.length}
+            RETURNING *`,
+          params,
+        );
+        await rawQuery(
+          `INSERT INTO numbering_audit_logs (
+             "companyId","branchId","actorId",action,"schemeId","before","after",reason
+           ) VALUES ($1,$2,$3,'update_scheme',$4,$5,$6,$7)`,
+          [
+            scope.companyId, scope.branchId ?? null, scope.userId, id,
+            JSON.stringify(existing), JSON.stringify(row), req.body?.reason ?? null,
+          ],
+        );
+        return row;
+      });
 
-      // Audit + clear cached branch codes (the operator may have just
-      // renamed/overridden branch codes via `branchPrefixOverrides`).
+      // Clear cached branch codes (the operator may have just renamed /
+      // overridden branch codes via `branchPrefixOverrides`).
       invalidateBranchCodeCache();
-      await rawQuery(
-        `INSERT INTO numbering_audit_logs (
-           "companyId","branchId","actorId",action,"schemeId","before","after",reason
-         ) VALUES ($1,$2,$3,'update_scheme',$4,$5,$6,$7)`,
-        [
-          scope.companyId, scope.branchId ?? null, scope.userId, id,
-          JSON.stringify(existing), JSON.stringify(updated), req.body?.reason ?? null,
-        ],
-      );
       await createAuditLog({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
         action: "numbering_scheme_updated", entity: "numbering_schemes", entityId: id,
