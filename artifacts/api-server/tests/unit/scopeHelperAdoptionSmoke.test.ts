@@ -128,6 +128,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // lookup/run keyed by (companyId, id); point-lookup + per-company due run,
   // not a branch list cascade. Manual companyId scoping is correct here.
   "finance-recurring-invoices.ts",
+  // finance-pricing.ts: إحياء «قواعد التسعير» (مخطّط 171 المُطبّع). CRUD نقطي على
+  // pricing_rules/conditions/actions، كلّها مفلترة بـ scope.companyId داخل
+  // transactions (point-lookup/per-company، يطابق finance-amortization.ts؛ لا
+  // cascade فروع). معتمد بمراجعة المجلس «يُعتمد» + تحقّق مستقلّ.
+  "finance-pricing.ts",
   // fleet-inspections.ts: vehicle inspection + photos (متابعة النقل بالصور,
   // PR1). Mostly point operations keyed by (companyId, id) — get/update/delete/
   // approve/reject a single inspection or photo — plus one filtered list. The
@@ -384,10 +389,18 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // manual companyId list-predicate (its lookup is keyed by assignment id).
       // Tenant isolation is enforced in realtimeHub (per-company buckets), not
       // a SQL predicate — so it counts under neither helperUsers nor manualOnly.
-      // +1 total/manualOnly: routes/fleet-inspections.ts (متابعة النقل بالصور).
-      total: 134,
+      // +3 total/manualOnly: this session (customFields/finance-cash-in-transit/
+      // finance-recurring-invoices) + see entries above.
+      // +1 total/manualOnly: routes/fleet-inspections.ts (متابعة النقل بالصور,
+      // PR1) — vehicle inspection + photos CRUD, point ops keyed by
+      // (companyId, id) + one filtered list; allowlisted with justification
+      // (mirrors fleet-optimizer.ts, tenant-point-lookup, no branch cascade).
+      // +1 total/manualOnly: routes/finance-pricing.ts — إحياء «قواعد التسعير»
+      // (مخطّط 171 المُطبّع). CRUD نقطي + upserts على (companyId, id) داخل
+      // transactions، يطابق finance-amortization.ts؛ لا cascade فروع. allowlisted.
+      total: 135,
       helperUsers: 39,
-      manualOnly: 91,
+      manualOnly: 92,
     });
   });
 });

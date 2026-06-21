@@ -1099,8 +1099,8 @@ router.patch("/accidents/:id/assess", authorize({ feature: "fleet.vehicles", act
     const id = parseId(req.params.id, "id");
     const b = zodParse(assessAccidentSchema.safeParse(req.body));
 
-    const [acc] = await rawQuery<{ id: number; vehicleId: number; driverId: number | null; status: string; branchId: number | null }>(
-      `SELECT id, "vehicleId", "driverId", status, "branchId" FROM fleet_accidents
+    const [acc] = await rawQuery<{ id: number; vehicleId: number; driverId: number | null; status: string; branchId: number | null; costBearer: string | null }>(
+      `SELECT id, "vehicleId", "driverId", status, "branchId", "costBearer" FROM fleet_accidents
         WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     if (!acc) throw new NotFoundError("بلاغ الحادث غير موجود");
     if (acc.status === "closed" || acc.status === "cancelled") {
@@ -1127,18 +1127,20 @@ router.patch("/accidents/:id/assess", authorize({ feature: "fleet.vehicles", act
     const reversedJournalId: number | null = (gl as any)?.reversedJournalId ?? null;
     const isReassessment = !!reversedJournalId;
 
-    if (b.estimatedCost > 0) {
-      // استرداد كلفة السائق عبر خصم راتب (عقد HR) — لا كتابة مباشرة. يُطلَب عند
-      // التقييم الأول فقط؛ تعديل المتحمّل في إعادة تقييم يتطلب تسوية خصم يدوية
-      // (لا مستهلك عكس خصم بعد) — يُسجَّل في التدقيق.
-      if (!isReassessment && b.costBearer === "driver" && acc.driverId) {
-        const [drv] = await rawQuery<{ employeeId: number | null }>(
-          `SELECT "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-          [acc.driverId, scope.companyId]);
-        if (drv?.employeeId) {
-          await fleetEngine.requestAccidentDeduction(glCtx,
-            { employeeId: drv.employeeId, accidentId: id, amount: b.estimatedCost, reason: `استرداد كلفة حادث مركبة #${acc.vehicleId}` });
-        }
+    // تسوية خصم السائق عبر عقد HR (لا كتابة مباشرة):
+    //  • التحوّل بعيدًا عن السائق في إعادة تقييم → إلغاء الخصم السابق غير المطبَّق.
+    //  • التحوّل إلى السائق (أول تقييم أو إعادة) → طلب خصم بالمبلغ الجديد. عند
+    //    driver→driver بمبلغ مختلف: إلغاء القديم + طلب الجديد (تسوية صحيحة).
+    if (isReassessment && acc.costBearer === "driver") {
+      await fleetEngine.requestAccidentDeductionReversal(glCtx, { accidentId: id });
+    }
+    if (b.estimatedCost > 0 && b.costBearer === "driver" && acc.driverId) {
+      const [drv] = await rawQuery<{ employeeId: number | null }>(
+        `SELECT "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [acc.driverId, scope.companyId]);
+      if (drv?.employeeId) {
+        await fleetEngine.requestAccidentDeduction(glCtx,
+          { employeeId: drv.employeeId, accidentId: id, amount: b.estimatedCost, reason: `استرداد كلفة حادث مركبة #${acc.vehicleId}` });
       }
     }
 
