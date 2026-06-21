@@ -8875,6 +8875,7 @@ CREATE TABLE public.entity_comments (
     id integer NOT NULL,
     "entityType" character varying(50) NOT NULL,
     "entityId" integer NOT NULL,
+    "documentId" integer,
     "companyId" integer NOT NULL,
     "userId" integer,
     "userName" character varying(200),

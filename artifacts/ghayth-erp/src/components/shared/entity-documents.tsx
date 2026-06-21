@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormShell, FormTextField, FormSelectField } from "@workspace/ui-core";
-import { FileText, Upload, Download, Plus, X, FileUp, Eye, List, LayoutGrid, ClipboardCheck, Printer } from "lucide-react";
+import { FileText, Upload, Download, Plus, X, FileUp, Eye, List, LayoutGrid, ClipboardCheck, Printer, MessageCircle } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
 import { DecisionImpactPreview } from "./decision-impact";
+import { EntityComments } from "./entity-comments";
 import { buildBundleHtml, openBundlePrint, type BundleImage, type BundleOtherFile } from "@/lib/print-bundle";
 import { renderDocument, decodeRenderResponse } from "@/lib/print-client";
 import { formatDateAr } from "@/lib/formatters";
@@ -113,6 +114,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
   const [view, setView] = useState<"list" | "grid">(viewMode);
   const [grouped, setGrouped] = useState(false);
   const [reviewDoc, setReviewDoc] = useState<any | null>(null);
+  const [commentsDoc, setCommentsDoc] = useState<any | null>(null);
   const [bundling, setBundling] = useState(false);
   const { data: docsResp, refetch } = useApiQuery<any>(
     ["entity-docs", entityType, String(entityId)],
@@ -305,6 +307,9 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
           </Button>
         </>
       )}
+      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setCommentsDoc(d)} title="تعليقات المرفق">
+        <MessageCircle className="h-3.5 w-3.5" />
+      </Button>
       {canReview && (
         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setReviewDoc(d)} title="مراجعة المرفق">
           <ClipboardCheck className="h-3.5 w-3.5" />
@@ -486,6 +491,16 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
         onClose={() => setReviewDoc(null)}
         onReviewed={() => { setReviewDoc(null); refetch(); }}
       />
+      <Dialog open={!!commentsDoc} onOpenChange={(o) => !o && setCommentsDoc(null)}>
+        <DialogContent className="sm:max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تعليقات المرفق{commentsDoc?.title ? ` — ${commentsDoc.title}` : ""}</DialogTitle>
+          </DialogHeader>
+          {commentsDoc && (
+            <EntityComments entityType={entityType} entityId={entityId} documentId={commentsDoc.id} />
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
