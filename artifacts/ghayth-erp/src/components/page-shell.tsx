@@ -69,6 +69,14 @@ export interface PageShellProps {
   actions?: ReactNode;
 
   /**
+   * Optional summary slot rendered between the header and the filters —
+   * the place for a page-level overview (e.g. 4 key metric chips/cards, or a
+   * short guidance line) so the operator grasps state before acting. Pure
+   * layout: callers own the content. Omit it and nothing is rendered.
+   */
+  summary?: ReactNode;
+
+  /**
    * Optional filter row rendered between the header and the body. Intended
    * for search inputs, status selects, date pickers. Automatically styled
    * as a sticky toolbar on scrolling pages.
@@ -141,6 +149,7 @@ export function PageShell(props: PageShellProps) {
     subtitle,
     breadcrumbs,
     actions,
+    summary,
     filters,
     loading,
     resetKey,
@@ -185,6 +194,8 @@ export function PageShell(props: PageShellProps) {
           </div>
         )}
       </header>
+
+      {summary && <div className="space-y-3">{summary}</div>}
 
       {filters && (
         <div className="bg-muted/30 rounded-lg border p-3 flex items-center gap-2 flex-wrap">

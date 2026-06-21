@@ -5486,34 +5486,48 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
       throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
     }
 
-    if (newStatus === "approved") {
-      await rawExecute(
-        `UPDATE official_letters
-           SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
-         WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
-        [newStatus, Number(id), scope.userId, scope.companyId]
-      );
-    } else {
-      await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
-        [newStatus, Number(id), scope.companyId]
-      );
-    }
+    // Status change + (on reject/return) the queued-dispatch cancellation
+    // + the approval-action audit row are written atomically: a rejected
+    // letter must NEVER leave its dispatch queued (it would get sent after
+    // rejection), and the approval decision must never be recorded without
+    // its audit row. rawQuery joins the ambient transaction (txStore).
+    await withTransaction(async () => {
+      if (newStatus === "approved") {
+        await rawExecute(
+          `UPDATE official_letters
+             SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
+           WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+          [newStatus, Number(id), scope.userId, scope.companyId]
+        );
+      } else {
+        await rawExecute(
+          `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+          [newStatus, Number(id), scope.companyId]
+        );
+      }
 
-    // If the letter was rejected or returned, cancel any queued dispatches
-    // so the queue worker doesn't send it after the fact. Phase 4 final
-    // contract: one UPDATE against the unified outbound_queue.
+      // If the letter was rejected or returned, cancel any queued dispatches
+      // so the queue worker doesn't send it after the fact. Phase 4 final
+      // contract: one UPDATE against the unified outbound_queue.
+      if (newStatus === "rejected" || newStatus === "returned") {
+        await rawExecute(
+          `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+          [Number(id), scope.companyId]
+        );
+      }
+
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
+        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
+      );
+    });
+
+    // Notify whoever filed the letter about the rejection/return so they
+    // can see the reason and take action. Best-effort serving path, after
+    // the transaction. Prefer the creator assignment (the HR officer who
+    // filed it), fall back to the employee's own assignment.
     if (newStatus === "rejected" || newStatus === "returned") {
-      await rawExecute(
-        `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
-        [Number(id), scope.companyId]
-      ).catch((e) => logger.error(e, "cancel outbound_queue for rejected letter failed:"));
-
-      // Notify whoever filed the letter about the rejection/return so they
-      // can see the reason and take action. Prefer the creator assignment
-      // (the HR officer who filed it), fall back to the employee's own
-      // assignment when the letter was filed by the employee themselves.
       const [targetAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(
                   ol."createdByAssignmentId",
@@ -5542,13 +5556,6 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
         }).catch((e) => logger.error(e, "notify letter creator failed:"));
       }
     }
-
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { logger.error(e, "Failed to log approval action:"); }
 
     // Close the loop: emit a lifecycle event so the letter actually gets
     // dispatched (email_queue). Without this the route used to stop at

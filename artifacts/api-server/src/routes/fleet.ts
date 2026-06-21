@@ -1370,18 +1370,23 @@ router.post("/me/trips/:id/complete", authorize({ feature: "fleet.trips.my", act
     if (trip.status !== "in_progress") {
       throw new ConflictError(`لا يمكن إنهاء رحلة بحالة ${trip.status}`);
     }
-    await rawExecute(
-      `UPDATE fleet_trips
-          SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2`,
-      [id, scope.companyId]
-    );
-    // Free the driver (only flip when they're on_trip — operator-only states stay).
-    await rawExecute(
-      `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
-      [driver.id, scope.companyId]
-    );
+    // Completing the trip + freeing the driver are atomic: a completed
+    // trip must never leave its driver stuck 'on_trip' (or a driver freed
+    // without the trip closed). rawQuery joins the ambient tx (txStore).
+    await withTransaction(async () => {
+      await rawExecute(
+        `UPDATE fleet_trips
+            SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
+      );
+      // Free the driver (only flip when they're on_trip — operator-only states stay).
+      await rawExecute(
+        `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
+        [driver.id, scope.companyId]
+      );
+    });
     void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.driver_completed", entity: "fleet_trips", entityId: id,
       details: JSON.stringify({ driverId: driver.id }) });

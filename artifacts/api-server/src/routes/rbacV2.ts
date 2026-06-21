@@ -1378,20 +1378,25 @@ router.post("/jit/:id/reject", authorize({ feature: "admin.roles", action: "upda
     const id = parseId(req.params.id, "id");
     const body = zodParse(jitDecisionSchema.safeParse(req.body || {}));
 
-    const { affectedRows } = await rawExecute(
-      `UPDATE rbac_jit_requests
-          SET status = 'rejected', "approvedBy" = $1, "approvedAt" = NOW(),
-              "rejectedReason" = $2, "updatedAt" = NOW()
-        WHERE id = $3 AND "companyId" = $4 AND status = 'pending'`,
-      [scope.userId, body.reason || "(no reason)", id, scope.companyId]
-    );
-    if (!affectedRows) throw new NotFoundError("طلب JIT غير موجود أو ليس بانتظار قرار");
+    // The reject decision + its role-history record are written atomically:
+    // a rejected JIT request must never be left without its history entry
+    // (or vice versa). rawQuery joins the ambient transaction (txStore).
+    await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE rbac_jit_requests
+            SET status = 'rejected', "approvedBy" = $1, "approvedAt" = NOW(),
+                "rejectedReason" = $2, "updatedAt" = NOW()
+          WHERE id = $3 AND "companyId" = $4 AND status = 'pending'`,
+        [scope.userId, body.reason || "(no reason)", id, scope.companyId]
+      );
+      if (!affectedRows) throw new NotFoundError("طلب JIT غير موجود أو ليس بانتظار قرار");
 
-    await rawExecute(
-      `INSERT INTO rbac_role_history (role_id, "companyId", "changedBy", change_type, after_state, reason)
-       VALUES (NULL, $1, $2, 'jit.reject', $3, $4)`,
-      [scope.companyId, scope.userId, JSON.stringify({ jitId: id }), body.reason || null]
-    ).catch(() => undefined);
+      await rawExecute(
+        `INSERT INTO rbac_role_history (role_id, "companyId", "changedBy", change_type, after_state, reason)
+         VALUES (NULL, $1, $2, 'jit.reject', $3, $4)`,
+        [scope.companyId, scope.userId, JSON.stringify({ jitId: id }), body.reason || null]
+      );
+    });
 
     await createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
