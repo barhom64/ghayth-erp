@@ -445,3 +445,69 @@ describe("Documents — audit logging and events", () => {
     expect(SRC).toContain("documents.version.created");
   });
 });
+
+describe("Documents — attachment review (per-link verdict)", () => {
+  it("registers PATCH /:id/review", () => {
+    expect(SRC).toContain('router.patch("/:id/review"');
+  });
+
+  it("review is gated by authorize + an approver role (mirrors status approval)", () => {
+    const idx = SRC.indexOf('router.patch("/:id/review"');
+    const section = SRC.slice(idx, idx + 3000);
+    expect(section).toContain("authorize(");
+    expect(section).toContain("APPROVE_ROLES");
+    expect(section).toContain("scope.isOwner");
+  });
+
+  it("a rejecting / replacement verdict requires a reason", () => {
+    const idx = SRC.indexOf('router.patch("/:id/review"');
+    const section = SRC.slice(idx, idx + 3000);
+    expect(section).toContain("needs_replacement");
+    expect(section).toContain("reviewNote");
+    expect(section).toContain("ValidationError");
+  });
+
+  it("review stamps the link and writes audit + approval_action + event", () => {
+    const idx = SRC.indexOf('router.patch("/:id/review"');
+    const section = SRC.slice(idx, idx + 3000);
+    expect(section).toContain('UPDATE document_entity_links');
+    expect(section).toContain("createAuditLog");
+    expect(section).toContain("approval_actions");
+    expect(section).toContain("documents.attachment.reviewed");
+  });
+
+  it("the entity-scoped list returns the review verdict + uploader name", () => {
+    const idx = SRC.indexOf('if (entity && entityId)');
+    const section = SRC.slice(idx, idx + 700);
+    expect(section).toContain('del."reviewStatus"');
+    expect(section).toContain('"uploaderName"');
+  });
+});
+
+describe("Documents — requirements (per-entityType checklist)", () => {
+  it("registers requirements CRUD before the /:id route", () => {
+    expect(SRC).toContain('router.get("/requirements"');
+    expect(SRC).toContain('router.post("/requirements"');
+    expect(SRC).toContain('router.patch("/requirements/:id"');
+    expect(SRC).toContain('router.delete("/requirements/:id"');
+    // must be registered before GET /:id so "/requirements" isn't read as an id
+    expect(SRC.indexOf('router.get("/requirements"')).toBeLessThan(SRC.indexOf('router.get("/:id"'));
+  });
+
+  it("requirement writes are gated by an approver role + audited", () => {
+    for (const verb of ['router.post("/requirements"', 'router.patch("/requirements/:id"', 'router.delete("/requirements/:id"']) {
+      const idx = SRC.indexOf(verb);
+      const section = SRC.slice(idx, idx + 1800);
+      expect(section).toContain("authorize(");
+      expect(section).toContain("APPROVE_ROLES");
+      expect(section).toContain("createAuditLog");
+    }
+  });
+
+  it("delete is a soft-deactivate (no physical delete)", () => {
+    const idx = SRC.indexOf('router.delete("/requirements/:id"');
+    const section = SRC.slice(idx, idx + 1200);
+    expect(section).toContain('"isActive"=false');
+    expect(section).not.toContain("DELETE FROM document_requirements");
+  });
+});

@@ -7220,7 +7220,28 @@ CREATE TABLE public.document_entity_links (
     "documentId" integer,
     "entityType" character varying(50) NOT NULL,
     "entityId" integer NOT NULL,
+    "reviewStatus" character varying(20) DEFAULT 'new'::character varying NOT NULL,
+    "reviewedBy" integer,
+    "reviewedAt" timestamp with time zone,
+    "reviewNote" text,
     "createdAt" timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+
+CREATE TABLE public.document_requirements (
+    id bigint NOT NULL,
+    "companyId" integer,
+    "entityType" character varying(50) NOT NULL,
+    "docCategory" character varying(50),
+    label character varying(255) NOT NULL,
+    required boolean DEFAULT true NOT NULL,
+    "isActive" boolean DEFAULT true NOT NULL,
+    "sortOrder" integer DEFAULT 0 NOT NULL,
+    "createdBy" integer,
+    "createdAt" timestamp with time zone DEFAULT now() NOT NULL,
+    "updatedAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
