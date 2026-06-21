@@ -69,6 +69,7 @@
     "audit:domain-routes": "node scripts/src/audit-domain-routes.mjs",
     "audit:stop-ship": "node scripts/src/audit-stop-ship.mjs",
     "audit:numbering-coverage": "node scripts/src/audit-numbering-coverage.mjs",
+    "report:negative-journal-lines": "node scripts/src/report-negative-journal-lines.mjs",
     "numbering:backfill-report": "node scripts/src/numbering-backfill-report.mjs",
     "audit:system-review": "node audit/system-review/tooling/run-all.mjs",
     "audit:print-templates": "node scripts/src/audit-print-templates.mjs",

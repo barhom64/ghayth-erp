@@ -102,6 +102,9 @@ run_step "check:ghost-rows:tests" node scripts/src/check-ghost-rows.test.mjs
 # Pure-logic fixtures for the ambiguous-column scanner — no DB needed, so
 # this runs in every environment to guard the guard itself.
 run_step "check:sql-ambiguity:tests" node scripts/src/check-sql-ambiguity.test.mjs
+# Pure-logic fixtures for the negative-journal-lines diagnostic (formatter +
+# psql-row parser) — no DB needed; guards the report tool's logic.
+run_step "report:negative-journal-lines:tests" node scripts/src/report-negative-journal-lines.test.mjs
 if [ -n "${DATABASE_URL:-}" ]; then
   run_step "check:schema-drift" node scripts/src/check-schema-drift.mjs
   run_step "check:ghost-rows"   node scripts/src/check-ghost-rows.mjs
