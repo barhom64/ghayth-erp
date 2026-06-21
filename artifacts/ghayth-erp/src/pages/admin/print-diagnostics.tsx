@@ -26,6 +26,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useApiQuery, apiFetch, ApiError } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useQueryClient } from "@tanstack/react-query";
 import { renderDocument, listJobs, listTemplates, type PrintJobRow, type PrintTemplateRow } from "@/lib/print-client";
@@ -97,6 +99,14 @@ export default function PrintDiagnosticsPage() {
   const asnItems = assignments.data?.items ?? [];
   const jobItems = jobs.data?.items ?? [];
   const queueMeta = queueProbe.data ?? null;
+
+  // Arabic labels for print-job statuses (raw enums from the server).
+  const JOB_STATUS_LABEL: Record<string, string> = {
+    done: "تم", queued: "في الطابور", processing: "قيد المعالجة",
+    failed: "فشل", error: "خطأ", cancelled: "ملغاة",
+  };
+
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<PrintJobRow>(jobItems);
 
   // Flag suspicious templates. Looks for tell-tale signs of "this will
   // render blank" — empty htmlContent, tokens with no matching data
@@ -262,18 +272,36 @@ export default function PrintDiagnosticsPage() {
       subtitle="القوالب النشطة، الإسنادات، والمحاولات الأخيرة — مع زر إعادة ضبط لكل إسناد فاسد"
       loading={templates.isLoading || assignments.isLoading || jobs.isLoading}
       actions={
-        <div className="flex items-center gap-1">
-          <Label className="text-xs whitespace-nowrap">احذف الأقدم من (أيام):</Label>
-          <Input
-            type="number"
-            value={pruneDays}
-            onChange={(e) => setPruneDays(e.target.value)}
-            className="h-7 w-16 text-xs"
-            inputMode="numeric"
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <Label className="text-xs whitespace-nowrap">احذف الأقدم من (أيام):</Label>
+            <Input
+              type="number"
+              value={pruneDays}
+              onChange={(e) => setPruneDays(e.target.value)}
+              className="h-7 w-16 text-xs"
+              inputMode="numeric"
+            />
+            <GuardedButton perm="admin:update" size="sm" variant="outline" rateLimitAware onClick={handlePruneJobs}>
+              تنظيف السجلات
+            </GuardedButton>
+          </div>
+          <PrintButton
+            entityType="report_admin_print_jobs"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "آخر محاولات الطباعة", total: printRows.length },
+              items: printRows.map((r) => ({
+                "النوع": r.entityType,
+                "السجل": r.entityId,
+                "النسق": r.format,
+                "نسخة": r.copyNumber,
+                "الحالة": JOB_STATUS_LABEL[r.status] ?? r.status,
+                "التاريخ": new Date(r.createdAt).toLocaleString("ar-SA"),
+              })),
+            })}
           />
-          <GuardedButton perm="admin:update" size="sm" variant="outline" rateLimitAware onClick={handlePruneJobs}>
-            تنظيف السجلات
-          </GuardedButton>
         </div>
       }
     >
@@ -411,6 +439,7 @@ export default function PrintDiagnosticsPage() {
           <DataTable
             columns={jobsCols}
             data={jobItems}
+            onSortedDataChange={setPrintRows}
             rowKey={(r) => String(r.id)}
             emptyMessage="لم تُسجل أي طباعة بعد"
           />

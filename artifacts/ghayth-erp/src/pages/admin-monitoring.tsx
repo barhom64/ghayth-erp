@@ -30,6 +30,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { RefreshAction } from "@/components/page-actions";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { resolveStatus } from "@/components/page-status-badge";
 
 interface SystemStopRow {
   id: number;
@@ -340,6 +343,10 @@ export default function AdminMonitoring() {
   const failedCronJobs = cronJobs.filter((j: any) => j.lastStatus === "failed" && j.isActive);
   const healthyCronJobs = cronJobs.filter((j: any) => j.lastStatus !== "failed" || !j.isActive);
 
+  // Print wiring — the scheduled-jobs table (المهام المجدولة) is the most
+  // operationally-meaningful row-level list on this monitoring dashboard.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(healthyCronJobs);
+
   const cronJobColumns: DataTableColumn<any>[] = [
     { key: "name", header: "المهمة", searchable: true, render: (r: any) => <span className="font-medium text-xs">{r.name}</span> },
     { key: "schedule", header: "الجدول", render: (r: any) => <span className="font-mono text-xs text-muted-foreground">{r.schedule}</span> },
@@ -391,7 +398,23 @@ export default function AdminMonitoring() {
       subtitle="مراقبة صحة النظام والخدمات"
       loading={isLoading}
       actions={
-        <RefreshAction onRefresh={() => refetch()} />
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_admin_monitoring"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "المهام المجدولة — مركز المراقبة", total: printRows.length },
+              items: printRows.map((j: any) => ({
+                "المهمة": j.name,
+                "الجدول": j.schedule,
+                "آخر تشغيل": j.lastRunAt,
+                "الحالة": resolveStatus(j.lastStatus)?.label ?? (j.isActive ? "نشط" : "غير نشط"),
+              })),
+            })}
+          />
+          <RefreshAction onRefresh={() => refetch()} />
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
@@ -635,6 +658,7 @@ export default function AdminMonitoring() {
             <DataTable
               columns={cronJobColumns}
               data={healthyCronJobs}
+              onSortedDataChange={setPrintRows}
               noToolbar
               pageSize={0}
               emptyMessage="لا توجد مهام مجدولة"

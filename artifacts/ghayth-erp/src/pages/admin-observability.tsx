@@ -20,6 +20,9 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useState } from "react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { resolveStatus } from "@/components/page-status-badge";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { apiFetch, useApiQuery, API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -249,6 +252,10 @@ export default function AdminObservability() {
   const criticalCount = anomalies.filter((a) => a.severity === "critical").length;
   const warningCount = anomalies.filter((a) => a.severity === "warning").length;
 
+  // Print wiring — the workers table (صحة المهام المجدولة) is the most
+  // operationally-meaningful row-level list on this observability pane.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<WorkerRow>(workers);
+
   const dlqColumns: DataTableColumn<DlqTop>[] = [
     { key: "type", header: "النوع", searchable: true, render: (r) => (
       <span className="font-medium text-xs">{r.type}</span>
@@ -380,7 +387,25 @@ export default function AdminObservability() {
       subtitle="رؤية موحّدة للطوابير، التكاملات، العمّال، خروقات الـ SLA، والشذوذات النشطة"
       loading={isLoading}
       actions={
-        <RefreshAction onRefresh={() => refetch()} />
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_admin_observability"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "صحة المهام المجدولة — مرصد المراقبة", total: printRows.length },
+              items: printRows.map((w: WorkerRow) => ({
+                "المهمة": w.jobName,
+                "تشغيلات (24س)": w.totalLast24h,
+                "فاشلة": w.failed,
+                "متوسط المدة": fmtMs(w.avgDurationMs),
+                "آخر حالة": w.lastStatus ? (resolveStatus(w.lastStatus)?.label ?? w.lastStatus) : "—",
+                "آخر تشغيل": w.lastRunAt ?? "—",
+              })),
+            })}
+          />
+          <RefreshAction onRefresh={() => refetch()} />
+        </div>
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>
@@ -650,6 +675,7 @@ export default function AdminObservability() {
                 <DataTable
                   columns={workerColumns}
                   data={workers}
+                  onSortedDataChange={setPrintRows}
                   noToolbar
                   pageSize={0}
                 />

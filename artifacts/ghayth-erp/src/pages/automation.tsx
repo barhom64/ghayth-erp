@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { resolveStatus } from "@/components/page-status-badge";
 import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +54,7 @@ export default function Automation() {
   );
   const autoLogs = asList(autoLogsResp);
   const autoLogsTotal = autoLogsResp?.total || autoLogs.length;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(autoLogs);
   const { data: autoStats } = useApiQuery<any>(["automation-stats"], "/automation/automation-stats");
   // GET /automation/event-logs — raw event stream (what fired, when,
   // what payload). Distinct from /automation-logs which records rule
@@ -135,7 +139,24 @@ export default function Automation() {
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "الأتمتة والجدولة" },
-      ]} loading={isLoading}>
+      ]} loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_automation_logs"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "الأتمتة والجدولة — سجل الأتمتة الاستباقية", total: printRows.length },
+            items: printRows.map((l: any) => ({
+              "نوع الأتمتة": AUTOMATION_TYPE_LABELS[l.automationType] || l.automationType,
+              "سبب التفعيل": l.triggerReason || "—",
+              "الإجراء": l.actionTaken || "—",
+              "الحالة": resolveStatus(l.status || "success", "recurring")?.label ?? (l.status || "success"),
+              "التاريخ": l.createdAt,
+            })),
+          })}
+        />
+      }>
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Cog className="h-4 w-4" /> المهام المجدولة</CardTitle></CardHeader>
@@ -231,6 +252,7 @@ export default function Automation() {
               <DataTable
                 columns={autoLogColumns}
                 data={filteredAutoLogs}
+                onSortedDataChange={setPrintRows}
                 isLoading={loadingAutoLogs}
                 isError={isAutoLogsError}
                 error={autoLogsError as Error | null}

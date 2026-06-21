@@ -20,6 +20,8 @@ import {
 } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -148,6 +150,15 @@ interface GeneratedSecret {
   notes: string;
 }
 
+// Arabic transcript-status labels — mirrors the status <Select> options
+// and the PageStatusBadge copy shown in the transcripts table.
+const TRANSCRIPT_STATUS_AR: Record<string, string> = {
+  pending: "بانتظار",
+  transcribing: "قيد التحويل",
+  completed: "مكتملة",
+  failed: "فاشلة",
+};
+
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -194,6 +205,10 @@ export default function AdminPbxControl() {
   const menus = menusResp?.data ?? [];
   const recordings = recResp?.data ?? [];
   const transcripts = trResp?.data ?? [];
+
+  // Print wiring — the speech-to-text transcript queue is the primary
+  // operational row-level list on this PBX control plane.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<TranscriptRow>(transcripts);
 
   const refreshAll = () => {
     void refetchOv(); void refetchExt(); void refetchMenus(); void refetchRec(); void refetchTr();
@@ -511,14 +526,32 @@ export default function AdminPbxControl() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button variant="outline" size="sm" onClick={() => runNext.mutate()} disabled={runNext.isPending}>
-                <PlayCircle className="w-4 h-4 me-1" />شغّل العنصر التالي
-              </Button>
+              <div className="flex items-center gap-2">
+                <PrintButton
+                  entityType="report_admin_pbx_control"
+                  entityId="list"
+                  size="icon"
+                  payload={() => ({
+                    entity: { title: "طابور النسخ (تحويل الصوت إلى نص) — مركز التحكّم بالـ PBX", total: printRows.length },
+                    items: printRows.map((r: TranscriptRow) => ({
+                      "المكالمة": `${r.callerNumber} → ${r.calledNumber}`,
+                      "الحالة": TRANSCRIPT_STATUS_AR[r.status] ?? r.status,
+                      "اللغة": r.language ?? "—",
+                      "نسخة": r.hasTranscript ? "متوفرة" : "غير متوفرة",
+                      "ملخّص": r.hasSummary ? "متوفر" : "غير متوفر",
+                      "أُضيفت": r.createdAt,
+                    })),
+                  })}
+                />
+                <Button variant="outline" size="sm" onClick={() => runNext.mutate()} disabled={runNext.isPending}>
+                  <PlayCircle className="w-4 h-4 me-1" />شغّل العنصر التالي
+                </Button>
+              </div>
             </div>
             <Card>
               <CardContent className="p-0">
                 {transcripts.length > 0
-                  ? <DataTable columns={transcriptColumns} data={transcripts} noToolbar pageSize={0} />
+                  ? <DataTable columns={transcriptColumns} data={transcripts} onSortedDataChange={setPrintRows} noToolbar pageSize={0} />
                   : <p className="text-sm text-muted-foreground p-6 text-center">لا توجد نسخ في النطاق المختار.</p>}
               </CardContent>
             </Card>

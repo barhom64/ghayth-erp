@@ -7,6 +7,8 @@ import { DataTable, type DataTableColumn, PageShell } from "@workspace/ui-core";
 import { ShieldCheck, AlertTriangle, FileWarning, Layers } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * لوحة صدق دفتر الأستاذ — FIN-INTEGRITY-CONTRACT (#2246) المرحلة أ (قياس فقط).
@@ -51,6 +53,11 @@ export default function LedgerTruthPage() {
     ["ledger-truth", startDate, endDate],
     `/finance/reports/ledger-truth?startDate=${startDate}&endDate=${endDate}`,
   );
+
+  // Primary truth table = dimension completeness (the headline measurement).
+  // Seeded from the optional response so the hook stays above the early return.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } =
+    usePrintRows<LedgerTruthResponse["dimensionCompleteness"][number]>(data?.dimensionCompleteness ?? []);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
@@ -108,10 +115,25 @@ export default function LedgerTruthPage() {
         { label: "صدق دفتر الأستاذ" },
       ]}
       actions={
-        <>
+        <div className="flex items-center gap-2">
           <DatePicker value={startDate} onChange={setStartDate} className="w-44" placeholder="من" />
           <DatePicker value={endDate} onChange={setEndDate} className="w-44" placeholder="إلى" />
-        </>
+          <PrintButton
+            entityType="report_finance_ledger_truth_dimensions"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "اكتمال الأبعاد حسب الصنف", total: printRows.length },
+              items: printRows.map((r) => ({
+                "البُعد المطلوب": DIM_LABEL[r.expectedDim] ?? r.expectedDim,
+                "إجمالي السطور": r.totalLines,
+                "سطور بلا بُعد": r.missingLines,
+                "القيمة اليتيمة": r.missingValue,
+                "اكتمال %": `${r.completenessPct.toFixed(2)}%`,
+              })),
+            })}
+          />
+        </div>
       }
     >
       <FinanceTabsNav />
@@ -155,7 +177,7 @@ export default function LedgerTruthPage() {
 
       <div className="mt-6">
         <h3 className="text-base font-semibold mb-3">اكتمال الأبعاد حسب الصنف</h3>
-        <DataTable columns={dimColumns} data={dimensionCompleteness} emptyMessage="لا توجد سطور مُبعّدة في هذه الفترة" noToolbar />
+        <DataTable columns={dimColumns} data={dimensionCompleteness} onSortedDataChange={setPrintRows} emptyMessage="لا توجد سطور مُبعّدة في هذه الفترة" noToolbar />
       </div>
 
       <div className="mt-6">
