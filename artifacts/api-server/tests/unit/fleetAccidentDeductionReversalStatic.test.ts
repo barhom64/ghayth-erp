@@ -17,9 +17,9 @@ const repoRoot = join(import.meta.dirname!, "../../../..");
 const FLEET_ROUTE = readFileSync(join(repoRoot, "artifacts/api-server/src/routes/fleet.ts"), "utf8");
 const FLEET_ENGINE = readFileSync(join(repoRoot, "artifacts/api-server/src/lib/engines/fleetEngine.ts"), "utf8");
 const HR = readFileSync(join(repoRoot, "artifacts/api-server/src/lib/engines/hrEngine.ts"), "utf8");
-const MIG = readFileSync(join(repoRoot, "artifacts/api-server/src/migrations/399_payroll_deductions_source_link.sql"), "utf8");
+const MIG = readFileSync(join(repoRoot, "artifacts/api-server/src/migrations/400_payroll_deductions_source_link.sql"), "utf8");
 
-describe("migration 399 — payroll_deductions source link", () => {
+describe("migration 400 — payroll_deductions source link", () => {
   it("adds sourceType/sourceId additively + a lookup index", () => {
     expect(MIG).toMatch(/ADD COLUMN IF NOT EXISTS "sourceType"/);
     expect(MIG).toMatch(/ADD COLUMN IF NOT EXISTS "sourceId"/);

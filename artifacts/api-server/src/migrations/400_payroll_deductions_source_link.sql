@@ -1,4 +1,4 @@
--- 399_payroll_deductions_source_link.sql
+-- 400_payroll_deductions_source_link.sql
 -- ربط خصم الراتب بمصدره (لإلغائه الموجّه عند تغيّر المصدر).
 --
 -- WHAT:
