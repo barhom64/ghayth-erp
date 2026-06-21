@@ -111,6 +111,41 @@ function resolveImport(imp) {
   return null;
 }
 
+/** Resolve a relative (`./x`) default import from the importing file's dir. */
+function resolveRelativeImport(fromFile, rel) {
+  const base = path.join(path.dirname(fromFile), rel);
+  for (const c of [base + ".tsx", base + ".ts", path.join(base, "index.tsx")]) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+/**
+ * Effective source of a page — follows thin-wrapper delegation one level.
+ * Several pages (customer-statement → account-statement, profitability-*
+ * → profitability) are tiny wrappers that render a shared component which
+ * actually owns the PrintButton / DataTable / search bar. Reading only the
+ * wrapper file under-reports those capabilities (false "missing"), so we
+ * union the wrapper's source with any locally-imported default component it
+ * actually renders. Bounded to depth 1 — enough for the wrapper pattern,
+ * and avoids cycles.
+ */
+export function effectiveSource(file, src) {
+  let out = src;
+  const importRe = /import\s+(\w+)\s+from\s+["'](\.\/[^"']+)["']/g;
+  let m;
+  while ((m = importRe.exec(src)) !== null) {
+    const [, name, rel] = m;
+    // Only follow a delegated component that is actually rendered as <Name …>.
+    if (!new RegExp(`<\\s*${name}\\b`).test(src)) continue;
+    const target = resolveRelativeImport(file, rel);
+    if (target && fs.existsSync(target)) {
+      out += "\n" + fs.readFileSync(target, "utf-8");
+    }
+  }
+  return out;
+}
+
 function collectRoutedPages() {
   const seen = new Map();
   const routedFiles = new Set();
@@ -137,8 +172,11 @@ function main() {
   };
   for (const [rp, f] of seen) {
     if (!fs.existsSync(f)) continue;
-    const src = fs.readFileSync(f, "utf-8");
-    if (isRedirectPage(src)) continue;
+    const rawSrc = fs.readFileSync(f, "utf-8");
+    if (isRedirectPage(rawSrc)) continue;
+    // Follow thin-wrapper delegation so a shared component's PrintButton /
+    // DataTable / search bar counts for the wrapper route too.
+    const src = effectiveSource(f, rawSrc);
     const type = pageType(rp, f, src);
     const els = {
       back:   assess(type, hasBackShell(src), "back"),

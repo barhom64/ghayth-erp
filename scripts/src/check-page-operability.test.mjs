@@ -11,7 +11,10 @@ import {
   hasSearch,
   pageType,
   assess,
+  effectiveSource,
 } from "./check-page-operability.mjs";
+import path from "node:path";
+import url from "node:url";
 
 let failed = 0;
 function assert(cond, label) {
@@ -48,6 +51,20 @@ assert(assess("list", true, "search").state === "present", "list w/ search ⇒ p
 assert(assess("form", false, "print").state === "na", "form: print n/a");
 assert(assess("page", false, "sort").state === "na", "page: sort n/a");
 assert(assess("detail", false, "sort").state === "na", "detail: sort n/a");
+
+console.log("effectiveSource (thin-wrapper delegation)");
+{
+  const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+  const APP = path.resolve(__dirname, "..", "..", "artifacts/ghayth-erp/src");
+  // A synthetic wrapper that renders a relative default import is unioned
+  // with the parent's source; one without a render is left untouched.
+  const wrapperFile = path.join(APP, "pages/finance/customer-statement.tsx");
+  const wrapperSrc = `import AccountStatementPage from "./account-statement";\nexport default () => <AccountStatementPage entityType="customer" />;`;
+  const merged = effectiveSource(wrapperFile, wrapperSrc);
+  assert(hasPrint(merged), "wrapper unions parent ⇒ PrintButton seen via delegation");
+  const noRender = `import AccountStatementPage from "./account-statement";\nexport default () => null;`;
+  assert(!hasPrint(effectiveSource(wrapperFile, noRender)), "imported-but-not-rendered ⇒ not followed");
+}
 
 if (failed) {
   console.error(`\n[check:page-operability.test] ${failed} assertion(s) FAILED`);
