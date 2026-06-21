@@ -246,6 +246,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // Point lookups + per-tenant CRUD keyed on (companyId, id); inherits the same
   // allowlist justification as the parent umrah-entities.ts.
   "umrah-accommodation.ts",
+  // umrah-commission.ts: U-07 Phase 5 split — 8 commission-plan / calculation
+  // routes carved verbatim out of umrah-entities.ts. Point lookups + per-tenant
+  // CRUD keyed on (companyId, id); inherits the same allowlist justification as
+  // the parent umrah-entities.ts.
+  "umrah-commission.ts",
   "umrah-entities.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
@@ -414,9 +419,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 4 routes/umrah-accommodation.ts — 9
       // accommodation routes (hotels / room-blocks / allocations) carved verbatim
       // out of umrah-entities.ts. Same allowlist justification as the parent.
-      total: 137,
+      // +1 total/manualOnly: U-07 Phase 5 routes/umrah-commission.ts — 8
+      // commission-plan / calculation routes carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      total: 138,
       helperUsers: 39,
-      manualOnly: 94,
+      manualOnly: 95,
     });
   });
 });
