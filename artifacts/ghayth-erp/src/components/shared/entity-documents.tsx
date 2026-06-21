@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
 import { DecisionImpactPreview } from "./decision-impact";
 import { EntityComments } from "./entity-comments";
+import { computeDuplicateMarks, computeFileSha256, type DuplicateKind } from "@/lib/duplicate-detection";
 import { buildBundleHtml, openBundlePrint, type BundleImage, type BundleOtherFile } from "@/lib/print-bundle";
 import { renderDocument, decodeRenderResponse } from "@/lib/print-client";
 import { formatDateAr } from "@/lib/formatters";
@@ -245,21 +246,13 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     return Array.from(m.entries());
   })();
 
-  // Likely-duplicate detection (derived, no backend): same fileName + fileSize
-  // appearing more than once among this entity's attachments. Surfaces a hint;
-  // the reviewer still decides the «مكرر» verdict.
-  const dupKey = (d: any) => (d.fileName && d.fileSize ? `${d.fileName}::${d.fileSize}` : null);
-  const duplicateKeys: Set<string> = (() => {
-    const counts = new Map<string, number>();
-    for (const d of docs) {
-      const k = dupKey(d);
-      if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([k]) => k));
-  })();
-  const isLikelyDuplicate = (d: any) => {
-    const k = dupKey(d);
-    return !!k && duplicateKeys.has(k);
+  // Two-tier duplicate detection (derived, no backend): exact = same content
+  // hash (renamed-but-identical), likely = same name + size. Reviewer decides
+  // the «مكرر» verdict; this only flags.
+  const duplicateMarks: Map<number | string, DuplicateKind> = computeDuplicateMarks(docs);
+  const DUP_BADGE: Record<DuplicateKind, { label: string; color: string }> = {
+    exact: { label: "مكرر", color: "bg-red-100 text-status-error-foreground" },
+    likely: { label: "مكرر محتمل", color: "bg-purple-100 text-purple-700" },
   };
 
   const docBadges = (d: any) => {
@@ -268,13 +261,14 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     const rv = d.reviewStatus ? REVIEW_STATUS_MAP[d.reviewStatus] : null;
     // Show the verdict once a decision exists, or always to a reviewer.
     const showReview = rv && (d.reviewStatus !== "new" || canReview);
+    const dup = duplicateMarks.get(d.id);
     return (
       <>
         {cat && <Badge variant="outline" className="text-[10px]">{cat.label}</Badge>}
         <Badge className={cn("text-[10px]", st.color)}>{st.label}</Badge>
         {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
         {isExpired(d) && <Badge className="text-[10px] bg-amber-100 text-amber-700">منتهي</Badge>}
-        {isLikelyDuplicate(d) && <Badge className="text-[10px] bg-purple-100 text-purple-700">مكرر محتمل</Badge>}
+        {dup && <Badge className={cn("text-[10px]", DUP_BADGE[dup].color)}>{DUP_BADGE[dup].label}</Badge>}
         {showReview && <Badge className={cn("text-[10px]", rv!.color)}>{rv!.label}</Badge>}
       </>
     );
@@ -765,6 +759,9 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
       const { uploadURL, objectPath } = await urlRes.json();
       await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
 
+      // Best-effort content fingerprint for exact-duplicate detection.
+      const contentHash = await computeFileSha256(file);
+
       await apiFetch("/documents/upload", {
         method: "POST",
         body: JSON.stringify({
@@ -775,6 +772,7 @@ function UploadEntityDocDialog({ entityType, entityId, onSuccess }: { entityType
           mimeType: file.type,
           category: values.category || null,
           storageKey: objectPath,
+          ...(contentHash ? { contentHash } : {}),
           entityLinks: [{ entityType, entityId: Number(entityId) }],
         }),
       });
