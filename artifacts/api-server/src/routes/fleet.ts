@@ -1345,6 +1345,12 @@ router.post("/me/trips/:id/start", authorize({ feature: "fleet.trips.my", action
     void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.driver_started", entity: "fleet_trips", entityId: id,
       details: JSON.stringify({ driverId: driver.id }) });
+    // الحدث القانوني: يُفعّل مسجّل التدقيق + خطوة «أول رحلة» في تأهّل الأسطول
+    // (journeyEngine) + محرّك القواعد. لم يكن يُطلَق من أي مكان (المسار يطلق
+    // driver_started فقط، بلا مستهلك) فظلّت تلك المستهلكات معطّلة. غير دفتري.
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.started", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id, source: "driver" }) });
     res.json({ data: { id, status: "in_progress" } });
   } catch (err) { handleRouteError(err, res, "Driver trip-start error:"); }
 });
@@ -1379,6 +1385,11 @@ router.post("/me/trips/:id/complete", authorize({ feature: "fleet.trips.my", act
     void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.driver_completed", entity: "fleet_trips", entityId: id,
       details: JSON.stringify({ driverId: driver.id }) });
+    // الحدث القانوني (تدقيق + قواعد + تأهّل). القيد ليس مدفوعًا بالحدث (يُرحَّل
+    // مباشرة في مسار الإكمال الإداري)، فهذا الإطلاق غير دفتري ولا يُكرّر قيدًا.
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.completed", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id, source: "driver" }) });
     res.json({ data: { id, status: "completed" } });
   } catch (err) { handleRouteError(err, res, "Driver trip-complete error:"); }
 });
