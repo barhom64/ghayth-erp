@@ -1282,11 +1282,11 @@ function NewTestCaseDialog({ open, slug, onClose, onSuccess }: {
           <div><Label>الاسم</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div><Label>الوصف</Label><Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></div>
           <div>
-            <Label>Input (JSON)</Label>
+            <Label>المدخل (JSON)</Label>
             <Textarea rows={4} className="font-mono text-xs" value={inputJson} onChange={(e) => setInputJson(e.target.value)} />
           </div>
           <div>
-            <Label>Expected Contains (اختياري)</Label>
+            <Label>المتوقَّع يحتوي (اختياري)</Label>
             <Input value={expectedContains} onChange={(e) => setExpectedContains(e.target.value)} placeholder="نص يجب أن يحتويه المخرَج" />
           </div>
         </div>
