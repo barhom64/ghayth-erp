@@ -37,7 +37,7 @@ d("field tracking pipeline — GPS ingestion + breadcrumb read (#1799 §K)", () 
   let rawExecute: any;
   let resolveAttendancePolicy: any;
   const ids: {
-    companyId?: number;
+    companyId?: number; branchId?: number;
     driverEmployeeId?: number; driverAssignmentId?: number;
     managerEmployeeId?: number; managerAssignmentId?: number;
   } = {};
@@ -49,6 +49,7 @@ d("field tracking pipeline — GPS ingestion + breadcrumb read (#1799 §K)", () 
     for (const eId of [ids.driverEmployeeId, ids.managerEmployeeId]) {
       if (eId) await rawExecute(`DELETE FROM employees WHERE id=$1`, [eId]).catch(() => {});
     }
+    await rawExecute(`DELETE FROM branches WHERE "companyId"=$1`, [ids.companyId]).catch(() => {});
     await rawExecute(`DELETE FROM companies WHERE id=$1 AND name=$2`, [ids.companyId, COMPANY_NAME]).catch(() => {});
   }
 
@@ -66,6 +67,11 @@ d("field tracking pipeline — GPS ingestion + breadcrumb read (#1799 §K)", () 
       [COMPANY_NAME]
     );
     ids.companyId = c.id as number;
+    const [br] = await rawQuery(
+      `INSERT INTO branches ("companyId", name) VALUES ($1, 'الفرع الرئيسي') RETURNING id`,
+      [ids.companyId]
+    );
+    ids.branchId = br.id as number;
 
     // Driver — category seeded with trackingFrequencySeconds=30.
     const [dEmp] = await rawQuery(
@@ -75,9 +81,9 @@ d("field tracking pipeline — GPS ingestion + breadcrumb read (#1799 §K)", () 
     ids.driverEmployeeId = dEmp.id as number;
     const [dAsn] = await rawQuery(
       `INSERT INTO employee_assignments
-         ("employeeId","companyId","jobTitle",role,"isPrimary",status,"categoryKey")
-       VALUES ($1, $2, 'Driver', 'employee', TRUE, 'active', 'driver') RETURNING id`,
-      [ids.driverEmployeeId, ids.companyId]
+         ("employeeId","companyId","branchId","jobTitle",role,"isPrimary",status,"categoryKey")
+       VALUES ($1, $2, $3, 'Driver', 'employee', TRUE, 'active', 'driver') RETURNING id`,
+      [ids.driverEmployeeId, ids.companyId, ids.branchId]
     );
     ids.driverAssignmentId = dAsn.id as number;
 
@@ -89,9 +95,9 @@ d("field tracking pipeline — GPS ingestion + breadcrumb read (#1799 §K)", () 
     ids.managerEmployeeId = mEmp.id as number;
     const [mAsn] = await rawQuery(
       `INSERT INTO employee_assignments
-         ("employeeId","companyId","jobTitle",role,"isPrimary",status,"categoryKey")
-       VALUES ($1, $2, 'Manager', 'general_manager', TRUE, 'active', 'manager') RETURNING id`,
-      [ids.managerEmployeeId, ids.companyId]
+         ("employeeId","companyId","branchId","jobTitle",role,"isPrimary",status,"categoryKey")
+       VALUES ($1, $2, $3, 'Manager', 'general_manager', TRUE, 'active', 'manager') RETURNING id`,
+      [ids.managerEmployeeId, ids.companyId, ids.branchId]
     );
     ids.managerAssignmentId = mAsn.id as number;
   });
@@ -131,7 +137,7 @@ d("field tracking pipeline — GPS ingestion + breadcrumb read (#1799 §K)", () 
        ping.accuracy, ping.speed, ping.heading, ping.battery,
        ping.source, ping.deviceId],
     );
-    expect(row.id).toBeGreaterThan(0);
+    expect(Number(row.id)).toBeGreaterThan(0);
     expect(Number(row.lat)).toBeCloseTo(ping.lat, 4);
     expect(Number(row.lng)).toBeCloseTo(ping.lng, 4);
     expect(row.source).toBe("gps");
