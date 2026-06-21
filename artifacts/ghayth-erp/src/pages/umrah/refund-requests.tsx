@@ -29,6 +29,8 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -220,6 +222,7 @@ export default function UmrahRefundRequests() {
     }
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
 
   const sum = (rows: RefundRow[], f: (r: RefundRow) => number) =>
     rows.reduce((s, r) => s + f(r), 0);
@@ -328,10 +331,24 @@ export default function UmrahRefundRequests() {
       subtitle="دورة استرداد كاملة: تقديم ← موافقة/رفض ← صرف من الخزينة ← إغلاق — الخادم يتحقق من كل انتقال"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "طلبات الاسترداد" }]}
       actions={
-        <GuardedButton perm="umrah:create" variant="outline" className="gap-2"
-          onClick={() => setCreateOpen((v) => !v)}>
-          <Plus className="h-4 w-4" />طلب استرداد
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_refund_requests"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات الاسترداد", total: printRows.length },
+              items: printRows.map((r: any) => Object.fromEntries(
+                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
+                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
+              )),
+            })}
+          />
+          <GuardedButton perm="umrah:create" variant="outline" className="gap-2"
+            onClick={() => setCreateOpen((v) => !v)}>
+            <Plus className="h-4 w-4" />طلب استرداد
+          </GuardedButton>
+        </div>
       }
     >
       <UmrahTabsNav />
@@ -422,6 +439,7 @@ export default function UmrahRefundRequests() {
       <DataTable
         columns={columns}
         data={filteredItems}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
