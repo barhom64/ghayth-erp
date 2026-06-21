@@ -971,6 +971,121 @@ router.patch("/breakdowns/:id", authorize({ feature: "fleet.vehicles", action: "
   } catch (err) { handleRouteError(err, res, "Breakdown update error:"); }
 });
 
+// ─── بلاغ حادث مركبة (نقاط السائق الميدانية، الدفعة C1) ──────────────────────
+// البلاغ واقعة تشغيلية بحالة 'reported' — خالٍ من الدفتر. الترحيل المحاسبي حسب
+// costBearer (ذمة موظف/مطالبة HR/مخالفة) هو الدفعة C2 المستقلة عند التقييم، مع
+// assertion tests على سطور القيد (القاعدة 3). هنا: تسجيل الواقعة فقط.
+const driverAccidentSchema = z.object({
+  vehicleId: z.coerce.number().optional(),
+  vehiclePlate: z.string().optional(),
+  description: z.string().min(3, "وصف الحادث مطلوب"),
+  occurredAt: z.string().optional(),
+  severity: z.enum(["minor", "moderate", "severe", "total_loss"]).optional(),
+  locationText: z.string().optional(),
+  locationLat: z.coerce.number().optional(),
+  locationLng: z.coerce.number().optional(),
+  odometer: z.coerce.number().optional(),
+  hasInjuries: z.coerce.boolean().optional(),
+  thirdPartyInvolved: z.coerce.boolean().optional(),
+  thirdPartyDetails: z.string().optional(),
+  policeReportNo: z.string().optional(),
+  tripId: z.coerce.number().optional(),
+});
+
+// POST /me/accidents — السائق يبلّغ عن حادث مركبته. driverId مُسنَد ذاتيًا.
+router.post("/me/accidents", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const b = zodParse(driverAccidentSchema.safeParse(req.body)) as any;
+
+    let resolvedVehicleId = b.vehicleId || null;
+    if (!resolvedVehicleId && b.vehiclePlate) {
+      const [v] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.vehiclePlate, driver.companyId]);
+      if (v) resolvedVehicleId = v.id;
+    }
+    if (!resolvedVehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر مركبتك أو أدخل رقم اللوحة" });
+    }
+    const [veh] = await rawQuery<{ id: number; branchId: number | null }>(
+      `SELECT id, "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [resolvedVehicleId, driver.companyId]);
+    if (!veh) throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, { field: "vehicleId" });
+
+    let validatedTripId: number | null = null;
+    if (b.tripId) {
+      const [trip] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_trips WHERE id = $1 AND "companyId" = $2 AND "driverId" = $3 AND "deletedAt" IS NULL`,
+        [Number(b.tripId), driver.companyId, driver.id]);
+      if (!trip) throw new ValidationError("الرحلة غير موجودة أو لا تخصّك", { field: "tripId" });
+      validatedTripId = trip.id;
+    }
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_accidents
+         ("companyId","branchId","vehicleId","driverId","tripId","occurredAt","severity","status",
+          "description","locationText","locationLat","locationLng","odometer","hasInjuries",
+          "thirdPartyInvolved","thirdPartyDetails","policeReportNo","reportedByUserId","reportedByRole")
+       VALUES ($1,$2,$3,$4,$5,COALESCE($6::timestamptz, NOW()),$7,'reported',$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'driver')`,
+      [driver.companyId, veh.branchId ?? scope.branchId, resolvedVehicleId, driver.id, validatedTripId,
+       b.occurredAt ?? null, b.severity ?? "minor", b.description, b.locationText ?? null,
+       b.locationLat ?? null, b.locationLng ?? null, b.odometer ?? null, b.hasInjuries ?? false,
+       b.thirdPartyInvolved ?? false, b.thirdPartyDetails ?? null, b.policeReportNo ?? null, scope.userId]);
+    assertInsert(insertId, "fleet_accidents");
+
+    void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.accident.reported", entity: "fleet_accidents", entityId: insertId,
+      details: JSON.stringify({ vehicleId: resolvedVehicleId, severity: b.severity ?? "minor", hasInjuries: b.hasInjuries ?? false, source: "driver_self" }) });
+    void createAuditLog({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_accidents", entityId: insertId,
+      after: { vehicleId: resolvedVehicleId, driverId: driver.id, severity: b.severity ?? "minor", source: "driver_self" } });
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fleet_accidents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, driver.companyId]);
+    res.status(201).json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Driver accident report error:"); }
+});
+
+// GET /me/accidents — السائق يستعرض بلاغات حوادثه.
+router.get("/me/accidents", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT a.*, v."plateNumber"
+         FROM fleet_accidents a
+         LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."deletedAt" IS NULL
+        WHERE a."driverId" = $1 AND a."companyId" = $2 AND a."deletedAt" IS NULL
+        ORDER BY a."occurredAt" DESC, a.id DESC LIMIT 200`,
+      [driver.id, driver.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver accidents list error:"); }
+});
+
+// GET /accidents — مشرف الأسطول يتابع البلاغات (مُفلتر بالنطاق).
+router.get("/accidents", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const filters = parseScopeFilters(req);
+    const { where, params, nextParamIndex } = buildScopedWhere(scope, filters, {
+      companyColumn: 'a."companyId"', branchColumn: 'a."branchId"', enforceBranchScope: true });
+    let w = where; const p = params; let idx = nextParamIndex;
+    const status = (req.query.status as string) || "";
+    if (status) { w += ` AND a."status" = $${idx}`; p.push(status); idx++; }
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT a.*, v."plateNumber", d.name AS "driverName"
+         FROM fleet_accidents a
+         LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."deletedAt" IS NULL
+         LEFT JOIN fleet_drivers d ON d.id = a."driverId" AND d."deletedAt" IS NULL
+        WHERE ${w} AND a."deletedAt" IS NULL
+        ORDER BY a."occurredAt" DESC LIMIT 500`, p);
+    res.json(maskFields(req, { data: rows, total: rows.length }));
+  } catch (err) { handleRouteError(err, res, "Accidents list error:"); }
+});
+
 router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
