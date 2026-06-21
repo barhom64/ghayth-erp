@@ -859,8 +859,8 @@ router.post("/me/breakdowns", authorize({ feature: "fleet.driver.me", action: "u
     if (!resolvedVehicleId) {
       throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر مركبتك أو أدخل رقم اللوحة" });
     }
-    const [veh] = await rawQuery<{ id: number; branchId: number | null }>(
-      `SELECT id, "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    const [veh] = await rawQuery<{ id: number; branchId: number | null; plateNumber: string | null }>(
+      `SELECT id, "branchId", "plateNumber" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [resolvedVehicleId, driver.companyId]);
     if (!veh) throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, { field: "vehicleId" });
 
@@ -886,6 +886,11 @@ router.post("/me/breakdowns", authorize({ feature: "fleet.driver.me", action: "u
     void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
       action: "fleet.breakdown.reported", entity: "fleet_breakdowns", entityId: insertId,
       details: JSON.stringify({ vehicleId: resolvedVehicleId, severity: b.severity ?? "medium", category: b.category ?? null, source: "driver_self" }) });
+    // يُشغّل المعالج القائم proactiveVehicleBreakdown: تذكرة صيانة تلقائية + مهمة
+    // عاجلة لمدير الأسطول (entityId = vehicleId حسب توقيع المعالج).
+    void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.vehicle.breakdown", entity: "fleet_vehicle", entityId: resolvedVehicleId,
+      plateNumber: veh.plateNumber ?? undefined, description: b.description, source: "driver" });
     void createAuditLog({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_breakdowns", entityId: insertId,
       after: { vehicleId: resolvedVehicleId, driverId: driver.id, severity: b.severity ?? "medium", source: "driver_self" } });
@@ -1010,8 +1015,8 @@ router.post("/me/accidents", authorize({ feature: "fleet.driver.me", action: "up
     if (!resolvedVehicleId) {
       throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر مركبتك أو أدخل رقم اللوحة" });
     }
-    const [veh] = await rawQuery<{ id: number; branchId: number | null }>(
-      `SELECT id, "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+    const [veh] = await rawQuery<{ id: number; branchId: number | null; plateNumber: string | null }>(
+      `SELECT id, "branchId", "plateNumber" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
       [resolvedVehicleId, driver.companyId]);
     if (!veh) throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, { field: "vehicleId" });
 
@@ -1036,8 +1041,12 @@ router.post("/me/accidents", authorize({ feature: "fleet.driver.me", action: "up
        b.thirdPartyInvolved ?? false, b.thirdPartyDetails ?? null, b.policeReportNo ?? null, scope.userId]);
     assertInsert(insertId, "fleet_accidents");
 
+    // top-level vehicleId/plateNumber/severity/hasInjuries ليقرأها معالج
+    // proactiveVehicleAccident → مهمة تقييم عاجلة + إشعار لمدير الأسطول.
     void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
       action: "fleet.accident.reported", entity: "fleet_accidents", entityId: insertId,
+      vehicleId: resolvedVehicleId, plateNumber: veh.plateNumber ?? undefined,
+      severity: b.severity ?? "minor", hasInjuries: b.hasInjuries ?? false,
       details: JSON.stringify({ vehicleId: resolvedVehicleId, severity: b.severity ?? "minor", hasInjuries: b.hasInjuries ?? false, source: "driver_self" }) });
     void createAuditLog({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
       action: "create", entity: "fleet_accidents", entityId: insertId,
