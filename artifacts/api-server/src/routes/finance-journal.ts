@@ -377,7 +377,7 @@ const createJournalSchema = z.object({
   branchId: z.coerce.number().optional(),
   branchSplits: z.array(z.object({
     branchId: z.coerce.number(),
-    percentage: z.coerce.number().optional(),
+    percentage: z.coerce.number().min(0, "النسبة يجب ألا تكون سالبة").max(100, "النسبة يجب ألا تتجاوز 100").optional(),
     amount: z.coerce.number().optional(),
   })).optional(),
 });

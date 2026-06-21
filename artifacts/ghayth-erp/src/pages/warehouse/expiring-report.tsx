@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ export default function ExpiringReportPage() {
 
   return (
     <PageShell title="تقرير الصلاحيات القادمة" >
+      <WarehouseTabsNav />
       <Card className="mb-4">
         <CardContent className="pt-6 flex items-end gap-3">
           <div>

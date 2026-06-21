@@ -11,12 +11,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Bus } from "lucide-react";
 
@@ -73,15 +70,14 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 export default function UmrahTransportReport() {
-  const [seasonFilter, setSeasonFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [filters, setFilters] = useFilters();
   const qsParts: string[] = [];
-  if (seasonFilter !== "all") qsParts.push(`seasonId=${seasonFilter}`);
-  if (statusFilter !== "all") qsParts.push(`status=${statusFilter}`);
+  if (filters.seasonId) qsParts.push(`seasonId=${filters.seasonId}`);
+  if (filters.status) qsParts.push(`status=${filters.status}`);
   const qs = qsParts.length ? `?${qsParts.join("&")}` : "";
 
   const { data, isLoading, isError, refetch } = useApiQuery<TransportResp>(
-    ["umrah-transport-report", seasonFilter, statusFilter],
+    ["umrah-transport-report", filters.seasonId, filters.status],
     `/umrah/reports/umrah-transport${qs}`,
   );
   const { data: seasonsResp } = useApiQuery<{ data: SeasonOpt[] }>(
@@ -107,43 +103,25 @@ export default function UmrahTransportReport() {
     >
       <UmrahTabsNav />
 
-      <Card>
-        <CardContent className="p-4 flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">الموسم</label>
-            <Select value={seasonFilter} onValueChange={setSeasonFilter}>
-              <SelectTrigger className="w-[200px]" data-testid="transport-filter-season">
-                <SelectValue placeholder="كل المواسم" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل المواسم</SelectItem>
-                {seasons.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">الحالة</label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="transport-filter-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل الحالات</SelectItem>
-                {Object.entries(STATUS_LABEL_AR).map(([k, v]) => (
-                  <SelectItem key={k} value={k}>{v}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="mr-auto flex items-center gap-2 text-sm">
-            <Bus className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">إجمالي:</span>
-            <span className="font-bold text-lg" data-testid="transport-total">{data?.total ?? 0}</span>
-          </div>
-        </CardContent>
-      </Card>
+      <AdvancedFilters
+        config={{
+          showSearch: false,
+          statuses: Object.entries(STATUS_LABEL_AR).map(([value, label]) => ({ value, label })),
+          extraFilters: [{
+            key: "seasonId",
+            label: "الموسم",
+            options: seasons.map((s) => ({ value: String(s.id), label: s.title })),
+          }],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+      />
+      <div className="flex items-center gap-2 text-sm mb-3">
+        <Bus className="h-4 w-4 text-muted-foreground" />
+        <span className="text-muted-foreground">إجمالي:</span>
+        <span className="font-bold text-lg" data-testid="transport-total">{data?.total ?? 0}</span>
+      </div>
 
       <div className="flex flex-wrap gap-2" data-testid="transport-status-counts">
         {Object.entries(counts).map(([status, count]) => {
