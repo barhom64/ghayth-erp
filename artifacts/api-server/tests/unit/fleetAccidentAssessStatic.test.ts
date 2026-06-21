@@ -31,9 +31,11 @@ describe("accident assess endpoint — PATCH /accidents/:id/assess", () => {
   it("is gated by fleet.vehicles update", () => {
     expect(block()).toMatch(/authorize\(\{\s*feature:\s*"fleet\.vehicles",\s*action:\s*"update"\s*\}\)/);
   });
-  it("posts via fleetEngine.postAccidentGL and only when cost > 0", () => {
+  it("posts via fleetEngine.postAccidentGL and tracks reversal on re-assessment", () => {
     const b = block();
     expect(b).toMatch(/postAccidentGL/);
+    expect(b).toMatch(/reversedJournalId/);
+    // driver deduction is still gated on a positive cost
     expect(b).toMatch(/estimatedCost > 0/);
   });
   it("driver cost recovery goes through the HR event contract, not a direct write", () => {
@@ -51,6 +53,11 @@ describe("fleetEngine.postAccidentGL", () => {
     expect(m![0]).toMatch(/resolveVehicleAccountCode\(ctx\.companyId, accident\.vehicleId/);
     expect(m![0]).toMatch(/sourceKey: `fleet:accident:\$\{accident\.id\}`/);
     expect(m![0]).toMatch(/guardTable: "fleet_accidents"/);
+  });
+  it("reverses a prior posted entry before re-posting (no ledger freeze on re-assessment)", () => {
+    const m = ENGINE.match(/async postAccidentGL\([\s\S]+?\n  \}/);
+    expect(m![0]).toMatch(/softDeleteJournalEntry/);
+    expect(m![0]).toMatch(/reversedJournalId/);
   });
   it("emits the accident deduction event (no direct HR write)", () => {
     const m = ENGINE.match(/async requestAccidentDeduction\([\s\S]+?\n  \}/);
