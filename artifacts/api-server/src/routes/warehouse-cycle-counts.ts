@@ -222,21 +222,29 @@ router.post("/cycle-counts/:id/record", authorize({ feature: "warehouse.inventor
     if (!["pending", "in_progress"].includes(cc.status)) {
       throw new ValidationError("لا يمكن تسجيل العدّ بعد التقديم", { field: "status", fix: "العدّ متاح في حالتي pending/in_progress فقط" });
     }
-    let updated = 0;
-    for (const item of b.items) {
-      const r = await rawExecute(
-        `UPDATE warehouse_cycle_count_lines SET "countedQuantity"=$1, reason=$2
-         WHERE "cycleCountId"=$3 AND "productId"=$4`,
-        [item.countedQuantity, item.reason ?? null, id, item.productId]
-      );
-      updated += r.affectedRows ?? 0;
-    }
-    if (cc.status === "pending") {
-      await rawExecute(
-        `UPDATE warehouse_cycle_counts SET status='in_progress', "countedBy"=$1, "countedAt"=NOW(), "updatedAt"=NOW() WHERE id=$2`,
-        [scope.employeeId || null, id]
-      );
-    }
+    // Recording all counted lines + flipping the count to in_progress are
+    // atomic: a partial save (some lines recorded but the status not
+    // flipped, or vice versa) would leave the count inconsistent. rawQuery
+    // joins the ambient transaction (txStore). This records physical counts
+    // only — no GL posting (variance is posted later in /post).
+    const updated = await withTransaction(async () => {
+      let n = 0;
+      for (const item of b.items) {
+        const r = await rawExecute(
+          `UPDATE warehouse_cycle_count_lines SET "countedQuantity"=$1, reason=$2
+           WHERE "cycleCountId"=$3 AND "productId"=$4`,
+          [item.countedQuantity, item.reason ?? null, id, item.productId]
+        );
+        n += r.affectedRows ?? 0;
+      }
+      if (cc.status === "pending") {
+        await rawExecute(
+          `UPDATE warehouse_cycle_counts SET status='in_progress', "countedBy"=$1, "countedAt"=NOW(), "updatedAt"=NOW() WHERE id=$2`,
+          [scope.employeeId || null, id]
+        );
+      }
+      return n;
+    });
     createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "update", entity: "warehouse_cycle_counts", entityId: id,
