@@ -75,6 +75,23 @@ const TARGET_OPTIONS: { value: AllocationTarget; label: string }[] = [
   { value: "fixed_asset", label: "أصل ثابت" },
 ];
 
+// #2230 — group the 15 flat targets into domains so «ربط المصروف» cascades
+// المجال → نوع العملية (the owner's «اختر مركبات ثم نوع العملية»). value.target
+// stays the single source of truth; the domain is derived from it.
+const TARGET_DOMAINS: { domain: string; label: string; targets: AllocationTarget[] }[] = [
+  { domain: "none", label: "بدون ربط", targets: ["none"] },
+  { domain: "vehicle", label: "مركبة / أسطول", targets: ["vehicle", "vehicle_maintenance", "transport_trip"] },
+  { domain: "property", label: "عقار / وحدة", targets: ["property", "property_maintenance", "unit", "contract"] },
+  { domain: "project", label: "مشروع", targets: ["project"] },
+  { domain: "umrah", label: "عمرة", targets: ["umrah_season", "umrah_agent"] },
+  { domain: "parties", label: "مورد / عميل / موظف", targets: ["supplier", "customer", "employee"] },
+  { domain: "fixed_asset", label: "أصل ثابت", targets: ["fixed_asset"] },
+];
+const LABEL_FOR_TARGET: Record<string, string> = Object.fromEntries(TARGET_OPTIONS.map((o) => [o.value, o.label]));
+function domainForTarget(t: AllocationTarget): string {
+  return TARGET_DOMAINS.find((d) => d.targets.includes(t))?.domain ?? "none";
+}
+
 const MAINTENANCE_TYPES = ["دورية", "إصلاح", "طارئة", "وقائية", "حادث"];
 
 interface Props {
@@ -119,14 +136,37 @@ export function AllocationTargetSelect({ value, onChange, label = "ربط الع
 
   return (
     <div className="space-y-3">
-      <FormFieldWrapper label={label}>
-        <Select value={value.target} onValueChange={(v) => onTargetChange(v as AllocationTarget)}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {TARGET_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </FormFieldWrapper>
+      {/* #2230 — two-level cascade: المجال أولًا، ثم يندرج نوع العملية منه
+          (بدل قائمة مسطّحة من 15 خيارًا). value.target يبقى مصدر الحقيقة. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <FormFieldWrapper label={label}>
+          <Select
+            value={domainForTarget(value.target)}
+            onValueChange={(d) => {
+              const dom = TARGET_DOMAINS.find((x) => x.domain === d);
+              if (dom) onTargetChange(dom.targets[0]);
+            }}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TARGET_DOMAINS.map((d) => <SelectItem key={d.domain} value={d.domain}>{d.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </FormFieldWrapper>
+        {(() => {
+          const domainTargets = TARGET_DOMAINS.find((d) => d.domain === domainForTarget(value.target))?.targets ?? [];
+          return domainTargets.length > 1 ? (
+            <FormFieldWrapper label="نوع العملية">
+              <Select value={value.target} onValueChange={(v) => onTargetChange(v as AllocationTarget)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {domainTargets.map((t) => <SelectItem key={t} value={t}>{LABEL_FOR_TARGET[t] ?? t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormFieldWrapper>
+          ) : null;
+        })()}
+      </div>
 
       {(value.target === "vehicle" || value.target === "vehicle_maintenance") && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
