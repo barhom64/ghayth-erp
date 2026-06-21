@@ -442,7 +442,9 @@ const createPenaltySchema = z.object({
   agentId: z.coerce.number().optional().nullable(),
   seasonId: z.coerce.number().optional().nullable(),
   type: z.string().optional(),
-  amount: z.coerce.number().optional(),
+  // F9-B3b: لا جزاء بمبلغ سالب. المعالج يسمح بـ0 (مسوّدة) ويُرحّل فقط إن >0،
+  // والإعفاء تدفّق عكس مستقل — فـ nonnegative يحفظ سلوك الصفر ويرفض السالب فقط.
+  amount: z.coerce.number().nonnegative("مبلغ الجزاء لا يكون سالبًا").optional(),
   reason: z.string().optional().nullable(),
   status: z.string().optional(),
 });

@@ -247,8 +247,9 @@ const updateTenantSchema = z.object({
 });
 
 const payRentPaymentSchema = z.object({
-  paidAmount: z.coerce.number().optional(),
-  amount: z.coerce.number().optional(),
+  // F9-B3b: مبالغ الدفع موجبة (الاتجاه في الترحيل لا في الإشارة) — رفض السالب.
+  paidAmount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
+  amount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
   paidDate: z.string().optional().nullable(),
   method: z.string().optional().nullable(),
 });
@@ -405,8 +406,9 @@ const updateOwnerSchema = z.object({
 });
 
 const payInstallmentSchema = z.object({
-  paidAmount: z.coerce.number().optional(),
-  amount: z.coerce.number().optional(),
+  // F9-B3b: مبالغ سداد القسط موجبة — رفض السالب.
+  paidAmount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
+  amount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
   paidDate: z.string().optional().nullable(),
   method: z.string().optional().nullable(),
   receiptNumber: z.string().optional().nullable(),
@@ -433,16 +435,18 @@ const updateInspectionSchema = z.object({
 
 const createDepositSchema = z.object({
   contractId: z.coerce.number(),
-  amount: z.coerce.number(),
+  // F9-B3b: مبلغ التأمين والاسترداد مقداران موجبان (لا سالب).
+  amount: z.coerce.number().nonnegative("مبلغ التأمين لا يكون سالبًا"),
   receivedDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  refundAmount: z.coerce.number().optional().nullable(),
+  refundAmount: z.coerce.number().nonnegative("مبلغ الاسترداد لا يكون سالبًا").optional().nullable(),
   refundDate: z.string().optional().nullable(),
   refundReason: z.string().optional().nullable(),
 });
 
 const refundDepositSchema = z.object({
-  refundAmount: z.coerce.number().optional().nullable(),
+  // F9-B3b: مبلغ الاسترداد مقدار موجب.
+  refundAmount: z.coerce.number().nonnegative("مبلغ الاسترداد لا يكون سالبًا").optional().nullable(),
   refundDate: z.string().optional().nullable(),
   refundReason: z.string().optional().nullable(),
 });

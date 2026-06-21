@@ -46,4 +46,19 @@ describe("JE line non-negative invariant (F9-B2)", () => {
     const s = SRC("finance-hardening.ts");
     expect((s.match(/amount: z\.coerce\.number\(\)\.positive\(/g) || []).length).toBeGreaterThanOrEqual(2);
   });
+
+  // F9-B3b (approved): ledger-touching but reversal-direction lives in the
+  // posting, not in a negative number — so reject negative, keep 0 behaviour.
+  it("umrah penalty amount rejects negative (nonnegative, keeps 0-draft)", () => {
+    const s = SRC("umrah.ts");
+    expect(s).toMatch(/const createPenaltySchema[\s\S]*?amount: z\.coerce\.number\(\)\.nonnegative\(/);
+  });
+
+  it("properties rent/installment/deposit/refund amounts reject negative", () => {
+    const s = SRC("properties.ts");
+    expect(s).toMatch(/const payRentPaymentSchema[\s\S]*?paidAmount: z\.coerce\.number\(\)\.nonnegative\(/);
+    expect(s).toMatch(/const payInstallmentSchema[\s\S]*?paidAmount: z\.coerce\.number\(\)\.nonnegative\(/);
+    expect(s).toMatch(/const createDepositSchema[\s\S]*?amount: z\.coerce\.number\(\)\.nonnegative\(/);
+    expect(s).toMatch(/const refundDepositSchema[\s\S]*?refundAmount: z\.coerce\.number\(\)\.nonnegative\(/);
+  });
 });
