@@ -1692,7 +1692,7 @@ router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "li
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Onboarding tasks error:"); }
 });
 
 router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
@@ -1907,7 +1907,7 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "job-titles query failed"); }
 });
 
 // Migration 248 — create / update job_titles so admins can wire the
