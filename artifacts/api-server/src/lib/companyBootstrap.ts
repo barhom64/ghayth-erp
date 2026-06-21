@@ -401,6 +401,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "5380", name: "أتعاب مهنية واستشارية", nameEn: "Professional Fees", type: "expense", level: 3, parentCode: "5300" },
   { code: "5390", name: "مصروفات وعمولات بنكية", nameEn: "Bank Charges", type: "expense", level: 3, parentCode: "5300" },
   { code: "5395", name: "اشتراكات وعضويات", nameEn: "Subscriptions & Memberships", type: "expense", level: 3, parentCode: "5300" },
+  { code: "5399", name: "مصروفات عمومية أخرى", nameEn: "Other G&A Expenses", type: "expense", level: 3, parentCode: "5300" },
 
   // 54xx مصروفات تسويقية
   { code: "5400", name: "مصروفات التسويق والمبيعات", nameEn: "Marketing & Sales", type: "expense", level: 2, parentCode: "5000", allowPosting: false },
