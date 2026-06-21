@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,7 @@ export default function WarehouseLotsPage() {
     <PageShell title="الدفعات المخزنية" 
       actions={<Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />استلام دفعة</Button>}
     >
+      <WarehouseTabsNav />
       <div className="mb-4 flex gap-2">
         {["", "active", "quarantine", "expired", "recalled", "disposed"].map((s) => (
           <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm"

@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   PageShell,
 } from "@workspace/ui-core";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import {
   Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation,
 } from "lucide-react";
@@ -161,6 +162,7 @@ export default function MeDriver() {
           </Link></Button>
       }
     >
+      <FleetTabsNav />
       <Card className="mb-4">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">

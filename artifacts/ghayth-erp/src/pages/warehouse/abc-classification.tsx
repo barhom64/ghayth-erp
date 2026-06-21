@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ export default function AbcClassificationPage() {
 
   return (
     <PageShell title="تصنيف ABC للمنتجات">
+      <WarehouseTabsNav />
       <div className="mb-4 flex gap-2">
         {["", "A", "B", "C"].map((c) => (
           <Button key={c || "all"} size="sm" variant={cat === c ? "default" : "outline"} onClick={() => setCat(c)}>

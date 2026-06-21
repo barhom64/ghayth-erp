@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -79,6 +80,7 @@ export default function WarehouseSerialsPage() {
     <PageShell title="العناصر التسلسلية" 
       actions={<Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />تسجيل عنصر</Button>}
     >
+      <WarehouseTabsNav />
       <div className="mb-4 flex gap-2 flex-wrap">
         <Button variant={statusFilter === "" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("")}>الكل</Button>
         {Object.entries(STATUS_LABELS).map(([v, l]) => (

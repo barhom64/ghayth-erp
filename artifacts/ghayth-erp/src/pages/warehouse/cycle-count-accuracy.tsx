@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ export default function CycleCountAccuracyPage() {
 
   return (
     <PageShell title="دقة الجرد الدوري" >
+      <WarehouseTabsNav />
       <Card><CardContent className="pt-6">
         <DataTable data={rows} columns={columns} emptyMessage="لا توجد بيانات اعتماد جرد" />
       </CardContent></Card>

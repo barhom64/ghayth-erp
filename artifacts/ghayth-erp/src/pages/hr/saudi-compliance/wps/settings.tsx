@@ -12,6 +12,7 @@ import { useMemo, useState } from "react";
 import { apiFetch, useApiQuery } from "@/lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "@workspace/ui-core";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -233,6 +234,7 @@ export default function WpsBankCredentialsSettings() {
       title="إعدادات قنوات بنوك WPS"
       subtitle="إدارة بيانات اعتماد التسليم المباشر (SFTP / HTTPS) لكل بنك. تُحفظ مشفّرة على مستوى الشركة، ويرجع النظام تلقائياً إلى متغيرات البيئة عند عدم توفّرها."
     >
+      <HrTabsNav />
       {isLoading && <LoadingSpinner />}
       {error && <ErrorState onRetry={refresh} error={error} />}
       {!isLoading && !error && banks.length === 0 && (

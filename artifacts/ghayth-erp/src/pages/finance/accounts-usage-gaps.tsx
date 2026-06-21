@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { CheckCircle2, Wand2 } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -75,6 +76,7 @@ export default function AccountsUsageGaps() {
         { label: "فجوات التصنيف" },
       ]}
     >
+      <FinanceTabsNav />
       {total > 0 && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border bg-surface-subtle p-3">
           <p className="text-sm text-muted-foreground">

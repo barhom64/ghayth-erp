@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { Inbox, CheckCircle2, XCircle, Truck } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -156,6 +157,7 @@ export default function FinanceIntakeCenter() {
       subtitle="الوارد التشغيلي الذي ينتظر تحويله إلى قيود — النقل يقود التشغيل، والمحاسب يتصرّف ماليًا (#1715 / #1733)"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "مركز التلقّي" }]}
     >
+      <FinanceTabsNav />
       <div className="flex items-center gap-2 mb-4">
         <Inbox className="h-5 w-5 text-status-info-foreground" />
         <div className="flex gap-1">
