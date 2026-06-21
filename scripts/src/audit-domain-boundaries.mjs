@@ -77,14 +77,82 @@ const ROUTE_DOMAIN = {
   "store.ts": "store",
 };
 
-// Files that are domain-neutral orchestrators. They may write to multiple
-// domains' tables, but they should ideally use engines too. For now we
-// only flag the listed cases (hr.ts journal_entries, etc.) — neutral
-// orchestrators are checked separately if they appear in this list.
-const NEUTRAL_FILES = new Set([
-  "requests.ts",       // Generic request → entity converter
-  "clientPortal.ts",   // External-facing portal
-  "index.ts",          // Router barrel
+// Prefix-based owner inference for the ~110 route files NOT in ROUTE_DOMAIN.
+// Before #review-2026-06-21 the audit skipped every unmapped file (finance-*,
+// hr-*, transport-*, communications, admin, employees…), so real cross-domain
+// writes slipped through. We now scan EVERY route file: the owner is resolved
+// via ROUTE_DOMAIN → this prefix list (first match wins, order matters) →
+// otherwise the file's own stem (an unknown, non-table-owning domain, so any
+// write it makes to a DOMAIN_TABLES table is flagged as cross-domain).
+// Domains that own no DOMAIN_TABLES (transport/communications/admin/…) are
+// intentionally left to resolve to their stem so their cross writes surface.
+const DOMAIN_PREFIXES = [
+  ["accounting-engine", "finance"],
+  ["finance-", "finance"],
+  ["hr-", "hr"],
+  ["employees", "hr"],
+  ["employeeTrackingPolicy", "hr"],
+  ["recruitment", "hr"],
+  ["training", "hr"],
+  ["vehicle-profile", "fleet"],
+  ["fleet-", "fleet"],
+  ["fleet", "fleet"],
+  ["warehouse", "warehouse"],
+  ["properties", "properties"],
+  ["projects", "projects"],
+  ["umrah", "umrah"],
+  ["marketing", "crm"],
+  ["crm", "crm"],
+  ["legal", "legal"],
+  ["support", "support"],
+  ["store", "store"],
+];
+
+function inferDomain(basename) {
+  if (ROUTE_DOMAIN[basename]) return ROUTE_DOMAIN[basename];
+  for (const [prefix, domain] of DOMAIN_PREFIXES) {
+    if (basename.startsWith(prefix)) return domain;
+  }
+  // Unknown / non-table-owning domain → use the stem so cross writes flag.
+  return basename.replace(/\.ts$/, "");
+}
+
+// Known pre-existing cross-domain writes (ratchet baseline). Each entry is
+// "basename:table" and is documented + tracked for removal. The audit fails
+// only on writes NOT in this set — so coverage expands immediately (no new
+// violations allowed) while the documented debt is paid down PR-by-PR. Prune
+// an entry the moment its write is removed; a stale entry is harmless but
+// should not linger. See plans/architecture-boundary-decisions-2026-06-21.md.
+const BASELINE = new Set([
+  // admin → HR (مادة 18): إلغاء وصول كان يحذف employee_assignments. يُعالَج في
+  // PR #2828 — يُحذف هذا السطر فور دمجه (الحارس عندها يفرضه فعليًا).
+  "admin.ts:employee_assignments",
+  // communications (خادم) يقرر دعم/CRM ويكتب جداولهما — قرار نطاق مؤجّل.
+  "communications.ts:support_tickets",
+  "communications.ts:crm_opportunities",
+  // transport-pricing (خادم) ينشئ فاتورة ويحسب ضريبة — يحتاج استخراج خدمة مالية
+  // مشتركة (refactor واسع، مادة 15) — قرار نطاق مؤجّل.
+  "transport-pricing.ts:invoices",
+  // transport يعدّل حالة دوام سائق مملوكة للأسطول — متوسط، موثّق.
+  "transport-bookings.ts:fleet_drivers",
+  "transport-planning.ts:fleet_drivers",
+  // employees (HR) ينشئ سطر ربط fleet_drivers (best-effort) — منخفض، موثّق.
+  "employees.ts:fleet_drivers",
+
+  // ── تهيئة المنصّة/تسجيل المستأجر (bootstrap ذرّي) — مقبول دستوريًا ──────────
+  // إنشاء شركة+فرع+موظف+مستخدم+RBAC في معاملة واحدة عبر خدمة الترقيم. توفير
+  // هوية لا سياسة HR. (مصنّف مقبولًا في تقرير المراجعة 2026-06-21.)
+  "auth.ts:employees",
+  "auth.ts:employee_assignments",
+  "admin.ts:employees",
+
+  // ── كتابات عابرة أظهرها توسيع الحارس — تحتاج فرزًا لاحقًا (دَين موثّق) ───────
+  // (لم يُدخلها هذا الـPR؛ كانت قائمة على main قبل توسيع التغطية.)
+  "finance-hardening.ts:projects",          // finance يكتب projects (أداة hardening/datafix؟)
+  "finance-invoices.ts:warehouse_movements",// ربط الفاتورة بحركة مخزون/COGS؟
+  "publicData.ts:employees",                // تحديث employees من مسار بيانات عامة
+  "settings.ts:employee_assignments",       // settings يحدّث تكليفات HR
+  "settings.ts:purchase_orders",            // settings يحدّث أوامر شراء مالية
 ]);
 
 // Build reverse index: table → owning domain
@@ -112,17 +180,16 @@ async function main() {
   const violations = [];
   let fileCount = 0;
 
+  const baselineHit = new Set();
+
   for await (const filePath of walkFiles(ROUTES_DIR)) {
     fileCount++;
     const basename = filePath.split("/").pop();
-    const ownDomain = ROUTE_DOMAIN[basename];
-    const isNeutral = NEUTRAL_FILES.has(basename);
-
-    // Skip files we don't classify (finance-*.ts, etc. — they own their writes)
-    if (!ownDomain && !isNeutral) continue;
+    // Every route file is now scanned; the owner is inferred (no more silent
+    // skip of finance-*/transport-*/communications/admin/…).
+    const ownDomain = inferDomain(basename);
 
     const content = await readFile(filePath, "utf8");
-    const lines = content.split("\n");
 
     for (const pat of PATTERNS) {
       pat.lastIndex = 0;
@@ -131,7 +198,11 @@ async function main() {
         const table = match[1];
         const owner = TABLE_OWNER[table];
         if (!owner) continue; // unknown table — not our concern
-        if (ownDomain && owner === ownDomain) continue; // own-domain write
+        if (owner === ownDomain) continue; // own-domain write
+
+        // Known pre-existing cross-domain write → tracked in BASELINE, skip.
+        const key = `${basename}:${table}`;
+        if (BASELINE.has(key)) { baselineHit.add(key); continue; }
 
         // Find approximate line number
         const upToMatch = content.slice(0, match.index);
@@ -140,13 +211,22 @@ async function main() {
         violations.push({
           file: basename,
           line: lineNum,
-          domain: ownDomain || "neutral",
+          domain: ownDomain,
           table,
           tableOwner: owner,
           op: match[0].split(/\s+/)[0].toUpperCase(),
         });
       }
     }
+  }
+
+  // Surface baseline entries that no longer match any write — they were fixed
+  // and should be pruned so the audit actively enforces them again.
+  const staleBaseline = [...BASELINE].filter((k) => !baselineHit.has(k));
+  if (staleBaseline.length > 0) {
+    console.log(
+      `[audit-domain-boundaries] note — ${staleBaseline.length} baseline entr(y/ies) no longer match (fixed?) — prune from BASELINE:\n  ${staleBaseline.join("\n  ")}`
+    );
   }
 
   if (violations.length === 0) {
