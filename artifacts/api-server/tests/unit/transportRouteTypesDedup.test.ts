@@ -9,8 +9,10 @@ const spaSrc = join(import.meta.dirname!, "../../../../artifacts/ghayth-erp/src"
 const read = (rel: string) => readFileSync(join(spaSrc, rel), "utf8");
 
 const SHARED = "lib/transport-constants.ts";
+// #1812 audit fix — transport-booking-create.tsx no longer renders the
+// routeType select (it moved to the canonical UmrahContextQuestionnaire),
+// so it's no longer a ROUTE_TYPES consumer. The editor + questionnaire remain.
 const CONSUMERS = [
-  "pages/fleet/transport-booking-create.tsx",
   "components/shared/multi-leg-booking-editor.tsx",
   "components/shared/umrah-context-questionnaire.tsx",
 ];
@@ -28,7 +30,7 @@ describe("UX-05 — ROUTE_TYPES مصدر واحد", () => {
     }
   });
 
-  it("المستهلكون الثلاثة يستوردونه ولا يعرّفونه محليًا", () => {
+  it("المستهلكون يستوردونه ولا يعرّفونه محليًا", () => {
     for (const f of CONSUMERS) {
       const src = read(f);
       expect(src, `${f} لا يستورد المصدر المشترك`).toMatch(
