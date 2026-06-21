@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { exportRowsToCsv } from "@/lib/unified-export";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,21 +53,18 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function UmrahAgentBalancesReport() {
-  const [seasonFilter, setSeasonFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("active");
-  const [onlyOutstanding, setOnlyOutstanding] = useState(false);
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useFilters({ status: "active" });
 
   const qs = useMemo(() => {
     const parts: string[] = [];
-    if (seasonFilter !== "all") parts.push(`seasonId=${seasonFilter}`);
-    if (statusFilter !== "all") parts.push(`status=${statusFilter}`);
-    if (onlyOutstanding) parts.push("hasOutstanding=true");
+    if (filters.seasonId) parts.push(`seasonId=${filters.seasonId}`);
+    if (filters.status) parts.push(`status=${filters.status}`);
+    if (filters.hasOutstanding) parts.push("hasOutstanding=true");
     return parts.length ? `?${parts.join("&")}` : "";
-  }, [seasonFilter, statusFilter, onlyOutstanding]);
+  }, [filters]);
 
   const { data, isLoading, isError, refetch } = useApiQuery<BalancesResp>(
-    ["umrah-agent-balances", seasonFilter, statusFilter, String(onlyOutstanding)],
+    ["umrah-agent-balances", filters.seasonId, filters.status, filters.hasOutstanding],
     `/umrah/reports/agent-balances${qs}`,
   );
   const { data: seasonsResp } = useApiQuery<{ data: SeasonOpt[] }>(
@@ -82,15 +79,10 @@ export default function UmrahAgentBalancesReport() {
   // Client-side search filter — يطبَّق على الصفوف اللي رجعت من الـ server
   // (الـ server يقدر يعمل filter لكن الـ search box يتكلم بنص حر؛ أبسط
   // و أسرع نخليه local على الـ payload المحدود مسبقاً).
-  const visibleRows = useMemo(() => {
-    if (!search.trim()) return rows;
-    const q = search.trim().toLowerCase();
-    return rows.filter((r) =>
-      r.name?.toLowerCase().includes(q) ||
-      r.nuskAgentNumber?.toLowerCase().includes(q) ||
-      r.country?.toLowerCase().includes(q),
-    );
-  }, [rows, search]);
+  const visibleRows = useMemo(
+    () => applyFilters(rows, filters, { searchFields: ["name", "nuskAgentNumber", "country"] }),
+    [rows, filters],
+  );
 
   const exportCsv = () => {
     void exportRowsToCsv({
@@ -145,58 +137,25 @@ export default function UmrahAgentBalancesReport() {
     >
       <UmrahTabsNav />
 
-      <Card>
-        <CardContent className="p-4 flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">الموسم</label>
-            <Select value={seasonFilter} onValueChange={setSeasonFilter}>
-              <SelectTrigger className="w-[200px]" data-testid="agent-balances-filter-season">
-                <SelectValue placeholder="كل المواسم" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">كل المواسم</SelectItem>
-                {seasons.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">الحالة</label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px]" data-testid="agent-balances-filter-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">الكل</SelectItem>
-                <SelectItem value="active">نشط</SelectItem>
-                <SelectItem value="inactive">غير نشط</SelectItem>
-                <SelectItem value="suspended">موقوف</SelectItem>
-                <SelectItem value="blocked">محظور</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">بحث</label>
-            <Input
-              type="text"
-              placeholder="اسم / رقم نسك / دولة..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-[220px]"
-              data-testid="agent-balances-search"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-xs cursor-pointer">
-            <Checkbox
-              checked={onlyOutstanding}
-              onCheckedChange={(v) => setOnlyOutstanding(!!v)}
-              data-testid="agent-balances-filter-outstanding"
-            />
-            الذين عليهم رصيد فقط
-          </label>
-        </CardContent>
-      </Card>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "اسم / رقم نسك / دولة...",
+          statuses: [
+            { value: "active", label: "نشط" },
+            { value: "inactive", label: "غير نشط" },
+            { value: "suspended", label: "موقوف" },
+            { value: "blocked", label: "محظور" },
+          ],
+          extraFilters: [
+            { key: "seasonId", label: "الموسم", options: seasons.map((s) => ({ value: String(s.id), label: s.title })) },
+            { key: "hasOutstanding", label: "الرصيد", options: [{ value: "true", label: "الذين عليهم رصيد فقط" }] },
+          ],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={visibleRows.length}
+      />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {kpis.map((k) => (
