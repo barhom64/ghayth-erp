@@ -129,6 +129,7 @@ function AgentInvoicesTab() {
             <UmrahAgentSelect
               label="الوكيل"
               placeholder="اختر الوكيل"
+              allowCreate={false}
               value={genAgent}
               onChange={setGenAgent}
             />
@@ -137,6 +138,7 @@ function AgentInvoicesTab() {
             <UmrahSeasonSelect
               label="الموسم"
               placeholder="اختر الموسم"
+              allowCreate={false}
               value={genSeason}
               onChange={setGenSeason}
             />
