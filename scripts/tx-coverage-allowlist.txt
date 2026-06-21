@@ -2,9 +2,8 @@
 # Baseline of handlers that write 2+ tables outside withTransaction/
 # applyTransition. As each is wrapped, delete its line — the guard fails
 # on any NEW offender. Regenerate: node scripts/src/check-tx-coverage.mjs --write-allowlist
-# Baseline: 26 handler(s).
+# Baseline: 23 handler(s).
 routes/admin-ai-governance.ts:POST /prompts/:id/evaluate
-routes/admin-ai-governance.ts:POST /prompts/:id/reviews
 routes/admin-communication-control.ts:POST /outbound-queue/bulk-retry
 routes/cargo.ts:PATCH /manifests/:id
 routes/communications.ts:POST /click-to-call
@@ -14,8 +13,6 @@ routes/fleet-telematics.ts:POST /telematics/video/session/:id/stop
 routes/fleet.ts:POST /me/trips/:id/complete
 routes/hr-overtime.ts:PATCH /overtime/:id/approve
 routes/hr.ts:PATCH /official-letters/:id/approve
-routes/inbox.ts:POST /messages/:id/cancel
-routes/inbox.ts:POST /messages/:id/retry
 routes/legal.ts:POST /cases
 routes/legal.ts:POST /contracts
 routes/properties.ts:PATCH /maintenance-requests/:id
