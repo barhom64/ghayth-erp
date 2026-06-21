@@ -61,16 +61,23 @@ test.describe("Vehicle subsidiary accounts — operational UI", () => {
     // 3) UI: open the vehicle detail page and switch to the finance tab.
     await login(page);
     await page.goto(`/fleet/${vehicleId}`);
-    await page.getByRole("button", { name: "المالية" }).click();
+    // exact:true keeps this off the sidebar's "القوائم المالية" menu button,
+    // which also contains "المالية" as a substring (default getByRole name
+    // matching is substring) and would otherwise be clicked instead of the tab.
+    await page.getByRole("button", { name: "المالية", exact: true }).click();
 
     // 4) The subsidiary-accounts section renders with the linked account.
     await expect(page.getByText("الحسابات الفرعية للمركبة")).toBeVisible();
-    await expect(page.getByText(postable!.code, { exact: false })).toBeVisible();
+    // The code renders in 2+ spots (status chip + COA column); .first() avoids
+    // a strict-mode violation while still proving the linked code is shown.
+    await expect(page.getByText(postable!.code, { exact: false }).first()).toBeVisible();
 
     // 5) The control lever — the "ربط حساب" button opens the relink dialog
     //    with both the account-type and the chart-of-accounts pickers.
     await page.getByRole("button", { name: /ربط حساب/ }).first().click();
     await expect(page.getByText("الحساب من دليل الحسابات")).toBeVisible();
-    await expect(page.getByText("نوع الحساب")).toBeVisible();
+    // "نوع الحساب" appears as both a table header and the dialog field label;
+    // .first() keeps strict mode happy while proving the picker is present.
+    await expect(page.getByText("نوع الحساب").first()).toBeVisible();
   });
 });

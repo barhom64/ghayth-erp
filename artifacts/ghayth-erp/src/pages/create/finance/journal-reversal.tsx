@@ -134,7 +134,7 @@ export default function JournalReversalPage() {
             </div>
           ) : (
             <div className="max-h-96 overflow-y-auto border rounded">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead className="bg-muted sticky top-0">
                   <tr className="text-xs text-muted-foreground">
                     <th className="text-start py-2 px-2">المرجع</th>
@@ -169,7 +169,7 @@ export default function JournalReversalPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </CardContent>
@@ -195,7 +195,7 @@ export default function JournalReversalPage() {
                 <div className="text-sm font-medium mb-2 truncate" title={selected.description}>
                   {selected.description}
                 </div>
-                <table className="w-full text-xs">
+                <div className="overflow-x-auto"><table className="w-full text-xs">
                   <thead>
                     <tr className="text-muted-foreground border-b">
                       <th className="text-start py-1">الحساب</th>
@@ -216,7 +216,7 @@ export default function JournalReversalPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
 
               {/* Reversal preview */}
@@ -233,7 +233,7 @@ export default function JournalReversalPage() {
                 <div className="text-sm font-medium mb-2 truncate">
                   عكس قيد: {selected.description}
                 </div>
-                <table className="w-full text-xs">
+                <div className="overflow-x-auto"><table className="w-full text-xs">
                   <thead>
                     <tr className="text-muted-foreground border-b border-status-warning-foreground/30">
                       <th className="text-start py-1">الحساب</th>
@@ -254,7 +254,7 @@ export default function JournalReversalPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
 

@@ -29,7 +29,7 @@ export interface ResolvedRecipient {
   cc: string | null;
   /** Human-readable name for the recipient — surfaced in subject/log. */
   displayName: string | null;
-  /** "ar" or "en" — used by notificationEngine to pick the right template language. */
+  /** "ar" or "en" — used by notificationDispatch to pick the right template language. */
   language: "ar" | "en";
   /** Source entity row id — passed through to messageSender as relatedId. */
   entityId: number;

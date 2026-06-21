@@ -114,7 +114,7 @@ export default function FxRevaluationPage() {
 
   return (
     <PageShell
-      title="إعادة تقييم العملات الأجنبية (FX Revaluation)"
+      title="إعادة تقييم العملات الأجنبية"
       subtitle="قيد شهري لتعديل قيمة الفواتير وأوامر الشراء المفتوحة بعملات أجنبية إلى سعر إقفال الفترة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

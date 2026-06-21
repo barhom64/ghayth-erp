@@ -33,6 +33,15 @@ export function permissionMatches(granted: readonly string[], required: string):
 
   if (granted.includes(`${moduleKey}:*`)) return true; // module wildcard
 
+  // منحة wildcard على مستوى الموديول بالصيغة الدقيقة: `module.*:action` /
+  // `module.*:*` (مثل `finance.*` الممنوحة للمدير المالي، تُسقَط من جسر
+  // /permissions/my حرفيًا «finance.*:action»). بدون هذا، طلبٌ دقيق مثل
+  // `finance.journals:list` لا يطابق منحة المدير `finance.*` فتختفي عنه أزرار
+  // وصفحات دقيقة الحراسة. إضافي بحت لحاملي `module.*` (المدراء) — لا يُخفي
+  // شيئًا كان ظاهرًا. RBAC-REV-WILDCARD.
+  if (granted.includes(`${moduleKey}.*:*`)) return true;
+  if (action && granted.includes(`${moduleKey}.*:${action}`)) return true;
+
   if (isFineAsk) {
     // legacy coarse grant satisfies a fine ask (compat for non-granular tenants)
     if (action && granted.includes(`${moduleKey}:${action}`)) return true;

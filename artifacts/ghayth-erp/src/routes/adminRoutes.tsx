@@ -15,7 +15,6 @@ const AdminAiPromptDetail = lazy(() => import("@/pages/admin-ai-prompt-detail"))
 const AdminCommunicationControl = lazy(() => import("@/pages/admin-communication-control"));
 const AdminPbxControl = lazy(() => import("@/pages/admin-pbx-control"));
 const AdminMasterPlan = lazy(() => import("@/pages/admin-master-plan"));
-const AdminNotificationRouting = lazy(() => import("@/pages/admin-notification-routing"));
 const AdminVendorSettings = lazy(() => import("@/pages/admin-vendor-settings"));
 const AdminViolationsReport = lazy(() => import("@/pages/admin-violations-report"));
 const AdminSystemGovernor = lazy(() => import("@/pages/admin-system-governor"));
@@ -24,6 +23,7 @@ const AdminDomainRegistry = lazy(() => import("@/pages/admin-domain-registry"));
 const AdminEventMonitor = lazy(() => import("@/pages/admin-event-monitor"));
 const AdminEventOutbox = lazy(() => import("@/pages/admin-event-outbox"));
 const AdminJourneys = lazy(() => import("@/pages/admin-journeys"));
+const AdminInfraAlerts = lazy(() => import("@/pages/admin-infra-alerts"));
 const AdminPostingFailures = lazy(() => import("@/pages/admin-posting-failures"));
 const AdminLifecycleMonitor = lazy(() => import("@/pages/admin-lifecycle-monitor"));
 const AdminRbacMatrix = lazy(() => import("@/pages/admin-rbac-matrix"));
@@ -55,6 +55,16 @@ const AdminOrgMemberships = lazy(() => import("@/pages/admin/org-memberships"));
 const AdminSubscription = lazy(() => import("@/pages/admin/subscription"));
 const RedirectToHrAttendanceCategories = redirectTo("/hr/attendance-categories");
 const RedirectToHrScoringWeights      = redirectTo("/hr/scoring-weights");
+// /admin/roles-simple rendered the SAME RbacSimpleEditor as the canonical
+// /admin/roles — two identical menu entries for one editor. Kept reachable for
+// bookmarks but redirected; its «مُركّب الأدوار» nav entry was removed.
+const RedirectToAdminRoles            = redirectTo("/admin/roles");
+// /admin/notification-routing and /communications/notification-engine were two
+// CRUD UIs over the SAME notification_routing_rules table (the live dispatcher
+// reads it — notificationEngine.ts:135). notification-engine is the superset
+// (rules + fallback-chains + templates) and more reachable (level 50), so this
+// alias redirects to it; the «توجيه الإشعارات» nav entry was removed.
+const RedirectToNotificationEngine    = redirectTo("/communications/notification-engine");
 
 export const adminRoutes = [
   { path: "/admin/expiring-docs", component: AdminExpiringDocs },
@@ -72,7 +82,7 @@ export const adminRoutes = [
   { path: "/admin/communication-control", component: AdminCommunicationControl },
   { path: "/admin/pbx-control", component: AdminPbxControl },
   { path: "/admin/master-plan", component: AdminMasterPlan },
-  { path: "/admin/notification-routing", component: AdminNotificationRouting },
+  { path: "/admin/notification-routing", component: RedirectToNotificationEngine },
   { path: "/admin/vendor-settings", component: AdminVendorSettings },
   { path: "/admin/violations-report", component: AdminViolationsReport },
   { path: "/admin/system-governor", component: AdminSystemGovernor },
@@ -81,10 +91,11 @@ export const adminRoutes = [
   { path: "/admin/event-monitor", component: AdminEventMonitor },
   { path: "/admin/outbox", component: AdminEventOutbox },
   { path: "/admin/journeys", component: AdminJourneys },
+  { path: "/admin/infra-alerts", component: AdminInfraAlerts },
   { path: "/admin/posting-failures", component: AdminPostingFailures },
   { path: "/admin/lifecycle-monitor", component: AdminLifecycleMonitor },
   { path: "/admin/rbac-matrix", component: AdminRbacMatrix },
-  { path: "/admin/roles-simple", component: RbacSimpleEditor },
+  { path: "/admin/roles-simple", component: RedirectToAdminRoles },
   { path: "/admin/job-titles", component: AdminJobTitles },
   { path: "/assistant", component: AssistantAsk },
   { path: "/admin/gl-reconciliation", component: AdminGlReconciliation },

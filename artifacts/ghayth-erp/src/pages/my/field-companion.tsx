@@ -17,7 +17,12 @@
 // ════════════════════════════════════════════════════════════════════════════
 import { useState, useEffect, useRef, useCallback } from "react";
 import { PageShell } from "@workspace/ui-core";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { useApiQuery, apiFetch, API_BASE } from "@/lib/api";
+import {
+  isNativeFieldTracking,
+  startNativeFieldTracking,
+  stopNativeFieldTracking,
+} from "@/lib/field-tracking-native";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -60,9 +65,29 @@ export default function FieldCompanionPage() {
   const [lastError, setLastError] = useState<string | null>(null);
   const [queueLen, setQueueLen] = useState(readQueue().length);
   const [sentCount, setSentCount] = useState(0);
+  // "native" = التتبع الخلفي الأصلي (Capacitor)؛ "browser" = مسار المتصفح
+  // (Wake Lock، يتوقف عند قفل الشاشة)؛ null = متوقف.
+  const [mode, setMode] = useState<"native" | "browser" | null>(null);
+  const [hiddenWarning, setHiddenWarning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wakeLockRef = useRef<any>(null);
+  const isNative = isNativeFieldTracking();
 
   const freq = elig?.trackingFrequencySeconds ?? 0;
+
+  // ── Wake Lock: يمنع قفل الشاشة فيبقى JS حيًّا أطول في مسار المتصفح ──
+  const acquireWakeLock = useCallback(async () => {
+    try {
+      const nav = navigator as any;
+      if (nav.wakeLock?.request) {
+        wakeLockRef.current = await nav.wakeLock.request("screen");
+      }
+    } catch { /* مرفوض/غير مدعوم — يكمل التتبع لكن قد تُقفل الشاشة */ }
+  }, []);
+  const releaseWakeLock = useCallback(() => {
+    try { wakeLockRef.current?.release?.(); } catch { /* ignore */ }
+    wakeLockRef.current = null;
+  }, []);
 
   // ── send one ping (or queue it when offline) ──────────────────────
   const sendPing = useCallback(async (p: QueuedPing): Promise<boolean> => {
@@ -148,17 +173,47 @@ export default function FieldCompanionPage() {
     );
   }, [flushQueue, sendPing]);
 
-  const startTracking = useCallback(() => {
+  const startTracking = useCallback(async () => {
     if (!elig?.eligible || freq <= 0) return;
+
+    // ── المسار الأصلي (Capacitor): تتبع خلفي حقيقي والتطبيق مقفول ──
+    if (isNative) {
+      try {
+        const { token } = await apiFetch<{ token: string }>(
+          "/my/field/tracking-token", { method: "POST" },
+        );
+        // Use the single native-aware origin (API_BASE) so the plugin posts
+        // to the real server, not the app bundle origin (https://localhost).
+        const apiOrigin = API_BASE;
+        const started = await startNativeFieldTracking({
+          token,
+          apiOrigin,
+          onSent: () => { setLastSent(new Date().toLocaleTimeString("ar-SA")); setSentCount((c) => c + 1); setLastError(null); },
+          onError: (m) => setLastError(m),
+        });
+        if (started) { setRunning(true); setMode("native"); return; }
+      } catch (err: any) {
+        if (err?.code === "FORBIDDEN") { setLastError("فئتك لا تخضع للتتبع — تم الإيقاف"); return; }
+        // فشل بدء الأصلي → اسقط إلى مسار المتصفح.
+      }
+    }
+
+    // ── مسار المتصفح: Wake Lock يبقي الشاشة/JS حيًّا + التقاط دوري ──
     setRunning(true);
+    setMode("browser");
+    await acquireWakeLock();
     tick(); // immediate first capture
     timerRef.current = setInterval(tick, freq * 1000);
-  }, [elig, freq, tick]);
+  }, [elig, freq, tick, isNative, acquireWakeLock]);
 
-  function stopTracking() {
+  const stopTracking = useCallback(() => {
     setRunning(false);
+    setHiddenWarning(false);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-  }
+    releaseWakeLock();
+    if (mode === "native") { stopNativeFieldTracking().catch(() => {}); }
+    setMode(null);
+  }, [mode, releaseWakeLock]);
 
   // Flush the queue automatically when connectivity returns.
   useEffect(() => {
@@ -167,8 +222,29 @@ export default function FieldCompanionPage() {
     return () => window.removeEventListener("online", onOnline);
   }, [flushQueue]);
 
-  // Stop on unmount — never leave a timer running after navigation.
-  useEffect(() => () => { if (timerRef.current) clearInterval(timerRef.current); }, []);
+  // مسار المتصفح فقط: حذّر عند إخفاء الصفحة (التتبع سيتوقف)، وأعد طلب
+  // Wake Lock عند العودة (المتصفح يحرّره تلقائيًا عند الإخفاء). الأصلي لا
+  // يتأثر — يكمل في الخلفية.
+  useEffect(() => {
+    if (!running || mode !== "browser") return;
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        setHiddenWarning(true);
+      } else {
+        setHiddenWarning(false);
+        acquireWakeLock();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [running, mode, acquireWakeLock]);
+
+  // Stop on unmount — never leave a timer / wake-lock / native watcher running.
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    releaseWakeLock();
+    stopNativeFieldTracking().catch(() => {});
+  }, [releaseWakeLock]);
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -206,10 +282,17 @@ export default function FieldCompanionPage() {
                     <span className={`inline-block w-3 h-3 rounded-full ${running ? "bg-green-500 animate-pulse" : "bg-gray-300"}`} />
                     <span className="font-semibold">{running ? "التتبع نشط" : "التتبع متوقف"}</span>
                   </div>
-                  <Badge variant="outline" className="gap-1">
-                    <Clock className="h-3 w-3" />
-                    كل {freq} ثانية
-                  </Badge>
+                  <div className="flex items-center gap-1.5">
+                    {running && (
+                      <Badge variant={mode === "native" ? "default" : "secondary"} className="gap-1" data-testid="tracking-mode">
+                        {mode === "native" ? "خلفي (تطبيق)" : "يتطلب شاشة مفتوحة"}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="gap-1">
+                      <Clock className="h-3 w-3" />
+                      كل {freq} ثانية
+                    </Badge>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="bg-surface-subtle rounded p-2">
@@ -225,6 +308,12 @@ export default function FieldCompanionPage() {
                   <div className="flex items-center gap-2 p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-sm" data-testid="offline-queue-banner">
                     <WifiOff className="h-4 w-4 shrink-0" />
                     <span>{queueLen} نقطة بانتظار الإرسال (ستُرسل تلقائيًا عند عودة الاتصال)</span>
+                  </div>
+                )}
+                {hiddenWarning && (
+                  <div className="flex items-start gap-2 p-2 rounded bg-amber-50 border border-amber-200 text-amber-800 text-sm" data-testid="hidden-warning">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>التتبع قد يتوقف وأنت خارج هذه الصفحة. أبقِ الشاشة مفتوحة على هذه الصفحة، أو استخدم تطبيق غيث للجوال للتتبع في الخلفية.</span>
                   </div>
                 )}
                 {lastError && (
@@ -247,7 +336,7 @@ export default function FieldCompanionPage() {
                 <Square className="h-5 w-5" /> إيقاف التتبع
               </Button>
             ) : (
-              <Button onClick={startTracking} className="w-full h-12 text-base gap-2" data-testid="start-btn">
+              <Button onClick={() => { void startTracking(); }} className="w-full h-12 text-base gap-2" data-testid="start-btn">
                 <Play className="h-5 w-5" /> بدء التتبع
               </Button>
             )}
@@ -255,6 +344,9 @@ export default function FieldCompanionPage() {
             <p className="text-xs text-muted-foreground text-center px-4">
               يُرسَل موقعك فقط أثناء تشغيل التتبع وبالفاصل المحدد في سياسة فئتك
               ({elig?.categoryKey ?? "—"}). أوقفه عند نهاية الدوام أو المهمة.
+              {isNative
+                ? " يعمل في الخلفية حتى مع قفل الشاشة."
+                : " في المتصفح يتطلب إبقاء الشاشة مفتوحة — للتتبع الخلفي استخدم تطبيق غيث للجوال."}
             </p>
           </>
         )}

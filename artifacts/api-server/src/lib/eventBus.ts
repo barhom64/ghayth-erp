@@ -110,6 +110,10 @@ function captureToOutbox(eventName: string, payload?: EventPayload): void {
   ).catch((err) => logger.warn(err, "[outbox] failed to capture event"));
 }
 
+// Private wildcard channel — not a real EventName, so domain code can never
+// emit/subscribe to it by accident.
+const ANY_EVENT = "__any__" as EventName;
+
 class EventBus extends EventEmitter {
   // Maps a caller's listener to the safety-wrapped function actually
   // registered, so off() can still remove it by the original reference.
@@ -121,7 +125,27 @@ class EventBus extends EventEmitter {
     // envelope once guarantees every event is versioned + timestamped.
     const stamped = stampEnvelope(payload);
     captureToOutbox(event, stamped);
+    // Fan a copy to the wildcard channel so cross-cutting consumers (the
+    // realtime SSE hub) can subscribe to ALL events without registering 200
+    // per-name listeners. Kept on a private channel name that is never a real
+    // EventName, so it can't collide with a domain event.
+    super.emit(ANY_EVENT, { event, payload: stamped });
     return super.emit(event, stamped);
+  }
+
+  /**
+   * Subscribe to EVERY event (post-stamp). Used by the realtime hub to push
+   * live updates to connected clients. The listener receives the event name
+   * plus its stamped payload (which carries companyId for tenant routing).
+   */
+  onAny(listener: (e: { event: EventName; payload: EventPayload }) => void): this {
+    return super.on(ANY_EVENT, (e: any) => {
+      try { listener(e); } catch { /* never let a realtime push break the bus */ }
+    });
+  }
+
+  offAny(listener: (e: { event: EventName; payload: EventPayload }) => void): this {
+    return super.off(ANY_EVENT, listener as any);
   }
 
   // EventEmitter never awaits async listeners, so a rejecting handler

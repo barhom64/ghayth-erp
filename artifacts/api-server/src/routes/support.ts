@@ -184,6 +184,8 @@ router.get("/tickets", authorize({ feature: "support.tickets", action: "list" })
   try {
     const scope = req.scope!;
     const { status, priority } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض التذاكر المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const filters = parseScopeFilters(req);
     // Migration 171 added `support_tickets.branchId`. Drop the legacy
     // `disableBranchScope: true` so the header picker filters tickets
@@ -194,8 +196,9 @@ router.get("/tickets", authorize({ feature: "support.tickets", action: "list" })
     let paramIdx = nextParamIndex;
     if (status) { where += ` AND t.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (priority) { where += ` AND t.priority = $${paramIdx}`; params.push(priority); paramIdx++; }
+    where += showDeleted ? ` AND t."deletedAt" IS NOT NULL` : ` AND t."deletedAt" IS NULL`;
     const rows = await rawQuery<SupportTicketRow & { clientName?: string | null; assigneeName?: string | null }>(
-      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."companyId"=t."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} AND t."deletedAt" IS NULL ORDER BY t.id DESC LIMIT 500`,
+      `SELECT t.*, cl.name AS "clientName", e.name AS "assigneeName" FROM support_tickets t LEFT JOIN clients cl ON cl.id=t."clientId" AND cl."companyId"=t."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=t."assigneeId" AND e."deletedAt" IS NULL WHERE ${where} ORDER BY t.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -711,6 +714,19 @@ router.delete("/tickets/:id", authorize({ feature: "support.tickets", action: "d
 
     res.json({ message: "تم حذف التذكرة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete ticket error:"); }
+});
+
+// #2713 (تعميم) — استرجاع تذكرة محذوفة ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/tickets/:id/restore", authorize({ feature: "support.tickets", action: "delete", resource: { table: "support_tickets", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE support_tickets SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا توجد تذكرة محذوفة بهذا المعرّف");
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "support.ticket.restored", entity: "support_tickets", entityId: id }).catch((e) => logger.error(e, "support background task failed"));
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "support_tickets", entityId: id }).catch((e) => logger.error(e, "support background task failed"));
+    res.json({ message: "تم استرجاع التذكرة" });
+  } catch (err) { handleRouteError(err, res, "Restore ticket error:"); }
 });
 
 router.get("/replies", authorize({ feature: "support.tickets", action: "list" }), async (req, res) => {

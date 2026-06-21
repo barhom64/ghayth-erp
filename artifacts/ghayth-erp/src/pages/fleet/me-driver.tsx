@@ -11,7 +11,7 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import {
-  Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation,
+  Truck, Package, MapPin, Activity, CheckCircle2, Route as RouteIcon, Weight, Navigation, Megaphone,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CargoCheckpointDialog } from "@/components/shared/cargo-checkpoint-dialog";
@@ -66,6 +66,7 @@ export default function MeDriver() {
   const meQ = useApiQuery<{ data: DriverMe }>(["fleet-me"], "/fleet/me");
   const tripsQ = useApiQuery<{ data: DriverTrip[] }>(["fleet-me-trips"], "/fleet/me/trips");
   const cargoQ = useApiQuery<{ data: DriverCargo[] }>(["fleet-me-cargo"], "/fleet/me/cargo");
+  const inspQ = useApiQuery<{ data: { id: number; plateNumber: string | null; status: string; dueDate: string | null }[] }>(["fleet-me-inspections"], "/fleet/me/inspections");
   const me = meQ.data?.data;
   const trips = tripsQ.data?.data || [];
   const cargo = cargoQ.data?.data || [];
@@ -155,9 +156,14 @@ export default function MeDriver() {
       title={`مرحباً، ${me.name}`}
       subtitle="لوحة السائق — رحلاتك وبضائعك"
       actions={
-        <Button asChild size="sm" variant="default"><Link href="/me/driver/navigation">
+        <div className="flex gap-2">
+          <Button asChild size="sm" variant="outline"><Link href="/me/driver/reports">
+            <Megaphone className="h-4 w-4 me-1" />البلاغات
+          </Link></Button>
+          <Button asChild size="sm" variant="default"><Link href="/me/driver/navigation">
             <Navigation className="h-4 w-4 me-1" />الملاحة
           </Link></Button>
+        </div>
       }
     >
       <Card className="mb-4">
@@ -204,6 +210,31 @@ export default function MeDriver() {
           )}
         </CardContent>
       </Card>
+
+      {(() => {
+        const pending = (inspQ.data?.data ?? []).filter((i) => i.status === "pending");
+        if (pending.length === 0) return null;
+        return (
+          <Card className="mb-4 border-status-warning/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-status-warning" />
+                الفحص اليومي ({pending.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {pending.map((i) => (
+                <div key={i.id} className="flex items-center justify-between rounded-md border p-2 text-sm">
+                  <span>المركبة {i.plateNumber ?? "—"} {i.dueDate ? `· ${i.dueDate}` : ""}</span>
+                  <Button size="sm" asChild>
+                    <Link href={`/fleet/me/inspections/${i.id}`}>تصوير العداد</Link>
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as "trips" | "cargo")}>
         <TabsList>

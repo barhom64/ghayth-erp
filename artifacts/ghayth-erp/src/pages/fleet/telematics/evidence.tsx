@@ -260,7 +260,7 @@ export default function FleetTelematicsEvidence() {
 
   return (
     <PageShell
-      title="أرشيف الأدلة (AI Evidence)"
+      title="أرشيف الأدلة"
       breadcrumbs={[
         { href: "/fleet", label: "الأسطول" },
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },

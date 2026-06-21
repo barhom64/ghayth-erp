@@ -201,7 +201,7 @@ const createPurchaseRequestSchema = z.object({
   items: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
-    unitPrice: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().nonnegative().optional(),
     productId: z.coerce.number().optional(),
     ...purchaseLineDimsSchema,
   })).min(1, "يجب إضافة بند واحد على الأقل"),
@@ -2857,6 +2857,12 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
     });
     markIdempotencyReplay(req, res, vadvAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_advance.created", entity: "vendor_advances", entityId: advanceId ?? 0,
+      after: { ref: advRef, supplierId, amount: amt, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-advance-create audit failed"));
+
     res.status(201).json({ advanceId, ref: advRef, supplierId, amount: amt, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Vendor advance create error:");
@@ -2952,6 +2958,11 @@ purchaseRouter.post("/vendor-advances/:id/apply", authorize({ feature: "finance.
 
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_advance.applied", entity: "vendor_advances", entityId: advanceId,
+      after: { poId, amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-advance-apply audit failed"));
     res.json({ advanceId, poId, amount: applyAmt, journalId });
   } catch (err) {
     handleRouteError(err, res, "Apply vendor advance error:");
@@ -3086,6 +3097,11 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     });
     markIdempotencyReplay(req, res, vcmAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_credit.created", entity: "vendor_credit_memos", entityId: memoId ?? 0,
+      after: { ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-credit-create audit failed"));
     res.status(201).json({ memoId, ref: creditRef, supplierId, amount: subtotal, vatAmount, totalAmount: fullAmount, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Vendor credit memo create error:");
@@ -3175,6 +3191,11 @@ purchaseRouter.post("/vendor-credits/:id/apply", authorize({ feature: "finance.p
 
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_credit.applied", entity: "vendor_credit_memos", entityId: memoId,
+      after: { poId, amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-credit-apply audit failed"));
     res.json({ memoId, poId, amount: applyAmt, journalId });
   } catch (err) {
     handleRouteError(err, res, "Apply vendor credit error:");
@@ -3437,6 +3458,12 @@ purchaseRouter.post("/vendor-invoices", authorize({ feature: "finance.purchase",
       }
     });
     markIdempotencyReplay(req, res, vinvAlreadyExists);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.vendor_invoice.created", entity: "vendor_invoices", entityId: invoiceId ?? 0,
+      after: { ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId },
+    }).catch((e) => logger.error(e, "finance-purchase vendor-invoice-create audit failed"));
 
     res.status(201).json({ invoiceId, ref: b.ref, supplierId: b.supplierId, subtotal, vatAmount, total, journalId, status: "approved" });
   } catch (err) {

@@ -11,7 +11,7 @@
  * Routes:
  *   POST /inbox/send                 — compose a new outbound message
  *                                      on any channel; passes through
- *                                      notificationEngine so DLP rules
+ *                                      notificationDispatch so DLP rules
  *                                      apply + provider failover works
  *   POST /inbox/threads/:id/reply    — reply in an existing thread
  *                                      (keyed by recipient address)
@@ -25,13 +25,13 @@
  *   1. Records the outbound row in communications_log (audit trail).
  *   2. Inserts into the channel's queue (email_queue / sms_queue /
  *      whatsapp_queue) so the existing workers pick it up.
- *   3. Applies DLP via the same scanner notificationEngine uses on its
+ *   3. Applies DLP via the same scanner notificationDispatch uses on its
  *      template-driven sends. Blocked messages are written to the log
  *      with status='blocked_dlp' so the operator UI surfaces them.
  */
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -460,33 +460,39 @@ router.post("/calls", authorize({ feature: "communications", action: "create" })
     const scope = req.scope!;
     const body = zodParse(logCallSchema.safeParse(req.body));
     const callId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const { insertId } = await rawExecute(
-      `INSERT INTO pbx_calls ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-      [
-        scope.companyId, callId,
-        body.callerNumber, body.calledNumber,
-        body.direction, body.duration, body.status,
-      ],
-    );
-    assertInsert(insertId, "pbx_calls");
-
-    // Mirror in message_log so the call shows up in the unified thread
-    // view alongside email/SMS/WhatsApp. Phase 4 final contract:
-    // legacy communications_log INSERT dropped; channel='pbx' accepted
-    // by the relaxed constraint from migration 224.
+    // The call log + its message_log mirror are written atomically: a call
+    // that committed without its unified-thread mirror would be invisible
+    // in the inbox. rawQuery joins the ambient transaction (txStore).
     const fromAddr = body.direction === "outbound" ? scope.userId.toString() : body.callerNumber;
     const toAddr = body.direction === "outbound" ? body.calledNumber : scope.userId.toString();
     const callBody = `${body.status} · ${body.duration}s${body.notes ? ` · ${body.notes}` : ""}`;
-    await rawExecute(
-      `INSERT INTO message_log
-         ("companyId", channel, direction, "fromAddress", "toAddress",
-          body, status, folder, "relatedType", "relatedId", "createdAt")
-       VALUES ($1, 'pbx', $2, $3, $4, $5, 'logged',
-               CASE WHEN $2 = 'inbound' THEN 'inbox' ELSE 'sent' END,
-               $6, $7, NOW())`,
-      [scope.companyId, body.direction, fromAddr, toAddr, callBody, body.relatedType ?? null, body.relatedId ?? null],
-    );
+    const insertId = await withTransaction(async () => {
+      const { insertId: callRowId } = await rawExecute(
+        `INSERT INTO pbx_calls ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [
+          scope.companyId, callId,
+          body.callerNumber, body.calledNumber,
+          body.direction, body.duration, body.status,
+        ],
+      );
+      assertInsert(callRowId, "pbx_calls");
+
+      // Mirror in message_log so the call shows up in the unified thread
+      // view alongside email/SMS/WhatsApp. Phase 4 final contract:
+      // legacy communications_log INSERT dropped; channel='pbx' accepted
+      // by the relaxed constraint from migration 224.
+      await rawExecute(
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'pbx', $2, $3, $4, $5, 'logged',
+                 CASE WHEN $2 = 'inbound' THEN 'inbox' ELSE 'sent' END,
+                 $6, $7, NOW())`,
+        [scope.companyId, body.direction, fromAddr, toAddr, callBody, body.relatedType ?? null, body.relatedId ?? null],
+      );
+      return callRowId;
+    });
 
     void emitEvent({
       companyId: scope.companyId, userId: scope.userId,

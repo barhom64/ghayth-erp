@@ -50,8 +50,9 @@ describe("PR-9 (#2077) — backend: eligibility mirror + context-stamped insert"
   it("GET /attendance/field-ping/eligibility exists, same gate as the ping route", () => {
     expect(HR).toMatch(/router\.get\("\/attendance\/field-ping\/eligibility", authorize\(\{ feature: "hr\.attendance\.checkin", action: "create" \}\)/);
   });
-  it("eligibility resolves the category policy and returns eligible=false for freq<=0", () => {
-    expect(SERVICE).toMatch(/eligible: freq > 0/);
+  it("eligibility derives from an explicit active tracking policy (no policy → eligible=false)", () => {
+    expect(SERVICE).toMatch(/getActiveTrackingPolicy\(/);
+    expect(SERVICE).toMatch(/reason: "no_tracking_policy"/);
   });
   it("the SAME service serves a /my/field self-service mount (no module gate) — field workers reach it", () => {
     // Plain employees (the actual field workers) don't carry the hr
@@ -70,14 +71,14 @@ describe("PR-9 (#2077) — backend: eligibility mirror + context-stamped insert"
   });
   it("ping INSERT stamps userId + selectedRoleKey + categoryKey from scope (server-side, unspoofable)", () => {
     expect(SERVICE).toMatch(/INSERT INTO field_tracking_points[\s\S]{0,400}"userId","activeRoleKey","categoryKey"/);
-    expect(SERVICE).toMatch(/scope\.userId, scope\.selectedRoleKey \?\? null, policy\?\.categoryKey \?\? null/);
+    expect(SERVICE).toMatch(/scope\.userId, scope\.selectedRoleKey \?\? null, assignment\.categoryKey \?\? null/);
   });
   it("ON CONFLICT (assignmentId, capturedAt) DO NOTHING — offline replay is idempotent", () => {
     expect(SERVICE).toMatch(/ON CONFLICT \("assignmentId", "capturedAt"\) DO NOTHING/);
     expect(HR).toMatch(/reason: "duplicate"/);
   });
-  it("the category gate (freq<=0 → 403) is UNCHANGED — admins/managers untrackable", () => {
-    expect(HR).toMatch(/فئة الموظف لا تخضع للتتبع اللحظي/);
+  it("the policy gate (no active policy → 403) replaces the old category gate", () => {
+    expect(HR).toMatch(/لا توجد سياسة تتبع فعّالة لهذا الموظف/);
   });
 });
 
@@ -103,12 +104,19 @@ describe("PR-9 (#2077) — companion page: eligibility-first + Arabic UX + batte
     expect(PAGE).toMatch(/!q\.some\(\(x\) => x\.capturedAt === p\.capturedAt\)/);
     expect(PAGE).toMatch(/window\.addEventListener\("online", onOnline\)/);
   });
-  it("stop button exists + interval cleared on unmount (no zombie timers)", () => {
+  it("stop button exists + unmount clears the timer, wake-lock and native watcher (no zombies)", () => {
     expect(PAGE).toMatch(/data-testid="stop-btn"/);
-    expect(PAGE).toMatch(/useEffect\(\(\) => \(\) => \{ if \(timerRef\.current\) clearInterval\(timerRef\.current\); \}, \[\]\)/);
+    // unmount cleanup now also releases the Wake Lock and stops the native watcher
+    expect(PAGE).toMatch(/if \(timerRef\.current\) clearInterval\(timerRef\.current\);[\s\S]{0,120}releaseWakeLock\(\);[\s\S]{0,120}stopNativeFieldTracking\(\)/);
   });
   it("a 403 policy rejection STOPS the loop (doesn't queue or retry-storm)", () => {
     expect(PAGE).toMatch(/err\?\.code === "FORBIDDEN"[\s\S]{0,300}stopTracking\(\)/);
+  });
+  it("background tracking: tries the native (Capacitor) path first, then falls back to the browser", () => {
+    expect(PAGE).toMatch(/if \(isNative\)/);
+    expect(PAGE).toMatch(/startNativeFieldTracking\(/);
+    // browser fallback acquires a Wake Lock to keep the screen/JS alive
+    expect(PAGE).toMatch(/await acquireWakeLock\(\)/);
   });
 });
 

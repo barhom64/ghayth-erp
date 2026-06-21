@@ -95,8 +95,8 @@ const updateBuildingSchema = z.object({
   buildingPermitNumber: z.string().optional().nullable(),
   latitude: z.coerce.number().optional().nullable(),
   longitude: z.coerce.number().optional().nullable(),
-  totalUnits: z.coerce.number().optional().nullable(),
-  totalArea: z.coerce.number().optional().nullable(),
+  totalUnits: z.coerce.number().nonnegative().optional().nullable(),
+  totalArea: z.coerce.number().nonnegative().optional().nullable(),
   yearBuilt: z.coerce.number().optional().nullable(),
   ownerId: z.coerce.number().optional().nullable(),
   managerId: z.coerce.number().optional().nullable(),
@@ -122,7 +122,7 @@ const updateContractSchema = z.object({
   contractSource: z.enum(["ejar", "manual", "file_import", "ejar_later", "migrated"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
-  totalContractValue: z.coerce.number().optional().nullable(),
+  totalContractValue: z.coerce.number().nonnegative().optional().nullable(),
   latePenaltyType: z.string().optional().nullable(),
   latePenaltyValue: z.coerce.number().optional().nullable(),
   gracePeriodDays: z.coerce.number().optional().nullable(),
@@ -175,7 +175,7 @@ const createContractSchema = z.object({
   contractSource: z.enum(["ejar", "manual", "file_import", "ejar_later", "migrated"]).optional().nullable(),
   paymentFrequency: z.string().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
-  totalContractValue: z.coerce.number().optional().nullable(),
+  totalContractValue: z.coerce.number().nonnegative().optional().nullable(),
   latePenaltyType: z.string().optional().nullable(),
   latePenaltyValue: z.coerce.number().optional().nullable(),
   gracePeriodDays: z.coerce.number().optional().nullable(),
@@ -204,7 +204,7 @@ const renewContractSchema = z.object({
   newStartDate: z.string().optional().nullable(),
   monthlyRent: z.coerce.number().optional().nullable(),
   yearlyRent: z.coerce.number().optional().nullable(),
-  totalContractValue: z.coerce.number().optional().nullable(),
+  totalContractValue: z.coerce.number().nonnegative().optional().nullable(),
 });
 
 const terminateContractSchema = z.object({
@@ -247,8 +247,9 @@ const updateTenantSchema = z.object({
 });
 
 const payRentPaymentSchema = z.object({
-  paidAmount: z.coerce.number().optional(),
-  amount: z.coerce.number().optional(),
+  // F9-B3b: مبالغ الدفع موجبة (الاتجاه في الترحيل لا في الإشارة) — رفض السالب.
+  paidAmount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
+  amount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
   paidDate: z.string().optional().nullable(),
   method: z.string().optional().nullable(),
 });
@@ -262,7 +263,7 @@ const createMaintenanceRequestSchema = z.object({
   description: z.string().min(1, "وصف البلاغ مطلوب"),
   priority: z.string().optional().nullable(),
   assignedTo: z.coerce.number().optional().nullable(),
-  estimatedCost: z.coerce.number().optional().nullable(),
+  estimatedCost: z.coerce.number().nonnegative().optional().nullable(),
   unitLat: z.coerce.number().optional().nullable(),
   unitLon: z.coerce.number().optional().nullable(),
   supplierId: z.coerce.number().optional().nullable(),
@@ -282,6 +283,12 @@ const completeMaintenanceSchema = z.object({
   zeroCostConfirmed: z.boolean().optional().nullable(),
   materialsUsed: z.array(z.any()).optional().nullable(),
   coveredByContract: z.boolean().optional().nullable(),
+  // V1 (FIN-PROP-OWNER) — من يتحمّل تكلفة الصيانة. الافتراضي "company" (سلوك
+  // قائم بلا تغيير). "owner" يوجّه القيد لفوترة المالك بدل مصروف الشركة،
+  // ومحروس: يُرفض ما لم يوجد مالك مسجّل على الوحدة/المبنى.
+  costResponsibility: z.enum(["company", "owner"]).optional().nullable(),
+  // عند تحميلها على المالك: هل تُصدَر فاتورة ضريبية (ضريبة بمعدل الشركة)؟
+  ownerVatApplicable: z.boolean().optional().nullable(),
 });
 
 const createTenantSchema = z.object({
@@ -322,8 +329,8 @@ const createBuildingSchema = z.object({
   nationalAddress: z.union([z.string(), z.record(z.any())]).optional().nullable(),
   latitude: z.coerce.number().optional().nullable(),
   longitude: z.coerce.number().optional().nullable(),
-  totalUnits: z.coerce.number().optional().nullable(),
-  totalArea: z.coerce.number().optional().nullable(),
+  totalUnits: z.coerce.number().nonnegative().optional().nullable(),
+  totalArea: z.coerce.number().nonnegative().optional().nullable(),
   yearBuilt: z.coerce.number().optional().nullable(),
   ownerId: z.coerce.number().optional().nullable(),
   managerId: z.coerce.number().optional().nullable(),
@@ -353,7 +360,7 @@ const updateMaintenanceRequestSchema = z.object({
   assignedTo: z.coerce.number().optional().nullable(),
   technicianId: z.coerce.number().optional().nullable(),
   costResponsibility: z.string().optional().nullable(),
-  estimatedCost: z.coerce.number().optional().nullable(),
+  estimatedCost: z.coerce.number().nonnegative().optional().nullable(),
   actualCost: z.coerce.number().optional().nullable(),
   closureReport: z.string().optional().nullable(),
   clientRating: z.coerce.number().optional().nullable(),
@@ -399,8 +406,9 @@ const updateOwnerSchema = z.object({
 });
 
 const payInstallmentSchema = z.object({
-  paidAmount: z.coerce.number().optional(),
-  amount: z.coerce.number().optional(),
+  // F9-B3b: مبالغ سداد القسط موجبة — رفض السالب.
+  paidAmount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
+  amount: z.coerce.number().nonnegative("المبلغ لا يكون سالبًا").optional(),
   paidDate: z.string().optional().nullable(),
   method: z.string().optional().nullable(),
   receiptNumber: z.string().optional().nullable(),
@@ -427,16 +435,18 @@ const updateInspectionSchema = z.object({
 
 const createDepositSchema = z.object({
   contractId: z.coerce.number(),
-  amount: z.coerce.number(),
+  // F9-B3b: مبلغ التأمين والاسترداد مقداران موجبان (لا سالب).
+  amount: z.coerce.number().nonnegative("مبلغ التأمين لا يكون سالبًا"),
   receivedDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
-  refundAmount: z.coerce.number().optional().nullable(),
+  refundAmount: z.coerce.number().nonnegative("مبلغ الاسترداد لا يكون سالبًا").optional().nullable(),
   refundDate: z.string().optional().nullable(),
   refundReason: z.string().optional().nullable(),
 });
 
 const refundDepositSchema = z.object({
-  refundAmount: z.coerce.number().optional().nullable(),
+  // F9-B3b: مبلغ الاسترداد مقدار موجب.
+  refundAmount: z.coerce.number().nonnegative("مبلغ الاسترداد لا يكون سالبًا").optional().nullable(),
   refundDate: z.string().optional().nullable(),
   refundReason: z.string().optional().nullable(),
 });
@@ -519,6 +529,8 @@ router.get("/units", authorize({ feature: "properties.units", action: "list" }),
   try {
     const scope = req.scope!;
     const { status, search, buildingId } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض الوحدات المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const conditions = [`u."companyId" = $1`];
     const params: unknown[] = [scope.companyId];
     if (status) { params.push(status); conditions.push(`u.status = $${params.length}`); }
@@ -532,7 +544,7 @@ router.get("/units", authorize({ feature: "properties.units", action: "list" }),
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 100));
     const offset = (page - 1) * limit;
-    conditions.push(`u."deletedAt" IS NULL`);
+    conditions.push(showDeleted ? `u."deletedAt" IS NOT NULL` : `u."deletedAt" IS NULL`);
     const countParams = [...params];
     const limitIdx = params.length + 1;
     const offsetIdx = params.length + 2;
@@ -890,6 +902,19 @@ router.delete("/units/:id", authorize({ feature: "properties.units", action: "de
 
     res.json({ message: "تم حذف الوحدة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete unit error:"); }
+});
+
+// #2713 (تعميم) — استرجاع وحدة محذوفة ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/units/:id/restore", authorize({ feature: "properties.units", action: "delete", resource: { table: "property_units", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE property_units SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا توجد وحدة محذوفة بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "property_units", entityId: id }).catch((e) => logger.error(e, "properties background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "property.unit.restored", entity: "property_units", entityId: id }).catch((e) => logger.error(e, "properties background task failed"));
+    res.json({ message: "تم استرجاع الوحدة" });
+  } catch (err) { handleRouteError(err, res, "Restore unit error:"); }
 });
 
 // Preview from Ejar — Mock-First read by ejarNumber. The form calls
@@ -2448,11 +2473,39 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
       }
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"assignedTo","estimatedCost","supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [scope.companyId, b.unitId, b.contractId || null, b.tenantName || null, b.category || null, b.description, autoPriority, assignedTechnicianId ? 'assigned' : 'pending', assignedTechnicianId, b.estimatedCost || 0, b.supplierId ?? null, b.unregisteredSupplierName ?? null]
-    );
-    assertInsert(insertId, "maintenance_requests");
+    const insertId = await withTransaction(async () => {
+      const { insertId: mrId } = await rawExecute(
+        `INSERT INTO maintenance_requests ("companyId","unitId","contractId","tenantName",category,description,priority,status,"assignedTo","estimatedCost","supplierId","unregisteredSupplierName") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        [scope.companyId, b.unitId, b.contractId || null, b.tenantName || null, b.category || null, b.description, autoPriority, assignedTechnicianId ? 'assigned' : 'pending', assignedTechnicianId, b.estimatedCost || 0, b.supplierId ?? null, b.unregisteredSupplierName ?? null]
+      );
+      assertInsert(mrId, "maintenance_requests");
+
+      // The auto work-item task is part of the create flow: a failed task
+      // insert must not leave a maintenance request with no task on the
+      // technician's list. Atomic with the request (no silent best-effort
+      // loss); rawQuery joins the ambient transaction via txStore.
+      let techAssignmentId: number | null = null;
+      if (assignedTechnicianId) {
+        const [techEmp] = await rawQuery<Record<string, unknown>>(
+          `SELECT ea.id FROM technicians t LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' AND ea."companyId"=$2 WHERE t.id=$1 AND t."companyId"=$2`,
+          [assignedTechnicianId, scope.companyId]
+        );
+        if (techEmp) techAssignmentId = techEmp.id as number;
+      }
+      await rawExecute(
+        `INSERT INTO tasks ("companyId","branchId","assignmentId","assignedTo",title,description,type,priority,status,"linkedEntityType","linkedEntityId","autoGenerated","createdAt")
+         VALUES ($1,$2,$3,$4,$5,$6,'task',$7,'pending','maintenance_request',$8,true,NOW())`,
+        [
+          scope.companyId, scope.branchId, scope.activeAssignmentId,
+          techAssignmentId || scope.activeAssignmentId,
+          `صيانة: ${b.category || 'عام'} — بلاغ #${mrId}`,
+          b.description || null,
+          autoPriority === 'critical' ? 'high' : 'medium',
+          mrId,
+        ]
+      );
+      return mrId;
+    });
 
     if (assignedTechnicianId) {
       try {
@@ -2494,29 +2547,6 @@ router.post("/maintenance-requests", authorize({ feature: "properties.maintenanc
       entityId: insertId,
       details: JSON.stringify({ unitId: b.unitId, category: b.category, priority: autoPriority, isEmergency, assignedTo: assignedTechnicianId }),
     }).catch((e) => logger.error(e, "properties background task failed"));
-
-    try {
-      let techAssignmentId = null;
-      if (assignedTechnicianId) {
-        const [techEmp] = await rawQuery<Record<string, unknown>>(
-          `SELECT ea.id FROM technicians t LEFT JOIN employee_assignments ea ON ea."employeeId"=t."employeeId" AND ea.status='active' AND ea."companyId"=$2 WHERE t.id=$1 AND t."companyId"=$2`,
-          [assignedTechnicianId, scope.companyId]
-        );
-        if (techEmp) techAssignmentId = techEmp.id;
-      }
-      await rawExecute(
-        `INSERT INTO tasks ("companyId","branchId","assignmentId","assignedTo",title,description,type,priority,status,"linkedEntityType","linkedEntityId","autoGenerated","createdAt")
-         VALUES ($1,$2,$3,$4,$5,$6,'task',$7,'pending','maintenance_request',$8,true,NOW())`,
-        [
-          scope.companyId, scope.branchId, scope.activeAssignmentId,
-          techAssignmentId || scope.activeAssignmentId,
-          `صيانة: ${b.category || 'عام'} — بلاغ #${insertId}`,
-          b.description || null,
-          autoPriority === 'critical' ? 'high' : 'medium',
-          insertId,
-        ]
-      );
-    } catch (taskErr) { logger.error(taskErr, "Auto-task creation failed:"); }
 
     const [row] = await rawQuery<Record<string, unknown>>(`SELECT * FROM maintenance_requests WHERE id=$1 AND "companyId"=$2`, [insertId, scope.companyId]);
     res.status(201).json({
@@ -2639,6 +2669,32 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
 
     const cost = resolvedCost ?? 0;
 
+    // V1 (FIN-PROP-OWNER) — توجيه مسؤولية التكلفة. الافتراضي = الشركة (سلوك
+    // قائم). عند اختيار "owner" صراحةً: تُفوتَر على مالك العقار المسجَّل (ذمة
+    // مدينة) لا كمصروف شركة — مع حارس يرفض "owner" ما لم يوجد مالك مسجَّل على
+    // الوحدة أو مبناها. يُنفَّذ قبل applyTransition ليفشل قبل إكمال البلاغ.
+    let billToOwner = false;
+    let maintOwnerId: number | null = null;
+    if (b.costResponsibility === "owner") {
+      const ownerLookup = mr.unitId
+        ? await rawQuery<{ ownerId: number | null }>(
+            `SELECT COALESCE(u."ownerId", bld."ownerId") AS "ownerId"
+               FROM property_units u
+               LEFT JOIN property_buildings bld ON bld.id = u."buildingId" AND bld."companyId" = $2
+              WHERE u.id = $1 AND u."companyId" = $2`,
+            [Number(mr.unitId), scope.companyId]
+          )
+        : [];
+      maintOwnerId = ownerLookup[0]?.ownerId ?? null;
+      if (!maintOwnerId) {
+        throw new ValidationError("لا يمكن تحميل الصيانة على المالك: لا يوجد مالك مسجَّل لهذا العقار", {
+          field: "costResponsibility",
+          fix: "سجّل مالك العقار (الوحدة أو المبنى) أولاً، أو اجعل التكلفة على الشركة.",
+        });
+      }
+      billToOwner = true;
+    }
+
     // Build setExtras for the completion columns
     const completionExtras: Record<string, any> = {
       completedAt: { raw: "NOW()" },
@@ -2647,6 +2703,7 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
     if (b.closureReport) completionExtras.closureReport = b.closureReport;
     if (b.afterPhotos) completionExtras.afterPhotos = JSON.stringify(b.afterPhotos);
     if (b.materialsUsed) completionExtras.materialsUsed = JSON.stringify(b.materialsUsed);
+    if (b.costResponsibility) completionExtras.costResponsibility = b.costResponsibility;
 
     // Derive allowed fromStates for "completed" from the local state machine
     const completionFromStates = Object.entries(MAINT_REQUEST_TRANSITIONS)
@@ -2665,8 +2722,10 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
 
     // --- Post-commit side-effects ---
 
+    // فاتورة المستأجر التلقائية تُتخطّى عند تحميل التكلفة على المالك (يُفوتَر
+    // المالك عبر قيد فوترة المالك أدناه، لا المستأجر).
     let invoiceId: number | null = null;
-    if (cost > 0 && !b.coveredByContract) {
+    if (cost > 0 && !b.coveredByContract && !billToOwner) {
       const monthNum = currentMonthPadded();
       const yearShort = String(currentYear()).slice(2);
       const ref = `INV-MAINT-${yearShort}${monthNum}-${id}`;
@@ -2740,12 +2799,23 @@ router.post("/maintenance-requests/:id/complete", authorize({ feature: "properti
         const propertyId = unitDimRow?.buildingId ?? 0;
         const unitId = mr.unitId ? Number(mr.unitId) : null;
         const tenantId = unitDimRow?.tenantId ?? null;
-        const glResult = await propertiesEngine.postMaintenanceExpenseGL(
-          { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
-          { id, propertyId, unitId, tenantId, totalCost: cost, type: mr.category as string | undefined }
-        );
-        journalEntryId = glResult.journalId;
-      } catch (e) { logger.error(e, "maintenance expense GL posting failed"); journalEntryId = null; }
+        if (billToOwner && maintOwnerId) {
+          // V1 — مُدارة لطرف ثالث: التكلفة ذمة على المالك لا مصروف شركة.
+          // مدين ذمة المالك (الإجمالي) / دائن مستحق صيانة (الصافي) / دائن ضريبة (اختياري).
+          const ownerVat = b.ownerVatApplicable ? computeVat(cost, await getCompanyVatRate(scope.companyId)) : 0;
+          const glResult = await propertiesEngine.postMaintenanceOwnerBillingGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            { id, propertyId, unitId, ownerId: maintOwnerId, totalCost: cost, vatAmount: ownerVat, type: mr.category as string | undefined }
+          );
+          journalEntryId = glResult.journalId;
+        } else {
+          const glResult = await propertiesEngine.postMaintenanceExpenseGL(
+            { companyId: scope.companyId, branchId: scope.branchId, createdBy: scope.userId },
+            { id, propertyId, unitId, tenantId, totalCost: cost, type: mr.category as string | undefined }
+          );
+          journalEntryId = glResult.journalId;
+        }
+      } catch (e) { logger.error(e, "maintenance GL posting failed"); journalEntryId = null; }
     }
 
     let followUpTaskId: number | null = null;

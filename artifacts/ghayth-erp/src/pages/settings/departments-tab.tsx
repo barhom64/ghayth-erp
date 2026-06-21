@@ -1,22 +1,16 @@
 // N1 — Dedicated Departments tab.
 //
-// Closes N1 from docs/testing/CRITICAL_DEFECTS_REPORT.md. Replaces the
-// generic 3-field CrudSection at settings.tsx:348 with a full tab that
-// surfaces the columns that already exist in the departments table but
-// the generic component wasn't showing:
-//   - parentId (department hierarchy)
-//   - branchId (per-branch ownership)
-//   - managerId (assignment-based — picks from employees list)
-//   - status (active/inactive)
+// Closes N1 from docs/testing/CRITICAL_DEFECTS_REPORT.md. Surfaces the columns
+// that already exist in the departments table but the old generic CrudSection
+// wasn't showing: parentId (hierarchy), branchId, managerId, status.
 //
-// Backend already supports all these via /settings/departments
-// (settings.ts:525+ POST/PUT/DELETE). authorizeAny added in batch5
-// means HR Director can also use this tab, not just SysAdmin.
+// The create/edit form body lives in the shared `DepartmentForm` component so
+// the SAME full form is reused by the inline `AllowCreateDrawer` opened from
+// `DepartmentSelect` — one source of truth, no truncated quick-add. Backend
+// supports all fields via /settings/departments (settings.ts POST/PUT/DELETE).
 import { useState } from "react";
-import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
+import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Building2, Edit2, Trash2, X } from "lucide-react";
@@ -28,6 +22,7 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
+import { DepartmentForm, type DepartmentFormValues } from "./department-form";
 
 interface Department {
   id: number;
@@ -37,8 +32,6 @@ interface Department {
   managerId: number | null;
   status: string;
 }
-
-const EMPTY_FORM = { name: "", branchId: "", parentId: "", managerId: "", status: "active" };
 
 export function DepartmentsTab() {
   const { toast } = useToast();
@@ -57,19 +50,16 @@ export function DepartmentsTab() {
   const employees: any[] = asList(employeesResp);
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [editingValues, setEditingValues] = useState<DepartmentFormValues | null>(null);
   const [showForm, setShowForm] = useState(false);
-
-  const createMut = useApiMutation("/settings/departments", "POST");
-  const [submitting, setSubmitting] = useState(false);
 
   const branchName = (id: number | null) => branches.find((b: any) => b.id === id)?.name ?? "—";
   const parentName = (id: number | null) => departments.find((d) => d.id === id)?.name ?? "—";
   const empName = (id: number | null) => employees.find((e: any) => e.id === id)?.name ?? "—";
 
   const resetForm = () => {
-    setForm(EMPTY_FORM);
     setEditingId(null);
+    setEditingValues(null);
     setShowForm(false);
   };
 
@@ -84,38 +74,9 @@ export function DepartmentsTab() {
     }
   };
 
-  const submit = async () => {
-    setSubmitting(true);
-    try {
-      const payload = {
-        name: form.name,
-        branchId: form.branchId ? Number(form.branchId) : null,
-        parentId: form.parentId ? Number(form.parentId) : null,
-        managerId: form.managerId ? Number(form.managerId) : null,
-        status: form.status,
-      };
-      if (editingId) {
-        await apiFetch(`/settings/departments/${editingId}`, {
-          method: "PUT",
-          body: JSON.stringify(payload),
-        });
-        toast({ title: "تم تحديث القسم" });
-      } else {
-        await createMut.mutateAsync(payload);
-        toast({ title: "تم إنشاء القسم" });
-      }
-      resetForm();
-      await refetch();
-    } catch (err: any) {
-      toast({ title: "فشل الحفظ", description: err?.message, variant: "destructive" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const startEdit = (d: Department) => {
     setEditingId(d.id);
-    setForm({
+    setEditingValues({
       name: d.name,
       branchId: d.branchId ? String(d.branchId) : "",
       parentId: d.parentId ? String(d.parentId) : "",
@@ -186,82 +147,22 @@ export function DepartmentsTab() {
               })),
             })}
           />
-          <GuardedButton perm="settings:update" onClick={() => { setShowForm((v) => !v); if (showForm) resetForm(); }} data-testid="button-toggle-dept-form">
+          <GuardedButton perm="settings:update" onClick={() => { if (showForm) resetForm(); else setShowForm(true); }} data-testid="button-toggle-dept-form">
             {showForm ? <><X className="h-4 w-4 me-1" /> إلغاء</> : <><Plus className="h-4 w-4 me-1" /> قسم جديد</>}
           </GuardedButton>
         </div>
       </div>
 
       {showForm && (
-        <Card data-testid="form-department">
+        <Card>
           <CardContent className="p-4 space-y-3">
             <h4 className="font-semibold">{editingId ? "تعديل قسم" : "إضافة قسم جديد"}</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">اسم القسم *</Label>
-                <Input data-testid="input-dept-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="إدارة الموارد البشرية" />
-              </div>
-              <div>
-                <Label className="text-xs">الفرع</Label>
-                <select
-                  data-testid="select-dept-branch"
-                  className="w-full h-10 border rounded-md px-2 text-sm"
-                  value={form.branchId}
-                  onChange={(e) => setForm({ ...form, branchId: e.target.value })}
-                >
-                  <option value="">— كل الفروع —</option>
-                  {branches.map((b: any) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">القسم الأب (اختياري)</Label>
-                <select
-                  data-testid="select-dept-parent"
-                  className="w-full h-10 border rounded-md px-2 text-sm"
-                  value={form.parentId}
-                  onChange={(e) => setForm({ ...form, parentId: e.target.value })}
-                >
-                  <option value="">— جذر —</option>
-                  {departments
-                    .filter((d) => d.id !== editingId) /* prevent self-parent */
-                    .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">مدير القسم</Label>
-                <select
-                  data-testid="select-dept-manager"
-                  className="w-full h-10 border rounded-md px-2 text-sm"
-                  value={form.managerId}
-                  onChange={(e) => setForm({ ...form, managerId: e.target.value })}
-                >
-                  <option value="">— بدون —</option>
-                  {employees.map((e: any) => (
-                    <option key={e.id} value={e.id}>{e.name} {e.empNumber ? `(${e.empNumber})` : ""}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs">الحالة</Label>
-                <select
-                  data-testid="select-dept-status"
-                  className="w-full h-10 border rounded-md px-2 text-sm"
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  <option value="active">نشط</option>
-                  <option value="inactive">غير نشط</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button disabled={!form.name || submitting} onClick={submit} data-testid="button-submit-dept">
-                {submitting ? "جاري الحفظ..." : editingId ? "تحديث" : "إنشاء"}
-              </Button>
-              <Button variant="outline" onClick={resetForm}>إلغاء</Button>
-            </div>
+            <DepartmentForm
+              editingId={editingId}
+              initialValues={editingValues ?? undefined}
+              onSaved={() => { resetForm(); refetch(); }}
+              onCancel={resetForm}
+            />
           </CardContent>
         </Card>
       )}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useFormContext, useWatch } from "react-hook-form";
 import { z } from "zod";
 import {
   PageShell,
@@ -23,7 +24,7 @@ import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
   Plug, Mail, MessageSquare, Webhook, Phone, Plus, X, Play,
-  RefreshCw, AlertCircle, CheckCircle, Clock, Settings,
+  RefreshCw, AlertCircle, CheckCircle, Clock, Settings, Github,
 } from "lucide-react";
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -31,6 +32,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   sms: "رسائل نصية",
   whatsapp: "واتساب",
   webhook: "ويب هوك",
+  github: "GitHub",
 };
 
 const CHANNEL_ICONS: Record<string, any> = {
@@ -38,6 +40,7 @@ const CHANNEL_ICONS: Record<string, any> = {
   sms: Phone,
   whatsapp: MessageSquare,
   webhook: Webhook,
+  github: Github,
 };
 
 // Zod schema enforces JSON validity BEFORE submit (the old flow only
@@ -45,23 +48,79 @@ const CHANNEL_ICONS: Record<string, any> = {
 // after the user had clicked the button). `z.string().refine()` runs
 // at validation time so the operator sees the error inline next to
 // the textarea.
-const integrationFormSchema = z.object({
-  name: z.string().trim().min(1, "الاسم مطلوب"),
-  type: z.enum(["email", "sms", "whatsapp", "webhook"]),
-  config: z
-    .string()
-    .refine((s) => {
-      try { JSON.parse(s); return true; } catch { return false; }
-    }, { message: "صيغة JSON غير صالحة" }),
-  status: z.enum(["active", "inactive", "error"]),
-});
+// github uses the simple token/repo fields below — a non-technical operator
+// never types JSON — while every other type keeps the raw `config` JSON. The
+// superRefine enforces the right requirement per type: github → token present,
+// others → valid JSON.
+const integrationFormSchema = z
+  .object({
+    name: z.string().trim().min(1, "الاسم مطلوب"),
+    type: z.enum(["email", "sms", "whatsapp", "webhook", "github"]),
+    config: z.string().optional(),
+    githubToken: z.string().optional(),
+    githubRepo: z.string().optional(),
+    status: z.enum(["active", "inactive", "error"]),
+  })
+  .superRefine((val, ctx) => {
+    if (val.type === "github") {
+      if (!val.githubToken || !val.githubToken.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["githubToken"], message: "التوكن مطلوب" });
+      }
+    } else {
+      try {
+        JSON.parse(val.config ?? "");
+      } catch {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["config"], message: "صيغة JSON غير صالحة" });
+      }
+    }
+  });
 type IntegrationForm = z.infer<typeof integrationFormSchema>;
 const defaultIntegrationForm: IntegrationForm = {
   name: "",
   type: "email",
   config: "{}",
+  githubToken: "",
+  githubRepo: "barhom64/ghayth-erp",
   status: "inactive",
 };
+
+// Config fields that adapt to the selected type. github → a single masked
+// «رمز الوصول» field + a prefilled repo, so a non-technical owner just pastes
+// the token; all other types keep the JSON config textarea unchanged.
+function IntegrationConfigFields() {
+  const { control } = useFormContext<IntegrationForm>();
+  const type = useWatch({ control, name: "type" });
+  if (type === "github") {
+    return (
+      <>
+        <FormTextField
+          name="githubToken"
+          label="رمز الوصول (Token)"
+          placeholder="ghp_..."
+          type="password"
+          autoComplete="off"
+          required
+          className="md:col-span-2"
+        />
+        <FormTextField
+          name="githubRepo"
+          label="المستودع"
+          placeholder="barhom64/ghayth-erp"
+          className="md:col-span-2"
+        />
+      </>
+    );
+  }
+  return (
+    <FormTextareaField
+      name="config"
+      label="الإعدادات (بصيغة JSON)"
+      description="JSON صالح. مثال البريد: host, port, user, password, from"
+      rows={5}
+      className="md:col-span-2"
+    />
+  );
+}
 
 function IntegrationsList() {
   const { data: intResp, isLoading, isError } = useApiQuery<any>(["admin-integrations"], "/admin/integrations");
@@ -129,9 +188,19 @@ function IntegrationsList() {
                 </Button>
               }
               onSubmit={async (values, ctx) => {
-                // Schema already guaranteed config is valid JSON; safe to parse.
-                const parsedConfig = JSON.parse(values.config);
-                await createMut.mutateAsync({ ...values, config: parsedConfig });
+                // github → build {token, repo} from the simple fields; others →
+                // parse the JSON config (the schema already validated per type).
+                const config =
+                  values.type === "github"
+                    ? { token: (values.githubToken ?? "").trim(), repo: (values.githubRepo ?? "").trim() || "barhom64/ghayth-erp" }
+                    : JSON.parse(values.config ?? "{}");
+                // Send only real columns — githubToken/githubRepo are UI-only helpers.
+                await createMut.mutateAsync({
+                  name: values.name,
+                  type: values.type,
+                  status: values.status,
+                  config,
+                });
                 ctx.reset();
                 setShowForm(false);
               }}
@@ -146,15 +215,10 @@ function IntegrationsList() {
                     { value: "sms", label: "رسائل نصية" },
                     { value: "whatsapp", label: "واتساب" },
                     { value: "webhook", label: "خطاف استدعاء" },
+                    { value: "github", label: "GitHub" },
                   ]}
                 />
-                <FormTextareaField
-                  name="config"
-                  label="الإعدادات (بصيغة JSON)"
-                  description='يجب أن تكون JSON صالحًا. مثال للبريد: host, port, user, password, from'
-                  rows={5}
-                  className="md:col-span-2"
-                />
+                <IntegrationConfigFields />
               </FormGrid>
             </FormShell>
           </CardContent>

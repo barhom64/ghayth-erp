@@ -143,7 +143,7 @@ const operationalEffectsShape = {
   fuelLog: z.object({
     create: z.boolean().optional(),
     liters: z.coerce.number().optional(),
-    costPerLiter: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().nonnegative().optional(),
     odometer: z.coerce.number().optional(),
     stationName: z.string().optional(),
     // #2234 — the SAVED fuel supplier (vendorId references suppliers.id) is the
@@ -215,7 +215,7 @@ const vendorInvoiceLineSchema = z.object({
   itemName: z.string().optional(),
   quantity: z.coerce.number().optional(),
   unit: z.string().optional(),
-  unitPrice: z.coerce.number().optional(),
+  unitPrice: z.coerce.number().nonnegative().optional(),
   taxCode: z.string().optional(),
   // amount = qty × unitPrice (net of VAT) — the line's debit base.
   amount: z.coerce.number(),
@@ -401,8 +401,10 @@ const yearEndCloseSchema = z.object({
 
 const openingBalanceLineSchema = z.object({
   accountCode: z.string(),
-  debit: z.coerce.number(),
-  credit: z.coerce.number(),
+  // F9-B2: لا رصيد افتتاحي سالب (نمط finance-accounts). السالب خطأ إدخال —
+  // يُستعمل الجانب المقابل لعكس الإشارة لا الرقم السالب.
+  debit: z.coerce.number().min(0, "المدين لا يكون سالبًا"),
+  credit: z.coerce.number().min(0, "الدائن لا يكون سالبًا"),
 });
 
 const openingBalancesSchema = z.object({
@@ -3919,6 +3921,11 @@ journalRouter.post("/opening-balances", requireMinLevel(70), authorize({ feature
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.created", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", lineCount: (lines ?? []).length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances audit failed"));
     res.status(201).json(result);
   } catch (err) {
     handleRouteError(err, res, "Create opening balances error:");
@@ -3962,6 +3969,11 @@ journalRouter.post("/opening-balances/import-csv", requireMinLevel(70), authoriz
       res.status(result.status).json({ error: result.error, ...(result.details ?? {}) });
       return;
     }
+    await createAuditLog({
+      companyId: scope.companyId, userId: scope.userId,
+      action: "finance.opening_balances.imported_csv", entity: "journal_entries", entityId: result.id,
+      after: { ref: result.ref, periodStart: periodStart ?? "", linesCount: parsed.length, force: !!force },
+    }).catch((e) => logger.error(e, "finance-journal opening-balances-csv audit failed"));
     res.status(201).json({ ...result, linesCount: parsed.length });
   } catch (err) {
     handleRouteError(err, res, "Import opening balances CSV error:");

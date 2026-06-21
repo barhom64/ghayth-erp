@@ -77,6 +77,43 @@ const roleKeySubPages: Record<string, Record<string, string[]>> = {
   payroll_officer: { hr: ["payroll", "attendance"] },
 };
 
+// لواحق المفاتيح الذاتية (الخدمة الذاتية): ملفي الشخصي / تسجيل حضوري / إجازاتي.
+// منحة على أحد هذه لا تُخوّل الصفحات الإدارية للوحدة — هي فقط تُدخل اسم
+// الوحدة الأم في allowedModules. تُستعمل لإيقاف تسريب «ظاهر+403» حيث كان
+// الموظف الاستاندر يرى قائمة الموارد البشرية كاملة بسبب منحة ذاتية واحدة
+// (hr.employees.self / hr.attendance.checkin). RBAC-REV-STD.
+const SELF_FEATURE_SUFFIXES = [".self", ".checkin", ".my"] as const;
+
+/**
+ * هل يملك المستخدم منحة فعلية تُخوّله رؤية صفحة فرعية معيّنة (subKey) داخل
+ * وحدة؟ بوابة دقيقة **على مستوى الصفحة الفرعية** لا الوحدة — تطابق ما
+ * يعتمده الباك تمامًا، فتمنع تسريب «ظاهر+403»:
+ *
+ *   • منحة شاملة (`*` أو الوحدة `hr` أو `hr.*`) ⇒ كل الصفحات الفرعية.
+ *   • منحة محدّدة (`hr.attendance`) ⇒ صفحتها فقط (لا الرواتب ولا المخالفات).
+ *   • منحة ذاتية (`hr.employees.self` / `.checkin` / `.my`) ⇒ لا صفحة إدارية.
+ *
+ * بهذا: الموظف الاستاندر (منح ذاتية فقط) لا يرى صفحات HR الإدارية، ومسؤول
+ * الحضور (`hr.attendance` فقط) يرى الحضور فقط، ومدير HR (`hr.*`) يرى الكل —
+ * كلها مشتقّة من المنح، بلا قوائم أدوار ثابتة. RBAC-REV-STD.
+ */
+export function hasGrantForSubPage(
+  rawPermissions: readonly string[],
+  module: string,
+  subKey: string,
+): boolean {
+  const subFeature = `${module}.${subKey}`; // "hr.attendance"
+  for (const p of rawPermissions) {
+    const scope = p.split(":")[0]; // feature_key: "hr" | "hr.*" | "hr.attendance" | "hr.employees.self"
+    if (!scope) continue;
+    if (scope === "*") return true; // مالك/وكيل شامل
+    if (scope === module || scope === `${module}.*`) return true; // منحة وحدة شاملة
+    if (SELF_FEATURE_SUFFIXES.some((s) => scope.endsWith(s))) continue; // ذاتية ⇒ ليست إدارية
+    if (scope === subFeature || scope.startsWith(`${subFeature}.`)) return true; // الصفحة الفرعية بالضبط (أو أعمق: hr.payroll.wps)
+  }
+  return false;
+}
+
 export type PermissionKey =
   | "canViewAllBranches"
   | "canManageViolations"
@@ -504,17 +541,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const canAccessSubPage = useCallback((module: string, subKey: string) => {
     if (!selectedRole) return false;
+    if (isOwnerRole) return true;
     const rk = selectedRole.roleKey;
     const perms = roleKeySubPages[rk];
-    if (!perms) {
-      return allowedModules.includes(module as ModuleType);
+    if (perms) {
+      const moduleSubs = perms[module];
+      // الخريطة هي المرجع للأدوار المُسجَّلة: تُظهر الصفحات المُصرَّح بها فقط.
+      if (moduleSubs) return moduleSubs.includes(subKey);
     }
-    const moduleSubs = perms[module];
-    if (!moduleSubs) {
-      return allowedModules.includes(module as ModuleType);
-    }
-    return moduleSubs.includes(subKey);
-  }, [selectedRole, allowedModules]);
+    // RBAC-REV-STD — منع افتراضي مشتقّ من المنح، دقيق على مستوى الصفحة الفرعية.
+    // السلوك القديم (allowedModules.includes(module)) كان يسرّب كل صفحات HR
+    // للموظف الاستاندر؛ كما أن فحص الوحدة وحده كان يُظهر كل صفحات HR لدور
+    // ضيّق المنح (مسؤول الحضور `hr.attendance` يرى الرواتب → 403). نُظهر كل
+    // صفحة فرعية فقط عند وجود منحة فعلية تُخوّلها (شاملة أو محدّدة بها).
+    return hasGrantForSubPage(rawPermissions, module, subKey);
+  }, [selectedRole, isOwnerRole, rawPermissions]);
 
   return (
     <AppContext.Provider value={{

@@ -169,7 +169,7 @@ export default function LotExpiryAlertsPage() {
 
   return (
     <PageShell
-      title="تنبيهات صلاحية التشغيلات"
+      title="تنبيهات صلاحية الدفعات"
       subtitle="تشغيلات المخزون المتجهة للانتهاء — تخطيط FIFO ومنع الخسائر"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

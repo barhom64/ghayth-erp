@@ -53,7 +53,7 @@ const createInvoiceSchema = z.object({
   lines: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
-    unitPrice: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().nonnegative().optional(),
     accountCode: z.string().optional(),
     accountId: z.coerce.number().optional(),
     costCenterId: z.coerce.number().optional(),
@@ -86,7 +86,7 @@ const createInvoiceSchema = z.object({
   // New flow: pick a `taxCode` (header default) and the line math is
   // driven by tax_codes.rate. taxInclusive declares whether the entered
   // amount is gross or net.
-  vatRate: z.coerce.number().optional(),
+  vatRate: z.coerce.number().nonnegative().optional(),
   taxCode: z.string().optional(),
   taxInclusive: z.boolean().optional(),
   dueDate: z.string().optional(),
@@ -193,12 +193,14 @@ const createCustomerReceiptSchema = z.object({
   })).max(200).default([]),
   branchId: z.coerce.number().optional(),
   lineAllocation: z.record(z.string(), z.any()).optional(),
+  // #2698 — خزنة/بنك الإيداع صراحةً (يتجاوز الحلّ الآلي بالطريقة في سند القبض).
+  cashAccountCode: z.string().max(40).optional(),
 });
 
 const impactPreviewSchema = z.object({
   clientId: z.coerce.number().optional(),
   lines: z.array(z.any()).optional(),
-  taxRate: z.coerce.number().optional(),
+  taxRate: z.coerce.number().nonnegative().optional(),
   dueInDays: z.coerce.number().optional(),
 });
 
@@ -4163,6 +4165,12 @@ invoicesRouter.post("/customer-advances", authorize({ feature: "finance.invoices
     });
     markIdempotencyReplay(req, res, advanceAlreadyExists);
 
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.created", entity: "customer_advances", entityId: advanceId ?? 0,
+      after: { ref: advRef, clientId, amount: amt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-create audit failed"));
+
     res.status(201).json({ advanceId, ref: advRef, clientId, amount: amt, journalId, status: "open" });
   } catch (err) {
     handleRouteError(err, res, "Customer advance create error:");
@@ -4213,6 +4221,7 @@ invoicesRouter.post("/customer-receipts", authorize({ feature: "finance.invoices
       clientId: body.clientId,
       amount: body.amount,
       method: body.method === "bank" || body.method === "transfer" ? "bank_transfer" : body.method,
+      cashAccountCode: body.cashAccountCode ?? null,
       receiptKey: body.receiptKey,
       receivedDate: body.date,
       reference: body.reference ?? null,
@@ -4361,6 +4370,12 @@ invoicesRouter.post("/customer-advances/:id/apply", authorize({ feature: "financ
     // below would have responded with the error).
     const journalId = applyResult!.journalId;
     markIdempotencyReplay(req, res, applyResult!.alreadyExists);
+
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.customer_advance.applied", entity: "customer_advances", entityId: advanceId,
+      after: { invoiceId: Number(invoiceId), amount: applyAmt, journalId },
+    }).catch((e) => logger.error(e, "finance-invoices customer-advance-apply audit failed"));
 
     res.json({ advanceId, invoiceId: Number(invoiceId), amount: applyAmt, journalId });
   } catch (err) {
@@ -4615,9 +4630,16 @@ invoicesRouter.post("/dunning/send", authorize({ feature: "finance.collection", 
       results.push({ invoiceId: inv.id, letterId: row.id, stage: stg.stage, daysPastDue: days, outstanding, status: "sent" });
     }
 
+    const sentCount = results.filter(r => r.status === "sent").length;
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.dunning.sent", entity: "dunning_letters", entityId: scope.companyId,
+      after: { sent: sentCount, total: results.length, sentVia },
+    }).catch((e) => logger.error(e, "finance-invoices dunning audit failed"));
+
     res.status(201).json({
       total: results.length,
-      sent: results.filter(r => r.status === "sent").length,
+      sent: sentCount,
       skipped: results.filter(r => r.status === "skipped").length,
       results,
     });

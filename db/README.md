@@ -153,7 +153,15 @@ When it fires, follow the **dump-refresh + cutoff-advance** workflow:
 4. Commit `db/schema*.sql`, `db/.baseline-cutoff`, and
    `scripts/schema-dump-drift-baseline.txt` together.
 
-### Live-DB drift monitor (NOT a gate)
+### Live-DB drift monitor (PLANNED — not yet implemented)
+
+> **Status:** this monitor is a *documented design only* — the
+> `scripts/src/check-live-db-drift.mjs` implementation was never committed,
+> and the `pnpm check:live-db-drift` alias has been removed from
+> `package.json` so it can no longer be invoked as a broken command. The
+> design below is kept as a specification for whoever implements it. Until
+> then, the *dump ↔ migrations* guard (`check:dump-drift`) and the code ↔
+> live-schema guard (`check:schema-drift`) are the active drift checks.
 
 The drift guard above proves *dump ↔ migrations*. It never looks at the
 real live DB, so a live/production database that has silently fallen
@@ -162,11 +170,10 @@ real live DB, so a live/production database that has silently fallen
 CHECK constraints that reject valid statuses) stays invisible until
 someone manually re-dumps and notices the diff.
 
-`scripts/src/check-live-db-drift.mjs` (`pnpm check:live-db-drift`) closes
-that gap. It loads the committed dump into a disposable scratch DB (the
-**canonical** schema), then reads indexes, constraints, and columns from
-both the scratch DB and the live `$DATABASE_URL` via `pg_catalog` and
-diffs them object-by-object:
+The planned monitor would close that gap by loading the committed dump
+into a disposable scratch DB (the **canonical** schema), then reading
+indexes, constraints, and columns from both the scratch DB and the live
+`$DATABASE_URL` via `pg_catalog` and diffing them object-by-object:
 
 - **MISSING in live** — present in the dump, absent in live. The loud
   failure: live lost something it should have. Each is printed with
@@ -187,12 +194,12 @@ known-benign deparse variance (the `ARRAY[(x)::text,…]` vs
 membership test) is normalized away before comparison so genuine changes
 still surface.
 
-Exit codes: `0` clean (or only EXTRA without `--strict`, or a benign skip
-when `DATABASE_URL` is unset / the role lacks `CREATEDB`); `1` live is
-MISSING/CHANGED objects; `2` the check could not run. This is a **monitor,
-not a PR gate** — it needs the live DB, so run it on demand
-(`pnpm check:live-db-drift`) or register it as a periodic Replit workflow
-(`node scripts/src/check-live-db-drift.mjs`).
+Intended exit codes: `0` clean (or only EXTRA without `--strict`, or a
+benign skip when `DATABASE_URL` is unset / the role lacks `CREATEDB`); `1`
+live is MISSING/CHANGED objects; `2` the check could not run. It is meant
+to be a **monitor, not a PR gate** — it needs the live DB, so it would be
+run on demand or registered as a periodic workflow rather than wired into
+`guard`. (Note: the scratch-DB approach requires a role with `CREATEDB`.)
 
 ## Why we don't use Drizzle migrate / Prisma migrate
 

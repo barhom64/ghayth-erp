@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { CostCenterForm } from "@/pages/finance/cost-center-form";
 import { STATUSES } from "@/lib/constants";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import {
@@ -77,7 +78,6 @@ export default function CostCentersPage() {
   const [editing, setEditing] = useState<CostCenter | null>(null);
   const [deleting, setDeleting] = useState<CostCenter | null>(null);
 
-  const createMut = useApiMutation("/finance/cost-centers", "POST", [["cost-centers"]]);
   // PATCH + DELETE for /finance/cost-centers/:id — backend already
   // supports both; the previous code-comment noted them as "follow-up
   // PR" but the UI never landed. Inline edit dialog + delete confirm
@@ -95,14 +95,6 @@ export default function CostCentersPage() {
     { successMessage: "تم حذف مركز التكلفة", onSuccess: () => setDeleting(null) },
   );
 
-  const [form, setForm] = useState({
-    code: "",
-    name: "",
-    type: "department",
-    parentId: "",
-    allocatedAmount: "",
-  });
-
   const rows = data?.data ?? [];
 
   const filtered = typeFilter
@@ -118,27 +110,6 @@ export default function CostCentersPage() {
   const linkedCount = rows.filter((r) => r.relatedEntityType).length;
   const totalAllocated = rows.reduce((s, r) => s + Number(r.allocatedAmount ?? 0), 0);
   const types = Array.from(new Set(rows.map((r) => r.relatedEntityType ?? "general"))).sort();
-
-  const submitCreate = async () => {
-    if (!form.name.trim()) {
-      toast({ variant: "destructive", title: "اسم مركز التكلفة مطلوب" });
-      return;
-    }
-    try {
-      await createMut.mutateAsync({
-        code: form.code || undefined,
-        name: form.name,
-        type: form.type,
-        parentId: form.parentId ? Number(form.parentId) : null,
-        allocatedAmount: form.allocatedAmount ? Number(form.allocatedAmount) : undefined,
-      });
-      toast({ title: "تم إنشاء مركز التكلفة" });
-      setCreateOpen(false);
-      setForm({ code: "", name: "", type: "department", parentId: "", allocatedAmount: "" });
-    } catch (err) {
-      toast({ variant: "destructive", title: "تعذّر الحفظ", description: getErrorMessage(err) });
-    }
-  };
 
   const cols: DataTableColumn<CostCenter>[] = [
     {
@@ -267,41 +238,10 @@ export default function CostCentersPage() {
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader><DialogTitle>مركز تكلفة جديد</DialogTitle></DialogHeader>
-            <div className="grid gap-3 py-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">الرمز</Label>
-                  <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="CC-001" />
-                </div>
-                <div>
-                  <Label className="text-xs">النوع</Label>
-                  <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="department">إدارة</SelectItem>
-                      <SelectItem value="project">مشروع</SelectItem>
-                      <SelectItem value="vehicle">مركبة</SelectItem>
-                      <SelectItem value="branch">فرع</SelectItem>
-                      <SelectItem value="general">عام</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <Label className="text-xs">الاسم *</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="مثال: نقل قطاع البناء" />
-              </div>
-              <div>
-                <Label className="text-xs">الميزانية المخصصة (اختياري)</Label>
-                <Input type="number" value={form.allocatedAmount} onChange={(e) => setForm({ ...form, allocatedAmount: e.target.value })} />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button>
-              <Button onClick={submitCreate} disabled={createMut.isPending}>
-                {createMut.isPending ? "جاري الحفظ..." : "حفظ"}
-              </Button>
-            </DialogFooter>
+            <CostCenterForm
+              onCreated={() => setCreateOpen(false)}
+              onCancel={() => setCreateOpen(false)}
+            />
           </DialogContent>
         </Dialog>
         </div>

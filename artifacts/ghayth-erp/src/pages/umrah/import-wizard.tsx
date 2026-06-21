@@ -982,7 +982,7 @@ export default function UmrahImportWizard() {
                       صريح أولاً (عبر <span className="font-mono" dir="ltr">PUT /umrah/agents/:id/link-client</span>).
                     </p>
                     <div className="rounded border border-blue-200 bg-white overflow-hidden">
-                      <table className="w-full text-xs" data-testid="import-unlinked-main-agents-table">
+                      <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-unlinked-main-agents-table">
                         <thead className="bg-blue-100/50">
                           <tr>
                             <th className="p-2 text-start font-medium">الاسم</th>
@@ -999,7 +999,7 @@ export default function UmrahImportWizard() {
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </table></div>
                       {preview.unlinkedMainAgents.length > 10 && (
                         <p className="px-2 py-1 text-[10px] text-muted-foreground border-t border-blue-100">
                           + {formatNumber(preview.unlinkedMainAgents.length - 10)} آخرين
@@ -1024,7 +1024,7 @@ export default function UmrahImportWizard() {
                   الوكلاء الفرعيون التاليون موجودون في الملف ولكن غير مربوطين بعملاء في النظام. يمكنك ربطهم الآن قبل التأكيد.
                 </p>
                 <div className="rounded border overflow-hidden">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
                     <thead className="bg-muted/40">
                       <tr>
                         <th className="p-2 text-start font-medium">رمز نُسك</th>
@@ -1054,7 +1054,7 @@ export default function UmrahImportWizard() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
               </CardContent>
             </Card>
@@ -1072,7 +1072,7 @@ export default function UmrahImportWizard() {
                   الوكلاء التاليون مذكورون في الملف ولا يوجد لهم سجل في النظام. سيُنشأون تلقائياً عند التأكيد. راجع الأسماء قبل المتابعة لتجنّب إنشاء سجلات مكررة بفروق إملائية.
                 </p>
                 <div className="rounded border overflow-hidden">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
                     <thead className="bg-muted/40">
                       <tr>
                         <th className="p-2 text-start font-medium">رقم الوكيل</th>
@@ -1089,7 +1089,7 @@ export default function UmrahImportWizard() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
               </CardContent>
             </Card>

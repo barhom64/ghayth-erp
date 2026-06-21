@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  RefreshCw, Database, Layers, Cog, Shield, Calendar, BookOpen,
+  Database, Layers, Cog, Shield, Calendar, BookOpen,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 export default function AdminDomainRegistry() {
   const { data, isLoading, error, refetch } = useApiQuery<any>(
@@ -26,9 +27,7 @@ export default function AdminDomainRegistry() {
       subtitle="خريطة كاملة لكل نطاق في النظام — الجداول والمحركات والصلاحيات"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !data} error={error} onRetry={refetch}>

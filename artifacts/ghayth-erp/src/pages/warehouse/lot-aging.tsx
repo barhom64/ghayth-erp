@@ -35,7 +35,7 @@ export default function LotAgingPage() {
   ], []);
 
   return (
-    <PageShell title="تقرير عمر الدفعات (FIFO Lot Aging)">
+    <PageShell title="تقرير عمر الدفعات">
       <Card className="mb-4">
         <CardContent className="pt-6 flex flex-wrap gap-3 items-end">
           <div>

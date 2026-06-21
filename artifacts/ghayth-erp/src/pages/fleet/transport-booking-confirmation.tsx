@@ -141,7 +141,7 @@ export default function TransportBookingConfirmation() {
             )}
           </div>
 
-          <table className="w-full text-sm mb-4" style={{ borderCollapse: "collapse" }}>
+          <div className="overflow-x-auto"><table className="w-full text-sm mb-4" style={{ borderCollapse: "collapse" }}>
             <tbody>
               <tr><td className="py-1 pl-3 text-muted-foreground w-32">العميل</td><td className="font-medium">{c.linkedCustomerName || c.customerName || "—"}</td></tr>
               <tr><td className="py-1 pl-3 text-muted-foreground">رقم الهاتف</td><td className="font-mono" dir="ltr">{c.customerPhone || "—"}</td></tr>
@@ -151,25 +151,25 @@ export default function TransportBookingConfirmation() {
               <tr><td className="py-1 pl-3 text-muted-foreground">تاريخ التحميل</td><td>{fmtDate(c.requestedPickupDate)} {fmtTime(c.requestedPickupTime)}</td></tr>
               <tr><td className="py-1 pl-3 text-muted-foreground">تاريخ التسليم</td><td>{fmtDate(c.requestedDeliveryDate)} {fmtTime(c.requestedDeliveryTime)}</td></tr>
             </tbody>
-          </table>
+          </table></div>
 
           {isUmrah && (
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">بيانات العمرة</div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <tbody>
                   <tr><td className="py-1 pl-3 text-muted-foreground w-32">رقم الرحلة</td><td className="font-mono" dir="ltr">{c.flightNumber || "—"}</td></tr>
                   <tr><td className="py-1 pl-3 text-muted-foreground">الفندق</td><td>{c.hotelName || "—"}</td></tr>
                   <tr><td className="py-1 pl-3 text-muted-foreground">المشرف</td><td>{c.supervisorName || "—"} {c.supervisorPhone && <span className="font-mono" dir="ltr">({c.supervisorPhone})</span>}</td></tr>
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
           {c.lines.length > 0 && (
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">مقاطع المسار ({c.lines.length})</div>
-              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+              <div className="overflow-x-auto"><table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
                 <thead>
                   <tr className="bg-surface-subtle">
                     <th className="text-right p-1 border">#</th>
@@ -196,26 +196,26 @@ export default function TransportBookingConfirmation() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
           {c.lines.length === 0 && (c.fromLocationText || c.toLocationText) && (
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">المسار</div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <tbody>
                   <tr><td className="py-1 pl-3 text-muted-foreground w-32">من</td><td>{c.fromLocationText || "—"}</td></tr>
                   <tr><td className="py-1 pl-3 text-muted-foreground">إلى</td><td>{c.toLocationText || "—"}</td></tr>
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 
           {c.dispatchOrders.length > 0 && (
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">المركبات والسائقون المُسنَدون</div>
-              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+              <div className="overflow-x-auto"><table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
                 <thead>
                   <tr className="bg-surface-subtle">
                     <th className="text-right p-1 border">المركبة</th>
@@ -234,7 +234,7 @@ export default function TransportBookingConfirmation() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
 

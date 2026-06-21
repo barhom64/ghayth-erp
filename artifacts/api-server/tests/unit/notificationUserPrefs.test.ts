@@ -8,7 +8,7 @@
  * category-specific row overriding the global 'general' master switch.
  */
 import { describe, it, expect } from "vitest";
-import { computeDisabledChannels, type PreferenceRow } from "../../src/lib/notificationEngine.js";
+import { computeDisabledChannels, type PreferenceRow } from "../../src/lib/notificationDispatch.js";
 
 describe("computeDisabledChannels", () => {
   it("returns empty when there are no preference rows (default: all on)", () => {

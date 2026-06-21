@@ -130,7 +130,7 @@ const CARDS: SettingsCard[] = [
   // ── Procurement (Purchase Requests / Vendor Contracts) ───────
   {
     href: "/finance/purchase-requests",
-    title: "طلبات الشراء (Purchase Requests)",
+    title: "طلبات الشراء",
     description: "تدفّق طلب الشراء قبل إصدار PO — اعتماد ثم تحويل إلى أمر شراء رسمي. حوكمة مسبقة على الالتزامات.",
     icon: ClipboardList,
     iconClass: "text-status-info-foreground bg-status-info-surface",
@@ -147,7 +147,7 @@ const CARDS: SettingsCard[] = [
 
   // ── Periods & close ──────────────────────────────────────────
   {
-    href: "/finance/fiscal-periods",
+    href: "/finance/fiscal-periods-v2",
     title: "الفترات المالية",
     description: "تقفيل/فتح الفترات الشهرية — يمنع الترحيل في فترات مقفلة. مع سياسة قفل بعد الإقرار الضريبي.",
     icon: Calendar,

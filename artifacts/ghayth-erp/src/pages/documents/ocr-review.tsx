@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { FileSearch, Check, X, RefreshCw } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface Extraction {
   id: number;
@@ -151,9 +152,7 @@ export default function OcrReviewPage() {
           <FileSearch className="w-5 h-5" />
           <h1 className="text-xl font-semibold">مستخلَصات OCR بانتظار المراجعة</h1>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 ml-2 ${loading ? "animate-spin" : ""}`} /> تحديث
-        </Button>
+        <RefreshAction onRefresh={load} disabled={loading} />
       </div>
 
       {loading && <p className="text-sm text-muted-foreground">جاري التحميل…</p>}

@@ -6,6 +6,7 @@ const HrServices = lazy(() => import("@/pages/hr/services"));
 const Employees = lazy(() => import("@/pages/employees"));
 const EmployeeDetail = lazy(() => import("@/pages/employee-detail"));
 const EmployeesCreate = lazy(() => import("@/pages/create/employees-create"));
+const EmployeeQuickCreate = lazy(() => import("@/pages/create/hr/employee-quick-create"));
 const Attendance = lazy(() => import("@/pages/hr/attendance"));
 const AttendanceCreate = lazy(() => import("@/pages/create/hr/attendance-create"));
 const Leaves = lazy(() => import("@/pages/hr/leaves"));
@@ -51,12 +52,14 @@ const AttendanceReports = lazy(() => import("@/pages/hr/attendance-reports"));
 // الموحّدة، و/hr/leaves/management يُعاد توجيهه إليها. HR-REV-2)
 const ApprovalChains = lazy(() => import("@/pages/hr/approval-chains"));
 const FieldTracking = lazy(() => import("@/pages/hr/field-tracking"));
+const TrackingPolicies = lazy(() => import("@/pages/hr/tracking-policies"));
 const QRScanner = lazy(() => import("@/pages/hr/qr-scanner"));
 const PenaltyEscalation = lazy(() => import("@/pages/hr/penalty-escalation"));
 const SalaryComponents = lazy(() => import("@/pages/hr/salary-components"));
 const EmployeeActivation = lazy(() => import("@/pages/hr/employee-activation"));
 const OnboardingReview = lazy(() => import("@/pages/hr/onboarding-review"));
 const ActivationBoard = lazy(() => import("@/pages/hr/activation-board"));
+const SelfOnboardingReview = lazy(() => import("@/pages/hr/self-onboarding-review"));
 // (OrganizationStructure أُزيل استيراده — المسار يُعاد توجيهه إلى org-tree، ADR-HR-02)
 // (PerformanceAdvanced أُزيل — توزيع التقييمات + أفضل ١٠ صارا تبويب «التحليلات»
 // في /hr/performance، والمسار /hr/performance/advanced يُعاد توجيهه إليها. HR-REV)
@@ -124,15 +127,17 @@ const ExcuseEdit = lazy(() => import("@/pages/create/hr/excuse-edit"));
 const LeavesEdit = lazy(() => import("@/pages/create/hr/leaves-edit"));
 const ContractsEdit = lazy(() => import("@/pages/create/hr/contracts-edit"));
 // Phase 2 wiring — orphan pages with existing backends.
-const AccrualsMonthly = lazy(() => import("@/pages/hr/accruals-monthly"));
 const WpsSettings = lazy(() => import("@/pages/hr/saudi-compliance/wps/settings"));
 
 export const hrRoutes = [
-  { path: "/hr", component: HR },
+  // RBAC-REV-STD — مركز HR لوحة إدارية بلا subKey؛ minRoleLevel:25 يحرس
+  // الوصول المباشر بالرابط (لا الواجهة فقط) فلا يصله الاستاندر (10)/السائق (15).
+  { path: "/hr", component: HR, minRoleLevel: 25 },
   // HR-010 / #1799 priority #4 — Services Catalog landing page.
   { path: "/hr/services", component: HrServices, subKey: "services" },
   { path: "/employees", component: Employees, subKey: "employees" },
   { path: "/employees/create", component: EmployeesCreate, subKey: "employees" },
+  { path: "/employees/quick-create", component: EmployeeQuickCreate, subKey: "employees" },
   { path: "/employees/:id", component: EmployeeDetail, subKey: "employees" },
   { path: "/hr/attendance", component: Attendance, subKey: "attendance" },
   { path: "/hr/attendance/create", component: AttendanceCreate, subKey: "attendance" },
@@ -141,6 +146,7 @@ export const hrRoutes = [
   // "field-tracking" and "qr-scanner" as an id and shadow these pages.
   { path: "/hr/attendance/reports", component: AttendanceReports, subKey: "attendance" },
   { path: "/hr/attendance/field-tracking", component: FieldTracking, subKey: "attendance" },
+  { path: "/hr/attendance/tracking-policies", component: TrackingPolicies, subKey: "attendance" },
   { path: "/hr/attendance/qr-scanner", component: QRScanner, subKey: "attendance" },
   // ":id/edit" precedes ":id" — defensive ordering (see route-shadowing fix).
   { path: "/hr/attendance/:id/edit", component: AttendanceEdit, subKey: "attendance" },
@@ -200,6 +206,7 @@ export const hrRoutes = [
   { path: "/hr/shifts/:id", component: ShiftDetail, subKey: "shifts" },
   { path: "/hr/employee-activation", component: EmployeeActivation, subKey: "employees" },
   { path: "/hr/activation-board", component: ActivationBoard, subKey: "employees" },
+  { path: "/hr/self-onboarding-review", component: SelfOnboardingReview, subKey: "employees" },
   { path: "/hr/onboarding-review", component: OnboardingReview, subKey: "employees" },
   { path: "/hr/evaluation-360/create", component: Evaluation360Create, subKey: "performance" },
   { path: "/hr/evaluation-360/history/:employeeId", component: Evaluation360History, subKey: "performance" },
@@ -222,7 +229,9 @@ export const hrRoutes = [
   { path: "/hr/org-tree", component: OrgTree, subKey: "employees" },
   { path: "/hr/delegations", component: Delegations, subKey: "employees" },
   { path: "/hr/accruals", component: Accruals, subKey: "payroll" },
-  { path: "/hr/accruals/monthly", component: AccrualsMonthly, subKey: "payroll" },
+  // /hr/accruals already previews AND posts the same POST /hr/accruals/monthly;
+  // the standalone run-only page was a functional duplicate (CROSS_MODULE audit 🔴).
+  { path: "/hr/accruals/monthly", component: redirectTo("/hr/accruals"), subKey: "payroll" },
   { path: "/hr/transfers", component: Transfers, subKey: "employees" },
   { path: "/hr/transfers/:id/edit", component: TransfersEdit, subKey: "employees" },
   { path: "/hr/transfers/:id", component: TransferDetail, subKey: "employees" },

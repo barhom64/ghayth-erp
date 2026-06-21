@@ -1014,4 +1014,56 @@ router.get("/evaluations/:id/results", authorize({ feature: "admin", action: "li
   }
 });
 
+// ── connection test / activation status ─────────────────────────────────────
+// Lets an admin verify the Anthropic integration is configured AND reachable
+// without exposing any secret. Reports the env-backed config flags; if
+// configured, sends a tiny 4-token ping so activation is self-verifiable the
+// moment AI_INTEGRATIONS_ANTHROPIC_API_KEY / _BASE_URL are set (no key needed
+// to call this — it just reports state + optionally pings).
+router.get(
+  "/connection-test",
+  authorize({ feature: "admin", action: "list" }),
+  async (_req, res) => {
+    const apiKeySet = Boolean(config.ai.anthropicApiKey);
+    const baseUrlSet = Boolean(config.ai.anthropicBaseUrl);
+    const out: {
+      configured: boolean;
+      apiKeySet: boolean;
+      baseUrlSet: boolean;
+      model: string;
+      reachable: boolean;
+      latencyMs: number | null;
+      error: string | null;
+    } = {
+      configured: apiKeySet && baseUrlSet,
+      apiKeySet,
+      baseUrlSet,
+      model: ANTHROPIC_MODEL,
+      reachable: false,
+      latencyMs: null,
+      error: null,
+    };
+    const client = getAnthropicClient();
+    if (!client) {
+      out.error =
+        "غير مضبوط: اضبط AI_INTEGRATIONS_ANTHROPIC_API_KEY و AI_INTEGRATIONS_ANTHROPIC_BASE_URL ثم أعد تشغيل الخادم.";
+      res.json(out);
+      return;
+    }
+    try {
+      const t0 = Date.now();
+      const msg = await client.messages.create({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 4,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      out.reachable = Array.isArray(msg.content) && msg.content.length > 0;
+      out.latencyMs = Date.now() - t0;
+    } catch (err) {
+      out.error = err instanceof Error ? err.message : String(err);
+    }
+    res.json(out);
+  },
+);
+
 export default router;

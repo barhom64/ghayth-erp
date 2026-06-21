@@ -13,6 +13,7 @@ import { PageShell } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { UmrahAgentSelect, UmrahSeasonSelect } from "@/components/shared/entity-selects";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
 import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 import { Plus, Pencil, Trash2, AlertTriangle, Tag, Hotel, Bus } from "lucide-react";
@@ -36,13 +37,10 @@ interface PricingRow {
 
 export default function UmrahPricing() {
   const pricingQ = useApiQuery<{ data: PricingRow[] }>(["umrah-pricing"], "/umrah/pricing");
-  const agentsQ = useApiQuery<{ data: any[] }>(["umrah-agents"], "/umrah/agents");
-  
   const subAgentsQ = useApiQuery<{ data: any[] }>(["umrah-sub-agents"], "/umrah/sub-agents");
   const seasonsQ = useApiQuery<{ data: any[] }>(["umrah-seasons"], "/umrah/seasons");
 
   const rows = pricingQ.data?.data ?? [];
-  const agents = agentsQ.data?.data ?? [];
   const subAgents = subAgentsQ.data?.data ?? [];
   const seasons = seasonsQ.data?.data ?? [];
 
@@ -270,18 +268,12 @@ export default function UmrahPricing() {
           </DialogHeader>
           {editing && (
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>الوكيل الرئيسي *</Label>
-                <Select
-                  value={editing.agentId ? String(editing.agentId) : ""}
-                  onValueChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <UmrahAgentSelect
+                label="الوكيل الرئيسي *"
+                placeholder="اختر الوكيل"
+                value={editing.agentId ? String(editing.agentId) : ""}
+                onChange={(v) => setEditing({ ...editing, agentId: Number(v) })}
+              />
               <div>
                 <Label>الوكيل الفرعي (اختياري)</Label>
                 <Select
@@ -297,18 +289,12 @@ export default function UmrahPricing() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <Label>الموسم *</Label>
-                <Select
-                  value={editing.seasonId ? String(editing.seasonId) : ""}
-                  onValueChange={(v) => setEditing({ ...editing, seasonId: Number(v) })}
-                >
-                  <SelectTrigger><SelectValue placeholder="اختر الموسم" /></SelectTrigger>
-                  <SelectContent>
-                    {seasons.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <UmrahSeasonSelect
+                label="الموسم *"
+                placeholder="اختر الموسم"
+                value={editing.seasonId ? String(editing.seasonId) : ""}
+                onChange={(v) => setEditing({ ...editing, seasonId: Number(v) })}
+              />
               <div>
                 <Label>السعر للمعتمر *</Label>
                 <Input

@@ -10,6 +10,7 @@ import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 import {
   AlertTriangle, TrendingDown, FileSignature, RefreshCw,
   Info, CheckCircle2, Lock,
@@ -119,7 +120,7 @@ export default function BadDebtProvisionPage() {
 
   return (
     <PageShell
-      title="مخصص ديون مشكوك فيها"
+      title="ورقة عمل مخصص الديون"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },
         { label: "مخصص ديون مشكوك فيها" },
@@ -192,9 +193,7 @@ export default function BadDebtProvisionPage() {
               <RefreshCw className="w-4 h-4 ml-1" />
               نسب افتراضية
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => refetch()}>
-              تحديث
-            </Button>
+            <RefreshAction onRefresh={() => refetch()} />
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -346,7 +345,7 @@ export default function BadDebtProvisionPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-xs text-muted-foreground">
                     <th className="text-start py-2 px-2">الحساب</th>
@@ -370,7 +369,7 @@ export default function BadDebtProvisionPage() {
                     </td>
                   </tr>
                 </tbody>
-              </table>
+              </table></div>
               <div className="mt-3 text-[11px] text-muted-foreground flex items-start gap-2 bg-status-info-surface p-2 rounded">
                 <Info className="w-4 h-4 flex-shrink-0 mt-0.5 text-status-info-foreground" />
                 <div>

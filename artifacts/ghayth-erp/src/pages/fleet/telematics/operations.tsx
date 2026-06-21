@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Activity, AlertTriangle, CheckCircle2, Clock, Database,
-  Network, Pause, RefreshCw, Shield, ShieldAlert, Wifi, WifiOff,
+  Network, Pause, Shield, ShieldAlert, Wifi, WifiOff,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import {
   DataTable,
   type DataTableColumn,
@@ -216,7 +217,7 @@ export default function FleetTelematicsOperations() {
 
   return (
     <PageShell
-      title="تشغيل التتبع — مراقبة CMSV6 و breakers"
+      title="تشغيل التتبع"
       breadcrumbs={[
         { href: "/fleet", label: "الأسطول" },
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },
@@ -232,13 +233,7 @@ export default function FleetTelematicsOperations() {
             <Network className="h-4 w-4" />
             {syncMut.isPending ? "جاري المزامنة…" : "مزامنة الآن"}
           </button>
-          <button
-            onClick={refresh}
-            className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-md border hover:bg-surface-subtle"
-          >
-            <RefreshCw className="h-4 w-4" />
-            تحديث
-          </button>
+          <RefreshAction onRefresh={refresh} />
         </div>
       }
     >

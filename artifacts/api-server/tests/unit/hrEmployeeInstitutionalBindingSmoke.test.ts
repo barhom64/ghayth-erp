@@ -35,7 +35,7 @@ const EMPLOYEES_ROUTE = readFileSync(
   "utf8",
 );
 const EMPLOYEES_CREATE_PAGE = readFileSync(
-  join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/create/employees-create.tsx"),
+  join(REPO_ROOT, "artifacts/ghayth-erp/src/pages/create/employee-create-form.tsx"),
   "utf8",
 );
 const ENTITY_SELECTS = readFileSync(
@@ -67,11 +67,12 @@ describe("PR-1 (#2077) — createEmployeeSchema accepts the 6 institutional fiel
   });
 });
 
-describe("PR-1 (#2077) — route rejects the 5 mandatories with field-tagged errors", () => {
-  // The handler derives `isBootstrapEmployee` from the active-employee
-  // count and skips mandatoriness only when the company is empty. The
-  // ValidationError throws below are how the frontend's
-  // useFieldErrors.setApiError highlights the exact input.
+describe("النظام يَحضُر لا يُحضَر له — route enforces only the 3 essential bindings", () => {
+  // Policy revision (النظام يَحضُر لا يُحضَر له): الفريق والمشروع أمور عارضة
+  // تُسنَد لاحقًا عبر عقود العضوية المستقلة، ومركز التكلفة يُشتق آليًا من
+  // الفرع والصفة — فلا تُفرَض وقت التعيين. تبقى إلزامية وقت التعيين:
+  // المنصب الإداري، فئة الحضور، المدير المباشر. الحقول الثلاثة الأخرى تبقى
+  // مقبولة في المخطط (optional) وتُتحقَّق فقط حين تُرسَل.
   it("bootstrap detection counts active employee_assignments", () => {
     expect(EMPLOYEES_ROUTE).toMatch(/isBootstrapEmployee\s*=\s*Number\(activeEmpCount[^)]*\)\s*===\s*0/);
   });
@@ -81,17 +82,17 @@ describe("PR-1 (#2077) — route rejects the 5 mandatories with field-tagged err
   it("rejects missing categoryKey with field=categoryKey", () => {
     expect(EMPLOYEES_ROUTE).toMatch(/if\s*\(!categoryKey\)[\s\S]{0,200}field:\s*"categoryKey"/);
   });
-  it("rejects missing teamId with field=teamId", () => {
-    expect(EMPLOYEES_ROUTE).toMatch(/if\s*\(!teamId\)[\s\S]{0,200}field:\s*"teamId"/);
-  });
-  it("rejects missing projectId with field=projectId", () => {
-    expect(EMPLOYEES_ROUTE).toMatch(/if\s*\(!projectId\)[\s\S]{0,200}field:\s*"projectId"/);
-  });
-  it("rejects missing costCenterId with field=costCenterId", () => {
-    expect(EMPLOYEES_ROUTE).toMatch(/if\s*\(!costCenterId\)[\s\S]{0,200}field:\s*"costCenterId"/);
-  });
-  it("rejects missing managerId with field=managerId (was previously soft-optional)", () => {
+  it("rejects missing managerId with field=managerId", () => {
     expect(EMPLOYEES_ROUTE).toMatch(/if\s*\(!managerId\)[\s\S]{0,200}field:\s*"managerId"/);
+  });
+  it("does NOT throw a mandatoriness error for missing teamId", () => {
+    expect(EMPLOYEES_ROUTE).not.toMatch(/if\s*\(!teamId\)[\s\S]{0,200}field:\s*"teamId"/);
+  });
+  it("does NOT throw a mandatoriness error for missing projectId", () => {
+    expect(EMPLOYEES_ROUTE).not.toMatch(/if\s*\(!projectId\)[\s\S]{0,200}field:\s*"projectId"/);
+  });
+  it("does NOT throw a mandatoriness error for missing costCenterId", () => {
+    expect(EMPLOYEES_ROUTE).not.toMatch(/if\s*\(!costCenterId\)[\s\S]{0,200}field:\s*"costCenterId"/);
   });
 });
 
@@ -217,16 +218,21 @@ describe("PR-1 (#2077) — wizard form binds the 6 fields + adds a step", () => 
   it("WIZARD_STEPS contains the institutional step", () => {
     expect(EMPLOYEES_CREATE_PAGE).toMatch(/key:\s*"institutional"[\s\S]{0,400}label:\s*"الربط المؤسسي"/);
   });
-  it("institutional step isComplete predicate covers all 5 mandatories + manager", () => {
-    expect(EMPLOYEES_CREATE_PAGE).toMatch(/f\.positionId && f\.categoryKey && f\.teamId && f\.projectId && f\.costCenterId && f\.managerId/);
+  it("institutional step isComplete predicate covers the 3 essential bindings only", () => {
+    expect(EMPLOYEES_CREATE_PAGE).toMatch(/f\.positionId && f\.categoryKey && f\.managerId/);
   });
-  it("validate() rejects each mandatory with an Arabic message", () => {
+  it("validate() requires only position/category/manager with Arabic messages", () => {
     expect(EMPLOYEES_CREATE_PAGE).toMatch(/managerId:\s*form\.managerId\s*\?\s*null\s*:/);
     expect(EMPLOYEES_CREATE_PAGE).toMatch(/positionId:\s*form\.positionId\s*\?\s*null\s*:/);
     expect(EMPLOYEES_CREATE_PAGE).toMatch(/categoryKey:\s*form\.categoryKey\s*\?\s*null\s*:/);
-    expect(EMPLOYEES_CREATE_PAGE).toMatch(/teamId:\s*form\.teamId\s*\?\s*null\s*:/);
-    expect(EMPLOYEES_CREATE_PAGE).toMatch(/projectId:\s*form\.projectId\s*\?\s*null\s*:/);
-    expect(EMPLOYEES_CREATE_PAGE).toMatch(/costCenterId:\s*form\.costCenterId\s*\?\s*null\s*:/);
+  });
+  it("validate() no longer hard-requires team/project/costCenter", () => {
+    expect(EMPLOYEES_CREATE_PAGE).not.toMatch(/teamId:\s*form\.teamId\s*\?\s*null\s*:/);
+    expect(EMPLOYEES_CREATE_PAGE).not.toMatch(/projectId:\s*form\.projectId\s*\?\s*null\s*:/);
+    expect(EMPLOYEES_CREATE_PAGE).not.toMatch(/costCenterId:\s*form\.costCenterId\s*\?\s*null\s*:/);
+  });
+  it("team/project/costCenter moved into the collapsed AdvancedSection (modeling)", () => {
+    expect(EMPLOYEES_CREATE_PAGE).toMatch(/AdvancedSection[\s\S]{0,900}TeamSelect/);
   });
   it("POST payload forwards the 6 institutional fields", () => {
     expect(EMPLOYEES_CREATE_PAGE).toMatch(/positionId:\s*form\.positionId\s*\?\s*Number\(form\.positionId\)\s*:\s*undefined/);

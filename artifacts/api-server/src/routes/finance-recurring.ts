@@ -70,8 +70,10 @@ const VALID_FREQUENCIES = ["daily", "weekly", "monthly", "quarterly", "yearly"] 
 
 const recurringJournalLineSchema = z.object({
   accountCode: z.string(),
-  debit: z.coerce.number().default(0),
-  credit: z.coerce.number().default(0),
+  // F9-B2: المدين/الدائن لا يكونان سالبين (نمط finance-accounts). العكس يبدّل
+  // العمودين فيبقيان ≥0؛ وسطور المحرّك الداخلية السالبة لا تمرّ عبر هذه السكيمة.
+  debit: z.coerce.number().min(0, "المدين لا يكون سالبًا").default(0),
+  credit: z.coerce.number().min(0, "الدائن لا يكون سالبًا").default(0),
   description: z.string().optional().nullable(),
   costCenter: z.string().optional().nullable(),
   departmentId: z.coerce.number().optional().nullable(),
