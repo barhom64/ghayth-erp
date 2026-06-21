@@ -1,23 +1,23 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { BarChart3 } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 
 const VARIANT: Record<string, any> = { A: "default", B: "secondary", C: "outline" };
 
 export default function AbcClassificationPage() {
-  const [cat, setCat] = useState("");
-  const { data } = useApiQuery<any>(
-    ["abc", cat],
-    `/warehouse/abc-classification${cat ? `?category=${cat}` : ""}`,
-  );
+  const [filters, setFilters] = useFilters();
+  const { data } = useApiQuery<any>(["abc"], `/warehouse/abc-classification`);
   const rows = asList(data?.data || data);
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["productName"],
+    extraFields: { category: "category" },
+  });
 
   const columns = useMemo<any[]>(() => [
     { key: "productName", header: "المنتج", cell: (r: any) => r.productName ?? `#${r.productId}` },
@@ -30,15 +30,20 @@ export default function AbcClassificationPage() {
   return (
     <PageShell title="تصنيف ABC للمنتجات">
       <WarehouseTabsNav />
-      <div className="mb-4 flex gap-2">
-        {["", "A", "B", "C"].map((c) => (
-          <Button key={c || "all"} size="sm" variant={cat === c ? "default" : "outline"} onClick={() => setCat(c)}>
-            {c === "" ? "الكل" : c}
-          </Button>
-        ))}
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث باسم المنتج...",
+          extraFilters: [{ key: "category", label: "التصنيف", options: [
+            { value: "A", label: "A" }, { value: "B", label: "B" }, { value: "C", label: "C" },
+          ] }],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
       <Card><CardContent className="pt-6">
-        <DataTable data={rows} columns={columns} emptyMessage="لا يوجد تصنيف ABC بعد — انتظر تشغيل الـ cron الشهري" />
+        <DataTable data={filtered} columns={columns} emptyMessage="لا يوجد تصنيف ABC بعد — انتظر تشغيل الـ cron الشهري" noToolbar />
       </CardContent></Card>
     </PageShell>
   );

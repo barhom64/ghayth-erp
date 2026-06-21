@@ -6,7 +6,7 @@ import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { Hash, Plus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
@@ -31,13 +31,14 @@ type CreateForm = z.infer<typeof createSchema>;
 
 export default function WarehouseSerialsPage() {
   const [showForm, setShowForm] = useState(false);
-  const [statusFilter, setStatusFilter] = useState("");
+  const [filters, setFilters] = useFilters();
 
-  const { data, refetch } = useApiQuery<any>(
-    ["warehouse-serials", statusFilter],
-    `/warehouse/serials${statusFilter ? `?status=${statusFilter}` : ""}`,
-  );
+  const { data, refetch } = useApiQuery<any>(["warehouse-serials"], `/warehouse/serials`);
   const serials = asList(data?.data || data);
+  const filtered = applyFilters(serials, filters, {
+    searchFields: ["serialNumber", "productName", "currentLocation"],
+    statusField: "status",
+  });
 
   async function changeStatus(id: number, status: string) {
     try {
@@ -81,12 +82,16 @@ export default function WarehouseSerialsPage() {
       actions={<Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />تسجيل عنصر</Button>}
     >
       <WarehouseTabsNav />
-      <div className="mb-4 flex gap-2 flex-wrap">
-        <Button variant={statusFilter === "" ? "default" : "outline"} size="sm" onClick={() => setStatusFilter("")}>الكل</Button>
-        {Object.entries(STATUS_LABELS).map(([v, l]) => (
-          <Button key={v} variant={statusFilter === v ? "default" : "outline"} size="sm" onClick={() => setStatusFilter(v)}>{l}</Button>
-        ))}
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث برقم تسلسلي أو منتج أو موقع...",
+          statuses: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       {showForm && (
         <Card className="mb-4">
@@ -111,7 +116,7 @@ export default function WarehouseSerialsPage() {
       )}
 
       <Card><CardContent className="pt-6">
-        <DataTable data={serials} columns={columns} emptyMessage="لا توجد عناصر تسلسلية" />
+        <DataTable data={filtered} columns={columns} emptyMessage="لا توجد عناصر تسلسلية" noToolbar />
       </CardContent></Card>
     </PageShell>
   );
