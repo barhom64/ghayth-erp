@@ -6,63 +6,12 @@
 // the layout renders and no runtime errors land in the console.
 
 import { test, expect } from "@playwright/test";
-
-const EMAIL = process.env.E2E_USER_EMAIL ?? "admin@ghayth.com";
-const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Admin@123456";
-
-async function login(page: import("@playwright/test").Page) {
-  await page.goto("/");
-  // Use input ids directly — getByLabel(/كلمة/i) matches both the input
-  // and the "إظهار كلمة المرور" toggle button via its aria-label, which
-  // Playwright strict mode rejects.
-  await page.locator("input#email").fill(EMAIL);
-  await page.locator("input#password").fill(PASSWORD);
-  await page.getByRole("button", { name: /login|دخول/i }).click();
-  await page.waitForLoadState("networkidle");
-}
-
-// Console noise we tolerate: third-party libraries (React-Query devtools,
-// react-router lazy-chunk warnings, browser autofill, vite-preview HMR
-// stubs, ResizeObserver loop, web-vitals deprecations) emit `console.error`
-// on every page load. They don't represent real product regressions, so
-// filtering them keeps the assertion focused on app-level pageerrors.
-const IGNORED_CONSOLE_PATTERNS: RegExp[] = [
-  /ResizeObserver loop/i,
-  /Failed to load resource.*404/i, // dev-only optional endpoints (e.g. /announcements)
-  /Failed to load resource.*net::ERR_/i, // external CDN reachability — not an app bug
-  // playwright.config.ts attaches `X-E2E-Test: 1` to every browser
-  // request (extraHTTPHeaders is unconditional). For cross-origin fetches
-  // like Google Fonts (fonts.gstatic.com), the preflight returns an
-  // Access-Control-Allow-Headers list that doesn't include x-e2e-test,
-  // so the browser blocks every font request and logs one console.error
-  // per blocked URL. None of these point at app code — strip them.
-  /Access to font at .*blocked by CORS/i,
-  /blocked by CORS policy/i,
-  /\[vite\]/i,
-  /Download the React DevTools/i,
-  /findDOMNode is deprecated/i,
-  /A future version of React/i,
-  /Hydration/i,
-  /Warning:/i, // React PropTypes / strict-mode warnings — not real errors
-];
-
-function isRealError(text: string): boolean {
-  return !IGNORED_CONSOLE_PATTERNS.some((re) => re.test(text));
-}
+import { login, captureErrors } from "./_helpers/login";
 
 test.describe("Dashboard", () => {
   test("renders KPI cards and sidebar without runtime errors", async ({ page }) => {
-    const pageErrors: string[] = [];
-    const consoleErrors: string[] = [];
-    // pageerror = uncaught exception in the page context — always a real bug
-    page.on("pageerror", (e) => pageErrors.push(e.message));
-    // console.error = anything the app or its libs logged at error level —
-    // filter to the ones that indicate a real regression
-    page.on("console", (msg) => {
-      if (msg.type() === "error" && isRealError(msg.text())) {
-        consoleErrors.push(msg.text());
-      }
-    });
+    // Attach capturers BEFORE navigating so we don't miss early errors.
+    const { pageErrors, consoleErrors } = captureErrors(page);
 
     await login(page);
 

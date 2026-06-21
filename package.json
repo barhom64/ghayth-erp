@@ -59,6 +59,7 @@
     "check:tenant-isolation": "node scripts/src/check-tenant-isolation.mjs",
     "check:tx-coverage": "node scripts/src/check-tx-coverage.mjs",
     "check:gl-swallow": "node scripts/src/check-gl-swallow.mjs",
+    "check:e2e-login": "node scripts/src/check-e2e-login-pattern.mjs",
     "check:no-physical-delete": "node scripts/src/check-no-physical-delete.mjs",
     "check:ledger-posting-single-path": "node scripts/src/check-ledger-posting-single-path.mjs",
     "check:ledger-immutability": "node scripts/src/check-ledger-immutability.mjs",
