@@ -20,7 +20,7 @@ import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/compo
 
 const DRAFT_KEY = "hr_recruitment_create";
 const INITIAL = {
-  title: "", department: "", location: "", type: "full-time",
+  title: "", department: "", departmentId: "", location: "", type: "full-time",
   description: "", requirements: "", salaryMin: "", salaryMax: "",
   closingDate: "", experienceLevel: "", education: "", vacancies: "1",
   benefits: "", skills: "",
@@ -121,9 +121,14 @@ export default function RecruitmentCreate() {
           <TextField label="المسمى الوظيفي" required value={form.title} onChange={(v) => set("title", v)} placeholder="مثال: مهندس برمجيات" error={fieldErrors.title} />
           <SearchableSelectField
             label="القسم"
-            options={departments.map((d: any) => ({ value: d.name, label: d.name }))}
-            value={form.department}
-            onValueChange={(v) => set("department", v)}
+            // القيمة = معرّف القسم (FK دقيق، يحسم تكرار الاسم عبر الفروع). نخزّن
+            // الاسم أيضًا للعرض (الشارة) وللتوافق؛ الخادم يفضّل المعرّف.
+            options={departments.map((d: any) => ({ value: String(d.id), label: d.name }))}
+            value={form.departmentId}
+            onValueChange={(v) => {
+              const d = departments.find((x: any) => String(x.id) === v);
+              setForm((f) => ({ ...f, departmentId: v, department: d?.name ?? "" }));
+            }}
             placeholder={isLoading ? "جاري التحميل..." : "اختر القسم"}
             searchPlaceholder="ابحث عن قسم..."
             emptyText={isError ? "تعذر تحميل قائمة الأقسام" : "لا توجد أقسام — أضفها من الإعدادات ← الأقسام"}

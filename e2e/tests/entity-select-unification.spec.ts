@@ -48,14 +48,20 @@ async function aDialogComboboxOpensCmdk(page: Page, dialog: ReturnType<Page["loc
   const n = await combos.count();
   for (let i = 0; i < n; i++) {
     await combos.nth(i).click().catch(() => {});
-    const opened = await page
-      .locator("[cmdk-input]")
-      .first()
+    const input = page.locator("[cmdk-input]").first();
+    const opened = await input
       .waitFor({ state: "visible", timeout: 3000 })
       .then(() => true)
       .catch(() => false);
+    if (opened) {
+      // Prove the search box is functional (not just rendered): typing must
+      // register in the cmdk input — this exercises the live filter path.
+      await input.fill("بحث").catch(() => {});
+      const value = await input.inputValue().catch(() => "");
+      await page.keyboard.press("Escape").catch(() => {});
+      return value === "بحث";
+    }
     await page.keyboard.press("Escape").catch(() => {});
-    if (opened) return true;
   }
   return false;
 }
