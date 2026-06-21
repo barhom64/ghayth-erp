@@ -33,6 +33,8 @@ import { EmployeeSelect } from "@/components/shared/entity-selects";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { MapPin, ShieldCheck, ShieldOff, Power } from "lucide-react";
 
 // Tracking modes — must match the server enum (employeeTrackingPolicy.ts).
@@ -71,6 +73,7 @@ export default function TrackingPoliciesPage() {
   const { data: empData } = useApiQuery<any>(["employees-list"], "/employees?limit=500");
   const policies = asList(data);
   const employees = asList(empData);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(policies);
 
   const empName = useMemo(() => {
     const map: Record<string, string> = {};
@@ -215,11 +218,30 @@ export default function TrackingPoliciesPage() {
       subtitle="تفعيل وإدارة تتبع الموقع الجغرافي لكل موظف — التتبع لا يبدأ إلا بسياسة فعّالة هنا"
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { label: "سياسات التتبع" }]}
       actions={
-        <Button asChild variant="outline" size="sm">
-          <Link href="/hr/attendance/field-tracking">
-            <MapPin className="h-4 w-4 ml-1" /> الخريطة الحية
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_hr_tracking_policies"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "سياسات تتبع الموظفين", total: printRows.length },
+              items: printRows.map((p: any) => ({
+                "الموظف": empName[String(p.employeeId)] || `#${p.employeeId}`,
+                "نمط التتبع": MODE_LABEL[p.trackingMode] || p.trackingMode,
+                "الحالة": p.trackingEnabled ? "مُفعّل" : "موقوف",
+                "مخوّلون بالعرض": (Array.isArray(p.allowedViewerRoles) && p.allowedViewerRoles.length > 0)
+                  ? p.allowedViewerRoles.map((r: string) => VIEWER_ROLES.find((v) => v.key === r)?.label || r).join("، ")
+                  : "الجميع",
+                "السبب": p.reason || "—",
+              })),
+            })}
+          />
+          <Button asChild variant="outline" size="sm">
+            <Link href="/hr/attendance/field-tracking">
+              <MapPin className="h-4 w-4 ml-1" /> الخريطة الحية
+            </Link>
+          </Button>
+        </div>
       }
     >
       <HrTabsNav />
@@ -289,6 +311,7 @@ export default function TrackingPoliciesPage() {
       <DataTable
         columns={columns}
         data={policies}
+        onSortedDataChange={setPrintRows}
         noToolbar
         pageSize={20}
         emptyMessage="لا توجد سياسات تتبع — فعّل أول موظف من النموذج بالأعلى"
