@@ -456,21 +456,28 @@ router.post("/prompts/:id/reviews", authorize({ feature: "admin", action: "appro
       throw new ForbiddenError("لا يجوز للمؤلّف مراجعة prompt من تأليفه (Separation-of-Duties)");
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO ai_prompt_reviews ("promptId", "reviewerId", decision, comments)
-       VALUES ($1, $2, $3, $4)`,
-      [id, scope.userId, body.decision, body.comments ?? null],
-    );
+    // The review record + its effect on the prompt status are written
+    // atomically: a 'rejected'/'changes_requested' decision must not be
+    // recorded without flipping the prompt (or vice versa). rawQuery joins
+    // the ambient transaction (txStore).
+    const insertId = await withTransaction(async () => {
+      const { insertId: reviewId } = await rawExecute(
+        `INSERT INTO ai_prompt_reviews ("promptId", "reviewerId", decision, comments)
+         VALUES ($1, $2, $3, $4)`,
+        [id, scope.userId, body.decision, body.comments ?? null],
+      );
 
-    // Side-effects on the prompt itself: a 'rejected' review terminates
-    // the version; 'changes_requested' bounces it back to draft. An
-    // 'approved' review does NOT yet flip the prompt — the explicit
-    // /approve endpoint does (so the author can preview before promotion).
-    if (body.decision === "rejected") {
-      await rawExecute(`UPDATE ai_prompts SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [id]);
-    } else if (body.decision === "changes_requested") {
-      await rawExecute(`UPDATE ai_prompts SET status = 'draft', "updatedAt" = NOW() WHERE id = $1`, [id]);
-    }
+      // Side-effects on the prompt itself: a 'rejected' review terminates
+      // the version; 'changes_requested' bounces it back to draft. An
+      // 'approved' review does NOT yet flip the prompt — the explicit
+      // /approve endpoint does (so the author can preview before promotion).
+      if (body.decision === "rejected") {
+        await rawExecute(`UPDATE ai_prompts SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [id]);
+      } else if (body.decision === "changes_requested") {
+        await rawExecute(`UPDATE ai_prompts SET status = 'draft', "updatedAt" = NOW() WHERE id = $1`, [id]);
+      }
+      return reviewId;
+    });
 
     void emitEvent({
       companyId: scope.companyId, userId: scope.userId,
