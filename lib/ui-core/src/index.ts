@@ -44,6 +44,7 @@ export type {
   DataTableColumn,
   BulkAction,
   StatusFilterOption,
+  QuickFilter,
   Align,
 } from "../../../artifacts/ghayth-erp/src/components/ui/data-table";
 
