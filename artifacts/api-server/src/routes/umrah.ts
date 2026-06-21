@@ -612,6 +612,21 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchSeasonSchema.safeParse(req.body));
+    // re-validate date ordering against the effective (merged) values:
+    // patchSeasonSchema lets startDate/endDate change independently, so a partial
+    // update must not place startDate after endDate (createSeasonSchema enforces this).
+    if (b.startDate !== undefined || b.endDate !== undefined) {
+      const [curDates] = await rawQuery<{ startDate: string; endDate: string }>(
+        `SELECT "startDate"::text AS "startDate", "endDate"::text AS "endDate" FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!curDates) throw new NotFoundError("الموسم غير موجود");
+      const effStart = b.startDate ?? curDates.startDate;
+      const effEnd = b.endDate ?? curDates.endDate;
+      if (effEnd < effStart) {
+        throw new ValidationError("تاريخ النهاية يجب أن يكون بعد تاريخ البداية", { field: "endDate" });
+      }
+    }
     let originalStatus: string | undefined;
     if (b.status !== undefined) {
       const [existing] = await rawQuery<Record<string, unknown>>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -3757,19 +3772,10 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       sets.push(`"${field}" = $${params.length}`);
       auditAfter[field] = value;
     }
-    if (sets.length > 0) {
-      await rawExecute(
-        `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
-        params,
-      );
-    }
-
-    // Overstay-penalty knobs + §8 finance-hygiene knobs live in
-    // system_settings (not companies). Same omit/null/value semantics
-    // as the FK fields above. We UPSERT when the value is non-null,
-    // DELETE the company-scoped row when the value is explicitly null
-    // — clearing reverts to the global default (key with
-    // companyId IS NULL).
+    // The companies FK fields + the system_settings knobs are one logical
+    // settings save across two tables — write them atomically so a partial
+    // failure can't leave the page half-applied. rawQuery joins the ambient
+    // transaction (txStore).
     const settingsFields: Array<[string, number | string | boolean | null | undefined]> = [
       ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
       ["umrah.overstay_tier_days",     b.umrahOverstayTierDays],
@@ -3788,30 +3794,45 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       "umrah_vat_mode":               "umrahVatMode",
       "commission_via_hr":            "commissionViaHr",
     };
-    for (const [key, value] of settingsFields) {
-      if (value === undefined) continue;
-      if (value === null) {
+    await withTransaction(async () => {
+      if (sets.length > 0) {
         await rawExecute(
-          `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
-          [key, scope.companyId],
+          `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
+          params,
         );
-      } else {
-        // UPSERT — UPDATE first; INSERT only if no row exists.
-        // Matches the pattern in routes/settings.ts so a future
-        // shared helper can replace both call sites.
-        const result = await rawExecute(
-          `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
-          [String(value), key, scope.companyId],
-        );
-        if (!result.affectedRows) {
-          await rawExecute(
-            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
-            [key, String(value), scope.companyId],
-          );
-        }
       }
-      auditAfter[keyToAuditField[key]!] = value;
-    }
+
+      // Overstay-penalty knobs + §8 finance-hygiene knobs live in
+      // system_settings (not companies). Same omit/null/value semantics
+      // as the FK fields above. We UPSERT when the value is non-null,
+      // DELETE the company-scoped row when the value is explicitly null
+      // — clearing reverts to the global default (key with
+      // companyId IS NULL).
+      for (const [key, value] of settingsFields) {
+        if (value === undefined) continue;
+        if (value === null) {
+          await rawExecute(
+            `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+            [key, scope.companyId],
+          );
+        } else {
+          // UPSERT — UPDATE first; INSERT only if no row exists.
+          // Matches the pattern in routes/settings.ts so a future
+          // shared helper can replace both call sites.
+          const result = await rawExecute(
+            `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
+            [String(value), key, scope.companyId],
+          );
+          if (!result.affectedRows) {
+            await rawExecute(
+              `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+              [key, String(value), scope.companyId],
+            );
+          }
+        }
+        auditAfter[keyToAuditField[key]!] = value;
+      }
+    });
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

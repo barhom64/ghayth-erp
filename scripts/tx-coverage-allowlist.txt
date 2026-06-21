@@ -2,27 +2,20 @@
 # Baseline of handlers that write 2+ tables outside withTransaction/
 # applyTransition. As each is wrapped, delete its line — the guard fails
 # on any NEW offender. Regenerate: node scripts/src/check-tx-coverage.mjs --write-allowlist
-# Baseline: 23 handler(s).
+# Baseline: 16 handler(s).
 routes/admin-ai-governance.ts:POST /prompts/:id/evaluate
-routes/admin-communication-control.ts:POST /outbound-queue/bulk-retry
 routes/cargo.ts:PATCH /manifests/:id
-routes/communications.ts:POST /click-to-call
 routes/communications.ts:POST /pbx/completed
 routes/communications.ts:POST /whatsapp/webhook
 routes/fleet-telematics.ts:POST /telematics/video/session/:id/stop
-routes/fleet.ts:POST /me/trips/:id/complete
 routes/hr-overtime.ts:PATCH /overtime/:id/approve
-routes/hr.ts:PATCH /official-letters/:id/approve
 routes/legal.ts:POST /cases
 routes/legal.ts:POST /contracts
 routes/properties.ts:PATCH /maintenance-requests/:id
 routes/rbacV2.ts:DELETE /users/:userId/roles/:roleId
-routes/rbacV2.ts:POST /jit/:id/reject
 routes/transport-bookings.ts:POST /transport/dispatch-orders
 routes/transport-integration.ts:POST /transport/integration/plan-bookings
-routes/transport-planning.ts:POST /transport/dispatch-orders/:id/navigation/complete
 routes/transport-planning.ts:POST /transport/dispatch-orders/:id/navigation/ping
 routes/umrah-entities.ts:POST /groups
 routes/umrah-entities.ts:PUT /sub-agents/:id/link
-routes/umrah.ts:PATCH /settings
 routes/warehouse-cycle-counts.ts:POST /cycle-counts/:id/record
