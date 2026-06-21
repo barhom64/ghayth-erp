@@ -303,23 +303,28 @@ router.post("/opportunities", authorize({ feature: "crm.opportunities", action: 
       }
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes,"nextFollowUp") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null, b.nextFollowUp ?? null]
-    );
-    assertInsert(insertId, "crm_opportunities");
-
     const stageConfig = STAGE_AUTO_ACTIONS[stage];
-    if (stageConfig && stageConfig.followUpDays > 0) {
-      const followUpDate = new Date();
-      followUpDate.setDate(followUpDate.getDate() + stageConfig.followUpDays);
-      try {
+    const insertId = await withTransaction(async () => {
+      const { insertId: oppId } = await rawExecute(
+        `INSERT INTO crm_opportunities ("companyId",title,"clientId","contactName","contactPhone","contactEmail",source,stage,value,probability,"expectedCloseDate","assignedTo",notes,"nextFollowUp") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [scope.companyId, title, b.clientId ?? null, b.contactName ?? null, b.contactPhone ?? null, b.contactEmail ?? null, b.source ?? null, stage, value, probability, b.expectedCloseDate ?? null, b.assignedTo ?? null, b.notes ?? null, b.nextFollowUp ?? null]
+      );
+      assertInsert(oppId, "crm_opportunities");
+
+      // The stage auto follow-up activity is part of the create flow: a
+      // failed activity insert must not leave an opportunity with no
+      // scheduled follow-up. Atomic with the opportunity — rawQuery joins
+      // the ambient transaction (txStore) — so it can't be silently lost.
+      if (stageConfig && stageConfig.followUpDays > 0) {
+        const followUpDate = new Date();
+        followUpDate.setDate(followUpDate.getDate() + stageConfig.followUpDays);
         await rawExecute(
           `INSERT INTO crm_activities ("opportunityId",type,description,"scheduledAt","createdBy") VALUES ($1,'follow_up',$2,$3,$4)`,
-          [insertId, stageConfig.description, followUpDate.toISOString(), scope.userId]
+          [oppId, stageConfig.description, followUpDate.toISOString(), scope.userId]
         );
-      } catch (actErr) { logger.error(actErr, "Failed to create auto activity:"); }
-    }
+      }
+      return oppId;
+    });
 
     if (b.assignedTo) {
       try {
