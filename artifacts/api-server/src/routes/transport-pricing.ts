@@ -110,6 +110,12 @@ transportPricingRouter.post(
     try {
       const scope = req.scope!;
       const b = zodParse(createPriceRuleSchema.safeParse(req.body));
+      // validTo (optional) must not precede validFrom — keeps date-range pricing
+      // lookups correct. (createPriceRuleSchema uses .partial() for the update
+      // schema, so the ordering check lives in the handlers, not a schema refine.)
+      if (b.validTo && b.validTo < b.validFrom) {
+        throw new ValidationError("تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", { field: "validTo" });
+      }
       const { insertId } = await rawExecute(
         `INSERT INTO transport_price_rules
            ("companyId", "branchId", "customerId", "transportServiceType",
@@ -141,6 +147,20 @@ transportPricingRouter.patch(
       const scope = req.scope!;
       const id = parseId(req.params.id, "id");
       const b = zodParse(updatePriceRuleSchema.safeParse(req.body));
+      // re-validate ordering against the effective (merged) values — a partial
+      // update must not place validFrom after validTo.
+      if (b.validFrom !== undefined || b.validTo !== undefined) {
+        const [cur] = await rawQuery<{ validFrom: string | null; validTo: string | null }>(
+          `SELECT "validFrom"::text AS "validFrom", "validTo"::text AS "validTo" FROM transport_price_rules WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [id, scope.companyId],
+        );
+        if (!cur) throw new NotFoundError("القاعدة غير موجودة");
+        const effFrom = b.validFrom !== undefined ? b.validFrom : cur.validFrom;
+        const effTo = b.validTo !== undefined ? b.validTo : cur.validTo;
+        if (effFrom && effTo && effTo < effFrom) {
+          throw new ValidationError("تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", { field: "validTo" });
+        }
+      }
       const sets: string[] = [];
       const params: unknown[] = [];
       let p = 1;
