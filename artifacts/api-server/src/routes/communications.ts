@@ -315,24 +315,25 @@ publicWebhookRouter.post("/whatsapp/webhook", async (req, res): Promise<void> =>
       let relatedType: string | null = null;
       let relatedId: number | null = null;
 
+      // حدود المسارات (#2838): الاتصالات (خادم) تصنّف الوارد وتطلب فتح
+      // تذكرة/فرصة، لكن إنشاءهما وسياسة حالتهما الابتدائية يملكهما المسار
+      // القائد (الدعم/CRM) عبر عقد خدمته — لا كتابة مباشرة من الاتصالات.
       if (categorized.category === "support" || categorized.priority === "urgent") {
-        const { insertId } = await rawExecute(
-          `INSERT INTO support_tickets ("companyId",title,description,status,priority,"createdAt")
-           VALUES ($1,$2,$3,'open',$4,NOW())`,
-          [companyId, `WhatsApp: ${msgText.substring(0, 100)}`, `${msgText}\n\nمن: ${sender.name} (${from})`, categorized.priority]
-        );
-        assertInsert(insertId, "support_tickets");
+        const { createTicketFromInboundComm } = await import("./support.js");
+        relatedId = await createTicketFromInboundComm({
+          companyId,
+          title: `WhatsApp: ${msgText.substring(0, 100)}`,
+          description: `${msgText}\n\nمن: ${sender.name} (${from})`,
+          priority: categorized.priority,
+        });
         relatedType = "support_ticket";
-        relatedId = insertId;
       } else if (sender.type === "unknown" && categorized.category === "crm") {
-        const { insertId } = await rawExecute(
-          `INSERT INTO crm_opportunities ("companyId",title,stage,status,"createdAt")
-           VALUES ($1,$2,'lead','active',NOW())`,
-          [companyId, `WhatsApp Lead: ${sender.name}`]
-        );
-        assertInsert(insertId, "crm_opportunities");
+        const { createOpportunityFromInboundComm } = await import("./crm.js");
+        relatedId = await createOpportunityFromInboundComm({
+          companyId,
+          title: `WhatsApp Lead: ${sender.name}`,
+        });
         relatedType = "crm_opportunity";
-        relatedId = insertId;
       }
 
       const ackMessage = `مرحباً ${sender.name !== from ? sender.name : ""}، شكراً لتواصلك معنا. سنقوم بالرد عليك في أقرب وقت ممكن. رقم طلبك: WA-${msgId.substring(0, 8)}`;

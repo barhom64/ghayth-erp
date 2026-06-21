@@ -21,6 +21,25 @@ import { logger } from "../lib/logger.js";
 
 type RequestScope = NonNullable<ExpressRequest["scope"]>;
 
+// عقد قائد/خادم (#2838): إنشاء فرصة من رسالة اتصالات واردة. مسار الاتصالات
+// (خادم) يصنّف الوارد ويطلب إنشاء فرصة، لكن **قرار** المرحلة/الحالة الابتدائية
+// و**ملكية الكتابة** في crm_opportunities يبقيان هنا في المسار القائد (CRM).
+// سلوكيًا مطابق لِما كانت الاتصالات تنشئه سابقًا (نُقل فقط عبر الحد).
+export async function createOpportunityFromInboundComm(params: {
+  companyId: number;
+  title: string;
+}): Promise<number> {
+  const { companyId, title } = params;
+  const { insertId } = await rawExecute(
+    `INSERT INTO crm_opportunities ("companyId", title, stage, status, "createdAt")
+     VALUES ($1, $2, 'lead', 'active', NOW())`,
+    [companyId, title],
+  );
+  assertInsert(insertId, "crm_opportunities");
+  return insertId;
+}
+
+
 // Local row shapes for CRM tables (not in @workspace/db schema).
 
 interface CrmOpportunityRow {
