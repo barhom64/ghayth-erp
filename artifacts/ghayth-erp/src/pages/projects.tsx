@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useSearch, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import { usePrintRows } from "@/hooks/use-print-rows";
 import { useInlineActions, RowActions, InlineEditForm, InlineDeleteConfirm } from "@/components/inline-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 const PROJECT_STATUS_OPTIONS = [
   { value: "active", label: "نشط" },
@@ -402,6 +404,12 @@ function ProjectListTab() {
 export default function Projects() {
   const { roleLevel, scopeQueryString } = useAppContext();
   const canManage = roleLevel >= 50;
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «مشروع جديد» (رأس الصفحة)
+  // يفتح النموذج الكامل في درج بدل الانتقال لصفحة /create. صفحة الإنشاء الكاملة
+  // تبقى متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
   const search = useSearch();
   const params = new URLSearchParams(search);
   const defaultTab = params.get("tab") || "overview";
@@ -438,9 +446,7 @@ export default function Projects() {
             })}
           />
           {canManage ? (
-            <Link href="/projects/create">
-              <GuardedButton perm="projects:create" className="gap-2"><Plus className="h-4 w-4" /> مشروع جديد</GuardedButton>
-            </Link>
+            <GuardedButton perm="projects:create" className="gap-2" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4" /> مشروع جديد</GuardedButton>
           ) : null}
         </div>
       }
@@ -454,6 +460,19 @@ export default function Projects() {
         <TabsContent value="overview"><OverviewTab /></TabsContent>
         <TabsContent value="list"><ProjectListTab /></TabsContent>
       </Tabs>
+
+      <AllowCreateDrawer
+        kind="project"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء المشروع" });
+          queryClient.invalidateQueries({ queryKey: ["projects"] });
+          queryClient.invalidateQueries({ queryKey: ["projects-stats"] });
+          queryClient.invalidateQueries({ queryKey: ["projects-overview"] });
+          queryClient.invalidateQueries({ queryKey: ["projects-print"] });
+        }}
+      />
     </PageShell>
   );
 }
