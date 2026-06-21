@@ -747,7 +747,7 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
     const existing = nuskNumbers.length === 0
       ? []
       : await rawQuery<Record<string, unknown>>(
-          `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber",
+          `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber", "passportNumber_hash",
                   "entryPort", "exitPort", "overstayDays", "actualStayDays",
                   "entryDate", "exitDate"
            FROM umrah_pilgrims
@@ -845,8 +845,21 @@ async function previewImport(scope: ImportScope, rows: ParsedRow[], fileType: "m
       } else {
         const changes: { field: string; oldValue: any; newValue: any }[] = [];
         for (const f of COMPARE_FIELDS) {
-          const oldVal = ex[f] ?? null;
           const newVal = row[f] ?? null;
+          if (f === "passportNumber") {
+            // The stored passportNumber is ENCRYPTED, so a plaintext-vs-ciphertext
+            // compare always reports a phantom change — re-importing the same file
+            // would perpetually classify every passport-bearing pilgrim as
+            // "updated", breaking import idempotency. Compare via the deterministic
+            // blind index instead; report the change with the old value masked.
+            if (newVal === null) continue;
+            const newHash = blindIndex(String(newVal));
+            if (newHash !== (ex.passportNumber_hash ?? null)) {
+              changes.push({ field: f, oldValue: ex.passportNumber_hash ? "***" : null, newValue: newVal });
+            }
+            continue;
+          }
+          const oldVal = ex[f] ?? null;
           if (String(oldVal) !== String(newVal) && newVal !== null) {
             changes.push({ field: f, oldValue: oldVal, newValue: newVal });
             if (f === "overstayDays" || f === "actualStayDays") diff.financialImpactCount++;
@@ -1044,7 +1057,7 @@ export async function confirmMutamersImport(
 
       const existing = nuskNumbers.length > 0
         ? (await client.query(
-            `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber",
+            `SELECT id, "nuskNumber", "fullName", nationality, status, "passportNumber", "passportNumber_hash",
                     "entryPort", "exitPort", "overstayDays", "actualStayDays",
                     "entryDate", "exitDate"
              FROM umrah_pilgrims
@@ -1123,8 +1136,24 @@ export async function confirmMutamersImport(
             let hasFinancial = false;
 
             for (const f of FIELDS) {
-              const oldVal = ex[f] ?? null;
               const newVal = row[f] ?? null;
+              if (f === "passportNumber") {
+                // The stored value is ENCRYPTED — compare via the deterministic
+                // blind index so re-confirming the same passport is NOT a phantom
+                // update (the false-success the import contract guards against).
+                // On a real change, update BOTH the ciphertext and its index.
+                if (newVal === null) continue;
+                const newHash = blindIndex(String(newVal));
+                if (newHash !== (ex.passportNumber_hash ?? null)) {
+                  vals.push(encryptField(String(newVal)));
+                  changes.push(`"passportNumber"=$${vals.length}`);
+                  vals.push(newHash);
+                  changes.push(`"passportNumber_hash"=$${vals.length}`);
+                  await logChange(client, batchId, "mutamer", ex.id, "updated", "passportNumber", "***", "***", false);
+                }
+                continue;
+              }
+              const oldVal = ex[f] ?? null;
               if (String(oldVal) !== String(newVal) && newVal !== null) {
                 vals.push(newVal);
                 changes.push(`"${f}"=$${vals.length}`);
@@ -1212,7 +1241,7 @@ export async function confirmMutamersImport(
       emitEvent({
         companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
         action: "umrah.import.unlinked_rows_detected", entity: "umrah_import_batches", entityId: batchId,
-        after: { unlinkedAgentCount, unlinkedGroupCount, unlinkedSubAgentCount },
+        after: { batchId, unlinkedAgentCount, unlinkedGroupCount, unlinkedSubAgentCount },
       }).catch((e) => logger.error(e, "umrah import event emit failed"));
     }
 
@@ -1222,7 +1251,7 @@ export async function confirmMutamersImport(
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.import.confirmed", entity: "umrah_import_batches", entityId: batchId,
-      after: { fileType: "mutamers", newCount, updatedCount, skippedCount, errorCount },
+      after: { batchId, fileType: "mutamers", newCount, updatedCount, skippedCount, errorCount },
     }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
     return {
@@ -1478,7 +1507,7 @@ export async function confirmVouchersImport(
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "umrah.import.confirmed", entity: "umrah_import_batches", entityId: batchId,
-      after: { fileType: "vouchers", newCount, updatedCount, skippedCount, errorCount },
+      after: { batchId, fileType: "vouchers", newCount, updatedCount, skippedCount, errorCount },
     }).catch((e) => logger.error(e, "umrah import event emit failed"));
 
     return {
