@@ -248,6 +248,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // justification as the parent umrah-entities.ts (calendar/aggregate shape,
   // not list cascades).
   "umrah-journey-reports.ts",
+  // umrah-families.ts: U-07 Phase 2 split — 5 families CRUD routes carved
+  // verbatim out of umrah-entities.ts. Point lookups + per-tenant CRUD keyed
+  // on (companyId, id); inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-families.ts",
   "umrah.ts",
   "wiring-stubs.ts",
   "workspace.ts",
@@ -398,9 +403,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: routes/finance-pricing.ts — إحياء «قواعد التسعير»
       // (مخطّط 171 المُطبّع). CRUD نقطي + upserts على (companyId, id) داخل
       // transactions، يطابق finance-amortization.ts؛ لا cascade فروع. allowlisted.
-      total: 135,
+      // +1 total/manualOnly: U-07 Phase 2 routes/umrah-families.ts — 5 families
+      // CRUD routes carved verbatim out of umrah-entities.ts. Same allowlist
+      // justification as the parent.
+      total: 136,
       helperUsers: 39,
-      manualOnly: 92,
+      manualOnly: 93,
     });
   });
 });
