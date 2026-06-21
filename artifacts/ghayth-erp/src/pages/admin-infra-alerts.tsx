@@ -1,5 +1,7 @@
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +91,7 @@ export default function AdminInfraAlerts() {
   );
 
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const openTotal = data?.open ?? 0;
   const openCritical = data?.openCritical ?? 0;
 
@@ -274,6 +277,22 @@ export default function AdminInfraAlerts() {
       loading={isLoading}
       actions={
         <div className="flex gap-2">
+          <PrintButton
+            entityType="report_admin_infra_alerts"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تنبيهات البنية التحتية", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "الخطورة": (SEVERITY_META[r.severity] ?? SEVERITY_META.info).label,
+                "التنبيه": r.title,
+                "النوع": r.type,
+                "الشركة": r.companyName || `#${r.companyId}`,
+                "الوقت": r.createdAt,
+                "الحالة": r.isDismissed ? "معتمد" : "مفتوح",
+              })),
+            })}
+          />
           {!showAcknowledged && openTotal > 0 && (
             <GuardedButton perm={["admin:update"]} size="sm" disabled={busy} onClick={() => setConfirmBulk({})}>
               <CheckCheck className="h-4 w-4 me-1" />اعتماد الكل
@@ -495,6 +514,7 @@ export default function AdminInfraAlerts() {
               <DataTable
                 columns={columns}
                 data={rows}
+                onSortedDataChange={setPrintRows}
                 noToolbar
                 pageSize={0}
                 emptyMessage={showAcknowledged ? "لا توجد تنبيهات معتمدة" : "لا توجد تنبيهات بنية تحتية مفتوحة — المنصّة تعمل بشكل طبيعي"}
