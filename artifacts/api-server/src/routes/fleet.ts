@@ -222,7 +222,7 @@ const createInsuranceSchema = z.object({
   type: z.string().optional(),
   policyNumber: z.string().optional(),
   premium: z.coerce.number().optional(),
-  coverageAmount: z.coerce.number().optional(),
+  coverageAmount: z.coerce.number().nonnegative().optional(),
   notes: z.string().optional(),
 });
 
@@ -350,7 +350,7 @@ const createPreventivePlanSchema = z.object({
   lastServiceMileage: z.coerce.number().optional(),
   nextServiceDate: z.string().optional(),
   nextServiceMileage: z.coerce.number().optional(),
-  estimatedCost: z.coerce.number().optional(),
+  estimatedCost: z.coerce.number().nonnegative().optional(),
   notes: z.string().optional(),
 });
 
@@ -359,7 +359,7 @@ const updatePreventivePlanSchema = z.object({
   nextServiceMileage: z.coerce.number().optional(),
   lastServiceDate: z.string().optional(),
   lastServiceMileage: z.coerce.number().optional(),
-  estimatedCost: z.coerce.number().optional(),
+  estimatedCost: z.coerce.number().nonnegative().optional(),
   status: z.string().optional(),
   partsUsed: z.array(z.any()).optional(),
 });
