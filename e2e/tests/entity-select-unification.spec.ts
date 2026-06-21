@@ -1,43 +1,53 @@
 // Behavioral coverage for the entity-select unification (#2741–#2773).
 //
-// The migration replaced raw native <select> / shadcn <Select> dropdowns with
-// the unified searchable component (components/shared/entity-selects.tsx →
+// The migration moved ~26 dropdowns across 8 tracks onto ONE unified
+// searchable component (components/shared/entity-selects.tsx →
 // SearchableSelectField, built on cmdk + a Radix Popover). Static checks (tsc
-// + source smoke tests) proved the code compiles and wires the right
-// component, but could NOT prove it MOUNTS and OPENS at runtime. This spec
-// closes that gap.
+// + source smoke tests) proved the code compiles and wires that component,
+// but could NOT prove the component MOUNTS and OPENS at runtime. This spec
+// closes that gap by exercising the unified component's runtime open contract.
 //
-// Contract: on a real create page, clicking the unified [role=combobox] opens
-// a cmdk search box ([cmdk-input]) — the runtime proof the Popover + Command
-// render without error (a raw shadcn <Select> opens a listbox, no cmdk).
+// Harness: the vehicle finance tab's "ربط حساب" dialog renders the unified
+// AccountSelect (the SAME buildEntitySelect engine every migrated select uses)
+// and — unlike seedless create pages — is render-guaranteed once a vehicle is
+// seeded via the API (mirrors vehicle-subsidiary-accounts.spec, which proves
+// the dialog renders; here we go one step further and prove the picker OPENS).
 //
-// Resilience: the e2e DB is the seedless admin lane, and individual create
-// pages may gate on a reference query (render a spinner/error) or otherwise
-// not expose the form there. So we probe several migrated create pages and
-// require the contract to hold on AT LEAST ONE — enough to prove the unified
-// component works at runtime, without coupling the test to one page's
-// environment-specific quirks. We do NOT assert option contents (empty lane).
-import { test, expect, type Page } from "@playwright/test";
+// Contract: clicking the unified picker opens a cmdk search box ([cmdk-input])
+// — the runtime proof the Popover + Command render without error. A raw shadcn
+// <Select> would open a listbox instead, so we click the dialog's comboboxes
+// until the cmdk box appears. We do NOT assert option contents.
+import { test, expect, request as apiRequest, type Page } from "@playwright/test";
+import { TEST_API_URL } from "../playwright.config.js";
 import { login } from "./_helpers/login";
 
-// Migrated create pages, each rendering at least one unified entity-select.
-const CANDIDATES = [
-  "/properties/maintenance/create", // UnitSelect + SupplierSelect (no page gate)
-  "/properties/buildings/create",   // PropertyOwnerSelect
-  "/properties/contracts/create",   // PropertyOwnerSelect
-  "/properties/create",             // BuildingSelect + PropertyOwnerSelect
-  "/hr/recruitment/create",         // department search
-  "/crm/create",                    // ClientSelect
-];
+const EMAIL = process.env.E2E_USER_EMAIL ?? "admin@ghayth.com";
+const PASSWORD = process.env.E2E_USER_PASSWORD ?? "Admin@123456";
 
-// Click each [role=combobox] until one opens the cmdk search box.
-async function aComboboxOpensCmdk(page: Page): Promise<boolean> {
-  const combos = page.locator('[role="combobox"]');
+// Authenticated API context with the CSRF header (mirrors vehicle-subsidiary-accounts.spec).
+async function authedContext() {
+  const ctx = await apiRequest.newContext({ baseURL: TEST_API_URL });
+  const loginRes = await ctx.post("/api/auth/login", { data: { email: EMAIL, password: PASSWORD } });
+  if (!loginRes.ok()) throw new Error(`API login failed: ${loginRes.status()} ${await loginRes.text()}`);
+  const state = await ctx.storageState();
+  const csrf = state.cookies.find((c) => c.name === "erp_csrf")?.value;
+  if (!csrf) throw new Error("Login did not set erp_csrf cookie");
+  await ctx.dispose();
+  return apiRequest.newContext({
+    baseURL: TEST_API_URL,
+    storageState: state,
+    extraHTTPHeaders: { "x-csrf-token": csrf },
+  });
+}
+
+// Click the dialog's comboboxes until one opens a cmdk search box (the unified
+// component). cmdk renders in a body-level portal, so the input is matched
+// page-scoped, not within the dialog subtree.
+async function aDialogComboboxOpensCmdk(page: Page, dialog: ReturnType<Page["locator"]>): Promise<boolean> {
+  const combos = dialog.locator('[role="combobox"]');
   const n = await combos.count();
   for (let i = 0; i < n; i++) {
-    const combo = combos.nth(i);
-    await combo.scrollIntoViewIfNeeded().catch(() => {});
-    await combo.click().catch(() => {});
+    await combos.nth(i).click().catch(() => {});
     const opened = await page
       .locator("[cmdk-input]")
       .first()
@@ -51,36 +61,42 @@ async function aComboboxOpensCmdk(page: Page): Promise<boolean> {
 }
 
 test.describe("entity-select unification — runtime mount & open", () => {
-  test("a unified searchable select mounts and opens its cmdk popover on a migrated create page", async ({ page }) => {
+  test("the unified searchable picker mounts and opens its cmdk popover (vehicle account relink dialog)", async ({ page }) => {
+    const api = await authedContext();
+
+    // Seed a vehicle + link one subsidiary account so the finance tab + relink
+    // dialog render deterministically (same setup the vehicle spec relies on).
+    const plate = `E2E-ES-${Date.now().toString().slice(-6)}`;
+    const vRes = await api.post("/api/fleet/vehicles", {
+      data: { plateNumber: plate, make: "Toyota", model: "Hiace", year: 2024, fuelType: "diesel" },
+    });
+    expect(vRes.ok(), `vehicle create: ${vRes.status()} ${await vRes.text()}`).toBeTruthy();
+    const vehicleId = (await vRes.json()).id as number;
+    expect(vehicleId).toBeGreaterThan(0);
+
+    const accRes = await api.get("/api/finance/accounts?limit=500");
+    expect(accRes.ok()).toBeTruthy();
+    const accounts: Array<{ id: number; allowPosting?: boolean }> = (await accRes.json()).data ?? [];
+    const postable = accounts.find((a) => a.allowPosting !== false);
+    expect(postable, "no postable account in COA").toBeTruthy();
+    const linkRes = await api.post("/api/finance/subsidiary-accounts", {
+      data: { entityType: "vehicle", entityId: vehicleId, accountType: "custody", accountId: postable!.id },
+    });
+    expect(linkRes.ok(), `link account: ${linkRes.status()} ${await linkRes.text()}`).toBeTruthy();
+    await api.dispose();
+
+    // UI: vehicle detail → finance tab → open the relink dialog.
     await login(page);
+    await page.goto(`/fleet/${vehicleId}`);
+    await page.getByRole("button", { name: "المالية", exact: true }).click();
+    await expect(page.getByText("الحسابات الفرعية للمركبة")).toBeVisible({ timeout: 10_000 });
 
-    let provenOn: string | null = null;
-    const visited: string[] = [];
-    for (const path of CANDIDATES) {
-      try {
-        await page.goto(path);
-        await page.waitForLoadState("networkidle");
-      } catch {
-        continue;
-      }
-      visited.push(path);
-      // Skip pages that didn't expose any combobox in this lane (gated/redirect).
-      const hasCombo = await page
-        .locator('[role="combobox"]')
-        .first()
-        .isVisible({ timeout: 4000 })
-        .catch(() => false);
-      if (!hasCombo) continue;
+    await page.getByRole("button", { name: /ربط حساب/ }).first().click();
+    const dialog = page.locator('[role="dialog"]').last();
+    await expect(dialog.getByText("الحساب من دليل الحسابات")).toBeVisible({ timeout: 10_000 });
 
-      if (await aComboboxOpensCmdk(page)) {
-        provenOn = path;
-        break;
-      }
-    }
-
-    expect(
-      provenOn,
-      `unified searchable select never opened a cmdk popover on any candidate create page. visited: ${visited.join(", ")}`,
-    ).not.toBeNull();
+    // The unified AccountSelect must open its cmdk search box on click.
+    const opened = await aDialogComboboxOpensCmdk(page, dialog);
+    expect(opened, "the unified account picker did not open a cmdk search popover").toBe(true);
   });
 });
