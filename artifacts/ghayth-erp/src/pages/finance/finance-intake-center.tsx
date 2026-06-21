@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2, XCircle, Truck } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -125,6 +127,7 @@ export default function FinanceIntakeCenter() {
   const filtered = applyFilters(rows, filters, {
     searchFields: ["customerName", "serviceType", "sourceRef"],
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns: DataTableColumn<Candidate>[] = [
     { key: "customer", header: "العميل", render: (r) => <span className="font-medium">{r.customerName ?? "—"}</span> },
@@ -159,6 +162,20 @@ export default function FinanceIntakeCenter() {
       title="مركز التلقّي المالي"
       subtitle="الوارد التشغيلي الذي ينتظر تحويله إلى قيود — النقل يقود التشغيل، والمحاسب يتصرّف ماليًا (#1715 / #1733)"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "مركز التلقّي" }]}
+      actions={
+        <PrintButton
+          entityType="report_finance_intake"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "مركز التلقّي المالي", total: printRows.length },
+            items: printRows.map((r: any) => Object.fromEntries(
+              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
+                .map((c: any) => [c.header, r[c.key] ?? "—"]),
+            )),
+          })}
+        />
+      }
     >
       <FinanceTabsNav />
       <AdvancedFilters
@@ -180,7 +197,7 @@ export default function FinanceIntakeCenter() {
           </CardContent>
         </Card>
       ) : (
-        <DataTable columns={columns} data={filtered} emptyMessage="—" pageSize={50} noToolbar />
+        <DataTable columns={columns} data={filtered} onSortedDataChange={setPrintRows} emptyMessage="—" pageSize={50} noToolbar />
       )}
 
       <Dialog open={!!dialog} onOpenChange={(o) => !o && closeDialog()}>
