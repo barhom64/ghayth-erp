@@ -17,7 +17,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const read = (p: string) => readFileSync(resolve(ROOT, p), "utf8");
 
 const MIGRATION = read("artifacts/api-server/src/migrations/394_job_postings_department_fk.sql");
-const HARDENING = read("artifacts/api-server/src/migrations/395_job_postings_department_fk_hardening.sql");
+const HARDENING = read("artifacts/api-server/src/migrations/399_job_postings_department_fk_hardening.sql");
 const ROUTE = read("artifacts/api-server/src/routes/recruitment.ts");
 
 describe("migration 394 — job_postings.departmentId FK", () => {
@@ -36,7 +36,7 @@ describe("migration 394 — job_postings.departmentId FK", () => {
   });
 });
 
-describe("migration 395 — FK hardening (post-review)", () => {
+describe("migration 399 — FK hardening (post-review)", () => {
   it("normalizes the FK to ON DELETE SET NULL defensively (drop + re-add)", () => {
     expect(HARDENING).toMatch(/DROP CONSTRAINT/);
     expect(HARDENING).toMatch(/FOREIGN KEY \("departmentId"\) REFERENCES departments\(id\) ON DELETE SET NULL/);

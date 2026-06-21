@@ -1,4 +1,4 @@
--- 395_job_postings_department_fk_hardening.sql
+-- 399_job_postings_department_fk_hardening.sql
 -- تقوية ربط القسم في الإعلانات الوظيفية (تصحيح ما بعد المراجعة لـ #2769/394):
 --
 -- (أ) تطبيع قيد المفتاح الأجنبي إلى ON DELETE SET NULL بشكل قطعي (idempotent):
