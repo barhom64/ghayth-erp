@@ -1086,6 +1086,73 @@ router.get("/accidents", authorize({ feature: "fleet.vehicles", action: "list" }
   } catch (err) { handleRouteError(err, res, "Accidents list error:"); }
 });
 
+// PATCH /accidents/:id/assess — المشرف يقيّم الحادث: يحدّد المتحمّل والكلفة فيُرحَّل
+// القيد حسب السياسة المعتمدة (الدفعة C2). يمسّ الدفتر — محروس بـfleet.vehicles.
+const assessAccidentSchema = z.object({
+  costBearer: z.enum(["company", "driver", "insurance", "customer", "tenant", "third_party"]),
+  estimatedCost: z.coerce.number().nonnegative("الكلفة يجب ألا تكون سالبة"),
+  assessmentNotes: z.string().optional(),
+});
+router.patch("/accidents/:id/assess", authorize({ feature: "fleet.vehicles", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(assessAccidentSchema.safeParse(req.body));
+
+    const [acc] = await rawQuery<{ id: number; vehicleId: number; driverId: number | null; status: string; branchId: number | null }>(
+      `SELECT id, "vehicleId", "driverId", status, "branchId" FROM fleet_accidents
+        WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!acc) throw new NotFoundError("بلاغ الحادث غير موجود");
+    if (acc.status === "closed" || acc.status === "cancelled") {
+      throw new ConflictError("لا يمكن تقييم بلاغ مغلق أو ملغى");
+    }
+
+    // تحديث التقييم أولًا (الحقيقة التشغيلية).
+    await rawExecute(
+      `UPDATE fleet_accidents
+          SET "costBearer"=$1, "estimatedCost"=$2, "assessmentNotes"=COALESCE($3,"assessmentNotes"),
+              status='assessed', "assessedByUserId"=$4, "assessedAt"=NOW(), "updatedAt"=NOW()
+        WHERE id=$5 AND "companyId"=$6`,
+      [b.costBearer, b.estimatedCost, b.assessmentNotes ?? null, scope.userId, id, scope.companyId]);
+
+    const { fleetEngine } = await import("../lib/engines/index.js");
+    const glCtx = { companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, createdBy: scope.userId };
+
+    // ترحيل القيد حسب السياسة. postAccidentGL يعكس القيد السابق تلقائيًا عند
+    // إعادة التقييم (idempotent عبر sourceKey)، ويُرجِع reversedJournalId.
+    // الكلفة الصفرية = عكس فقط بلا قيد جديد.
+    const gl = await fleetEngine.postAccidentGL(glCtx,
+      { id, vehicleId: acc.vehicleId, cost: b.estimatedCost, costBearer: b.costBearer });
+    const journalId: number | null = (gl as any)?.journalId ?? null;
+    const reversedJournalId: number | null = (gl as any)?.reversedJournalId ?? null;
+    const isReassessment = !!reversedJournalId;
+
+    if (b.estimatedCost > 0) {
+      // استرداد كلفة السائق عبر خصم راتب (عقد HR) — لا كتابة مباشرة. يُطلَب عند
+      // التقييم الأول فقط؛ تعديل المتحمّل في إعادة تقييم يتطلب تسوية خصم يدوية
+      // (لا مستهلك عكس خصم بعد) — يُسجَّل في التدقيق.
+      if (!isReassessment && b.costBearer === "driver" && acc.driverId) {
+        const [drv] = await rawQuery<{ employeeId: number | null }>(
+          `SELECT "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+          [acc.driverId, scope.companyId]);
+        if (drv?.employeeId) {
+          await fleetEngine.requestAccidentDeduction(glCtx,
+            { employeeId: drv.employeeId, accidentId: id, amount: b.estimatedCost, reason: `استرداد كلفة حادث مركبة #${acc.vehicleId}` });
+        }
+      }
+    }
+
+    void createAuditLog({ companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, userId: scope.userId,
+      action: "update", entity: "fleet_accidents", entityId: id,
+      before: { status: acc.status }, after: { status: "assessed", costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId, reassessment: isReassessment, reversedJournalId } });
+    void emitEvent({ companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.accident.assessed", entity: "fleet_accidents", entityId: id,
+      details: JSON.stringify({ costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId }) });
+
+    res.json({ data: { id, status: "assessed", costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId } });
+  } catch (err) { handleRouteError(err, res, "Accident assess error:"); }
+});
+
 router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;

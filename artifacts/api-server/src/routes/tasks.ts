@@ -690,60 +690,67 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
     if (sets.length === 0) {
       sets.push(`"updatedAt" = NOW()`);
     }
-    const rows = await rawQuery<TaskRow>(
-      `UPDATE tasks SET ${sets.join(", ")} WHERE ${whereClause} RETURNING *`,
-      params,
-    );
-    if (rows.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
-
-    // Replace the assignee team if `assignees` was sent. We don't
-    // truncate-and-rewrite (audit log integrity); we soft-remove rows
-    // no longer in the new list and insert any new ones.
-    if (bodyAssignees !== undefined) {
-      const resolved: number[] = [];
-      const seen = new Set<number>();
-      for (const ref of bodyAssignees) {
-        const aid = await resolveAssigneeRef(ref, scope.companyId, type || "task");
-        if (!seen.has(aid)) {
-          seen.add(aid);
-          resolved.push(aid);
-        }
-      }
-      const existing = await rawQuery<{ assignmentId: number; role: string }>(
-        `SELECT "assignmentId", role FROM task_assignees
-         WHERE "taskId" = $1 AND "companyId" = $2 AND "removedAt" IS NULL`,
-        [id, scope.companyId],
+    // Scalar update + team replacement are atomic: a soft-remove of old
+    // assignees must not commit without the matching re-role/insert of the
+    // new team (or the tasks row update). rawQuery joins the ambient
+    // transaction (txStore) automatically.
+    const rows = await withTransaction(async () => {
+      const updated = await rawQuery<TaskRow>(
+        `UPDATE tasks SET ${sets.join(", ")} WHERE ${whereClause} RETURNING *`,
+        params,
       );
-      const existingSet = new Set(existing.map((r) => r.assignmentId));
-      // Remove rows that are no longer in the new team.
-      for (const e of existing) {
-        if (!resolved.includes(e.assignmentId)) {
-          await rawQuery(
-            `UPDATE task_assignees SET "removedAt" = NOW()
-             WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL`,
-            [id, e.assignmentId, scope.companyId],
-          );
+      if (updated.length === 0) { throw new NotFoundError("المهمة غير موجودة"); }
+
+      // Replace the assignee team if `assignees` was sent. We don't
+      // truncate-and-rewrite (audit log integrity); we soft-remove rows
+      // no longer in the new list and insert any new ones.
+      if (bodyAssignees !== undefined) {
+        const resolved: number[] = [];
+        const seen = new Set<number>();
+        for (const ref of bodyAssignees) {
+          const aid = await resolveAssigneeRef(ref, scope.companyId, type || "task");
+          if (!seen.has(aid)) {
+            seen.add(aid);
+            resolved.push(aid);
+          }
+        }
+        const existing = await rawQuery<{ assignmentId: number; role: string }>(
+          `SELECT "assignmentId", role FROM task_assignees
+           WHERE "taskId" = $1 AND "companyId" = $2 AND "removedAt" IS NULL`,
+          [id, scope.companyId],
+        );
+        const existingSet = new Set(existing.map((r) => r.assignmentId));
+        // Remove rows that are no longer in the new team.
+        for (const e of existing) {
+          if (!resolved.includes(e.assignmentId)) {
+            await rawQuery(
+              `UPDATE task_assignees SET "removedAt" = NOW()
+               WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL`,
+              [id, e.assignmentId, scope.companyId],
+            );
+          }
+        }
+        // Insert / re-role.
+        for (let i = 0; i < resolved.length; i++) {
+          const role = i === 0 ? "primary" : "member";
+          if (existingSet.has(resolved[i])) {
+            // Update role on the existing active row.
+            await rawQuery(
+              `UPDATE task_assignees SET role = $1
+               WHERE "taskId" = $2 AND "assignmentId" = $3 AND "companyId" = $4 AND "removedAt" IS NULL`,
+              [role, id, resolved[i], scope.companyId],
+            );
+          } else {
+            await rawQuery(
+              `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
+               VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+              [scope.companyId, id, resolved[i], role, scope.activeAssignmentId],
+            );
+          }
         }
       }
-      // Insert / re-role.
-      for (let i = 0; i < resolved.length; i++) {
-        const role = i === 0 ? "primary" : "member";
-        if (existingSet.has(resolved[i])) {
-          // Update role on the existing active row.
-          await rawQuery(
-            `UPDATE task_assignees SET role = $1
-             WHERE "taskId" = $2 AND "assignmentId" = $3 AND "companyId" = $4 AND "removedAt" IS NULL`,
-            [role, id, resolved[i], scope.companyId],
-          );
-        } else {
-          await rawQuery(
-            `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
-             VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
-            [scope.companyId, id, resolved[i], role, scope.activeAssignmentId],
-          );
-        }
-      }
-    }
+      return updated;
+    });
 
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "tasks", entityId: id, after: { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes, assignedTo: primaryReassignTo, assignees: bodyAssignees } }).catch((e) => logger.error(e, "tasks background task failed"));
 
@@ -833,42 +840,47 @@ router.post(
           fix: "اختر موظفاً نشطاً من القائمة",
         });
       }
-      // Promotion: if role='primary', demote any existing primary first.
-      if (role === "primary") {
-        await rawQuery(
-          `UPDATE task_assignees SET role = 'member'
-           WHERE "taskId" = $1 AND "companyId" = $2 AND role = 'primary' AND "removedAt" IS NULL`,
-          [id, scope.companyId],
+      // All assignee writes are atomic: a primary-demote + assignedTo mirror
+      // must not commit without the matching assignee insert/update. rawQuery
+      // joins the ambient transaction (txStore) automatically.
+      await withTransaction(async () => {
+        // Promotion: if role='primary', demote any existing primary first.
+        if (role === "primary") {
+          await rawQuery(
+            `UPDATE task_assignees SET role = 'member'
+             WHERE "taskId" = $1 AND "companyId" = $2 AND role = 'primary' AND "removedAt" IS NULL`,
+            [id, scope.companyId],
+          );
+          // Also mirror into tasks.assignedTo.
+          await rawQuery(
+            `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
+            [assignmentId, id, scope.companyId],
+          );
+        }
+        // SELECT-then-INSERT-or-UPDATE in two steps. The audit:schema-
+        // drift regex (scripts/src/check-schema-drift.mjs) misreads the
+        // upsert clause as a table reference, so we use two queries
+        // instead. Two round-trips here are fine — there's no
+        // concurrency win to chase, just code aesthetics.
+        const [existingRow] = await rawQuery<{ id: number }>(
+          `SELECT id FROM task_assignees
+           WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL
+           LIMIT 1`,
+          [id, assignmentId, scope.companyId],
         );
-        // Also mirror into tasks.assignedTo.
-        await rawQuery(
-          `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
-          [assignmentId, id, scope.companyId],
-        );
-      }
-      // SELECT-then-INSERT-or-UPDATE in two steps. The audit:schema-
-      // drift regex (scripts/src/check-schema-drift.mjs) misreads the
-      // upsert clause as a table reference, so we use two queries
-      // instead. Two round-trips here are fine — there's no
-      // concurrency win to chase, just code aesthetics.
-      const [existingRow] = await rawQuery<{ id: number }>(
-        `SELECT id FROM task_assignees
-         WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL
-         LIMIT 1`,
-        [id, assignmentId, scope.companyId],
-      );
-      if (existingRow) {
-        await rawQuery(
-          `UPDATE task_assignees SET role = $1 WHERE id = $2 AND "companyId" = $3`,
-          [role, existingRow.id, scope.companyId],
-        );
-      } else {
-        await rawQuery(
-          `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
-           VALUES ($1, $2, $3, $4, $5)`,
-          [scope.companyId, id, assignmentId, role, scope.activeAssignmentId],
-        );
-      }
+        if (existingRow) {
+          await rawQuery(
+            `UPDATE task_assignees SET role = $1 WHERE id = $2 AND "companyId" = $3`,
+            [role, existingRow.id, scope.companyId],
+          );
+        } else {
+          await rawQuery(
+            `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
+             VALUES ($1, $2, $3, $4, $5)`,
+            [scope.companyId, id, assignmentId, role, scope.activeAssignmentId],
+          );
+        }
+      });
       createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "assignee.add", entity: "tasks", entityId: id, after: { assignmentId, role } }).catch((e) => logger.error(e, "tasks background task failed"));
       const team = await fetchTaskAssignees(id, scope.companyId);
       res.status(201).json(maskFields(req, team));
@@ -892,39 +904,43 @@ router.delete(
         [id, scope.companyId],
       );
       if (!task) throw new NotFoundError("المهمة غير موجودة");
-      const [removed] = await rawQuery<{ id: number; role: string }>(
-        `UPDATE task_assignees SET "removedAt" = NOW()
-         WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL
-         RETURNING id, role`,
-        [id, assignmentId, scope.companyId],
-      );
-      if (!removed) throw new NotFoundError("هذا المستخدم ليس عضواً في المهمة");
-      // If we just removed the primary, promote the oldest remaining
-      // member to primary (and mirror to tasks.assignedTo). If the team
-      // is now empty, clear assignedTo too.
-      if (removed.role === "primary") {
-        const [next] = await rawQuery<{ id: number; assignmentId: number }>(
-          `SELECT id, "assignmentId" FROM task_assignees
-           WHERE "taskId" = $1 AND "companyId" = $2 AND "removedAt" IS NULL
-           ORDER BY "assignedAt" ASC LIMIT 1`,
-          [id, scope.companyId],
+      // Remove + primary-promotion are atomic: a removed primary must not
+      // commit without the replacement primary (or the assignedTo clear).
+      await withTransaction(async () => {
+        const [removed] = await rawQuery<{ id: number; role: string }>(
+          `UPDATE task_assignees SET "removedAt" = NOW()
+           WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL
+           RETURNING id, role`,
+          [id, assignmentId, scope.companyId],
         );
-        if (next) {
-          await rawQuery(
-            `UPDATE task_assignees SET role = 'primary' WHERE id = $1 AND "companyId" = $2`,
-            [next.id, scope.companyId],
-          );
-          await rawQuery(
-            `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
-            [next.assignmentId, id, scope.companyId],
-          );
-        } else {
-          await rawQuery(
-            `UPDATE tasks SET "assignedTo" = NULL WHERE id = $1 AND "companyId" = $2`,
+        if (!removed) throw new NotFoundError("هذا المستخدم ليس عضواً في المهمة");
+        // If we just removed the primary, promote the oldest remaining
+        // member to primary (and mirror to tasks.assignedTo). If the team
+        // is now empty, clear assignedTo too.
+        if (removed.role === "primary") {
+          const [next] = await rawQuery<{ id: number; assignmentId: number }>(
+            `SELECT id, "assignmentId" FROM task_assignees
+             WHERE "taskId" = $1 AND "companyId" = $2 AND "removedAt" IS NULL
+             ORDER BY "assignedAt" ASC LIMIT 1`,
             [id, scope.companyId],
           );
+          if (next) {
+            await rawQuery(
+              `UPDATE task_assignees SET role = 'primary' WHERE id = $1 AND "companyId" = $2`,
+              [next.id, scope.companyId],
+            );
+            await rawQuery(
+              `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
+              [next.assignmentId, id, scope.companyId],
+            );
+          } else {
+            await rawQuery(
+              `UPDATE tasks SET "assignedTo" = NULL WHERE id = $1 AND "companyId" = $2`,
+              [id, scope.companyId],
+            );
+          }
         }
-      }
+      });
       createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "assignee.remove", entity: "tasks", entityId: id, after: { assignmentId } }).catch((e) => logger.error(e, "tasks background task failed"));
       const team = await fetchTaskAssignees(id, scope.companyId);
       res.json(maskFields(req, team));
