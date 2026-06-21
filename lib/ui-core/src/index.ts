@@ -80,6 +80,7 @@ export {
   FormSelectField,
   FormCheckboxField,
   FormGrid,
+  FormSection,
 } from "../../../artifacts/ghayth-erp/src/components/form-shell";
 export type {
   FormShellProps,
