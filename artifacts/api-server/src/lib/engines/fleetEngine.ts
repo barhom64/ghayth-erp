@@ -102,6 +102,85 @@ class FleetEngineImpl implements DomainEngine {
     });
   }
 
+  /**
+   * Accident assessment → GL by costBearer (الدفعة C2). يستخدم حساب المركبة
+   * الفرعي المخصّص دائمًا (resolveVehicleAccountCode، إن وُجد) كطرف المركبة —
+   * تطبيقًا لمبدأ «حساب مخصّص لكل أصل». السياسة المعتمدة:
+   *   • company  : مدين حساب المركبة، دائن النقد.
+   *   • driver   : مدين حساب المركبة، دائن النقد + (طلب خصم راتب منفصل عبر الحدث).
+   *   • insurance/customer/tenant/third_party: مدين ذمة مدينة (1131)، دائن حساب
+   *     المركبة (تعويض). موسوم بالكيان عبر سطور القيد.
+   * متوازن دائمًا (إجمالي المدين = إجمالي الدائن = الكلفة). idempotent عبر
+   * sourceKey/guardId.
+   */
+  async postAccidentGL(
+    ctx: FleetGLContext,
+    accident: { id: number; vehicleId: number; cost: number; costBearer: string; description?: string }
+  ) {
+    const cost = Number(accident.cost) || 0;
+    if (cost <= 0) return null;
+
+    const vehicleAccount = await this.resolveVehicleAccountCode(ctx.companyId, accident.vehicleId, "maintenance");
+    const vehicleCode = vehicleAccount
+      ?? await financialEngine.resolveAccountCode(ctx.companyId, "fleet_maintenance_expense", "debit", "5520");
+    const cashCode = await financialEngine.resolveAccountCode(ctx.companyId, "fleet_cash_source", "credit", "1111");
+    const costCenterId = await resolveVehicleCostCenter(ctx.companyId, accident.vehicleId);
+
+    const recoverable = ["insurance", "customer", "tenant", "third_party"].includes(accident.costBearer);
+    let lines: JournalEntryLine[];
+    if (recoverable) {
+      // الكلفة مستردّة من طرف خارجي: مدين ذمة مدينة، دائن حساب المركبة.
+      const arCode = await financialEngine.resolveAccountCode(ctx.companyId, "accounts_receivable", "debit", "1131");
+      lines = [
+        { accountCode: arCode, debit: cost, credit: 0, description: `ذمة حادث — ${accident.costBearer}`, vehicleId: accident.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: vehicleCode, debit: 0, credit: cost, description: "تعويض حادث المركبة", vehicleId: accident.vehicleId, costCenterId: costCenterId ?? undefined },
+      ];
+    } else {
+      // company / driver: الكلفة تقع على المركبة، دائن النقد. (استرداد السائق
+      // يتم عبر خصم الراتب لا في هذا القيد.)
+      lines = [
+        { accountCode: vehicleCode, debit: cost, credit: 0, description: `حادث مركبة — ${accident.costBearer}`, vehicleId: accident.vehicleId, costCenterId: costCenterId ?? undefined },
+        { accountCode: cashCode, debit: 0, credit: cost, vehicleId: accident.vehicleId, costCenterId: costCenterId ?? undefined },
+      ];
+    }
+
+    return financialEngine.postJournalEntry({
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      createdBy: ctx.createdBy,
+      ref: `ACC-${accident.id}`,
+      description: accident.description ?? `حادث مركبة #${accident.vehicleId} — يتحمّلها ${accident.costBearer}`,
+      type: "general",
+      sourceType: "fleet_accident",
+      sourceId: accident.id,
+      sourceKey: `fleet:accident:${accident.id}`,
+      guardTable: "fleet_accidents",
+      guardId: accident.id,
+      lines,
+    });
+  }
+
+  /**
+   * Driver-borne accident cost → payroll deduction via the HR event
+   * boundary (no direct write to the HR-owned payroll_deductions table).
+   * hrEngine listens to `fleet.accident.deduction_requested`.
+   */
+  async requestAccidentDeduction(
+    ctx: FleetGLContext,
+    params: { employeeId: number; accidentId: number; amount: number; reason: string }
+  ) {
+    eventBus.emit("fleet.accident.deduction_requested", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      employeeId: params.employeeId,
+      accidentId: params.accidentId,
+      amount: params.amount,
+      reason: params.reason,
+    });
+    return { requested: true, employeeId: params.employeeId, amount: params.amount };
+  }
+
   async postInsuranceGL(
     ctx: FleetGLContext,
     insurance: { id: number; vehicleId: number; premium: number; description?: string }
