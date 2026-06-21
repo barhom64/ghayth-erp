@@ -1,6 +1,8 @@
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -59,6 +61,7 @@ export default function DeferredRevenuePage() {
     `/finance/deferred-revenue/schedules${scopeSuffix}`,
   );
   const items: DeferredRevenueSchedule[] = (data?.data || []) as DeferredRevenueSchedule[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   // POST /finance/deferred-revenue/run — empty body recognises every DUE month
   // across all schedules; { scheduleId } limits it to one.
@@ -167,6 +170,18 @@ export default function DeferredRevenuePage() {
       loading={isLoading}
       actions={
         <>
+          <PrintButton
+            entityType="report_finance_deferred_revenue"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "الإيراد المؤجل", total: printRows.length },
+              items: printRows.map((r: any) => Object.fromEntries(
+                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
+                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
+              )),
+            })}
+          />
           <Button asChild variant="outline" size="sm"><Link href="/finance/journal">
             <ScrollText className="h-4 w-4 me-2" />القيود اليومية
           </Link></Button>
@@ -218,6 +233,7 @@ export default function DeferredRevenuePage() {
       <DataTable
         columns={columns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
