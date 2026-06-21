@@ -432,6 +432,61 @@ class FleetEngineImpl implements DomainEngine {
     return { requested: true, employeeId: params.employeeId, amount: params.amount };
   }
 
+  // إعدادات تكلفة الأسطول (مرآة لـgetFleetCostSettings بالراوت — يقرؤها المحرّك
+  // بنفسه تفاديًا لاعتماد محرّك→راوت). افتراضات سعودية عند غياب الإعداد.
+  private async resolveTripCostSettings(companyId: number) {
+    const D = { fuelPricePerLiter: 2.5, fuelEfficiencyKmPerLiter: 10, driverFarePerKm: 0.5, depreciationPerKm: 0.15 };
+    try {
+      const rows = await rawQuery<{ key: string; value: string | null }>(
+        `SELECT key, value FROM system_settings
+          WHERE key IN ('fleet.fuel_price_per_liter','fleet.fuel_efficiency_km_per_liter','fleet.driver_fare_per_km','fleet.depreciation_per_km')
+            AND ( "companyId" = $1 OR "companyId" IS NULL )
+          ORDER BY ("companyId" IS NULL) ASC`, [companyId]);
+      const pick = (k: string, fb: number) => {
+        const r = rows.find((x) => x.key === k); const n = r?.value == null ? NaN : Number(r.value);
+        return Number.isFinite(n) && n > 0 ? n : fb;
+      };
+      return {
+        fuelPricePerLiter: pick("fleet.fuel_price_per_liter", D.fuelPricePerLiter),
+        fuelEfficiencyKmPerLiter: pick("fleet.fuel_efficiency_km_per_liter", D.fuelEfficiencyKmPerLiter),
+        driverFarePerKm: pick("fleet.driver_fare_per_km", D.driverFarePerKm),
+        depreciationPerKm: pick("fleet.depreciation_per_km", D.depreciationPerKm),
+      };
+    } catch { return D; }
+  }
+
+  /**
+   * Compute a completed trip's actual cost (fuel/fare/depreciation from trip
+   * distance + per-company rates + tagged fuel logs) and post the completion
+   * GL — idempotent via sourceKey `fleet:trip:<id>`. Closes the gap where a
+   * driver-completed trip (POST /me/trips/:id/complete) never reached the
+   * costing the manager route does. Tagged fuel logs already posted their own
+   * GL, so their cost is excluded here (no double-count). Same money math as
+   * the manager route; the manager path's direct post wins (this no-ops then).
+   */
+  async computeAndPostTripGL(ctx: FleetGLContext, tripId: number) {
+    const [trip] = await rawQuery<{ id: number; vehicleId: number | null; distance: string | number | null }>(
+      `SELECT id, "vehicleId", distance FROM fleet_trips WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+      [tripId, ctx.companyId]);
+    if (!trip || !trip.vehicleId) return null;
+
+    const s = await this.resolveTripCostSettings(ctx.companyId);
+    const distance = Number(trip.distance) || 0;
+    const estimatedFuelCost = s.fuelEfficiencyKmPerLiter > 0 ? (distance / s.fuelEfficiencyKmPerLiter) * s.fuelPricePerLiter : 0;
+    const [fuelRow] = await rawQuery<{ total: string }>(
+      `SELECT COALESCE(SUM("totalCost"),0)::text AS total FROM fleet_fuel_logs WHERE "companyId"=$1 AND "tripId"=$2 AND "deletedAt" IS NULL`,
+      [ctx.companyId, tripId]).catch(() => [{ total: "0" }]);
+    const actualFuelFromLogs = Number(fuelRow?.total ?? 0);
+    const glFuelCost = actualFuelFromLogs > 0 ? 0 : estimatedFuelCost; // tagged fuel already posted
+    const driverFare = distance * s.driverFarePerKm;
+    const depreciation = distance * s.depreciationPerKm;
+    const totalCost = glFuelCost + driverFare + depreciation;
+    if (totalCost <= 0) return null;
+
+    return this.postTripCompletionGL(ctx,
+      { id: tripId, vehicleId: trip.vehicleId, fuelCost: glFuelCost, driverFare, depreciation, totalCost });
+  }
+
   async postTripGL(
     ctx: FleetGLContext,
     trip: { id: number; vehicleId: number; totalCost: number; driverId?: number }
