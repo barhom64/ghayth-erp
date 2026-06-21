@@ -3,13 +3,10 @@ import { PageShell } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatUmrahDate } from "@/lib/formatters";
-import { Paperclip, Download, Search } from "lucide-react";
+import { Paperclip, Download } from "lucide-react";
 import { PrintButton } from "@/components/shared/print-button";
 
 // Standalone /umrah/attachments page — surfaces every row from

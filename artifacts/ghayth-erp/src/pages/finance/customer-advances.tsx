@@ -6,11 +6,10 @@ import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import {
-  Plus, Wallet, ArrowDownToLine, Search, DollarSign,
+  Plus, Wallet, ArrowDownToLine, DollarSign,
   ChevronDown, ChevronRight, ExternalLink, Users, CheckCircle2,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -66,7 +65,7 @@ export default function CustomerAdvancesPage() {
   const [filters, setFilters] = useFilters();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  const { data, isLoading, isError, refetch } = useApiQuery<{ data: CustomerAdvance[] }>(
+  const { data, isLoading, isError } = useApiQuery<{ data: CustomerAdvance[] }>(
     ["customer-advances", filters.status],
     `/finance/customer-advances${filters.status ? `?status=${filters.status}` : ""}`,
   );
