@@ -108,6 +108,9 @@ import umrahEntitiesRouter from "./umrah-entities.js";
 // A dead-code wiring-scanner mount lives below the `router` declaration so
 // the FE↔BE wiring audit can discover the routes inside this file.
 import journeyReportsRouter from "./umrah-journey-reports.js";
+// U-07 Phase 2 — families CRUD split; imported for the wiring-scanner hint
+// below. Mounted at runtime via umrah-entities.ts (router.use(familiesRouter)).
+import familiesRouter from "./umrah-families.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -178,6 +181,7 @@ const router: IRouter = Router();
 const __WIRING_SCANNER_HINT__: boolean = false;
 if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", journeyReportsRouter);
+  router.use("/umrah", familiesRouter);
 }
 
 router.use(healthRouter);
