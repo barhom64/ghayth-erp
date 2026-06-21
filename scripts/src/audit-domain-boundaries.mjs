@@ -124,9 +124,8 @@ function inferDomain(basename) {
 // an entry the moment its write is removed; a stale entry is harmless but
 // should not linger. See plans/architecture-boundary-decisions-2026-06-21.md.
 const BASELINE = new Set([
-  // admin → HR (مادة 18): إلغاء وصول كان يحذف employee_assignments. يُعالَج في
-  // PR #2828 — يُحذف هذا السطر فور دمجه (الحارس عندها يفرضه فعليًا).
-  "admin.ts:employee_assignments",
+  // (الحذف العابر admin→employee_assignments عولِج ودُمج في #2828؛ بقي فقط
+  //  INSERT الـbootstrap المعتمد، المُدرج ضمن قسم الـbootstrap أدناه.)
   // communications (خادم) يقرر دعم/CRM ويكتب جداولهما — قرار نطاق مؤجّل.
   "communications.ts:support_tickets",
   "communications.ts:crm_opportunities",
@@ -145,6 +144,7 @@ const BASELINE = new Set([
   "auth.ts:employees",
   "auth.ts:employee_assignments",
   "admin.ts:employees",
+  "admin.ts:employee_assignments", // INSERT bootstrap فقط (الـDELETE العابر عولِج في #2828)
 
   // ── كتابات عابرة أظهرها توسيع الحارس — تحتاج فرزًا لاحقًا (دَين موثّق) ───────
   // (لم يُدخلها هذا الـPR؛ كانت قائمة على main قبل توسيع التغطية.)
