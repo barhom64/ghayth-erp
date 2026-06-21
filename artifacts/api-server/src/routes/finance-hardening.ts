@@ -139,7 +139,7 @@ const createIntercompanySchema = z.object({
   arAccountCode: z.string().default("1200"),
   apAccountCode: z.string().default("2100"),
   revenueAccountCode: z.string().default("4000"),
-  expenseAccountCode: z.string().default("5000"),
+  expenseAccountCode: z.string().default("5399"),
 });
 
 const createProjectSchema = z.object({
