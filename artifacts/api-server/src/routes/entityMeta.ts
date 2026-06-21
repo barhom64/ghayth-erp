@@ -78,6 +78,20 @@ router.post("/comments/:entityType/:entityId", authorize({ feature: "admin", act
     if (!body || !body.trim()) {
       throw new ValidationError("نص التعليق مطلوب");
     }
+    // Integrity: a document-scoped comment must target an attachment actually
+    // linked to this entity and owned by this company (no orphan/cross-tenant
+    // scoping). Tenant-safe via documents."companyId".
+    if (documentId != null) {
+      const [link] = await rawQuery(
+        `SELECT 1 FROM document_entity_links del
+         JOIN documents d ON d.id = del."documentId"
+         WHERE del."documentId" = $1 AND del."entityType" = $2 AND del."entityId" = $3
+           AND d."companyId" = $4
+         LIMIT 1`,
+        [documentId, entityType, entityId, scope.companyId],
+      );
+      if (!link) throw new ValidationError("المرفق غير مرتبط بهذا السجل");
+    }
     const rows = await rawQuery(
       `INSERT INTO entity_comments ("entityType", "entityId", "documentId", "companyId", "userId", "userName", body)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
