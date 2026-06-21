@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PageShell } from "@workspace/ui-core";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import {
   MapPin, Navigation, CheckCircle2, AlertCircle, Truck, Package,
   ExternalLink, ArrowLeft, Play, Clock,
@@ -220,6 +221,7 @@ export default function MeDriverNavigation() {
           </Link></Button>
       }
     >
+      <FleetTabsNav />
       {/* Hero status card */}
       <Card className="mt-4">
         <CardContent className="p-4">

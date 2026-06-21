@@ -11,6 +11,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -213,6 +214,7 @@ export default function AttendanceCategoriesPage() {
         { label: "فئات الحضور" },
       ]}
     >
+      {onHrRoute && <HrTabsNav />}
       {/* System categories — read-only summary */}
       <Card className="mb-4">
         <CardHeader className="pb-2">

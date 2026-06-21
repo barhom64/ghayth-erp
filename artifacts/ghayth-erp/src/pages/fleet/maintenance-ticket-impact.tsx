@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
 import { Wrench, Ticket, CheckCircle2, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -157,6 +158,7 @@ export default function MaintenanceTicketImpact() {
       subtitle="المركبة تحت الصيانة = مركبة خارج الخدمة. حوّل أثر الصيانة إلى تذكرة دعم ليتصرّف فريق التشغيل."
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "أثر الصيانة" }]}
     >
+      <FleetTabsNav />
       <div className="flex items-center gap-2 mb-4">
         <Wrench className="h-5 w-5 text-status-warning-foreground" />
         <div className="flex gap-1">

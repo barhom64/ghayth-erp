@@ -15,6 +15,7 @@ import {
   PageStatusBadge,
   type DataTableColumn,
 } from "@workspace/ui-core";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -246,6 +247,7 @@ export default function TransportServiceLines() {
         { href: "/fleet/transport/service-lines", label: "بنود الخدمة" },
       ]}
     >
+      <FleetTabsNav />
       {/* Filters */}
       <div className="flex gap-3 flex-wrap items-end">
         <div className="space-y-1">

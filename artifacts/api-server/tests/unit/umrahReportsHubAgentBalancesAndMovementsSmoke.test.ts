@@ -199,10 +199,13 @@ describe("reports hub + new pages — registration + nav", () => {
 
 describe("agent balances page — UX", () => {
   it("renders 4 KPI tiles + filters + table with stable testids", () => {
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-filter-season"');
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-filter-status"');
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-filter-outstanding"');
-    expect(AGENTS_PAGE).toContain('data-testid="agent-balances-search"');
+    // Filters unified into the canonical <AdvancedFilters> bar (was 4 bespoke
+    // controls: season/status/outstanding/search). The status enum + the
+    // season/outstanding extra-filters + the search placeholder feed it.
+    expect(AGENTS_PAGE).toMatch(/<AdvancedFilters/);
+    expect(AGENTS_PAGE).toContain('key: "seasonId"');
+    expect(AGENTS_PAGE).toContain('key: "hasOutstanding"');
+    expect(AGENTS_PAGE).toContain('searchPlaceholder: "اسم / رقم نسك / دولة..."');
     expect(AGENTS_PAGE).toContain('data-testid="agent-balances-table"');
     expect(AGENTS_PAGE).toContain("data-testid={`agent-balances-row-${r.id}`}");
     expect(AGENTS_PAGE).toContain("data-testid={`agent-balances-outstanding-${r.id}`}");

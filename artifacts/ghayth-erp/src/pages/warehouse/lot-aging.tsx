@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ export default function LotAgingPage() {
 
   return (
     <PageShell title="تقرير عمر الدفعات">
+      <WarehouseTabsNav />
       <Card className="mb-4">
         <CardContent className="pt-6 flex flex-wrap gap-3 items-end">
           <div>

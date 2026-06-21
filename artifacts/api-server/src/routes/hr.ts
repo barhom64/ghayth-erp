@@ -514,6 +514,21 @@ const excuseApprovalSchema = z.object({
   rejectionReason: z.string().optional(),
 });
 
+// عقد قائد/خادم (#2839): إعادة إسناد التكليفات النشطة لفرع بديل. مسار الإعدادات
+// (خادم لإدارة الفروع) يُنسّق تعطيل فرع، لكن **الكتابة** في جدول HR المملوك
+// (employee_assignments) تبقى هنا في المسار القائد (HR). يعمل ضمن المعاملة
+// المحيطة (rawExecute ينضمّ لـ txStore) فتبقى ذرّية مع تعطيل الفرع.
+export async function reassignActiveAssignmentsToBranch(
+  companyId: number,
+  fromBranchId: number,
+  toBranchId: number,
+): Promise<void> {
+  await rawExecute(
+    `UPDATE employee_assignments SET "branchId" = $1 WHERE "branchId" = $2 AND status = 'active' AND "companyId" = $3`,
+    [toBranchId, fromBranchId, companyId],
+  );
+}
+
 const router = Router();
 
 // Per-user check-in limiter. The /hr router runs after authMiddleware in
@@ -4277,15 +4292,24 @@ router.delete("/approval-chain-definitions/:id", authorize({ feature: "hr.employ
 router.get("/approval-requests", authorize({ feature: "hr.organization", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const statusFilter = (req.query.status as string) ?? "pending";
+    // status optional: an explicit status filters; omitting it ⇒ all statuses
+    // (the «الكل» tab of the unified filter bar). Single caller:
+    // ghayth-erp/src/pages/hr/approval-inbox.tsx (defaults to "pending").
+    const statusFilter = (req.query.status as string) || null;
+    const params: unknown[] = [scope.companyId];
+    let statusClause = "";
+    if (statusFilter) {
+      params.push(statusFilter);
+      statusClause = ` AND ar.status = $${params.length}`;
+    }
     const rows = await rawQuery<Record<string, unknown>>(
       `SELECT ar.*, e.name AS "assignedToName"
        FROM approval_requests ar
        LEFT JOIN employee_assignments ea ON ea.id = ar."assignedTo"
        LEFT JOIN employees e ON e.id = ea."employeeId" AND e."companyId" = ea."companyId" AND e."deletedAt" IS NULL
-       WHERE ar."companyId" = $1 AND ar.status = $2
+       WHERE ar."companyId" = $1${statusClause}
        ORDER BY ar."createdAt" DESC LIMIT 500`,
-      [scope.companyId, statusFilter]
+      params
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
   } catch (_e) { handleRouteError(_e, res, "approval-requests query failed"); }
