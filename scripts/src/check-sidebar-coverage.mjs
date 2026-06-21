@@ -85,6 +85,9 @@ const SUPERSEDED_BY_SHELL = new Set([
 // (detail / create / redirect-stub) can't classify. Keep this list tiny and
 // justified — every entry is an explicit exception.
 const OFF_SIDEBAR_ALLOWLIST = new Set([
+  // بوابة السائق الذاتية: صفحة البلاغات الميدانية (وقود/عطل/حادث). تُفتح من زر
+  // «البلاغات» على /me/driver، لا من القائمة الجانبية (شاشة سائق، ليست إدارية).
+  "/me/driver/reports",
   // Back-compat alias → /work-inbox (PR-4 #2163). The redirect is component-
   // level (pages/my/work-queue.tsx calls setLocation), so the route reads as
   // `component: WorkQueue` and the redirectTo/RedirectToXxx detection can't see

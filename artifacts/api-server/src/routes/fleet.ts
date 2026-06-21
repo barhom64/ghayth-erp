@@ -917,6 +917,71 @@ router.get("/me/breakdowns", authorize({ feature: "fleet.driver.me", action: "vi
   } catch (err) { handleRouteError(err, res, "Driver breakdowns list error:"); }
 });
 
+// ─── صور بلاغ العطل ──────────────────────────────────────────────────────────
+const breakdownPhotoSchema = z.object({
+  photoType: z.enum(["fault", "dashboard", "vehicle", "other"]),
+  storageKey: z.string().min(1).max(1024),
+  fileName: z.string().max(512).optional(),
+  mimeType: z.string().max(60).optional(),
+  fileSize: z.coerce.number().int().nonnegative().optional(),
+});
+
+// POST /me/breakdowns/:id/photos — السائق يرفق صورة لبلاغ عطله.
+router.post("/me/breakdowns/:id/photos", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(breakdownPhotoSchema.safeParse(req.body));
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const [bd] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM fleet_breakdowns WHERE id=$1 AND "companyId"=$2 AND "driverId"=$3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, driver.id]);
+    if (!bd) throw new NotFoundError("البلاغ غير موجود أو لا يخصّك");
+    if (bd.status === "resolved" || bd.status === "cancelled") {
+      throw new ValidationError("لا يمكن إضافة صور بعد إغلاق البلاغ");
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_breakdown_photos ("companyId","breakdownId","photoType","storageKey","fileName","mimeType","fileSize","capturedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+      [scope.companyId, id, b.photoType, b.storageKey, b.fileName ?? null, b.mimeType ?? null, b.fileSize ?? null]);
+    assertInsert(insertId, "fleet_breakdown_photos");
+    void createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "fleet_breakdown_photos", entityId: insertId,
+      after: { breakdownId: id, photoType: b.photoType, source: "driver" } });
+    res.status(201).json({ id: insertId });
+  } catch (err) { handleRouteError(err, res, "Driver breakdown photo error:"); }
+});
+
+// GET /me/breakdowns/:id/photos — صور السائق لبلاغه. (المشرف يستخدم /breakdowns/:id/photos.)
+router.get("/me/breakdowns/:id/photos", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_breakdown_photos p
+         JOIN fleet_breakdowns b ON b.id = p."breakdownId" AND b."deletedAt" IS NULL
+        WHERE p."breakdownId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL AND b."driverId"=$3
+        ORDER BY p.id ASC`, [id, scope.companyId, driver.id]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver breakdown photos list error:"); }
+});
+
+// GET /breakdowns/:id/photos — المشرف يعرض صور بلاغ (مُفلتر بالنطاق).
+router.get("/breakdowns/:id/photos", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_breakdown_photos p
+        WHERE p."breakdownId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL
+        ORDER BY p.id ASC`, [id, scope.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Breakdown photos list error:"); }
+});
+
 // GET /breakdowns — مشرف الأسطول يتابع البلاغات (مُفلتر بالنطاق).
 router.get("/breakdowns", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
@@ -928,7 +993,9 @@ router.get("/breakdowns", authorize({ feature: "fleet.vehicles", action: "list" 
     const status = (req.query.status as string) || "";
     if (status) { w += ` AND b."status" = $${idx}`; p.push(status); idx++; }
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT b.*, v."plateNumber", d.name AS "driverName"
+      `SELECT b.*, v."plateNumber", d.name AS "driverName",
+              (SELECT COUNT(*)::int FROM fleet_breakdown_photos ph
+                WHERE ph."breakdownId" = b.id AND ph."deletedAt" IS NULL) AS "photoCount"
          FROM fleet_breakdowns b
          LEFT JOIN fleet_vehicles v ON v.id = b."vehicleId" AND v."deletedAt" IS NULL
          LEFT JOIN fleet_drivers d ON d.id = b."driverId" AND d."deletedAt" IS NULL
@@ -1074,6 +1141,71 @@ router.get("/me/accidents", authorize({ feature: "fleet.driver.me", action: "vie
   } catch (err) { handleRouteError(err, res, "Driver accidents list error:"); }
 });
 
+// ─── صور بلاغ الحادث (دليل تأمين) ────────────────────────────────────────────
+const accidentPhotoSchema = z.object({
+  photoType: z.enum(["scene", "damage", "vehicle", "plate", "document", "other"]),
+  storageKey: z.string().min(1).max(1024),
+  fileName: z.string().max(512).optional(),
+  mimeType: z.string().max(60).optional(),
+  fileSize: z.coerce.number().int().nonnegative().optional(),
+});
+
+// POST /me/accidents/:id/photos — السائق يرفق صورة لبلاغ حادثه (دليل).
+router.post("/me/accidents/:id/photos", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(accidentPhotoSchema.safeParse(req.body));
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const [acc] = await rawQuery<{ id: number; status: string }>(
+      `SELECT id, status FROM fleet_accidents WHERE id=$1 AND "companyId"=$2 AND "driverId"=$3 AND "deletedAt" IS NULL`,
+      [id, scope.companyId, driver.id]);
+    if (!acc) throw new NotFoundError("البلاغ غير موجود أو لا يخصّك");
+    if (acc.status === "closed" || acc.status === "cancelled") {
+      throw new ValidationError("لا يمكن إضافة صور بعد إغلاق البلاغ");
+    }
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_accident_photos ("companyId","accidentId","photoType","storageKey","fileName","mimeType","fileSize","capturedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())`,
+      [scope.companyId, id, b.photoType, b.storageKey, b.fileName ?? null, b.mimeType ?? null, b.fileSize ?? null]);
+    assertInsert(insertId, "fleet_accident_photos");
+    void createAuditLog({ companyId: scope.companyId, userId: scope.userId,
+      action: "create", entity: "fleet_accident_photos", entityId: insertId,
+      after: { accidentId: id, photoType: b.photoType, source: "driver" } });
+    res.status(201).json({ id: insertId });
+  } catch (err) { handleRouteError(err, res, "Driver accident photo error:"); }
+});
+
+// GET /me/accidents/:id/photos — صور السائق لبلاغه.
+router.get("/me/accidents/:id/photos", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_accident_photos p
+         JOIN fleet_accidents a ON a.id = p."accidentId" AND a."deletedAt" IS NULL
+        WHERE p."accidentId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL AND a."driverId"=$3
+        ORDER BY p.id ASC`, [id, scope.companyId, driver.id]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver accident photos list error:"); }
+});
+
+// GET /accidents/:id/photos — المشرف يعرض صور الحادث (مُفلتر بالنطاق).
+router.get("/accidents/:id/photos", authorize({ feature: "fleet.vehicles", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT p.* FROM fleet_accident_photos p
+        WHERE p."accidentId"=$1 AND p."companyId"=$2 AND p."deletedAt" IS NULL
+        ORDER BY p.id ASC`, [id, scope.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Accident photos list error:"); }
+});
+
 // GET /accidents — مشرف الأسطول يتابع البلاغات (مُفلتر بالنطاق).
 router.get("/accidents", authorize({ feature: "fleet.vehicles", action: "list" }), async (req, res) => {
   try {
@@ -1085,7 +1217,9 @@ router.get("/accidents", authorize({ feature: "fleet.vehicles", action: "list" }
     const status = (req.query.status as string) || "";
     if (status) { w += ` AND a."status" = $${idx}`; p.push(status); idx++; }
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT a.*, v."plateNumber", d.name AS "driverName"
+      `SELECT a.*, v."plateNumber", d.name AS "driverName",
+              (SELECT COUNT(*)::int FROM fleet_accident_photos ph
+                WHERE ph."accidentId" = a.id AND ph."deletedAt" IS NULL) AS "photoCount"
          FROM fleet_accidents a
          LEFT JOIN fleet_vehicles v ON v.id = a."vehicleId" AND v."deletedAt" IS NULL
          LEFT JOIN fleet_drivers d ON d.id = a."driverId" AND d."deletedAt" IS NULL

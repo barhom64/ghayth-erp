@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useApiQuery, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,14 +9,12 @@ import { Building2, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
-import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 
 export default function BuildingsCreate() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { isLoading, isError } = useApiQuery<any>(["property-owners"], "/properties/owners");
   const [saving, setSaving] = useState(false);
   const { fieldErrors, validate, setApiError } = useFieldErrors();
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft("properties_buildings_create", {
@@ -25,9 +23,6 @@ export default function BuildingsCreate() {
     district: "", street: "", buildingNumber: "", postalCode: "", additionalNumber: "",
     latitude: "", longitude: "", totalArea: "", yearBuilt: "", ownerId: "",
   });
-
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState />;
 
   const buildPayload = () => ({
     ...form,
