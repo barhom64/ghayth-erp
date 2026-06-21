@@ -21,7 +21,7 @@ import {
 } from "../lib/errorHandler.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { emitEvent, createAuditLog } from "../lib/businessHelpers.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { pushToDLQ } from "../lib/eventBus.js";
 import { logger } from "../lib/logger.js";
 import { z } from "zod";
@@ -272,12 +272,7 @@ pricingRouter.post(
         details: JSON.stringify({ name: body.name }),
       }).catch((err) => pushToDLQ("event", { action: "pricing.rule.created", entityId: insertId }, err, scope.companyId));
 
-      createAuditLog({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "create",
-        entity: "pricing_rules",
-        entityId: insertId,
+      auditFromRequest(req, "create", "pricing_rules", insertId, {
         after: { name: body.name, status: body.status, conditions: body.conditions.length },
       }).catch((err) => logger.error(err, "[audit] pricing.rule.created:"));
 
@@ -335,12 +330,7 @@ pricingRouter.put(
         details: JSON.stringify({ name: body.name }),
       }).catch((err) => pushToDLQ("event", { action: "pricing.rule.updated", entityId: id }, err, scope.companyId));
 
-      createAuditLog({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "update",
-        entity: "pricing_rules",
-        entityId: id,
+      auditFromRequest(req, "update", "pricing_rules", id, {
         after: { name: body.name, status: body.status, conditions: body.conditions.length },
       }).catch((err) => logger.error(err, "[audit] pricing.rule.updated:"));
 
@@ -383,12 +373,7 @@ pricingRouter.delete(
         details: JSON.stringify({ name: existing.name }),
       }).catch((err) => pushToDLQ("event", { action: "pricing.rule.deleted", entityId: id }, err, scope.companyId));
 
-      createAuditLog({
-        companyId: scope.companyId,
-        userId: scope.userId,
-        action: "delete",
-        entity: "pricing_rules",
-        entityId: id,
+      auditFromRequest(req, "delete", "pricing_rules", id, {
         after: { name: existing.name, softDelete: true },
       }).catch((err) => logger.error(err, "[audit] pricing.rule.deleted:"));
 

@@ -112,6 +112,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
   // company/branch list cascades which this surface intentionally isn't.
   "finance-memory.ts",
+  // finance-pricing.ts: إحياء «قواعد التسعير» (مخطّط 171 المُطبّع). CRUD نقطي على
+  // pricing_rules/conditions/actions، كلّها مفلترة بـ scope.companyId داخل
+  // transactions (point-lookup/per-company، يطابق finance-amortization.ts؛ لا
+  // cascade فروع). معتمد بمراجعة المجلس «يُعتمد» + تحقّق مستقلّ.
+  "finance-pricing.ts",
   // fleet-inspections.ts: vehicle inspection + photos (متابعة النقل بالصور,
   // PR1). Mostly point operations keyed by (companyId, id) — get/update/delete/
   // approve/reject a single inspection or photo — plus one filtered list. The
@@ -369,9 +374,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // PR1) — vehicle inspection + photos CRUD, point ops keyed by
       // (companyId, id) + one filtered list; allowlisted with justification
       // (mirrors fleet-optimizer.ts, tenant-point-lookup, no branch cascade).
-      total: 131,
+      // +1 total/manualOnly: routes/finance-pricing.ts — إحياء «قواعد التسعير»
+      // (مخطّط 171 المُطبّع). CRUD نقطي + upserts على (companyId, id) داخل
+      // transactions، يطابق finance-amortization.ts؛ لا cascade فروع. allowlisted.
+      total: 132,
       helperUsers: 39,
-      manualOnly: 88,
+      manualOnly: 89,
     });
   });
 });
