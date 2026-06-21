@@ -82,10 +82,14 @@ const TransportRoutePatterns = lazy(() => import("@/pages/fleet/transport-route-
 // — drivers log in to the regular ERP, get the `driver` role, and land
 // here as their dashboard (see dashboard.tsx role-based redirect).
 const MeDriver = lazy(() => import("@/pages/fleet/me-driver"));
+const MeInspection = lazy(() => import("@/pages/fleet/me-inspection"));
+const MeDriverReports = lazy(() => import("@/pages/fleet/me-driver-reports"));
+const InspectionsReview = lazy(() => import("@/pages/fleet/inspections-review"));
 
 export const fleetRoutes = [
   { path: "/fleet", component: Fleet },
   { path: "/fleet/vehicles/create", component: VehiclesCreate },
+  { path: "/fleet/inspections", component: InspectionsReview },
   { path: "/fleet/drivers", component: Drivers },
   { path: "/fleet/drivers/create", component: DriversCreate },
   { path: "/fleet/drivers/:id", component: DriverDetail },
@@ -132,6 +136,11 @@ export const fleetRoutes = [
   // Driver self-service dashboard — appears at /me/driver. Role gate
   // happens in dashboard.tsx (drivers redirected here automatically).
   { path: "/me/driver", component: MeDriver },
+  // Driver field reports — fuel / breakdown / accident self-report.
+  { path: "/me/driver/reports", component: MeDriverReports },
+  // Driver fulfils a daily vehicle inspection (odometer + photos). Reached
+  // from the daily-inspection reminder notification + the driver dashboard card.
+  { path: "/fleet/me/inspections/:id", component: MeInspection },
   // Cargo / freight (#1354 — نقل بري للبضائع). Manifest + items CRUD.
   { path: "/fleet/cargo", component: CargoList },
   { path: "/fleet/cargo/create", component: CargoCreate },

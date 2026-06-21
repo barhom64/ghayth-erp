@@ -103,7 +103,7 @@ const createEmployeeSchema = z.object({
   dateOfBirth: z.string().optional().nullable(),
   jobTitle: z.string().optional(),
   role: z.string().optional(),
-  salary: z.coerce.number().optional(),
+  salary: z.coerce.number().nonnegative().optional(),
   branchId: z.coerce.number().optional().nullable(),
   companyId: z.coerce.number().optional().nullable(),
   departmentId: z.coerce.number().optional().nullable(),
@@ -229,7 +229,7 @@ const patchEmployeeSchema = z.object({
   jobTitle: z.string().optional().nullable(),
   jobTitleId: z.coerce.number().optional().nullable(),
   role: z.string().optional().nullable(),
-  salary: z.coerce.number().optional().nullable(),
+  salary: z.coerce.number().nonnegative().optional().nullable(),
   branchId: z.coerce.number().optional().nullable(),
   departmentId: z.coerce.number().optional().nullable(),
   status: z.string().optional().nullable(),
@@ -1964,7 +1964,7 @@ router.get("/onboarding-tasks", authorize({ feature: "hr.employees", action: "li
       params
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { logger.error(err, "Onboarding tasks error:"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Onboarding tasks error:"); }
 });
 
 router.patch("/onboarding-tasks/:id", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
@@ -2179,7 +2179,7 @@ router.get("/job-titles", authorize({ feature: "hr.employees", action: "list" })
       [scope.companyId]
     );
     res.json({ data: rows, total: rows.length });
-  } catch (err) { logger.error(err, "job-titles query failed"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "job-titles query failed"); }
 });
 
 // Migration 248 — create / update job_titles so admins can wire the

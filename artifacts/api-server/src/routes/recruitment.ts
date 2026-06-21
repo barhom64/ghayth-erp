@@ -60,8 +60,8 @@ const createPostingSchema = z.object({
   type: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   requirements: z.string().optional().nullable(),
-  salaryMin: z.coerce.number().optional().nullable(),
-  salaryMax: z.coerce.number().optional().nullable(),
+  salaryMin: z.coerce.number().nonnegative().optional().nullable(),
+  salaryMax: z.coerce.number().nonnegative().optional().nullable(),
   status: z.enum(["open", "closed", "draft", "paused"]).default("open"),
   closingDate: z.string().optional().nullable(),
   experienceLevel: z.string().optional().nullable(),
@@ -98,8 +98,8 @@ const updatePostingSchema = z.object({
   type: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   requirements: z.string().optional().nullable(),
-  salaryMin: z.coerce.number().optional().nullable(),
-  salaryMax: z.coerce.number().optional().nullable(),
+  salaryMin: z.coerce.number().nonnegative().optional().nullable(),
+  salaryMax: z.coerce.number().nonnegative().optional().nullable(),
   status: z.enum(["open", "closed", "draft", "paused"]).optional(),
   closingDate: z.string().optional().nullable(),
 });
@@ -504,15 +504,17 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
     const { empId, assignmentId } = await withTransaction(async () => {
       // 1. Mark the application hired.
       await rawExecute(
-        `UPDATE job_applications SET status = 'hired', "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE job_applications SET status = 'hired' WHERE id = $1`,
         [id],
       );
       // 2. Insert the inactive employee with its issued empNumber.
+      // hireDate lives on the assignment, not on employees; employees has no
+      // updatedAt column — both were dropped to match the head-of-main schema.
       const [empRow] = await rawQuery<{ id: number }>(
-        `INSERT INTO employees (name, phone, email, "empNumber", nationality, "nationalId", status, "hireDate", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, 'inactive', $7, NOW(), NOW())
+        `INSERT INTO employees (name, phone, email, "empNumber", nationality, "nationalId", status, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, 'inactive', NOW())
          RETURNING id`,
-        [name, phone, email, empNumber, b.nationality, b.nationalId, hireDate],
+        [name, phone, email, empNumber, b.nationality, b.nationalId],
       );
       const newEmpId = empRow.id;
       // Link the numbering assignment to the new employee row.
@@ -522,7 +524,7 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
       );
       // 3. Insert the active assignment.
       const [assignRow] = await rawQuery<{ id: number }>(
-        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "startDate", "createdAt", "updatedAt")
+        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "hireDate", "createdAt", "updatedAt")
          VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW(), NOW())
          RETURNING id`,
         [newEmpId, scope.companyId, b.branchId, b.departmentId, b.jobTitle, b.salary, hireDate],
@@ -530,7 +532,7 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
       const newAssignmentId = assignRow.id;
       // 4. Link the optional institutional fields.
       if (b.positionId) await rawExecute(`INSERT INTO employee_position_assignments ("employeeId","positionId","assignmentId","startDate","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [newEmpId, b.positionId, newAssignmentId, hireDate]);
-      if (b.teamId) await rawExecute(`INSERT INTO employee_team_memberships ("employeeId","teamId","assignmentId","joinedAt","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [newEmpId, b.teamId, newAssignmentId, hireDate]);
+      if (b.teamId) await rawExecute(`INSERT INTO employee_team_memberships ("teamId","assignmentId","startDate","createdAt") VALUES($1,$2,$3,NOW()) ON CONFLICT DO NOTHING`, [b.teamId, newAssignmentId, hireDate]);
       return { empId: newEmpId, assignmentId: newAssignmentId };
     });
     // 5. Audit + event.
