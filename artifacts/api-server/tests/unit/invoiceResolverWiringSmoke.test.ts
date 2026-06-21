@@ -69,10 +69,15 @@ describe("posting uses resolver output, not raw line fields", () => {
   });
 
   it("falls back to invRevenueCode when resolver returns null account", () => {
-    // #1945 item 6 — the fallback chain gained the product revenue map
-    // between the resolver output and the generic account:
-    //   res.resolvedAccountCode || productRevenueCodes.get(productId) || invRevenueCode
-    expect(ROUTE).toMatch(/res\.resolvedAccountCode\s*\|\|[\s\S]*?productRevenueCodes[\s\S]*?\|\|\s*invRevenueCode/);
+    // #2102 — product-revenue selection is now folded INTO the resolver,
+    // so the route fallback is simply resolver-output || generic:
+    //   res.resolvedAccountCode || invRevenueCode
+    expect(ROUTE).toMatch(/res\.resolvedAccountCode\s*\|\|\s*invRevenueCode/);
+    // The old post-resolver bolt-on must be gone — product context flows
+    // THROUGH the resolver via the injected productRevenueCodes input, so
+    // the map is never read (`.get(`) after resolution.
+    expect(ROUTE).not.toContain("productRevenueCodes.get(");
+    expect(ROUTE).toMatch(/resolveLineAllocation\(\{[\s\S]*?productRevenueCodes[\s\S]*?\}\)/);
   });
 });
 
