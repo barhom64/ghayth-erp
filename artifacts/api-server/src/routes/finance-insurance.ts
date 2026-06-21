@@ -23,6 +23,8 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { authorize } from "../lib/rbac/authorize.js";
+import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 import { postInsurancePremium, type InsuranceKind } from "../lib/engines/insuranceEngine.js";
 
 export const financeInsuranceRouter = Router();
@@ -81,6 +83,15 @@ async function handlePremium(req: Request, res: Response, kind: InsuranceKind) {
       dims: b.dims,
       currency: b.currency,
     });
+    auditFromRequest(req, "finance.insurance.premium_opened", "prepaid_amortization_schedules", result.scheduleId, {
+      after: { kind, journalId: result.journalId, premiumAmount: b.premiumAmount, prepaidAccountCode: result.prepaidAccountCode },
+    });
+    emitEvent({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "finance.insurance.premium_opened", entity: "prepaid_amortization_schedules", entityId: result.scheduleId,
+      journalId: result.journalId, scheduleId: result.scheduleId, premiumAmount: b.premiumAmount,
+      details: JSON.stringify({ kind, journalId: result.journalId, scheduleId: result.scheduleId, premiumAmount: b.premiumAmount }),
+    }).catch((e) => logger.error(e, "finance-insurance background task failed"));
     res.status(201).json({ data: result });
   } catch (err) {
     handleRouteError(err, res, "Insurance premium error:");
@@ -129,6 +140,15 @@ financeInsuranceRouter.post(
         dims: b.dims,
         currency: b.currency,
       });
+      auditFromRequest(req, "finance.insurance.premium_opened", "prepaid_amortization_schedules", result.scheduleId, {
+        after: { kind: b.kind, journalId: result.journalId, premiumAmount: b.premiumAmount, prepaidAccountCode: result.prepaidAccountCode },
+      });
+      emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "finance.insurance.premium_opened", entity: "prepaid_amortization_schedules", entityId: result.scheduleId,
+        journalId: result.journalId, scheduleId: result.scheduleId, premiumAmount: b.premiumAmount,
+        details: JSON.stringify({ kind: b.kind, journalId: result.journalId, scheduleId: result.scheduleId, premiumAmount: b.premiumAmount }),
+      }).catch((e) => logger.error(e, "finance-insurance background task failed"));
       res.status(201).json({ data: result });
     } catch (err) {
       handleRouteError(err, res, "Insurance premium error:");
