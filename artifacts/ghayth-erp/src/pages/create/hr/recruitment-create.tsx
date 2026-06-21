@@ -4,6 +4,7 @@ import { useApiMutation, useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelectField } from "@/components/shared/searchable-select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -19,7 +20,7 @@ import { TextField, TextAreaField, NumberField, FormFieldWrapper } from "@/compo
 
 const DRAFT_KEY = "hr_recruitment_create";
 const INITIAL = {
-  title: "", department: "", location: "", type: "full-time",
+  title: "", department: "", departmentId: "", location: "", type: "full-time",
   description: "", requirements: "", salaryMin: "", salaryMax: "",
   closingDate: "", experienceLevel: "", education: "", vacancies: "1",
   benefits: "", skills: "",
@@ -118,27 +119,20 @@ export default function RecruitmentCreate() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <TextField label="المسمى الوظيفي" required value={form.title} onChange={(v) => set("title", v)} placeholder="مثال: مهندس برمجيات" error={fieldErrors.title} />
-          <FormFieldWrapper label="القسم">
-            <Select value={form.department || "_none"} onValueChange={(v) => set("department", v === "_none" ? "" : v)}>
-              <SelectTrigger>
-                <SelectValue placeholder={isLoading ? "جاري التحميل..." : "اختر القسم"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">اختر القسم</SelectItem>
-                {departments.map((d: any) => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
-                {!isLoading && departments.length === 0 && (
-                  <div className="px-3 py-2 text-xs text-muted-foreground">
-                    لا توجد أقسام. أضفها من <a href="/settings/departments" className="text-status-info-foreground hover:underline">الإعدادات ← الأقسام</a>.
-                  </div>
-                )}
-                {isError && (
-                  <div className="px-3 py-2 text-xs text-status-error-foreground">
-                    تعذر تحميل قائمة الأقسام
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
-          </FormFieldWrapper>
+          <SearchableSelectField
+            label="القسم"
+            // القيمة = معرّف القسم (FK دقيق، يحسم تكرار الاسم عبر الفروع). نخزّن
+            // الاسم أيضًا للعرض (الشارة) وللتوافق؛ الخادم يفضّل المعرّف.
+            options={departments.map((d: any) => ({ value: String(d.id), label: d.name }))}
+            value={form.departmentId}
+            onValueChange={(v) => {
+              const d = departments.find((x: any) => String(x.id) === v);
+              setForm((f) => ({ ...f, departmentId: v, department: d?.name ?? "" }));
+            }}
+            placeholder={isLoading ? "جاري التحميل..." : "اختر القسم"}
+            searchPlaceholder="ابحث عن قسم..."
+            emptyText={isError ? "تعذر تحميل قائمة الأقسام" : "لا توجد أقسام — أضفها من الإعدادات ← الأقسام"}
+          />
           <TextField label="الموقع" value={form.location} onChange={(v) => set("location", v)} placeholder="المدينة أو الفرع" />
           <NumberField label="عدد الشواغر" value={form.vacancies} onChange={(v) => set("vacancies", v)} min={1} />
           <FormFieldWrapper label="مستوى الخبرة">

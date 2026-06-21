@@ -224,7 +224,7 @@ const EMIT_GAP_ALLOWLIST: AllowEntry[] = [
   { file: "src/lib/cronScheduler.ts", action: "leave.completed", missing: ["id"], cat: "A" },
   { file: "src/lib/cronScheduler.ts", action: "legal.case.created", missing: ["caseId","caseType","hearingDate"], cat: "B" },
   { file: "src/lib/umrahCommissionEngine.ts", action: "umrah.commission.calculated", missing: ["agentId","amount","commissionId","period"], cat: "B" },
-  { file: "src/lib/umrahImportEngine.ts", action: "umrah.import.confirmed", missing: ["batchId"], cat: "B" },
+  // umrah.import.confirmed batchId gap — FIXED (batchId now in the event payload).
   { file: "src/lib/umrahInvoicingEngine.ts", action: "umrah.invoice.generated", missing: ["invoiceId","pilgrimId","total"], cat: "B" },
   { file: "src/lib/umrahInvoicingEngine.ts", action: "umrah.payment.received", missing: ["amount","invoiceId","method","paymentId"], cat: "B" },
   { file: "src/lib/umrahInvoicingEngine.ts", action: "umrah.sales_invoice.created", missing: ["invoiceId"], cat: "B" },

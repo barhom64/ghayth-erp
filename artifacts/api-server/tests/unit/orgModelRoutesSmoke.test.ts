@@ -198,7 +198,11 @@ describe("Org Model — wiring (routes + nav)", () => {
     expect(ADMIN_ROUTES_SRC).toMatch(/\{ path: "\/admin\/org-model", component: AdminOrgModel \}/);
   });
 
-  it("nav entry under «إعدادات الموارد البشرية»", () => {
-    expect(NAV_SRC).toMatch(/label: "نموذج المؤسسة التشغيلي", path: "\/admin\/org-model"/);
+  it("intentionally off-sidebar (route-reachable; retired as an org-structure duplicate)", () => {
+    // UX Nav Governance — the legal_entities/positions/teams overlay duplicates
+    // the load-bearing companies/branches/departments structure, so its sidebar
+    // entry was dropped. The /admin/org-model route stays mounted for deep links
+    // — pinned in check-sidebar-coverage's OFF_SIDEBAR_ALLOWLIST.
+    expect(NAV_SRC).not.toMatch(/label: "نموذج المؤسسة التشغيلي", path: "\/admin\/org-model"/);
   });
 });

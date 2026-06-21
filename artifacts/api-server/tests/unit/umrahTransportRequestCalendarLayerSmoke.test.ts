@@ -58,7 +58,7 @@ const LEGACY_TRANSPORT_PAGE = readFileSync(
   "utf8",
 );
 const TABS_NAV = readFileSync(
-  join(REPO_ROOT, "artifacts/ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(REPO_ROOT, "artifacts/ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 
@@ -257,12 +257,12 @@ describe("U-02b M5b §D — flag, M3 gate, and legacy FE consumer untouched", ()
   });
 
   it("M5a-installed nav tab `/umrah/transport-requests` is still wired (no regression)", () => {
-    expect(TABS_NAV).toMatch(/href:\s*"\/umrah\/transport-requests"/);
+    expect(TABS_NAV).toMatch(/path:\s*"\/umrah\/transport-requests"/);
   });
 
   it("M5a-preserved legacy `/umrah/transport` nav tab is still wired", () => {
     expect(TABS_NAV).toMatch(
-      /href:\s*"\/umrah\/transport"[^}]*label:\s*"النقل"/,
+      /label:\s*"النقل والمواصلات",\s*path:\s*"\/umrah\/transport"/,
     );
   });
 });
@@ -303,6 +303,6 @@ describe("U-02b M5b §E — earlier boundary sentinels unchanged", () => {
     // Anchor on a small, distinctive assertion from each upstream
     // smoke so accidentally deleting one of them surfaces here too.
     expect(M4_PAGE_SMOKE).toMatch(/transport-requests/);
-    expect(M5A_NAV_SMOKE).toMatch(/href:\\s\*"\\\/umrah\\\/transport-requests"/);
+    expect(M5A_NAV_SMOKE).toMatch(/path:\\s\*"\\\/umrah\\\/transport-requests"/);
   });
 });

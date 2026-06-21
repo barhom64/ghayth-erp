@@ -292,20 +292,24 @@ export function PrintButton({
         onClick={() => run(primary)}
         disabled={loading || !hasRealId}
         title={!hasRealId ? "الوثيقة غير محمّلة بعد" : label}
-        className={isIconOnly ? "shrink-0" : "gap-1"}
+        className={isIconOnly ? "shrink-0" : "group/pa gap-0"}
         aria-label={label}
       >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-        {!isIconOnly && label}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4 shrink-0" />}
+        {!isIconOnly && (
+          <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover/pa:ms-1.5 group-hover/pa:max-w-[10rem] group-hover/pa:opacity-100 group-focus-visible/pa:ms-1.5 group-focus-visible/pa:max-w-[10rem] group-focus-visible/pa:opacity-100">
+            {label}
+          </span>
+        )}
       </Button>
     );
   }
 
   return (
     <div className="flex">
-      <Button variant={variant} size={size} onClick={() => run(primary)} disabled={loading || !hasRealId} title={!hasRealId ? "الوثيقة غير محمّلة بعد" : undefined} className="gap-1 rounded-l-none">
+      <Button variant={variant} size={size} onClick={() => run(primary)} disabled={loading || !hasRealId} title={!hasRealId ? "الوثيقة غير محمّلة بعد" : label} aria-label={label} className="group/pa gap-0 rounded-l-none">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : FORMAT_ICON[primary]}
-        {label}
+        <span className="max-w-0 overflow-hidden whitespace-nowrap opacity-0 transition-all duration-200 group-hover/pa:ms-1.5 group-hover/pa:max-w-[10rem] group-hover/pa:opacity-100 group-focus-visible/pa:ms-1.5 group-focus-visible/pa:max-w-[10rem] group-focus-visible/pa:opacity-100">{label}</span>
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

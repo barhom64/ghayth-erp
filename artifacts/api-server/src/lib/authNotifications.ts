@@ -16,7 +16,7 @@
  */
 import { rawQuery } from "./rawdb.js";
 import { sendMessage } from "./messageSender.js";
-import { interpolateTemplate } from "./notificationEngine.js";
+import { interpolateTemplate } from "./notificationDispatch.js";
 import { logger } from "./logger.js";
 
 interface TemplateRow {
@@ -27,7 +27,7 @@ interface TemplateRow {
 /**
  * Resolve an email template: tenant override first, else the platform
  * default (companyId IS NULL), preferring the requested language. Mirrors
- * notificationEngine.getTemplate's selection so behaviour is consistent.
+ * notificationDispatch.getTemplate's selection so behaviour is consistent.
  */
 async function getEmailTemplate(
   companyId: number,

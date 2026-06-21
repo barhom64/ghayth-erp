@@ -40,6 +40,7 @@
 //     tests/integration/umrahImportFalseSuccessContract.dynamic.test.ts
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { encryptField, blindIndex } from "../../src/lib/fieldEncryption.js";
 
 const TEST_URL_MARKERS = ["_test", "localhost:54329", "127.0.0.1:54329"];
 const dbUrl = process.env.DATABASE_URL ?? "";
@@ -183,14 +184,15 @@ d("Umrah import — false-success-prevention contract (U-08-CLOSE, #2080)", () =
     for (const seed of [SEEDED_UPD_1, SEEDED_UPD_2, SEEDED_SKIP_1]) {
       await rawQuery(
         `INSERT INTO umrah_pilgrims
-         ("companyId","branchId","seasonId","nuskNumber","fullName",nationality,status,
+         ("companyId","branchId","seasonId","nuskNumber","fullName","passportNumber","passportNumber_hash",nationality,status,
           "programDuration","overstayDays","isInsideKingdom","hasUmrahPermit",
           "createdBy","createdAt","updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,'pending',14,0,false,false,$7,NOW(),NOW())`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',14,0,false,false,$9,NOW(),NOW())`,
         [
           ids.companyId, ids.branchId, ids.seasonId,
-          seed.nuskNumber, seed.fullName, seed.nationality,
-          ids.userId,
+          seed.nuskNumber, seed.fullName,
+          encryptField(String(seed.passportNumber)), blindIndex(String(seed.passportNumber)),
+          seed.nationality, ids.userId,
         ],
       );
     }

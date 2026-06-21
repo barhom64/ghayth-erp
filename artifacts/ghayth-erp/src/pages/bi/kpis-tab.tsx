@@ -1,5 +1,7 @@
 import { Link } from "wouter";
-import { useApiQuery, asList } from "@/lib/api";
+import { useState } from "react";
+import { useApiQuery, asList, apiFetch } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +13,7 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { useAppContext } from "@/contexts/app-context";
-import { TrendingUp, Plus } from "lucide-react";
+import { TrendingUp, Plus, RefreshCw } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -23,6 +25,23 @@ export function KPIsTab() {
   const allItems = asList(kpisResp);
   const { roleLevel } = useAppContext();
   const canWrite = roleLevel >= 50;
+  const { toast } = useToast();
+  // المؤشّرات الحقيقية المتاحة للحساب الآلي — زر التحديث يظهر فقط لمن صيغته منها.
+  const { data: metricsResp } = useApiQuery<any>(["bi-kpi-metrics"], "/bi/kpis/metrics");
+  const computableKeys = new Set<string>(asList(metricsResp).map((m: any) => m.key));
+  const [refreshingId, setRefreshingId] = useState<number | null>(null);
+  const refreshKpi = async (k: any) => {
+    setRefreshingId(k.id);
+    try {
+      const r: any = await apiFetch(`/bi/kpis/${k.id}/refresh`, { method: "POST" });
+      toast({ title: "تم تحديث المؤشّر", description: `${k.name}: ${formatNumber(Number(r?.currentValue ?? 0))}` });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "تعذّر التحديث", description: e?.message || "خطأ غير متوقع" });
+    } finally {
+      setRefreshingId(null);
+    }
+  };
   const [filters, setFilters] = useFilters();
   const filtered = applyFilters(allItems, filters, {
     searchFields: ["name", "module", "description"],
@@ -34,6 +53,13 @@ export function KPIsTab() {
     { key: "module", header: "الوحدة", sortable: true, render: (k) => <span className="text-muted-foreground">{k.module || "-"}</span> },
     { key: "target", header: "الهدف", sortable: true, render: (k) => formatNumber(k.target || 0) },
     { key: "currentValue", header: "القيمة الحالية", sortable: true, render: (k) => <span className="font-bold">{formatNumber(k.currentValue || 0)}</span> },
+    ...(canWrite ? [{
+      key: "__refresh" as const, header: "", render: (k: any) => computableKeys.has(k.formula) ? (
+        <Button variant="ghost" size="sm" className="gap-1" disabled={refreshingId === k.id} onClick={() => refreshKpi(k)} title="حساب القيمة من البيانات الفعلية">
+          <RefreshCw className={`h-4 w-4 ${refreshingId === k.id ? "animate-spin" : ""}`} /> تحديث
+        </Button>
+      ) : <span className="text-xs text-muted-foreground" title="مؤشّر يدوي — صيغته ليست مؤشّرًا محسوبًا معروفًا">يدوي</span>,
+    }] : []),
   ];
 
   if (isLoading) return <LoadingSpinner />;

@@ -5,7 +5,8 @@ import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CheckCircle2, Circle, GitBranch } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
+import { CheckCircle2, Circle, GitBranch } from "lucide-react";
 
 /**
  * Admin / Journey tracking (#1604, under #1594).
@@ -78,9 +79,7 @@ export default function AdminJourneys() {
               </Button>
             ))}
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 me-1" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={refetch} />
         </div>
       }
     >

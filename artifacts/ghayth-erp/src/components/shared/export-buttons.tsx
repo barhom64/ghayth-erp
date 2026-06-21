@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Download, FileSpreadsheet, FileText, ChevronDown, Loader2, Clock } from "lucide-react";
@@ -6,10 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { notifyRateLimited, RateLimitError } from "@/lib/rate-limit-toast";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = API_BASE;
 
 async function authFetchBlob(endpoint: string, qs: string = ""): Promise<Blob> {
-  const response = await fetch(`${BASE}/api${endpoint}${qs}`, { credentials: "include" });
+  const response = await fetch(`${BASE}/api${endpoint}${qs}`, { credentials: "include", headers: { ...nativeAuthHeaders() } });
   if (response.status === 429) {
     // Surface the live cooldown so the export button (and every other
     // rate-limit-aware button on the page) ticks down "حاول بعد N ثانية…".

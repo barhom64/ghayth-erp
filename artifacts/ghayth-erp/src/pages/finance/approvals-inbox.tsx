@@ -159,7 +159,7 @@ export default function ApprovalsInboxPage() {
 
   return (
     <PageShell
-      title="صندوق الموافقات الموحد (Approvals Inbox)"
+      title="صندوق الموافقات الموحد"
       subtitle="كل ما ينتظر اعتمادك في مكان واحد — 7 أنواع طلبات من 7 صفحات مختلفة"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

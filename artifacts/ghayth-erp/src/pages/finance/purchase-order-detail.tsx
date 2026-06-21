@@ -15,6 +15,7 @@ import { ApprovalActions, ActionHistory } from "@workspace/workflow-kit";
 import { DetailPageLayout } from "@workspace/entity-kit";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
 import { PurchaseOrderReceiveSection } from "@/components/finance/purchase-order-receive-section";
+import { PurchaseOrderMatchSection } from "@/components/finance/purchase-order-match-section";
 
 export default function PurchaseOrderDetailPage() {
   const [, params] = useRoute("/finance/purchase-orders/:id");
@@ -117,6 +118,11 @@ export default function PurchaseOrderDetailPage() {
       {po && (po.status === "approved" || po.status === "partially_received" || po.status === "received" || po.status === "invoiced") && (
         <PurchaseOrderReceiveSection poId={id || po.id} poStatus={po.status} />
       )}
+
+      {/* 3-way-match → payment transitions (vendor-confirm / match-invoice /
+          schedule-payment) — the section renders only the action valid for the
+          PO's current status. */}
+      <PurchaseOrderMatchSection poId={id || po.id} poStatus={po.status} totalAmount={Number(po.totalAmount || 0)} />
 
       <Card>
         <CardHeader><CardTitle>سجل الإجراءات</CardTitle></CardHeader>

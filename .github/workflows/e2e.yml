@@ -107,6 +107,11 @@ jobs:
         # socket; any value satisfies the assertion.
         env:
           PORT: '5173'
+          # Disable the SSE realtime client in the e2e build: a persistent
+          # EventSource connection keeps the network perpetually "active" so
+          # Playwright's waitForLoadState("networkidle") never resolves and the
+          # whole suite hangs. Realtime push has its own unit coverage.
+          VITE_DISABLE_REALTIME: '1'
         run: pnpm --filter @workspace/ghayth-erp run build
 
       - name: Build api-server
@@ -138,6 +143,15 @@ jobs:
           actual_fks=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM pg_constraint c JOIN pg_class r ON c.conrelid=r.oid JOIN pg_namespace n ON r.relnamespace=n.oid WHERE c.contype='f' AND n.nspname='public';")
           echo "::notice::schema loaded — $actual_fks FKs (dump declares $expected_fks)"
           if [ "$actual_fks" -lt "$expected_fks" ]; then echo "FK shortfall — schema_post.log:"; cat /tmp/schema_post.log; exit 1; fi
+          # --- e2e genesis tenant: the schema dump is data-free, so `companies` is
+          # empty. The numbering-scheme seed migrations (213-232) seed `FROM companies`,
+          # and bootstrapCompany clones from an existing template tenant — NEITHER can
+          # seed the first-ever company on an empty DB. Pre-seed company id=1 + a branch
+          # so the booting api-server's migration replay seeds its numbering schemes and
+          # bootstrapAdminUser (needs company+branch+hr/employee_code scheme) can create
+          # admin@ghayth.com. Without this every login 403s and the whole suite fails.
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "INSERT INTO companies (id, name) VALUES (1, 'E2E Company') ON CONFLICT (id) DO NOTHING; SELECT setval(pg_get_serial_sequence('companies','id'), 1, true); INSERT INTO branches (id, \"companyId\", name) VALUES (1, 1, 'الفرع الرئيسي') ON CONFLICT (id) DO NOTHING; SELECT setval(pg_get_serial_sequence('branches','id'), 1, true);"
+          echo "::notice::e2e genesis tenant pre-seeded (company id=1 + branch id=1)"
           # NOTE: unlike guard.yml we do NOT pre-mark migrations as applied. The
           # dump is a point-in-time baseline that lags newer migrations (e.g.
           # `vendor_secrets.companyId`), so the booting api-server MUST run its
@@ -181,6 +195,15 @@ jobs:
           # DEPENDENCY-FREE: uses only Node's built-in `http` module (no
           # `npm install -g http-proxy` + NODE_PATH global-module resolution,
           # which is what made this step error out before the suite ran).
+          #
+          # ⚠️ INCIDENT FIX (2026-06-19): port 80 is privileged and the runner
+          # user is non-root, so binding it directly threw
+          # `listen EACCES: permission denied 0.0.0.0:80` — the proxy crashed on
+          # listen, `curl localhost:80` failed, and the Playwright suite NEVER
+          # ran (api-server + frontend were up; only the proxy died). Lower the
+          # unprivileged-port floor so the non-root proxy can bind :80
+          # (GitHub-hosted runners allow passwordless `sudo sysctl`).
+          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
           node -e '
             const http = require("http");
             const pipe = (req, res, port) => {
@@ -191,8 +214,11 @@ jobs:
               p.on("error", (e) => { res.statusCode = 502; res.end(String(e)); });
               req.pipe(p);
             };
-            http.createServer((req, res) => pipe(req, res, req.url.startsWith("/api") ? 8080 : 5173))
-                .listen(80, () => console.log("proxy on :80"));
+            const srv = http.createServer((req, res) => pipe(req, res, req.url.startsWith("/api") ? 8080 : 5173));
+            // Fail FAST and VISIBLY on a listen error (e.g. EACCES/EADDRINUSE)
+            // instead of an unhandled "error" event that crashes opaquely.
+            srv.on("error", (e) => { console.error("proxy listen error:", e); process.exit(1); });
+            srv.listen(80, () => console.log("proxy on :80"));
           ' > /tmp/proxy.log 2>&1 &
           echo $! > /tmp/proxy.pid
           for i in $(seq 1 15); do

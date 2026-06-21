@@ -16,10 +16,11 @@ import { useToast } from "@/hooks/use-toast";
 import { currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import {
   CheckCircle2, AlertCircle, AlertTriangle, ExternalLink, Lock,
-  Loader2, Calendar, ShieldCheck, RefreshCw, ChevronRight,
+  Loader2, Calendar, ShieldCheck, ChevronRight,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 
 /**
  * Period close pre-flight. Fans out 10 readiness queries against
@@ -348,9 +349,7 @@ export default function PeriodClosePreflightPage() {
               </Select>
             </>
           )}
-          <Button variant="outline" size="sm" onClick={refreshAll}>
-            <RefreshCw className="h-4 w-4 me-1" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={refreshAll} />
           <PrintButton
             entityType="report_finance_period_close_preflight"
             entityId={selectedPeriodId ? String(selectedPeriodId) : "list"}

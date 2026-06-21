@@ -59,6 +59,35 @@ run_step "audit:routes"       node scripts/src/audit-routes.mjs
 # "/foo/..." paths, producing /api/foo/foo/.... See scripts/src/
 # audit-route-doubling.mjs header for the canonical example.
 run_step "audit:route-doubling" node scripts/src/audit-route-doubling.mjs
+# Navigation governance gates (UX Nav Governance wave) — source-only, no DB.
+#   gate:tabs          — fails if an internal *-tabs-nav tab points at a dead /
+#                        redirect-only / create-edit-detail route.
+#   gate:quick-actions — fails if a header quick-action button points at a
+#                        redirect-only / dead route (create links are allowed).
+#   gate:nav           — fails on a sidebar dead-link, a create page in the nav
+#                        drawer, or an orphan list page (0 after the off-sidebar
+#                        recognition fixes: quick-create heuristic + documented
+#                        intentional-off-sidebar / superseded-by-shell allowlists).
+# Report-only siblings for local triage: audit:tabs / audit:quick-actions / audit:sidebar.
+run_step "gate:tabs"          pnpm -s run gate:tabs
+run_step "gate:quick-actions" pnpm -s run gate:quick-actions
+run_step "gate:nav"           pnpm -s run gate:nav
+#   gate:labels        — fails on a DUPLICATE sidebar label (same Arabic name on
+#                        two different pages → looks like a duplicated feature),
+#                        a Latin label leaking back after Arabisation, or a label
+#                        that drifted from navigation.canonical-map.ts. Stops the
+#                        label-mismatch / duplication defects from recurring.
+run_step "gate:labels"        pnpm -s run gate:labels
+#   gate:nav-titles    — fails if a PageShell page title leaks English, so page
+#                        titles stay Arabic like the sidebar (established acronyms
+#                        WPS / ZATCA / WHT / PDPL / … are allow-listed).
+run_step "gate:nav-titles"    pnpm -s run gate:nav-titles
+#   gate:subtabs       — fails if a page's in-page sub-tab (<TabsTrigger>) leaks
+#                        English; keeps the SECOND horizontal menu layer Arabic.
+run_step "gate:subtabs"       pnpm -s run gate:subtabs
+# nav-mirror: every horizontal module bar must mirror its sidebar groups (it now
+# delegates to <ModuleTabsNav>, derived from the registry) — blocks any drift.
+run_step "gate:nav-mirror"    pnpm -s run gate:nav-mirror
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a
@@ -148,6 +177,37 @@ run_step "check:button-nesting" node scripts/src/check-button-nesting.mjs
 # fails only on a NEW offender. Pure-logic fixtures guard the detector.
 run_step "check:jsx-generic-component:tests" node scripts/src/check-jsx-generic-component.test.mjs
 run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-component.mjs
+# Responsive tables: a raw <table> not inside an overflow scroll container
+# clips/breaks the layout on phone widths (the 2026-06 mobile pass wrapped
+# every offender). OFFLINE source scan; empty baseline in
+# scripts/responsive-tables-allowlist.txt — fails on any NEW unwrapped table.
+# Pure-logic fixtures guard the detector.
+run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
+run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
+# Page action-bar consistency (refresh/print/export): a hand-rolled control —
+# a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
+# / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
+# (<RefreshAction/> / <PrintButton/> / <ExportAction/>), so the same action looked
+# and behaved differently on every page before unification. OFFLINE source scan;
+# deliberate framework/section/per-row exceptions (action:path) in
+# scripts/page-actions-allowlist.txt, fails only on a NEW offender.
+# Pure-logic fixtures guard the detector.
+run_step "check:page-actions:tests" node scripts/src/check-page-actions.test.mjs
+run_step "check:page-actions" node scripts/src/check-page-actions.mjs
+# Native API origin: a relative `/api` or local `const BASE =
+# import.meta.env.BASE_URL` hits the app bundle (https://localhost), not the
+# server, inside the Capacitor native shell — so the whole data layer fails in
+# the app. The single native-aware source is API_BASE in lib/api.ts. OFFLINE
+# source scan; empty baseline in scripts/api-base-allowlist.txt. Fixtures guard
+# the detector.
+run_step "check:api-base:tests" node scripts/src/check-api-base.test.mjs
+run_step "check:api-base"       node scripts/src/check-api-base.mjs
+# Direct API fetch: a raw fetch(`${BASE}/api…`) bypasses apiFetch, so on the
+# native app it carries no Bearer token (cookies don't cross the WebView
+# origin) and 401s. Forces new API calls through apiFetch; reviewed raw
+# blob/upload sites are baselined in scripts/direct-api-fetch-allowlist.txt.
+run_step "check:direct-api-fetch:tests" node scripts/src/check-direct-api-fetch.test.mjs
+run_step "check:direct-api-fetch" node scripts/src/check-direct-api-fetch.mjs
 # Nested anchors: a wouter <Link> WITHOUT `asChild` directly wrapping <a>
 # renders <a><a> (the OUTER <a> carries href+onClick, the author's INNER <a>
 # carries content but no href). Invalid HTML — React logs a validateDOMNesting
@@ -167,6 +227,15 @@ run_step "check:link-nested-anchor" node scripts/src/check-link-nested-anchor.mj
   # returned-JSX event handlers). Pure-logic fixtures guard the detector.
   run_step "check:usememo-setstate:tests" node scripts/src/check-usememo-setstate.test.mjs
   run_step "check:usememo-setstate" node scripts/src/check-usememo-setstate.mjs
+  # RULES OF HOOKS: a React Hook called conditionally — after an early `return`,
+  # inside an if/loop/ternary, or in a plain helper function — changes the hook
+  # count between renders and throws "Rendered more hooks than during the
+  # previous render", blanking the whole page (the expenses-create / exempt-
+  # pilgrims / org-model incidents). typecheck/build pass; only manifests at
+  # runtime. AST-based scan (bundled tsc); empty baseline in
+  # scripts/hooks-rules-allowlist.txt. Pure-logic fixtures guard the detector.
+  run_step "check:hooks-rules:tests" node scripts/src/check-hooks-rules.test.mjs
+  run_step "check:hooks-rules" node scripts/src/check-hooks-rules.mjs
   # The strict account-creation limiter (registerLimiter, max 5/hour) must never
   # gate a GET probe. /api/auth/setup-state is polled on every login-page mount;
   # gating it with the registration budget 429s the probe under modest/shared-IP

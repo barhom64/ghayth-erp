@@ -4,7 +4,8 @@
 // all go through the Financial Engine for proper period checks and guards.
 
 import { financialEngine } from "./financialEngine.js";
-import { rawQuery, rawExecute } from "../rawdb.js";
+import { rawQuery, rawExecute, withTransaction } from "../rawdb.js";
+import { deriveBranchCostCenter } from "../accountingAllocation.js";
 import { registerCrossDomainHandler } from "../eventBus.js";
 import { roundTo2 } from "../businessHelpers.js";
 import type { DomainEngine } from "./domainEngineBase.js";
@@ -382,7 +383,7 @@ class HREngineImpl implements DomainEngine {
     let breakdownTrusted = false;
     const debitLines: Array<{
       accountCode: string; debit: number; credit: number;
-      employeeId?: number; departmentId?: number;
+      employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number;
     }> = [];
 
     if (payroll.breakdown && payroll.breakdown.length > 0) {
@@ -487,7 +488,7 @@ class HREngineImpl implements DomainEngine {
     // ALWAYS balances by construction.
     const deductionLines: Array<{
       accountCode: string; debit: number; credit: number;
-      employeeId?: number; departmentId?: number;
+      employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number;
     }> = [];
     if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
       let classified = 0;
@@ -520,11 +521,111 @@ class HREngineImpl implements DomainEngine {
       deductionLines.push({ accountCode: deductionsPayableCode, debit: 0, credit: otherDeductions });
     }
 
+    // ── الدفعة 2/2ب — اشتقاق مركز التكلفة + التوزيع على الفروع (يمسّ الدفتر) ──
+    // لكل موظف، نشتق وجهة (وجهات) تحميل راتبه من تخصيصات فروعه
+    // (employee_branch_allocations):
+    //   • موظف أحادي الفرع (0 أو 1 تخصيص): بُعد فقط — يُستمّ مركز التكلفة والفرع
+    //     على سطوره دون تغيير أي مبلغ. الفرع الموثوق من سطر breakdown (تعيين
+    //     الرواتب الحالي المُصفّى)، فيبقى صحيحًا بعد PATCH أو بلا تخصيص (التفعيل
+    //     السريع). التخصيص يقدّم تجاوزًا صريحًا لمركز التكلفة مُقيّدًا بمطابقة الفرع.
+    //   • موظف متعدد الفروع (>1 تخصيص بمجموع نِسَب = 100%): يُقسَّم كل سطر من سطوره
+    //     على الوجهات حسب النسبة، وبواقي التقريب على آخر حصة — فيبقى مجموع السطر
+    //     ثابتًا والقيد متوازنًا للقرش. مركز التكلفة لكل حصة: تجاوز التخصيص أو
+    //     المركز التلقائي للفرع. مجموع نِسَب ≠ 100% → نتراجع لمسار أحادي الفرع
+    //     (أمان: لا توزيع مُضلِّل). سطور الالتزام الجماعية (بلا employeeId) لا تتأثر.
+    let postedDebitLines = debitLines;
+    let postedDeductionLines = deductionLines;
+    if (payroll.breakdown && payroll.breakdown.length > 0 && breakdownTrusted) {
+      const empBranch = new Map<number, number | null>();
+      for (const e of payroll.breakdown) empBranch.set(e.employeeId, e.branchId ?? null);
+      const empIds = [...empBranch.keys()];
+
+      const allocRows = await rawQuery<{ employeeId: number; branchId: number | null; costCenterId: number | null; allocationPercent: string | number | null }>(
+        `SELECT eba."employeeId", eba."branchId", eba."costCenterId", eba."allocationPercent"
+           FROM employee_branch_allocations eba
+          WHERE eba."companyId" = $1
+            AND eba."endDate" IS NULL
+            AND eba."employeeId" = ANY($2::int[])`,
+        [ctx.companyId, empIds]
+      );
+      const allocByEmp = new Map<number, Array<{ branchId: number | null; costCenterId: number | null; percent: number }>>();
+      for (const r of allocRows) {
+        const list = allocByEmp.get(r.employeeId) ?? [];
+        list.push({ branchId: r.branchId, costCenterId: r.costCenterId, percent: roundTo2(Number(r.allocationPercent ?? 0)) });
+        allocByEmp.set(r.employeeId, list);
+      }
+
+      const branchCcCache = new Map<number, number | null>();
+      const ccForBranch = async (branchId: number | null): Promise<number | null> => {
+        if (branchId == null) return null;
+        if (!branchCcCache.has(branchId)) {
+          branchCcCache.set(branchId, await deriveBranchCostCenter(ctx.companyId, branchId));
+        }
+        return branchCcCache.get(branchId) ?? null;
+      };
+
+      // وجهات تحميل كل موظف: قائمة { branchId, costCenterId, percent } مجموعها 100.
+      type Target = { branchId: number | null; costCenterId: number | null; percent: number };
+      const empTargets = new Map<number, Target[]>();
+      for (const empId of empIds) {
+        const branchId = empBranch.get(empId) ?? null;
+        const allocs = allocByEmp.get(empId) ?? [];
+        const sumPct = roundTo2(allocs.reduce((s, a) => s + a.percent, 0));
+        if (allocs.length > 1 && sumPct === 100) {
+          // متعدد الفروع — وجهة لكل تخصيص.
+          const targets: Target[] = [];
+          for (const a of allocs) {
+            targets.push({ branchId: a.branchId, costCenterId: a.costCenterId ?? (await ccForBranch(a.branchId)), percent: a.percent });
+          }
+          empTargets.set(empId, targets);
+        } else {
+          // أحادي الفرع (سلوك الدفعة 2): الفرع من breakdown + تجاوز مطابق للفرع.
+          const override = allocs.find((a) => a.costCenterId != null && a.branchId === branchId)?.costCenterId ?? null;
+          empTargets.set(empId, [{ branchId, costCenterId: override ?? (await ccForBranch(branchId)), percent: 100 }]);
+        }
+      }
+
+      type Line = { accountCode: string; debit: number; credit: number; employeeId?: number; departmentId?: number; costCenterId?: number; branchId?: number };
+      const splitLine = (l: Line): Line[] => {
+        if (l.employeeId == null) return [l]; // سطر جماعي — لا يُمسّ.
+        const targets = empTargets.get(l.employeeId);
+        if (!targets || targets.length === 0) return [l];
+        if (targets.length === 1) {
+          const t = targets[0];
+          if (t.costCenterId != null) l.costCenterId = t.costCenterId;
+          if (t.branchId != null && l.branchId == null) l.branchId = t.branchId;
+          return [l];
+        }
+        // متعدد الوجهات — قسّم المبلغ بالنسبة، والبواقي على آخر حصة.
+        const isDebit = (l.debit ?? 0) > 0;
+        const amount = isDebit ? l.debit : l.credit;
+        const out: Line[] = [];
+        let running = 0;
+        for (let i = 0; i < targets.length; i++) {
+          const t = targets[i];
+          const share = i === targets.length - 1 ? roundTo2(amount - running) : roundTo2((amount * t.percent) / 100);
+          running = roundTo2(running + share);
+          if (share <= 0) continue;
+          out.push({
+            ...l,
+            debit: isDebit ? share : 0,
+            credit: isDebit ? 0 : share,
+            ...(t.costCenterId != null ? { costCenterId: t.costCenterId } : {}),
+            ...(t.branchId != null ? { branchId: t.branchId } : {}),
+          });
+        }
+        return out.length > 0 ? out : [l];
+      };
+
+      postedDebitLines = debitLines.flatMap(splitLine);
+      postedDeductionLines = deductionLines.flatMap(splitLine);
+    }
+
     const lines = [
-      ...debitLines,
+      ...postedDebitLines,
       { accountCode: salaryPayableCode, debit: 0, credit: bankPayout },
       { accountCode: gosiPayableCode, debit: 0, credit: gosiPayable },
-      ...deductionLines,
+      ...postedDeductionLines,
       // WHT payable — separate CR line on the ZATCA WHT-payable account.
       // Caller has already netted WHT off bankPayout so the entry balances.
       { accountCode: whtPayableCode, debit: 0, credit: totalWht },
@@ -582,6 +683,38 @@ class HREngineImpl implements DomainEngine {
         { accountCode: salaryPayableCode, debit: amount, credit: 0, description: "تسوية رواتب مستحقة" },
         { accountCode: bankCode, debit: 0, credit: amount, description: "سداد رواتب — بنك" },
       ],
+    });
+  }
+
+  // HR-002 (atomicity) — flip a run to 'posted' AND post its payment JE inside
+  // ONE transaction so the two can never diverge. The route used to flip the
+  // status, commit, THEN post the GL; a GL failure (e.g. a closed financial
+  // period) left the run 'posted' with no settlement entry — and the
+  // "already posted" guard then blocked every retry, stranding the run.
+  // withTransaction is reentrant (AsyncLocalStorage + SAVEPOINT), so the inner
+  // postPayrollPostGL joins THIS transaction: either the status flip + the JE
+  // both commit, or both roll back and the run stays at `fromStatus` for a
+  // clean retry. The UPDATE is guarded on the expected fromStatus (TOCTOU
+  // backstop on top of the route's pre-check); a no-row match returns null so
+  // the caller maps it to the same 404 it raised before — no JE is posted.
+  async postPayrollRunWithGL(
+    ctx: HRGLContext,
+    payroll: { runId: number; period: string; totalBankPayout: number; fromStatus: string }
+  ): Promise<Record<string, unknown> | null> {
+    return withTransaction(async () => {
+      const [run] = await rawQuery<Record<string, unknown>>(
+        `UPDATE payroll_runs SET status = 'posted'
+          WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL AND status = $3
+          RETURNING *`,
+        [payroll.runId, ctx.companyId, payroll.fromStatus]
+      );
+      if (!run) return null;
+      await this.postPayrollPostGL(ctx, {
+        runId: payroll.runId,
+        period: payroll.period,
+        totalBankPayout: payroll.totalBankPayout,
+      });
+      return run;
     });
   }
 
@@ -742,10 +875,31 @@ class HREngineImpl implements DomainEngine {
     sourceId?: number;
   }) {
     await rawExecute(
-      `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,"createdAt")
-       VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,NOW())`,
-      [params.companyId, params.employeeId, params.type, params.amount, params.reason]
+      `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,status,"sourceType","sourceId","createdAt")
+       VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,'pending',$6,$7,NOW())`,
+      [params.companyId, params.employeeId, params.type, params.amount, params.reason,
+       params.sourceType ?? null, params.sourceId ?? null]
     );
+  }
+
+  /**
+   * Cancel an as-yet-UNAPPLIED payroll deduction by its source (e.g. when a
+   * fleet accident is re-assessed away from the driver). Only rows not yet
+   * tied to a payroll line are voided; an already-applied deduction is left
+   * for manual adjustment (returns the count cancelled).
+   */
+  async cancelPayrollDeductionBySource(params: {
+    companyId: number; sourceType: string; sourceId: number;
+  }): Promise<number> {
+    const { affectedRows } = await rawExecute(
+      `UPDATE payroll_deductions
+          SET status = 'cancelled'
+        WHERE "companyId" = $1 AND "sourceType" = $2 AND "sourceId" = $3
+          AND "payrollLineId" IS NULL
+          AND COALESCE(status, 'pending') <> 'cancelled'`,
+      [params.companyId, params.sourceType, params.sourceId]
+    );
+    return affectedRows ?? 0;
   }
 
   /**
@@ -790,5 +944,31 @@ registerCrossDomainHandler("fleet.violation.deduction_requested", async (payload
     reason: (payload.reason as string) ?? "خصم مخالفة مرورية",
     sourceType: "fleet_traffic_violations",
     sourceId: payload.violationId as number,
+  });
+});
+
+// عقد الأسطول → HR: استرداد كلفة حادث يتحمّلها السائق عبر خصم راتب (الدفعة C2).
+// مرآةٌ لمستهلك المخالفة، بنوع/مصدر خاصّين بالحادث.
+registerCrossDomainHandler("fleet.accident.deduction_requested", async (payload) => {
+  if (!payload?.companyId || !payload?.employeeId || !payload?.amount) return;
+  await hrEngine.createPayrollDeduction({
+    companyId: payload.companyId,
+    employeeId: payload.employeeId as number,
+    type: "accident_recovery",
+    amount: payload.amount as number,
+    reason: (payload.reason as string) ?? "استرداد كلفة حادث مركبة",
+    sourceType: "fleet_accidents",
+    sourceId: payload.accidentId as number,
+  });
+});
+
+// عقد الأسطول → HR: إعادة تقييم حادث حوّلت المتحمّل بعيدًا عن السائق → ألغِ خصمه
+// غير المطبَّق تلقائيًا (متابعة مراجعة C2). الخصم المطبَّق يُترك لتسوية يدوية.
+registerCrossDomainHandler("fleet.accident.deduction_reversed", async (payload) => {
+  if (!payload?.companyId || !payload?.accidentId) return;
+  await hrEngine.cancelPayrollDeductionBySource({
+    companyId: payload.companyId,
+    sourceType: "fleet_accidents",
+    sourceId: payload.accidentId as number,
   });
 });

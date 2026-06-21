@@ -126,7 +126,7 @@ function BreakdownRows({ rows, testid, label }: {
   }
   const totalCount = rows.reduce((acc, r) => acc + num(r.count as number), 0);
   return (
-    <table className="w-full text-xs" data-testid={testid}>
+    <div className="overflow-x-auto"><table className="w-full text-xs" data-testid={testid}>
       <thead>
         <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
           <th className="p-2 font-medium">البند</th>
@@ -156,7 +156,7 @@ function BreakdownRows({ rows, testid, label }: {
           );
         })}
       </tbody>
-    </table>
+    </table></div>
   );
 }
 

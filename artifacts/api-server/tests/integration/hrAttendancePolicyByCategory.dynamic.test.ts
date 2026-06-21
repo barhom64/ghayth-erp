@@ -35,7 +35,7 @@ d("attendance policy resolver — category exemption (#1799 §F.6)", () => {
   let rawExecute: any;
   let resolveAttendancePolicy: any;
   const ids: {
-    companyId?: number;
+    companyId?: number; branchId?: number;
     workerEmployeeId?: number; workerAssignmentId?: number;
     managerEmployeeId?: number; managerAssignmentId?: number;
   } = {};
@@ -47,6 +47,7 @@ d("attendance policy resolver — category exemption (#1799 §F.6)", () => {
     for (const eId of [ids.workerEmployeeId, ids.managerEmployeeId]) {
       if (eId) await rawExecute(`DELETE FROM employees WHERE id=$1`, [eId]).catch(() => {});
     }
+    await rawExecute(`DELETE FROM branches WHERE "companyId"=$1`, [ids.companyId]).catch(() => {});
     await rawExecute(`DELETE FROM branches WHERE "companyId"=$1`, [ids.companyId]).catch(() => {});
     await rawExecute(`DELETE FROM companies WHERE id=$1 AND name=$2`, [ids.companyId, COMPANY_NAME]).catch(() => {});
   }
@@ -65,6 +66,11 @@ d("attendance policy resolver — category exemption (#1799 §F.6)", () => {
       [COMPANY_NAME]
     );
     ids.companyId = c.id as number;
+    const [br] = await rawQuery(
+      `INSERT INTO branches ("companyId", name) VALUES ($1, 'الفرع الرئيسي') RETURNING id`,
+      [ids.companyId]
+    );
+    ids.branchId = br.id as number;
 
     // Worker (default category — autoDeductionEnabled=true).
     const [wEmp] = await rawQuery(
@@ -75,10 +81,10 @@ d("attendance policy resolver — category exemption (#1799 §F.6)", () => {
     ids.workerEmployeeId = wEmp.id as number;
     const [wAsn] = await rawQuery(
       `INSERT INTO employee_assignments
-         ("employeeId","companyId","jobTitle",role,"isPrimary",status,"categoryKey")
-       VALUES ($1, $2, 'Worker', 'employee', TRUE, 'active', 'worker')
+         ("employeeId","companyId","branchId","jobTitle",role,"isPrimary",status,"categoryKey")
+       VALUES ($1, $2, $3, 'Worker', 'employee', TRUE, 'active', 'worker')
        RETURNING id`,
-      [ids.workerEmployeeId, ids.companyId]
+      [ids.workerEmployeeId, ids.companyId, ids.branchId]
     );
     ids.workerAssignmentId = wAsn.id as number;
 
@@ -91,10 +97,10 @@ d("attendance policy resolver — category exemption (#1799 §F.6)", () => {
     ids.managerEmployeeId = mEmp.id as number;
     const [mAsn] = await rawQuery(
       `INSERT INTO employee_assignments
-         ("employeeId","companyId","jobTitle",role,"isPrimary",status,"categoryKey")
-       VALUES ($1, $2, 'Manager', 'general_manager', TRUE, 'active', 'manager')
+         ("employeeId","companyId","branchId","jobTitle",role,"isPrimary",status,"categoryKey")
+       VALUES ($1, $2, $3, 'Manager', 'general_manager', TRUE, 'active', 'manager')
        RETURNING id`,
-      [ids.managerEmployeeId, ids.companyId]
+      [ids.managerEmployeeId, ids.companyId, ids.branchId]
     );
     ids.managerAssignmentId = mAsn.id as number;
   });
@@ -151,10 +157,10 @@ d("attendance policy resolver — category exemption (#1799 §F.6)", () => {
     );
     const [legacyAsn] = await rawQuery(
       `INSERT INTO employee_assignments
-         ("employeeId","companyId","jobTitle",role,"isPrimary",status)
-       VALUES ($1, $2, 'Legacy', 'employee', TRUE, 'active')
+         ("employeeId","companyId","branchId","jobTitle",role,"isPrimary",status)
+       VALUES ($1, $2, $3, 'Legacy', 'employee', TRUE, 'active')
        RETURNING id`,
-      [legacyEmp.id, ids.companyId]
+      [legacyEmp.id, ids.companyId, ids.branchId]
     );
     const policy = await resolveAttendancePolicy({
       companyId: ids.companyId, assignmentId: legacyAsn.id,

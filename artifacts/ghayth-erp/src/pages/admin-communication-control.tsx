@@ -35,8 +35,9 @@ import { toast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import {
-  Radio, Inbox, Shield, AlertOctagon, Plus, RefreshCw, FlaskConical, Phone, MessageSquare, Mail,
+  Radio, Inbox, Shield, AlertOctagon, Plus, FlaskConical, Phone, MessageSquare, Mail,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 
 interface ProviderRow {
   id: number;
@@ -249,9 +250,7 @@ export default function AdminCommunicationControl() {
       ]}
       subtitle="الـ Unified Inbox، سجل المزوّدات مع الـ failover، وقواعد منع تسريب البيانات (DLP)"
       actions={
-        <Button variant="outline" size="sm" onClick={refreshAll}>
-          <RefreshCw className="w-4 h-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={refreshAll} />
       }
     >
       <PageStateWrapper isLoading={ovLoading && !overview} error={ovError} onRetry={refetchOverview}>

@@ -36,26 +36,29 @@ import { login } from "./_helpers/login";
 // The exact tab labels HrTabsNav declares, in order.
 // Lifted from artifacts/ghayth-erp/src/components/shared/hr-tabs-nav.tsx
 // (HR-REV layout: the bar mirrors the sidebar's top-level groups 1:1).
+// مشتقّ من مجموعات قسم «الموارد البشرية» في navigation.registry عبر ModuleTabsNav.
 const HR_TABS = [
-  "لوحة HR",
-  "الموظفون",
+  "لوحة الموارد البشرية",
+  "مركز الموارد البشرية",
+  "شؤون الموظفين",
+  "التوظيف والتعيين",
   "النشاط والحضور",
   "الطلبات",
-  "الامتثال والجزاءات",
+  "المخالفات والجزاءات",
   "الأداء والتطوير",
   "الرواتب والمستحقات",
   "التقارير",
-  "الإعدادات",
+  "إعدادات الموارد البشرية",
 ] as const;
 
 // The 5 pages the user specifically called out. Each entry: URL + the
 // expected current-page breadcrumb label.
 const PAGES = [
-  { path: "/employees",       breadcrumb: "إدارة الموظفين",        activeTab: "الموظفون" },
+  { path: "/employees",       breadcrumb: "إدارة الموظفين",        activeTab: "شؤون الموظفين" },
   { path: "/hr/attendance",   breadcrumb: "الحضور والانصراف",       activeTab: "النشاط والحضور" },
   { path: "/hr/leaves",       breadcrumb: "طلبات الإجازات",         activeTab: "الطلبات" },
   { path: "/hr/training",     breadcrumb: "برامج التدريب",          activeTab: "الأداء والتطوير" },
-  { path: "/hr/violations",   breadcrumb: "المخالفات والجزاءات",    activeTab: "الامتثال والجزاءات" },
+  { path: "/hr/violations",   breadcrumb: "المخالفات والجزاءات",    activeTab: "المخالفات والجزاءات" },
 ] as const;
 
 // iPhone 13 mini portrait — a common low-width RTL mobile target.
@@ -71,7 +74,7 @@ async function gotoAndSettle(page: Page, path: string) {
   // Wait for the HrTabsNav to render — it's the marker that the layout
   // mounted and the data-fetch finished (every HR page renders it
   // immediately after PageShell).
-  await page.locator('nav a:has-text("الموظفون")').first().waitFor({
+  await page.locator('nav a:has-text("شؤون الموظفين")').first().waitFor({
     state: "visible",
     timeout: 10_000,
   });

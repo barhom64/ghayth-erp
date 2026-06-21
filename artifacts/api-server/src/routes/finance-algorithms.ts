@@ -2190,6 +2190,15 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
       );
     });
 
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "finance.cip.cost_added",
+      entity: "construction_in_progress",
+      entityId: id,
+      after: { costId, journalEntryId: journalId, amount: amt, costDate: b.costDate },
+    }).catch((e) => logger.error(e, "finance-algorithms cip-cost audit failed"));
     res.status(201).json({ costId, journalEntryId: journalId, amount: amt, cipId: id });
   } catch (err) {
     handleRouteError(err, res, "Add CIP cost error:");

@@ -220,6 +220,10 @@ export function WorkflowDefinitionsTab() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2">
+        <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+        <span>هذا المحرّك (تعريفات سير العمل) مُتجاوَز — الموافقات الفعّالة تُدار من تبويب «الموافقات». يبقى هنا للتوافق فقط ولا يُنفّذ سلاسل جديدة.</span>
+      </div>
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Workflow className="h-5 w-5" />

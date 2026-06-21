@@ -231,6 +231,8 @@ interface EntitySelectProps {
   error?: string;
   allowCreate?: boolean;
   filter?: (item: any) => boolean;
+  /** Visually hide the label (sr-only) for dense inline/toolbar contexts. */
+  hideLabel?: boolean;
 }
 
 function buildEntitySelect(config: EntitySelectConfig) {
@@ -244,6 +246,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
     error,
     allowCreate = true,
     filter,
+    hideLabel,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
     // #2134 — entities created from «+ جديد» are appended locally so they
@@ -308,6 +311,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           label={label}
           required={required}
           error={error}
+          hideLabel={hideLabel}
           options={options}
           value={value}
           onValueChange={onChange}
@@ -503,6 +507,20 @@ export const ProjectSelect = buildEntitySelect({
   ],
   getName: (r) => r?.name || r?.title || `#${r?.id}`,
   getSublabel: (r) => r?.code || "",
+});
+
+export const UnitSelect = buildEntitySelect({
+  queryKey: "property-units-list",
+  endpoint: "/properties/units?limit=500",
+  defaultLabel: "الوحدة العقارية",
+  defaultPlaceholder: "اختر الوحدة",
+  searchPlaceholder: "ابحث عن وحدة...",
+  createTitle: "إضافة وحدة",
+  createLabel: "+ وحدة جديدة",
+  createApiPath: "/properties/units",
+  createFields: [{ key: "unitNumber", label: "رقم الوحدة", required: true }],
+  getName: (r) => [r?.buildingName, r?.unitNumber].filter(Boolean).join(" - ") || `#${r?.id}`,
+  getSublabel: (r) => r?.unitType || r?.status || "",
 });
 
 export const AccountSelect = buildEntitySelect({
@@ -730,4 +748,75 @@ export const EmployeeCategorySelect = buildEntitySelect({
   getValueField: "categoryKey",
   getName: (r) => r?.labelAr || r?.labelEn || r?.categoryKey || `#${r?.id}`,
   getSublabel: (r) => r?.exemptFromAutoDeduction ? "مُعفاة من الخصم التلقائي" : "",
+});
+
+// ── كيانات جذرية كانت بلا مُحدِّد موحّد (الخطوة C) — بحث + إنشاء «+» خفيف ────────
+export const UmrahAgentSelect = buildEntitySelect({
+  queryKey: "umrah-agents-list",
+  endpoint: "/umrah/agents",
+  defaultLabel: "وكيل العمرة",
+  defaultPlaceholder: "اختر الوكيل",
+  searchPlaceholder: "ابحث عن وكيل...",
+  createTitle: "إضافة وكيل عمرة",
+  createLabel: "+ وكيل جديد",
+  createApiPath: "/umrah/agents",
+  createFields: [
+    { key: "name", label: "اسم الوكيل", required: true },
+    { key: "phone", label: "الهاتف" },
+    { key: "country", label: "الدولة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.country || "",
+});
+
+export const UmrahSeasonSelect = buildEntitySelect({
+  queryKey: "umrah-seasons-list",
+  endpoint: "/umrah/seasons",
+  defaultLabel: "موسم العمرة",
+  defaultPlaceholder: "اختر الموسم",
+  searchPlaceholder: "ابحث عن موسم...",
+  createTitle: "إضافة موسم عمرة",
+  createLabel: "+ موسم جديد",
+  createApiPath: "/umrah/seasons",
+  createFields: [
+    { key: "title", label: "اسم الموسم", required: true },
+    { key: "startDate", label: "تاريخ البداية", required: true, type: "date" },
+    { key: "endDate", label: "تاريخ النهاية", required: true, type: "date" },
+  ],
+  getName: (r) => r?.title || `#${r?.id}`,
+  getSublabel: (r) => r?.startDate ? `${r.startDate}${r.endDate ? ` → ${r.endDate}` : ""}` : "",
+});
+
+export const BuildingSelect = buildEntitySelect({
+  queryKey: "property-buildings-list",
+  endpoint: "/properties/buildings",
+  defaultLabel: "المبنى",
+  defaultPlaceholder: "اختر المبنى",
+  searchPlaceholder: "ابحث عن مبنى...",
+  createTitle: "إضافة مبنى",
+  createLabel: "+ مبنى جديد",
+  createApiPath: "/properties/buildings",
+  createFields: [
+    { key: "name", label: "اسم المبنى", required: true },
+    { key: "city", label: "المدينة" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.city || r?.address || "",
+});
+
+export const PropertyOwnerSelect = buildEntitySelect({
+  queryKey: "property-owners-list",
+  endpoint: "/properties/owners",
+  defaultLabel: "مالك العقار",
+  defaultPlaceholder: "اختر المالك",
+  searchPlaceholder: "ابحث عن مالك...",
+  createTitle: "إضافة مالك عقار",
+  createLabel: "+ مالك جديد",
+  createApiPath: "/properties/owners",
+  createFields: [
+    { key: "name", label: "اسم المالك", required: true },
+    { key: "phone", label: "الهاتف" },
+  ],
+  getName: (r) => r?.name || `#${r?.id}`,
+  getSublabel: (r) => r?.phone || "",
 });

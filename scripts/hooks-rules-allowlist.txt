@@ -1,0 +1,1 @@
+# hooks-rules allowlist — vetted exceptions only (file:line). Empty = main is clean.

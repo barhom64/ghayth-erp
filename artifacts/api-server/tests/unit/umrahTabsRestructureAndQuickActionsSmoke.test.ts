@@ -24,81 +24,34 @@ const DASHBOARD = readFileSync(
   join(import.meta.dirname!, "../../../ghayth-erp/src/pages/umrah/dashboard.tsx"),
   "utf8",
 );
+const REGISTRY = readFileSync(
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
+  "utf8",
+);
 
-describe("umrah tabs nav — restructure", () => {
-  it("splits TABS into PRIMARY_TABS + MONITORING_TABS arrays", () => {
-    // Pinning the array names ensures any refactor that flattens
-    // them back to a single list will trip the smoke + force the
-    // author to reconsider the dropdown structure.
-    expect(TABS).toMatch(/const PRIMARY_TABS: Tab\[\]/);
-    expect(TABS).toMatch(/const MONITORING_TABS: Tab\[\]/);
+describe("umrah tabs nav — derived mirror of the sidebar", () => {
+  // The 19-vs-sidebar drift this suite used to police is now structurally
+  // impossible: UmrahTabsNav derives both levels (groups + their pages) from
+  // the sidebar registry section «العمرة» via the shared ModuleTabsNav — there
+  // is no hand-built PRIMARY_TABS/MONITORING_TABS list that can diverge.
+  it("UmrahTabsNav delegates to the shared ModuleTabsNav (no hand list to drift)", () => {
+    expect(TABS).toMatch(/<ModuleTabsNav\s+section="العمرة"/);
+    expect(TABS).not.toMatch(/\bPRIMARY_TABS\b/);
+    expect(TABS).not.toMatch(/\blabel:\s*"/);
   });
 
-  it("monitoring dropdown groups compliance + runsheet + exempt + reconciliation", () => {
-    // These 4 must be in MONITORING_TABS — not in PRIMARY_TABS.
-    const monitoringBlock = TABS.match(/const MONITORING_TABS[\s\S]*?\];/);
-    expect(monitoringBlock).not.toBeNull();
-    expect(monitoringBlock![0]).toContain("/umrah/compliance");
-    expect(monitoringBlock![0]).toContain("/umrah/daily-runsheet");
-    expect(monitoringBlock![0]).toContain("/umrah/exempt-pilgrims");
-    expect(monitoringBlock![0]).toContain("/umrah/reconciliation");
+  it("the monitoring/compliance pages are reachable from the registry the bar mirrors", () => {
+    for (const p of [
+      "/umrah/compliance", "/umrah/daily-runsheet",
+      "/umrah/exempt-pilgrims", "/umrah/reconciliation",
+    ]) {
+      expect(REGISTRY).toMatch(new RegExp(`path:\\s*"${p.replace(/\//g, "\\/")}"`));
+    }
   });
 
-  it("monitoring dropdown puts compliance first (it's the summary)", () => {
-    // The compliance dashboard is the rollup view of the other 3.
-    // It should anchor the dropdown so the operator's first click
-    // lands on the overview, not a sub-report.
-    const monitoringBlock = TABS.match(/const MONITORING_TABS[\s\S]*?\];/)![0];
-    const idxCompliance = monitoringBlock.indexOf("/umrah/compliance");
-    const idxRunsheet  = monitoringBlock.indexOf("/umrah/daily-runsheet");
-    expect(idxCompliance).toBeGreaterThan(0);
-    expect(idxRunsheet).toBeGreaterThan(idxCompliance);
-  });
-
-  it("primary tabs no longer include the 4 monitoring entries", () => {
-    const primaryBlock = TABS.match(/const PRIMARY_TABS[\s\S]*?\];/)![0];
-    expect(primaryBlock).not.toContain("/umrah/compliance");
-    expect(primaryBlock).not.toContain("/umrah/daily-runsheet");
-    expect(primaryBlock).not.toContain("/umrah/exempt-pilgrims");
-    expect(primaryBlock).not.toContain("/umrah/reconciliation");
-  });
-
-  it("renders the dropdown trigger with a stable testid", () => {
-    expect(TABS).toContain('data-testid="umrah-tab-monitoring-dropdown"');
-    expect(TABS).toContain('data-testid="umrah-monitoring-menu"');
-  });
-
-  it("dropdown opens on hover AND click (operator can use either)", () => {
-    expect(TABS).toMatch(/onMouseEnter=\{\(\) => setMonitoringOpen\(true\)\}/);
-    expect(TABS).toMatch(/onClick=\{\(\) => setMonitoringOpen\(\(v\) => !v\)\}/);
-  });
-
-  it("dropdown closes on mouse-leave from the container (no permanent hover state)", () => {
-    expect(TABS).toMatch(/onMouseLeave=\{\(\) => setMonitoringOpen\(false\)\}/);
-  });
-
-  it("dropdown trigger highlights when any of the 4 monitoring pages is active", () => {
-    // monitoringActive is the boolean that drives the trigger
-    // styling — pin its derivation so a future refactor that
-    // forgets to highlight the trigger fails this test.
-    expect(TABS).toMatch(/const monitoringActive = MONITORING_TABS\.some\(\(t\) => isActive\(t, location\)\)/);
-  });
-
-  it("settings gear is a separate icon link to /umrah/settings (was hidden before)", () => {
-    expect(TABS).toContain('data-testid="umrah-tab-settings-gear"');
-    expect(TABS).toMatch(/<Link href="\/umrah\/settings"[^>]*>/);
-  });
-
-  it("isActive helper is a pure function — used by every renderable", () => {
-    // Single source of truth for active-tab logic. If a future
-    // refactor inlines the comparison in two places, the pin still
-    // passes (function exists) but the duplicated logic invites
-    // drift — keeping the helper visible discourages that.
-    expect(TABS).toMatch(/function isActive\(tab: Tab, location: string\): boolean/);
-  });
-
-  it("nav exposes a data-testid for e2e selectors", () => {
-    expect(TABS).toContain('data-testid="umrah-tabs-nav"');
+  it("settings + the umrah section are present in the registry the bar derives from", () => {
+    expect(REGISTRY).toMatch(/path:\s*"\/umrah\/settings"/);
+    expect(REGISTRY).toMatch(/title:\s*"العمرة"/);
   });
 });
 

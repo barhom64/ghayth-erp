@@ -275,7 +275,7 @@ export default function MonthlyClosePackPage() {
                 <CardTitle className="text-base">قائمة الدخل المختصرة</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <tbody>
                     <PlRow label="الإيرادات" value={pnl.data?.revenue?.total ?? 0} bold />
                     <PlRow label="تكلفة الإيرادات" value={-(pnl.data?.cogs?.total ?? 0)} />
@@ -290,7 +290,7 @@ export default function MonthlyClosePackPage() {
                       large
                     />
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
 
@@ -300,7 +300,7 @@ export default function MonthlyClosePackPage() {
                 <CardTitle className="text-base">الميزانية المختصرة</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <tbody>
                     <PlRow label="أصول متداولة" value={bs.data?.assets?.current?.total ?? 0} />
                     <PlRow label="أصول غير متداولة" value={bs.data?.assets?.nonCurrent?.total ?? 0} />
@@ -310,7 +310,7 @@ export default function MonthlyClosePackPage() {
                     <PlRow label="إجمالي الخصوم" value={bs.data?.liabilities?.total ?? 0} bold border />
                     <PlRow label="حقوق الملكية" value={bs.data?.equity?.total ?? 0} bold border large />
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
           </div>
@@ -322,7 +322,7 @@ export default function MonthlyClosePackPage() {
                 <CardTitle className="text-base">حركة النقد</CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <tbody>
                     <PlRow label="الرصيد الافتتاحي" value={cf.data?.openingCash ?? 0} />
                     <PlRow label="من التشغيل" value={cf.data?.sections?.operating?.net ?? 0} />
@@ -330,7 +330,7 @@ export default function MonthlyClosePackPage() {
                     <PlRow label="من التمويل" value={cf.data?.sections?.financing?.net ?? 0} />
                     <PlRow label="الرصيد الختامي" value={cf.data?.closingCash ?? 0} bold border large />
                   </tbody>
-                </table>
+                </table></div>
               </CardContent>
             </Card>
 
@@ -343,7 +343,7 @@ export default function MonthlyClosePackPage() {
                 {topVariances.length === 0 ? (
                   <div className="text-xs text-muted-foreground py-2">لا انحرافات</div>
                 ) : (
-                  <table className="w-full text-xs">
+                  <div className="overflow-x-auto"><table className="w-full text-xs">
                     <tbody>
                       {topVariances.map(r => (
                         <tr key={r.accountCode} className="border-b">
@@ -357,7 +357,7 @@ export default function MonthlyClosePackPage() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 )}
               </CardContent>
             </Card>

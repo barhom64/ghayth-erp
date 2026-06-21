@@ -208,7 +208,7 @@ export default function GlHealthScorePage() {
 
   return (
     <PageShell
-      title="مؤشر صحة النظام المالي (GL Health Score)"
+      title="مؤشر صحة النظام المالي"
       subtitle="نقطة واحدة من 0-100 تلخّص صحة النظام المالي الكلي مع تفصيل وإجراءات تحسين"
       breadcrumbs={[
         { href: "/finance", label: "المالية" },

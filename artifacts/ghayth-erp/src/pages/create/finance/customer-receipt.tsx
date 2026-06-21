@@ -413,7 +413,7 @@ export default function CustomerReceiptWizardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            <table className="w-full text-xs">
+            <div className="overflow-x-auto"><table className="w-full text-xs">
               <thead>
                 <tr className="text-muted-foreground border-b">
                   <th className="text-end p-1">البند</th>
@@ -441,7 +441,7 @@ export default function CustomerReceiptWizardPage() {
                   <td className="p-1 font-mono text-end text-red-700">{formatCurrency(totalAmount)}</td>
                 </tr>
               </tbody>
-            </table>
+            </table></div>
             {/* #1945 (FIN-03) — الحسابات الفعلية يحدّدها محرك الترحيل
                 (resolveAccountCode) عند الحفظ؛ لا نعرض أكوادًا ثابتة قد تخالف
                 ما يُرحَّل فعليًا (كانت 1200/1220/2110 وهي رأس غير قابل للترحيل /

@@ -24,11 +24,12 @@ import { cn } from "@/lib/utils";
 import {
   Activity, Database, Clock, AlertTriangle, Shield,
   Server, CheckCircle, XCircle, Users, Building2,
-  HardDrive, Cpu, MemoryStick, RefreshCw, Plug, Gauge,
+  HardDrive, Cpu, MemoryStick, Plug, Gauge,
   Power, PowerOff, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { RefreshAction } from "@/components/page-actions";
 
 interface SystemStopRow {
   id: number;
@@ -390,9 +391,7 @@ export default function AdminMonitoring() {
       subtitle="مراقبة صحة النظام والخدمات"
       loading={isLoading}
       actions={
-        <Button variant="outline" size="sm" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       }
     >
       <PageStateWrapper isLoading={isLoading && !health} error={error} onRetry={refetch}>
@@ -680,7 +679,7 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-surface-subtle">
                   <th className="text-start p-2">الفحص</th>
@@ -706,7 +705,7 @@ export default function AdminMonitoring() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}
@@ -720,7 +719,7 @@ export default function AdminMonitoring() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-surface-subtle">
                   <th className="text-start p-2">من</th>
@@ -737,7 +736,7 @@ export default function AdminMonitoring() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}

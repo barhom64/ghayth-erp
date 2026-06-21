@@ -20,6 +20,7 @@ import { amountTaxSplit } from "@/lib/tax-math";
 import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
 import { AlertCircle, Paperclip, Link2, Plus, Trash2, Split, Lock, ChevronDown } from "lucide-react";
 import { usePermission } from "@/components/shared/permission-gate";
+import { AdvancedSection } from "@/components/shared/advanced-section";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { CostCenterSelect, ProjectSelect, BranchSelect, DepartmentSelect, EmployeeSelect, VehicleSelect } from "@/components/shared/entity-selects";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
@@ -334,6 +335,13 @@ export default function ExpensesCreate() {
     }
   }, [isFuelScenario, fuelDerivedAmount]);
 
+  // #2238 — the journal-preview verdict gates save: a critical blocker (account
+  // not found / unbalanced / required dimension missing / illegal money source)
+  // disables the save button so the operator fixes the routing before posting,
+  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
+  // Rules of Hooks: this useState MUST be declared before the early returns below.
+  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
+
   if (accountsLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -367,18 +375,12 @@ export default function ExpensesCreate() {
   // description / account / allocation, preserving shared header fields
   // (date, branch, payment method, source treasury). Operators get the
   // multi-line workflow without a second form.
-  // #2238 — the journal-preview verdict gates save: a critical blocker (account
-  // not found / unbalanced / required dimension missing / illegal money source)
-  // disables the save button so the operator fixes the routing before posting,
-  // instead of hitting the «الحساب غير موجود» error after the save round-trip.
-  const [journalBlockers, setJournalBlockers] = useState<{ code: string; message: string }[]>([]);
-
   const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
       accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
       amount: form.amount ? null : "المبلغ مطلوب",
-      branchId: form.branchId ? null : "الفرع مطلوب",
-      costCenter: form.costCenter ? null : "مركز التكلفة مطلوب",
+      // الفرع ومركز التكلفة أبعاد اختيارية في الخلفية (.optional) — يُشتقّان من
+      // سياق الدخول والربط؛ لا يُفرضان على المستخدم (النظام يَحضُر لا يُحضَر له).
       attachmentUrl: attachmentRequired && !form.attachmentUrl ? "المرفق إلزامي — هذا النوع من العمليات يتطلب إرفاق مستند داعم" : null,
     });
     if (firstError) {
@@ -754,14 +756,22 @@ export default function ExpensesCreate() {
           )}
         </div>
 
-        <div className="border rounded-lg p-4 mb-4 space-y-3">
-          <h3 className="font-semibold text-sm text-muted-foreground">مركز التكلفة والمرجع</h3>
+        <AdvancedSection
+          perm="finance:update"
+          title="مركز التكلفة والمرجع — نمذجة محاسبية (اختياري)"
+          className="mb-4"
+          summary={
+            <span>
+              الأبعاد المحاسبية تُشتقّ تلقائيًا من الفرع والربط
+              {form.costCenter ? <> · مركز التكلفة: <b>{form.costCenter}</b></> : null}.
+            </span>
+          }
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <BranchSelect
               value={form.branchId}
               onChange={(v) => setForm({ ...form, branchId: v })}
               label="الفرع"
-              required
             />
             <DepartmentSelect
               value={form.departmentId}
@@ -771,7 +781,6 @@ export default function ExpensesCreate() {
             <CostCenterSelect
               value={form.costCenter}
               onChange={(v) => setForm({ ...form, costCenter: v })}
-              required
             />
             <ProjectSelect
               value={form.projectId}
@@ -797,7 +806,7 @@ export default function ExpensesCreate() {
               {derivedRelated.type === "property" && <PropertyUnitContextCard unitId={derivedRelated.id} section="payment" />}
             </div>
           )}
-        </div>
+        </AdvancedSection>
 
         <div className="border rounded-lg p-4 mb-4 space-y-3">
           <div className="flex items-center justify-between">

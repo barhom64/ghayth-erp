@@ -35,6 +35,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
+import { RefreshAction } from "@/components/page-actions";
 import {
   Phone, ListTree, Headphones, Users, MessageSquareText, Plus, RefreshCw,
   PlayCircle, Trash2, FlaskConical, Sparkles, AlertOctagon,
@@ -353,9 +354,7 @@ export default function AdminPbxControl() {
       ]}
       subtitle="الامتدادات، قوائم الـ IVR، التسجيلات، وطابور تحويل الصوت إلى نص"
       actions={
-        <Button variant="outline" size="sm" onClick={refreshAll}>
-          <RefreshCw className="w-4 h-4 me-1" />تحديث
-        </Button>
+        <RefreshAction onRefresh={refreshAll} />
       }
     >
       <PageStateWrapper isLoading={ovLoading && !overview} error={ovError} onRetry={refetchOv}>

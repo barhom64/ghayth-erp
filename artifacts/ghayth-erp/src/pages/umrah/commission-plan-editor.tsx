@@ -496,7 +496,7 @@ function TiersTab() {
       </div>
 
       <div className="rounded border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead className="bg-muted/40">
             <tr>
               <th className="p-2 text-start font-medium">#</th>
@@ -567,7 +567,7 @@ function TiersTab() {
               </tr>
             )}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </>
   );
