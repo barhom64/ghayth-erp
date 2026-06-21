@@ -401,8 +401,10 @@ const yearEndCloseSchema = z.object({
 
 const openingBalanceLineSchema = z.object({
   accountCode: z.string(),
-  debit: z.coerce.number(),
-  credit: z.coerce.number(),
+  // F9-B2: لا رصيد افتتاحي سالب (نمط finance-accounts). السالب خطأ إدخال —
+  // يُستعمل الجانب المقابل لعكس الإشارة لا الرقم السالب.
+  debit: z.coerce.number().min(0, "المدين لا يكون سالبًا"),
+  credit: z.coerce.number().min(0, "الدائن لا يكون سالبًا"),
 });
 
 const openingBalancesSchema = z.object({
