@@ -38,6 +38,7 @@ interface UmrahPackage {
   includesMeals?: boolean;
   includesZiyarat?: boolean;
   status?: string;
+  updatedAt?: string; // #2718 — نسخة القفل المتفائل (تُرسَل عند الحفظ)
 }
 
 interface PackageForm {
@@ -78,6 +79,11 @@ export default function UmrahPackages() {
   });
   const updateMut = useApiMutation<any, any>(() => `/umrah/packages/${editing?.id}`, "PATCH", [["umrah-packages"]], {
     onSuccess: () => { packagesQ.refetch(); closeDialog(); toast({ title: "تم تحديث الباقة بنجاح" }); },
+    // #2718 — تعارض نسخة: أبلِغ المستخدم وأعد التحميل بدل الكتابة فوق تعديل غيره.
+    onError: (e: any) => {
+      packagesQ.refetch();
+      toast({ variant: "destructive", title: e?.message || "تعذّر التحديث" });
+    },
   });
   const deleteMut = useApiMutation<any, any>(() => `/umrah/packages/${deleteId}`, "DELETE", [["umrah-packages"]], {
     onSuccess: () => { packagesQ.refetch(); setDeleteId(null); toast({ title: "تم حذف الباقة" }); },
@@ -125,7 +131,8 @@ export default function UmrahPackages() {
       includesZiyarat: form.includesZiyarat,
     };
     if (isNew) createMut.mutate(payload);
-    else updateMut.mutate(payload);
+    // #2718 — أرسل النسخة المعروفة (updatedAt) لتفعيل قفل التعارض المتفائل.
+    else updateMut.mutate({ ...payload, updatedAt: editing?.updatedAt });
   }
 
   const columns: DataTableColumn<UmrahPackage>[] = [

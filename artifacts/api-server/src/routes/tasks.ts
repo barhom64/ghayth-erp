@@ -570,6 +570,18 @@ router.patch("/:id", authorize({ feature: "tasks", action: "update", resource: {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const { title, description, type, priority, status, scheduledStart, scheduledEnd, scheduledDate, notes, assignedTo: bodyAssignedTo, assignees: bodyAssignees } = zodParse(updateTaskSchema.safeParse(req.body));
+    // كمرآة لتحقّق POST: لا يجوز أن تصبح نهاية الجدولة قبل بدايتها بعد التعديل الجزئي.
+    if (scheduledStart !== undefined || scheduledEnd !== undefined) {
+      const [cur] = await rawQuery<{ scheduledStart: string | null; scheduledEnd: string | null }>(
+        `SELECT "scheduledStart", "scheduledEnd" FROM tasks WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      const ss = scheduledStart ?? cur?.scheduledStart;
+      const se = scheduledEnd ?? cur?.scheduledEnd;
+      if (ss && se && new Date(se) < new Date(ss)) {
+        throw new ValidationError("تاريخ النهاية قبل تاريخ البداية", { field: "scheduledEnd", fix: "اختر موعد انتهاء بعد موعد البداية" });
+      }
+    }
     const sets: string[] = [];
     const params: unknown[] = [];
     let idx = 1;

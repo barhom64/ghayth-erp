@@ -20,4 +20,5 @@ artifacts/api-server/src/routes/tasks.ts::3::params::1
 # umrah PATCH /violations/:id — `sets` is initialized UNCONDITIONALLY with
 # `"updatedBy"=$3`, so $3 is always present; the array is always
 # [id, companyId, userId] (>=3). The literal WHERE only references $1,$2.
-artifacts/api-server/src/routes/umrah.ts::60::params::2
+# (handlerIndex refreshed 60→62 after restore handlers were added ahead of it.)
+artifacts/api-server/src/routes/umrah.ts::62::params::2

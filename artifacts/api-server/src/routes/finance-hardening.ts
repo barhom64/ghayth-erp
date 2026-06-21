@@ -93,7 +93,8 @@ const createBankGuaranteeSchema = z.object({
   ref: z.string().optional(),
   bank: z.string().min(1),
   beneficiary: z.string().min(1),
-  amount: z.coerce.number(),
+  // F9-B3b: قيمة الضمان البنكي موجبة قطعًا (لا صفر/سالب، ولا حالة عكس).
+  amount: z.coerce.number().positive("قيمة الضمان يجب أن تكون موجبة"),
   issueDate: z.string().min(1),
   expiryDate: z.string().min(1),
   guaranteeType: z.string().optional(),
@@ -131,7 +132,8 @@ const createIntercompanySchema = z.object({
   // where it may not even exist as a valid branch row. Branch
   // isolation queries on the destination company side then break.
   toBranchId: z.coerce.number().optional(),
-  amount: z.coerce.number(),
+  // F9-B3b: مبلغ التحويل بين الشركات موجب قطعًا (العكس تحويل مستقل بالاتجاه المعاكس).
+  amount: z.coerce.number().positive("مبلغ التحويل يجب أن يكون موجبًا"),
   description: z.string().optional(),
   transactionDate: z.string().optional(),
   arAccountCode: z.string().default("1200"),

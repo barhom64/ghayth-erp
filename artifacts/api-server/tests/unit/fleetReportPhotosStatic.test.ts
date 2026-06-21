@@ -11,7 +11,7 @@ import { join } from "node:path";
  */
 const repoRoot = join(import.meta.dirname!, "../../../..");
 const FLEET = readFileSync(join(repoRoot, "artifacts/api-server/src/routes/fleet.ts"), "utf8");
-const MIG = readFileSync(join(repoRoot, "artifacts/api-server/src/migrations/401_fleet_report_photos.sql"), "utf8");
+const MIG = readFileSync(join(repoRoot, "artifacts/api-server/src/migrations/406_fleet_report_photos.sql"), "utf8");
 
 function block(method: string, path: string): string {
   const re = new RegExp(`router\\.${method}\\("${path.replace(/\//g, "\\/")}"[\\s\\S]+?\\n\\}\\);`);
@@ -20,7 +20,7 @@ function block(method: string, path: string): string {
   return m![0];
 }
 
-describe("migration 401 — report photo tables", () => {
+describe("migration 406 — report photo tables", () => {
   it("creates accident + breakdown photo tables, CASCADE to parent, type CHECK", () => {
     expect(MIG).toMatch(/CREATE TABLE IF NOT EXISTS fleet_accident_photos/);
     expect(MIG).toMatch(/"accidentId"\s+BIGINT\s+NOT NULL REFERENCES fleet_accidents\(id\) ON DELETE CASCADE/);

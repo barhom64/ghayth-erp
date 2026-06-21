@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { useApiQuery } from "@/lib/api";
+import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageShell } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
-import { Calendar as CalendarIcon, Calendar, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield, Users, List, Grid3x3, ChevronRight, ChevronLeft } from "lucide-react";
+import { Calendar as CalendarIcon, Calendar, Flag, Clock, FileText, ListTodo, GraduationCap, IdCard, Car, Shield, Users, List, Grid3x3, ChevronRight, ChevronLeft, CalendarPlus } from "lucide-react";
 import { formatDateAr, todayLocal } from "@/lib/formatters";
 
 const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
@@ -23,7 +28,10 @@ const CATEGORY_CONFIG: Record<string, { label: string; color: string; icon: any 
   insurance_expiry: { label: "تأمين", color: "bg-emerald-100 text-emerald-700", icon: Shield },
   leave: { label: "إجازة", color: "bg-status-success-surface text-status-success-foreground", icon: Calendar },
   interview: { label: "مقابلة", color: "bg-indigo-100 text-indigo-700", icon: Users },
+  appointment: { label: "موعد", color: "bg-violet-100 text-violet-700", icon: CalendarIcon },
 };
+
+const EMPTY_APPOINTMENT = { title: "", startsAt: "", endsAt: "", location: "", description: "" };
 
 function groupByDate(events: any[]): Record<string, any[]> {
   const groups: Record<string, any[]> = {};
@@ -80,10 +88,36 @@ export default function CalendarPage() {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
 
+  const { toast } = useToast();
+  const [showCreate, setShowCreate] = useState(false);
+  const [apptForm, setApptForm] = useState(EMPTY_APPOINTMENT);
+
   const { data, isLoading, isError, refetch } = useApiQuery<any>(
     ["calendar-upcoming", days],
     `/calendar/upcoming?days=${days}`
   );
+
+  // #2704 — إنشاء موعد. يظهر فورًا في التقويم (مدمج في /upcoming) ويُولَّد له .ics.
+  const createAppt = useApiMutation<any, any>("/calendar/appointments", "POST", [["calendar-upcoming"]], {
+    onSuccess: () => { setShowCreate(false); setApptForm(EMPTY_APPOINTMENT); refetch(); toast({ title: "تم إنشاء الموعد" }); },
+  });
+  const submitAppt = () => {
+    if (!apptForm.title || !apptForm.startsAt || !apptForm.endsAt) {
+      toast({ variant: "destructive", title: "العنوان ووقتا البداية والنهاية مطلوبة" });
+      return;
+    }
+    if (new Date(apptForm.endsAt).getTime() < new Date(apptForm.startsAt).getTime()) {
+      toast({ variant: "destructive", title: "وقت النهاية قبل البداية" });
+      return;
+    }
+    createAppt.mutate({
+      title: apptForm.title,
+      startsAt: new Date(apptForm.startsAt).toISOString(),
+      endsAt: new Date(apptForm.endsAt).toISOString(),
+      location: apptForm.location || undefined,
+      description: apptForm.description || undefined,
+    });
+  };
 
   const allEvents = data?.events || [];
   const summary = data?.summary || {};
@@ -104,6 +138,9 @@ export default function CalendarPage() {
       breadcrumbs={[{ label: "العمليات" }, { label: "التقويم" }]}
       actions={
         <div className="flex items-center gap-2">
+          <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => setShowCreate(true)}>
+            <CalendarPlus className="h-3.5 w-3.5" /> إضافة موعد
+          </Button>
           <div className="flex rounded-md border bg-muted/30 p-0.5">
             <Button
               variant={view === "list" ? "default" : "ghost"}
@@ -136,6 +173,7 @@ export default function CalendarPage() {
               <SelectItem value="insurance_expiry">التأمين</SelectItem>
               <SelectItem value="leave">الإجازات</SelectItem>
               <SelectItem value="interview">المقابلات</SelectItem>
+              <SelectItem value="appointment">المواعيد</SelectItem>
             </SelectContent>
           </Select>
           <Select value={days} onValueChange={setDays}>
@@ -226,6 +264,40 @@ export default function CalendarPage() {
           })}
         </div>
       )}
+
+      <Dialog open={showCreate} onOpenChange={(o) => { if (!o) { setShowCreate(false); setApptForm(EMPTY_APPOINTMENT); } }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>إضافة موعد</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">العنوان *</Label>
+              <Input value={apptForm.title} onChange={(e) => setApptForm({ ...apptForm, title: e.target.value })} placeholder="عنوان الموعد" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">من *</Label>
+                <Input type="datetime-local" value={apptForm.startsAt} onChange={(e) => setApptForm({ ...apptForm, startsAt: e.target.value })} />
+              </div>
+              <div>
+                <Label className="text-xs">إلى *</Label>
+                <Input type="datetime-local" value={apptForm.endsAt} onChange={(e) => setApptForm({ ...apptForm, endsAt: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">المكان</Label>
+              <Input value={apptForm.location} onChange={(e) => setApptForm({ ...apptForm, location: e.target.value })} placeholder="اختياري" />
+            </div>
+            <div>
+              <Label className="text-xs">الوصف</Label>
+              <Textarea value={apptForm.description} onChange={(e) => setApptForm({ ...apptForm, description: e.target.value })} placeholder="اختياري" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowCreate(false); setApptForm(EMPTY_APPOINTMENT); }}>إلغاء</Button>
+            <Button onClick={submitAppt} disabled={createAppt.isPending}>{createAppt.isPending ? "جاري الحفظ..." : "حفظ"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }

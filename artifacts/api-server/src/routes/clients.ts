@@ -145,14 +145,16 @@ const router = Router();
 router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { search = "", classification = "", page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
+    const { search = "", classification = "", page = "1", limit: lim = "20", deleted = "" } = req.query as Record<string, string | undefined>;
     const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
 
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['name', 'email', 'phone']; }
 
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { disableBranchScope: true });
-    let where = baseWhere + ` AND "deletedAt" IS NULL`;
+    // #2713 — سلة المحذوفات: deleted=true يعرض المحذوف ناعمًا فقط (للاسترجاع).
+    const showDeleted = deleted === "true";
+    let where = baseWhere + (showDeleted ? ` AND "deletedAt" IS NOT NULL` : ` AND "deletedAt" IS NULL`);
     let paramIdx = nextParamIndex;
 
     if (classification) {
@@ -460,6 +462,25 @@ router.patch("/:id", authorize({ feature: "crm.clients", action: "update" }), as
     res.json(updated);
   } catch (err) {
     handleRouteError(err, res, "Update client error:");
+  }
+});
+
+// #2713 — استرجاع عميل محذوف ناعمًا (سلة المحذوفات). صلاحية تعديل + Audit.
+router.post("/:id/restore", authorize({ feature: "crm.clients", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(
+      `UPDATE clients SET "deletedAt" = NULL WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NOT NULL`,
+      [id, scope.companyId]
+    );
+    if (!affectedRows) throw new NotFoundError("لا يوجد عميل محذوف بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "clients", entityId: id }).catch((e) => logger.error(e, "clients background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "client.restored", entity: "clients", entityId: id, details: JSON.stringify({ restored: true }) }).catch((e) => logger.error(e, "clients background task failed"));
+    const [restored] = await rawQuery<ClientRow>(`SELECT * FROM clients WHERE id = $1 AND "companyId" = $2`, [id, scope.companyId]);
+    res.json(restored ?? { id, restored: true });
+  } catch (err) {
+    handleRouteError(err, res, "Restore client error:");
   }
 });
 

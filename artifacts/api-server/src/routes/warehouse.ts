@@ -420,6 +420,8 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
   try {
     const scope = req.scope!;
     const { search, status, page = "1", limit: lim = "50", dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض المنتجات المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const pageNum = Math.max(Number(page) || 1, 1);
     const perPage = Math.min(Number(lim) || 50, 500);
     const offset = (pageNum - 1) * perPage;
@@ -431,10 +433,11 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
     if (status) { where += ` AND p.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (dateFrom) { where += ` AND p."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
     if (dateTo) { where += ` AND p."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
+    where += showDeleted ? ` AND p."deletedAt" IS NOT NULL` : ` AND p."deletedAt" IS NULL`;
 
     const countParams = [...params];
     const [countRow] = await rawQuery<Record<string, unknown>>(
-      `SELECT COUNT(*) AS total FROM warehouse_products p WHERE ${where} AND p."deletedAt" IS NULL`,
+      `SELECT COUNT(*) AS total FROM warehouse_products p WHERE ${where}`,
       countParams
     );
 
@@ -444,7 +447,7 @@ router.get("/products", authorize({ feature: "warehouse.inventory", action: "lis
     const offsetParam = paramIdx++;
 
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" AND c."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
+      `SELECT p.*, c.name AS "categoryName" FROM warehouse_products p LEFT JOIN warehouse_categories c ON c.id=p."categoryId" AND c."deletedAt" IS NULL WHERE ${where} ORDER BY p.name LIMIT $${limitParam} OFFSET $${offsetParam}`,
       params
     );
     res.json(maskFields(req, { data: rows, total: Number(countRow.total), page: pageNum, pageSize: perPage }));
@@ -718,6 +721,33 @@ router.delete("/products/:id", authorize({ feature: "warehouse.inventory", actio
     const mapped = lifecycleErrorResponse(err);
     if (mapped) { res.status(mapped.status).json(mapped.body); return; }
     handleRouteError(err, res, "Delete product error:");
+  }
+});
+
+// #2713 (تعميم) — استرجاع منتج محذوف ناعمًا (سلة المحذوفات). عكس الحذف عبر
+// آلة الحالة نفسها: inactive (محذوف) → active مع تصفير deletedAt + Audit/Event.
+router.post("/products/:id/restore", authorize({ feature: "warehouse.inventory", action: "delete", resource: { table: "warehouse_products", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    await applyTransition({
+      entity: "warehouse_products",
+      id,
+      scope,
+      action: "warehouse.product.restored",
+      fromStates: ["inactive"],
+      toState: "active",
+      setExtras: {
+        deletedAt: { raw: "NULL" },
+      },
+      extraWhere: `"deletedAt" IS NOT NULL`,
+      after: { restored: true },
+    });
+    res.json({ message: "تم استرجاع المنتج" });
+  } catch (err) {
+    const mapped = lifecycleErrorResponse(err);
+    if (mapped) { res.status(mapped.status).json(mapped.body); return; }
+    handleRouteError(err, res, "Restore product error:");
   }
 });
 

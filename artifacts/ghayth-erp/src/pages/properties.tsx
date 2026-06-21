@@ -13,7 +13,8 @@ import {
   useFilters,
   exportToCSV,
 } from "@workspace/ui-core";
-import { useApiQuery, asList } from "@/lib/api";
+import { useApiQuery, apiFetch, asList } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { PropertyTabsNav } from "@/components/shared/property-tabs-nav";
 import { Building, Building2, Plus, Eye, Home, DollarSign } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -35,8 +36,11 @@ export default function Properties() {
   const [filters, setFilters] = useFilters();
   useEffect(() => { setPage(1); }, [filters.search, filters.status]);
   const filterParams = `&search=${encodeURIComponent(filters.search || "")}&status=${encodeURIComponent(filters.status || "")}`;
+  // #2713 (تعميم) — سلة المحذوفات للوحدات.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { toast } = useToast();
   const { data: unitsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["property-units", String(page), filters.search, filters.status, scopeQueryString], `/properties/units?page=${page}&limit=${pageSize}${scopeSuffix}${filterParams}`
+    ["property-units", String(page), filters.search, filters.status, scopeQueryString, showDeleted ? "deleted" : "active"], `/properties/units?page=${page}&limit=${pageSize}${scopeSuffix}${filterParams}${showDeleted ? "&deleted=true" : ""}`
   );
   const units = asList(unitsResp);
   const total = unitsResp?.total || units.length;
@@ -50,6 +54,16 @@ export default function Properties() {
     queryKeys: [["property-units", String(page)], ["properties-stats"]],
     onSuccess: () => refetch(),
   });
+
+  async function handleRestoreUnit(id: number) {
+    try {
+      await apiFetch(`/properties/units/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع الوحدة" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
 
   const editFields = [
     { key: "unitNumber", label: "رقم الوحدة" },
@@ -83,14 +97,20 @@ export default function Properties() {
       header: "الإجراءات",
       render: (u) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button asChild variant="ghost" size="sm" title="عرض"><Link href={`/properties/${u.id}`}><Eye className="h-4 w-4" /></Link></Button>
-          {canManage && (
-            <RowActions
-              canEdit={canManage}
-              onEdit={() => startEdit(u.id, { unitNumber: u.unitNumber || "", buildingName: u.buildingName || "", type: u.type || "apartment", area: u.area || 0, monthlyRent: u.monthlyRent || 0, status: u.status || "available" })}
-              onDelete={() => startDelete(u.id)}
-              deletePerm="properties:delete"
-            />
+          {showDeleted ? (
+            canManage && <Button variant="outline" size="sm" onClick={() => handleRestoreUnit(u.id)}>استرجاع</Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" size="sm" title="عرض"><Link href={`/properties/${u.id}`}><Eye className="h-4 w-4" /></Link></Button>
+              {canManage && (
+                <RowActions
+                  canEdit={canManage}
+                  onEdit={() => startEdit(u.id, { unitNumber: u.unitNumber || "", buildingName: u.buildingName || "", type: u.type || "apartment", area: u.area || 0, monthlyRent: u.monthlyRent || 0, status: u.status || "available" })}
+                  onDelete={() => startDelete(u.id)}
+                  deletePerm="properties:delete"
+                />
+              )}
+            </>
           )}
         </div>
       ),
@@ -173,7 +193,12 @@ export default function Properties() {
       />
 
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Building className="h-5 w-5 text-status-info" /> الوحدات العقارية</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2"><Building className="h-5 w-5 text-status-info" /> {showDeleted ? "الوحدات المحذوفة" : "الوحدات العقارية"}</CardTitle>
+          <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => { setShowDeleted((v) => !v); setPage(1); }}>
+            {showDeleted ? "الوحدات النشطة" : "سلة المحذوفات"}
+          </Button>
+        </CardHeader>
         <CardContent>
           <DataTable
             columns={columns}

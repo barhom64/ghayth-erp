@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -47,7 +48,13 @@ function ReputationBadge({ score }: { score: number | string | null | undefined 
 
 export default function DriversPage() {
   const [, navigate] = useLocation();
-  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(["drivers"], "/fleet/drivers");
+  const { toast } = useToast();
+  // #2713 (تعميم) — سلة المحذوفات للسائقين.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
+    ["drivers", showDeleted ? "deleted" : "active"],
+    `/fleet/drivers${showDeleted ? "?deleted=true" : ""}`,
+  );
   const items: any[] = data?.data || [];
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const [previewDriver, setPreviewDriver] = useState<any>(null);
@@ -124,6 +131,16 @@ export default function DriversPage() {
     onSuccess: () => refetch(),
   });
 
+  async function handleRestoreDriver(id: number) {
+    try {
+      await apiFetch(`/fleet/drivers/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع السائق" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
+
   const editFields = [
     { key: "name", label: "الاسم" },
     { key: "phone", label: "الهاتف" },
@@ -169,13 +186,19 @@ export default function DriversPage() {
       header: "إجراءات",
       render: (d) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" onClick={() => setPreviewDriver(d)} title="معاينة سريعة"><Eye className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="sm" onClick={() => { setPortalForDriver(d); setPortalEmail(""); setPortalPassword(""); }} title="بوابة السائق"><KeyRound className="h-4 w-4" /></Button>
-          <RowActions
-            onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
-            onDelete={() => startDelete(d.id)}
-            deletePerm="fleet:delete"
-          />
+          {showDeleted ? (
+            <Button variant="outline" size="sm" onClick={() => handleRestoreDriver(d.id)}>استرجاع</Button>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setPreviewDriver(d)} title="معاينة سريعة"><Eye className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="sm" onClick={() => { setPortalForDriver(d); setPortalEmail(""); setPortalPassword(""); }} title="بوابة السائق"><KeyRound className="h-4 w-4" /></Button>
+              <RowActions
+                onEdit={() => startEdit(d.id, { name: d.name, phone: d.phone || "", licenseNumber: d.licenseNumber || "", status: d.status || "available" })}
+                onDelete={() => startDelete(d.id)}
+                deletePerm="fleet:delete"
+              />
+            </>
+          )}
         </div>
       ),
     },
@@ -191,6 +214,13 @@ export default function DriversPage() {
       loading={isLoading}
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant={showDeleted ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowDeleted((v) => !v)}
+          >
+            {showDeleted ? "السائقون النشطون" : "سلة المحذوفات"}
+          </Button>
           <PrintButton
             entityType="report_fleet_drivers"
             entityId="list"
