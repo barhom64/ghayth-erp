@@ -315,6 +315,12 @@ run_step "check:module-strip-coverage" node scripts/src/check-module-strip-cover
 # pure classifiers are gated by the :tests sibling.
 run_step "check:filter-bar-coverage:tests" node scripts/src/check-filter-bar-coverage.test.mjs
 run_step "check:filter-bar-coverage" node scripts/src/check-filter-bar-coverage.mjs
+# OPERABILITY CENSUS (جرد العمليّة): report-only per-page inventory of the
+# operational elements — back / print / sort / search — across every routed
+# page, classified by page type so every gap (or n/a) carries a reason. The
+# accounting tool behind the «back/print/search/sort» standardisation campaign.
+run_step "check:page-operability:tests" node scripts/src/check-page-operability.test.mjs
+run_step "check:page-operability" node scripts/src/check-page-operability.mjs
 # SIDEBAR COVERAGE: every mounted route must be reachable from the left sidebar
 # (navigation.registry.ts) or be legitimately off-sidebar (detail / create /
 # redirect-stub / allowlisted); and no nav entry may be a dead link or a
