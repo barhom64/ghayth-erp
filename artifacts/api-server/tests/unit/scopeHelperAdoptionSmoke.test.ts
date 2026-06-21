@@ -241,6 +241,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // schedule template. List/lookup keyed on (companyId, id) — same shape as
   // the other transport surfaces; buildScopedWhere has no branch cascade to add.
   "transport-route-patterns.ts",
+  // umrah-accommodation.ts: U-07 Phase 4 split — 9 accommodation routes (hotels /
+  // room-blocks / room-allocations) carved verbatim out of umrah-entities.ts.
+  // Point lookups + per-tenant CRUD keyed on (companyId, id); inherits the same
+  // allowlist justification as the parent umrah-entities.ts.
+  "umrah-accommodation.ts",
   "umrah-entities.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
@@ -406,9 +411,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 2 routes/umrah-families.ts — 5 families
       // CRUD routes carved verbatim out of umrah-entities.ts. Same allowlist
       // justification as the parent.
-      total: 136,
+      // +1 total/manualOnly: U-07 Phase 4 routes/umrah-accommodation.ts — 9
+      // accommodation routes (hotels / room-blocks / allocations) carved verbatim
+      // out of umrah-entities.ts. Same allowlist justification as the parent.
+      total: 137,
       helperUsers: 39,
-      manualOnly: 93,
+      manualOnly: 94,
     });
   });
 });
