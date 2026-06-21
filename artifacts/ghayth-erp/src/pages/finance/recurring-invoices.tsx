@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +42,7 @@ export default function RecurringInvoicesPage() {
     `/finance/recurring-invoices${scopeSuffix}`,
   );
   const items: any[] = data?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<any>(emptyForm);
@@ -93,12 +96,28 @@ export default function RecurringInvoicesPage() {
       subtitle="قوالب فواتير تتولّد تلقائيًا على جدول (اشتراكات/إيجارات دورية)"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الفوترة المتكررة" }]}
       loading={isLoading}
-      actions={<GuardedButton perm="finance:create" size="sm" onClick={() => { setForm(emptyForm); setShowForm(true); }}><Plus className="h-4 w-4 me-1" /> قالب جديد</GuardedButton>}
+      actions={
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_finance_recurring_invoices"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "الفوترة المتكررة", total: printRows.length },
+              items: printRows.map((r: any) => Object.fromEntries(
+                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
+                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
+              )),
+            })}
+          />
+          <GuardedButton perm="finance:create" size="sm" onClick={() => { setForm(emptyForm); setShowForm(true); }}><Plus className="h-4 w-4 me-1" /> قالب جديد</GuardedButton>
+        </div>
+      }
     >
       <FinanceTabsNav />
 
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()} emptyText="لا توجد قوالب فوترة متكررة">
-        <DataTable columns={columns} data={items} pageSize={20} emptyMessage="لا توجد قوالب" />
+        <DataTable columns={columns} data={items} onSortedDataChange={setPrintRows} pageSize={20} emptyMessage="لا توجد قوالب" />
       </PageStateWrapper>
 
       <Dialog open={showForm} onOpenChange={(o) => { if (!o) { setShowForm(false); setForm(emptyForm); } }}>

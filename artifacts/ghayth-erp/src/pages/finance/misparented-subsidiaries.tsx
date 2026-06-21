@@ -1,5 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeftRight, ShieldAlert, Wrench } from "lucide-react";
@@ -56,6 +58,7 @@ export default function MisparentedSubsidiariesPage() {
     `/finance/datafix/misparented-subsidiaries${scopeSuffix}`,
   );
   const items: MisparentedRow[] = (data?.data || []) as MisparentedRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
   const autoFixable = items.filter((r) => r.autoFixable).length;
   const needsReview = items.length - autoFixable;
   const balanceAtRisk = items.reduce((s, r) => s + Math.abs(Number(r.currentBalance ?? 0)), 0);
@@ -131,6 +134,20 @@ export default function MisparentedSubsidiariesPage() {
       subtitle="مراجعة (قراءة فقط) للحسابات الفرعية المفتوحة تحت أب رقابي خاطئ — للتخطيط؛ التصحيح يُشحن في إصلاح مالي منفصل"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "تشخيص أبوّة الحسابات" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_misparented_subsidiaries"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "حسابات فرعية مغلوطة الأبوّة", total: printRows.length },
+            items: printRows.map((r: any) => Object.fromEntries(
+              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
+                .map((c: any) => [c.header, r[c.key] ?? "—"]),
+            )),
+          })}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
@@ -173,6 +190,7 @@ export default function MisparentedSubsidiariesPage() {
       <DataTable
         columns={columns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
