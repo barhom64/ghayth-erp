@@ -156,8 +156,8 @@ d("BILL-MAIN P7 — main-agent linkage closure (import → link → re-import, #
     // the main agent. Pre-existing — the linker is operator-
     // confirmed linkage of an EXISTING client (no createNew branch).
     const [client] = await rawQuery(
-      `INSERT INTO clients ("companyId", name, status, "createdAt", "updatedAt")
-       VALUES ($1, 'عميل العقد الرئيسي', 'active', NOW(), NOW()) RETURNING id`,
+      `INSERT INTO clients ("companyId", name, "createdAt", "updatedAt")
+       VALUES ($1, 'عميل العقد الرئيسي', NOW(), NOW()) RETURNING id`,
       [ids.companyId],
     );
     ids.clientId = client.id as number;
