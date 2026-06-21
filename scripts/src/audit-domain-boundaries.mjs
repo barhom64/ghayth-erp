@@ -126,9 +126,12 @@ function inferDomain(basename) {
 const BASELINE = new Set([
   // (الحذف العابر admin→employee_assignments عولِج ودُمج في #2828؛ بقي فقط
   //  INSERT الـbootstrap المعتمد، المُدرج ضمن قسم الـbootstrap أدناه.)
-  // communications (خادم) يقرر دعم/CRM ويكتب جداولهما — قرار نطاق مؤجّل.
+  // communications → support_tickets: بقي فقط مسار «التحويل» بمبادرة المستخدم
+  // (communications.ts:856) وهو ضمن دور «التحويل» الدستوري المعتمد للاتصالات.
+  // المسار التلقائي (AI) عُولِج في #2838 بتمريره عبر عقد الدعم القائد.
   "communications.ts:support_tickets",
-  "communications.ts:crm_opportunities",
+  // (communications → crm_opportunities عُولِج في #2838: مُرِّر عبر عقد CRM القائد
+  //  createOpportunityFromInboundComm — لم تعد الاتصالات تكتب الجدول مباشرة.)
   // transport-pricing (خادم) ينشئ فاتورة ويحسب ضريبة — يحتاج استخراج خدمة مالية
   // مشتركة (refactor واسع، مادة 15) — قرار نطاق مؤجّل.
   "transport-pricing.ts:invoices",
