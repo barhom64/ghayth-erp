@@ -31,7 +31,7 @@ d("HR manual correction + scoring composition (#1799 §K)", () => {
   let scoreEmployee: any;
   let createAuditLog: any;
   const ids: {
-    companyId?: number;
+    companyId?: number; branchId?: number;
     employeeId?: number; assignmentId?: number; userId?: number;
   } = {};
 
@@ -47,6 +47,7 @@ d("HR manual correction + scoring composition (#1799 §K)", () => {
     await rawExecute(`DELETE FROM employee_assignments WHERE "companyId"=$1`, [ids.companyId]).catch(() => {});
     if (ids.userId) await rawExecute(`DELETE FROM users WHERE id=$1`, [ids.userId]).catch(() => {});
     if (ids.employeeId) await rawExecute(`DELETE FROM employees WHERE id=$1`, [ids.employeeId]).catch(() => {});
+    await rawExecute(`DELETE FROM branches WHERE "companyId"=$1`, [ids.companyId]).catch(() => {});
     await rawExecute(`DELETE FROM companies WHERE id=$1 AND name=$2`, [ids.companyId, COMPANY_NAME]).catch(() => {});
   }
 
@@ -66,6 +67,11 @@ d("HR manual correction + scoring composition (#1799 §K)", () => {
       [COMPANY_NAME]
     );
     ids.companyId = c.id as number;
+    const [br] = await rawQuery(
+      `INSERT INTO branches ("companyId", name) VALUES ($1, 'الفرع الرئيسي') RETURNING id`,
+      [ids.companyId]
+    );
+    ids.branchId = br.id as number;
 
     const [emp] = await rawQuery(
       `INSERT INTO employees (name, email, status) VALUES ('Scoring Test', $1, 'active') RETURNING id`,
@@ -82,10 +88,10 @@ d("HR manual correction + scoring composition (#1799 §K)", () => {
 
     const [asn] = await rawQuery(
       `INSERT INTO employee_assignments
-         ("employeeId","companyId","jobTitle",role,"isPrimary",status,"categoryKey")
-       VALUES ($1, $2, 'Specialist', 'employee', TRUE, 'active', 'office_employee')
+         ("employeeId","companyId","branchId","jobTitle",role,"isPrimary",status,"categoryKey")
+       VALUES ($1, $2, $3, 'Specialist', 'employee', TRUE, 'active', 'office_employee')
        RETURNING id`,
-      [ids.employeeId, ids.companyId]
+      [ids.employeeId, ids.companyId, ids.branchId]
     );
     ids.assignmentId = asn.id as number;
   });
@@ -100,9 +106,9 @@ d("HR manual correction + scoring composition (#1799 §K)", () => {
       // Pre-seed an attendance row that needs correcting.
       const [row] = await rawQuery(
         `INSERT INTO attendance
-           ("companyId","assignmentId","employeeId",date,"checkIn","status","lateMinutes")
-         VALUES ($1, $2, $3, CURRENT_DATE, '09:30:00', 'late', 30) RETURNING id`,
-        [ids.companyId, ids.assignmentId, ids.employeeId],
+           ("companyId","assignmentId",date,"checkIn","status","lateMinutes")
+         VALUES ($1, $2, CURRENT_DATE, CURRENT_DATE + TIME '09:30:00', 'late', 30) RETURNING id`,
+        [ids.companyId, ids.assignmentId],
       );
       attendanceId = row.id as number;
     });
@@ -173,20 +179,20 @@ d("HR manual correction + scoring composition (#1799 §K)", () => {
       // (a) attendance: 5 present, 1 late, 1 absent
       for (let i = 1; i <= 5; i++) {
         await rawExecute(
-          `INSERT INTO attendance ("companyId","assignmentId","employeeId",date,status)
-           VALUES ($1, $2, $3, CURRENT_DATE - $4::int, 'present')`,
-          [ids.companyId, ids.assignmentId, ids.employeeId, i + 10],
+          `INSERT INTO attendance ("companyId","assignmentId",date,status)
+           VALUES ($1, $2, CURRENT_DATE - $3::int, 'present')`,
+          [ids.companyId, ids.assignmentId, i + 10],
         );
       }
       await rawExecute(
-        `INSERT INTO attendance ("companyId","assignmentId","employeeId",date,status,"lateMinutes")
-         VALUES ($1, $2, $3, CURRENT_DATE - 20, 'late', 15)`,
-        [ids.companyId, ids.assignmentId, ids.employeeId],
+        `INSERT INTO attendance ("companyId","assignmentId",date,status,"lateMinutes")
+         VALUES ($1, $2, CURRENT_DATE - 20, 'late', 15)`,
+        [ids.companyId, ids.assignmentId],
       );
       await rawExecute(
-        `INSERT INTO attendance ("companyId","assignmentId","employeeId",date,status)
-         VALUES ($1, $2, $3, CURRENT_DATE - 21, 'absent')`,
-        [ids.companyId, ids.assignmentId, ids.employeeId],
+        `INSERT INTO attendance ("companyId","assignmentId",date,status)
+         VALUES ($1, $2, CURRENT_DATE - 21, 'absent')`,
+        [ids.companyId, ids.assignmentId],
       );
 
       // (b) one open violation (recent — counts in 30-day window)
