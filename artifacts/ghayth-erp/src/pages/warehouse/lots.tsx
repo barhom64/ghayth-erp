@@ -2,11 +2,12 @@ import { useMemo, useState } from "react";
 import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { Package, Plus, ShieldCheck, ShieldX, AlertTriangle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatDateAr, formatNumber, todayLocal } from "@/lib/formatters";
@@ -36,16 +37,17 @@ type ReceiveForm = z.infer<typeof receiveSchema>;
 
 export default function WarehouseLotsPage() {
   const [showForm, setShowForm] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [filters, setFilters] = useFilters();
   const [rejectTarget, setRejectTarget] = useState<number | null>(null);
   const [recallTarget, setRecallTarget] = useState<number | null>(null);
   const [reason, setReason] = useState("");
 
-  const { data, refetch } = useApiQuery<any>(
-    ["warehouse-lots", statusFilter],
-    `/warehouse/lots${statusFilter ? `?status=${statusFilter}` : ""}`,
-  );
+  const { data, refetch } = useApiQuery<any>(["warehouse-lots"], `/warehouse/lots`);
   const lots = asList(data?.data || data);
+  const filtered = applyFilters(lots, filters, {
+    searchFields: ["lotNumber", "productName", "warehouseName"],
+    statusField: "status",
+  });
 
   const columns = useMemo<any[]>(() => [
     { key: "lotNumber", header: "رقم الدفعة", cell: (r: any) => <span className="font-mono">{r.lotNumber}</span> },
@@ -120,14 +122,17 @@ export default function WarehouseLotsPage() {
     <PageShell title="الدفعات المخزنية" 
       actions={<Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />استلام دفعة</Button>}
     >
-      <div className="mb-4 flex gap-2">
-        {["", "active", "quarantine", "expired", "recalled", "disposed"].map((s) => (
-          <Button key={s} variant={statusFilter === s ? "default" : "outline"} size="sm"
-            onClick={() => setStatusFilter(s)}>
-            {s === "" ? "الكل" : (STATUS_LABELS[s]?.label ?? s)}
-          </Button>
-        ))}
-      </div>
+      <WarehouseTabsNav />
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث برقم الدفعة أو المنتج أو المخزن...",
+          statuses: Object.entries(STATUS_LABELS).map(([value, s]) => ({ value, label: s.label })),
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       {showForm && (
         <Card className="mb-4">
@@ -158,7 +163,7 @@ export default function WarehouseLotsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <DataTable data={lots} columns={columns} emptyMessage="لا توجد دفعات" />
+          <DataTable data={filtered} columns={columns} emptyMessage="لا توجد دفعات" noToolbar />
         </CardContent>
       </Card>
 

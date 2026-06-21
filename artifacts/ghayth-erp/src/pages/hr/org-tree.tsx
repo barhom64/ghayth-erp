@@ -21,6 +21,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -142,6 +143,7 @@ export default function OrgTreePage() {
       ]}
       data-testid="org-tree-page"
     >
+      <HrTabsNav />
       {/* Totals strip — instant overview before diving into the tree. */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4" data-testid="org-tree-totals">
         <SummaryTile icon={Building2} label="الفروع"      n={totals.branches}        tone="info" />
