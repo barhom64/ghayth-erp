@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useLocation } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -13,7 +13,7 @@ import { Autocomplete, type AutocompleteOption } from "@/components/ui/autocompl
 import { todayLocal } from "@/lib/formatters";
 import { formatCurrency } from "@/lib/formatters";
 import { filterAccountsForPaymentMethod, isMoneyAccount } from "@/lib/finance-account-usage";
-import { Plus, Trash2, Paperclip } from "lucide-react";
+import { Plus, Paperclip } from "lucide-react";
 import { usePermission } from "@/components/shared/permission-gate";
 import { type Attachment } from "@/components/shared/file-drop-zone";
 import { SupplierSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
@@ -287,64 +287,86 @@ export default function VendorInvoiceCreate() {
                 <Plus className="h-4 w-4 me-1" /> إضافة بند
               </Button>
             </div>
-            {lines.map((line, i) => (
-              <div key={i} className="border rounded-md p-3 space-y-3 bg-muted/20">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">بند #{i + 1}</span>
-                  {lines.length > 1 && (
-                    <Button type="button" variant="ghost" size="icon" onClick={() => setLines((p) => p.filter((_, j) => j !== i))}>
-                      <Trash2 className="h-4 w-4 text-status-error" />
-                    </Button>
-                  )}
-                </div>
-                {/* supplier item picker (memory) — filtered by scenario. */}
-                {supplierId && (
-                  <SupplierItemPicker
-                    supplierId={supplierId}
-                    scenario={line.scenario || undefined}
-                    value={line.itemId != null ? String(line.itemId) : ""}
-                    onPick={(item) => onPickItem(i, item)}
-                  />
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <FormFieldWrapper label="البند">
-                    <Input value={line.itemName} onChange={(e) => updateLine(i, { itemName: e.target.value })} placeholder="اسم البند" />
-                  </FormFieldWrapper>
-                  <FormFieldWrapper label="الكمية">
-                    <Input type="number" step="0.01" value={line.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} placeholder="0" />
-                  </FormFieldWrapper>
-                  <FormFieldWrapper label="الوحدة">
-                    <Input value={line.unit} onChange={(e) => updateLine(i, { unit: e.target.value })} placeholder="قطعة / لتر" />
-                  </FormFieldWrapper>
-                  <FormFieldWrapper label="سعر الوحدة">
-                    <Input type="number" step="0.01" value={line.unitPrice} onChange={(e) => updateLine(i, { unitPrice: e.target.value })} placeholder="0.00" />
-                  </FormFieldWrapper>
-                  <FormFieldWrapper label="المبلغ (تلقائي = كمية × سعر)">
-                    <Input value={lineAmount(line) ? formatCurrency(lineAmount(line)) : ""} disabled placeholder="0.00" />
-                  </FormFieldWrapper>
-                  <FormFieldWrapper label="ضريبة البند (اختياري)">
-                    <Input type="number" step="0.01" value={line.vatAmount} onChange={(e) => updateLine(i, { vatAmount: e.target.value })} placeholder="0.00" />
-                  </FormFieldWrapper>
-                  <FormFieldWrapper label="غرض الحساب" required>
-                    <Select value={line.accountPurpose} onValueChange={(v) => updateLine(i, { accountPurpose: v })}>
-                      <SelectTrigger><SelectValue placeholder="اختر غرض الحساب" /></SelectTrigger>
-                      <SelectContent>
-                        {ACCOUNT_PURPOSE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </FormFieldWrapper>
-                  <CostCenterSelect value={line.costCenterId} onChange={(v) => updateLine(i, { costCenterId: v })} label="مركز التكلفة" />
-                  <TextField label="رمز الضريبة" value={line.taxCode} onChange={(v) => updateLine(i, { taxCode: v })} placeholder="رمز" />
-                </div>
-                {/* per-line dimensions */}
-                <LineAllocationPanel
-                  value={line.allocation}
-                  onChange={(a) => updateLine(i, { allocation: a })}
-                  status={deriveAllocationStatus(line.allocation)}
-                  required={false}
-                />
-              </div>
-            ))}
+            <div className="rounded-xl border overflow-hidden">
+              <div className="overflow-x-auto"><table className="w-full text-sm">
+                <thead className="bg-surface-subtle">
+                  <tr>
+                    <th className="px-3 py-2 text-right min-w-[10rem]">البند</th>
+                    <th className="px-3 py-2 text-right">الكمية</th>
+                    <th className="px-3 py-2 text-right">الوحدة</th>
+                    <th className="px-3 py-2 text-right">سعر الوحدة</th>
+                    <th className="px-3 py-2 text-right">المبلغ</th>
+                    <th className="px-3 py-2 text-right">ضريبة البند</th>
+                    <th className="px-3 py-2 text-right min-w-[9rem]">غرض الحساب *</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line, i) => (
+                    <Fragment key={i}>
+                      <tr className="border-t align-top">
+                        <td className="px-2 py-1 min-w-[10rem]">
+                          <Input value={line.itemName} onChange={(e) => updateLine(i, { itemName: e.target.value })} placeholder="اسم البند" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input type="number" step="0.01" className="w-20" value={line.quantity} onChange={(e) => updateLine(i, { quantity: e.target.value })} placeholder="0" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input className="w-20" value={line.unit} onChange={(e) => updateLine(i, { unit: e.target.value })} placeholder="قطعة" />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input type="number" step="0.01" className="w-24" value={line.unitPrice} onChange={(e) => updateLine(i, { unitPrice: e.target.value })} placeholder="0.00" />
+                        </td>
+                        <td className="px-2 py-1 whitespace-nowrap font-semibold text-emerald-700">
+                          {lineAmount(line) ? formatCurrency(lineAmount(line)) : "—"}
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input type="number" step="0.01" className="w-24" value={line.vatAmount} onChange={(e) => updateLine(i, { vatAmount: e.target.value })} placeholder="0.00" />
+                        </td>
+                        <td className="px-2 py-1 min-w-[9rem]">
+                          <Select value={line.accountPurpose} onValueChange={(v) => updateLine(i, { accountPurpose: v })}>
+                            <SelectTrigger className="h-9"><SelectValue placeholder="اختر الغرض" /></SelectTrigger>
+                            <SelectContent>
+                              {ACCOUNT_PURPOSE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-2 py-1">
+                          {lines.length > 1 && (
+                            <button type="button" onClick={() => setLines((p) => p.filter((_, j) => j !== i))}
+                              className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td colSpan={8} className="px-2 pb-3 space-y-2">
+                          {/* supplier item picker (memory) — filtered by scenario. */}
+                          {supplierId && (
+                            <SupplierItemPicker
+                              supplierId={supplierId}
+                              scenario={line.scenario || undefined}
+                              value={line.itemId != null ? String(line.itemId) : ""}
+                              onPick={(item) => onPickItem(i, item)}
+                            />
+                          )}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <CostCenterSelect value={line.costCenterId} onChange={(v) => updateLine(i, { costCenterId: v })} label="مركز التكلفة" />
+                            <TextField label="رمز الضريبة" value={line.taxCode} onChange={(v) => updateLine(i, { taxCode: v })} placeholder="رمز" />
+                          </div>
+                          {/* per-line dimensions */}
+                          <LineAllocationPanel
+                            value={line.allocation}
+                            onChange={(a) => updateLine(i, { allocation: a })}
+                            status={deriveAllocationStatus(line.allocation)}
+                            required={false}
+                          />
+                        </td>
+                      </tr>
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table></div>
+            </div>
             <div className="flex flex-wrap items-center gap-2 text-xs pt-2 border-t">
               <span className="px-2 py-1 rounded bg-muted">صافي: <span className="font-mono">{formatCurrency(totalNet)}</span></span>
               {totalVat > 0 && <span className="px-2 py-1 rounded bg-status-info-surface text-status-info-foreground">ضريبة: <span className="font-mono">{formatCurrency(totalVat)}</span></span>}
