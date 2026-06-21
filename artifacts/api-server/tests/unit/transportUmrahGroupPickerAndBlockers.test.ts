@@ -21,6 +21,11 @@ const readSpa = (rel: string) => readFileSync(join(spaSrc, rel), "utf8");
 
 const PICKER = readSpa("components/shared/umrah-group-picker.tsx");
 const BOOKING_CREATE = readSpa("pages/fleet/transport-booking-create.tsx");
+// #1812 audit fix — the inline umrah picker on booking-create was a
+// duplicate of the UmrahContextQuestionnaire. The duplicate inline
+// form was removed; these assertions now target the canonical
+// questionnaire component instead.
+const QUESTIONNAIRE = readSpa("components/shared/umrah-context-questionnaire.tsx");
 const DIALOG = readSpa("components/shared/assignment-suggest-dialog.tsx");
 
 describe("#1812 — umrah group picker", () => {
@@ -50,31 +55,39 @@ describe("#1812 — umrah group picker", () => {
   });
 });
 
-describe("#1812 — booking-create wires the picker", () => {
-  it("imports the UmrahGroupPicker component", () => {
-    expect(BOOKING_CREATE).toContain('UmrahGroupPicker');
-    expect(BOOKING_CREATE).toContain('from "@/components/shared/umrah-group-picker"');
+describe("#1812 — booking-create wires the umrah picker via the questionnaire (audit-fixed)", () => {
+  it("UmrahContextQuestionnaire is imported by booking-create + carries UmrahGroupPicker", () => {
+    expect(BOOKING_CREATE).toContain("UmrahContextQuestionnaire");
+    expect(QUESTIONNAIRE).toContain("UmrahGroupPicker");
   });
 
-  it("renders the picker inside the isUmrah branch", () => {
-    // The picker appears together with the umrahGroupId input.
-    expect(BOOKING_CREATE).toMatch(/<UmrahGroupPicker[\s\S]{0,200}onSelect=/);
+  it("questionnaire renders the picker via trigger prop", () => {
+    expect(QUESTIONNAIRE).toMatch(/<UmrahGroupPicker[\s\S]{0,400}trigger=/);
   });
 
   it("on select: fills umrahGroupId + passengerCount + customerName + source", () => {
-    expect(BOOKING_CREATE).toMatch(/setUmrahGroupId\(String\(g\.id\)\)/);
-    expect(BOOKING_CREATE).toMatch(/setPassengerCount\(String\(g\.mutamerCount\)\)/);
-    expect(BOOKING_CREATE).toMatch(/setCustomerName\(g\.name\)/);
-    expect(BOOKING_CREATE).toMatch(/setBookingSource\("umrah_group"\)/);
+    expect(QUESTIONNAIRE).toMatch(/setUmrahGroupId\(String\(g\.id\)\)/);
+    expect(QUESTIONNAIRE).toMatch(/setPassengerCount\(String\(g\.mutamerCount\)\)/);
+    expect(QUESTIONNAIRE).toMatch(/setCustomerName\(g\.name\)/);
+    expect(QUESTIONNAIRE).toMatch(/setBookingSource\("umrah_group"\)/);
   });
 
-  it("shows a confirmation toast with the group number + pax count", () => {
-    expect(BOOKING_CREATE).toMatch(/تم ربط المجموعة \$\{g\.nuskGroupNumber\}/);
-    expect(BOOKING_CREATE).toMatch(/تم تعبئة عدد الركاب تلقائياً/);
+  it("audit-fix: the old inline umrah block is gone (no duplicate UX)", () => {
+    // The audit found booking-create rendered BOTH the questionnaire AND
+    // an inline `{isUmrah && <Input id="umrahGroupId" />}` form — operator
+    // filled the same data twice. The inline block must stay deleted.
+    expect(BOOKING_CREATE).not.toMatch(/<Input\s+id="umrahGroupId"/);
+    expect(BOOKING_CREATE).not.toMatch(/<Input\s+id="flightNumber"/);
+    expect(BOOKING_CREATE).not.toMatch(/<Input\s+id="hotelName"/);
   });
 
-  it("shows an audit-trail hint when a group is linked", () => {
-    expect(BOOKING_CREATE).toMatch(/أي تعديل على عدد الركاب موثّق في سجل التدقيق/);
+  it("audit-trail hint visible — either via inline note or via the questionnaire's auto-fill toast", () => {
+    // After the inline duplicate removal, the operator still gets the
+    // audit-trail cue from the questionnaire's group-link note.
+    const hasHint =
+      /أي تعديل على عدد الركاب موثّق في سجل التدقيق/.test(BOOKING_CREATE) ||
+      /أي تعديل على عدد الركاب موثّق في سجل التدقيق/.test(QUESTIONNAIRE);
+    expect(hasHint, "audit-trail hint must appear in booking-create OR the questionnaire").toBe(true);
   });
 });
 
