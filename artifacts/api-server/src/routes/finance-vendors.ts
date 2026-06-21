@@ -221,7 +221,7 @@ vendorsRouter.post("/vendors/:id/restore", authorize({ feature: "finance.vendors
     if (!affectedRows) throw new NotFoundError("لا يوجد مورد محذوف بهذا المعرّف");
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "vendor.restored", entity: "suppliers", entityId: vendorId, details: JSON.stringify({ restored: true }) }).catch((err) => pushToDLQ("event", { action: "vendor.restored", entityId: vendorId }, err, scope.companyId));
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "restore", entity: "suppliers", entityId: vendorId }).catch((err) => logger.error(err, "[audit] vendor.restored:"));
-    const [row] = await rawQuery<VendorRow>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2`, [vendorId, scope.companyId]);
+    const [row] = await rawQuery<VendorRow>(`SELECT * FROM suppliers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [vendorId, scope.companyId]);
     res.json(row ?? { id: vendorId, restored: true });
   } catch (err) {
     handleRouteError(err, res, "Restore vendor error:");
