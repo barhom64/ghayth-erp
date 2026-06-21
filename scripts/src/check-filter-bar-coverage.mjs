@@ -61,11 +61,17 @@ export function usesCanonicalBar(src) {
  *  depends on a filter-ish state var, OR a <Select> wired to a filter setter.
  *  (Deliberately does NOT count "a filter setter merely exists" — that produced
  *  false positives on pages whose only `flex gap` row was the actions bar.) */
+// Known display-badge false positives: pages flagged only because a status
+// DISPLAY badge (`variant={r.active ? …}` / `variant={data.status === "ok" ?
+// …}`) trips the toggle regex — they have NO filter bar (a multi-table health
+// dashboard / a master-detail page). Documented exempt, not migrate targets.
+export const FILTER_EXEMPT = new Map([
+  ["/admin/monitoring", "لوحة مراقبة متعددة الجداول (شارات حالة عرض، لا شريط فلترة)"],
+  ["/finance/pricing-rules", "صفحة master-detail (شارة active في عمود، لا شريط فلترة)"],
+]);
+
 export function hasHandRolledFilter(src) {
-  // NB: `tab`/`Tab` is deliberately excluded — a <Tabs> toggle is section
-  // navigation, not a list filter; counting it flagged multi-section config
-  // dashboards (admin-monitoring / ai-governance / notification-engine) that
-  // have no single filterable list.
+  // `tab`/`Tab` excluded — a <Tabs> toggle is section navigation, not a filter.
   const toggleButtons =
     /variant=\{[^}]*\b(statusFilter|cat|filter|status|active|category)\b[^}]*\?[^}]*["'`](default|outline|secondary)["'`]/.test(src);
   const filterSelect =
@@ -140,6 +146,7 @@ function main() {
     if (!fs.existsSync(f)) continue;
     const src = fs.readFileSync(f, "utf-8");
     if (isRedirectPage(src)) continue;
+    if (FILTER_EXEMPT.has(rp)) continue; // documented display-badge FP
     const k = classify(src);
     if (buckets[k]) buckets[k].push({ rp, f: path.relative(REPO, f) });
   }
