@@ -304,6 +304,14 @@ run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
 # forms + focused/standalone layouts are exempt by design. Pure helpers first.
 run_step "check:module-strip-coverage:tests" node scripts/src/check-module-strip-coverage.test.mjs
 run_step "check:module-strip-coverage" node scripts/src/check-module-strip-coverage.mjs --strict
+# FILTER-BAR INVENTORY (جرد): report-only census of every list page's filter/
+# search bar — canonical (<AdvancedFilters>/DataTable toolbar) vs hand-rolled
+# (client = safe to migrate onto the canonical bar; server = keep server-side
+# filtering, only the LAYOUT should be normalised). Report-only by design:
+# server-side filtering is a legitimate pattern and must NOT fail the build. The
+# pure classifiers are gated by the :tests sibling.
+run_step "check:filter-bar-coverage:tests" node scripts/src/check-filter-bar-coverage.test.mjs
+run_step "check:filter-bar-coverage" node scripts/src/check-filter-bar-coverage.mjs
 # SIDEBAR COVERAGE: every mounted route must be reachable from the left sidebar
 # (navigation.registry.ts) or be legitimately off-sidebar (detail / create /
 # redirect-stub / allowlisted); and no nav entry may be a dead link or a
