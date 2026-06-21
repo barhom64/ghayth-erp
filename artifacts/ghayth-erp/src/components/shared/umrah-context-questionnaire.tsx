@@ -104,6 +104,9 @@ export function UmrahContextQuestionnaire(props: Props) {
           {hasGroup && (
             <div className="text-xs text-status-success-foreground pr-6">
               ✓ تم الربط بالمجموعة #{props.umrahGroupId}
+              <span className="block text-muted-foreground mt-1">
+                أي تعديل على عدد الركاب موثّق في سجل التدقيق.
+              </span>
             </div>
           )}
         </div>
