@@ -1377,29 +1377,34 @@ router.post("/click-to-call", authorize({ feature: "communications", action: "cr
     }
 
     // Always log the attempt — the operator should see who tried what
-    // even when the backend gracefully fell back to a tel: link.
-    const { insertId: callPk } = await rawExecute(
-      `INSERT INTO pbx_calls
-         ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
-       VALUES ($1, $2, $3, $4, 'outbound', 0, $5, NOW())`,
-      [scope.companyId, callId, callerExt?.extension ?? `user:${scope.userId}`, body.target, mode === "pbx" ? "initiated" : "pending"],
-    );
-    assertInsert(callPk, "pbx_calls");
+    // even when the backend gracefully fell back to a tel: link. The call
+    // log + its message_log mirror are written atomically so a logged call
+    // can never be missing from the unified thread view.
+    const callPk = await withTransaction(async () => {
+      const { insertId } = await rawExecute(
+        `INSERT INTO pbx_calls
+           ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
+         VALUES ($1, $2, $3, $4, 'outbound', 0, $5, NOW())`,
+        [scope.companyId, callId, callerExt?.extension ?? `user:${scope.userId}`, body.target, mode === "pbx" ? "initiated" : "pending"],
+      );
+      assertInsert(insertId, "pbx_calls");
 
-    await rawExecute(
-      `INSERT INTO message_log
-         ("companyId", channel, direction, "fromAddress", "toAddress",
-          body, status, folder, "relatedType", "relatedId", "createdAt")
-       VALUES ($1, 'pbx', 'outbound', $2, $3, $4, 'logged', 'sent', $5, $6, NOW())`,
-      [
-        scope.companyId,
-        callerExt?.extension ?? `user:${scope.userId}`,
-        body.target,
-        `click-to-call · mode=${mode} · ${detail}`,
-        body.relatedType ?? (targetEmployeeId ? "employees" : null),
-        body.relatedId ?? targetEmployeeId,
-      ],
-    );
+      await rawExecute(
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'pbx', 'outbound', $2, $3, $4, 'logged', 'sent', $5, $6, NOW())`,
+        [
+          scope.companyId,
+          callerExt?.extension ?? `user:${scope.userId}`,
+          body.target,
+          `click-to-call · mode=${mode} · ${detail}`,
+          body.relatedType ?? (targetEmployeeId ? "employees" : null),
+          body.relatedId ?? targetEmployeeId,
+        ],
+      );
+      return insertId;
+    });
 
     void emitEvent({
       companyId: scope.companyId, userId: scope.userId,
