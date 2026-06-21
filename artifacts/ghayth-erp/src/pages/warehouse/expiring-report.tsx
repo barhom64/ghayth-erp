@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +15,7 @@ export default function ExpiringReportPage() {
   const [within, setWithin] = useState("90");
   const { data } = useApiQuery<any>(["expiring", within], `/warehouse/reports/expiring?within=${within || 90}`);
   const rows = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const columns = useMemo<any[]>(() => [
     { key: "lotNumber", header: "رقم الدفعة", cell: (r: any) => <span className="font-mono">{r.lotNumber}</span> },
@@ -29,7 +32,26 @@ export default function ExpiringReportPage() {
   ], []);
 
   return (
-    <PageShell title="تقرير الصلاحيات القادمة" >
+    <PageShell title="تقرير الصلاحيات القادمة"
+      actions={
+        <PrintButton
+          entityType="report_warehouse_expiring"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير الصلاحيات القادمة", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "رقم الدفعة": r.lotNumber,
+              "المنتج": r.productName ?? `#${r.productId}`,
+              "المخزن": r.warehouseName ?? `#${r.warehouseId}`,
+              "الكمية": Number(r.quantity),
+              "تاريخ الانتهاء": r.expiryDate,
+              "أيام متبقية": `${formatNumber(Number(r.daysUntilExpiry))} يوم`,
+            })),
+          })}
+        />
+      }
+    >
       <WarehouseTabsNav />
       <Card className="mb-4">
         <CardContent className="pt-6 flex items-end gap-3">
@@ -40,7 +62,7 @@ export default function ExpiringReportPage() {
         </CardContent>
       </Card>
       <Card><CardContent className="pt-6">
-        <DataTable data={rows} columns={columns} emptyMessage="لا توجد دفعات قاربت على الانتهاء" />
+        <DataTable data={rows} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد دفعات قاربت على الانتهاء" />
       </CardContent></Card>
     </PageShell>
   );
