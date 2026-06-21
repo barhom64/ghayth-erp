@@ -142,7 +142,7 @@ const createPricingSchema = z.object({
   includesHotel: z.boolean().optional(),
   includesTransport: z.boolean().optional(),
   notes: z.string().optional(),
-});
+}).refine((d) => d.validTo >= d.validFrom, { message: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", path: ["validTo"] });
 
 const updatePricingSchema = z.object({
   subAgentId: z.coerce.number().nullable().optional(),
@@ -689,6 +689,12 @@ router.patch("/pricing/:id", authorize({ feature: "umrah", action: "update" }), 
       if (current) {
         const vf = b.validFrom || current.validFrom;
         const vt = b.validTo || current.validTo;
+        // re-validate ordering against the effective (merged) values — a partial
+        // update must not place validFrom after validTo. This also keeps the
+        // overlap query below correct (it assumes validFrom <= validTo).
+        if (new Date(vt).getTime() < new Date(vf).getTime()) {
+          throw new ValidationError("تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", { field: "validTo" });
+        }
         const agId = b.agentId ?? current.agentId;
         const saId = b.subAgentId ?? current.subAgentId;
         const sId = b.seasonId ?? current.seasonId;

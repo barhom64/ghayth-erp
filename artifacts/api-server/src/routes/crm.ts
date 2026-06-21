@@ -164,6 +164,8 @@ router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "
   try {
     const scope = req.scope!;
     const { stage, status, dateFrom, dateTo } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض الفرص المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'o."companyId"', disableBranchScope: true });
     let where = baseWhere;
@@ -172,8 +174,9 @@ router.get("/opportunities", authorize({ feature: "crm.opportunities", action: "
     if (status) { where += ` AND o.status = $${paramIdx}`; params.push(status); paramIdx++; }
     if (dateFrom) { where += ` AND o."createdAt" >= $${paramIdx}::timestamptz`; params.push(dateFrom); paramIdx++; }
     if (dateTo) { where += ` AND o."createdAt" <= ($${paramIdx}::date + INTERVAL '1 day')`; params.push(dateTo); paramIdx++; }
+    where += showDeleted ? ` AND o."deletedAt" IS NOT NULL` : ` AND o."deletedAt" IS NULL`;
     const rows = await rawQuery<CrmOpportunityListRow>(
-      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."companyId"=o."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} AND o."deletedAt" IS NULL ORDER BY o.id DESC LIMIT 500`,
+      `SELECT o.*, cl.name AS "clientName", e.name AS "assigneeName" FROM crm_opportunities o LEFT JOIN clients cl ON cl.id=o."clientId" AND cl."companyId"=o."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=o."assignedTo" AND e."deletedAt" IS NULL WHERE ${where} ORDER BY o.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -999,6 +1002,29 @@ router.delete("/opportunities/:id", authorize({ feature: "crm.opportunities", ac
     }).catch((e) => logger.error(e, "crm background task failed"));
     res.json({ message: "تم حذف الفرصة بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete opportunity error:"); }
+});
+
+// #2713 (تعميم) — استرجاع فرصة محذوفة ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/opportunities/:id/restore", authorize({ feature: "crm.opportunities", action: "delete", resource: { table: "crm_opportunities", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE crm_opportunities SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا توجد فرصة محذوفة بهذا المعرّف");
+    emitEvent({
+      companyId: scope.companyId,
+      userId: scope.userId,
+      action: "crm.opportunity.restored",
+      entity: "crm_opportunities",
+      entityId: id,
+      details: `استرجاع فرصة CRM`,
+    }).catch((e) => logger.error(e, "crm background task failed"));
+    createAuditLog({
+      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "restore", entity: "crm_opportunities", entityId: id,
+    }).catch((e) => logger.error(e, "crm background task failed"));
+    res.json({ message: "تم استرجاع الفرصة" });
+  } catch (err) { handleRouteError(err, res, "Restore opportunity error:"); }
 });
 
 // Related deals for a given opportunity: other opportunities that share the

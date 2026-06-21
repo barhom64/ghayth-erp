@@ -142,8 +142,8 @@ budgetRouter.get("/budget", authorize({ feature: "finance.budget", action: "list
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (_e) { logger.error(_e, "budget list query failed");
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+  } catch (err) {
+    handleRouteError(err, res, "budget list query failed");
   }
 });
 
@@ -193,8 +193,8 @@ budgetRouter.get("/budget-vs-actual", authorize({ feature: "finance.budget", act
       [scope.companyId, startDate.slice(0, 7), endDate.slice(0, 7)]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "budget-vs-actual query failed");
-    res.json({ data: [], total: 0 });
+  } catch (err) {
+    handleRouteError(err, res, "budget-vs-actual query failed");
   }
 });
 

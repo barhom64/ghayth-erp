@@ -429,13 +429,12 @@ router.delete("/users/:id", authorize({ feature: "admin", action: "update" }), a
         `DELETE FROM rbac_user_roles WHERE "userId"=$1 AND "companyId"=$2`,
         [id, scope.companyId]
       );
-      await tx.query(
-        `DELETE FROM employee_assignments ea
-         USING employees e
-         WHERE ea."employeeId" = e.id AND e.id = (SELECT "employeeId" FROM users WHERE id=$1)
-           AND ea."companyId"=$2`,
-        [id, scope.companyId]
-      );
+      // ملاحظة معمارية (مادة 4–9 + 18): هذا الإجراء «إلغاء وصول» لا «حذف موظف».
+      // إلغاء الوصول = سحب أدوار RBAC + إبطال الجلسات (أدناه). أما تكليفات الموظف
+      // (employee_assignments) فهي بيانات تشغيلية مملوكة لمسار الموارد البشرية،
+      // ولا يجوز لمسار الإدارة (خادم) أن يحذفها فيزيائيًا عبر حدود المسار. أي
+      // إنهاء خدمة فعلي يتولاه HR عبر تدفّقه الخاص، ويمكنه الاشتراك في الحدث
+      // المُصدَر أدناه (admin.user.deleted) للتفاعل ضمن اختصاصه.
       await tx.query(
         `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
         [id]
@@ -1913,7 +1912,7 @@ const onboardSchema = z.object({
   // migration 249) so activating a new employee is one choice, not a manual
   // role hunt. Explicit `roles` below still override / extend it.
   jobTitleId: z.coerce.number().int().positive().optional().nullable(),
-  salary: z.coerce.number().optional(),
+  salary: z.coerce.number().nonnegative().optional(),
   // account
   password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل").optional(),
   // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule).

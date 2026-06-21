@@ -463,6 +463,19 @@ export function registerEventListeners() {
   eventBus.on("fleet.trip.completed", async (payload) => {
     await logEvent("fleet.trip.completed", payload);
     await logAudit("fleet.trip.completed", { ...payload, action: "update" });
+    // سدّ فجوة الدفتر: أي إكمال رحلة (سائق أو مدير) يُرحّل قيد تكلفتها. المسار
+    // الإداري يُرحّل مباشرة فيصبح هذا no-op (idempotent عبر fleet:trip:<id>)؛
+    // إكمال السائق — الذي لا يُرحّل في مساره — يُكلَّف هنا. «الحقيقة التشغيلية
+    // ← المالية تشتق» بصرف النظر عمّن أكمل.
+    if (payload.companyId && payload.entityId) {
+      try {
+        const { fleetEngine } = await import("./engines/index.js");
+        await fleetEngine.computeAndPostTripGL(
+          { companyId: payload.companyId as number, branchId: (payload.branchId as number) ?? 0, createdBy: (payload.userId as number) ?? 0 },
+          payload.entityId as number,
+        );
+      } catch (err) { logger.error(err, "[trip.completed] deferred trip GL post failed"); }
+    }
   });
 
   // Phase C.8 — warehouse product lifecycle listeners

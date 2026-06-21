@@ -53,7 +53,7 @@ const createInvoiceSchema = z.object({
   lines: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
-    unitPrice: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().nonnegative().optional(),
     accountCode: z.string().optional(),
     accountId: z.coerce.number().optional(),
     costCenterId: z.coerce.number().optional(),
@@ -86,7 +86,7 @@ const createInvoiceSchema = z.object({
   // New flow: pick a `taxCode` (header default) and the line math is
   // driven by tax_codes.rate. taxInclusive declares whether the entered
   // amount is gross or net.
-  vatRate: z.coerce.number().optional(),
+  vatRate: z.coerce.number().nonnegative().optional(),
   taxCode: z.string().optional(),
   taxInclusive: z.boolean().optional(),
   dueDate: z.string().optional(),
@@ -193,12 +193,14 @@ const createCustomerReceiptSchema = z.object({
   })).max(200).default([]),
   branchId: z.coerce.number().optional(),
   lineAllocation: z.record(z.string(), z.any()).optional(),
+  // #2698 — خزنة/بنك الإيداع صراحةً (يتجاوز الحلّ الآلي بالطريقة في سند القبض).
+  cashAccountCode: z.string().max(40).optional(),
 });
 
 const impactPreviewSchema = z.object({
   clientId: z.coerce.number().optional(),
   lines: z.array(z.any()).optional(),
-  taxRate: z.coerce.number().optional(),
+  taxRate: z.coerce.number().nonnegative().optional(),
   dueInDays: z.coerce.number().optional(),
 });
 
@@ -1046,6 +1048,17 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         logAllocationOverride,
         getProductRevenueCodes,
       } = await import("../lib/accountingAllocation.js");
+      // #2102 — batch-load the product→revenue-account map ONCE, then inject
+      // it into the resolver so product-revenue selection happens INSIDE
+      // resolveLineAllocation at the right precedence (manual pin > rule >
+      // product revenue > generic). No per-line DB call; the old
+      // post-resolver bolt-on that read this map after the resolver is gone.
+      const productRevenueCodes = await getProductRevenueCodes(
+        scope.companyId,
+        dimLines.rows
+          .filter((ln) => ln.productId != null)
+          .map((ln) => Number(ln.productId)),
+      );
       const lineResolutions = await Promise.all(
         dimLines.rows.map((ln) =>
           resolveLineAllocation({
@@ -1056,6 +1069,8 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
             accountId: ln.accountId,
             costCenterId: ln.costCenterId,
             taxCode: ln.taxCode,
+            productId: ln.productId,
+            productRevenueCodes,
             dimensions: {
               vehicleId: ln.vehicleId,
               propertyId: ln.propertyId,
@@ -1126,18 +1141,6 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
       const totalNet = Number(invoice.total) - Number(invoice.vatAmount || 0);
       const revenueLines: JournalEntryLine[] = [];
 
-      // #1945 item 6 — خريطة إيراد المنتج: lines the resolver left without an
-      // account (no manual pin, no rule) consult the PRODUCT's mapped revenue
-      // account (products.defaultRevenueAccountId) before the generic
-      // company-level invoice_revenue — each product line lands on ITS
-      // revenue account, carrying its productId dim.
-      const productRevenueCodes = await getProductRevenueCodes(
-        scope.companyId,
-        dimLines.rows
-          .filter((ln, i) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
-          .map((ln) => Number(ln.productId)),
-      );
-
       if (dimLines.rows.length > 0) {
         // Group lines that share the SAME revenue account + dimension
         // signature into one journal_line, so the GL stays compact
@@ -1164,15 +1167,13 @@ invoicesRouter.post("/invoices/:id/approve", authorize({
         for (let i = 0; i < dimLines.rows.length; i++) {
           const ln = dimLines.rows[i];
           const res = lineResolutions[i];
-          // Resolver picked an account (rule match or manual override);
-          // unmapped lines try the PRODUCT's mapped revenue account
-          // (#1945 item 6) before the generic invoice_revenue mapping so
-          // the entry still posts. The dimensions used in the bucket key
-          // come from the RESOLVER OUTPUT — for an 'explicit' or
-          // 'from_vehicle' strategy that may differ from the raw line.
-          const acct = res.resolvedAccountCode
-            || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
-            || invRevenueCode;
+          // #2102 — the resolver now returns the account at the right
+          // precedence (manual pin > rule > product revenue); the route
+          // only supplies the generic invoice_revenue fallback. The
+          // dimensions used in the bucket key come from the RESOLVER OUTPUT
+          // — for an 'explicit' or 'from_vehicle' strategy that may differ
+          // from the raw line.
+          const acct = res.resolvedAccountCode || invRevenueCode;
           const dims = res.dimensions;
           const cc = res.costCenterId;
           const key = [
@@ -1588,6 +1589,15 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     // rule shows as "resolved" with the rule's chosen account in the
     // preview, matching exactly what /approve would post.
     const { resolveLineAllocation, getProductRevenueCodes } = await import("../lib/accountingAllocation.js");
+    // #2102 — batch-load the product→revenue map ONCE and inject it so the
+    // resolver applies product-revenue selection internally (same precedence
+    // as /approve). The post-resolver bolt-on below is gone.
+    const productRevenueCodes = await getProductRevenueCodes(
+      scope.companyId,
+      lines
+        .filter((ln: any) => ln.productId != null)
+        .map((ln: any) => Number(ln.productId)),
+    );
     const lineResolutions = await Promise.all(
       lines.map((ln) =>
         resolveLineAllocation({
@@ -1598,6 +1608,8 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
           accountId: ln.accountId,
           costCenterId: ln.costCenterId,
           taxCode: ln.taxCode,
+          productId: ln.productId,
+          productRevenueCodes,
           dimensions: {
             vehicleId: ln.vehicleId,
             propertyId: ln.propertyId,
@@ -1641,14 +1653,6 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
     const unmappedLineIds: number[] = [];
     // Aggregate resolver warnings so the operator sees them in the preview.
     const resolverWarnings: Array<{ lineId: number; code: string; message: string }> = [];
-    // #1945 item 6 — same product-revenue-map fallback as /approve, so the
-    // preview shows the product's mapped revenue account, not the generic.
-    const productRevenueCodes = await getProductRevenueCodes(
-      scope.companyId,
-      lines
-        .filter((ln: any, i: number) => !lineResolutions[i].resolvedAccountCode && ln.productId != null)
-        .map((ln: any) => Number(ln.productId)),
-    );
     if (lines.length > 0) {
       const buckets = new Map<string, PreviewLine & { _amount: number }>();
       let postedNet = 0;
@@ -1657,10 +1661,10 @@ invoicesRouter.post("/invoices/:id/preview-posting", authorize({
         const res = lineResolutions[i];
 
         // Resolver output drives the bucket — same as /approve so the
-        // preview shows exactly what would post.
-        const acct = res.resolvedAccountCode
-          || (ln.productId != null ? productRevenueCodes.get(Number(ln.productId)) : undefined)
-          || invRevenueCode;
+        // preview shows exactly what would post. Product-revenue selection
+        // is now inside the resolver (#2102); the route only adds the
+        // generic fallback.
+        const acct = res.resolvedAccountCode || invRevenueCode;
         const cc = res.costCenterId;
         const dims = res.dimensions;
         if (res.status === "unmapped") unmappedLineIds.push(ln.id);
@@ -4219,6 +4223,7 @@ invoicesRouter.post("/customer-receipts", authorize({ feature: "finance.invoices
       clientId: body.clientId,
       amount: body.amount,
       method: body.method === "bank" || body.method === "transfer" ? "bank_transfer" : body.method,
+      cashAccountCode: body.cashAccountCode ?? null,
       receiptKey: body.receiptKey,
       receivedDate: body.date,
       reference: body.reference ?? null,

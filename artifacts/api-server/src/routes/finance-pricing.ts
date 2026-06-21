@@ -144,8 +144,7 @@ pricingRouter.get(
       }));
       res.json({ data, total: data.length });
     } catch (e) {
-      logger.error(e, "[pricing] list failed");
-      res.json({ data: [], total: 0 });
+      handleRouteError(e, res, "[pricing] list failed");
     }
   }
 );

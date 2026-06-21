@@ -143,7 +143,7 @@ const operationalEffectsShape = {
   fuelLog: z.object({
     create: z.boolean().optional(),
     liters: z.coerce.number().optional(),
-    costPerLiter: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().nonnegative().optional(),
     odometer: z.coerce.number().optional(),
     stationName: z.string().optional(),
     // #2234 — the SAVED fuel supplier (vendorId references suppliers.id) is the
@@ -215,7 +215,7 @@ const vendorInvoiceLineSchema = z.object({
   itemName: z.string().optional(),
   quantity: z.coerce.number().optional(),
   unit: z.string().optional(),
-  unitPrice: z.coerce.number().optional(),
+  unitPrice: z.coerce.number().nonnegative().optional(),
   taxCode: z.string().optional(),
   // amount = qty × unitPrice (net of VAT) — the line's debit base.
   amount: z.coerce.number(),
@@ -401,8 +401,10 @@ const yearEndCloseSchema = z.object({
 
 const openingBalanceLineSchema = z.object({
   accountCode: z.string(),
-  debit: z.coerce.number(),
-  credit: z.coerce.number(),
+  // F9-B2: لا رصيد افتتاحي سالب (نمط finance-accounts). السالب خطأ إدخال —
+  // يُستعمل الجانب المقابل لعكس الإشارة لا الرقم السالب.
+  debit: z.coerce.number().min(0, "المدين لا يكون سالبًا"),
+  credit: z.coerce.number().min(0, "الدائن لا يكون سالبًا"),
 });
 
 const openingBalancesSchema = z.object({
@@ -512,8 +514,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
-    logger.error(err, "Get expenses error:");
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+    handleRouteError(err, res, "Get expenses error:");
   }
 });
 
@@ -549,8 +550,7 @@ journalRouter.get("/maintenance-ticket-options", authorize({ feature: "finance.j
     }
     res.json({ data: options });
   } catch (err) {
-    logger.error(err, "Get maintenance ticket options error:");
-    res.json({ data: [] });
+    handleRouteError(err, res, "Get maintenance ticket options error:");
   }
 });
 
@@ -2069,8 +2069,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
-    logger.error(err, "Get vouchers error:");
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+    handleRouteError(err, res, "Get vouchers error:");
   }
 });
 
@@ -2716,7 +2715,7 @@ journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", ac
     const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status, je."documentStatus", je."paymentStatus", je."postingStatus" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."documentStatus", je."paymentStatus", je."postingStatus", je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } }));
   } catch (err) {
-    res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
+    handleRouteError(err, res, "Get salary advances error:");
   }
 });
 

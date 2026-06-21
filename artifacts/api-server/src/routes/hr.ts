@@ -3659,7 +3659,7 @@ router.get("/violations", authorize({ feature: "hr.violations", action: "list" }
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (err) { logger.error(err, "Get violations error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Get violations error:"); }
 });
 
 router.get("/violations/:id", authorize({ feature: "hr.violations", action: "view" }), async (req, res) => {
@@ -3837,7 +3837,7 @@ router.get("/shifts", authorize({ feature: "hr.attendance", action: "list" }), a
     const scope = req.scope!;
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM shifts WHERE "companyId" = $1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (err) { logger.error(err, "Get shifts error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Get shifts error:"); }
 });
 
 router.post("/shifts", authorize({ feature: "hr.attendance", action: "create" }), async (req, res) => {
@@ -3909,7 +3909,7 @@ router.get("/performance", authorize({ feature: "hr.performance", action: "list"
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (err) { logger.error(err, "Get performance error:"); res.json({ data: [], total: 0, page: 1, pageSize: 0 }); }
+  } catch (err) { handleRouteError(err, res, "Get performance error:"); }
 });
 
 router.get("/performance/:id", authorize({ feature: "hr.performance", action: "view" }), async (req, res) => {
@@ -4039,7 +4039,7 @@ router.get("/attendance-stats", authorize({ feature: "hr.attendance", action: "l
       totalEmployees: Number(totalEmp?.count ?? 0),
       month,
     }));
-  } catch (_e) { logger.error(_e, "attendance-stats query failed"); res.json({ present: 0, absent: 0, late: 0, totalEmployees: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "attendance-stats query failed"); }
 });
 
 router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), async (req, res) => {
@@ -4057,7 +4057,7 @@ router.get("/leave-stats", authorize({ feature: "hr.leaves", action: "list" }), 
       rejected: Number(rejected?.count ?? 0),
       total: Number(total?.count ?? 0),
     }));
-  } catch (_e) { logger.error(_e, "leave-stats query failed"); res.json({ pending: 0, approved: 0, rejected: 0, total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "leave-stats query failed"); }
 });
 
 router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action: "list" }), async (req, res) => {
@@ -4067,7 +4067,7 @@ router.get("/salary-components", authorize({ feature: "hr.payroll.runs", action:
       `SELECT * FROM salary_components WHERE "companyId"=$1 ORDER BY name LIMIT 500`, [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (_e) { logger.error(_e, "salary-components query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "salary-components query failed"); }
 });
 
 router.post("/salary-components", authorize({ feature: "hr.payroll.runs", action: "create" }), async (req, res) => {
@@ -4188,7 +4188,7 @@ router.get("/approval-chains", authorize({ feature: "hr.employees", action: "lis
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "approval-chains query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "approval-chains query failed"); }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4209,7 +4209,7 @@ router.get("/approval-chain-definitions", authorize({ feature: "hr.employees", a
       [scope.companyId]
     );
     res.json(maskFields(req, { data: chains, total: chains.length }));
-  } catch (_e) { logger.error(_e, "approval-chain-definitions query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "approval-chain-definitions query failed"); }
 });
 
 router.post("/approval-chain-definitions", authorize({ feature: "hr.employees", action: "create" }), async (req, res) => {
@@ -4297,7 +4297,7 @@ router.get("/approval-requests", authorize({ feature: "hr.organization", action:
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "approval-requests query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "approval-requests query failed"); }
 });
 
 router.patch("/approval-requests/:id/decide", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {
@@ -4443,7 +4443,7 @@ router.get("/attendance-policy", authorize({ feature: "hr.attendance", action: "
       penaltyLevel3Label: "خصم يوم", penaltyLevel4Label: "خصم يومين",
       penaltyLevel5Label: "خصم ثلاثة أيام + إنذار نهائي",
     }));
-  } catch (e) { logger.error(e, "attendance-policy GET error"); res.json({}); }
+  } catch (e) { handleRouteError(e, res, "attendance-policy GET error"); }
 });
 
 router.put("/attendance-policy", authorize({ feature: "hr.attendance", action: "update" }), async (req, res) => {
@@ -4533,7 +4533,7 @@ router.get("/payroll-summary", authorize({ feature: "hr.payroll.runs", action: "
 
     const data = Array.from(empMap.values());
     res.json(maskFields(req, { data, total: data.length, period: targetPeriod }));
-  } catch (err) { logger.error(err, "payslip-preview query failed"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "payslip-preview query failed"); }
 });
 
 router.get("/violations-stats", authorize({ feature: "hr.violations", action: "list" }), async (req, res) => {
@@ -4550,7 +4550,7 @@ router.get("/violations-stats", authorize({ feature: "hr.violations", action: "l
       thisMonth: Number(thisMonthRow?.count ?? 0),
       totalDeductions: Number(totalDeductions?.total ?? 0),
     }));
-  } catch (_e) { logger.error(_e, "violations-stats query failed"); res.json({ total: 0, thisMonth: 0, totalDeductions: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "violations-stats query failed"); }
 });
 
 router.patch("/violations/:id", authorize({ feature: "hr.violations", action: "update" }), async (req, res) => {
@@ -4708,7 +4708,7 @@ router.get("/shift-assignments", authorize({ feature: "hr.attendance", action: "
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "shift-assignments query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "shift-assignments query failed"); }
 });
 
 router.post("/shift-assignments", authorize({ feature: "hr.attendance", action: "create" }), async (req, res) => {
@@ -4782,7 +4782,7 @@ router.get("/official-letters", authorize({ feature: "hr.organization", action: 
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "official-letters query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "official-letters query failed"); }
 });
 
 router.post("/official-letters", authorize({ feature: "hr.organization", action: "create" }), async (req, res) => {
@@ -4901,7 +4901,7 @@ router.get("/monthly-attendance", authorize({ feature: "hr.attendance", action: 
       [scope.companyId, month]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "monthly-attendance query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "monthly-attendance query failed"); }
 });
 
 // ─── Leave requests general PATCH/DELETE ──────────────────────
@@ -5495,34 +5495,48 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
       throw new ValidationError("يجب ذكر سبب الرفض", { field: "notes" });
     }
 
-    if (newStatus === "approved") {
-      await rawExecute(
-        `UPDATE official_letters
-           SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
-         WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
-        [newStatus, Number(id), scope.userId, scope.companyId]
-      );
-    } else {
-      await rawExecute(
-        `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
-        [newStatus, Number(id), scope.companyId]
-      );
-    }
+    // Status change + (on reject/return) the queued-dispatch cancellation
+    // + the approval-action audit row are written atomically: a rejected
+    // letter must NEVER leave its dispatch queued (it would get sent after
+    // rejection), and the approval decision must never be recorded without
+    // its audit row. rawQuery joins the ambient transaction (txStore).
+    await withTransaction(async () => {
+      if (newStatus === "approved") {
+        await rawExecute(
+          `UPDATE official_letters
+             SET status = $1, "approvedAt" = NOW(), "approvedBy" = $3
+           WHERE id = $2 AND "companyId" = $4 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+          [newStatus, Number(id), scope.userId, scope.companyId]
+        );
+      } else {
+        await rawExecute(
+          `UPDATE official_letters SET status = $1 WHERE id = $2 AND "companyId" = $3 AND status = 'pending_approval' AND "deletedAt" IS NULL`,
+          [newStatus, Number(id), scope.companyId]
+        );
+      }
 
-    // If the letter was rejected or returned, cancel any queued dispatches
-    // so the queue worker doesn't send it after the fact. Phase 4 final
-    // contract: one UPDATE against the unified outbound_queue.
+      // If the letter was rejected or returned, cancel any queued dispatches
+      // so the queue worker doesn't send it after the fact. Phase 4 final
+      // contract: one UPDATE against the unified outbound_queue.
+      if (newStatus === "rejected" || newStatus === "returned") {
+        await rawExecute(
+          `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
+            WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
+          [Number(id), scope.companyId]
+        );
+      }
+
+      await rawExecute(
+        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
+        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
+      );
+    });
+
+    // Notify whoever filed the letter about the rejection/return so they
+    // can see the reason and take action. Best-effort serving path, after
+    // the transaction. Prefer the creator assignment (the HR officer who
+    // filed it), fall back to the employee's own assignment.
     if (newStatus === "rejected" || newStatus === "returned") {
-      await rawExecute(
-        `UPDATE outbound_queue SET status='cancelled', "errorMessage"='تم رفض الخطاب الرسمي', "updatedAt"=NOW()
-          WHERE "refType"='official_letter' AND "refId"=$1 AND "companyId"=$2 AND status='pending'`,
-        [Number(id), scope.companyId]
-      ).catch((e) => logger.error(e, "cancel outbound_queue for rejected letter failed:"));
-
-      // Notify whoever filed the letter about the rejection/return so they
-      // can see the reason and take action. Prefer the creator assignment
-      // (the HR officer who filed it), fall back to the employee's own
-      // assignment when the letter was filed by the employee themselves.
       const [targetAssignment] = await rawQuery<Record<string, unknown>>(
         `SELECT COALESCE(
                   ol."createdByAssignmentId",
@@ -5551,13 +5565,6 @@ router.patch("/official-letters/:id/approve", authorize({ feature: "hr.organizat
         }).catch((e) => logger.error(e, "notify letter creator failed:"));
       }
     }
-
-    try {
-      await rawExecute(
-        `INSERT INTO approval_actions ("entityType", "entityId", action, notes, "actionBy", "companyId") VALUES ('official_letter',$1,$2,$3,$4,$5)`,
-        [Number(id), newStatus, notes || null, scope.userId, scope.companyId]
-      );
-    } catch (e) { logger.error(e, "Failed to log approval action:"); }
 
     // Close the loop: emit a lifecycle event so the letter actually gets
     // dispatched (email_queue). Without this the route used to stop at
@@ -5643,7 +5650,7 @@ router.get("/deductions", authorize({ feature: "hr.payroll.runs", action: "list"
       [scope.companyId, month]
     );
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (_e) { logger.error(_e, "deductions query failed"); res.json({ data: [], total: 0 }); }
+  } catch (_e) { handleRouteError(_e, res, "deductions query failed"); }
 });
 
 router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "list" }), async (req, res) => {
@@ -5658,7 +5665,7 @@ router.get("/onboarding-steps", authorize({ feature: "hr.employees", action: "li
       res.json(maskFields(req, { data: val })); return;
     }
     res.json(maskFields(req, { data: ["تسليم أجهزة IT", "توقيع عقد العمل", "تعريف المدير المباشر", "دورة التعريف بالشركة", "فتح حساب بنكي", "تسجيل التأمينات"] }));
-  } catch (e) { logger.error(e, "failed to load onboarding steps"); res.json({ data: [] }); }
+  } catch (e) { handleRouteError(e, res, "failed to load onboarding steps"); }
 });
 
 router.put("/onboarding-steps", authorize({ feature: "hr.employees", action: "update" }), async (req, res) => {
@@ -6658,7 +6665,7 @@ router.get("/delegations", authorize({ feature: "hr.organization", action: "list
       // as-any-reason: justified-pragmatic - catch fallback preserves existing empty-result behavior while satisfying route return typing
     ).catch((e) => { logger.error(e, "hr query failed"); return [] as any[]; });
     res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (err) { logger.error(err, "delegations query failed"); res.json({ data: [], total: 0 }); }
+  } catch (err) { handleRouteError(err, res, "delegations query failed"); }
 });
 
 router.post("/delegations", authorize({ feature: "hr.organization", action: "approve" }), async (req, res) => {

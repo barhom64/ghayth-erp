@@ -540,6 +540,32 @@ export interface JournalEntryLine {
   analyticAccountId?: number | null;
 }
 
+/**
+ * تطبيع إشارة سطور القيد — دفاع المحرّك المركزي (معتمد من إبراهيم 2026-06-21:
+ * «التطبيع لا الرفض»). يحوّل أي مبلغ سالب إلى الجهة المقابلة بدل تخزينه سالبًا:
+ *   debit:-100, credit:0   ⇒  debit:0, credit:100
+ *   debit:0, credit:-50    ⇒  debit:50, credit:0
+ *
+ * الأثر المحاسبي مطابق تمامًا — صافي السطر (debit − credit) ثابت — لكن التخزين
+ * يصبح قياسيًا: تختفي الأعمدة السالبة التي كانت تُشوّه إجماليات/تقارير المدين والدائن.
+ * تدفقات داخلية (إقفال الفترة، التخلص من أصل، استقطاع راتب) ترحّل سالبًا عمدًا لعكس
+ * حركة حساب؛ التطبيع يبقيها على نفس الأرصدة لكن على العمود الصحيح، فلا يكسرها.
+ *
+ * مهم: لا يكسر بوابة عدم التوازن في createJournalEntry — (Σdebit − Σcredit) ثابت
+ * تحت التطبيع، لأن صافي كل سطر لا يتغيّر. يعدّل السطور في مكانها (نفس نمط التقريب).
+ */
+export function normalizeJournalLineSigns<T extends { debit: number; credit: number }>(lines: T[]): T[] {
+  for (const line of lines) {
+    let debit = Number(line.debit) || 0;
+    let credit = Number(line.credit) || 0;
+    if (debit < 0) { credit += -debit; debit = 0; }
+    if (credit < 0) { debit += -credit; credit = 0; }
+    line.debit = debit;
+    line.credit = credit;
+  }
+  return lines;
+}
+
 export async function createJournalEntry(params: {
   companyId: number;
   branchId: number;
@@ -608,6 +634,10 @@ export async function createJournalEntry(params: {
     }
   }
 
+  // دفاع المحرّك المركزي: طبّع إشارة كل سطر قبل التقريب والتوازن والكتابة، فلا
+  // تُخزَّن مبالغ سالبة (تدفقات الإقفال/التخلص/الاستقطاع ترحّل سالبًا عمدًا).
+  // التطبيع يحافظ على صافي كل سطر، فبوابة عدم التوازن أدناه تبقى صحيحة.
+  normalizeJournalLineSigns(params.lines);
   for (const line of params.lines) {
     line.debit = roundTo2(Number(line.debit));
     line.credit = roundTo2(Number(line.credit));

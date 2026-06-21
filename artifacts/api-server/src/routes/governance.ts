@@ -10,6 +10,13 @@ import { createAuditLog, emitEvent } from "../lib/businessHelpers.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { logger } from "../lib/logger.js";
 
+// ترتيب تاريخَي السريان/الانتهاء — يُطبَّق فقط عند وجود الطرفين (كلاهما اختياري).
+// مدى مقلوب يجعل السياسة «غير نشطة أبدًا» في فلتر النشاط (effectiveDate <= اليوم
+// AND expiryDate >= اليوم)، فالترتيب شرط صحّة.
+const policyDatesOrdered = (d: { effectiveDate?: string | null; expiryDate?: string | null }) =>
+  !d.effectiveDate || !d.expiryDate || d.expiryDate >= d.effectiveDate;
+const policyDatesRefine = { message: "تاريخ الانتهاء يجب أن يكون بعد تاريخ السريان", path: ["expiryDate"] };
+
 const createPolicySchema = z.object({
   title: z.string().min(1, "عنوان السياسة مطلوب"),
   description: z.string().optional().nullable(),
@@ -18,7 +25,7 @@ const createPolicySchema = z.object({
   effectiveDate: z.string().optional().nullable(),
   expiryDate: z.string().optional().nullable(),
   modules: z.array(z.string()).optional().nullable(),
-});
+}).refine(policyDatesOrdered, policyDatesRefine);
 
 const createRiskSchema = z.object({
   title: z.string().min(1, "عنوان المخاطرة مطلوب"),
@@ -39,7 +46,7 @@ const updatePolicySchema = z.object({
   effectiveDate: z.string().optional().nullable(),
   expiryDate: z.string().optional().nullable(),
   modules: z.array(z.string()).optional().nullable(),
-});
+}).refine(policyDatesOrdered, policyDatesRefine);
 
 const newPolicyVersionSchema = z.object({
   title: z.string().optional(),
@@ -47,7 +54,7 @@ const newPolicyVersionSchema = z.object({
   category: z.string().optional().nullable(),
   effectiveDate: z.string().optional().nullable(),
   expiryDate: z.string().optional().nullable(),
-});
+}).refine(policyDatesOrdered, policyDatesRefine);
 
 const updateRiskSchema = z.object({
   title: z.string().optional(),
@@ -247,6 +254,21 @@ router.patch("/policies/:id", authorize({ feature: "governance", action: "update
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(updatePolicySchema.safeParse(req.body));
+    // re-validate date ordering against the effective (merged) values — a partial
+    // update must not place effectiveDate after expiryDate (the body-only refine
+    // can't see a date that stays in the DB).
+    if (b.effectiveDate !== undefined || b.expiryDate !== undefined) {
+      const [cur] = await rawQuery<{ effectiveDate: string | null; expiryDate: string | null }>(
+        `SELECT "effectiveDate"::text AS "effectiveDate", "expiryDate"::text AS "expiryDate" FROM governance_policies WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!cur) throw new NotFoundError("السياسة غير موجودة");
+      const effEff = b.effectiveDate !== undefined ? (b.effectiveDate || null) : cur.effectiveDate;
+      const effExp = b.expiryDate !== undefined ? (b.expiryDate || null) : cur.expiryDate;
+      if (effEff && effExp && effExp < effEff) {
+        throw new ValidationError("تاريخ الانتهاء يجب أن يكون بعد تاريخ السريان", { field: "expiryDate" });
+      }
+    }
     const sets: string[] = [];
     const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }

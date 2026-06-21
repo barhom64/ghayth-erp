@@ -17,7 +17,8 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 // P4.9 — Warehouse sweep: shared header + status chips.
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Package, ArrowLeftRight, Layers, Truck, Plus, AlertTriangle, DollarSign, Activity } from "lucide-react";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -90,9 +91,12 @@ function ProductsTab() {
   useEffect(() => { setPage(1); }, [filters.search, filters.status, filters.dateFrom, filters.dateTo]);
   const pageSize = 20;
   const canManage = roleLevel >= 50;
+  // #2713 (تعميم) — سلة المحذوفات للمنتجات.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { toast } = useToast();
   const { data: productsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["warehouse-products", String(page), filters.search, filters.status, filters.dateFrom, filters.dateTo],
-    withListFilters(`/warehouse/products?page=${page}&limit=${pageSize}`, filters),
+    ["warehouse-products", String(page), filters.search, filters.status, filters.dateFrom, filters.dateTo, showDeleted ? "deleted" : "active"],
+    withListFilters(`/warehouse/products?page=${page}&limit=${pageSize}${showDeleted ? "&deleted=true" : ""}`, filters),
   );
   const products = asList(productsResp);
   const total = productsResp?.total || products.length;
@@ -105,6 +109,16 @@ function ProductsTab() {
     queryKeys: [["warehouse-products", String(page)], ["warehouse-stats"]],
     onSuccess: () => refetch(),
   });
+
+  async function handleRestoreProduct(id: number) {
+    try {
+      await apiFetch(`/warehouse/products/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع المنتج" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
 
   const editFields = [
     { key: "name", label: "المنتج" },
@@ -127,12 +141,16 @@ function ProductsTab() {
     {
       key: "actions", header: "الإجراءات",
       render: (p) => (
-        <RowActions
-          canEdit={canManage}
-          onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", minStock: p.minStock || 0, costPrice: p.costPrice || 0, sellPrice: p.sellPrice || 0, status: p.status || "active" })}
-          onDelete={() => startDelete(p.id)}
-          deletePerm="warehouse:delete"
-        />
+        showDeleted ? (
+          <Button variant="outline" size="sm" onClick={() => handleRestoreProduct(p.id)}>استرجاع</Button>
+        ) : (
+          <RowActions
+            canEdit={canManage}
+            onEdit={() => startEdit(p.id, { name: p.name, sku: p.sku || "", minStock: p.minStock || 0, costPrice: p.costPrice || 0, sellPrice: p.sellPrice || 0, status: p.status || "active" })}
+            onDelete={() => startDelete(p.id)}
+            deletePerm="warehouse:delete"
+          />
+        )
       ),
     },
   ];
@@ -197,7 +215,12 @@ function ProductsTab() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>المنتجات</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{showDeleted ? "المنتجات المحذوفة" : "المنتجات"}</CardTitle>
+          <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => { setShowDeleted((v) => !v); setPage(1); }}>
+            {showDeleted ? "المنتجات النشطة" : "سلة المحذوفات"}
+          </Button>
+        </CardHeader>
         <CardContent>
           <DataTable
             columns={columns}

@@ -31,7 +31,7 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -460,33 +460,39 @@ router.post("/calls", authorize({ feature: "communications", action: "create" })
     const scope = req.scope!;
     const body = zodParse(logCallSchema.safeParse(req.body));
     const callId = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const { insertId } = await rawExecute(
-      `INSERT INTO pbx_calls ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-      [
-        scope.companyId, callId,
-        body.callerNumber, body.calledNumber,
-        body.direction, body.duration, body.status,
-      ],
-    );
-    assertInsert(insertId, "pbx_calls");
-
-    // Mirror in message_log so the call shows up in the unified thread
-    // view alongside email/SMS/WhatsApp. Phase 4 final contract:
-    // legacy communications_log INSERT dropped; channel='pbx' accepted
-    // by the relaxed constraint from migration 224.
+    // The call log + its message_log mirror are written atomically: a call
+    // that committed without its unified-thread mirror would be invisible
+    // in the inbox. rawQuery joins the ambient transaction (txStore).
     const fromAddr = body.direction === "outbound" ? scope.userId.toString() : body.callerNumber;
     const toAddr = body.direction === "outbound" ? body.calledNumber : scope.userId.toString();
     const callBody = `${body.status} · ${body.duration}s${body.notes ? ` · ${body.notes}` : ""}`;
-    await rawExecute(
-      `INSERT INTO message_log
-         ("companyId", channel, direction, "fromAddress", "toAddress",
-          body, status, folder, "relatedType", "relatedId", "createdAt")
-       VALUES ($1, 'pbx', $2, $3, $4, $5, 'logged',
-               CASE WHEN $2 = 'inbound' THEN 'inbox' ELSE 'sent' END,
-               $6, $7, NOW())`,
-      [scope.companyId, body.direction, fromAddr, toAddr, callBody, body.relatedType ?? null, body.relatedId ?? null],
-    );
+    const insertId = await withTransaction(async () => {
+      const { insertId: callRowId } = await rawExecute(
+        `INSERT INTO pbx_calls ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+        [
+          scope.companyId, callId,
+          body.callerNumber, body.calledNumber,
+          body.direction, body.duration, body.status,
+        ],
+      );
+      assertInsert(callRowId, "pbx_calls");
+
+      // Mirror in message_log so the call shows up in the unified thread
+      // view alongside email/SMS/WhatsApp. Phase 4 final contract:
+      // legacy communications_log INSERT dropped; channel='pbx' accepted
+      // by the relaxed constraint from migration 224.
+      await rawExecute(
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'pbx', $2, $3, $4, $5, 'logged',
+                 CASE WHEN $2 = 'inbound' THEN 'inbox' ELSE 'sent' END,
+                 $6, $7, NOW())`,
+        [scope.companyId, body.direction, fromAddr, toAddr, callBody, body.relatedType ?? null, body.relatedId ?? null],
+      );
+      return callRowId;
+    });
 
     void emitEvent({
       companyId: scope.companyId, userId: scope.userId,
@@ -720,26 +726,32 @@ router.post("/messages/:id/retry", authorize({ feature: "communications", action
       throw new ValidationError("هذه الرسالة محجوبة بواسطة قواعد DLP — لا يمكن إعادة محاولتها");
     }
 
-    const { affectedRows } = await rawExecute(
-      `UPDATE outbound_queue
-          SET status = 'pending',
-              attempts = 0,
-              "errorMessage" = NULL,
-              "scheduledAt" = NOW(),
-              "updatedAt" = NOW()
-        WHERE "messageLogId" = $1 AND "companyId" = $2 AND status = 'failed'`,
-      [msgId, scope.companyId],
-    );
-    if (!affectedRows) {
-      throw new ValidationError("لا يوجد صف في قائمة الإرسال بحالة فاشلة لهذه الرسالة");
-    }
-
-    // Mirror message_log so the inbox shows the new status immediately,
-    // without waiting for the worker to tick.
-    await rawExecute(
-      `UPDATE message_log SET status = 'queued' WHERE id = $1 AND "companyId" = $2`,
-      [msgId, scope.companyId],
-    ).catch((e) => logger.warn(e, "[inbox/retry] mirror status update failed"));
+    // Re-queue + its message_log mirror are written atomically so the
+    // inbox status can never diverge from the queue state (previously the
+    // mirror was a best-effort .catch that left a stale badge until the
+    // next worker tick).
+    const affectedRows = await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE outbound_queue
+            SET status = 'pending',
+                attempts = 0,
+                "errorMessage" = NULL,
+                "scheduledAt" = NOW(),
+                "updatedAt" = NOW()
+          WHERE "messageLogId" = $1 AND "companyId" = $2 AND status = 'failed'`,
+        [msgId, scope.companyId],
+      );
+      if (!affectedRows) {
+        throw new ValidationError("لا يوجد صف في قائمة الإرسال بحالة فاشلة لهذه الرسالة");
+      }
+      // Mirror message_log so the inbox shows the new status immediately,
+      // without waiting for the worker to tick.
+      await rawExecute(
+        `UPDATE message_log SET status = 'queued' WHERE id = $1 AND "companyId" = $2`,
+        [msgId, scope.companyId],
+      );
+      return affectedRows;
+    });
 
     void createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -775,27 +787,30 @@ router.post("/messages/:id/cancel", authorize({ feature: "communications", actio
     if (!msg) throw new NotFoundError("الرسالة غير موجودة");
     if (msg.direction !== "outbound") throw new ValidationError("لا يمكن إلغاء رسالة واردة");
 
-    // Cron worker ticks every 60s — add a 30s safety margin so we don't
-    // race a worker that's milliseconds away from picking the row up.
-    const { affectedRows } = await rawExecute(
-      `UPDATE outbound_queue
-          SET status = 'cancelled', "updatedAt" = NOW()
-        WHERE "messageLogId" = $1 AND "companyId" = $2
-          AND status = 'pending'
-          AND "scheduledAt" IS NOT NULL
-          AND "scheduledAt" > NOW() + INTERVAL '30 seconds'`,
-      [msgId, scope.companyId],
-    );
-    if (!affectedRows) {
-      throw new ValidationError(
-        "لا يمكن إلغاء هذه الرسالة — قد تكون قيد الإرسال أو حان وقت جدولتها",
+    // Cancel + its message_log mirror are written atomically so the inbox
+    // status can never diverge from the queue state. Cron worker ticks
+    // every 60s — add a 30s safety margin so we don't race a worker that's
+    // milliseconds away from picking the row up.
+    await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE outbound_queue
+            SET status = 'cancelled', "updatedAt" = NOW()
+          WHERE "messageLogId" = $1 AND "companyId" = $2
+            AND status = 'pending'
+            AND "scheduledAt" IS NOT NULL
+            AND "scheduledAt" > NOW() + INTERVAL '30 seconds'`,
+        [msgId, scope.companyId],
       );
-    }
-
-    await rawExecute(
-      `UPDATE message_log SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
-      [msgId, scope.companyId],
-    ).catch((e) => logger.warn(e, "[inbox/cancel] mirror status update failed"));
+      if (!affectedRows) {
+        throw new ValidationError(
+          "لا يمكن إلغاء هذه الرسالة — قد تكون قيد الإرسال أو حان وقت جدولتها",
+        );
+      }
+      await rawExecute(
+        `UPDATE message_log SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+        [msgId, scope.companyId],
+      );
+    });
 
     void createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
