@@ -107,4 +107,36 @@ d("Fleet accident assessment posts a balanced GL routed by costBearer", () => {
     expect(insCreditLeg.accountCode).toBe(companyDebit);
     expect(insDebitLeg.accountCode).not.toBe(companyDebit);
   });
+
+  it("re-assessment REVERSES the prior entry and re-posts the corrected one (no ledger freeze)", async () => {
+    const accidentId = 700004;
+    // التقييم الأول: شركة، 1000.
+    const first = await fleetEngine.postAccidentGL(
+      { companyId, branchId, createdBy: 0 },
+      { id: accidentId, vehicleId, cost: 1000, costBearer: "company" });
+    expect((first as any).reversedJournalId).toBeFalsy();
+    const firstJournalId = (first as any).journalId;
+
+    // إعادة التقييم: تأمين، 500.
+    const second = await fleetEngine.postAccidentGL(
+      { companyId, branchId, createdBy: 0 },
+      { id: accidentId, vehicleId, cost: 500, costBearer: "insurance" });
+    expect((second as any).reversedJournalId).toBe(firstJournalId);
+
+    // القيد الأول صار معكوسًا (deletedAt مضبوط).
+    const [oldJe] = await rawQuery<{ deletedAt: string | null }>(
+      `SELECT "deletedAt" FROM journal_entries WHERE id=$1`, [firstJournalId]);
+    expect(oldJe.deletedAt).toBeTruthy();
+
+    // القيد النشط الوحيد بنفس sourceKey هو المصحّح (500، مسار التأمين).
+    const active = await rawQuery<{ id: number }>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceKey"=$2 AND "deletedAt" IS NULL`,
+      [companyId, `fleet:accident:${accidentId}`]);
+    expect(active.length).toBe(1);
+    const lines = await linesFor(accidentId);
+    const debit = lines.reduce((s, l) => s + Number(l.debit), 0);
+    const credit = lines.reduce((s, l) => s + Number(l.credit), 0);
+    expect(debit).toBeCloseTo(500, 2);
+    expect(credit).toBeCloseTo(500, 2);
+  });
 });
