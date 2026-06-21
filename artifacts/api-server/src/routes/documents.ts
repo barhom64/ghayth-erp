@@ -176,6 +176,10 @@ const uploadDocumentSchema = z.object({
   storageKey: z.string().min(1),
   retentionUntil: z.string().optional(),
   retentionPolicy: z.string().max(40).optional(),
+  // SHA-256 of the file content, computed client-side at upload (the server
+  // never sees the bytes in the direct-to-storage flow). Enables exact-content
+  // duplicate detection even when a file is renamed. Optional/best-effort.
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
   entityLinks: z.array(entityLinkItem).optional(),
 });
 
@@ -335,7 +339,7 @@ router.post("/upload", authorize({ feature: "documents", action: "create" }), as
   try {
     const body = zodParse(uploadDocumentSchema.safeParse(req.body));
     const scope = req.scope!;
-    const { title, description, fileName, fileSize, mimeType, category, storageKey, entityLinks } = body;
+    const { title, description, fileName, fileSize, mimeType, category, storageKey, contentHash, entityLinks } = body;
 
     const ALLOWED_ENTITY_TYPES = [
       "employee", "client", "project", "invoice", "vehicle",
@@ -355,9 +359,9 @@ router.post("/upload", authorize({ feature: "documents", action: "create" }), as
     let docId!: number;
     await withTransaction(async (client) => {
       const r = await client.query(
-        `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "currentVersion", "uploadedBy", "companyId")
-         VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,1,$8,$9) RETURNING id`,
-        [title, description, fileName, fileSize, mimeType, category || null, storageKey, scope.userId, scope.companyId]
+        `INSERT INTO documents (title, description, "fileName", "fileSize", "mimeType", category, status, "storageKey", "contentHash", "currentVersion", "uploadedBy", "companyId")
+         VALUES ($1,$2,$3,$4,$5,$6,'draft',$7,$8,1,$9,$10) RETURNING id`,
+        [title, description, fileName, fileSize, mimeType, category || null, storageKey, contentHash || null, scope.userId, scope.companyId]
       );
       docId = r.rows[0].id;
 
