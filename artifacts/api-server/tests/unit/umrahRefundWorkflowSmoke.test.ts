@@ -26,8 +26,9 @@ const MIGRATION = readFileSync(
   join(import.meta.dirname!, "../../src/migrations/268_umrah_refund_workflow.sql"),
   "utf8",
 );
+// U-07 Phase 3: the refund routes now live in the dedicated sub-router.
 const ROUTES = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-refunds.ts"),
   "utf8",
 );
 
