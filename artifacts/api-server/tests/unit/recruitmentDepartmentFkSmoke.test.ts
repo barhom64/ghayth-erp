@@ -37,8 +37,10 @@ describe("migration 394 — job_postings.departmentId FK", () => {
 });
 
 describe("migration 399 — FK hardening (post-review)", () => {
-  it("normalizes the FK to ON DELETE SET NULL defensively (drop + re-add)", () => {
-    expect(HARDENING).toMatch(/DROP CONSTRAINT/);
+  it("ensures the FK with ON DELETE SET NULL via an idempotent pg_constraint guard", () => {
+    // migration-policy compliant: guarded ADD CONSTRAINT (no bare add, no DROP)
+    expect(HARDENING).toMatch(/IF NOT EXISTS \(\s*SELECT 1 FROM pg_constraint/);
+    expect(HARDENING).toMatch(/conname = 'job_postings_departmentId_fkey'/);
     expect(HARDENING).toMatch(/FOREIGN KEY \("departmentId"\) REFERENCES departments\(id\) ON DELETE SET NULL/);
   });
   it("nulls the FK for postings whose department name is non-unique within the company", () => {
