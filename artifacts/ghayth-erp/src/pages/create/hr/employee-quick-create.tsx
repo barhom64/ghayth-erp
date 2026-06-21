@@ -351,6 +351,7 @@ export default function EmployeeQuickCreate() {
               value={form.categoryKey}
               onChange={(v) => setForm((f) => ({ ...f, categoryKey: v }))}
               error={fieldErrors.categoryKey}
+              allowCreate={false}
             />
           </FormFieldWrapper>
         </CardContent>
