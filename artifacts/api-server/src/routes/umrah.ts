@@ -612,6 +612,21 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchSeasonSchema.safeParse(req.body));
+    // re-validate date ordering against the effective (merged) values:
+    // patchSeasonSchema lets startDate/endDate change independently, so a partial
+    // update must not place startDate after endDate (createSeasonSchema enforces this).
+    if (b.startDate !== undefined || b.endDate !== undefined) {
+      const [curDates] = await rawQuery<{ startDate: string; endDate: string }>(
+        `SELECT "startDate"::text AS "startDate", "endDate"::text AS "endDate" FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!curDates) throw new NotFoundError("الموسم غير موجود");
+      const effStart = b.startDate ?? curDates.startDate;
+      const effEnd = b.endDate ?? curDates.endDate;
+      if (effEnd < effStart) {
+        throw new ValidationError("تاريخ النهاية يجب أن يكون بعد تاريخ البداية", { field: "endDate" });
+      }
+    }
     let originalStatus: string | undefined;
     if (b.status !== undefined) {
       const [existing] = await rawQuery<Record<string, unknown>>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
