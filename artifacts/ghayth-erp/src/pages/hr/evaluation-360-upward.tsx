@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -15,6 +15,8 @@ import { toast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
 
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 const UPWARD_CRITERIA = [
   { key: "leadership", label: "القيادة وتوزيع المهام" },
   { key: "communication", label: "التواصل والشفافية" },
@@ -84,6 +86,15 @@ export default function Evaluation360UpwardPage() {
   );
   const avgScore = Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length);
 
+  // Print rows = each leadership criterion with its current score (live from
+  // the sliders). Derived before any early return (loading / error / submitted)
+  // so hooks run unconditionally.
+  const criteriaRows = useMemo(
+    () => UPWARD_CRITERIA.map((c) => ({ label: c.label, score: scores[c.key] ?? 0 })),
+    [scores],
+  );
+  const { sortedRows: printRows } = usePrintRows<{ label: string; score: number }>(criteriaRows);
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -123,7 +134,24 @@ export default function Evaluation360UpwardPage() {
       subtitle={cycle ? `دورة تقييم: ${cycle.period}` : undefined}
       breadcrumbs={[{ href: "/hr", label: "الموارد البشرية" }, { href: "/hr/evaluation-360", label: "التقييم 360°" }, { label: "التقييم العكسي السري" }]}
       actions={
-        <Button asChild variant="ghost" size="sm"><Link href={`/hr/evaluation-360/${cycleId}`}><ArrowRight className="w-4 h-4 me-1" />عودة</Link></Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="ghost" size="sm"><Link href={`/hr/evaluation-360/${cycleId}`}><ArrowRight className="w-4 h-4 me-1" />عودة</Link></Button>
+          <PrintButton
+            entityType="report_hr_evaluation_360_upward"
+            entityId={String(cycleId)}
+            size="icon"
+            payload={() => ({
+              entity: {
+                title: cycle ? `التقييم العكسي السري — دورة ${cycle.period}` : "التقييم العكسي السري",
+                total: avgScore,
+              },
+              items: printRows.map((r) => ({
+                "المعيار": r.label,
+                "التقييم": r.score,
+              })),
+            })}
+          />
+        </div>
       }
     >
       <HrTabsNav />

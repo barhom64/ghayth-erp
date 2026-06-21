@@ -6,7 +6,7 @@
  * through the backend; reject requires a reason.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
@@ -14,6 +14,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, XCircle, ArrowRight } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface Assignment {
   bookingLineId: number;
@@ -81,6 +83,22 @@ export default function OptimizerRunDetailPage() {
   const canDecide = run && run.status === "solved";
   const busy = approveMut.isPending || rejectMut.isPending;
 
+  // صفوف الطباعة = الإسنادات المقترحة من هذه الخطة. تُحسب قبل أي return مبكر
+  // (قواعد الـHooks) وتعيد بناء القيم المُشتقّة في render الجدول (الترتيب، المسافة بالكم).
+  const assignmentRows = useMemo(
+    () =>
+      (run?.assignmentsJson ?? []).map((a) => ({
+        "#": a.sequenceOrder + 1,
+        "سطر الحجز": `#${a.bookingLineId}`,
+        "المركبة": `#${a.vehicleId}`,
+        "السائق": a.driverId != null ? `#${a.driverId}` : "—",
+        "المسافة (كم)": (a.distanceMeters / 1000).toFixed(2),
+        "السبب": a.reason,
+      })),
+    [run?.assignmentsJson],
+  );
+  const { sortedRows: printRows } = usePrintRows<any>(assignmentRows);
+
   function approve() {
     if (!runId) return;
     approveMut.mutate({});
@@ -117,6 +135,28 @@ export default function OptimizerRunDetailPage() {
         { href: "/fleet/optimizer/runs", label: "مُحسِّن الإسناد" },
         { label: `#${run.id}` },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_fleet_optimizer_run"
+          entityId={String(run.id)}
+          size="icon"
+          payload={() => ({
+            entity: {
+              title: `عملية تحسين #${run.id}`,
+              total: printRows.length,
+              status: meta.label,
+              algorithm: run.algorithm ?? "—",
+              runDate: run.runDate,
+              totalDistanceKm:
+                run.totalDistanceMeters != null
+                  ? (run.totalDistanceMeters / 1000).toFixed(1)
+                  : "—",
+              unassigned: unassigned.length,
+            },
+            items: printRows,
+          })}
+        />
+      }
     >
       {/* Header summary */}
       <Card className="mt-4">
