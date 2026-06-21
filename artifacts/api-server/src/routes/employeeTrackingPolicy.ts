@@ -19,7 +19,8 @@
 import { Router } from "express";
 import { rawQuery } from "../lib/rawdb.js";
 import { authorize } from "../lib/rbac/authorize.js";
-import { auditFromRequest } from "../lib/businessHelpers.js";
+import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
+import { logger } from "../lib/logger.js";
 import {
   handleRouteError,
   parseId,
@@ -167,6 +168,11 @@ router.post(
         after: row,
         reason: b.reason ?? undefined,
       });
+      void emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "tracking_policy.enable", entity: "employee_tracking_policy", entityId: row.id,
+        details: JSON.stringify({ employeeId: b.employeeId, trackingMode: row.trackingMode, trackingEnabled: row.trackingEnabled, upsert: existing ? "update" : "create" }),
+      }).catch((e) => logger.error(e, "tracking policy event failed"));
       res.status(existing ? 200 : 201).json({ data: row });
     } catch (err) {
       handleRouteError(err, res, "Create tracking policy error:");
@@ -213,6 +219,11 @@ router.patch(
       await auditFromRequest(req, "tracking_policy.update", "employee_tracking_policy", id, {
         before, after: row, reason: b.reason ?? undefined,
       });
+      void emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "tracking_policy.update", entity: "employee_tracking_policy", entityId: id,
+        details: JSON.stringify({ employeeId: (before as any).employeeId, changed: Object.keys(b), trackingEnabled: (row as any).trackingEnabled }),
+      }).catch((e) => logger.error(e, "tracking policy event failed"));
       res.json({ data: row });
     } catch (err) {
       handleRouteError(err, res, "Update tracking policy error:");
@@ -247,6 +258,11 @@ router.post(
       await auditFromRequest(req, "tracking_policy.disable", "employee_tracking_policy", id, {
         before, after: row, reason,
       });
+      void emitEvent({
+        companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+        action: "tracking_policy.disable", entity: "employee_tracking_policy", entityId: id,
+        details: JSON.stringify({ employeeId: (before as any).employeeId, reason: reason ?? null }),
+      }).catch((e) => logger.error(e, "tracking policy event failed"));
       res.json({ data: row });
     } catch (err) {
       handleRouteError(err, res, "Disable tracking policy error:");

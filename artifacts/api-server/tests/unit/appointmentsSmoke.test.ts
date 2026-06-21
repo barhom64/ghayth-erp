@@ -14,7 +14,7 @@ const CALENDAR = readFileSync(join(API_SRC, "routes/calendar.ts"), "utf8");
 
 describe("appointments — migration 393", () => {
   it("creates the appointments table (idempotent, companyId-scoped, soft-delete)", () => {
-    const p = join(API_SRC, "migrations/393_appointments.sql");
+    const p = join(API_SRC, "migrations/400_appointments.sql");
     expect(existsSync(p)).toBe(true);
     const sql = readFileSync(p, "utf8");
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS appointments/);

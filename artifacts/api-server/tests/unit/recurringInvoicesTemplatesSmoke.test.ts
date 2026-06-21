@@ -13,7 +13,7 @@ const INDEX = readFileSync(join(API_SRC, "routes/index.ts"), "utf8");
 
 describe("recurring invoices — migration 395 (templates only, non-ledger)", () => {
   it("creates recurring_invoice_templates (scoped, soft-delete, due index, rollback)", () => {
-    const p = join(API_SRC, "migrations/395_recurring_invoice_templates.sql");
+    const p = join(API_SRC, "migrations/402_recurring_invoice_templates.sql");
     expect(existsSync(p)).toBe(true);
     const sql = readFileSync(p, "utf8");
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS recurring_invoice_templates/);

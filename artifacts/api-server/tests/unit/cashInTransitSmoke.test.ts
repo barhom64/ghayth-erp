@@ -24,7 +24,7 @@ const confirmHandler = (() => {
 
 describe("cash-in-transit — migration 396", () => {
   it("creates the tracking table (scoped, soft-delete, status, rollback)", () => {
-    const p = join(API_SRC, "migrations/396_cash_in_transit.sql");
+    const p = join(API_SRC, "migrations/403_cash_in_transit.sql");
     expect(existsSync(p)).toBe(true);
     const sql = readFileSync(p, "utf8");
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS cash_in_transit_transfers/);

@@ -23,6 +23,7 @@ import { zatcaRouter } from "./finance-zatca.js";
 import notificationsRouter from "./notifications.js";
 import tasksRouter from "./tasks.js";
 import fleetRouter from "./fleet.js";
+import fleetInspectionsRouter from "./fleet-inspections.js";
 import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
@@ -74,6 +75,7 @@ import storageRouter from "./storage.js";
 import activityIngestRouter from "./activityIngest.js";
 import mySpaceRouter from "./mySpace.js";
 import myFieldTrackingRouter from "./myFieldTracking.js";
+import realtimeRouter from "./realtime.js";
 import employeeTrackingPolicyRouter from "./employeeTrackingPolicy.js";
 import meInsightsRouter from "./meInsights.js";
 import actionCenterRouter from "./actionCenter.js";
@@ -252,6 +254,12 @@ router.use("/communications", communicationsSmsWebhookRouter);
 // were registered on the authenticated communications router and got 401'd —
 // inbound WhatsApp messages and PBX call events never reached the system.
 router.use("/communications", communicationsPublicWebhookRouter);
+
+// Realtime SSE stream. Mounted BEFORE authMiddleware because EventSource can't
+// send an Authorization header, so the route authenticates itself from a query
+// token (native) / cookie (web) / Bearer. It pushes live change-events so the
+// web and native app stay in sync without a manual refresh.
+router.use("/realtime", realtimeRouter);
 
 router.get("/settings/display", async (req, res) => {
   try {
@@ -453,6 +461,8 @@ router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
 router.use("/fleet", fleetUserLimiter);
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
+// Vehicle inspections + photos (متابعة النقل بالصور). Same /fleet module gate.
+router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetInspectionsRouter);
 // Telematics surface (#1354). Mounted under /fleet so it inherits the same
 // module + financial guard + per-user limiter as the rest of the fleet
 // module, and so URLs stay /fleet/telematics/* in the SPA.

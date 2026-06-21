@@ -67,6 +67,7 @@ const STRICT = process.argv.includes("--strict");
 // "no create/edit in the nav drawer" convention.
 const CREATE_IN_SIDEBAR_ALLOWLIST = new Set([
   "/hr/leaves/create", // employee self-service "طلب إجازة" entry point
+  "/employees/quick-create", // "إنشاء موظف سريع" — intentional quick-access HR entry point (mirrors the leave self-service precedent)
 ]);
 
 // Pages intentionally OFF the sidebar because a tab-shell page supersets them —
@@ -180,7 +181,11 @@ function getRedirectRoutePaths() {
 /** Pure: every `path: "/x"` value in a navigation-registry source string. */
 export function extractSidebarPaths(src) {
   const out = [];
-  for (const m of src.matchAll(/\bpath:\s*["']([^"']+)["']/g)) out.push(m[1]);
+  // Virtual wrappers (path "#…") are visual sidebar containers, not pages/routes
+  // — skip them, consistent with getNavigationRegistry which also skips "#" paths.
+  for (const m of src.matchAll(/\bpath:\s*["']([^"']+)["']/g)) {
+    if (!m[1].startsWith("#")) out.push(m[1]);
+  }
   return out;
 }
 

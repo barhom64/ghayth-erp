@@ -85,6 +85,9 @@ run_step "gate:nav-titles"    pnpm -s run gate:nav-titles
 #   gate:subtabs       — fails if a page's in-page sub-tab (<TabsTrigger>) leaks
 #                        English; keeps the SECOND horizontal menu layer Arabic.
 run_step "gate:subtabs"       pnpm -s run gate:subtabs
+# nav-mirror: every horizontal module bar must mirror its sidebar groups (it now
+# delegates to <ModuleTabsNav>, derived from the registry) — blocks any drift.
+run_step "gate:nav-mirror"    pnpm -s run gate:nav-mirror
 # Pure-logic fixtures for the wiring audit's string-literal reader,
 # URL normaliser, and segment matcher — runs before the audit itself
 # so a broken heuristic fails with a precise diff rather than a
@@ -181,6 +184,16 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # Pure-logic fixtures guard the detector.
 run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
 run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
+# Page action-bar consistency (refresh/print/export): a hand-rolled control —
+# a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
+# / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
+# (<RefreshAction/> / <PrintButton/> / <ExportAction/>), so the same action looked
+# and behaved differently on every page before unification. OFFLINE source scan;
+# deliberate framework/section/per-row exceptions (action:path) in
+# scripts/page-actions-allowlist.txt, fails only on a NEW offender.
+# Pure-logic fixtures guard the detector.
+run_step "check:page-actions:tests" node scripts/src/check-page-actions.test.mjs
+run_step "check:page-actions" node scripts/src/check-page-actions.mjs
 # Native API origin: a relative `/api` or local `const BASE =
 # import.meta.env.BASE_URL` hits the app bundle (https://localhost), not the
 # server, inside the Capacitor native shell — so the whole data layer fails in

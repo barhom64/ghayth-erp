@@ -10,8 +10,9 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import {
   Clock, Calendar, DollarSign, FileSignature,
   CheckCircle2, XCircle, AlertCircle, ChevronLeft,
-  RefreshCw, ClipboardList, Wallet, Timer, LogOut,
+  ClipboardList, Wallet, Timer, LogOut,
 } from "lucide-react";
+import { RefreshAction } from "@/components/page-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,10 +94,7 @@ export default function MyRequests() {
       </div>
 
       <div className="flex justify-end mb-4">
-        <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
-          <RefreshCw size={14} />
-          تحديث
-        </Button>
+        <RefreshAction onRefresh={() => refetch()} />
       </div>
 
       {activeTab === "workflow" ? (

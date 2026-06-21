@@ -19,7 +19,7 @@ const ROUTE = readFileSync(
   "utf8",
 );
 const NAV = readFileSync(
-  join(import.meta.dirname!, "../../../ghayth-erp/src/components/shared/umrah-tabs-nav.tsx"),
+  join(import.meta.dirname!, "../../../ghayth-erp/src/components/layout/navigation.registry.ts"),
   "utf8",
 );
 

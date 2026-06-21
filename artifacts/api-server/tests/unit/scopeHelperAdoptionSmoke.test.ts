@@ -128,6 +128,13 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // lookup/run keyed by (companyId, id); point-lookup + per-company due run,
   // not a branch list cascade. Manual companyId scoping is correct here.
   "finance-recurring-invoices.ts",
+  // fleet-inspections.ts: vehicle inspection + photos (متابعة النقل بالصور,
+  // PR1). Mostly point operations keyed by (companyId, id) — get/update/delete/
+  // approve/reject a single inspection or photo — plus one filtered list. The
+  // company predicate is a literal `"companyId" = $N` per tenant-point-lookup;
+  // buildScopedWhere targets multi-company branch list cascades which this
+  // surface intentionally isn't. Manual scope.companyId is correct here.
+  "fleet-inspections.ts",
   // fleet-optimizer.ts: TA-T18-VRP Phase 2 — five short handlers that
   // each touch a single tenant-scoped table with literal `"companyId" =
   // $N`; the buildScopedWhere helper adds noise without changing
@@ -368,14 +375,19 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // caller's single active scope.companyId + a per-target gated location
       // view, not a multi-company list cascade. Allowlisted with justification.
       // +3 total/manualOnly: this session's three new finance/settings route
-      // files ship with manual companyId scoping (point-lookup/upsert shape,
-      // tables newer than the schema dump): routes/customFields.ts (#2719),
-      // routes/finance-cash-in-transit.ts (#2714), and
-      // routes/finance-recurring-invoices.ts. All allowlisted above with
-      // justification (mirror finance-memory.ts / employee_tracking_policies).
-      total: 132,
+      // files ship with manual companyId scoping: routes/customFields.ts (#2719),
+      // routes/finance-cash-in-transit.ts (#2714), routes/finance-recurring-invoices.ts.
+      // +1 total ONLY: routes/realtime.ts — SSE live-push stream. A single GET
+      // that self-authenticates (EventSource can't set headers) and derives the
+      // tenant from the active assignment by id; it holds an open stream rather
+      // than a scoped list, so buildScopedWhere doesn't apply AND there is no
+      // manual companyId list-predicate (its lookup is keyed by assignment id).
+      // Tenant isolation is enforced in realtimeHub (per-company buckets), not
+      // a SQL predicate — so it counts under neither helperUsers nor manualOnly.
+      // +1 total/manualOnly: routes/fleet-inspections.ts (متابعة النقل بالصور).
+      total: 134,
       helperUsers: 39,
-      manualOnly: 90,
+      manualOnly: 91,
     });
   });
 });

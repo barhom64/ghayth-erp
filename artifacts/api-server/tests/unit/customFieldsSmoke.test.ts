@@ -15,7 +15,7 @@ const INDEX = readFileSync(join(API_SRC, "routes/index.ts"), "utf8");
 
 describe("custom fields — migration 394", () => {
   it("creates definitions + values (EAV) tables, idempotent + scoped + rollback", () => {
-    const p = join(API_SRC, "migrations/394_custom_fields.sql");
+    const p = join(API_SRC, "migrations/401_custom_fields.sql");
     expect(existsSync(p)).toBe(true);
     const sql = readFileSync(p, "utf8");
     expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS custom_field_definitions/);

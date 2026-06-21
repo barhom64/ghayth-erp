@@ -18,6 +18,7 @@ interface JobPostingRow {
   companyId?: number | null;
   title: string;
   department?: string | null;
+  departmentId?: number | null;
   location?: string | null;
   type?: string | null;
   description?: string | null;
@@ -51,6 +52,10 @@ interface JobApplicationRow {
 const createPostingSchema = z.object({
   title: z.string().min(1, "عنوان الإعلان الوظيفي مطلوب"),
   department: z.string().optional().nullable(),
+  // #fk — القسم كمفتاح أجنبي. الواجهة قد ترسل الاسم (department) أو المعرّف
+  // (departmentId)؛ الخادم يوفّق بينهما ويخزّن الاثنين (المعرّف للعلاقة، الاسم
+  // denormalized للعرض في بوابة التوظيف العامة).
+  departmentId: z.coerce.number().int().optional().nullable(),
   location: z.string().optional().nullable(),
   type: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
@@ -88,6 +93,7 @@ const createApplicationSchema = z.object({
 const updatePostingSchema = z.object({
   title: z.string().optional(),
   department: z.string().optional().nullable(),
+  departmentId: z.coerce.number().int().optional().nullable(),
   location: z.string().optional().nullable(),
   type: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
@@ -109,6 +115,35 @@ const closePostingSchema = z.object({
   reason: z.string().min(1, "سبب الإغلاق مطلوب"),
 });
 
+// #fk — يوفّق بين اسم القسم ومعرّفه ضمن نطاق الشركة. يقبل أيًّا منهما (الواجهة
+// الحالية ترسل الاسم؛ الواجهات المستقبلية قد ترسل المعرّف) ويعيد الزوج المتسق:
+//   • معرّف مُمرَّر صالح   → يُشتق منه الاسم (denormalized للعرض).
+//   • اسم فقط             → يُشتق منه المعرّف (للعلاقة).
+//   • معرّف غير صالح      → يُهمَل (لا نخزّن FK مكسورًا)، ويبقى الاسم إن وُجد.
+async function resolveDepartment(
+  companyId: number | null | undefined,
+  departmentId?: number | null,
+  departmentName?: string | null,
+): Promise<{ id: number | null; name: string | null }> {
+  let id = departmentId ?? null;
+  let name = (departmentName ?? "").trim() || null;
+  if (id != null) {
+    const [d] = await rawQuery<{ name: string }>(
+      `SELECT name FROM departments WHERE id=$1 AND "companyId"=$2`, [id, companyId],
+    );
+    if (d) name = d.name; else id = null;
+  } else if (name) {
+    // اسم فقط → اشتق المعرّف فقط عند تطابق فريد. الأقسام لا تملك قيد تفرّد على
+    // (companyId, name) (قد يتكرر الاسم عبر فروع/إدارات)، فالاسم الغامض يُترك
+    // بلا FK (الاسم محفوظ) بدل ربطه بصف عشوائي.
+    const matches = await rawQuery<{ id: number }>(
+      `SELECT id FROM departments WHERE name=$1 AND "companyId"=$2`, [name, companyId],
+    );
+    if (matches.length === 1) id = matches[0].id;
+  }
+  return { id, name };
+}
+
 const router = Router();
 
 router.get("/postings", authorize({ feature: "hr.recruitment", action: "list" }), async (req, res) => {
@@ -122,16 +157,17 @@ router.get("/postings", authorize({ feature: "hr.recruitment", action: "list" })
 router.post("/postings", authorize({ feature: "hr.recruitment", action: "create" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const { title, department, location, type, description, requirements, salaryMin, salaryMax, status, closingDate, experienceLevel, education, vacancies, benefits, skills } = zodParse(createPostingSchema.safeParse(req.body));
+    const { title, department, departmentId, location, type, description, requirements, salaryMin, salaryMax, status, closingDate, experienceLevel, education, vacancies, benefits, skills } = zodParse(createPostingSchema.safeParse(req.body));
     if (salaryMin !== undefined && salaryMin !== null && salaryMax !== undefined && salaryMax !== null && Number(salaryMax) < Number(salaryMin)) {
       throw new ValidationError("الحد الأعلى للراتب أقل من الحد الأدنى", {
         field: "salaryMax",
         fix: "تأكد من أن الحد الأعلى أكبر من الحد الأدنى",
       });
     }
+    const dept = await resolveDepartment(scope.companyId, departmentId, department);
     const r = await rawExecute(
-      `INSERT INTO job_postings (title, department, location, type, description, requirements, "salaryMin", "salaryMax", status, "closingDate", "companyId", "experienceLevel", education, vacancies, benefits, skills) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [String(title).trim(), department ?? null, location ?? null, type || "full-time", description ?? null, requirements ?? null, salaryMin ?? null, salaryMax ?? null, status || "open", closingDate ?? null, scope.companyId, experienceLevel ?? null, education ?? null, vacancies ?? null, benefits ?? null, skills ?? null]
+      `INSERT INTO job_postings (title, department, "departmentId", location, type, description, requirements, "salaryMin", "salaryMax", status, "closingDate", "companyId", "experienceLevel", education, vacancies, benefits, skills) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+      [String(title).trim(), dept.name, dept.id, location ?? null, type || "full-time", description ?? null, requirements ?? null, salaryMin ?? null, salaryMax ?? null, status || "open", closingDate ?? null, scope.companyId, experienceLevel ?? null, education ?? null, vacancies ?? null, benefits ?? null, skills ?? null]
     );
     await createAuditLog({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
@@ -169,7 +205,12 @@ router.patch("/postings/:id", authorize({ feature: "hr.recruitment", action: "up
     const sets: string[] = [];
     const params: unknown[] = [];
     if (b.title !== undefined) { params.push(b.title); sets.push(`title=$${params.length}`); }
-    if (b.department !== undefined) { params.push(b.department); sets.push(`department=$${params.length}`); }
+    // #fk — عند تغيير القسم (بالاسم أو المعرّف) نوفّق بينهما ونحدّث العمودين معًا.
+    if (b.department !== undefined || b.departmentId !== undefined) {
+      const dept = await resolveDepartment(scope.companyId, b.departmentId ?? null, b.department ?? null);
+      params.push(dept.name); sets.push(`department=$${params.length}`);
+      params.push(dept.id); sets.push(`"departmentId"=$${params.length}`);
+    }
     if (b.location !== undefined) { params.push(b.location); sets.push(`location=$${params.length}`); }
     if (b.type !== undefined) { params.push(b.type); sets.push(`type=$${params.length}`); }
     if (b.description !== undefined) { params.push(b.description); sets.push(`description=$${params.length}`); }
@@ -463,15 +504,17 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
     const { empId, assignmentId } = await withTransaction(async () => {
       // 1. Mark the application hired.
       await rawExecute(
-        `UPDATE job_applications SET status = 'hired', "updatedAt" = NOW() WHERE id = $1`,
+        `UPDATE job_applications SET status = 'hired' WHERE id = $1`,
         [id],
       );
       // 2. Insert the inactive employee with its issued empNumber.
+      // hireDate lives on the assignment, not on employees; employees has no
+      // updatedAt column — both were dropped to match the head-of-main schema.
       const [empRow] = await rawQuery<{ id: number }>(
-        `INSERT INTO employees (name, phone, email, "empNumber", nationality, "nationalId", status, "hireDate", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, 'inactive', $7, NOW(), NOW())
+        `INSERT INTO employees (name, phone, email, "empNumber", nationality, "nationalId", status, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, 'inactive', NOW())
          RETURNING id`,
-        [name, phone, email, empNumber, b.nationality, b.nationalId, hireDate],
+        [name, phone, email, empNumber, b.nationality, b.nationalId],
       );
       const newEmpId = empRow.id;
       // Link the numbering assignment to the new employee row.
@@ -481,7 +524,7 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
       );
       // 3. Insert the active assignment.
       const [assignRow] = await rawQuery<{ id: number }>(
-        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "startDate", "createdAt", "updatedAt")
+        `INSERT INTO employee_assignments ("employeeId", "companyId", "branchId", "departmentId", "jobTitle", salary, status, "hireDate", "createdAt", "updatedAt")
          VALUES ($1, $2, $3, $4, $5, $6, 'active', $7, NOW(), NOW())
          RETURNING id`,
         [newEmpId, scope.companyId, b.branchId, b.departmentId, b.jobTitle, b.salary, hireDate],
@@ -489,7 +532,7 @@ router.post("/applications/:id/hire", authorize({ feature: "hr.recruitment", act
       const newAssignmentId = assignRow.id;
       // 4. Link the optional institutional fields.
       if (b.positionId) await rawExecute(`INSERT INTO employee_position_assignments ("employeeId","positionId","assignmentId","startDate","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [newEmpId, b.positionId, newAssignmentId, hireDate]);
-      if (b.teamId) await rawExecute(`INSERT INTO employee_team_memberships ("employeeId","teamId","assignmentId","joinedAt","isActive","createdAt") VALUES($1,$2,$3,$4,true,NOW()) ON CONFLICT DO NOTHING`, [newEmpId, b.teamId, newAssignmentId, hireDate]);
+      if (b.teamId) await rawExecute(`INSERT INTO employee_team_memberships ("teamId","assignmentId","startDate","createdAt") VALUES($1,$2,$3,NOW()) ON CONFLICT DO NOTHING`, [b.teamId, newAssignmentId, hireDate]);
       return { empId: newEmpId, assignmentId: newAssignmentId };
     });
     // 5. Audit + event.

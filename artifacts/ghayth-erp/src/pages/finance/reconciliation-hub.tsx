@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { formatCurrency, formatNumber, currentYearRiyadh, currentMonthPaddedRiyadh } from "@/lib/formatters";
 import {
   Scale, CheckCircle2, AlertCircle, ArrowRight, Banknote, ReceiptText,
-  Package, Percent, RefreshCw, Loader2, ChevronRight, FileText,
+  Package, Percent, Loader2, ChevronRight, FileText,
 } from "lucide-react";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { PrintButton } from "@/components/shared/print-button";
+import { RefreshAction } from "@/components/page-actions";
 
 /**
  * Reconciliation Hub — central tie-out screen.
@@ -272,9 +273,7 @@ export default function ReconciliationHubPage() {
             <Label className="text-xs">إلى</Label>
             <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="h-8 w-36" />
           </div>
-          <Button variant="outline" size="sm" onClick={refreshAll}>
-            <RefreshCw className="h-4 w-4 me-1" /> تحديث
-          </Button>
+          <RefreshAction onRefresh={refreshAll} />
           <PrintButton
             entityType="report_finance_reconciliation_hub"
             entityId="list"

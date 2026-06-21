@@ -3,10 +3,11 @@
 //
 // لماذا وحدة منفصلة: المتصفح يُجمّد JavaScript عند مغادرة الصفحة، فالتتبع
 // الخلفي الحقيقي يتطلب طبقة أصلية. هذه الوحدة **خاملة تمامًا على الويب**:
-//   • لا تستورد أي حزمة Capacitor بشكل ثابت — يُحقن المُحمّل عبر import()
-//     ديناميكي بمحدِّد نصي (@vite-ignore) فلا يحاول Vite تضمينه في حزمة الويب.
+//   • لا تستورد أي حزمة Capacitor (لا ثابت ولا ديناميكي) — تقرأ الـplugin من
+//     سجل Capacitor العالمي `window.Capacitor.Plugins` وقت التشغيل الأصلي، فلا
+//     حاجة لتضمينه في حزمة الويب ولا لحلّ محدِّد موديول في WebView.
 //   • تنشط فقط داخل تطبيق Capacitor، حيث يوجد `window.Capacitor` والـplugin
-//     المثبَّت (@capacitor-community/background-geolocation).
+//     المثبَّت (@capacitor-community/background-geolocation) مسجَّلًا.
 //   • على الويب: isNativeFieldTracking() = false → الصفحة تستخدم مسار
 //     المتصفح (watchPosition + Wake Lock) بدلاً منها.
 //
@@ -14,10 +15,6 @@
 // فتصل نداءات الموقع والتطبيق مُصغَّر/الشاشة مقفولة. كل نقطة تُرسَل مباشرةً
 // إلى POST /api/my/field/ping بتوكن Bearer محدود النطاق (لا كوكيز في الأصلي).
 // ════════════════════════════════════════════════════════════════════════════
-
-// محدِّد الـplugin كقيمة نصية في runtime — يمنع TypeScript/Vite من محاولة
-// حلّه وقت البناء على الويب حيث الحزمة غير مثبّتة.
-const PLUGIN_SPECIFIER = "@capacitor-community/background-geolocation";
 
 export interface NativeLocation {
   latitude: number;
@@ -48,10 +45,18 @@ export function isNativeFieldTracking(): boolean {
 
 let watcherId: string | null = null;
 
-async function loadPlugin(): Promise<any> {
-  const spec = PLUGIN_SPECIFIER;
-  const mod: any = await import(/* @vite-ignore */ spec);
-  return mod.BackgroundGeolocation ?? mod.default ?? mod;
+// Load the background-geolocation plugin at RUNTIME via Capacitor's global
+// plugin registry. A bundler import of "@capacitor-community/background-
+// geolocation" can't be used here: a static import would force the web build
+// to depend on the package, and a bare-specifier dynamic `import()` doesn't
+// resolve in the native WebView (no import map) — it would throw and silently
+// drop us back to the non-background browser path. Capacitor populates
+// `window.Capacitor.Plugins.BackgroundGeolocation` at native runtime once the
+// plugin is installed + synced, with addWatcher/removeWatcher proxied to the
+// native side (callbacks handled by Capacitor core). Returns null if absent.
+function loadPlugin(): any | null {
+  const cap = (globalThis as any)?.Capacitor;
+  return cap?.Plugins?.BackgroundGeolocation ?? null;
 }
 
 /**
@@ -62,7 +67,11 @@ async function loadPlugin(): Promise<any> {
 export async function startNativeFieldTracking(opts: StartNativeOptions): Promise<boolean> {
   if (!isNativeFieldTracking()) return false;
   try {
-    const BackgroundGeolocation = await loadPlugin();
+    const BackgroundGeolocation = loadPlugin();
+    // Plugin not registered (e.g. a build without it): fall back SILENTLY to
+    // the browser path — don't flash a scary error while tracking actually
+    // starts. The caller (field-companion) handles the fallback on `false`.
+    if (!BackgroundGeolocation?.addWatcher) return false;
     const pingUrl = `${opts.apiOrigin.replace(/\/$/, "")}/api/my/field/ping`;
     watcherId = await BackgroundGeolocation.addWatcher(
       {
@@ -116,7 +125,8 @@ export async function startNativeFieldTracking(opts: StartNativeOptions): Promis
 export async function stopNativeFieldTracking(): Promise<void> {
   if (!watcherId) return;
   try {
-    const BackgroundGeolocation = await loadPlugin();
+    const BackgroundGeolocation = loadPlugin();
+    if (!BackgroundGeolocation?.removeWatcher) { watcherId = null; return; }
     await BackgroundGeolocation.removeWatcher({ id: watcherId });
   } finally {
     watcherId = null;
