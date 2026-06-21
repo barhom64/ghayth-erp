@@ -130,7 +130,7 @@ const createVehicleSchema = z.object({
   // FLT-003 — purchase data drives the TCO report and the vehicle-asset
   // capitalisation entry (postVehicleAssetGL); without these the schema
   // stripped the fields and both were dead.
-  purchasePrice: z.coerce.number().optional(),
+  purchasePrice: z.coerce.number().nonnegative().optional(),
   purchaseDate: z.string().optional(),
   // #1733 Phase 2 — eligibility guard reads this column on cargo /
   // umrah assignment to refuse drivers who don't hold (or cover) the
@@ -202,7 +202,7 @@ const createFuelLogSchema = z.object({
   vehiclePlate: z.string().optional(),
   liters: z.coerce.number().positive("كمية الوقود يجب أن تكون أكبر من صفر"),
   driverId: z.coerce.number().optional(),
-  costPerLiter: z.coerce.number().optional(),
+  costPerLiter: z.coerce.number().nonnegative().optional(),
   fuelDate: z.string().optional(),
   mileageAtFuel: z.coerce.number().optional(),
   stationName: z.string().optional(),
@@ -290,16 +290,16 @@ const createTripSchema = z.object({
   startTime: z.string().optional(),
   endTime: z.string().optional(),
   notes: z.string().optional(),
-  fuelPricePerLiter: z.coerce.number().optional(),
+  fuelPricePerLiter: z.coerce.number().nonnegative().optional(),
   driverFare: z.coerce.number().optional(),
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
   status: z.string().optional(),
 });
 
 const completeTripSchema = z.object({
   endMileage: z.coerce.number().optional(),
   startMileage: z.coerce.number().optional(),
-  fuelPricePerLiter: z.coerce.number().optional(),
+  fuelPricePerLiter: z.coerce.number().nonnegative().optional(),
   driverFare: z.coerce.number().optional(),
 });
 
@@ -308,7 +308,7 @@ const cancelTripSchema = z.object({
 });
 
 const completeMaintenanceSchema = z.object({
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
 });
 
 const updateTripSchema = z.object({
@@ -317,20 +317,20 @@ const updateTripSchema = z.object({
   destination: z.string().optional(),
   status: z.string().optional(),
   notes: z.string().optional(),
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
 });
 
 const updateMaintenanceSchema = z.object({
   description: z.string().optional(),
   status: z.string().optional(),
-  cost: z.coerce.number().optional(),
+  cost: z.coerce.number().nonnegative().optional(),
 });
 
 const updateFuelLogSchema = z.object({
   liters: z.coerce.number().optional(),
   quantity: z.coerce.number().optional(),
-  costPerLiter: z.coerce.number().optional(),
-  totalCost: z.coerce.number().optional(),
+  costPerLiter: z.coerce.number().nonnegative().optional(),
+  totalCost: z.coerce.number().nonnegative().optional(),
   stationName: z.string().optional(),
 });
 

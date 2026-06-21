@@ -53,7 +53,7 @@ const createInvoiceSchema = z.object({
   lines: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
-    unitPrice: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().nonnegative().optional(),
     accountCode: z.string().optional(),
     accountId: z.coerce.number().optional(),
     costCenterId: z.coerce.number().optional(),
@@ -86,7 +86,7 @@ const createInvoiceSchema = z.object({
   // New flow: pick a `taxCode` (header default) and the line math is
   // driven by tax_codes.rate. taxInclusive declares whether the entered
   // amount is gross or net.
-  vatRate: z.coerce.number().optional(),
+  vatRate: z.coerce.number().nonnegative().optional(),
   taxCode: z.string().optional(),
   taxInclusive: z.boolean().optional(),
   dueDate: z.string().optional(),
@@ -200,7 +200,7 @@ const createCustomerReceiptSchema = z.object({
 const impactPreviewSchema = z.object({
   clientId: z.coerce.number().optional(),
   lines: z.array(z.any()).optional(),
-  taxRate: z.coerce.number().optional(),
+  taxRate: z.coerce.number().nonnegative().optional(),
   dueInDays: z.coerce.number().optional(),
 });
 

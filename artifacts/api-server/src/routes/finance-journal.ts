@@ -143,7 +143,7 @@ const operationalEffectsShape = {
   fuelLog: z.object({
     create: z.boolean().optional(),
     liters: z.coerce.number().optional(),
-    costPerLiter: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().nonnegative().optional(),
     odometer: z.coerce.number().optional(),
     stationName: z.string().optional(),
     // #2234 — the SAVED fuel supplier (vendorId references suppliers.id) is the
@@ -215,7 +215,7 @@ const vendorInvoiceLineSchema = z.object({
   itemName: z.string().optional(),
   quantity: z.coerce.number().optional(),
   unit: z.string().optional(),
-  unitPrice: z.coerce.number().optional(),
+  unitPrice: z.coerce.number().nonnegative().optional(),
   taxCode: z.string().optional(),
   // amount = qty × unitPrice (net of VAT) — the line's debit base.
   amount: z.coerce.number(),
