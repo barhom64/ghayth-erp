@@ -155,8 +155,8 @@ const BASELINE = new Set([
   "finance-invoices.ts:warehouse_movements",// ربط الفاتورة بحركة مخزون/COGS؟
   // (publicData→employees عُولِج في #2839: نُقل لعقد HR applySelfOnboardingSubmission
   //  — الاستكمال الذاتي يُطبَّق عبر المسار القائد لا مباشرةً.)
-  "settings.ts:employee_assignments",       // settings يحدّث تكليفات HR
-  "settings.ts:purchase_orders",            // settings يحدّث أوامر شراء مالية
+  // (settings→employee_assignments/purchase_orders عُولِجا في #2839: نُقلا لعقدَي
+  //  HR/المالية القائدين عند تعطيل الفرع — لم تعد الإعدادات تكتبهما مباشرة.)
 ]);
 
 // Build reverse index: table → owning domain
