@@ -38,6 +38,7 @@ import { SystemControlsTab } from "./settings/system-controls-tab";
 import { ApprovalWorkflowsTab } from "./settings/approval-workflows-tab";
 import { WorkflowDefinitionsTab } from "./settings/workflow-definitions-tab";
 import { NumberingTab } from "./settings/numbering-tab";
+import { CustomFieldsTab } from "./settings/custom-fields-tab";
 
 // GeneralSettings — 11-field edit form. The server stores values as
 // {key, value} rows; mapping happens in the hydration block below.
@@ -327,6 +328,7 @@ const SETTINGS_PATH_TAB: Record<string, string> = {
   "/settings/resolved": "resolved",
   "/settings/zatca": "zatca",
   "/settings/gov": "gov",
+  "/settings/custom-fields": "custom-fields",
 };
 
 export default function SettingsPage() {
@@ -359,6 +361,7 @@ export default function SettingsPage() {
           <TabsTrigger value="channels">قنوات الاتصال</TabsTrigger>
           <TabsTrigger value="audit">التدقيق</TabsTrigger>
           <TabsTrigger value="resolved">الوراثة</TabsTrigger>
+          <TabsTrigger value="custom-fields">الحقول المخصّصة</TabsTrigger>
         </TabsList>
         <TabsContent value="general"><GeneralSettings /></TabsContent>
         <TabsContent value="companies"><CompaniesTab /></TabsContent>
@@ -375,6 +378,7 @@ export default function SettingsPage() {
         <TabsContent value="channels"><CommunicationChannelsTab /></TabsContent>
         <TabsContent value="audit"><AuditLogTab /></TabsContent>
         <TabsContent value="resolved"><ResolvedSettingsTab /></TabsContent>
+        <TabsContent value="custom-fields"><CustomFieldsTab /></TabsContent>
       </Tabs>
     </PageShell>
   );

@@ -2,9 +2,25 @@
 
 This file tracks the open operational and architectural gaps identified during the April–May 2026 system audits. It is the working backlog for Phases 2–8 of the delivery plan described in `README.md`. Each section lists: the gap, the concrete symptom, the target fix, and the affected files (when known).
 
-**Last updated:** 9 May 2026 — adds Phase 9 (tenant-isolation freeze). Earlier baseline: 3040 unit tests, 287-table `db/schema.sql`, completion of all P0–P2 audit items.
+**Last updated:** 20 Jun 2026 — adds the «governance-gate hygiene» section below (a `guard.sh`-bypass debt class found during a full-suite certification). Earlier: 9 May 2026 — Phase 9 (tenant-isolation freeze); baseline 3040 unit tests, 287-table `db/schema.sql`, all P0–P2 audit items.
 
 Status legend: `[ ]` open · `[~]` in progress · `[x]` done.
+
+---
+
+## 2026-06-20 — Governance-gate hygiene (guard.sh-bypass debt)
+
+A full-suite governance certification after the «كلها» feature batches surfaced a **systemic** issue: some earlier commits on `claude/tender-babbage-hce8oj` were made **bypassing `scripts/guard.sh`** (the pre-commit gate), which let latent gate failures and stale allowlist keys accumulate unseen — they only surfaced on the next *guarded* commit. All were fixed in `28c5c09` **without weakening any gate**. The full anti-pattern list is recorded machine-readably in `ai-guardian-data/memory.json` (`patterns[]`, 10 entries) so future AI-guardian audits inherit it.
+
+- [x] **New-route governance ratchets** — custom-fields (#2719), appointments (#2704), cash-in-transit (#2714), recurring-invoices brought into compliance: `auditFromRequest` (IGOC context), `settings:update` action (catalog-valid), no `resource:{table}` on tables absent from the static schema dump (tenancy stays via `"companyId"=$N`, mirrors `employee_tracking_policies`), scope-helper allowlist + snapshot.
+- [x] **gate:nav orphans** — `/finance/recurring-invoices` + `/finance/cash-in-transit` wired into `navigation.registry.ts`.
+- [x] **check:utc-time-drift** — 6 UTC-date sites → `todayISO()` / `todayLocal()` (Task #400 class) in `finance-cash-in-transit`, `recurringInvoiceProcessor`, and the two finance pages.
+- [x] **Stale guard allowlists (drift)** — `rawquery-param-arity-allowlist` (`umrah.ts ::60→::62`) and `finance-period-drift-allowlist` (login/calendar/fleet line refresh). These keys drift when handlers/lines shift above an allowlisted site; **update the key, never bypass the guard.**
+- [ ] **Root-cause guard (follow-up):** add a server-side / CI check that rejects a push whose HEAD doesn't pass `guard.sh`, so a local `--no-verify` cannot reintroduce this debt class.
+
+### Delivered this session — candidates for issue closure (after review)
+
+#2719 custom fields · #2718 optimistic-lock · #2714 cash-in-transit · #2713 trash/restore · #2704 appointments+.ics · #2698 receipt cash-account selection · #2725 (duplicate of the recurring-invoices work). #2712 (2FA) is **foundation only** (migration 392 `user_2fa`) — needs session management + new-login alert before closure.
 
 ---
 

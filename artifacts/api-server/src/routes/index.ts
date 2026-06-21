@@ -84,6 +84,8 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { recurringInvoicesRouter } from "./finance-recurring-invoices.js";
+import { cashInTransitRouter } from "./finance-cash-in-transit.js";
 import { financeMemoryRouter } from "./finance-memory.js";
 import { financeAmortizationRouter } from "./finance-amortization.js";
 import { financeDeferredRevenueRouter } from "./finance-deferred-revenue.js";
@@ -156,6 +158,7 @@ import { execDashboardRouter } from "./execDashboard.js";
 import assistantRouter from "./assistant.js";
 import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
+import { customFieldsRouter } from "./customFields.js";
 import contractsRouter from "./hr-contracts.js";
 import correspondenceRouter from "./correspondence.js";
 import numberingRouter from "./numbering.js";
@@ -436,6 +439,10 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
+// قوالب الفوترة المتكررة للعملاء (#كلها). CRUD غير دفتري؛ التوليد دفعة لاحقة.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringInvoicesRouter);
+// النقد في الطريق (#2714). طوران يُرحَّلان عبر postJournalEntry القائم.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), cashInTransitRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
@@ -548,6 +555,9 @@ router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
 });
 router.use("/marketing", requireModule("marketing"), marketingRouter);
 router.use("/settings", requireModule("settings"), requireMinLevel(70), settingsRouter);
+// #2719 — الحقول المخصّصة لكل شركة: تعريفات + قيم EAV (هجرة 394). إدارة المخطط
+// عبر صلاحية settings؛ القيم تُحفظ في جدولها فقط (لا مساس بجداول الكيانات).
+router.use("/custom-fields", requireModule("settings"), requireMinLevel(50), customFieldsRouter);
 // Numbering center (Issue #1141): admin surface for the central numbering
 // authority. authMiddleware is applied inside the router (it carries
 // per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).

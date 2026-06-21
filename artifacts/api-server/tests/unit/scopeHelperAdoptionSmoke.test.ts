@@ -67,6 +67,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // companyId. Manual scope is correct here.
   "communications-sms-webhook.ts",
   "correspondence.ts",
+  // customFields.ts: per-company custom-field schema (#2719) — definitions +
+  // EAV values. Point lookups / upserts keyed by (companyId, entityType,
+  // fieldKey) / (companyId, id); the table is newer than the schema dump so it
+  // carries no resource guard (mirrors employee_tracking_policies). Manual
+  // companyId scoping is correct here — not a branch list cascade.
+  "customFields.ts",
   "digital-signature.ts",
   "documents.ts",
   // employeeTrackingPolicy.ts: Tracking Eligibility Contract control plane —
@@ -80,6 +86,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "execDashboard.ts",
   "export.ts",
   "finance-algorithms.ts",
+  // finance-cash-in-transit.ts: #2714 clearing-account transfers (2-phase JE
+  // via the existing engine). List/lookup/confirm keyed by (companyId, id /
+  // status); point-lookup + per-row state advance, not a branch list cascade.
+  // Manual companyId scoping is correct here (mirrors finance-memory.ts).
+  "finance-cash-in-transit.ts",
   // finance-amortization.ts: FIN-TIME-SPREADING (#2247) prepaid-amortization
   // CRUD + run trigger. List/insert/run keyed by (companyId, …) — point
   // lookups + a per-company recognition run, not a branch list cascade.
@@ -112,6 +123,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
   // company/branch list cascades which this surface intentionally isn't.
   "finance-memory.ts",
+  // finance-recurring-invoices.ts: customer recurring-invoice templates +
+  // run/run-due (generation reuses financialEngine.postSalesInvoice). List/
+  // lookup/run keyed by (companyId, id); point-lookup + per-company due run,
+  // not a branch list cascade. Manual companyId scoping is correct here.
+  "finance-recurring-invoices.ts",
   // finance-pricing.ts: إحياء «قواعد التسعير» (مخطّط 171 المُطبّع). CRUD نقطي على
   // pricing_rules/conditions/actions، كلّها مفلترة بـ scope.companyId داخل
   // transactions (point-lookup/per-company، يطابق finance-amortization.ts؛ لا
@@ -363,6 +379,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // disable + AUDITED location view). Point lookups/upserts keyed on the
       // caller's single active scope.companyId + a per-target gated location
       // view, not a multi-company list cascade. Allowlisted with justification.
+      // +3 total/manualOnly: this session's three new finance/settings route
+      // files ship with manual companyId scoping: routes/customFields.ts (#2719),
+      // routes/finance-cash-in-transit.ts (#2714), routes/finance-recurring-invoices.ts.
       // +1 total ONLY: routes/realtime.ts — SSE live-push stream. A single GET
       // that self-authenticates (EventSource can't set headers) and derives the
       // tenant from the active assignment by id; it holds an open stream rather
@@ -370,6 +389,8 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // manual companyId list-predicate (its lookup is keyed by assignment id).
       // Tenant isolation is enforced in realtimeHub (per-company buckets), not
       // a SQL predicate — so it counts under neither helperUsers nor manualOnly.
+      // +3 total/manualOnly: this session (customFields/finance-cash-in-transit/
+      // finance-recurring-invoices) + see entries above.
       // +1 total/manualOnly: routes/fleet-inspections.ts (متابعة النقل بالصور,
       // PR1) — vehicle inspection + photos CRUD, point ops keyed by
       // (companyId, id) + one filtered list; allowlisted with justification
@@ -377,9 +398,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: routes/finance-pricing.ts — إحياء «قواعد التسعير»
       // (مخطّط 171 المُطبّع). CRUD نقطي + upserts على (companyId, id) داخل
       // transactions، يطابق finance-amortization.ts؛ لا cascade فروع. allowlisted.
-      total: 132,
+      total: 135,
       helperUsers: 39,
-      manualOnly: 89,
+      manualOnly: 92,
     });
   });
 });
