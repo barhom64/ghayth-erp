@@ -305,9 +305,8 @@ router.get("/templates", authorize({ feature: "marketing", action: "list" }), as
       [scope.companyId]
     );
     res.json(maskFields(req, { data: rows }));
-  } catch (e) {
-    logger.error(e, "failed to list marketing templates");
-    res.json({ data: [] });
+  } catch (err) {
+    handleRouteError(err, res, "failed to list marketing templates");
   }
 });
 
