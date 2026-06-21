@@ -1118,15 +1118,20 @@ router.patch("/accidents/:id/assess", authorize({ feature: "fleet.vehicles", act
     const { fleetEngine } = await import("../lib/engines/index.js");
     const glCtx = { companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, createdBy: scope.userId };
 
-    // ترحيل القيد حسب السياسة (idempotent عبر sourceKey). لا قيد بكلفة صفرية.
-    let journalId: number | null = null;
-    if (b.estimatedCost > 0) {
-      const gl = await fleetEngine.postAccidentGL(glCtx,
-        { id, vehicleId: acc.vehicleId, cost: b.estimatedCost, costBearer: b.costBearer });
-      journalId = (gl as any)?.journalId ?? null;
+    // ترحيل القيد حسب السياسة. postAccidentGL يعكس القيد السابق تلقائيًا عند
+    // إعادة التقييم (idempotent عبر sourceKey)، ويُرجِع reversedJournalId.
+    // الكلفة الصفرية = عكس فقط بلا قيد جديد.
+    const gl = await fleetEngine.postAccidentGL(glCtx,
+      { id, vehicleId: acc.vehicleId, cost: b.estimatedCost, costBearer: b.costBearer });
+    const journalId: number | null = (gl as any)?.journalId ?? null;
+    const reversedJournalId: number | null = (gl as any)?.reversedJournalId ?? null;
+    const isReassessment = !!reversedJournalId;
 
-      // استرداد كلفة السائق عبر خصم راتب (عقد HR) — لا كتابة مباشرة.
-      if (b.costBearer === "driver" && acc.driverId) {
+    if (b.estimatedCost > 0) {
+      // استرداد كلفة السائق عبر خصم راتب (عقد HR) — لا كتابة مباشرة. يُطلَب عند
+      // التقييم الأول فقط؛ تعديل المتحمّل في إعادة تقييم يتطلب تسوية خصم يدوية
+      // (لا مستهلك عكس خصم بعد) — يُسجَّل في التدقيق.
+      if (!isReassessment && b.costBearer === "driver" && acc.driverId) {
         const [drv] = await rawQuery<{ employeeId: number | null }>(
           `SELECT "employeeId" FROM fleet_drivers WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
           [acc.driverId, scope.companyId]);
@@ -1139,7 +1144,7 @@ router.patch("/accidents/:id/assess", authorize({ feature: "fleet.vehicles", act
 
     void createAuditLog({ companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, userId: scope.userId,
       action: "update", entity: "fleet_accidents", entityId: id,
-      before: { status: acc.status }, after: { status: "assessed", costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId } });
+      before: { status: acc.status }, after: { status: "assessed", costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId, reassessment: isReassessment, reversedJournalId } });
     void emitEvent({ companyId: scope.companyId, branchId: acc.branchId ?? scope.branchId, userId: scope.userId,
       action: "fleet.accident.assessed", entity: "fleet_accidents", entityId: id,
       details: JSON.stringify({ costBearer: b.costBearer, estimatedCost: b.estimatedCost, journalId }) });

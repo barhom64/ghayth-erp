@@ -118,7 +118,22 @@ class FleetEngineImpl implements DomainEngine {
     accident: { id: number; vehicleId: number; cost: number; costBearer: string; description?: string }
   ) {
     const cost = Number(accident.cost) || 0;
-    if (cost <= 0) return null;
+
+    // إعادة تقييم: اعكس القيد السابق (إن وُجد) قبل أي ترحيل مصحّح — لا تجميد
+    // للدفتر. softDeleteJournalEntry يعكس الأرصدة ويحترم قفل الفترة، ويترك
+    // المعكوس deletedAt فيسمح idempotency بإعادة الترحيل بنفس sourceKey.
+    const [priorJe] = await rawQuery<{ id: number }>(
+      `SELECT id FROM journal_entries WHERE "companyId"=$1 AND "sourceKey"=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [ctx.companyId, `fleet:accident:${accident.id}`]);
+    let reversedJournalId: number | null = null;
+    if (priorJe) {
+      const { softDeleteJournalEntry } = await import("../businessHelpers.js");
+      await softDeleteJournalEntry(ctx.companyId, priorJe.id);
+      reversedJournalId = priorJe.id;
+    }
+
+    // كلفة صفرية (أو إلغاء التقييم): العكس فقط، بلا قيد جديد.
+    if (cost <= 0) return { journalId: null, reversedJournalId };
 
     const vehicleAccount = await this.resolveVehicleAccountCode(ctx.companyId, accident.vehicleId, "maintenance");
     const vehicleCode = vehicleAccount
@@ -144,7 +159,7 @@ class FleetEngineImpl implements DomainEngine {
       ];
     }
 
-    return financialEngine.postJournalEntry({
+    const posted = await financialEngine.postJournalEntry({
       companyId: ctx.companyId,
       branchId: ctx.branchId,
       createdBy: ctx.createdBy,
@@ -158,6 +173,7 @@ class FleetEngineImpl implements DomainEngine {
       guardId: accident.id,
       lines,
     });
+    return { ...posted, reversedJournalId };
   }
 
   /**
