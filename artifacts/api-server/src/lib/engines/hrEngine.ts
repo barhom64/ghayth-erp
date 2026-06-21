@@ -875,10 +875,31 @@ class HREngineImpl implements DomainEngine {
     sourceId?: number;
   }) {
     await rawExecute(
-      `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,"createdAt")
-       VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,NOW())`,
-      [params.companyId, params.employeeId, params.type, params.amount, params.reason]
+      `INSERT INTO payroll_deductions ("companyId","employeeId",type,amount,reason,date,status,"sourceType","sourceId","createdAt")
+       VALUES ($1,$2,$3,$4,$5,CURRENT_DATE,'pending',$6,$7,NOW())`,
+      [params.companyId, params.employeeId, params.type, params.amount, params.reason,
+       params.sourceType ?? null, params.sourceId ?? null]
     );
+  }
+
+  /**
+   * Cancel an as-yet-UNAPPLIED payroll deduction by its source (e.g. when a
+   * fleet accident is re-assessed away from the driver). Only rows not yet
+   * tied to a payroll line are voided; an already-applied deduction is left
+   * for manual adjustment (returns the count cancelled).
+   */
+  async cancelPayrollDeductionBySource(params: {
+    companyId: number; sourceType: string; sourceId: number;
+  }): Promise<number> {
+    const { affectedRows } = await rawExecute(
+      `UPDATE payroll_deductions
+          SET status = 'cancelled'
+        WHERE "companyId" = $1 AND "sourceType" = $2 AND "sourceId" = $3
+          AND "payrollLineId" IS NULL
+          AND COALESCE(status, 'pending') <> 'cancelled'`,
+      [params.companyId, params.sourceType, params.sourceId]
+    );
+    return affectedRows ?? 0;
   }
 
   /**
@@ -936,6 +957,17 @@ registerCrossDomainHandler("fleet.accident.deduction_requested", async (payload)
     type: "accident_recovery",
     amount: payload.amount as number,
     reason: (payload.reason as string) ?? "استرداد كلفة حادث مركبة",
+    sourceType: "fleet_accidents",
+    sourceId: payload.accidentId as number,
+  });
+});
+
+// عقد الأسطول → HR: إعادة تقييم حادث حوّلت المتحمّل بعيدًا عن السائق → ألغِ خصمه
+// غير المطبَّق تلقائيًا (متابعة مراجعة C2). الخصم المطبَّق يُترك لتسوية يدوية.
+registerCrossDomainHandler("fleet.accident.deduction_reversed", async (payload) => {
+  if (!payload?.companyId || !payload?.accidentId) return;
+  await hrEngine.cancelPayrollDeductionBySource({
+    companyId: payload.companyId,
     sourceType: "fleet_accidents",
     sourceId: payload.accidentId as number,
   });
