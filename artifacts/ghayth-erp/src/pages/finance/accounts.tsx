@@ -24,6 +24,8 @@ import {
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
+import { useToast } from "@/hooks/use-toast";
 
 const typeMap = ACCOUNT_TYPES;
 const typeColors: Record<string, string> = {
@@ -104,8 +106,14 @@ function AccountNode({ node, level = 0, highlightIds, onEdit, onDelete, onAddChi
 
 export default function AccountsPage() {
   const [, navigate] = useLocation();
-  const { data, isLoading, isError } = useApiQuery<any>(["accounts"], "/finance/accounts");
+  const { toast } = useToast();
+  const { data, isLoading, isError, refetch } = useApiQuery<any>(["accounts"], "/finance/accounts");
   const items = data?.data || [];
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة حساب» (المستوى
+  // الأعلى) يفتح النموذج الكامل في درج بدل الانتقال لصفحة /create. أزرار
+  // «إضافة حساب فرعي» تبقى على الانتقال لأنها تمرّر الحساب الأب (?parent=)
+  // والدرج لا يدعم تمرير الأب. الصفحة الكاملة تبقى متاحة للوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
   const [filters, setFilters] = useFilters();
   const [viewMode, setViewMode] = useState<"tree" | "flat">("tree");
   // R.2 iter 2 — delete flow routed through ConfirmDeleteDialog. The
@@ -319,11 +327,9 @@ export default function AccountsPage() {
               <Layers className="h-4 w-4 me-1" />
               مسطح
             </Button>
-            <GuardedButton perm="finance:create" size="sm" asChild>
-              <Link href="/finance/accounts/create">
-                <Plus className="h-4 w-4 me-1" />
-                إضافة حساب
-              </Link>
+            <GuardedButton perm="finance:create" size="sm" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4 me-1" />
+              إضافة حساب
             </GuardedButton>
           </>
         }
@@ -444,6 +450,16 @@ export default function AccountsPage() {
         invalidateKeys={[["accounts"]]}
         successMessage="تم حذف الحساب"
         onDeleted={() => setDeleteAccount(null)}
+      />
+
+      <AllowCreateDrawer
+        kind="account"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء الحساب" });
+          refetch();
+        }}
       />
     </>
   );
