@@ -293,8 +293,7 @@ custodiesRouter.get("/custodies", authorize({ feature: "finance.custodies", acti
       },
     }));
   } catch (err) {
-    logger.error(err, "Get custodies error:");
-    res.json({ data: [], summary: { total: 0, totalAmount: 0, totalRemaining: 0, activeCount: 0, overdueCount: 0, pendingCount: 0 } });
+    handleRouteError(err, res, "Get custodies error:");
   }
 });
 
