@@ -22,6 +22,7 @@ import { BulkActionsBar, BulkCheckbox, useBulkSelection } from "@/components/sha
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 /**
  * Vendors list — migrated in R.2 iter 2 to the unified template stack.
@@ -42,11 +43,13 @@ import { usePrintRows } from "@/hooks/use-print-rows";
  * `accounts.tsx` in this same iteration as the reference demo.
  */
 export default function VendorsPage() {
-  const [location, navigate] = useLocation();
-  const isWarehouseContext = location.startsWith("/warehouse");
-  const createPath = isWarehouseContext ? "/warehouse/suppliers/create" : "/finance/vendors/create";
+  const [, navigate] = useLocation();
   const { scopeQueryString } = useAppContext();
   const { toast } = useToast();
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة مورد» يفتح
+  // النموذج الكامل في درج بدل الانتقال لصفحة /create. صفحة الإنشاء الكاملة
+  // تبقى متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
   // #2713 (تعميم) — سلة المحذوفات للمورّدين.
   const [showDeleted, setShowDeleted] = useState(false);
   const vendorsQs = new URLSearchParams(scopeQueryString || "");
@@ -166,11 +169,9 @@ export default function VendorsPage() {
           <Button asChild variant="outline" size="sm"><Link href="/finance/vendor-contracts-tracker">
               <Calendar className="h-4 w-4 me-2" />متابعة العقود
             </Link></Button>
-          <GuardedButton perm="finance:create" size="sm" asChild>
-            <Link href={createPath}>
-              <Plus className="h-4 w-4 me-1" />
-              إضافة مورد
-            </Link>
+          <GuardedButton perm="finance:create" size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4 me-1" />
+            إضافة مورد
           </GuardedButton>
           <PrintButton
             entityType="report_finance_vendors"
@@ -257,6 +258,16 @@ export default function VendorsPage() {
           noToolbar
         />
       </PageStateWrapper>
+
+      <AllowCreateDrawer
+        kind="vendor"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء المورد" });
+          refetch();
+        }}
+      />
     </PageShell>
   );
 }
