@@ -160,6 +160,16 @@ function statusLabel(s: string): string {
   } as Record<string, string>)[s] ?? s;
 }
 
+type AiConnTest = {
+  configured: boolean;
+  apiKeySet: boolean;
+  baseUrlSet: boolean;
+  model: string;
+  reachable: boolean;
+  latencyMs: number | null;
+  error: string | null;
+};
+
 export default function AdminAiGovernance() {
   const qc = useQueryClient();
   const [tab, setTab] = useState("overview");
@@ -170,6 +180,24 @@ export default function AdminAiGovernance() {
   const [simulatePromptId, setSimulatePromptId] = useState<number | null>(null);
   const [evaluatePrompt, setEvaluatePrompt] = useState<PromptRow | null>(null);
   const [editProvider, setEditProvider] = useState<ProviderRow | null>(null);
+
+  // حالة/اختبار تفعيل الذكاء الاصطناعي (LLM) — يتحقّق من ضبط المفتاح + استجابة المزوّد.
+  const [connTest, setConnTest] = useState<AiConnTest | null>(null);
+  const [testingConn, setTestingConn] = useState(false);
+  async function runConnectionTest() {
+    setTestingConn(true);
+    try {
+      setConnTest((await apiFetch("/admin/ai-governance/connection-test")) as AiConnTest);
+    } catch (e) {
+      setConnTest({
+        configured: false, apiKeySet: false, baseUrlSet: false, model: "",
+        reachable: false, latencyMs: null,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setTestingConn(false);
+    }
+  }
 
   const { data: overview, isLoading: ovLoading, error: ovError, refetch: refetchOverview } =
     useApiQuery<Overview>(["ai-governance-overview"], "/admin/ai-governance/overview");
@@ -361,6 +389,57 @@ export default function AdminAiGovernance() {
 
           {/* ── Overview ──────────────────────────────────────────── */}
           <TabsContent value="overview" className="space-y-4">
+            {/* ── حالة تفعيل الذكاء الاصطناعي (LLM) ─────────────────── */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />حالة تفعيل الذكاء الاصطناعي (LLM)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Button size="sm" variant="outline" onClick={runConnectionTest} disabled={testingConn}>
+                    {testingConn ? "جارٍ الاختبار…" : "اختبار الاتصال"}
+                  </Button>
+                  {connTest && (
+                    <span
+                      className={`text-sm font-medium ${
+                        connTest.reachable
+                          ? "text-status-success-foreground"
+                          : connTest.configured
+                            ? "text-status-warning-foreground"
+                            : "text-muted-foreground"
+                      }`}
+                    >
+                      {connTest.reachable
+                        ? `✓ مُفعّل ويستجيب (${connTest.latencyMs} مللي ثانية)`
+                        : connTest.configured
+                          ? "⚠️ مضبوط لكن لا يستجيب"
+                          : "غير مُفعّل"}
+                    </span>
+                  )}
+                </div>
+                {connTest ? (
+                  <div className="text-xs text-muted-foreground space-y-0.5">
+                    <div>
+                      المفتاح: {connTest.apiKeySet ? "مضبوط ✓" : "غير مضبوط ✗"} · عنوان الخدمة:{" "}
+                      {connTest.baseUrlSet ? "مضبوط ✓" : "غير مضبوط ✗"} · النموذج:{" "}
+                      <span className="font-mono">{connTest.model || "—"}</span>
+                    </div>
+                    {connTest.error && (
+                      <div className="text-status-danger-foreground">{connTest.error}</div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    اضغط «اختبار الاتصال» للتحقّق من التفعيل. يتم التفعيل بضبط متغيّرَي البيئة{" "}
+                    <span className="font-mono">AI_INTEGRATIONS_ANTHROPIC_API_KEY</span> و{" "}
+                    <span className="font-mono">AI_INTEGRATIONS_ANTHROPIC_BASE_URL</span> ثم إعادة تشغيل الخادم.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2">
