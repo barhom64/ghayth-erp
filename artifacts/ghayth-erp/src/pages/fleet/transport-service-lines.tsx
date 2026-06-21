@@ -16,6 +16,8 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +84,7 @@ export default function TransportServiceLines() {
     `/transport/service-lines?${qs}`,
   );
   const lines: ServiceLine[] = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(lines);
 
   const autoPrice = async (id: number) => {
     setAutopriceLoading(id);
@@ -246,6 +249,24 @@ export default function TransportServiceLines() {
         { href: "/fleet", label: "الأسطول" },
         { href: "/fleet/transport/service-lines", label: "بنود الخدمة" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_transport_service_lines"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "طابور تسعير بنود النقل", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "التاريخ": r.serviceDate,
+              "العميل": r.customerName || `عميل #${r.customerId}`,
+              "نوع الخدمة": r.serviceType,
+              "المسار": r.routeFrom ? `${r.routeFrom} → ${r.routeTo || "—"}` : "—",
+              "الإجمالي": r.lineTotal ? formatCurrency(Number(r.lineTotal)) : "—",
+              "الحالة": STATUS_LABELS[r.billingStatus] || r.billingStatus,
+            })),
+          })}
+        />
+      }
     >
       <FleetTabsNav />
       {/* Filters */}
@@ -312,6 +333,7 @@ export default function TransportServiceLines() {
           <DataTable
             columns={columns}
             data={lines}
+            onSortedDataChange={setPrintRows}
             searchPlaceholder="بحث بالعميل أو نوع الخدمة..."
             pageSize={50}
           />

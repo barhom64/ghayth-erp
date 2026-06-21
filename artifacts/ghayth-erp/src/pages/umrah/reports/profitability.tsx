@@ -18,6 +18,8 @@ import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -63,6 +65,7 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
   );
   const seasons = seasonsResp?.data ?? [];
   const rows = data?.data ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const title = dimension === "group" ? "تقرير ربحية المجموعة" : "تقرير ربحية الوكيل";
   const idColumn = dimension === "group" ? "groupId" : "agentId";
@@ -91,6 +94,24 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
         { href: "/umrah/reports", label: "التقارير" },
         { label: title },
       ]}
+      actions={
+        <PrintButton
+          entityType={`report_umrah_profitability_${dimension}`}
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title, total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "الاسم": r.name ?? "—",
+              [subColumnLabel]: subColumnValue(r),
+              "الإيراد": formatCurrency(Number(r.revenue) || 0),
+              "التكلفة": formatCurrency(Number(r.cost) || 0),
+              "صافي الربح": formatCurrency(Number(r.netProfit) || 0),
+              "الهامش %": r.marginPercent == null ? "—" : `${Number(r.marginPercent)}%`,
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
@@ -141,6 +162,7 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
           <DataTable
             data={rows}
             rowKey={(r) => { const rowKey = (r as any)[idColumn] ?? `${r.name}`; return String(rowKey); }}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage=""
