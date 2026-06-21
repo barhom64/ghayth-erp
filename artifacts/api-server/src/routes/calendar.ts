@@ -1,9 +1,11 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
-import { handleRouteError } from "../lib/errorHandler.js";
-import { rawQuery } from "../lib/rawdb.js";
+import { handleRouteError, parseId, zodParse, ValidationError, NotFoundError } from "../lib/errorHandler.js";
+import { rawQuery, rawExecute } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
+import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
+import { z } from "zod";
 
 export const calendarRouter = Router();
 calendarRouter.use(authMiddleware);
@@ -58,6 +60,7 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       umrahSeasonStarts,
       umrahSeasonEnds,
       umrahGroupArrivals,
+      appointments,
     ] = await Promise.all([
       safe(() => rawQuery<MilestoneRow>(
         `SELECT pm.id, pm.title, pm."dueDate" as "date", pm.status, p.name as "projectName", p.id as "projectId"
@@ -196,6 +199,15 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
           ORDER BY MIN(p."entryDate") LIMIT 50`,
         [cid, now.slice(0, 10), cutoff.slice(0, 10)]
       ), []),
+      // #2704 — المواعيد المجدولة داخل النافذة.
+      safe(() => rawQuery<{ id: number; title: string; date: string; status: string; location: string | null }>(
+        `SELECT id, title, "startsAt"::text AS "date", status, location
+           FROM appointments
+          WHERE "companyId" = $1 AND "deletedAt" IS NULL AND status = 'scheduled'
+            AND "startsAt" BETWEEN $2 AND $3
+          ORDER BY "startsAt" LIMIT 50`,
+        [cid, now, cutoff]
+      ), []),
     ]);
 
     const events: CalendarEvent[] = [];
@@ -318,6 +330,12 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       link: `/umrah/groups`,
     }));
 
+    appointments.forEach((ap) => events.push({
+      id: `appointment-${ap.id}`, date: ap.date, title: ap.title,
+      category: "appointment", status: ap.status,
+      context: ap.location || "", link: "/calendar",
+    }));
+
     events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     const summary = {
@@ -334,10 +352,204 @@ calendarRouter.get("/upcoming", authorize({ feature: "projects", action: "list" 
       interviews: interviews.length,
       umrahSeasons: umrahSeasonStarts.length + umrahSeasonEnds.length,
       umrahGroupArrivals: umrahGroupArrivals.length,
+      appointments: appointments.length,
     };
 
     res.json(maskFields(req, { events, summary }));
   } catch (err) {
     handleRouteError(err, res, "Calendar upcoming error:");
   }
+});
+
+// ─── المواعيد/الاجتماعات (#2704) ───────────────────────────────────────────
+// كيان موعد قابل للإنشاء/التعديل/الإلغاء + توليد دعوة .ics. RBAC: calendar.my.
+// حذف ناعم + استرجاع (متوافق مع سلة المحذوفات #2713). تشغيلي — لا يمسّ الدفتر.
+
+interface AppointmentRow {
+  id: number;
+  companyId: number;
+  branchId: number | null;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startsAt: string;
+  endsAt: string;
+  allDay: boolean;
+  status: string;
+  relatedEntityType: string | null;
+  relatedEntityId: number | null;
+  attendees: Array<{ name?: string; email?: string }>;
+}
+
+const appointmentSchema = z.object({
+  title: z.string().min(1, "عنوان الموعد مطلوب").max(300),
+  description: z.string().max(5000).optional(),
+  location: z.string().max(300).optional(),
+  startsAt: z.string().min(1, "وقت البداية مطلوب"),
+  endsAt: z.string().min(1, "وقت النهاية مطلوب"),
+  allDay: z.boolean().optional(),
+  status: z.enum(["scheduled", "completed", "cancelled"]).optional(),
+  relatedEntityType: z.string().max(60).optional(),
+  relatedEntityId: z.coerce.number().int().positive().optional(),
+  attendees: z.array(z.object({
+    name: z.string().max(200).optional(),
+    email: z.string().email("بريد إلكتروني غير صالح").optional(),
+  })).max(100).optional(),
+  branchId: z.coerce.number().optional(),
+});
+
+function icsEscape(s: string | null | undefined): string {
+  return String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
+}
+function toIcsStamp(d: string | Date): string {
+  return new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+function buildAppointmentIcs(a: AppointmentRow): string {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Ghayth ERP//Appointments//AR",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "BEGIN:VEVENT",
+    `UID:appointment-${a.id}@ghayth-erp`,
+    `DTSTAMP:${toIcsStamp(new Date())}`,
+    `DTSTART:${toIcsStamp(a.startsAt)}`,
+    `DTEND:${toIcsStamp(a.endsAt)}`,
+    `SUMMARY:${icsEscape(a.title)}`,
+  ];
+  if (a.description) lines.push(`DESCRIPTION:${icsEscape(a.description)}`);
+  if (a.location) lines.push(`LOCATION:${icsEscape(a.location)}`);
+  if (a.status === "cancelled") lines.push("STATUS:CANCELLED");
+  for (const at of a.attendees ?? []) {
+    if (at?.email) lines.push(`ATTENDEE;CN=${icsEscape(at.name || at.email)}:mailto:${at.email}`);
+  }
+  lines.push("END:VEVENT", "END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+// GET /calendar/appointments?from=&to=&deleted= — قائمة ضمن نافذة زمنية اختيارية.
+calendarRouter.get("/appointments", authorize({ feature: "calendar.my", action: "list" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const q = req.query as Record<string, string | undefined>;
+    const showDeleted = q.deleted === "true";
+    const params: unknown[] = [scope.companyId];
+    let where = showDeleted
+      ? `"companyId" = $1 AND "deletedAt" IS NOT NULL`
+      : `"companyId" = $1 AND "deletedAt" IS NULL`;
+    if (q.from) { params.push(q.from); where += ` AND "startsAt" >= $${params.length}`; }
+    if (q.to) { params.push(q.to); where += ` AND "startsAt" <= $${params.length}`; }
+    const rows = await rawQuery<AppointmentRow>(
+      `SELECT * FROM appointments WHERE ${where} ORDER BY "startsAt" LIMIT 500`,
+      params,
+    );
+    res.json(maskFields(req, { data: rows }));
+  } catch (err) { handleRouteError(err, res, "List appointments error:"); }
+});
+
+// POST /calendar/appointments — إنشاء موعد.
+calendarRouter.post("/appointments", authorize({ feature: "calendar.my", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const b = zodParse(appointmentSchema.safeParse(req.body ?? {}));
+    if (new Date(b.endsAt).getTime() < new Date(b.startsAt).getTime()) {
+      throw new ValidationError("وقت النهاية قبل وقت البداية", { field: "endsAt", fix: "اجعل وقت النهاية بعد البداية" });
+    }
+    const [row] = await rawQuery<AppointmentRow>(
+      `INSERT INTO appointments ("companyId","branchId",title,description,location,"startsAt","endsAt","allDay",status,"relatedEntityType","relatedEntityId",attendees,"createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13) RETURNING *`,
+      [scope.companyId, b.branchId ?? scope.branchId ?? null, b.title, b.description ?? null, b.location ?? null,
+       b.startsAt, b.endsAt, b.allDay ?? false, b.status ?? "scheduled", b.relatedEntityType ?? null,
+       b.relatedEntityId ?? null, JSON.stringify(b.attendees ?? []), scope.userId],
+    );
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "appointment.created", entity: "appointments", entityId: row.id, details: JSON.stringify({ title: b.title }) }).catch((e) => logger.error(e, "appointment event failed"));
+    auditFromRequest(req, "create", "appointments", row.id, { after: { title: b.title, startsAt: b.startsAt } }).catch((e) => logger.error(e, "appointment audit failed"));
+    res.status(201).json(row);
+  } catch (err) { handleRouteError(err, res, "Create appointment error:"); }
+});
+
+// PATCH /calendar/appointments/:id — تعديل موعد.
+calendarRouter.patch("/appointments/:id", authorize({ feature: "calendar.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const b = zodParse(appointmentSchema.partial().safeParse(req.body ?? {}));
+    // كمرآة لتحقّق POST: لا يجوز أن تصبح النهاية قبل البداية بعد التعديل الجزئي.
+    // نحمّل القيم الحالية لحساب القيمة الفعّالة (الجديدة إن وُجدت، وإلا المخزَّنة).
+    if (b.startsAt !== undefined || b.endsAt !== undefined) {
+      const [cur] = await rawQuery<{ startsAt: string; endsAt: string }>(
+        `SELECT "startsAt", "endsAt" FROM appointments WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!cur) throw new NotFoundError("الموعد غير موجود");
+      const effStart = b.startsAt ?? cur.startsAt;
+      const effEnd = b.endsAt ?? cur.endsAt;
+      if (new Date(effEnd).getTime() < new Date(effStart).getTime()) {
+        throw new ValidationError("وقت النهاية قبل وقت البداية", { field: "endsAt", fix: "اجعل وقت النهاية بعد البداية" });
+      }
+    }
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    const set = (col: string, val: unknown) => { params.push(val); sets.push(`"${col}" = $${params.length}`); };
+    if (b.title !== undefined) set("title", b.title);
+    if (b.description !== undefined) set("description", b.description ?? null);
+    if (b.location !== undefined) set("location", b.location ?? null);
+    if (b.startsAt !== undefined) set("startsAt", b.startsAt);
+    if (b.endsAt !== undefined) set("endsAt", b.endsAt);
+    if (b.allDay !== undefined) set("allDay", b.allDay);
+    if (b.status !== undefined) set("status", b.status);
+    if (b.relatedEntityType !== undefined) set("relatedEntityType", b.relatedEntityType ?? null);
+    if (b.relatedEntityId !== undefined) set("relatedEntityId", b.relatedEntityId ?? null);
+    if (b.attendees !== undefined) { params.push(JSON.stringify(b.attendees ?? [])); sets.push(`attendees = $${params.length}::jsonb`); }
+    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث", { field: "body", fix: "أرسل حقلاً واحداً على الأقل" });
+    sets.push(`"updatedAt" = NOW()`);
+    params.push(id); params.push(scope.companyId);
+    const [row] = await rawQuery<AppointmentRow>(
+      `UPDATE appointments SET ${sets.join(", ")} WHERE id = $${params.length - 1} AND "companyId" = $${params.length} AND "deletedAt" IS NULL RETURNING *`,
+      params,
+    );
+    if (!row) throw new NotFoundError("الموعد غير موجود");
+    auditFromRequest(req, "update", "appointments", id).catch((e) => logger.error(e, "appointment audit failed"));
+    res.json(row);
+  } catch (err) { handleRouteError(err, res, "Update appointment error:"); }
+});
+
+// DELETE /calendar/appointments/:id — حذف ناعم.
+calendarRouter.delete("/appointments/:id", authorize({ feature: "calendar.my", action: "delete" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE appointments SET "deletedAt" = NOW() WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("الموعد غير موجود");
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "appointment.deleted", entity: "appointments", entityId: id }).catch((e) => logger.error(e, "appointment event failed"));
+    auditFromRequest(req, "delete", "appointments", id).catch((e) => logger.error(e, "appointment audit failed"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Delete appointment error:"); }
+});
+
+// POST /calendar/appointments/:id/restore — استرجاع (سلة المحذوفات #2713).
+calendarRouter.post("/appointments/:id/restore", authorize({ feature: "calendar.my", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE appointments SET "deletedAt" = NULL WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد موعد محذوف بهذا المعرّف");
+    auditFromRequest(req, "restore", "appointments", id).catch((e) => logger.error(e, "appointment audit failed"));
+    emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "appointment.restored", entity: "appointments", entityId: id }).catch((e) => logger.error(e, "appointment event failed"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Restore appointment error:"); }
+});
+
+// GET /calendar/appointments/:id/ics — تنزيل دعوة iCalendar للموعد.
+calendarRouter.get("/appointments/:id/ics", authorize({ feature: "calendar.my", action: "view" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const [row] = await rawQuery<AppointmentRow>(`SELECT * FROM appointments WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+    if (!row) throw new NotFoundError("الموعد غير موجود");
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="appointment-${id}.ics"`);
+    res.send(buildAppointmentIcs(row));
+  } catch (err) { handleRouteError(err, res, "Appointment ICS error:"); }
 });

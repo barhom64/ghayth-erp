@@ -201,7 +201,7 @@ const createPurchaseRequestSchema = z.object({
   items: z.array(z.object({
     description: z.string().optional(),
     quantity: z.coerce.number().optional(),
-    unitPrice: z.coerce.number().optional(),
+    unitPrice: z.coerce.number().nonnegative().optional(),
     productId: z.coerce.number().optional(),
     ...purchaseLineDimsSchema,
   })).min(1, "يجب إضافة بند واحد على الأقل"),

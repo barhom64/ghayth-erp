@@ -1913,7 +1913,7 @@ const onboardSchema = z.object({
   // migration 249) so activating a new employee is one choice, not a manual
   // role hunt. Explicit `roles` below still override / extend it.
   jobTitleId: z.coerce.number().int().positive().optional().nullable(),
-  salary: z.coerce.number().optional(),
+  salary: z.coerce.number().nonnegative().optional(),
   // account
   password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل").optional(),
   // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule).

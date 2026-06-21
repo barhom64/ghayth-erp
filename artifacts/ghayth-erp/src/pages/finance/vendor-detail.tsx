@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CustomFieldsPanel } from "@/components/shared/custom-fields-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -235,6 +236,9 @@ export default function VendorDetailPage() {
       </Card>
 
       {id && <VendorContactSummaryCard vendorId={id} />}
+
+      {/* #2719 — الحقول المخصّصة للمورّد (تظهر فقط إن عرّفت الشركة حقولًا). */}
+      {id && <CustomFieldsPanel entityType="vendor" entityId={id} />}
 
       {/* WHT settings — surfaces the fields from #999 (residencyStatus,
          defaultWhtRate, whtCategoryDefault, taxResidenceCountry). Only
