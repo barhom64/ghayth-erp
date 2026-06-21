@@ -821,42 +821,47 @@ router.post(
           fix: "اختر موظفاً نشطاً من القائمة",
         });
       }
-      // Promotion: if role='primary', demote any existing primary first.
-      if (role === "primary") {
-        await rawQuery(
-          `UPDATE task_assignees SET role = 'member'
-           WHERE "taskId" = $1 AND "companyId" = $2 AND role = 'primary' AND "removedAt" IS NULL`,
-          [id, scope.companyId],
+      // All assignee writes are atomic: a primary-demote + assignedTo mirror
+      // must not commit without the matching assignee insert/update. rawQuery
+      // joins the ambient transaction (txStore) automatically.
+      await withTransaction(async () => {
+        // Promotion: if role='primary', demote any existing primary first.
+        if (role === "primary") {
+          await rawQuery(
+            `UPDATE task_assignees SET role = 'member'
+             WHERE "taskId" = $1 AND "companyId" = $2 AND role = 'primary' AND "removedAt" IS NULL`,
+            [id, scope.companyId],
+          );
+          // Also mirror into tasks.assignedTo.
+          await rawQuery(
+            `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
+            [assignmentId, id, scope.companyId],
+          );
+        }
+        // SELECT-then-INSERT-or-UPDATE in two steps. The audit:schema-
+        // drift regex (scripts/src/check-schema-drift.mjs) misreads the
+        // upsert clause as a table reference, so we use two queries
+        // instead. Two round-trips here are fine — there's no
+        // concurrency win to chase, just code aesthetics.
+        const [existingRow] = await rawQuery<{ id: number }>(
+          `SELECT id FROM task_assignees
+           WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL
+           LIMIT 1`,
+          [id, assignmentId, scope.companyId],
         );
-        // Also mirror into tasks.assignedTo.
-        await rawQuery(
-          `UPDATE tasks SET "assignedTo" = $1 WHERE id = $2 AND "companyId" = $3`,
-          [assignmentId, id, scope.companyId],
-        );
-      }
-      // SELECT-then-INSERT-or-UPDATE in two steps. The audit:schema-
-      // drift regex (scripts/src/check-schema-drift.mjs) misreads the
-      // upsert clause as a table reference, so we use two queries
-      // instead. Two round-trips here are fine — there's no
-      // concurrency win to chase, just code aesthetics.
-      const [existingRow] = await rawQuery<{ id: number }>(
-        `SELECT id FROM task_assignees
-         WHERE "taskId" = $1 AND "assignmentId" = $2 AND "companyId" = $3 AND "removedAt" IS NULL
-         LIMIT 1`,
-        [id, assignmentId, scope.companyId],
-      );
-      if (existingRow) {
-        await rawQuery(
-          `UPDATE task_assignees SET role = $1 WHERE id = $2 AND "companyId" = $3`,
-          [role, existingRow.id, scope.companyId],
-        );
-      } else {
-        await rawQuery(
-          `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
-           VALUES ($1, $2, $3, $4, $5)`,
-          [scope.companyId, id, assignmentId, role, scope.activeAssignmentId],
-        );
-      }
+        if (existingRow) {
+          await rawQuery(
+            `UPDATE task_assignees SET role = $1 WHERE id = $2 AND "companyId" = $3`,
+            [role, existingRow.id, scope.companyId],
+          );
+        } else {
+          await rawQuery(
+            `INSERT INTO task_assignees ("companyId", "taskId", "assignmentId", role, "assignedBy")
+             VALUES ($1, $2, $3, $4, $5)`,
+            [scope.companyId, id, assignmentId, role, scope.activeAssignmentId],
+          );
+        }
+      });
       createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "assignee.add", entity: "tasks", entityId: id, after: { assignmentId, role } }).catch((e) => logger.error(e, "tasks background task failed"));
       const team = await fetchTaskAssignees(id, scope.companyId);
       res.status(201).json(maskFields(req, team));
