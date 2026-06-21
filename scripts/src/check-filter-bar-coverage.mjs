@@ -62,10 +62,14 @@ export function usesCanonicalBar(src) {
  *  (Deliberately does NOT count "a filter setter merely exists" — that produced
  *  false positives on pages whose only `flex gap` row was the actions bar.) */
 export function hasHandRolledFilter(src) {
+  // NB: `tab`/`Tab` is deliberately excluded — a <Tabs> toggle is section
+  // navigation, not a list filter; counting it flagged multi-section config
+  // dashboards (admin-monitoring / ai-governance / notification-engine) that
+  // have no single filterable list.
   const toggleButtons =
-    /variant=\{[^}]*\b(statusFilter|cat|tab|filter|status|active|category)\b[^}]*\?[^}]*["'`](default|outline|secondary)["'`]/.test(src);
+    /variant=\{[^}]*\b(statusFilter|cat|filter|status|active|category)\b[^}]*\?[^}]*["'`](default|outline|secondary)["'`]/.test(src);
   const filterSelect =
-    /onValueChange=\{[^}]*set(StatusFilter|Status|Cat|Category|Filter|Tab|Season|Agent|Employee|Type)\b/.test(src);
+    /onValueChange=\{[^}]*set(StatusFilter|Status|Cat|Category|Filter|Season|Agent|Employee|Type)\b/.test(src);
   return toggleButtons || filterSelect;
 }
 
@@ -85,9 +89,19 @@ export function filtersServerSide(src) {
   return false;
 }
 
+/** A multi-section page: a <Tabs> shell driving several DataTables. Its "filter"
+ *  is section navigation, not a single list filter, so a single AdvancedFilters
+ *  bar does not apply (admin-monitoring / ai-governance / notification-engine /
+ *  finance-collections). Counted separately, never as a migrate target. */
+export function isMultiSection(src) {
+  const tables = (src.match(/<\s*DataTable\b/g) || []).length;
+  return /<\s*Tabs\b/.test(src) && tables >= 2;
+}
+
 export function classify(src) {
   if (!isListPage(src)) return "not-list";
   if (usesCanonicalBar(src)) return "canonical";
+  if (isMultiSection(src)) return "multi-section";
   if (!hasHandRolledFilter(src)) return "no-filter";
   return filtersServerSide(src) ? "handrolled-server" : "handrolled-client";
 }
