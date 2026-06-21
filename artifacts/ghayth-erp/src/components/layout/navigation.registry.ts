@@ -589,6 +589,7 @@ export const allNavSections: NavSection[] = [
           // المركبات وزر الإضافة من القائمة رغم بقاء الصفحة قائمةً تعمل.
           { label: "المركبات", path: "/fleet", icon: Car, perm: "fleet.vehicles:list" },
           { label: "السائقين", path: "/fleet/drivers", icon: User, perm: "fleet.vehicles:list" },
+          { label: "فحوص المركبات", path: "/fleet/inspections", icon: ClipboardCheck, perm: "fleet.vehicles:list" },
           { label: "الرحلات", path: "/fleet/trips", icon: Navigation, perm: "fleet.trips:list" },
           { label: "استهلاك الوقود", path: "/fleet/fuel", icon: Fuel, perm: "fleet.trips:list" },
           { label: "التأمين", path: "/fleet/insurance", icon: Shield, perm: "fleet.vehicles:list" },

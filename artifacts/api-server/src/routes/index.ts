@@ -23,6 +23,7 @@ import { zatcaRouter } from "./finance-zatca.js";
 import notificationsRouter from "./notifications.js";
 import tasksRouter from "./tasks.js";
 import fleetRouter from "./fleet.js";
+import fleetInspectionsRouter from "./fleet-inspections.js";
 import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
@@ -453,6 +454,8 @@ router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
 router.use("/fleet", fleetUserLimiter);
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
+// Vehicle inspections + photos (متابعة النقل بالصور). Same /fleet module gate.
+router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetInspectionsRouter);
 // Telematics surface (#1354). Mounted under /fleet so it inherits the same
 // module + financial guard + per-user limiter as the rest of the fleet
 // module, and so URLs stay /fleet/telematics/* in the SPA.

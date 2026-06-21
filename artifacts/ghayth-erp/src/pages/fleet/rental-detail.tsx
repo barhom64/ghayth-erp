@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UnifiedDateInput } from "@/components/ui/unified-date-input";
+import { RentalInspectionPhotos } from "@/components/shared/inspection-photos";
 
 // #1812 Wave 1 Step C — rental contract detail.
 //
@@ -425,6 +426,11 @@ export default function RentalDetailPage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* صور الفحص (استلام/تسليم) — تربط الصور بعقد الإيجار عبر سجل الفحص */}
+      {c.status !== "draft" && (
+        <RentalInspectionPhotos vehicleId={c.vehicleId} rentalContractId={c.id} />
       )}
 
       {/* Return summary (terminal) */}
