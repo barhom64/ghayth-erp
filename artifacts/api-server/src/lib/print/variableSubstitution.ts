@@ -78,6 +78,20 @@ const ENUM_AR: Record<string, string> = {
   shipped: "مشحون",
   returned: "مُرتجع",
   fulfilled: "مُلبَّى",
+  // Warehouse lot / serial lifecycle — mirrored from the STATUS_LABELS maps
+  // in warehouse/serials.tsx, warehouse/lots.tsx and warehouse/cycle-counts.tsx
+  // so a printed inventory list reads the same Arabic label as the SPA badge.
+  // (Ambiguous cross-domain words like "return"/"submitted"/"handover" are
+  // intentionally left to per-page payloads to avoid wrong global meanings.)
+  in_stock: "في المخزن",
+  reserved: "محجوز",
+  sold: "مُباع",
+  defective: "تالف",
+  scrapped: "متلف",
+  quarantine: "حجر صحي",
+  recalled: "مستدعى",
+  disposed: "متلف",
+  reviewed: "مراجَع",
   // Voucher / journal types
   receipt: "سند قبض",
   payment: "سند صرف",

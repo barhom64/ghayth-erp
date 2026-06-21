@@ -166,10 +166,14 @@ export default function SubsidiaryAccountFailuresPage() {
           size="icon"
           payload={() => ({
             entity: { title: "فشل تأسيس الحسابات الفرعية", total: printRows.length },
-            items: printRows.map((r: any) => Object.fromEntries(
-              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                .map((c: any) => [c.header, r[c.key] ?? "—"]),
-            )),
+            items: printRows.map((r: any) => ({
+              "الجهة": r.entityName || `#${r.entityId}`,
+              "النوع": ENTITY_LABEL[r.entityType] || r.entityType,
+              "الحسابات الناقصة": missingList(r.missingAccountTypes).join("، ") || "—",
+              "السبب": r.reason || "—",
+              "المحاولات": r.retryCount ?? 0,
+              "الحالة": r.resolved ? "مُغلق" : "مفتوح",
+            })),
           })}
         />
       }

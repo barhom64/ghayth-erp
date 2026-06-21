@@ -104,10 +104,14 @@ export default function RecurringInvoicesPage() {
             size="icon"
             payload={() => ({
               entity: { title: "الفوترة المتكررة", total: printRows.length },
-              items: printRows.map((r: any) => Object.fromEntries(
-                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
-              )),
+              items: printRows.map((r: any) => ({
+                "العنوان": r.title,
+                "العميل": r.clientName || `#${r.clientId}`,
+                "التكرار": FREQUENCY_LABEL[r.frequency] || r.frequency,
+                "الاستحقاق التالي": r.nextRunDate,
+                "مرات التوليد": r.runsCount ?? 0,
+                "الحالة": r.active ? "نشط" : "غير نشط",
+              })),
             })}
           />
           <GuardedButton perm="finance:create" size="sm" onClick={() => { setForm(emptyForm); setShowForm(true); }}><Plus className="h-4 w-4 me-1" /> قالب جديد</GuardedButton>

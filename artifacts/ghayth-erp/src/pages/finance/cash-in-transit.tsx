@@ -87,10 +87,13 @@ export default function CashInTransitPage() {
             size="icon"
             payload={() => ({
               entity: { title: "النقد في الطريق", total: printRows.length },
-              items: printRows.map((r: any) => Object.fromEntries(
-                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
-              )),
+              items: printRows.map((r: any) => ({
+                "تاريخ الإرسال": r.sentDate,
+                "من": r.sourceAccountCode,
+                "إلى": r.destinationAccountCode,
+                "المبلغ": formatCurrency(Number(r.amount)),
+                "الحالة": r.status === "in_transit" ? "في الطريق" : r.status === "arrived" ? "وصل" : "ملغى",
+              })),
             })}
           />
           <GuardedButton perm="finance:create" size="sm" onClick={() => { setForm(emptyForm); setShowForm(true); }}><Plus className="h-4 w-4 me-1" /> تحويل جديد</GuardedButton>

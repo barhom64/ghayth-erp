@@ -338,10 +338,14 @@ export default function UmrahRefundRequests() {
             size="icon"
             payload={() => ({
               entity: { title: "طلبات الاسترداد", total: printRows.length },
-              items: printRows.map((r: any) => Object.fromEntries(
-                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
-              )),
+              items: printRows.map((r: any) => ({
+                "المستفيد": r.pilgrimName ?? r.agentName ?? "—",
+                "السبب": r.reason ?? "—",
+                "الإجمالي (ريال)": formatCurrency(Number(r.grossAmount || 0)),
+                "استقطاع الوزارة": Number(r.mofaRetention || 0) > 0 ? formatCurrency(Number(r.mofaRetention)) : "—",
+                "المصروف": r.settledAmount != null ? formatCurrency(Number(r.settledAmount)) : "—",
+                "الحالة": umrahRefundStatusLabel(r.status),
+              })),
             })}
           />
           <GuardedButton perm="umrah:create" variant="outline" className="gap-2"

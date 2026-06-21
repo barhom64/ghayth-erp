@@ -101,10 +101,14 @@ export default function InspectionsReview() {
           size="icon"
           payload={() => ({
             entity: { title: "مراجعة فحوص المركبات", total: printRows.length },
-            items: printRows.map((r: any) => Object.fromEntries(
-              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                .map((c: any) => [c.header, r[c.key] ?? "—"]),
-            )),
+            items: printRows.map((r: any) => ({
+              "المركبة": r.plateNumber ?? `#${r.vehicleId}`,
+              "النوع": TYPE_AR[r.inspectionType] ?? r.inspectionType,
+              "العداد": r.odometer != null ? r.odometer : "—",
+              "الصور": r.photoCount,
+              "الحالة": STATUS_AR[r.status] ?? r.status,
+              "وقت الالتقاط": r.capturedAt ?? "—",
+            })),
           })}
         />
       }

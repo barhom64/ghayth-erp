@@ -10,6 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useToast } from "@/hooks/use-toast";
 import { Wrench, Ticket, CheckCircle2, AlertTriangle } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
@@ -123,6 +125,7 @@ export default function MaintenanceTicketImpact() {
   const rows = onlyActive
     ? all.filter((m) => ACTIVE_STATUSES.includes((m.status || "").toLowerCase()))
     : all;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const columns: DataTableColumn<Maintenance>[] = [
     { key: "vehicle", header: "المركبة", render: (m) => <span className="font-mono font-medium">{plateOf(m)}</span> },
@@ -157,6 +160,23 @@ export default function MaintenanceTicketImpact() {
       title="أثر الصيانة → التذاكر"
       subtitle="المركبة تحت الصيانة = مركبة خارج الخدمة. حوّل أثر الصيانة إلى تذكرة دعم ليتصرّف فريق التشغيل."
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "أثر الصيانة" }]}
+      actions={
+        <PrintButton
+          entityType="report_fleet_maintenance_impact"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "أثر الصيانة → التذاكر", total: printRows.length },
+            items: printRows.map((m: any) => ({
+              "المركبة": plateOf(m),
+              "نوع الصيانة": typeOf(m),
+              "الحالة": STATUS_BADGE[(m.status || "").toLowerCase()]?.label ?? m.status ?? "—",
+              "التكلفة": costOf(m) ? formatCurrency(costOf(m)) : "—",
+              "التاريخ": dateOf(m) ? formatDateAr(dateOf(m)!) : "—",
+            })),
+          })}
+        />
+      }
     >
       <FleetTabsNav />
       <div className="flex items-center gap-2 mb-4">
@@ -179,7 +199,7 @@ export default function MaintenanceTicketImpact() {
           </CardContent>
         </Card>
       ) : (
-        <DataTable columns={columns} data={rows} emptyMessage="—" pageSize={50} />
+        <DataTable columns={columns} data={rows} onSortedDataChange={setPrintRows} emptyMessage="—" pageSize={50} />
       )}
 
       <Dialog open={!!dialog} onOpenChange={(o) => !o && setDialog(null)}>

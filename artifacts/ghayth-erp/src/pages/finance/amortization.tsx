@@ -170,10 +170,14 @@ export default function AmortizationPage() {
             size="icon"
             payload={() => ({
               entity: { title: "إطفاء المصروفات المدفوعة مقدماً", total: printRows.length },
-              items: printRows.map((r: any) => Object.fromEntries(
-                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
-              )),
+              items: printRows.map((r: any) => ({
+                "الحساب المدفوع مقدماً": r.prepaidAccountCode,
+                "وجهة المصروف": r.expenseAccountPurpose,
+                "الإجمالي": formatCurrency(Number(r.totalAmount ?? 0)),
+                "القسط الشهري": formatCurrency(Number(r.monthlyAmount ?? 0)),
+                "المُعترف به": formatCurrency(Number(r.recognizedAmount ?? 0)),
+                "الحالة": STATUS_LABEL[r.status] || r.status,
+              })),
             })}
           />
           <Button asChild variant="outline" size="sm"><Link href="/finance/journal">

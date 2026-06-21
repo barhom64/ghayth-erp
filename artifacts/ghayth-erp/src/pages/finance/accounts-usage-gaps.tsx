@@ -85,10 +85,12 @@ export default function AccountsUsageGaps() {
           size="icon"
           payload={() => ({
             entity: { title: "فجوات تصنيف الحسابات", total: printRows.length },
-            items: printRows.map((r: any) => Object.fromEntries(
-              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                .map((c: any) => [c.header, r[c.key] ?? "—"]),
-            )),
+            items: printRows.map((r: any) => ({
+              "الرمز": r.code,
+              "اسم الحساب": r.name,
+              "النوع": TYPE_LABELS[r.type] ?? r.type,
+              "الأولوية": r.allowPosting ? "قابل للترحيل — صنّفه أولاً" : "تجميعي",
+            })),
           })}
         />
       }

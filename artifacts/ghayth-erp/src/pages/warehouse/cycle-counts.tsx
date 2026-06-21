@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +28,7 @@ export default function CycleCountsPage() {
 
   const { data, refetch } = useApiQuery<any>(["cycle-counts"], "/warehouse/cycle-counts");
   const counts = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(counts);
 
   async function schedule() {
     if (!warehouseId) { toast({ title: "حدد المخزن أولاً", variant: "destructive" }); return; }
@@ -88,7 +91,26 @@ export default function CycleCountsPage() {
   ], []);
 
   return (
-    <PageShell title="الجرد الدوري" >
+    <PageShell title="الجرد الدوري"
+      actions={
+        <PrintButton
+          entityType="report_warehouse_cycle_counts"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "الجرد الدوري", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "المخزن": r.warehouseName ?? `#${r.warehouseId}`,
+              "التاريخ": r.scheduledDate,
+              "الأسطر": Number(r.lineCount ?? 0),
+              "صافي الفرق (ر.س)": Number(r.netVarianceValue ?? 0),
+              "خطة": r.planId ? `#${r.planId}` : "—",
+              "الحالة": r.status,
+            })),
+          })}
+        />
+      }
+    >
       <WarehouseTabsNav />
       <Card className="mb-4">
         <CardContent className="pt-6 flex flex-wrap gap-3 items-end">
@@ -109,7 +131,7 @@ export default function CycleCountsPage() {
         </CardContent>
       </Card>
       <Card><CardContent className="pt-6">
-        <DataTable data={counts} columns={columns} emptyMessage="لا توجد عمليات جرد" />
+        <DataTable data={counts} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد عمليات جرد" />
       </CardContent></Card>
     </PageShell>
   );

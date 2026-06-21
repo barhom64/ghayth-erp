@@ -169,10 +169,14 @@ export default function FinanceIntakeCenter() {
           size="icon"
           payload={() => ({
             entity: { title: "مركز التلقّي المالي", total: printRows.length },
-            items: printRows.map((r: any) => Object.fromEntries(
-              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                .map((c: any) => [c.header, r[c.key] ?? "—"]),
-            )),
+            items: printRows.map((r: any) => ({
+              "العميل": r.customerName ?? "—",
+              "الخدمة": r.serviceType ?? r.sourceType ?? "—",
+              "المسار": [r.routeFrom, r.routeTo].filter(Boolean).join(" → ") || "—",
+              "التاريخ": r.serviceDate ?? "—",
+              "إيراد مقترح": r.suggestedRevenue != null ? formatCurrency(Number(r.suggestedRevenue)) : "—",
+              "الحالة": STATUS_BADGE[r.status as keyof typeof STATUS_BADGE]?.label ?? r.status,
+            })),
           })}
         />
       }

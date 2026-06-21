@@ -176,10 +176,14 @@ export default function DeferredRevenuePage() {
             size="icon"
             payload={() => ({
               entity: { title: "الإيراد المؤجل", total: printRows.length },
-              items: printRows.map((r: any) => Object.fromEntries(
-                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
-              )),
+              items: printRows.map((r: any) => ({
+                "حساب الإيراد المؤجل": r.deferredRevenueAccountCode,
+                "وجهة الإيراد": r.revenueAccountPurpose,
+                "الإجمالي": formatCurrency(Number(r.totalAmount ?? 0)),
+                "المُحقَّق": formatCurrency(Number(r.recognizedAmount ?? 0)),
+                "المتبقّي": formatCurrency(Number(r.remainingAmount ?? 0)),
+                "الحالة": STATUS_LABEL[r.status] || r.status,
+              })),
             })}
           />
           <Button asChild variant="outline" size="sm"><Link href="/finance/journal">

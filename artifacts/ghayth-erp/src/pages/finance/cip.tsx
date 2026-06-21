@@ -226,7 +226,6 @@ export default function CipPage() {
                 "الرمز": r.code || "—",
                 "الفئة": r.category || "—",
                 "التكلفة المتراكمة": Number(r.totalCost ?? 0),
-                "بنود التكلفة": r.costEntryCount ?? 0,
                 "الإنجاز المتوقع": r.expectedCompletionDate || "—",
                 "الحالة": STATUS[r.status as string]?.label ?? r.status,
               })),

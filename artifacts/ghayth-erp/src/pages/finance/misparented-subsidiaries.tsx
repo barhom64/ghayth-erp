@@ -141,10 +141,14 @@ export default function MisparentedSubsidiariesPage() {
           size="icon"
           payload={() => ({
             entity: { title: "حسابات فرعية مغلوطة الأبوّة", total: printRows.length },
-            items: printRows.map((r: any) => Object.fromEntries(
-              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                .map((c: any) => [c.header, r[c.key] ?? "—"]),
-            )),
+            items: printRows.map((r: any) => ({
+              "الحساب الفرعي": r.accountCode,
+              "الجهة": r.entityName || "—",
+              "الأب الحالي ← المقترح": `${r.currentParentCode || "—"} ← ${r.proposedParentCode || "—"}`,
+              "الخطورة": (SEVERITY[r.severity] || SEVERITY.low).label,
+              "التصحيح": r.autoFixable ? "آلي" : "يدوي",
+              "السبب": r.suspicionReason ?? "—",
+            })),
           })}
         />
       }
