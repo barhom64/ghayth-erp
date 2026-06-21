@@ -273,7 +273,7 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
       key: "documents",
       label: "المرفقات",
       icon: FileText,
-      content: () => <EntityDocuments entityType={entityType} entityId={entityId} />,
+      content: () => <EntityDocuments entityType={entityType} entityId={entityId} canReview={mode === "reviewer"} />,
     });
   }
   if (!hideTabs.includes("timeline")) {
