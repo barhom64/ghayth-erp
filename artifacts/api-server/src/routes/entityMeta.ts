@@ -86,7 +86,7 @@ router.post("/comments/:entityType/:entityId", authorize({ feature: "admin", act
         `SELECT 1 FROM document_entity_links del
          JOIN documents d ON d.id = del."documentId"
          WHERE del."documentId" = $1 AND del."entityType" = $2 AND del."entityId" = $3
-           AND d."companyId" = $4
+           AND d."companyId" = $4 AND d."deletedAt" IS NULL
          LIMIT 1`,
         [documentId, entityType, entityId, scope.companyId],
       );

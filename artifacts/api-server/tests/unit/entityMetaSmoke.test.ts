@@ -26,6 +26,8 @@ describe("entityMeta — attachment-scoped comments", () => {
     expect(section).toContain("document_entity_links");
     expect(section).toContain('JOIN documents d ON d.id = del."documentId"');
     expect(section).toContain('d."companyId" = $');
+    // soft-delete safety: a deleted attachment is not a valid target
+    expect(section).toContain('d."deletedAt" IS NULL');
     expect(section).toContain("المرفق غير مرتبط بهذا السجل");
   });
 
