@@ -390,16 +390,16 @@ export default function AdminObservability() {
               Prometheus metrics. Failing probes show as red badges. */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className={livezQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : livezQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
-              livez: {livezQ.isError ? "DOWN" : livezQ.isLoading ? "…" : "OK"}
+              livez: {livezQ.isError ? "متوقّف" : livezQ.isLoading ? "…" : "يعمل"}
             </Badge>
             <Badge variant="outline" className={readyzQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : readyzQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
-              readyz: {readyzQ.isError ? "NOT READY" : readyzQ.isLoading ? "…" : "OK"}
+              readyz: {readyzQ.isError ? "غير جاهز" : readyzQ.isLoading ? "…" : "يعمل"}
             </Badge>
             <Badge variant="outline" className={healthzQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : healthzQ.data ? "bg-status-success-surface text-status-success-foreground border-status-success-surface" : ""}>
-              healthz: {healthzQ.isError ? "DOWN" : healthzQ.isLoading ? "…" : "OK"}
+              healthz: {healthzQ.isError ? "متوقّف" : healthzQ.isLoading ? "…" : "يعمل"}
             </Badge>
             <Badge variant="outline" className={metricsQ.isError ? "bg-status-error-surface text-status-error-foreground border-status-error-surface" : "bg-status-success-surface text-status-success-foreground border-status-success-surface"}>
-              /metrics: {metricsQ.isError ? "DOWN" : metricsQ.isLoading ? "…" : "exposed"}
+              /metrics: {metricsQ.isError ? "متوقّف" : metricsQ.isLoading ? "…" : "متاح"}
             </Badge>
           </div>
 
