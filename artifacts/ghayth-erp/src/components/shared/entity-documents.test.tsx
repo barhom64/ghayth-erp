@@ -5,7 +5,7 @@
  * (4) «منتهي» badge derived from retentionUntil when present. No status/notes
  * workflow is added — that needs a migration (tracked separately).
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -22,14 +22,16 @@ const REQS = [
   { id: 11, entityType: "employee", label: "شهادة ضريبية", docCategory: "compliance", required: true, isActive: true },
 ];
 
+// Mutable holder so individual tests can swap the document set (e.g. duplicates).
+const apiMock = vi.hoisted(() => ({ docs: [] as any[], reqs: [] as any[] }));
 vi.mock("@/lib/api", () => ({
   API_BASE: "",
   nativeAuthHeaders: () => ({}),
   apiFetch: vi.fn().mockResolvedValue({}),
   asList: (r: any) => (Array.isArray(r) ? r : Array.isArray(r?.data) ? r.data : []),
   useApiQuery: (key: string[]) => {
-    if (key[0] === "entity-docs") return { data: DOCS, refetch: vi.fn() };
-    if (key[0] === "entity-doc-reqs") return { data: { data: REQS }, refetch: vi.fn() };
+    if (key[0] === "entity-docs") return { data: apiMock.docs, refetch: vi.fn() };
+    if (key[0] === "entity-doc-reqs") return { data: { data: apiMock.reqs }, refetch: vi.fn() };
     return { data: { items: [] }, refetch: vi.fn() };
   },
 }));
@@ -37,6 +39,7 @@ vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 import { EntityDocuments } from "@workspace/entity-kit";
 
+beforeEach(() => { apiMock.docs = DOCS; apiMock.reqs = REQS; });
 afterEach(() => cleanup());
 
 describe("Batch F1 — entity-documents views", () => {
@@ -112,6 +115,21 @@ describe("Batch H2 — attachment review surface", () => {
     expect(within(impact).getByText("اعتماد المرفق للكيان")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "رفض" }));
     expect(within(impact).getByText("رفض المرفق")).toBeInTheDocument();
+  });
+});
+
+describe("Batch L — likely-duplicate detection", () => {
+  it("flags «مكرر محتمل» on attachments sharing fileName + fileSize", () => {
+    const dupDocs = [
+      { id: 5, title: "إيصال أ", fileName: "receipt.pdf", fileSize: 900, category: "financial", status: "active", currentVersion: 1, storageKey: "a" },
+      { id: 6, title: "إيصال ب", fileName: "receipt.pdf", fileSize: 900, category: "financial", status: "active", currentVersion: 1, storageKey: "b" },
+      { id: 7, title: "فريد", fileName: "unique.pdf", fileSize: 123, category: "financial", status: "active", currentVersion: 1, storageKey: "c" },
+    ];
+    apiMock.docs = dupDocs;
+    render(<EntityDocuments entityType="employee" entityId={1} />);
+    // two colliding docs → two «مكرر محتمل» badges; the unique one has none
+    expect(screen.getAllByText("مكرر محتمل").length).toBe(2);
+    apiMock.docs = DOCS;
   });
 });
 

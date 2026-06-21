@@ -17,6 +17,7 @@ import { EntityComments } from "./entity-comments";
 import { LinkedTasks } from "./linked-tasks";
 import { AuditTrailPanel } from "./audit-trail-panel";
 import { PageStatusBadge } from "@/components/page-status-badge";
+import { useAppContextOptional } from "@/contexts/app-context";
 
 /**
  * DetailPageLayout — the single source of truth for "how a detail page
@@ -214,6 +215,15 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
   const initialTab = reviewPanel && mode === "reviewer" ? "review" : defaultTab;
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
+  // Activate attachment-review affordances for users who can actually decide:
+  // explicit reviewer mode, OR a manager+ with the documents permission (matches
+  // the server's documents:update + approver gate). Provider-safe: returns false
+  // outside the app shell (e.g. isolated tests). The server enforces the real
+  // permission regardless — this only surfaces the controls.
+  const appCtx = useAppContextOptional();
+  const canReviewDocuments =
+    mode === "reviewer" || (!!appCtx && appCtx.can("documents:update") && appCtx.roleLevel >= 50);
+
   const MODE_BADGE: Partial<Record<NonNullable<DetailPageLayoutProps["mode"]>, { label: string; cls: string }>> = {
     reviewer: { label: "وضع المراجعة", cls: "bg-blue-100 text-status-info-foreground border-status-info-surface" },
     readonly: { label: "اطّلاع فقط", cls: "bg-surface-subtle text-muted-foreground border-border" },
@@ -273,7 +283,7 @@ export function DetailPageLayout(props: DetailPageLayoutProps) {
       key: "documents",
       label: "المرفقات",
       icon: FileText,
-      content: () => <EntityDocuments entityType={entityType} entityId={entityId} canReview={mode === "reviewer"} />,
+      content: () => <EntityDocuments entityType={entityType} entityId={entityId} canReview={canReviewDocuments} />,
     });
   }
   if (!hideTabs.includes("timeline")) {

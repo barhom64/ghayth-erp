@@ -179,6 +179,23 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
     return Array.from(m.entries());
   })();
 
+  // Likely-duplicate detection (derived, no backend): same fileName + fileSize
+  // appearing more than once among this entity's attachments. Surfaces a hint;
+  // the reviewer still decides the «مكرر» verdict.
+  const dupKey = (d: any) => (d.fileName && d.fileSize ? `${d.fileName}::${d.fileSize}` : null);
+  const duplicateKeys: Set<string> = (() => {
+    const counts = new Map<string, number>();
+    for (const d of docs) {
+      const k = dupKey(d);
+      if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return new Set(Array.from(counts.entries()).filter(([, n]) => n > 1).map(([k]) => k));
+  })();
+  const isLikelyDuplicate = (d: any) => {
+    const k = dupKey(d);
+    return !!k && duplicateKeys.has(k);
+  };
+
   const docBadges = (d: any) => {
     const st = STATUS_MAP[d.status] || STATUS_MAP.draft;
     const cat = CATEGORIES.find((c) => c.value === d.category);
@@ -191,6 +208,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
         <Badge className={cn("text-[10px]", st.color)}>{st.label}</Badge>
         {d.currentVersion > 1 && <Badge variant="secondary" className="text-[10px]">v{d.currentVersion}</Badge>}
         {isExpired(d) && <Badge className="text-[10px] bg-amber-100 text-amber-700">منتهي</Badge>}
+        {isLikelyDuplicate(d) && <Badge className="text-[10px] bg-purple-100 text-purple-700">مكرر محتمل</Badge>}
         {showReview && <Badge className={cn("text-[10px]", rv!.color)}>{rv!.label}</Badge>}
       </>
     );

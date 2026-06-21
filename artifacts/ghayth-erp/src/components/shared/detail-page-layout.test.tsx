@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, beforeAll, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 beforeAll(() => {
   const proto = Element.prototype as any;
@@ -25,6 +26,11 @@ vi.mock("@/lib/api", () => ({
   useApiQuery: () => ({ data: [], refetch: vi.fn() }),
 }));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
+
+// Drives the auto-activation of attachment review (Batch K). null = outside app
+// shell (default); set to grant/deny manager review.
+const appCtx: { value: any } = { value: null };
+vi.mock("@/contexts/app-context", () => ({ useAppContextOptional: () => appCtx.value }));
 
 import { DetailPageLayout } from "@workspace/entity-kit";
 
@@ -55,5 +61,26 @@ describe("Batch G — review mode + panel", () => {
     expect(screen.queryByRole("tab", { name: /المراجعة/ })).not.toBeInTheDocument();
     expect(screen.queryByText("وضع المراجعة")).not.toBeInTheDocument();
     expect(screen.queryByText("اطّلاع فقط")).not.toBeInTheDocument();
+  });
+});
+
+describe("Batch K — auto-activate review for managers", () => {
+  afterEach(() => { appCtx.value = null; });
+
+  it("enables document review when a manager+ holds documents:update", async () => {
+    const user = userEvent.setup();
+    appCtx.value = { can: (p: string) => p === "documents:update", roleLevel: 80 };
+    render(<DetailPageLayout {...base} />);
+    await user.click(screen.getByRole("tab", { name: /المرفقات/ }));
+    // empty docs + canReview → requirements card exposes the manager «إضافة متطلب»
+    expect(await screen.findByRole("button", { name: /إضافة متطلب/ })).toBeInTheDocument();
+  });
+
+  it("does NOT enable review for a low-level role even with the permission", async () => {
+    const user = userEvent.setup();
+    appCtx.value = { can: (p: string) => p === "documents:update", roleLevel: 10 };
+    render(<DetailPageLayout {...base} />);
+    await user.click(screen.getByRole("tab", { name: /المرفقات/ }));
+    expect(screen.queryByRole("button", { name: /إضافة متطلب/ })).not.toBeInTheDocument();
   });
 });
