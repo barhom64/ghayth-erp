@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Wallet, TrendingUp, AlertTriangle, Users, Download } from "lucide-react";
 import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 
@@ -78,6 +80,7 @@ export default function UmrahAgentBalancesReport() {
     () => applyFilters(rows, filters, { searchFields: ["name", "nuskAgentNumber", "country"] }),
     [rows, filters],
   );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(visibleRows);
 
   const exportCsv = () => {
     void exportRowsToCsv({
@@ -118,16 +121,34 @@ export default function UmrahAgentBalancesReport() {
       subtitle="كل وكلاء العمرة في شاشة واحدة مع المستحق والمحصَّل وآخر فاتورة"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "أرصدة الوكلاء" }]}
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={exportCsv}
-          disabled={visibleRows.length === 0}
-          className="gap-1"
-          data-testid="agent-balances-export-csv"
-        >
-          <Download className="h-3 w-3" /> تصدير CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_agent_balances"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "أرصدة الوكلاء — تقرير مجمَّع", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "الوكيل": r.name,
+                "الدولة": r.country || "—",
+                "المُفوتر": formatCurrency(Number(r.totalInvoiced)),
+                "المُحصَّل": formatCurrency(Number(r.totalPaid)),
+                "المستحق": formatCurrency(Number(r.outstanding ?? 0)),
+                "الحالة": STATUS_LABELS[r.status] || r.status,
+              })),
+            })}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={visibleRows.length === 0}
+            className="gap-1"
+            data-testid="agent-balances-export-csv"
+          >
+            <Download className="h-3 w-3" /> تصدير CSV
+          </Button>
+        </div>
       }
     >
       <UmrahTabsNav />
@@ -173,6 +194,7 @@ export default function UmrahAgentBalancesReport() {
           <DataTable
             data={visibleRows}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا يوجد وكلاء ضمن الفلتر الحالي."

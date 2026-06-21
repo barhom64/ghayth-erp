@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +24,7 @@ export default function LotAgingPage() {
   const qs = warehouseId ? `?warehouseId=${warehouseId}` : "";
   const { data } = useApiQuery<any>(["lot-aging", warehouseId], `/warehouse/reports/lot-aging${qs}`);
   const rows = asList(data?.data || data);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const columns = useMemo<any[]>(() => [
     { key: "lotNumber",     header: "رقم الدفعة",      cell: (r: any) => r.lotNumber },
@@ -36,7 +39,26 @@ export default function LotAgingPage() {
   ], []);
 
   return (
-    <PageShell title="تقرير عمر الدفعات">
+    <PageShell title="تقرير عمر الدفعات"
+      actions={
+        <PrintButton
+          entityType="report_warehouse_lot_aging"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير عمر الدفعات", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "رقم الدفعة": r.lotNumber,
+              "المنتج": r.productName ?? `#${r.productId}`,
+              "المخزن": r.warehouseName ?? `#${r.warehouseId}`,
+              "العمر (أيام)": Number(r.ageDays ?? 0),
+              "الفئة العمرية": bucketOf(Number(r.ageDays ?? 0)).label,
+              "القيمة (ر.س)": Number(r.value ?? (Number(r.quantity ?? 0) * Number(r.unitCost ?? 0))),
+            })),
+          })}
+        />
+      }
+    >
       <WarehouseTabsNav />
       <Card className="mb-4">
         <CardContent className="pt-6 flex flex-wrap gap-3 items-end">
@@ -47,7 +69,7 @@ export default function LotAgingPage() {
         </CardContent>
       </Card>
       <Card><CardContent className="pt-6">
-        <DataTable data={rows} columns={columns} emptyMessage="لا توجد دفعات نشطة" />
+        <DataTable data={rows} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد دفعات نشطة" />
       </CardContent></Card>
     </PageShell>
   );
