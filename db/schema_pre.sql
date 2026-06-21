@@ -7459,6 +7459,7 @@ CREATE TABLE public.documents (
     category character varying(50),
     status character varying(30) DEFAULT 'draft'::character varying,
     "storageKey" text,
+    "contentHash" character varying(64),
     "currentVersion" integer DEFAULT 1,
     "deletedAt" timestamp with time zone,
     "ocrText" text,
