@@ -19,6 +19,8 @@ const FILES = [
   "finance-vendors.ts",
   "finance-custodies.ts",
   "finance-pricing.ts",
+  // non-finance straggler of the same F8 class (GET /marketing/templates).
+  "marketing.ts",
 ] as const;
 
 // True if any `catch (...) {` block returns an empty-data success payload
@@ -33,7 +35,7 @@ function hasSwallowingCatch(src: string): boolean {
   return false;
 }
 
-describe("F8 — finance list handlers surface errors instead of swallowing them", () => {
+describe("F8 — list/summary handlers surface errors instead of swallowing them", () => {
   for (const file of FILES) {
     const src = readFileSync(join(API_SRC, "routes", file), "utf8");
     it(`${file} has no catch block that returns an empty-data 200`, () => {
