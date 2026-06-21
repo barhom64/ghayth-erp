@@ -197,6 +197,20 @@ class FleetEngineImpl implements DomainEngine {
     return { requested: true, employeeId: params.employeeId, amount: params.amount };
   }
 
+  /**
+   * Re-assessment moved an accident's cost away from the driver → ask HR to
+   * cancel the as-yet-unapplied recovery deduction (event boundary).
+   */
+  async requestAccidentDeductionReversal(ctx: FleetGLContext, params: { accidentId: number }) {
+    eventBus.emit("fleet.accident.deduction_reversed", {
+      companyId: ctx.companyId,
+      branchId: ctx.branchId,
+      userId: ctx.createdBy,
+      accidentId: params.accidentId,
+    });
+    return { reversed: true, accidentId: params.accidentId };
+  }
+
   async postInsuranceGL(
     ctx: FleetGLContext,
     insurance: { id: number; vehicleId: number; premium: number; description?: string }
