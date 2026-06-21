@@ -20,6 +20,28 @@ import { applyTransition, LifecycleError, lifecycleErrorResponse, STATE_MACHINES
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
 import { escalateSla } from "../lib/supportSlaEscalation.js";
 
+// عقد قائد/خادم (#2838): إنشاء تذكرة من رسالة اتصالات واردة. مسار الاتصالات
+// (خادم) يصنّف الوارد ويطلب فتح تذكرة، لكن **قرار** سياسة الحالة الابتدائية
+// ('open') و**ملكية الكتابة** في جدول support_tickets يبقيان هنا في المسار
+// القائد (الدعم) — لا في الاتصالات (حدود المسارات، مواد 4–9). سلوكيًا مطابق
+// لِما كانت الاتصالات تنشئه سابقًا (نُقل فقط عبر الحد).
+export async function createTicketFromInboundComm(params: {
+  companyId: number;
+  title: string;
+  description: string;
+  priority: string;
+}): Promise<number> {
+  const { companyId, title, description, priority } = params;
+  const result = await rawExecute(
+    `INSERT INTO support_tickets ("companyId", title, description, status, priority, "createdAt")
+     VALUES ($1, $2, $3, 'open', $4, NOW())`,
+    [companyId, title, description, priority],
+  );
+  assertInsert(result.insertId, "support_tickets");
+  return result.insertId;
+}
+
+
 // Local row shapes for support tables.
 
 interface SupportTicketRow {
