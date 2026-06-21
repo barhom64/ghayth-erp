@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 // P4.2 — HR hub sweep: shared header from P1.
 import { PageShell } from "@workspace/ui-core";
+import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import {
   Users, Clock, Calendar, DollarSign, GraduationCap, Target,
   Briefcase, Scale, CalendarClock, Network, UserPlus, ChevronLeft,
@@ -140,6 +141,7 @@ export default function HR() {
         </GuardedButton>
       }
     >
+      <HrTabsNav />
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <KPICard
           title="إجمالي الموظفين"

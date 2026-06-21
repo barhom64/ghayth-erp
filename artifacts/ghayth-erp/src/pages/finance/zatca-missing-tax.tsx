@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -157,6 +158,7 @@ export default function ZatcaMissingTaxPage() {
       title="عملاء بدون رقم ضريبي — يوقفون إرسال فواتير ZATCA"
       subtitle="هؤلاء هم العملاء الذين تحمل فواتيرهم الضريبية المعلّقة سبب إيقاف مهمّة إرسال ZATCA التلقائية. أدخل رقم السجل الضريبي لكل عميل واحفظ — وسيُستأنف الإرسال تلقائياً في الدورة التالية."
     >
+      <FinanceTabsNav />
       {pauseForbidden && (
         <Card className="border-gray-200 bg-gray-50 mb-4">
           <CardContent className="py-4">

@@ -15,13 +15,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -32,7 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Check, X, AlertTriangle, Repeat } from "lucide-react";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 
 interface ReprintRequest {
   id: number;
@@ -53,15 +46,18 @@ interface ReprintRequest {
 export default function ReprintApprovalsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [filters, setFilters] = useFilters({ status: "pending" });
   const [rejecting, setRejecting] = useState<ReprintRequest | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const { data, isLoading } = useApiQuery<{ items: ReprintRequest[] }>(
-    ["reprint-requests", statusFilter],
-    `/print/reprint-requests?status=${statusFilter}`
+    ["reprint-requests", filters.status],
+    `/print/reprint-requests${filters.status ? `?status=${filters.status}` : ""}`
   );
+  const filtered = applyFilters(data?.items ?? [], filters, {
+    searchFields: ["entityType", "requesterName"],
+  });
 
   async function approve(r: ReprintRequest) {
     setBusyId(r.id);
@@ -104,28 +100,29 @@ export default function ReprintApprovalsPage() {
       subtitle="مراجعة طلبات إعادة طباعة الوثائق وإصدار نسخ مكررة بختم رسمي."
       breadcrumbs={[{ label: "لوحات الإدارة" }, { label: "موافقات إعادة الطباعة" }]}
     >
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بنوع الوثيقة أو مُقدّم الطلب...",
+          statuses: [
+            { value: "pending", label: "قيد الانتظار" },
+            { value: "approved", label: "معتمد" },
+            { value: "rejected", label: "مرفوض" },
+          ],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Repeat className="h-4 w-4" />
             الطلبات
             {data?.items && (
-              <span className="text-xs text-muted-foreground">({data.items.length})</span>
+              <span className="text-xs text-muted-foreground">({filtered.length})</span>
             )}
           </CardTitle>
-          <div className="flex items-center gap-2 pt-1">
-            <Label className="text-xs">الحالة:</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40 h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">قيد الانتظار</SelectItem>
-                <SelectItem value="approved">معتمد</SelectItem>
-                <SelectItem value="rejected">مرفوض</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </CardHeader>
         <CardContent>
           {(() => {
@@ -134,7 +131,7 @@ export default function ReprintApprovalsPage() {
                 { key: "requesterName", header: "طالب الإصدار", render: (r) => r.requesterName ?? `#${r.requestedBy}` },
                 { key: "entityType", header: "الوثيقة", render: (r) => <span className="font-mono text-xs">{r.entityType} <span className="text-muted-foreground">#{r.entityId}</span></span> },
                 { key: "reason", header: "السبب", render: (r) => <span className="line-clamp-2">{r.reason ?? "—"}</span> },
-                ...(statusFilter !== "pending" ? [{
+                ...(filters.status !== "pending" ? [{
                   key: "approvedAt" as const,
                   header: "معالجة بواسطة",
                   render: (r: ReprintRequest) => (
@@ -168,13 +165,13 @@ export default function ReprintApprovalsPage() {
               ];
               return (
                 <DataTable
-                  data={data?.items ?? []}
+                  data={filtered}
                   rowKey={(r) => String(r.id)}
                   columns={cols}
                   noToolbar
                   pageSize={0}
                   isLoading={isLoading}
-                  emptyMessage={statusFilter === "pending" ? "لا توجد طلبات إعادة طباعة قيد الانتظار." : "لا توجد طلبات بهذه الحالة."}
+                  emptyMessage={filters.status === "pending" ? "لا توجد طلبات إعادة طباعة قيد الانتظار." : "لا توجد طلبات بهذه الحالة."}
                 />
               );
             })()}

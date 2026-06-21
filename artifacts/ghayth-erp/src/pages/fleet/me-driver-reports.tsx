@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageShell } from "@workspace/ui-core";
+import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { Fuel, Wrench, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -77,6 +78,7 @@ export default function MeDriverReports() {
       breadcrumbs={[{ href: "/me/driver", label: "السائق" }, { label: "البلاغات" }]}
       actions={<Button asChild variant="outline" size="sm"><Link href="/me/driver">رجوع</Link></Button>}
     >
+      <FleetTabsNav />
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList className="mb-4">
           <TabsTrigger value="fuel"><Fuel className="ms-1 h-4 w-4" /> وقود</TabsTrigger>

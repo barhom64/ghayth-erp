@@ -12,6 +12,9 @@ import {
   PageShell,
   DataTable,
   type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -72,17 +75,17 @@ function daysUntil(iso: string): number {
 
 export default function VendorContractsPage() {
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [filters, setFilters] = useFilters();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<VendorContract | null>(null);
   const [deleting, setDeleting] = useState<VendorContract | null>(null);
 
   const params = new URLSearchParams();
-  if (statusFilter) params.set("status", statusFilter);
+  if (filters.status) params.set("status", filters.status);
   const qs = params.toString();
 
   const { data, isLoading, isError } = useApiQuery<{ data: VendorContract[] }>(
-    ["vendor-contracts", statusFilter],
+    ["vendor-contracts", filters.status],
     `/finance/contracts${qs ? `?${qs}` : ""}`,
   );
 
@@ -140,6 +143,9 @@ export default function VendorContractsPage() {
   });
 
   const rows = data?.data ?? [];
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["vendorName", "title", "notes"],
+  });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
@@ -423,23 +429,16 @@ export default function VendorContractsPage() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs text-muted-foreground">الحالة:</span>
-        <Badge variant={statusFilter === "" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("")}>الكل ({rows.length})</Badge>
-        {(Object.keys(STATUS_LABEL) as Array<VendorContract["status"]>).map((s) => {
-          const count = rows.filter((r) => r.status === s).length;
-          return (
-            <Badge key={s}
-              variant={statusFilter === s ? "default" : "outline"}
-              className="cursor-pointer text-xs"
-              onClick={() => setStatusFilter(s)}>
-              {STATUS_LABEL[s]} ({count})
-            </Badge>
-          );
-        })}
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالمورّد أو عنوان العقد أو الملاحظات...",
+          statuses: (Object.keys(STATUS_LABEL) as Array<VendorContract["status"]>).map((value) => ({ value, label: STATUS_LABEL[value] })),
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       <Card>
         <CardHeader className="pb-2">
@@ -447,12 +446,13 @@ export default function VendorContractsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <DataTable
-            columns={cols} data={rows}
+            columns={cols} data={filtered}
             onSortedDataChange={setPrintRows}
             pageSize={50}
+            noToolbar
             emptyMessage={
-              statusFilter
-                ? `لا توجد عقود بحالة "${STATUS_LABEL[statusFilter as VendorContract["status"]]}"`
+              filters.status
+                ? `لا توجد عقود بحالة "${STATUS_LABEL[filters.status as VendorContract["status"]]}"`
                 : "لا توجد عقود — اضغط 'عقد جديد' لإضافة أول عقد"
             }
           />

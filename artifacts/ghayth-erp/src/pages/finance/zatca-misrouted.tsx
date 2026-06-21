@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { PageShell } from "@workspace/ui-core";
+import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
@@ -66,6 +67,7 @@ export default function ZatcaMisroutedPage() {
       title="فواتير شُحنت خطأً إلى مسار ZATCA B2C"
       subtitle="فواتير ضريبية أُرسلت إلى مسار التبليغ المبسّط (B2C) قبل اعتماد الرقم الضريبي للعميل، ويجب إعادة إصدارها كإشعار دائن + فاتورة جديدة تحت مسار الفوترة الضريبية (B2B)."
     >
+      <FinanceTabsNav />
       <Card className="border-orange-200 bg-orange-50/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-orange-700">
