@@ -724,6 +724,108 @@ router.patch("/me/availability", authorize({ feature: "fleet.driver.me", action:
   } catch (err) { handleRouteError(err, res, "Driver availability error:"); }
 });
 
+// ─── POST /me/fuel-logs — السائق يبلّغ عن تعبئة وقود ميدانيًا ─────────────────
+// بلاغ تشغيلي: السائق يسجّل واقعة التعبئة (مركبته + كمية + تكلفة)، فتُنشأ واقعة
+// وقود + مرشّح مصروف للمالية تُجسّده لاحقًا (لا ترحيل مباشر للدفتر — نموذج
+// «الحقيقة التشغيلية ← المالية تشتق»). driverId مُسنَد إجباريًا للسائق المُحلَّل،
+// فلا يبلّغ نيابة عن غيره.
+router.post("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "update" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const b = zodParse(createFuelLogSchema.safeParse(req.body)) as any;
+
+    // المركبة مطلوبة وتُحلّ من المعرّف أو رقم اللوحة داخل شركة السائق.
+    let resolvedVehicleId = b.vehicleId || null;
+    if (!resolvedVehicleId && b.vehiclePlate) {
+      const [v] = await rawQuery<{ id: number }>(
+        `SELECT id FROM fleet_vehicles WHERE "plateNumber"=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [b.vehiclePlate, driver.companyId]);
+      if (v) resolvedVehicleId = v.id;
+    }
+    if (!resolvedVehicleId) {
+      throw new ValidationError("المركبة مطلوبة", { field: "vehicleId", fix: "اختر مركبتك أو أدخل رقم اللوحة" });
+    }
+    const [veh] = await rawQuery<{ id: number; fuelCapacity: number | null; branchId: number | null }>(
+      `SELECT id, "fuelCapacity", "branchId" FROM fleet_vehicles WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
+      [resolvedVehicleId, driver.companyId]);
+    if (!veh) {
+      throw new ValidationError(`المركبة رقم ${resolvedVehicleId} غير موجودة`, { field: "vehicleId", fix: "اختر مركبة مسجلة" });
+    }
+    const liters = b.liters;
+    const tankCapacity = Number(veh.fuelCapacity ?? 0);
+    if (tankCapacity > 0 && liters > tankCapacity) {
+      throw new ValidationError(
+        `لا يمكن تسجيل وقود يتجاوز سعة الخزان (${tankCapacity} لتر). الكمية المدخلة: ${liters} لتر`,
+        { field: "liters", fix: `أدخل كمية لا تتجاوز سعة الخزان (${tankCapacity} لتر)` });
+    }
+
+    // الرحلة اختيارية: إن وُجدت يجب أن تخصّ هذا السائق وهذه المركبة.
+    let validatedTripId: number | null = null;
+    if (b.tripId) {
+      const [trip] = await rawQuery<{ id: number; vehicleId: number | null }>(
+        `SELECT id, "vehicleId" FROM fleet_trips
+          WHERE id = $1 AND "companyId" = $2 AND "driverId" = $3 AND "deletedAt" IS NULL`,
+        [Number(b.tripId), driver.companyId, driver.id]);
+      if (!trip) throw new ValidationError("الرحلة غير موجودة أو لا تخصّك", { field: "tripId", fix: "اختر إحدى رحلاتك" });
+      if (trip.vehicleId && trip.vehicleId !== resolvedVehicleId) {
+        throw new ValidationError("الرحلة المختارة تخص مركبة أخرى", { field: "tripId" });
+      }
+      validatedTripId = trip.id;
+    }
+
+    const costPerLiter = Number(b.costPerLiter || b.cost) || 0;
+    const totalCost = liters * costPerLiter;
+    const fuelDate = b.fuelDate || b.date || todayISO();
+    const mileageAtFuel = Number(b.mileageAtFuel || b.mileage) || null;
+    const stationName = b.stationName || b.station || null;
+
+    const { insertId } = await rawExecute(
+      `INSERT INTO fleet_fuel_logs ("companyId","vehicleId","driverId","fuelDate",liters,"costPerLiter","totalCost","mileageAtFuel","stationName","tripId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [driver.companyId, resolvedVehicleId, driver.id, fuelDate, liters, costPerLiter, totalCost, mileageAtFuel, stationName, validatedTripId]);
+    assertInsert(insertId, "fleet_fuel_logs");
+
+    // مرشّح مصروف للمالية (لا ترحيل مباشر للدفتر) — يُجسّده المحاسب لاحقًا.
+    if (totalCost > 0) {
+      const plateLabel = b.vehiclePlate ? ` / ${b.vehiclePlate}` : "";
+      const { fleetEngine } = await import("../lib/engines/index.js");
+      await fleetEngine.createFuelExpenseCandidate(
+        { companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, createdBy: scope.activeAssignmentId ?? scope.userId },
+        { id: insertId, vehicleId: resolvedVehicleId, cost: totalCost, description: `مصروف وقود (بلاغ سائق)${plateLabel} / ${liters} لتر / ${stationName ?? ""}` }
+      ).catch((e: unknown) => logger.error(e, "Driver fuel expense candidate failed:"));
+    }
+
+    void emitEvent({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "fleet.fuel_log.created", entity: "fleet_fuel_logs", entityId: insertId,
+      details: JSON.stringify({ vehicleId: resolvedVehicleId, liters, totalCost, source: "driver_self" }) });
+    void createAuditLog({ companyId: driver.companyId, branchId: veh.branchId ?? scope.branchId, userId: scope.userId,
+      action: "create", entity: "fleet_fuel_logs", entityId: insertId,
+      after: { vehicleId: resolvedVehicleId, driverId: driver.id, liters, totalCost, fuelDate, stationName, source: "driver_self" } });
+
+    const [row] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM fleet_fuel_logs WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [insertId, driver.companyId]);
+    res.status(201).json({ data: row });
+  } catch (err) { handleRouteError(err, res, "Driver fuel-log error:"); }
+});
+
+// ─── GET /me/fuel-logs — السائق يستعرض بلاغات وقوده ──────────────────────────
+router.get("/me/fuel-logs", authorize({ feature: "fleet.driver.me", action: "view" }), async (req, res) => {
+  try {
+    const driver = await resolveDriverFromScope(req);
+    if (!driver) throw new NotFoundError("لا يوجد سجل سائق مرتبط بحسابك");
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT f.*, v."plateNumber"
+         FROM fleet_fuel_logs f
+         LEFT JOIN fleet_vehicles v ON v.id = f."vehicleId" AND v."deletedAt" IS NULL
+        WHERE f."driverId" = $1 AND f."companyId" = $2 AND f."deletedAt" IS NULL
+        ORDER BY f."fuelDate" DESC, f.id DESC LIMIT 200`,
+      [driver.id, driver.companyId]);
+    res.json({ data: rows, total: rows.length });
+  } catch (err) { handleRouteError(err, res, "Driver fuel-logs list error:"); }
+});
+
 router.get("/me/trips", authorize({ feature: "fleet.trips.my", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
