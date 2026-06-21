@@ -205,11 +205,12 @@ describe("Documents — parameterized SQL (no injection)", () => {
     expect(section).toContain("sets.join");
   });
 
-  it("upload INSERT uses positional parameters through $9", () => {
+  it("upload INSERT uses positional parameters through $10 (incl. contentHash)", () => {
     const idx = SRC.indexOf('router.post("/upload"');
     const section = SRC.slice(idx, idx + 4000);
     expect(section).toContain("$1,$2,$3,$4,$5,$6");
-    expect(section).toContain("$8,$9");
+    expect(section).toContain("$9,$10");
+    expect(section).toContain('"contentHash"');
   });
 
   it("entity-link upsert uses ON CONFLICT DO NOTHING", () => {

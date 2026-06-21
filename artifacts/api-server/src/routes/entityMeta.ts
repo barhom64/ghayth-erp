@@ -10,6 +10,9 @@ import { logger } from "../lib/logger.js";
 
 const createCommentSchema = z.object({
   body: z.string().min(1, "نص التعليق مطلوب"),
+  // Optional: scope the comment to a specific attachment (document) of the
+  // entity. Null/absent = entity-level comment (the «المناقشة» thread).
+  documentId: z.coerce.number().int().positive().nullable().optional(),
 });
 
 const createTagSchema = z.object({
@@ -42,10 +45,20 @@ router.get("/comments/:entityType/:entityId", authorize({ feature: "projects", a
     const entityTypeIdx = nextParamIndex;
     params.push(entityId);
     const entityIdIdx = params.length;
+    // Optional: narrow to a specific attachment's thread (?documentId=N).
+    const rawDocId = req.query.documentId;
+    let docFilter = "";
+    if (rawDocId != null && String(rawDocId) !== "") {
+      const docId = Number(rawDocId);
+      if (Number.isFinite(docId)) {
+        params.push(docId);
+        docFilter = ` AND "documentId" = $${params.length}`;
+      }
+    }
     const rows = await rawQuery(
-      `SELECT id, "entityType", "entityId", "userId", "userName", body, "createdAt"
+      `SELECT id, "entityType", "entityId", "documentId", "userId", "userName", body, "createdAt"
        FROM entity_comments
-       WHERE ${scopedWhere} AND "entityType" = $${entityTypeIdx} AND "entityId" = $${entityIdIdx}
+       WHERE ${scopedWhere} AND "entityType" = $${entityTypeIdx} AND "entityId" = $${entityIdIdx}${docFilter}
        ORDER BY "createdAt" DESC LIMIT 500`,
       params,
     );
@@ -61,14 +74,14 @@ router.post("/comments/:entityType/:entityId", authorize({ feature: "admin", act
     const scope = req.scope!;
     const { entityType } = req.params;
     const entityId = parseId(req.params.entityId, "entityId");
-    const { body } = validatedBody;
+    const { body, documentId } = validatedBody;
     if (!body || !body.trim()) {
       throw new ValidationError("نص التعليق مطلوب");
     }
     const rows = await rawQuery(
-      `INSERT INTO entity_comments ("entityType", "entityId", "companyId", "userId", "userName", body)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [entityType, entityId, scope.companyId, scope.userId, scope.userName || "مستخدم", body.trim()]
+      `INSERT INTO entity_comments ("entityType", "entityId", "documentId", "companyId", "userId", "userName", body)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [entityType, entityId, documentId ?? null, scope.companyId, scope.userId, scope.userName || "مستخدم", body.trim()]
     );
 
     createAuditLog({
