@@ -501,14 +501,23 @@ budgetRouter.get("/budget/approval-requests", authorize({ feature: "finance.budg
   try {
     const scope = req.scope!;
     await ensureBudgetApprovalTable();
-    const status = (req.query.status as string) ?? "pending";
+    // status optional: omit ⇒ all statuses (the «الكل» tab of the unified
+    // filter bar). Every other GET caller passes an explicit status
+    // (inbox/cockpit ⇒ pending), so the default only affects budget-approvals.
+    const status = (req.query.status as string) || null;
+    const params: unknown[] = [scope.companyId];
+    let statusClause = "";
+    if (status) {
+      params.push(status);
+      statusClause = ` AND ar.status=$${params.length}`;
+    }
     const rows = await rawQuery<BudgetRequestRow & { accountName?: string | null }>(
       `SELECT ar.*, coa.name AS "accountName"
        FROM budget_approval_requests ar
        LEFT JOIN chart_of_accounts coa ON coa.code = ar."accountCode" AND coa."companyId" = ar."companyId" AND coa."deletedAt" IS NULL
-       WHERE ar."companyId"=$1 AND ar.status=$2 AND ar."deletedAt" IS NULL
+       WHERE ar."companyId"=$1${statusClause} AND ar."deletedAt" IS NULL
        ORDER BY ar."requestedAt" DESC LIMIT 200`,
-      [scope.companyId, status]
+      params
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) {
