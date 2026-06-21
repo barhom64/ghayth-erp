@@ -42,17 +42,26 @@ export interface RunRecurringInvoiceResult {
 }
 
 /**
- * يولّد فاتورة واحدة من قالب مستحقّ ويقدّم جدوله. لا يولّد إن لم يكن مستحقًّا
- * (nextRunDate > today) إلا عند force=true (تشغيل يدوي فوري).
+ * يولّد فاتورة واحدة من قالب متكرر. وضعان صريحان:
+ *
+ * - `scheduled` (افتراضي للـcron و«شغّل المستحق»): يعمل فقط إن كان مستحقًّا
+ *   (nextRunDate <= today)؛ مفتاح idempotency على nextRunDate؛ **يقدّم** الجدول.
+ * - `adhoc` («أصدر فاتورة الآن» اليدوي): يعمل في أي وقت؛ مفتاح على adhoc:today؛
+ *   مؤرّخة باليوم؛ **لا يقدّم** nextRunDate ولا يحجب الدورة المجدوَلة (فاتورة إضافية).
+ *
+ * توافق خلفي: `force:true` يُترجَم إلى `adhoc` (الأسلم — لا يستهلك الدورة).
  */
 export async function runRecurringInvoice(params: {
   companyId: number;
   templateId: number;
   createdBy: number;
   today?: string;
+  /** @deprecated استعمل mode. force:true ⇒ mode:"adhoc". */
   force?: boolean;
+  mode?: "scheduled" | "adhoc";
 }): Promise<RunRecurringInvoiceResult> {
   const today = params.today || todayISO();
+  const mode: "scheduled" | "adhoc" = params.mode ?? (params.force ? "adhoc" : "scheduled");
   const [tpl] = await rawQuery<RecurringInvoiceTemplateRow>(
     `SELECT id, "companyId", "branchId", "clientId", title, lines, currency, frequency, "nextRunDate"::text AS "nextRunDate", "dueInDays", notes
        FROM recurring_invoice_templates
@@ -60,7 +69,8 @@ export async function runRecurringInvoice(params: {
     [params.templateId, params.companyId],
   );
   if (!tpl) return { templateId: params.templateId, generated: false, reason: "القالب غير موجود أو غير نشط" };
-  if (!params.force && tpl.nextRunDate > today) {
+  // scheduled لا يعمل إلا عند الاستحقاق؛ adhoc يعمل في أي وقت (فاتورة إضافية).
+  if (mode === "scheduled" && tpl.nextRunDate > today) {
     return { templateId: tpl.id, generated: false, reason: "غير مستحقّ بعد", nextRunDate: tpl.nextRunDate };
   }
   if (!Array.isArray(tpl.lines) || tpl.lines.length === 0) {
@@ -75,9 +85,14 @@ export async function runRecurringInvoice(params: {
     taxCode: l.taxCode || "VAT_STANDARD",
   }));
 
-  // idempotent على (القالب، تاريخ الاستحقاق): إعادة التشغيل لا تُكرّر القيد.
+  // idempotency يختلف بالوضع:
+  // - scheduled: مفتاح على تاريخ الاستحقاق (الدورة) — إعادة التشغيل لا تُكرّر القيد.
+  // - adhoc: مفتاح على adhoc:today — فاتورة إضافية واحدة لكل يوم، لا تحجب الدورة المجدوَلة.
   const runDate = tpl.nextRunDate;
-  const sourceKey = `finance:recurring_invoice:${params.companyId}:${tpl.id}:${runDate}`;
+  const sourceKey =
+    mode === "adhoc"
+      ? `finance:recurring_invoice:${params.companyId}:${tpl.id}:adhoc:${today}`
+      : `finance:recurring_invoice:${params.companyId}:${tpl.id}:${runDate}`;
 
   const insertInvoice: InsertSalesInvoiceFn = async (prepared, client) => {
     const vatRate = prepared.lineBreakdown[0]?.taxRate ?? 15;
@@ -110,15 +125,25 @@ export async function runRecurringInvoice(params: {
     insertInvoice,
   );
 
-  // قدّم الجدول من تاريخ الاستحقاق (لا من اليوم) حتى لا تنزلق الدورة.
-  const next = computeNextRunDate(runDate, tpl.frequency as any);
-  await rawExecute(
-    `UPDATE recurring_invoice_templates SET "lastRunDate" = $1, "nextRunDate" = $2, "runsCount" = "runsCount" + 1, "updatedAt" = NOW()
-      WHERE id = $3 AND "companyId" = $4`,
-    [runDate, next, tpl.id, params.companyId],
-  );
+  if (mode === "scheduled") {
+    // قدّم الجدول من تاريخ الاستحقاق (لا من اليوم) حتى لا تنزلق الدورة.
+    const next = computeNextRunDate(runDate, tpl.frequency as any);
+    await rawExecute(
+      `UPDATE recurring_invoice_templates SET "lastRunDate" = $1, "nextRunDate" = $2, "runsCount" = "runsCount" + 1, "updatedAt" = NOW()
+        WHERE id = $3 AND "companyId" = $4`,
+      [runDate, next, tpl.id, params.companyId],
+    );
+    return { templateId: tpl.id, generated: true, invoiceId: resp.invoiceId, invoiceNumber: resp.invoiceNumber, nextRunDate: next };
+  }
 
-  return { templateId: tpl.id, generated: true, invoiceId: resp.invoiceId, invoiceNumber: resp.invoiceNumber, nextRunDate: next };
+  // adhoc: فاتورة إضافية الآن — سجّل آخر تشغيل + عدّاد التشغيل، لكن **لا تقدّم** الجدول
+  // (الدورة المجدوَلة تبقى كما هي ولا تُستهلَك).
+  await rawExecute(
+    `UPDATE recurring_invoice_templates SET "lastRunDate" = $1, "runsCount" = "runsCount" + 1, "updatedAt" = NOW()
+      WHERE id = $2 AND "companyId" = $3`,
+    [today, tpl.id, params.companyId],
+  );
+  return { templateId: tpl.id, generated: true, invoiceId: resp.invoiceId, invoiceNumber: resp.invoiceNumber, nextRunDate: tpl.nextRunDate };
 }
 
 /** يعالج كل القوالب المستحقّة لشركة (أو الكل) — للاستدعاء من cron أو يدويًا. */

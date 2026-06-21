@@ -123,8 +123,11 @@ recurringInvoicesRouter.post("/recurring-invoices/:id/run", authorize({ feature:
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const force = (req.body?.force ?? true) !== false; // التشغيل اليدوي فوري افتراضيًا
-    const result = await runRecurringInvoice({ companyId: scope.companyId, templateId: id, createdBy: scope.userId, force });
+    // التشغيل اليدوي = «أصدر فاتورة الآن» (adhoc): فاتورة فورية مؤرّخة باليوم لا تستهلك
+    // الدورة المجدوَلة ولا تقدّم nextRunDate. يقبل mode:"scheduled" صراحةً لمعالجة الدورة
+    // المستحقة فعليًا (يقدّم الجدول) — والافتراض الأسلم هو adhoc.
+    const mode = req.body?.mode === "scheduled" ? "scheduled" : "adhoc";
+    const result = await runRecurringInvoice({ companyId: scope.companyId, templateId: id, createdBy: scope.userId, mode });
     if (!result.generated) throw new ValidationError(result.reason || "تعذّر توليد الفاتورة", { field: "id" });
     auditFromRequest(req, "generate", "recurring_invoice_templates", id, { after: { invoiceId: result.invoiceId, invoiceNumber: result.invoiceNumber } }).catch((e) => logger.error(e, "recurring invoice audit failed"));
     emitEvent({ companyId: scope.companyId, userId: scope.userId, action: "recurring_invoice.generated", entity: "recurring_invoice_templates", entityId: id, details: JSON.stringify({ invoiceId: result.invoiceId }) }).catch((e) => logger.error(e, "recurring invoice event failed"));
