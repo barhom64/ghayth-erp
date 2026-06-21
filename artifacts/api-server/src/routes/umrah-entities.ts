@@ -467,12 +467,17 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
     const parsed = zodParse(linkSubAgentSchema.safeParse(req.body));
     const { clientId, createNew, clientName, clientPhone } = parsed;
 
-    let finalClientId = clientId;
+    let finalClientId: number | null = clientId ?? null;
 
+    // Validation + number reservation run BEFORE the transaction
+    // (issueNumber opens its own tx — must not be nested). The client
+    // create/mark + numbering back-link + sub-agent link are then written
+    // atomically so a failed sub-agent link can't leave an orphan client.
+    let issuedCli: Awaited<ReturnType<typeof issueNumber>> | null = null;
     if (createNew) {
       if (!clientName) throw new ValidationError("اسم العميل مطلوب عند إنشاء عميل جديد");
       // Numbering center (Issue #1141) — client code from authority.
-      const issuedCli = await issueNumber({
+      issuedCli = await issueNumber({
         companyId: scope.companyId,
         branchId: scope.branchId ?? null,
         moduleKey: "crm",
@@ -482,16 +487,6 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
         metadata: { source: "umrah_agent_creation" },
         expectedTiming: "on_draft",
       });
-      const [newClient] = await rawQuery<{ id: number }>(
-        `INSERT INTO clients ("companyId", name, phone, classification, source, code, "createdAt")
-         VALUES ($1, $2, $3, 'umrah_agent', 'system', $4, NOW()) RETURNING id`,
-        [scope.companyId, clientName, clientPhone || null, issuedCli.number]
-      );
-      finalClientId = newClient.id;
-      await rawExecute(
-        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
-        [finalClientId, issuedCli.assignmentId]
-      ).catch(() => { /* non-blocking link */ });
     } else {
       if (!clientId) throw new ValidationError("معرف العميل مطلوب");
       const [existingClient] = await rawQuery<{ id: number }>(
@@ -499,17 +494,36 @@ router.put("/sub-agents/:id/link", authorize({ feature: "umrah", action: "create
         [clientId, scope.companyId]
       );
       if (!existingClient) throw new NotFoundError("العميل غير موجود أو لا ينتمي لهذه الشركة");
-      await rawExecute(
-        `UPDATE clients SET classification = 'umrah_agent' WHERE id = $1 AND "companyId" = $2`,
-        [clientId, scope.companyId]
-      );
     }
 
-    await rawExecute(
-      `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
-       WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
-      [finalClientId, scope.userId, id, scope.companyId]
-    );
+    finalClientId = await withTransaction(async () => {
+      let cid = clientId ?? null;
+      if (createNew && issuedCli) {
+        const [newClient] = await rawQuery<{ id: number }>(
+          `INSERT INTO clients ("companyId", name, phone, classification, source, code, "createdAt")
+           VALUES ($1, $2, $3, 'umrah_agent', 'system', $4, NOW()) RETURNING id`,
+          [scope.companyId, clientName, clientPhone || null, issuedCli.number]
+        );
+        cid = newClient.id;
+        // Numbering back-link is now atomic with the client insert.
+        await rawExecute(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [cid, issuedCli.assignmentId]
+        );
+      } else {
+        await rawExecute(
+          `UPDATE clients SET classification = 'umrah_agent' WHERE id = $1 AND "companyId" = $2`,
+          [clientId, scope.companyId]
+        );
+      }
+
+      await rawExecute(
+        `UPDATE umrah_sub_agents SET "clientId"=$1, "updatedBy"=$2, "updatedAt"=NOW()
+         WHERE id=$3 AND "companyId"=$4 AND "deletedAt" IS NULL`,
+        [cid, scope.userId, id, scope.companyId]
+      );
+      return cid;
+    });
 
     const [row] = await rawQuery(
       `SELECT sa.*, c.name AS "clientName" FROM umrah_sub_agents sa
