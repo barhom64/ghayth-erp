@@ -283,6 +283,7 @@ export default function CustomerAdvancesPage() {
               onSortedDataChange={setPrintRows}
               data={filteredRows}
               pageSize={50}
+              noToolbar
               emptyMessage="لا توجد دفعات مقدمة"
             />
           </CardContent>

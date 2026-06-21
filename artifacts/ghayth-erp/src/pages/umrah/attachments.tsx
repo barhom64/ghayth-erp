@@ -171,7 +171,7 @@ export default function UmrahAttachmentsPage() {
         resultCount={items.length}
       />
 
-      <DataTable data={items} columns={columns} emptyMessage="لا توجد مرفقات تطابق المعايير" />
+      <DataTable data={items} columns={columns} emptyMessage="لا توجد مرفقات تطابق المعايير" noToolbar />
     </PageShell>
   );
 }
