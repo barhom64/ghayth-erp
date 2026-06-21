@@ -925,3 +925,18 @@ registerCrossDomainHandler("fleet.violation.deduction_requested", async (payload
     sourceId: payload.violationId as number,
   });
 });
+
+// عقد الأسطول → HR: استرداد كلفة حادث يتحمّلها السائق عبر خصم راتب (الدفعة C2).
+// مرآةٌ لمستهلك المخالفة، بنوع/مصدر خاصّين بالحادث.
+registerCrossDomainHandler("fleet.accident.deduction_requested", async (payload) => {
+  if (!payload?.companyId || !payload?.employeeId || !payload?.amount) return;
+  await hrEngine.createPayrollDeduction({
+    companyId: payload.companyId,
+    employeeId: payload.employeeId as number,
+    type: "accident_recovery",
+    amount: payload.amount as number,
+    reason: (payload.reason as string) ?? "استرداد كلفة حادث مركبة",
+    sourceType: "fleet_accidents",
+    sourceId: payload.accidentId as number,
+  });
+});
