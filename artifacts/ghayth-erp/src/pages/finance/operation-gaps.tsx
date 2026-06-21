@@ -10,6 +10,8 @@ import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { CheckCircle2, AlertTriangle, Download, FileWarning } from "lucide-react";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 /**
  * Operation-level finance gap report (#1715 §10). Consumes
@@ -102,6 +104,15 @@ export default function OperationGapsPage() {
     "/finance/reports/operation-gaps",
   );
 
+  // Print targets the PRIMARY section only — the first non-empty section.
+  // Sections have heterogeneous meaning (each is a distinct gap type) but a
+  // uniform GapRow shape, so a single printed table is coherent. The hook
+  // must run before the early returns below.
+  const allSections = data?.sections ?? [];
+  const primarySection = allSections.find((s) => s.rows.length > 0) ?? null;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } =
+    usePrintRows<GapRow>(primarySection?.rows);
+
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
 
@@ -150,7 +161,17 @@ export default function OperationGapsPage() {
           <p className="text-xs text-muted-foreground bg-status-warning-surface/50 border border-status-warning-surface rounded p-2">
             ⓘ {SECTION_HINT[section.source] ?? ""}
           </p>
-          <DataTable columns={cols} data={section.rows} emptyMessage="—" pageSize={25} noToolbar />
+          <DataTable
+            columns={cols}
+            data={section.rows}
+            emptyMessage="—"
+            pageSize={25}
+            noToolbar
+            // Only the primary (first non-empty) section feeds the printed list.
+            {...(primarySection && section.source === primarySection.source
+              ? { onSortedDataChange: setPrintRows }
+              : {})}
+          />
         </CardContent>
       </Card>
     );
@@ -168,7 +189,7 @@ export default function OperationGapsPage() {
         { label: "فجوات العمليات" },
       ]}
       actions={
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm" className="h-8 text-xs"><Link href="/finance/reports/gl-integrity-gaps">
               <AlertTriangle className="h-3.5 w-3.5 me-1" />فجوات الـ GL
             </Link></Button>
@@ -179,6 +200,25 @@ export default function OperationGapsPage() {
             >
               <Download className="h-3.5 w-3.5 me-1" />تصدير CSV
             </GuardedButton>
+          ) : null}
+          {primarySection ? (
+            <PrintButton
+              entityType="report_operation_gaps"
+              entityId="list"
+              size="icon"
+              payload={() => ({
+                entity: {
+                  title: `فجوات العمليات المالية — ${SECTION_LABEL[primarySection.source] ?? primarySection.source}`,
+                  total: printRows.length,
+                },
+                items: printRows.map((r: GapRow) => ({
+                  "المعرف": r.ref || `#${r.entityId}`,
+                  "نوع الفجوة": r.gap,
+                  "المبلغ": r.amount != null ? formatCurrency(Number(r.amount)) : "—",
+                  "التاريخ": r.createdAt?.slice(0, 10) ?? "—",
+                })),
+              })}
+            />
           ) : null}
         </div>
       }
