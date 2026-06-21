@@ -1,5 +1,7 @@
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +61,7 @@ export default function SubsidiaryAccountFailuresPage() {
     `/finance/subsidiary-account-failures${scopeSuffix}`,
   );
   const items: ProvisioningFailure[] = (data?.data || []) as ProvisioningFailure[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const retryMut = useApiMutation<void, { id: number }>(
     (body) => `/finance/subsidiary-account-failures/${body.id}/retry`,
@@ -156,6 +159,20 @@ export default function SubsidiaryAccountFailuresPage() {
       subtitle="جهات تعذّر إنشاء حساباتها الفرعية تلقائياً فتعطّلت قيودها — أعد المحاولة بعد إصلاح شجرة الحسابات"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "فشل الحسابات الفرعية" }]}
       loading={isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_subsidiary_account_failures"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "فشل تأسيس الحسابات الفرعية", total: printRows.length },
+            items: printRows.map((r: any) => Object.fromEntries(
+              columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
+                .map((c: any) => [c.header, r[c.key] ?? "—"]),
+            )),
+          })}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
@@ -192,6 +209,7 @@ export default function SubsidiaryAccountFailuresPage() {
       <DataTable
         columns={columns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}
