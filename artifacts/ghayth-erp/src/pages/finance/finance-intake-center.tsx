@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { useToast } from "@/hooks/use-toast";
-import { Inbox, CheckCircle2, XCircle, Truck } from "lucide-react";
+import { CheckCircle2, XCircle, Truck } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 
 /**
@@ -61,15 +61,15 @@ const STATUS_BADGE: Record<Status, { label: string; cls: string }> = {
 
 export default function FinanceIntakeCenter() {
   const { toast } = useToast();
-  const [status, setStatus] = useState<Status>("pending");
+  const [filters, setFilters] = useFilters({ status: "pending" });
   const [dialog, setDialog] = useState<{ mode: "materialize" | "reject"; row: Candidate } | null>(null);
   const [revenue, setRevenue] = useState("");
   const [cost, setCost] = useState("");
   const [reason, setReason] = useState("");
 
   const { data, isLoading, isError, refetch } = useApiQuery<ListResp>(
-    ["transport-billing-candidates", status],
-    `/finance/transport-billing-candidates?status=${status}`,
+    ["transport-billing-candidates", filters.status],
+    `/finance/transport-billing-candidates${filters.status ? `?status=${filters.status}` : ""}`,
   );
 
   const materializeMut = useApiMutation<any, { id: number; freightRevenue?: number; freightCost?: number }>(
@@ -122,6 +122,9 @@ export default function FinanceIntakeCenter() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["customerName", "serviceType", "sourceRef"],
+  });
 
   const columns: DataTableColumn<Candidate>[] = [
     { key: "customer", header: "العميل", render: (r) => <span className="font-medium">{r.customerName ?? "—"}</span> },
@@ -158,24 +161,18 @@ export default function FinanceIntakeCenter() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "مركز التلقّي" }]}
     >
       <FinanceTabsNav />
-      <div className="flex items-center gap-2 mb-4">
-        <Inbox className="h-5 w-5 text-status-info-foreground" />
-        <div className="flex gap-1">
-          {STATUS_TABS.map((t) => (
-            <Button
-              key={t.value}
-              size="sm"
-              variant={status === t.value ? "default" : "outline"}
-              className="h-8 text-xs"
-              onClick={() => setStatus(t.value)}
-            >
-              {t.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالعميل أو الخدمة أو المرجع...",
+          statuses: STATUS_TABS.map((t) => ({ value: t.value, label: t.label })),
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
-      {rows.length === 0 ? (
+      {filtered.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center flex flex-col items-center gap-2 text-muted-foreground">
             <Truck className="h-8 w-8" />
@@ -183,7 +180,7 @@ export default function FinanceIntakeCenter() {
           </CardContent>
         </Card>
       ) : (
-        <DataTable columns={columns} data={rows} emptyMessage="—" pageSize={50} />
+        <DataTable columns={columns} data={filtered} emptyMessage="—" pageSize={50} noToolbar />
       )}
 
       <Dialog open={!!dialog} onOpenChange={(o) => !o && closeDialog()}>
