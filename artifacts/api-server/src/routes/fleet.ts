@@ -1345,6 +1345,12 @@ router.post("/me/trips/:id/start", authorize({ feature: "fleet.trips.my", action
     void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.driver_started", entity: "fleet_trips", entityId: id,
       details: JSON.stringify({ driverId: driver.id }) });
+    // الحدث القانوني: يُفعّل مسجّل التدقيق + خطوة «أول رحلة» في تأهّل الأسطول
+    // (journeyEngine) + محرّك القواعد. لم يكن يُطلَق من أي مكان (المسار يطلق
+    // driver_started فقط، بلا مستهلك) فظلّت تلك المستهلكات معطّلة. غير دفتري.
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.started", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id, source: "driver" }) });
     res.json({ data: { id, status: "in_progress" } });
   } catch (err) { handleRouteError(err, res, "Driver trip-start error:"); }
 });
@@ -1364,21 +1370,31 @@ router.post("/me/trips/:id/complete", authorize({ feature: "fleet.trips.my", act
     if (trip.status !== "in_progress") {
       throw new ConflictError(`لا يمكن إنهاء رحلة بحالة ${trip.status}`);
     }
-    await rawExecute(
-      `UPDATE fleet_trips
-          SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2`,
-      [id, scope.companyId]
-    );
-    // Free the driver (only flip when they're on_trip — operator-only states stay).
-    await rawExecute(
-      `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
-        WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
-      [driver.id, scope.companyId]
-    );
+    // Completing the trip + freeing the driver are atomic: a completed
+    // trip must never leave its driver stuck 'on_trip' (or a driver freed
+    // without the trip closed). rawQuery joins the ambient tx (txStore).
+    await withTransaction(async () => {
+      await rawExecute(
+        `UPDATE fleet_trips
+            SET status = 'completed', "endTime" = COALESCE("endTime", NOW()), "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2`,
+        [id, scope.companyId]
+      );
+      // Free the driver (only flip when they're on_trip — operator-only states stay).
+      await rawExecute(
+        `UPDATE fleet_drivers SET status = 'available', "updatedAt" = NOW()
+          WHERE id = $1 AND "companyId" = $2 AND status = 'on_trip'`,
+        [driver.id, scope.companyId]
+      );
+    });
     void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
       action: "fleet.trip.driver_completed", entity: "fleet_trips", entityId: id,
       details: JSON.stringify({ driverId: driver.id }) });
+    // الحدث القانوني (تدقيق + قواعد + تأهّل). القيد ليس مدفوعًا بالحدث (يُرحَّل
+    // مباشرة في مسار الإكمال الإداري)، فهذا الإطلاق غير دفتري ولا يُكرّر قيدًا.
+    void emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
+      action: "fleet.trip.completed", entity: "fleet_trips", entityId: id,
+      details: JSON.stringify({ driverId: driver.id, source: "driver" }) });
     res.json({ data: { id, status: "completed" } });
   } catch (err) { handleRouteError(err, res, "Driver trip-complete error:"); }
 });

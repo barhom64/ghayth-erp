@@ -726,26 +726,32 @@ router.post("/messages/:id/retry", authorize({ feature: "communications", action
       throw new ValidationError("هذه الرسالة محجوبة بواسطة قواعد DLP — لا يمكن إعادة محاولتها");
     }
 
-    const { affectedRows } = await rawExecute(
-      `UPDATE outbound_queue
-          SET status = 'pending',
-              attempts = 0,
-              "errorMessage" = NULL,
-              "scheduledAt" = NOW(),
-              "updatedAt" = NOW()
-        WHERE "messageLogId" = $1 AND "companyId" = $2 AND status = 'failed'`,
-      [msgId, scope.companyId],
-    );
-    if (!affectedRows) {
-      throw new ValidationError("لا يوجد صف في قائمة الإرسال بحالة فاشلة لهذه الرسالة");
-    }
-
-    // Mirror message_log so the inbox shows the new status immediately,
-    // without waiting for the worker to tick.
-    await rawExecute(
-      `UPDATE message_log SET status = 'queued' WHERE id = $1 AND "companyId" = $2`,
-      [msgId, scope.companyId],
-    ).catch((e) => logger.warn(e, "[inbox/retry] mirror status update failed"));
+    // Re-queue + its message_log mirror are written atomically so the
+    // inbox status can never diverge from the queue state (previously the
+    // mirror was a best-effort .catch that left a stale badge until the
+    // next worker tick).
+    const affectedRows = await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE outbound_queue
+            SET status = 'pending',
+                attempts = 0,
+                "errorMessage" = NULL,
+                "scheduledAt" = NOW(),
+                "updatedAt" = NOW()
+          WHERE "messageLogId" = $1 AND "companyId" = $2 AND status = 'failed'`,
+        [msgId, scope.companyId],
+      );
+      if (!affectedRows) {
+        throw new ValidationError("لا يوجد صف في قائمة الإرسال بحالة فاشلة لهذه الرسالة");
+      }
+      // Mirror message_log so the inbox shows the new status immediately,
+      // without waiting for the worker to tick.
+      await rawExecute(
+        `UPDATE message_log SET status = 'queued' WHERE id = $1 AND "companyId" = $2`,
+        [msgId, scope.companyId],
+      );
+      return affectedRows;
+    });
 
     void createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
@@ -781,27 +787,30 @@ router.post("/messages/:id/cancel", authorize({ feature: "communications", actio
     if (!msg) throw new NotFoundError("الرسالة غير موجودة");
     if (msg.direction !== "outbound") throw new ValidationError("لا يمكن إلغاء رسالة واردة");
 
-    // Cron worker ticks every 60s — add a 30s safety margin so we don't
-    // race a worker that's milliseconds away from picking the row up.
-    const { affectedRows } = await rawExecute(
-      `UPDATE outbound_queue
-          SET status = 'cancelled', "updatedAt" = NOW()
-        WHERE "messageLogId" = $1 AND "companyId" = $2
-          AND status = 'pending'
-          AND "scheduledAt" IS NOT NULL
-          AND "scheduledAt" > NOW() + INTERVAL '30 seconds'`,
-      [msgId, scope.companyId],
-    );
-    if (!affectedRows) {
-      throw new ValidationError(
-        "لا يمكن إلغاء هذه الرسالة — قد تكون قيد الإرسال أو حان وقت جدولتها",
+    // Cancel + its message_log mirror are written atomically so the inbox
+    // status can never diverge from the queue state. Cron worker ticks
+    // every 60s — add a 30s safety margin so we don't race a worker that's
+    // milliseconds away from picking the row up.
+    await withTransaction(async () => {
+      const { affectedRows } = await rawExecute(
+        `UPDATE outbound_queue
+            SET status = 'cancelled', "updatedAt" = NOW()
+          WHERE "messageLogId" = $1 AND "companyId" = $2
+            AND status = 'pending'
+            AND "scheduledAt" IS NOT NULL
+            AND "scheduledAt" > NOW() + INTERVAL '30 seconds'`,
+        [msgId, scope.companyId],
       );
-    }
-
-    await rawExecute(
-      `UPDATE message_log SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
-      [msgId, scope.companyId],
-    ).catch((e) => logger.warn(e, "[inbox/cancel] mirror status update failed"));
+      if (!affectedRows) {
+        throw new ValidationError(
+          "لا يمكن إلغاء هذه الرسالة — قد تكون قيد الإرسال أو حان وقت جدولتها",
+        );
+      }
+      await rawExecute(
+        `UPDATE message_log SET status = 'cancelled' WHERE id = $1 AND "companyId" = $2`,
+        [msgId, scope.companyId],
+      );
+    });
 
     void createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

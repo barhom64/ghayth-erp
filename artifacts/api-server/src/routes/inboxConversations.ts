@@ -35,7 +35,7 @@
  */
 import { Router } from "express";
 import { z } from "zod";
-import { rawQuery, rawExecute, assertInsert } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, assertInsert, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
   ValidationError,
@@ -498,43 +498,49 @@ router.post("/:id/link", authorize({ feature: "communications", action: "update"
     const [target] = await rawQuery<{ id: number }>(entity.existsSql, [body.relatedId, scope.companyId]);
     if (!target) throw new NotFoundError("الكيان المطلوب ربطه غير موجود");
 
-    // Revive a previously-removed link instead of stacking duplicates.
-    const [revived] = await rawQuery<{ id: number }>(
-      `UPDATE conversation_links SET "deletedAt" = NULL, "linkedBy" = $4, "createdAt" = now()
-        WHERE "conversationId" = $1 AND "relatedType" = $2 AND "relatedId" = $3
-          AND "companyId" = $5
-          AND "deletedAt" IS NOT NULL
-        RETURNING id`,
-      [id, body.relatedType, body.relatedId, scope.userId, scope.companyId],
-    );
-    if (!revived) {
-      await rawExecute(
-        `INSERT INTO conversation_links
-           ("companyId", "conversationId", "relatedType", "relatedId", "linkedBy", "createdAt")
-         VALUES ($1, $2, $3, $4, $5, now())
-         ON CONFLICT ("conversationId", "relatedType", "relatedId")
-           WHERE "deletedAt" IS NULL
-         DO NOTHING`,
-        [scope.companyId, id, body.relatedType, body.relatedId, scope.userId],
+    // The link upsert + the conversation participant-identity fill are
+    // written atomically: a committed link must not leave the conversation
+    // without the matching participant identity (or vice versa). rawQuery
+    // joins the ambient transaction (txStore).
+    await withTransaction(async () => {
+      // Revive a previously-removed link instead of stacking duplicates.
+      const [revived] = await rawQuery<{ id: number }>(
+        `UPDATE conversation_links SET "deletedAt" = NULL, "linkedBy" = $4, "createdAt" = now()
+          WHERE "conversationId" = $1 AND "relatedType" = $2 AND "relatedId" = $3
+            AND "companyId" = $5
+            AND "deletedAt" IS NOT NULL
+          RETURNING id`,
+        [id, body.relatedType, body.relatedId, scope.userId, scope.companyId],
       );
-    }
+      if (!revived) {
+        await rawExecute(
+          `INSERT INTO conversation_links
+             ("companyId", "conversationId", "relatedType", "relatedId", "linkedBy", "createdAt")
+           VALUES ($1, $2, $3, $4, $5, now())
+           ON CONFLICT ("conversationId", "relatedType", "relatedId")
+             WHERE "deletedAt" IS NULL
+           DO NOTHING`,
+          [scope.companyId, id, body.relatedType, body.relatedId, scope.userId],
+        );
+      }
 
-    // A party-type link also fills the conversation's participant
-    // identity when it is still unmatched.
-    if (entity.partyNameSql && !conversation.participantId) {
-      const [party] = await rawQuery<{ name: string | null }>(entity.partyNameSql, [
-        body.relatedId,
-        scope.companyId,
-      ]);
-      await rawExecute(
-        `UPDATE conversations
-            SET "participantType" = $3, "participantId" = $4,
-                "participantName" = COALESCE("participantName", $5),
-                "updatedAt" = now()
-          WHERE id = $1 AND "companyId" = $2`,
-        [id, scope.companyId, body.relatedType, body.relatedId, party?.name ?? null],
-      );
-    }
+      // A party-type link also fills the conversation's participant
+      // identity when it is still unmatched.
+      if (entity.partyNameSql && !conversation.participantId) {
+        const [party] = await rawQuery<{ name: string | null }>(entity.partyNameSql, [
+          body.relatedId,
+          scope.companyId,
+        ]);
+        await rawExecute(
+          `UPDATE conversations
+              SET "participantType" = $3, "participantId" = $4,
+                  "participantName" = COALESCE("participantName", $5),
+                  "updatedAt" = now()
+            WHERE id = $1 AND "companyId" = $2`,
+          [id, scope.companyId, body.relatedType, body.relatedId, party?.name ?? null],
+        );
+      }
+    });
 
     recordConversationAction(req, {
       conversationId: id,
