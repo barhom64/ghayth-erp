@@ -39,4 +39,11 @@ describe("JE line non-negative invariant (F9-B2)", () => {
       expect(s, `${f} lost both-sides guard`).toMatch(/debit > 0 && l?\.?credit > 0|d > 0 && c > 0/);
     }
   });
+
+  // F9-B3b: hardening face-value amounts are strictly positive (no zero/negative,
+  // no reversal case — a reversal is an independent opposite-direction entry).
+  it("hardening bank-guarantee + inter-company transfer amounts are positive", () => {
+    const s = SRC("finance-hardening.ts");
+    expect((s.match(/amount: z\.coerce\.number\(\)\.positive\(/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
 });
