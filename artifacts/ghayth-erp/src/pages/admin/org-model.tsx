@@ -147,7 +147,7 @@ function LegalEntitiesTab() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>الاسم العربي *</Label><Input value={editForm.nameAr} onChange={(e) => setEditForm((f) => ({ ...f, nameAr: e.target.value }))} className="mt-1" /></div>
-              <div><Label>Name (EN)</Label><Input value={editForm.nameEn} onChange={(e) => setEditForm((f) => ({ ...f, nameEn: e.target.value }))} className="mt-1" /></div>
+              <div><Label>الاسم (إنجليزي)</Label><Input value={editForm.nameEn} onChange={(e) => setEditForm((f) => ({ ...f, nameEn: e.target.value }))} className="mt-1" /></div>
               <div><Label>السجل التجاري</Label><Input value={editForm.crNumber} onChange={(e) => setEditForm((f) => ({ ...f, crNumber: e.target.value }))} className="mt-1" /></div>
               <div><Label>الرقم الضريبي (VAT)</Label><Input value={editForm.vatNumber} onChange={(e) => setEditForm((f) => ({ ...f, vatNumber: e.target.value }))} className="mt-1" /></div>
               <div><Label>رقم الإقرار الضريبي</Label><Input value={editForm.taxNumber} onChange={(e) => setEditForm((f) => ({ ...f, taxNumber: e.target.value }))} className="mt-1" /></div>
@@ -174,7 +174,7 @@ function LegalEntitiesTab() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>الاسم العربي *</Label><Input value={form.nameAr} onChange={(e) => setForm((f) => ({ ...f, nameAr: e.target.value }))} className="mt-1" /></div>
-              <div><Label>Name (EN)</Label><Input value={form.nameEn} onChange={(e) => setForm((f) => ({ ...f, nameEn: e.target.value }))} className="mt-1" /></div>
+              <div><Label>الاسم (إنجليزي)</Label><Input value={form.nameEn} onChange={(e) => setForm((f) => ({ ...f, nameEn: e.target.value }))} className="mt-1" /></div>
               <div><Label>السجل التجاري</Label><Input value={form.crNumber} onChange={(e) => setForm((f) => ({ ...f, crNumber: e.target.value }))} className="mt-1" /></div>
               <div><Label>الرقم الضريبي (VAT)</Label><Input value={form.vatNumber} onChange={(e) => setForm((f) => ({ ...f, vatNumber: e.target.value }))} className="mt-1" /></div>
               <div><Label>رقم الإقرار الضريبي</Label><Input value={form.taxNumber} onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))} className="mt-1" /></div>
@@ -267,7 +267,7 @@ function PositionsTab() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>الاسم العربي *</Label><Input value={editForm.labelAr} onChange={(e) => setEditForm((f) => ({ ...f, labelAr: e.target.value }))} className="mt-1" /></div>
-              <div><Label>Label (EN)</Label><Input value={editForm.labelEn} onChange={(e) => setEditForm((f) => ({ ...f, labelEn: e.target.value }))} className="mt-1" /></div>
+              <div><Label>التسمية (إنجليزي)</Label><Input value={editForm.labelEn} onChange={(e) => setEditForm((f) => ({ ...f, labelEn: e.target.value }))} className="mt-1" /></div>
               <div><Label>المستوى (0..100)</Label><Input type="number" min={0} max={100} value={editForm.level} onChange={(e) => setEditForm((f) => ({ ...f, level: Number(e.target.value) }))} className="mt-1" /></div>
               <div><Label>الوصف</Label><Input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
             </div>
@@ -292,7 +292,7 @@ function PositionsTab() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>مفتاح المنصب * (إنجليزي)</Label><Input value={form.positionKey} onChange={(e) => setForm((f) => ({ ...f, positionKey: e.target.value }))} placeholder="مثل: team_lead" className="mt-1 font-mono" /></div>
               <div><Label>الاسم العربي *</Label><Input value={form.labelAr} onChange={(e) => setForm((f) => ({ ...f, labelAr: e.target.value }))} placeholder="مثل: قائد فريق" className="mt-1" /></div>
-              <div><Label>Label (EN)</Label><Input value={form.labelEn} onChange={(e) => setForm((f) => ({ ...f, labelEn: e.target.value }))} className="mt-1" /></div>
+              <div><Label>التسمية (إنجليزي)</Label><Input value={form.labelEn} onChange={(e) => setForm((f) => ({ ...f, labelEn: e.target.value }))} className="mt-1" /></div>
               <div><Label>المستوى (0..100)</Label><Input type="number" min={0} max={100} value={form.level} onChange={(e) => setForm((f) => ({ ...f, level: Number(e.target.value) }))} className="mt-1" /></div>
               <div className="sm:col-span-2"><Label>الوصف</Label><Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="mt-1" /></div>
             </div>
@@ -733,8 +733,8 @@ function ApprovalAuthoritiesTab() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><Label>معرّف تعيين الموظف *</Label><Input type="number" value={form.assignmentId} onChange={(e) => setForm((f) => ({ ...f, assignmentId: e.target.value }))} className="mt-1" /></div>
-              <div><Label>feature key *</Label><Input value={form.featureKey} onChange={(e) => setForm((f) => ({ ...f, featureKey: e.target.value }))} placeholder="مثل: finance.invoices" className="mt-1 font-mono" /></div>
-              <div><Label>action *</Label><Input value={form.action} onChange={(e) => setForm((f) => ({ ...f, action: e.target.value }))} placeholder="approve / release / pay" className="mt-1 font-mono" /></div>
+              <div><Label>مفتاح الصلاحية *</Label><Input value={form.featureKey} onChange={(e) => setForm((f) => ({ ...f, featureKey: e.target.value }))} placeholder="مثل: finance.invoices" className="mt-1 font-mono" /></div>
+              <div><Label>الإجراء *</Label><Input value={form.action} onChange={(e) => setForm((f) => ({ ...f, action: e.target.value }))} placeholder="approve / release / pay" className="mt-1 font-mono" /></div>
               <div><Label>العملة</Label><Input value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value.toUpperCase() }))} maxLength={3} className="mt-1" /></div>
               <div><Label>الحد الأقصى (اتركه فارغًا = بلا حد)</Label><Input type="number" value={form.maxAmount} onChange={(e) => setForm((f) => ({ ...f, maxAmount: e.target.value }))} className="mt-1" /></div>
               <div><Label>ينتهي في (اختياري)</Label><Input type="date" value={form.expiresAt} onChange={(e) => setForm((f) => ({ ...f, expiresAt: e.target.value }))} className="mt-1" /></div>
