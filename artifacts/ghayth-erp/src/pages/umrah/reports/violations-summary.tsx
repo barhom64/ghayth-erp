@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { AlertTriangle } from "lucide-react";
@@ -98,6 +100,8 @@ export default function ViolationsSummaryReport() {
   );
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
+  const recent = data?.recent ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(recent);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -113,6 +117,24 @@ export default function ViolationsSummaryReport() {
         { href: "/umrah/reports", label: "التقارير" },
         { label: "ملخص المخالفات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_violations_recent"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير المخالفات — آخر 100 مخالفة", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "التاريخ": r.detectedAt?.slice(0, 10) ?? "—",
+              "النوع": r.type,
+              "الحالة": STATUS_LABEL_AR[r.status] ?? r.status,
+              "المعتمر": r.mutamerName ?? (r.mutamerId ? `#${r.mutamerId}` : "—"),
+              "الوكيل": r.agentName ?? (r.agentId ? `#${r.agentId}` : "—"),
+              "الغرامة": formatCurrency(Number(r.penaltyAmount) || 0),
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
@@ -218,8 +240,9 @@ export default function ViolationsSummaryReport() {
           </div>
           <div data-testid="violations-recent-empty">
           <DataTable
-            data={data?.recent ?? []}
+            data={recent}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا مخالفات تطابق الفلاتر."

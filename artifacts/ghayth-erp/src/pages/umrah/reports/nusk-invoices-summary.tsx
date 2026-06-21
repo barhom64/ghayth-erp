@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { Receipt, AlertCircle } from "lucide-react";
@@ -105,6 +107,8 @@ export default function NuskInvoicesSummaryReport() {
   );
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
+  const recent = data?.recent ?? [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(recent);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -120,6 +124,24 @@ export default function NuskInvoicesSummaryReport() {
         { href: "/umrah/reports", label: "التقارير" },
         { label: "ملخص فواتير نُسك" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_nusk_invoices_recent"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير فواتير نُسك — آخر 100 فاتورة", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "رقم نُسك": r.nuskInvoiceNumber,
+              "المجموعة": r.groupName ?? (r.groupId ? `#${r.groupId}` : "—"),
+              "الوكيل": r.agentName ?? (r.agentId ? `#${r.agentId}` : "—"),
+              "الإجمالي": formatCurrency(Number(r.totalAmount) || 0),
+              "قيد AP": r.purchaseInvoiceId ? "مرحَّل" : "بانتظار",
+              "الحالة": STATUS_LABEL_AR[r.nuskStatus] ?? r.nuskStatus,
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
@@ -250,8 +272,9 @@ export default function NuskInvoicesSummaryReport() {
           </div>
           <div data-testid="nusk-recent-empty">
           <DataTable
-            data={data?.recent ?? []}
+            data={recent}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا فواتير تطابق الفلاتر."
