@@ -11,11 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormShell, FormTextField, FormSelectField } from "@workspace/ui-core";
-import { FileText, Upload, Download, Plus, X, FileUp, Eye, List, LayoutGrid, ClipboardCheck } from "lucide-react";
+import { FileText, Upload, Download, Plus, X, FileUp, Eye, List, LayoutGrid, ClipboardCheck, Printer } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AttachmentPreview, type PreviewableAttachment } from "./attachment-preview";
 import { DecisionImpactPreview } from "./decision-impact";
+import { buildBundleHtml, openBundlePrint, type BundleImage, type BundleOtherFile } from "@/lib/print-bundle";
+import { renderDocument, decodeRenderResponse } from "@/lib/print-client";
 import { formatDateAr } from "@/lib/formatters";
 
 const uploadDocSchema = z.object({
@@ -111,6 +113,7 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
   const [view, setView] = useState<"list" | "grid">(viewMode);
   const [grouped, setGrouped] = useState(false);
   const [reviewDoc, setReviewDoc] = useState<any | null>(null);
+  const [bundling, setBundling] = useState(false);
   const { data: docsResp, refetch } = useApiQuery<any>(
     ["entity-docs", entityType, String(entityId)],
     `/documents?entity=${entityType}&entityId=${entityId}`,
@@ -165,6 +168,67 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
         return;
       }
       toast({ variant: "destructive", title: "فشل التنزيل", description: err.message });
+    }
+  };
+
+  // Fetch one document's bytes and return a data URL (for inline embedding).
+  const fetchDataUrl = async (docId: number): Promise<string | null> => {
+    try {
+      const res = await fetch(`${BASE}/api/documents/${docId}/download`, {
+        credentials: "include",
+        headers: { ...nativeAuthHeaders() },
+      });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  // «طباعة مجمّعة» — compose the record print + image attachments into one
+  // browser-printed document. Reuses the HTML print pipeline (no server PDF).
+  const handleBundlePrint = async () => {
+    if (bundling) return;
+    setBundling(true);
+    try {
+      const images: BundleImage[] = [];
+      const others: BundleOtherFile[] = [];
+      for (const d of docs) {
+        if (!d.storageKey) continue;
+        const name = d.title || d.fileName || `مستند #${d.id}`;
+        if (typeof d.mimeType === "string" && d.mimeType.startsWith("image/")) {
+          const dataUrl = await fetchDataUrl(d.id);
+          if (dataUrl) images.push({ name, dataUrl });
+          else others.push({ name });
+        } else {
+          others.push({ name });
+        }
+      }
+      // Best-effort: render the entity's record print HTML; bundle still works
+      // (attachments only) if the entity has no print profile.
+      let recordHtml: string | null = null;
+      try {
+        const resp = await renderDocument({ entityType, entityId: Number(entityId), inline: false });
+        recordHtml = decodeRenderResponse(resp);
+      } catch {
+        recordHtml = null;
+      }
+      if (!recordHtml && images.length === 0 && others.length === 0) {
+        toast({ title: "لا يوجد ما يُطبع", description: "لا سجل قابل للطباعة ولا مرفقات." });
+        return;
+      }
+      const opened = openBundlePrint(buildBundleHtml({ title, recordHtml, images, otherFiles: others }));
+      if (!opened) {
+        toast({ variant: "destructive", title: "تعذّر فتح نافذة الطباعة", description: "اسمح بالنوافذ المنبثقة ثم أعد المحاولة." });
+      }
+    } finally {
+      setBundling(false);
     }
   };
 
@@ -346,6 +410,17 @@ export function EntityDocuments({ entityType, entityId, title = "المستند�
         ) : (
           <div className="space-y-3">
             <div className="flex items-center justify-end gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1 me-auto"
+                disabled={bundling}
+                onClick={handleBundlePrint}
+                title="طباعة السجل والمرفقات في ملف واحد"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                {bundling ? "جاري التجهيز..." : "طباعة مجمّعة"}
+              </Button>
               <Button
                 variant={grouped ? "default" : "outline"}
                 size="sm"
