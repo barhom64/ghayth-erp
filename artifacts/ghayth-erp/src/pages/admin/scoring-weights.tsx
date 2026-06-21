@@ -17,6 +17,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -246,6 +248,7 @@ function RankingTab() {
     ["scoring-ranking", scope], `/org/scoring-ranking?scope=${scope}&limit=100`,
   );
   const rows = asList<RankingRow>(data?.data || []);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const scoreClass = (s: number): string => {
     if (s >= 85) return "text-emerald-700 font-bold";
@@ -297,6 +300,22 @@ function RankingTab() {
           <Badge variant="secondary" className="font-mono">{data.periodKey}</Badge>
         )}
         <span className="text-xs text-muted-foreground">{rows.length} موظف</span>
+        <PrintButton
+          entityType="report_org_scoring_ranking"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: `ترتيب الأداء (${data?.periodKey ?? scope})`, total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "#": r.rank,
+              "الموظف": r.employeeName,
+              "النتيجة": Math.round(Number(r.compositeScore)),
+              "انضباط": Math.round(Number(r.disciplineScore)),
+              "نشاط": Math.round(Number(r.activityScore)),
+              "إنتاجية": Math.round(Number(r.productivityScore)),
+            })),
+          })}
+        />
       </div>
 
       {data?.message ? (
@@ -304,7 +323,7 @@ function RankingTab() {
       ) : (
         <Card>
           <CardContent className="p-3">
-            <DataTable data={rows} columns={columns} pageSize={50} noToolbar emptyMessage="لا توجد بيانات تقييم لهذه الفترة." />
+            <DataTable data={rows} columns={columns} onSortedDataChange={setPrintRows} pageSize={50} noToolbar emptyMessage="لا توجد بيانات تقييم لهذه الفترة." />
           </CardContent>
         </Card>
       )}
