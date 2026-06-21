@@ -528,6 +528,21 @@ const excuseApprovalSchema = z.object({
   rejectionReason: z.string().optional(),
 });
 
+// عقد قائد/خادم (#2839): إعادة إسناد التكليفات النشطة لفرع بديل. مسار الإعدادات
+// (خادم لإدارة الفروع) يُنسّق تعطيل فرع، لكن **الكتابة** في جدول HR المملوك
+// (employee_assignments) تبقى هنا في المسار القائد (HR). يعمل ضمن المعاملة
+// المحيطة (rawExecute ينضمّ لـ txStore) فتبقى ذرّية مع تعطيل الفرع.
+export async function reassignActiveAssignmentsToBranch(
+  companyId: number,
+  fromBranchId: number,
+  toBranchId: number,
+): Promise<void> {
+  await rawExecute(
+    `UPDATE employee_assignments SET "branchId" = $1 WHERE "branchId" = $2 AND status = 'active' AND "companyId" = $3`,
+    [toBranchId, fromBranchId, companyId],
+  );
+}
+
 const router = Router();
 
 // Per-user check-in limiter. The /hr router runs after authMiddleware in
