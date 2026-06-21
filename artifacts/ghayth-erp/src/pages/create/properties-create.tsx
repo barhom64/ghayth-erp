@@ -74,9 +74,11 @@ export default function PropertiesCreate() {
     setForm(prev => {
       const normalizedValue = (field === "buildingId" || field === "direction" || field === "finishing") && value === "none" ? "" : value;
       const update: any = { [field]: normalizedValue };
-      if (field === "buildingId" && normalizedValue) {
-        const bld = buildings.find((b: any) => String(b.id) === normalizedValue);
-        if (bld) update.buildingName = bld.name;
+      if (field === "buildingId") {
+        // اشتق اسم المبنى عند الاختيار، وفرّغه عند إلغاء الاختيار حتى لا تُحفظ
+        // الوحدة باسم مبنى قديم بلا buildingId.
+        const bld = normalizedValue ? buildings.find((b: any) => String(b.id) === normalizedValue) : null;
+        update.buildingName = bld ? bld.name : "";
       }
       return { ...prev, ...update };
     });
