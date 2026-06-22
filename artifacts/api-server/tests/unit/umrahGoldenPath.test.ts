@@ -5,6 +5,8 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const UMRAH_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"), "utf8");
 const UMRAH_ENT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
+// U-07 Phase 6: sub-agent CRUD + linking routes carved into a dedicated sub-router.
+const UMRAH_SUB_AGENTS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"), "utf8");
 // U-07 Phase 5: commission-plan routes carved into a dedicated sub-router.
 const UMRAH_COMMISSION = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-commission.ts"), "utf8");
 // The penalty creation pipeline (overstayed → violated transition,
@@ -89,10 +91,11 @@ describe("Umrah route structure", () => {
 
 describe("Umrah entities route structure", () => {
   it("sub-agent CRUD endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('router.get("/sub-agents"');
-    expect(UMRAH_ENT).toContain('router.post("/sub-agents"');
-    expect(UMRAH_ENT).toContain('router.patch("/sub-agents/:id"');
-    expect(UMRAH_ENT).toContain('router.delete("/sub-agents/:id"');
+    // routes moved to umrah-sub-agents.ts (U-07 Phase 6)
+    expect(UMRAH_SUB_AGENTS).toContain('router.get("/sub-agents"');
+    expect(UMRAH_SUB_AGENTS).toContain('router.post("/sub-agents"');
+    expect(UMRAH_SUB_AGENTS).toContain('router.patch("/sub-agents/:id"');
+    expect(UMRAH_SUB_AGENTS).toContain('router.delete("/sub-agents/:id"');
   });
 
   it("pricing CRUD endpoints exist", () => {
@@ -382,7 +385,8 @@ describe("Umrah entities security", () => {
   });
 
   it("sub-agent link validates client exists", () => {
-    expect(UMRAH_ENT).toContain("link-client");
+    // route moved to umrah-sub-agents.ts (U-07 Phase 6)
+    expect(UMRAH_SUB_AGENTS).toContain("link-client");
   });
 
   it("entities create audit logs", () => {
