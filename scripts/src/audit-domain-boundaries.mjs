@@ -132,9 +132,11 @@ const BASELINE = new Set([
   "communications.ts:support_tickets",
   // (communications → crm_opportunities عُولِج في #2838: مُرِّر عبر عقد CRM القائد
   //  createOpportunityFromInboundComm — لم تعد الاتصالات تكتب الجدول مباشرة.)
-  // transport-pricing (خادم) ينشئ فاتورة ويحسب ضريبة — يحتاج استخراج خدمة مالية
-  // مشتركة (refactor واسع، مادة 15) — قرار نطاق مؤجّل.
-  "transport-pricing.ts:invoices",
+  // (transport-pricing→invoices عُولِج في #2837: النقل (خادم) كان يكتب invoices/
+  //  invoice_lines مباشرةً لإصدار فاتورة خدمة مسوّدة. نُقلت الكتابتان لعقد المالية
+  //  createServiceInvoiceWithLines — لا قيد محاسبي هنا (الفاتورة مسوّدة؛ القيد
+  //  يُرحّل لاحقًا عبر اعتماد المالية القياسي). النقل يحتفظ بالترقيم/التسعير/مراكز
+  //  التكلفة وجداوله الخادمة. لم تعد النقل تكتب جدولَي المالية مباشرة.)
   // transport يعدّل حالة دوام سائق مملوكة للأسطول — متوسط، موثّق.
   "transport-bookings.ts:fleet_drivers",
   "transport-planning.ts:fleet_drivers",
