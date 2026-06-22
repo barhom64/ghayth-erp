@@ -215,8 +215,8 @@ const createTransportSchema = z.object({
   toLocation: z.string(),
   vehicleId: z.coerce.number().optional(),
   driverId: z.coerce.number().optional(),
-  capacity: z.coerce.number().optional(),
-  pilgrimCount: z.coerce.number().optional(),
+  capacity: z.coerce.number().nonnegative("السعة يجب ألا تكون سالبة").optional(),
+  pilgrimCount: z.coerce.number().nonnegative("عدد المعتمرين يجب ألا يكون سالبًا").optional(),
   cost: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
@@ -397,8 +397,8 @@ const patchTransportSchema = z.object({
   toLocation: z.string().optional(),
   vehicleId: z.coerce.number().optional(),
   driverId: z.coerce.number().optional(),
-  capacity: z.coerce.number().optional(),
-  pilgrimCount: z.coerce.number().optional(),
+  capacity: z.coerce.number().nonnegative("السعة يجب ألا تكون سالبة").optional(),
+  pilgrimCount: z.coerce.number().nonnegative("عدد المعتمرين يجب ألا يكون سالبًا").optional(),
   cost: z.coerce.number().optional(),
   notes: z.string().optional(),
 });

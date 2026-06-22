@@ -281,7 +281,7 @@ const createInventoryCountSchema = z.object({
 
 const createCountItemSchema = z.object({
   productId: z.coerce.number({ required_error: "المنتج مطلوب" }).int().positive(),
-  physicalCount: z.coerce.number().optional(),
+  physicalCount: z.coerce.number().nonnegative("الكمية المجرودة يجب ألا تكون سالبة").optional(),
   notes: z.string().optional().nullable(),
 });
 
