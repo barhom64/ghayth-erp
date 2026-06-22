@@ -3546,6 +3546,62 @@ reportsRouter.get(
         molParams,
       );
 
+      // ── 6. القيود اليتيمة بالمصدر (#2246 SLICE — قياس فقط، read-only) ────────
+      //  قيد آلي مُرحَّل بلا مصدر: sourceType/sourceId NULL، غير يدوي، مُطبَّق،
+      //  غير معكوس، غير محذوف. تُستثنى صراحةً أبواب الإقفال/التسوية/المطابقة
+      //  المعروفة (لها مصدرها النظامي ولا تُعدّ يتيمة):
+      //   closing / monthly_closing / opening_balance (إقفال وفتح)
+      //   fx_revaluation / fx_realised / asset_revaluation (إعادة التقييم)
+      //   bank_adjustment (مطابقة بنكية).
+      //  مفلتر بالشركة/الفترة/الفرع بنفس buildScope القائم. company-scoped.
+      const ORPHAN_EXCLUDED_TYPES = [
+        "closing",
+        "monthly_closing",
+        "opening_balance",
+        "fx_revaluation",
+        "fx_realised",
+        "asset_revaluation",
+        "bank_adjustment",
+      ];
+      const { params: orphParams, dateFilter: orphDate } = buildScope("je");
+      const orphBranch = getBranchCondition(scope, branchId, orphParams, "je");
+      orphParams.push(ORPHAN_EXCLUDED_TYPES);
+      const orphExcludeIdx = orphParams.length;
+      const orphanSourceRows = await rawQuery<{
+        journalId: number; ref: string | null; date: string; type: string | null; amount: number;
+      }>(
+        `SELECT je.id AS "journalId", je.ref, COALESCE(je."date"::text, je."createdAt"::text) AS date,
+                je.type AS type,
+                COALESCE((SELECT SUM(jl.debit) FROM journal_lines jl
+                           WHERE jl."journalId" = je.id AND jl."deletedAt" IS NULL), 0)::float8 AS amount
+           FROM journal_entries je
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."isManual" = false
+            AND je."balancesApplied" = true
+            AND je."reversedById" IS NULL
+            AND (je."sourceType" IS NULL OR je."sourceId" IS NULL)
+            AND COALESCE(je.type, '') <> ALL($${orphExcludeIdx}::text[])${orphDate}${orphBranch}
+          ORDER BY je."createdAt" DESC
+          LIMIT 200`,
+        orphParams,
+      );
+      const { params: orphCntParams, dateFilter: orphCntDate } = buildScope("je");
+      const orphCntBranch = getBranchCondition(scope, branchId, orphCntParams, "je");
+      orphCntParams.push(ORPHAN_EXCLUDED_TYPES);
+      const orphCntExcludeIdx = orphCntParams.length;
+      const [orphanCountRow] = await rawQuery<{ total: number }>(
+        `SELECT COUNT(*)::int AS total
+           FROM journal_entries je
+          WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+            AND je."isManual" = false
+            AND je."balancesApplied" = true
+            AND je."reversedById" IS NULL
+            AND (je."sourceType" IS NULL OR je."sourceId" IS NULL)
+            AND COALESCE(je.type, '') <> ALL($${orphCntExcludeIdx}::text[])${orphCntDate}${orphCntBranch}`,
+        orphCntParams,
+      );
+      const orphanSourceTotal = Number(orphanCountRow?.total ?? 0);
+
       // ── الملخص + ترتيب جاهزية الـratchet (الأصغر تسريبًا أولًا) ───────────
       const dimTotalLines = dimensionRows.reduce((s, r) => s + Number(r.totalLines), 0);
       const dimMissingLines = dimensionRows.reduce((s, r) => s + Number(r.missingLines), 0);
@@ -3576,6 +3632,7 @@ reportsRouter.get(
           fallbackTotal,
           manualTotal: Number(manual.total),
           manualBlind: Number(manual.blind),
+          orphanSourceTotal,
           enforcement: "none",
           phase: "measurement",
         },
@@ -3616,6 +3673,13 @@ reportsRouter.get(
           ref: r.ref,
           createdAt: r.createdAt,
           description: r.description,
+        })),
+        orphanSourceEntries: orphanSourceRows.map((r) => ({
+          journalId: Number(r.journalId),
+          ref: r.ref,
+          date: r.date,
+          type: r.type,
+          amount: Number(r.amount),
         })),
         ratchetReadiness,
       }));
