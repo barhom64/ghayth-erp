@@ -294,7 +294,10 @@ class FleetEngineImpl implements DomainEngine {
       guardId: violation.id,
       lines: [
         { accountCode: payableCode, debit: violation.amount, credit: 0, vehicleId: violation.vehicleId },
-        { accountCode: cashCode, debit: 0, credit: violation.amount },
+        // البُعد vehicleId يُنشر على سطر النقد أيضًا حتى تكون تقارير
+        // التدفّق النقدي لكل مركبة كاملة (السطران معًا)؛ ميتاداتا فقط — لا
+        // أثر على المبالغ أو التوازن.
+        { accountCode: cashCode, debit: 0, credit: violation.amount, vehicleId: violation.vehicleId },
       ],
     });
   }

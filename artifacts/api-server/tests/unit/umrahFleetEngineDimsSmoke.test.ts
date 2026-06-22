@@ -110,3 +110,31 @@ describe("fleetEngine.postFuelExpenseGL — both lines carry driverId", () => {
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// ─── fleetEngine.postViolationPaymentGL — CR (cash) line carries vehicleId ──
+// Pre-fix: DR (fines payable) carried vehicleId, CR (cash source) was bare —
+// per-vehicle cash-outflow reports only saw one leg. Dimension is metadata
+// only; debit/credit amounts and balance are unchanged.
+
+describe("fleetEngine.postViolationPaymentGL — both lines carry vehicleId", () => {
+  const fnStart = FLEET.indexOf("async postViolationPaymentGL");
+  const fnBlock = fnStart >= 0
+    ? FLEET.slice(fnStart, fnStart + 1500)
+    : "";
+
+  it("function exists", () => {
+    expect(fnStart).toBeGreaterThan(-1);
+  });
+
+  it("both lines carry vehicleId (silent gap fix on cash CR)", () => {
+    const matches = fnBlock.match(/vehicleId: violation\.vehicleId/g) ?? [];
+    expect(matches.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("stays balanced — exactly one debit and one credit on amount", () => {
+    // Guard against any accidental amount/leg change: the two legs must
+    // remain debit=violation.amount and credit=violation.amount.
+    expect(fnBlock).toContain("debit: violation.amount, credit: 0");
+    expect(fnBlock).toContain("debit: 0, credit: violation.amount");
+  });
+});
