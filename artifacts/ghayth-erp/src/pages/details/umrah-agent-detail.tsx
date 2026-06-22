@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
 import { Edit, Phone, Mail, MapPin, Users, Wallet, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
@@ -97,36 +98,54 @@ function AgentRecentInvoicesCard({ agentId }: { agentId: number }) {
         <CardTitle className="text-sm">آخر الفواتير</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-right text-muted-foreground border-b">
-                <th className="p-2 font-medium">المرجع</th>
-                <th className="p-2 font-medium">النوع</th>
-                <th className="p-2 font-medium">عدد المعتمرين</th>
-                <th className="p-2 font-medium">الإجمالي</th>
-                <th className="p-2 font-medium">الاستحقاق</th>
-                <th className="p-2 font-medium">الحالة</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b last:border-b-0" data-testid={`agent-invoice-row-${r.id}`}>
-                  <td className="p-2 font-mono">{r.ref || `#${r.id}`}</td>
-                  <td className="p-2">{INVOICE_TYPE_LABELS[r.type] || r.type}</td>
-                  <td className="p-2">{r.pilgrimCount ?? 0}</td>
-                  <td className="p-2 font-semibold">{formatCurrency(Number(r.total))}</td>
-                  <td className="p-2 text-muted-foreground">{r.dueDate ? formatDateAr(r.dueDate) : "—"}</td>
-                  <td className="p-2">
-                    <Badge variant="outline" className="text-xs">
-                      {INVOICE_STATUS_LABELS[r.status] || r.status}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<AgentInvoiceRow>
+          className="text-xs"
+          data={rows}
+          pageSize={0}
+          noToolbar
+          columns={[
+            {
+              key: "ref",
+              header: "المرجع",
+              className: "font-mono",
+              render: (r) => r.ref || `#${r.id}`,
+            },
+            {
+              key: "type",
+              header: "النوع",
+              render: (r) => INVOICE_TYPE_LABELS[r.type] || r.type,
+              exportValue: (r) => INVOICE_TYPE_LABELS[r.type] || r.type,
+            },
+            {
+              key: "pilgrimCount",
+              header: "عدد المعتمرين",
+              render: (r) => r.pilgrimCount ?? 0,
+            },
+            {
+              key: "total",
+              header: "الإجمالي",
+              className: "font-semibold",
+              render: (r) => formatCurrency(Number(r.total)),
+              exportValue: (r) => Number(r.total),
+            },
+            {
+              key: "dueDate",
+              header: "الاستحقاق",
+              className: "text-muted-foreground",
+              render: (r) => (r.dueDate ? formatDateAr(r.dueDate) : "—"),
+            },
+            {
+              key: "status",
+              header: "الحالة",
+              render: (r) => (
+                <Badge variant="outline" className="text-xs">
+                  {INVOICE_STATUS_LABELS[r.status] || r.status}
+                </Badge>
+              ),
+              exportValue: (r) => INVOICE_STATUS_LABELS[r.status] || r.status,
+            },
+          ]}
+        />
       </CardContent>
     </Card>
   );

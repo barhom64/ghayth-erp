@@ -7,6 +7,7 @@ import {
 } from "@workspace/entity-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
 import { Users, Plane, Wallet, AlertTriangle, Shield, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
@@ -444,30 +445,31 @@ export default function UmrahGroupDetail() {
         <CardContent>
           {data?.pilgrims?.length ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-right text-muted-foreground border-b">
-                    <th className="p-2 font-medium">الاسم</th>
-                    <th className="p-2 font-medium">الجنسية</th>
-                    <th className="p-2 font-medium">الحالة</th>
-                    <th className="p-2 font-medium">انتهاء التأشيرة</th>
-                    <th className="p-2 font-medium">رحلة دخول/خروج</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.pilgrims.slice(0, 50).map((p) => (
-                    <tr
-                      key={p.id}
-                      className="border-b last:border-b-0 hover:bg-muted/30"
-                      data-testid={`group-pilgrim-row-${p.id}`}
-                    >
-                      <td className="p-2">
-                        <Link href={`/umrah/pilgrims/${p.id}`} className="text-blue-600 hover:underline">
-                          {p.fullName}
-                        </Link>
-                      </td>
-                      <td className="p-2">{p.nationality || "-"}</td>
-                      <td className="p-2">
+              <DataTable<PilgrimRow>
+                className="text-xs"
+                data={data.pilgrims.slice(0, 50)}
+                pageSize={0}
+                noToolbar
+                columns={[
+                  {
+                    key: "fullName",
+                    header: "الاسم",
+                    render: (p) => (
+                      <Link href={`/umrah/pilgrims/${p.id}`} className="text-blue-600 hover:underline">
+                        {p.fullName}
+                      </Link>
+                    ),
+                  },
+                  {
+                    key: "nationality",
+                    header: "الجنسية",
+                    render: (p) => p.nationality || "-",
+                  },
+                  {
+                    key: "status",
+                    header: "الحالة",
+                    render: (p) => (
+                      <>
                         <Badge variant="outline" className="text-xs">
                           {PILGRIM_STATUS_LABELS[p.status] || p.status}
                         </Badge>
@@ -476,17 +478,25 @@ export default function UmrahGroupDetail() {
                             مستثنى
                           </Badge>
                         )}
-                      </td>
-                      <td className="p-2 text-muted-foreground">
-                        {p.visaExpiry ? formatDateAr(p.visaExpiry) : "-"}
-                      </td>
-                      <td className="p-2 font-mono text-xs">
-                        {p.entryFlight || "-"} / {p.exitFlight || "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </>
+                    ),
+                    exportValue: (p) => PILGRIM_STATUS_LABELS[p.status] || p.status,
+                  },
+                  {
+                    key: "visaExpiry",
+                    header: "انتهاء التأشيرة",
+                    className: "text-muted-foreground",
+                    render: (p) => (p.visaExpiry ? formatDateAr(p.visaExpiry) : "-"),
+                  },
+                  {
+                    key: "entryFlight",
+                    header: "رحلة دخول/خروج",
+                    sortable: false,
+                    className: "font-mono text-xs",
+                    render: (p) => `${p.entryFlight || "-"} / ${p.exitFlight || "-"}`,
+                  },
+                ]}
+              />
               {data.pilgrims.length > 50 && (
                 <p className="text-xs text-muted-foreground text-center pt-2">
                   و {data.pilgrims.length - 50} معتمر آخر — استخدم رابط القائمة أعلاه
