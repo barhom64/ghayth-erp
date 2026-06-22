@@ -148,6 +148,43 @@ const ROUTE_SEGMENT_COLUMNS: DataTableColumn<RouteSegment>[] = [
   },
 ];
 
+type DispatchOrder = ConfirmationData["dispatchOrders"][number];
+
+// Assigned vehicles/drivers list columns. Rendering preserved EXACTLY from the
+// prior raw <table>: plate (mono), driver, driver phone (mono/LTR), start time.
+// Non-sortable — fixed roster on a print sheet.
+const DISPATCH_COLUMNS: DataTableColumn<DispatchOrder>[] = [
+  {
+    key: "vehiclePlate",
+    header: "المركبة",
+    sortable: false,
+    className: "p-1 border font-mono",
+    render: (d) => <>{d.vehiclePlate || "—"}</>,
+  },
+  {
+    key: "driverName",
+    header: "السائق",
+    sortable: false,
+    className: "p-1 border",
+    render: (d) => <>{d.driverName || "—"}</>,
+  },
+  {
+    key: "driverPhone",
+    header: "هاتف السائق",
+    sortable: false,
+    ltr: true,
+    className: "p-1 border font-mono",
+    render: (d) => <>{d.driverPhone || "—"}</>,
+  },
+  {
+    key: "scheduledStartAt",
+    header: "البداية",
+    sortable: false,
+    className: "p-1 border text-xs",
+    render: (d) => <>{fmtDateTime(d.scheduledStartAt)}</>,
+  },
+];
+
 export default function TransportBookingConfirmation() {
   const [, params] = useRoute("/fleet/transport/bookings/:id/confirmation");
   const id = params?.id;
@@ -258,26 +295,15 @@ export default function TransportBookingConfirmation() {
           {c.dispatchOrders.length > 0 && (
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">المركبات والسائقون المُسنَدون</div>
-              <div className="overflow-x-auto"><table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr className="bg-surface-subtle">
-                    <th className="text-right p-1 border">المركبة</th>
-                    <th className="text-right p-1 border">السائق</th>
-                    <th className="text-right p-1 border">هاتف السائق</th>
-                    <th className="text-right p-1 border">البداية</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {c.dispatchOrders.map((d) => (
-                    <tr key={d.id}>
-                      <td className="p-1 border font-mono">{d.vehiclePlate || "—"}</td>
-                      <td className="p-1 border">{d.driverName || "—"}</td>
-                      <td className="p-1 border font-mono" dir="ltr">{d.driverPhone || "—"}</td>
-                      <td className="p-1 border text-xs">{fmtDateTime(d.scheduledStartAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+              <div className="overflow-x-auto text-sm">
+                <DataTable<DispatchOrder>
+                  columns={DISPATCH_COLUMNS}
+                  data={c.dispatchOrders}
+                  rowKey={(d) => d.id}
+                  noToolbar
+                  pageSize={0}
+                />
+              </div>
             </div>
           )}
 
