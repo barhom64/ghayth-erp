@@ -396,7 +396,9 @@ export default function ExpensesCreate() {
   // multi-line workflow without a second form.
   const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
-      accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
+      // بند المصروفات اختياري: إن تُرك فارغًا يُوجّهه المحرّك المالي تلقائيًا
+      // (قاعدة توجيه → «مصروفات عمومية أخرى» 5399 القابلة للترحيل). غير المحاسب
+      // لا يُجبَر على اختيار حساب — النظام يَحضُر لا يُحضَر له.
       amount: form.amount ? null : "المبلغ مطلوب",
       // الفرع ومركز التكلفة أبعاد اختيارية في الخلفية (.optional) — يُشتقّان من
       // سياق الدخول والربط؛ لا يُفرضان على المستخدم (النظام يَحضُر لا يُحضَر له).
@@ -656,10 +658,13 @@ export default function ExpensesCreate() {
                 </div>
               </FormFieldWrapper>
             ) : (
-              <FormFieldWrapper label="بند المصروفات" required>
+              <FormFieldWrapper label="بند المصروفات (اختياري — توجيه تلقائي)">
                 <Autocomplete options={expenseOptions} value={form.accountCode}
                   onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
-                  placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
+                  placeholder="اتركه فارغًا للتوجيه التلقائي…" loading={accountsLoading} />
+                <p className="text-xs text-muted-foreground mt-1">
+                  إن تركته فارغًا، يوجّهه النظام تلقائيًا حسب نوع المصروف (أو «مصروفات عمومية أخرى»).
+                </p>
               </FormFieldWrapper>
             )}
             <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">
