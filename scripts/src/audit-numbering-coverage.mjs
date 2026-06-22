@@ -72,6 +72,8 @@ const EXECUTIVE_TABLES = new Set([
   "hr_employee_loans",
   "hr_overtime_requests",
   "hr_exit_requests",
+  "vendor_advances",            // ref — AP mirror of customer_advances (#1141)
+  "vendor_credit_memos",        // ref — AP twin of credit_memos (#1141)
 ]);
 
 // Files we don't expect to issue numbers — admin / read-only / engine
