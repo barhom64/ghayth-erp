@@ -2794,7 +2794,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     const periodEnd = toDateISO(new Date(y, m, 0));
 
     const openInvoices = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, currency, "exchangeRate", total, "paidAmount"
+      `SELECT id, ref, currency, "exchangeRate", total, "paidAmount", "clientId"
        FROM invoices
        WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR'
          AND status NOT IN ('paid','cancelled') AND "deletedAt" IS NULL
@@ -2802,7 +2802,7 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       [scope.companyId, periodEnd]
     );
     const openPOs = await rawQuery<Record<string, unknown>>(
-      `SELECT id, ref, currency, "exchangeRate", "totalAmount"
+      `SELECT id, ref, currency, "exchangeRate", "totalAmount", "supplierId"
        FROM purchase_orders
        WHERE "companyId"=$1 AND "deletedAt" IS NULL AND currency IS NOT NULL AND currency<>'SAR'
          AND status NOT IN ('paid','cancelled','draft')
@@ -2827,69 +2827,45 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       for (const cur of currencies) if (!(cur in rateMap)) rateMap[cur] = 0;
     }
 
-    let arDiff = 0; // net AR adjustment (DR if positive → asset up)
-    let apDiff = 0; // net AP adjustment (CR if positive → liability up)
-    const details: any[] = [];
-
-    for (const inv of openInvoices) {
-      const closing = rateMap[inv.currency as string] || 0;
-      if (!closing) continue;
-      const booked = Number(inv.exchangeRate) || 1;
-      const outstandingFc = Number(inv.total) - Number(inv.paidAmount ?? 0);
-      const diff = roundTo2(outstandingFc * (closing - booked));
-      if (Math.abs(diff) < 0.01) continue;
-      arDiff += diff;
-      details.push({ kind: "AR", refId: inv.id, refNumber: inv.ref, currency: inv.currency, diff });
-    }
-    for (const po of openPOs) {
-      const closing = rateMap[po.currency as string] || 0;
-      if (!closing) continue;
-      const booked = Number(po.exchangeRate) || 1;
-      const outstandingFc = Number(po.totalAmount);
-      const diff = roundTo2(outstandingFc * (closing - booked));
-      if (Math.abs(diff) < 0.01) continue;
-      apDiff += diff;
-      details.push({ kind: "AP", refId: po.id, refNumber: po.ref, currency: po.currency, diff });
-    }
-
-    arDiff = roundTo2(arDiff);
-    apDiff = roundTo2(apDiff);
-
-    if (arDiff === 0 && apDiff === 0) {
-      throw new ValidationError("لا توجد فروق إعادة تقييم لهذه الفترة");
-    }
-
-    // Account codes (configurable via accounting_mappings)
+    // Account codes (configurable via accounting_mappings). 1131/2111 إلزاميان
+    // للبُعد (عقد البُعد في lib/gl/ledgerTruth.ts): سطر AR على 1131 يجب أن يحمل
+    // clientId وسطر AP على 2111 يجب أن يحمل vendorId وإلا يرفض الترحيل.
     const { financialEngine } = await import("../lib/engines/index.js");
     const arCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ar", "debit", "1131");
     const apCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_ap", "credit", "2111");
     const gainCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_gain", "credit", "4910");
     const lossCode = await financialEngine.resolveAccountCode(scope.companyId, "fx_revaluation_loss", "debit", "5910");
 
-    // Build JE lines
-    const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [];
-    // AR adjustment
-    if (arDiff > 0) {
-      lines.push({ accountCode: arCode, debit: arDiff, credit: 0, description: `إعادة تقييم ذمم مدينة — ${period}` });
-      lines.push({ accountCode: gainCode, debit: 0, credit: arDiff, description: `ربح صرف غير محقق — AR` });
-    } else if (arDiff < 0) {
-      const v = -arDiff;
-      lines.push({ accountCode: lossCode, debit: v, credit: 0, description: `خسارة صرف غير محققة — AR` });
-      lines.push({ accountCode: arCode, debit: 0, credit: v, description: `إعادة تقييم ذمم مدينة — ${period}` });
-    }
-    // AP adjustment
-    if (apDiff > 0) {
-      // Liability up → DR loss / CR AP
-      lines.push({ accountCode: lossCode, debit: apDiff, credit: 0, description: `خسارة صرف غير محققة — AP` });
-      lines.push({ accountCode: apCode, debit: 0, credit: apDiff, description: `إعادة تقييم ذمم دائنة — ${period}` });
-    } else if (apDiff < 0) {
-      const v = -apDiff;
-      lines.push({ accountCode: apCode, debit: v, credit: 0, description: `إعادة تقييم ذمم دائنة — ${period}` });
-      lines.push({ accountCode: gainCode, debit: 0, credit: v, description: `ربح صرف غير محقق — AP` });
-    }
+    // بناء سطور القيد مفصّلة لكل كيان (الخيار أ): سطر AR لكل عميل يحمل clientId،
+    // سطر AP لكل مورد يحمل vendorId، + سطرَي مكسب/خسارة إجماليين بلا بُعد.
+    // التفصيل لا يغيّر الإجمالي ولا التوازن — يوزّع طرف AR/AP على الكيانات فقط.
+    // فاتورة بلا clientId / أمر شراء بلا supplierId → تُتخطّى وتُسجَّل في skipped.
+    const { buildPeriodRevalLines } = await import("../lib/fx/build-period-reval-lines.js");
+    const built = buildPeriodRevalLines({
+      invoices: openInvoices as any,
+      purchaseOrders: openPOs as any,
+      rateMap,
+      accounts: { arCode, apCode, gainCode, lossCode },
+      period,
+    });
+    const { lines, arDiff, apDiff, totalGain, totalLoss, details, skipped } = built;
 
-    const totalGain = lines.filter(l => l.accountCode === gainCode).reduce((s, l) => s + l.credit, 0);
-    const totalLoss = lines.filter(l => l.accountCode === lossCode).reduce((s, l) => s + l.debit, 0);
+    if (lines.length === 0) {
+      // لا سطور قابلة للترحيل: إمّا لا فروق، أو كل البنود متخطّاة لغياب البُعد.
+      if (skipped.length > 0) {
+        throw new ValidationError(
+          "تعذّر تسجيل إعادة التقييم — كل البنود ذات الفروق بلا بُعد مطلوب (عميل/مورد). اربط الكيانات أولاً.",
+          { field: "dimension", meta: { skipped } as any },
+        );
+      }
+      throw new ValidationError("لا توجد فروق إعادة تقييم لهذه الفترة");
+    }
+    if (skipped.length > 0) {
+      logger.warn(
+        { companyId: scope.companyId, period, skipped },
+        "[fx-revaluation] بنود متخطّاة لغياب بُعد العميل/المورد — لم تُدرَج في القيد",
+      );
+    }
 
     // Atomicity: FX revaluation JE + per-currency fx_revaluations
     // audit rows commit or roll back together. Earlier shape posted
@@ -2954,6 +2930,9 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
         revaluationIds: revalIds,
         currencies,
         lineCount: details.length,
+        // بنود متخطّاة لغياب البُعد (عميل/مورد) — أثر قابل للتتبع، لا إسقاط صامت.
+        skippedCount: skipped.length,
+        skipped,
       },
     }).catch((e) => logger.error(e, "finance-algorithms fx-revaluation post audit failed"));
     res.status(201).json({
@@ -2963,6 +2942,8 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
       arDiff,
       apDiff,
       lineCount: details.length,
+      skippedCount: skipped.length,
+      skipped,
       message: `تم تسجيل إعادة تقييم العملات لفترة ${period}`,
     });
   } catch (err) {
