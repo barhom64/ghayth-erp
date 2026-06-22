@@ -28,9 +28,9 @@ const sendCommunicationSchema = z.object({
   channel: z.string({ required_error: "قناة المراسلة مطلوبة" }).min(1, "قناة المراسلة مطلوبة"),
   toNumber: z.string().optional(),
   toEmail: z.string().optional(),
-  body: z.string({ required_error: "محتوى الرسالة مطلوب" }).min(1, "محتوى الرسالة مطلوب"),
+  body: z.string({ required_error: "محتوى الرسالة مطلوب" }).min(1, "محتوى الرسالة مطلوب").max(20000, "المحتوى طويل جدًا"),
   fromNumber: z.string().optional(),
-  subject: z.string().optional(),
+  subject: z.string().max(1000, "الموضوع طويل جدًا").optional(),
   relatedType: z.string().optional(),
   relatedId: z.coerce.number().optional(),
   attachments: z.array(z.any()).optional(),
@@ -50,9 +50,9 @@ const pushSubscribeSchema = z.object({
 });
 
 const updateLogSchema = z.object({
-  body: z.string().optional(),
-  content: z.string().optional(),
-  subject: z.string().optional(),
+  body: z.string().max(20000, "المحتوى طويل جدًا").optional(),
+  content: z.string().max(20000, "المحتوى طويل جدًا").optional(),
+  subject: z.string().max(1000, "الموضوع طويل جدًا").optional(),
   direction: z.string().optional(),
   status: z.string().optional(),
 });
