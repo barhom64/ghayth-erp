@@ -275,7 +275,7 @@ const EMIT_GAP_ALLOWLIST: AllowEntry[] = [
   { file: "src/routes/operationsCenter.ts", action: "daily_close.executed", missing: ["id"], cat: "A" },
   { file: "src/routes/requests.ts", action: "legal.case.created", missing: ["caseId","caseType","hearingDate"], cat: "B" },
   { file: "src/routes/settings.ts", action: "company.created", missing: ["name"], cat: "B" },
-  { file: "src/routes/umrah-entities.ts", action: "umrah.commission.calculated", missing: ["agentId","amount","commissionId","period"], cat: "B" },
+  { file: "src/routes/umrah-commission.ts", action: "umrah.commission.calculated", missing: ["agentId","amount","commissionId","period"], cat: "B" },
   { file: "src/routes/umrah-entities.ts", action: "umrah.invoice.generated", missing: ["invoiceId","pilgrimId"], cat: "B" },
   { file: "src/routes/umrah-entities.ts", action: "umrah.payment.received", missing: ["amount","invoiceId","method","paymentId"], cat: "B" },
   { file: "src/routes/umrah-entities.ts", action: "umrah.sales_invoice.created", missing: ["invoiceId"], cat: "B" },

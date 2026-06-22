@@ -45,7 +45,6 @@ routes/recruitment.ts:job_postings
 routes/settings.ts:approval_chains
 routes/storage.ts:documents
 routes/training.ts:training_enrollments
-routes/umrah-entities.ts:employee_commission_tiers
 routes/umrah-entities.ts:umrah_agents
 routes/umrah-entities.ts:umrah_groups
 routes/umrah-entities.ts:umrah_import_changes
@@ -278,6 +277,13 @@ routes/transport-billing-candidates.ts:fleet_vehicles
 routes/transport-bookings.ts:fleet_drivers
 routes/transport-bookings.ts:fleet_vehicles
 routes/transport-pricing.ts:fleet_vehicles
+# employee_commission_tiers: GET /commission-plans uses a pre-aggregation CTE that
+# already has WHERE "deletedAt" IS NULL inside the CTE body. The ghost-row scanner
+# sees the compound statement (CTE + outer SELECT) and can't recognise a CTE-internal
+# predicate as filtering the reference — same false-positive class as
+# finance-algorithms.ts:cip_costs. The read is correctly filtered; this is a scanner
+# limitation, not a real ghost-row leak.
+routes/umrah-commission.ts:employee_commission_tiers
 routes/umrah-entities.ts:official_letters
 routes/umrah.ts:employees
 routes/umrah.ts:purchase_orders
