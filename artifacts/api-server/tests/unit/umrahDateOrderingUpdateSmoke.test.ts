@@ -12,7 +12,8 @@ import { join } from "node:path";
 
 const API_SRC = join(import.meta.dirname!, "../../src");
 const UMRAH = readFileSync(join(API_SRC, "routes/umrah.ts"), "utf8");
-const UMRAH_ENTITIES = readFileSync(join(API_SRC, "routes/umrah-entities.ts"), "utf8");
+// U-07 Phase 7 — agent pricing CRUD carved into a dedicated sub-router.
+const UMRAH_PRICING = readFileSync(join(API_SRC, "routes/umrah-pricing.ts"), "utf8");
 
 describe("umrah seasons — PATCH re-validates start/end ordering (F-class)", () => {
   it("create schema still enforces endDate >= startDate", () => {
@@ -33,20 +34,20 @@ describe("umrah seasons — PATCH re-validates start/end ordering (F-class)", ()
 
 describe("umrah agent pricing — create + PATCH enforce validFrom <= validTo (F-class)", () => {
   it("create schema now refines validTo >= validFrom", () => {
-    expect(UMRAH_ENTITIES).toMatch(/\.refine\(\(d\) => d\.validTo >= d\.validFrom/);
+    expect(UMRAH_PRICING).toMatch(/\.refine\(\(d\) => d\.validTo >= d\.validFrom/);
   });
 
   it("PATCH re-validates ordering on the effective (merged) values before the overlap check", () => {
     // vf/vt are the merged effective values already loaded for the overlap check…
-    expect(UMRAH_ENTITIES).toMatch(/const vf = b\.validFrom \|\| current\.validFrom/);
-    expect(UMRAH_ENTITIES).toMatch(/const vt = b\.validTo \|\| current\.validTo/);
+    expect(UMRAH_PRICING).toMatch(/const vf = b\.validFrom \|\| current\.validFrom/);
+    expect(UMRAH_PRICING).toMatch(/const vt = b\.validTo \|\| current\.validTo/);
     // …and the inverted-range guard sits before the PATCH overlap query (which
     // assumes ordering). The overlap message also appears in the POST handler, so
     // assert there is an occurrence AFTER the guard (the PATCH one), not globally.
-    const guardIdx = UMRAH_ENTITIES.search(/new Date\(vt\)\.getTime\(\) < new Date\(vf\)\.getTime\(\)/);
+    const guardIdx = UMRAH_PRICING.search(/new Date\(vt\)\.getTime\(\) < new Date\(vf\)\.getTime\(\)/);
     expect(guardIdx).toBeGreaterThan(-1);
-    const overlapAfterGuard = UMRAH_ENTITIES.indexOf("يوجد تداخل في فترات الأسعار", guardIdx);
+    const overlapAfterGuard = UMRAH_PRICING.indexOf("يوجد تداخل في فترات الأسعار", guardIdx);
     expect(overlapAfterGuard).toBeGreaterThan(guardIdx);
-    expect(UMRAH_ENTITIES).toMatch(/تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء/);
+    expect(UMRAH_PRICING).toMatch(/تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء/);
   });
 });
