@@ -10,10 +10,8 @@
 | الملف:السطر | الكود | النوع | الغرض | الورقة الصحيحة المقترحة (تحقّق) |
 |---|---|---|---|---|
 | ~~storeEngine (5 مواضع)~~ | — | — | — | **✅ أُصلح (#store-postable): 1111/4111/2131/5110/1151**
-| finance-hardening.ts:139 | 1200 | أب | intercompany AR | **1131** عملاء محليون (أو ورقة بينية) |
-| finance-hardening.ts:140 | 2100 | أب | intercompany AP | **2111** موردون محليون |
-| finance-hardening.ts:141 | 4000 | أب | intercompany revenue | **4130** إيرادات الخدمات |
-| finance-custodies.ts:636/843/1025 | 1400 | غير موجود | custody_account | ورقة عهدة (تحقّق 1113/114x) |
+| ~~finance-hardening (3: بينية)~~ | — | — | — | **✅ أُصلح: 1131/2111/4130** |
+| ~~finance-custodies~~ | 1400 | — | custody | **✅ أُصلح: 1113 العهد النقدية** |
 | eventListeners.ts:1803 | 5200 | أب (رواتب!) | commission_expense | ورقة عمولات (لا 5200 الرواتب) |
 | eventListeners.ts:1934 · umrahCommissionEngine.ts:204 | 6200 | غير موجود | عمولة عمرة | ورقة مصروف عمولة حقيقية |
 | finance-algorithms.ts:40/46 | 1120 | أب | bank | **1124** بنوك (أو ورقة بنك رئيسي) |
