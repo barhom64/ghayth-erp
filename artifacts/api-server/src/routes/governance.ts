@@ -66,7 +66,7 @@ const updateRiskSchema = z.object({
   mitigationPlan: z.string().optional().nullable(),
 });
 
-const createAuditSchema = z.object({
+export const createAuditSchema = z.object({
   title: z.string().min(1, "عنوان المراجعة مطلوب"),
   scope: z.string().optional().nullable(),
   status: z.string().optional(),
@@ -74,7 +74,14 @@ const createAuditSchema = z.object({
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
   findings: z.string().optional().nullable(),
-});
+}).refine(
+  (d) => {
+    const s = d.startDate ? Date.parse(d.startDate) : NaN;
+    const e = d.endDate ? Date.parse(d.endDate) : NaN;
+    return Number.isNaN(s) || Number.isNaN(e) || e >= s;
+  },
+  { path: ["endDate"], message: "تاريخ نهاية المراجعة يجب ألا يسبق تاريخ بدايتها" },
+);
 
 const updateAuditSchema = z.object({
   title: z.string().optional(),
