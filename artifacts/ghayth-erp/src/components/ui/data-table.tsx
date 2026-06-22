@@ -67,6 +67,24 @@ export interface DataTableColumn<T> {
   ltr?: boolean;
   /** Extra class name for the cells. */
   className?: string;
+  /**
+   * Per-CELL class name, computed from the row. Merged after `className`.
+   * Use for value-dependent cell styling that a static `className` can't
+   * express — e.g. a budget heatmap where each cell's background encodes its
+   * own ratio, or a conditional danger/success cell tint. Applied to the body
+   * cell (and the mobile value span); never to the header.
+   */
+  cellClassName?: (row: T, index: number) => string | undefined;
+  /**
+   * Per-COLUMN total cell, rendered in a column-aligned footer row at the
+   * bottom of the table (over all filtered+sorted rows). When ANY column sets
+   * `footer`, the table renders one total row with a cell under each column —
+   * the canonical, column-aligned alternative to the single-`colSpan`
+   * `renderGrandTotal`. Use for matrix / financial tables whose totals must sit
+   * directly under their columns. Columns without `footer` render an empty
+   * total cell.
+   */
+  footer?: (rows: T[]) => ReactNode;
   /** Hide the column entirely — used for feature gating without re-declaring. */
   hidden?: boolean;
   /** Value used when exporting selected rows to CSV. Defaults to `row[key]`.
@@ -458,6 +476,27 @@ export function DataTable<T>({
 
   const colCount = visibleColumns.length + (selectable ? 1 : 0);
 
+  // Column-aligned footer total row — rendered when ANY column declares a
+  // `footer`. Each column gets its own total cell under its own header (unlike
+  // `renderGrandTotal`, which spans all columns in one cell). Computed over the
+  // full filtered+sorted set, so it reflects the user's current filter/sort.
+  const hasFooter = visibleColumns.some((c) => c.footer);
+  const footerRow =
+    hasFooter && sortedData && sortedData.length > 0 ? (
+      <TableRow className="border-t-4 bg-muted font-bold">
+        {selectable && <TableCell className="w-[44px]" />}
+        {visibleColumns.map((col) => (
+          <TableCell
+            key={col.key}
+            className={cn(alignClass(col.align), col.className)}
+            dir={col.ltr ? "ltr" : undefined}
+          >
+            {col.footer ? col.footer(sortedData) : null}
+          </TableCell>
+        ))}
+      </TableRow>
+    ) : null;
+
   // Mobile (<768px): render the common (non-grouped) happy-path list as
   // stacked label:value cards instead of a horizontally-scrolling table, so
   // every DataTable-based page (~307 of them) is genuinely phone-usable. The
@@ -647,7 +686,7 @@ export function DataTable<T>({
                       return (
                         <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
                           <span className="text-muted-foreground shrink-0">{col.header}</span>
-                          <span className={cn("min-w-0 break-words text-end", col.className)} dir={col.ltr ? "ltr" : undefined}>
+                          <span className={cn("min-w-0 break-words text-end", col.className, col.cellClassName?.(row, rowIndex))} dir={col.ltr ? "ltr" : undefined}>
                             {content}
                           </span>
                         </div>
@@ -752,7 +791,7 @@ export function DataTable<T>({
                                   {visibleColumns.map((col) => {
                                     const content = col.render ? col.render(row, rowIndex) : ((row as any)[col.key] ?? "-");
                                     return (
-                                      <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                                      <TableCell key={col.key} className={cn(alignClass(col.align), col.className, col.cellClassName?.(row, rowIndex))} dir={col.ltr ? "ltr" : undefined}>
                                         {content}
                                       </TableCell>
                                     );
@@ -782,6 +821,7 @@ export function DataTable<T>({
                           </TableCell>
                         </TableRow>
                       )}
+                      {footerRow}
                     </>
                   );
                 })()
@@ -808,7 +848,7 @@ export function DataTable<T>({
                             ? col.render(row, rowIndex)
                             : ((row as any)[col.key] ?? "-");
                           return (
-                            <TableCell key={col.key} className={cn(alignClass(col.align), col.className)} dir={col.ltr ? "ltr" : undefined}>
+                            <TableCell key={col.key} className={cn(alignClass(col.align), col.className, col.cellClassName?.(row, rowIndex))} dir={col.ltr ? "ltr" : undefined}>
                               {content}
                             </TableCell>
                           );
@@ -829,6 +869,7 @@ export function DataTable<T>({
                     </TableCell>
                   </TableRow>
                 )}
+                {!groupBy && footerRow}
           </DataTableWrapper>
         </Table>
         )}
