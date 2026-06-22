@@ -84,19 +84,25 @@ describe("#1733 Pricing — route surface", () => {
     expect(block).toMatch(/finance\.transport_billing\.batch\.ready/);
   });
 
-  it("invoice-batch endpoint creates a real draft invoice + lines + links (Step-2)", () => {
+  it("invoice-batch endpoint creates a real draft invoice via finance contract + flips lines + links (Step-2)", () => {
     const block = PRICING_ROUTE.match(
       /\/transport\/invoice-batches[\s\S]+?Build invoice batch error:/,
     )?.[0]!;
     // Real invoice document, numbered via the central authority with the same
     // scheme as finance POST /invoices — keeps audit:numbering-coverage in-file.
-    expect(block).toContain("INSERT INTO invoices");
+    // invoices/invoice_lines are FINANCE-owned: transport no longer INSERTs them
+    // directly — it calls the finance contract createServiceInvoiceWithLines
+    // within its own transaction (#2837 boundary fix).
+    expect(block).toMatch(/await import\("\.\/finance-invoices\.js"\)/);
+    expect(block).toContain("createServiceInvoiceWithLines");
     expect(block).toMatch(/issueNumber\(/);
     expect(block).toContain('entityTable: "invoices"');
     expect(block).toContain('expectedTiming: "on_draft"');
     // Revenue routed per line by service type → 4151/4152/4153.
     expect(block).toContain("resolveTransportRevenueAccount");
-    expect(block).toContain("INSERT INTO invoice_lines");
+    // transport must NOT write the finance-owned tables directly anymore.
+    expect(block).not.toContain("INSERT INTO invoices");
+    expect(block).not.toContain("INSERT INTO invoice_lines");
     // The deferred B#1 flip now happens with the REAL invoiceId + the junction.
     expect(block).toMatch(/"billingStatus" = 'invoiced'/);
     expect(block).toContain('"invoiceId"');
