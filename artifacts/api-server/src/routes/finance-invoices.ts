@@ -9,7 +9,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { Router } from "express";
-import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
+import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { logger } from "../lib/logger.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnership } from "../middlewares/contextualRbac.js";
@@ -249,6 +249,93 @@ const dunningSendSchema = z.object({
   invoiceIds: z.array(z.coerce.number()).min(1, "invoiceIds مطلوبة (قائمة معرفات الفواتير)"),
   sentVia: z.string().optional(),
 });
+
+// ── عقد المالية: إنشاء فاتورة خدمة مسوّدة + سطورها ─────────────────────────
+// المالية تملك جدولَي `invoices` و`invoice_lines`. المسارات الخادمة (النقل…)
+// التي تُسعّر بنودها وتحتاج إصدار فاتورة لا تكتب الجدولين مباشرةً — تستدعي هذا
+// العقد عبر import ديناميكي **ضمن معاملتها** (rawExecute ينضمّ لـtxStore الذي
+// يربطه withTransaction، فيبقى الإدراج ذرّيًا مع كتابات المسار الخادم).
+//
+// العقد يُرسّخ ثوابت الفاتورة المسوّدة المملوكة للمالية (لا يقرّرها المستدعي):
+// status='draft' وpaidAmount=0 — كل فاتورة تنشأ مسوّدة ثم يعتمدها المحاسب
+// فيُرحّل القيد عبر مسار الاعتماد القياسي (لا قيد محاسبي هنا). وقيم فاتورة
+// المبيعات القياسية (ZATCA): isTaxLinked=true، invoiceTypeCode='388' (فاتورة
+// ضريبية)، taxCategoryCode='S' (نسبة قياسية)، taxInclusive=false، بلا خصم.
+//
+// المستدعي يبقى مالكًا لكل ما عداه: الترقيم، تحليل الحسابات/الضريبة، مراكز
+// التكلفة، جداوله الخادمة (روابط/حالة فوترة). يستقبل invoiceId + معرّفات
+// السطور بالترتيب نفسه ليكمل ربطه.
+export interface ServiceInvoiceLineInput {
+  description: string;
+  quantity: string;
+  unitPrice: string | null;
+  lineTotal: number;
+  vatAmount: number;
+  lineGross: number;
+  accountCode: string;
+  costCenterId: number | null;
+  vehicleId: number | null;
+  driverId: number | null;
+  taxCode: string | null;
+}
+
+export async function createServiceInvoiceWithLines(params: {
+  companyId: number;
+  branchId: number | null;
+  clientId: number;
+  ref: string;
+  description: string;
+  subtotal: number;
+  vatRate: number;
+  vatAmount: number;
+  total: number;
+  dueDate: string | null;
+  createdBy: number;
+  notes: string | null;
+  taxCode: string | null;
+  lines: ServiceInvoiceLineInput[];
+}): Promise<{ invoiceId: number; lineIds: number[] }> {
+  const inv = await rawExecute(
+    `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
+            subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
+            "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
+            "taxCode","taxInclusive","discountAmount","discountPercent")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,
+            true,'388','S',NULL,NULL,$13,false,0,0)
+     RETURNING id`,
+    [
+      params.companyId, params.branchId ?? null, params.clientId, params.ref, params.description,
+      params.subtotal, params.vatRate, params.vatAmount, params.total, params.dueDate ?? null,
+      params.createdBy, params.notes ?? null, params.taxCode ?? null,
+    ],
+  );
+  const invoiceId = assertInsert(inv.insertId, "invoices");
+
+  const lineIds: number[] = [];
+  for (const l of params.lines) {
+    const lineRes = await rawExecute(
+      `INSERT INTO invoice_lines (
+         "invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross",
+         "accountId","accountCode","costCenterId","activityType",
+         "projectId","vehicleId","propertyId","unitId","assetId",
+         "employeeId","driverId","contractId","umrahSeasonId","umrahAgentId",
+         "productId","taxCode","taxInclusive","allocationRuleId","allocationStatus",
+         "dimensionJson","manualOverrideReason"
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NULL,$8,$9,NULL,
+               NULL,$10,NULL,NULL,NULL,NULL,$11,NULL,NULL,NULL,
+               NULL,$12,false,NULL,'resolved',NULL,NULL)
+       RETURNING id`,
+      [
+        invoiceId, l.description, l.quantity, l.unitPrice, l.lineTotal, l.vatAmount, l.lineGross,
+        l.accountCode, l.costCenterId, l.vehicleId, l.driverId, l.taxCode,
+      ],
+    );
+    lineIds.push(assertInsert(lineRes.insertId, "invoice_lines"));
+  }
+
+  return { invoiceId, lineIds };
+}
 
 export const invoicesRouter = Router();
 invoicesRouter.use(authMiddleware);
