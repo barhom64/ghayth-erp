@@ -136,9 +136,9 @@ const createIntercompanySchema = z.object({
   amount: z.coerce.number().positive("مبلغ التحويل يجب أن يكون موجبًا"),
   description: z.string().optional(),
   transactionDate: z.string().optional(),
-  arAccountCode: z.string().default("1200"),
-  apAccountCode: z.string().default("2100"),
-  revenueAccountCode: z.string().default("4000"),
+  arAccountCode: z.string().default("1131"),
+  apAccountCode: z.string().default("2111"),
+  revenueAccountCode: z.string().default("4130"),
   expenseAccountCode: z.string().default("5399"),
 });
 
