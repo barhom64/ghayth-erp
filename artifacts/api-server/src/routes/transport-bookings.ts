@@ -271,7 +271,7 @@ const bookingLineSchema = z.object({
 // just append legs and the server auto-numbers them.
 const nestedBookingLineSchema = bookingLineSchema;
 
-const dispatchOrderSchema = z.object({
+export const dispatchOrderSchema = z.object({
   bookingLineId: z.coerce.number().int().positive(),
   vehicleId: z.coerce.number().int().positive(),
   driverId: z.coerce.number().int().positive(),
@@ -282,7 +282,16 @@ const dispatchOrderSchema = z.object({
   // Without this, both checks reject; with it, the conflict is recorded
   // in the audit log and the order is created anyway.
   overrideReason: z.string().min(1).max(500).optional(),
-});
+}).refine(
+  (d) => {
+    const s = Date.parse(d.scheduledStartAt);
+    const e = Date.parse(d.scheduledEndAt);
+    // skip if either is unparseable (other validation handles format);
+    // tstzrange() silently inverts a reversed window, so block it here.
+    return Number.isNaN(s) || Number.isNaN(e) || e >= s;
+  },
+  { path: ["scheduledEndAt"], message: "وقت نهاية الجدولة يجب ألا يسبق وقت بدايتها" },
+);
 
 const dispatchOrderActionSchema = z.object({
   action: z.enum(["notify", "accept", "decline", "start", "complete", "close", "cancel"]),
