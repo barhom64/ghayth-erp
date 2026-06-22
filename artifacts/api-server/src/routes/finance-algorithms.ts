@@ -37,13 +37,13 @@ const bankReconciliationRowSchema = z.object({
 
 const bankImportSchema = z.object({
   rows: z.array(bankReconciliationRowSchema).min(1),
-  accountCode: z.string().default("1120"),
+  accountCode: z.string().default("1124"),
   statementDate: z.string().optional(),
 });
 
 const bankAutoMatchSchema = z.object({
   batchId: z.string().min(1),
-  accountCode: z.string().default("1120"),
+  accountCode: z.string().default("1124"),
   toleranceDays: z.coerce.number().default(3),
 });
 
@@ -77,8 +77,8 @@ const createFixedAssetSchema = z.object({
   branchId: z.coerce.number().optional(),
   depreciationMethod: z.string().default("straight_line"),
   assetAccountCode: z.string().default("1500"),
-  depreciationAccountCode: z.string().default("6100"),
-  accDepreciationAccountCode: z.string().default("1590"),
+  depreciationAccountCode: z.string().default("5790"),
+  accDepreciationAccountCode: z.string().default("1290"),
   // Asset Acquisition Center: when a payment-source (credit) account is
   // supplied, the create also posts a balanced acquisition entry
   // (Dr asset account / Cr payment source) so the purchase is capitalised,
@@ -1411,8 +1411,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
         sourceId: asset.id as number,
         sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
         lines: [
-          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
-          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.depreciationAccountCode as string | null) ?? "5790", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1290", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
         ],
       });
       journalId = posted.journalId;
@@ -1515,8 +1515,8 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
           sourceId: asset.id as number,
           sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
           lines: [
-            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, assetId: asset.id as number },
-            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, assetId: asset.id as number },
+            { accountCode: (asset.depreciationAccountCode as string | null) ?? "5790", debit: depAmount, credit: 0, assetId: asset.id as number },
+            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1290", debit: 0, credit: depAmount, assetId: asset.id as number },
           ],
         });
 
@@ -1731,7 +1731,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
       (storedAssetCode && storedAssetCode !== "1500")
         ? Promise.resolve(storedAssetCode)
         : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "credit", "1270"),
-      (storedAccDepCode && storedAccDepCode !== "1590")
+      (storedAccDepCode && storedAccDepCode !== "1290")
         ? Promise.resolve(storedAccDepCode)
         : financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_depreciation", "debit", "1290"),
       // fallback 1111 (نقدية صندوق — postable leaf) — main أصلح هذا في #2192
@@ -2094,8 +2094,8 @@ financeAlgorithmsRouter.post("/cip", authorize({ feature: "finance.algorithms", 
           [scope.companyId, scope.branchId, b.code ?? null, b.name, b.description ?? null,
            b.category ?? null, b.startDate, b.expectedCompletionDate ?? null,
            b.cipAccountCode ?? "1530", b.targetAssetCategory ?? null,
-           b.targetAssetAccountCode ?? "1500", b.targetDepreciationAccountCode ?? "6100",
-           b.targetAccDepreciationAccountCode ?? "1590", b.targetUsefulLifeYears ?? null,
+           b.targetAssetAccountCode ?? "1500", b.targetDepreciationAccountCode ?? "5790",
+           b.targetAccDepreciationAccountCode ?? "1290", b.targetUsefulLifeYears ?? null,
            b.targetDepreciationMethod ?? "straight_line", scope.userId]
         );
         insertId = ins.rows[0].id;
@@ -2242,8 +2242,8 @@ financeAlgorithmsRouter.post("/cip/:id/capitalize", authorize({ feature: "financ
     const assetName = b.assetName ?? `${cip.name} (مرسمل)`;
     const assetCode = b.assetCode ?? (cip.code as string | null) ?? null;
     const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1500";
-    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "6100";
-    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1590";
+    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "5790";
+    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1290";
     const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
 
     let newAssetId: number | null = null;
