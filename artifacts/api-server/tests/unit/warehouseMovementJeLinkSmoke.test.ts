@@ -27,6 +27,11 @@ const ROUTE = readFileSync(
   "utf8"
 );
 const SCHEMA_PRE = readFileSync(join(REPO_ROOT, "db/schema_pre.sql"), "utf8");
+// #2839 — the retro-stamp UPDATE moved into the warehouse-owned contract.
+const WAREHOUSE = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/routes/warehouse.ts"),
+  "utf8"
+);
 
 // Isolate the two handlers we modified.
 const APPROVE_START = ROUTE.indexOf('invoicesRouter.post("/invoices/:id/approve"');
@@ -89,22 +94,28 @@ describe("invoice-approve passes journalId to applyStockMovements", () => {
   });
 });
 
-describe("credit-memo retro-stamps journalEntryId on the warehouse_movements rows", () => {
-  it("UPDATE warehouse_movements SET journalEntryId WHERE reference matches CM-{memoId}", () => {
-    expect(MEMO).toMatch(/UPDATE warehouse_movements\s+SET "journalEntryId" = \$1/);
-    expect(MEMO).toMatch(/reference = \$3/);
-    expect(MEMO).toMatch(/type = 'return'/);
-    expect(MEMO).toMatch(/"journalEntryId" IS NULL/);
+describe("credit-memo retro-stamps journalEntryId via the warehouse-owned contract (#2839)", () => {
+  it("the UPDATE lives in the warehouse contract (boundary — finance no longer owns the write)", () => {
+    expect(WAREHOUSE).toMatch(/export async function stampMovementsJournalEntry/);
+    expect(WAREHOUSE).toMatch(/UPDATE warehouse_movements\s+SET "journalEntryId" = \$1/);
+    expect(WAREHOUSE).toMatch(/reference = \$3/);
+    expect(WAREHOUSE).toMatch(/type = \$4/);
+    expect(WAREHOUSE).toMatch(/"journalEntryId" IS NULL/);
+    // ختم ضمن المعاملة المحيطة (rawExecute ينضمّ لـ txStore) ⇒ ذرّية محفوظة.
+    expect(WAREHOUSE).toMatch(/stampMovementsJournalEntry[\s\S]{0,400}rawExecute/);
   });
-  it("UPDATE only runs when there are reversal lineUpdates (skips service-only memos)", () => {
-    expect(MEMO).toMatch(/cogsReversalPlan\.lineUpdates\.length > 0[\s\S]{0,400}UPDATE warehouse_movements\s+SET "journalEntryId"/);
+  it("finance (credit-memo) no longer writes warehouse_movements directly", () => {
+    expect(MEMO).not.toMatch(/UPDATE warehouse_movements/);
   });
-  it("retroactive UPDATE happens INSIDE withTransaction (atomic with JE post)", () => {
-    // The retro-UPDATE must precede the LAST `});` of withTransaction
-    // (lastIndexOf — nested `});` blocks appear above it).
+  it("credit-memo calls the contract with CM-{memoId} + type 'return', only when reversal lineUpdates exist", () => {
+    expect(MEMO).toMatch(/cogsReversalPlan\.lineUpdates\.length > 0[\s\S]{0,400}stampMovementsJournalEntry/);
+    expect(MEMO).toMatch(/reference: `CM-\$\{memoId\}`/);
+    expect(MEMO).toMatch(/type: "return"/);
+  });
+  it("the contract call happens INSIDE withTransaction (atomic with JE post)", () => {
     const txnEnd = MEMO.lastIndexOf("    });");
-    const updIdx = MEMO.indexOf('UPDATE warehouse_movements\n                SET "journalEntryId"');
-    expect(updIdx).toBeGreaterThan(-1);
-    expect(updIdx).toBeLessThan(txnEnd);
+    const callIdx = MEMO.indexOf("stampMovementsJournalEntry({");
+    expect(callIdx).toBeGreaterThan(-1);
+    expect(callIdx).toBeLessThan(txnEnd);
   });
 });
