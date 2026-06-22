@@ -41,9 +41,6 @@ const ALLOWLIST = new Set([
   "lib/cronScheduler.ts:6100", "lib/cronScheduler.ts:1590",
   "lib/eventListeners.ts:5200", "lib/eventListeners.ts:6200",
   "lib/umrahCommissionEngine.ts:6200",
-  "lib/engines/storeEngine.ts:1100", "lib/engines/storeEngine.ts:4300",
-  "lib/engines/storeEngine.ts:2200", "lib/engines/storeEngine.ts:5300",
-  "lib/engines/storeEngine.ts:1500",
   "lib/finance/datafixInventory.ts:1130", "lib/finance/datafixInventory.ts:1140",
   "lib/finance/datafixInventory.ts:2110",
 ]);

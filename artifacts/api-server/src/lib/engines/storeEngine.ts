@@ -26,11 +26,11 @@ class StoreEngineImpl implements DomainEngine {
     }
   ) {
     const codes = await financialEngine.resolveAccountCodes(ctx.companyId, [
-      { operationType: "store_cash", side: "debit", fallbackCode: "1100" },
-      { operationType: "store_revenue", side: "credit", fallbackCode: "4300" },
-      { operationType: "vat_output", side: "credit", fallbackCode: "2200" },
-      { operationType: "store_cogs", side: "debit", fallbackCode: "5300" },
-      { operationType: "store_inventory", side: "credit", fallbackCode: "1500" },
+      { operationType: "store_cash", side: "debit", fallbackCode: "1111" },
+      { operationType: "store_revenue", side: "credit", fallbackCode: "4111" },
+      { operationType: "vat_output", side: "credit", fallbackCode: "2131" },
+      { operationType: "store_cogs", side: "debit", fallbackCode: "5110" },
+      { operationType: "store_inventory", side: "credit", fallbackCode: "1151" },
     ]);
 
     const lines = [

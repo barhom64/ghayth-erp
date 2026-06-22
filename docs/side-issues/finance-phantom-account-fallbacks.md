@@ -9,11 +9,7 @@
 
 | الملف:السطر | الكود | النوع | الغرض | الورقة الصحيحة المقترحة (تحقّق) |
 |---|---|---|---|---|
-| engines/storeEngine.ts:29 | 1100 | أب | store_cash | **1111** الصندوق الرئيسي |
-| engines/storeEngine.ts:30 | 4300 | غير موجود | store_revenue | **4111** مبيعات نقدية |
-| engines/storeEngine.ts:31 | 2200 | أب | vat_output | ورقة ضريبة مخرجات (تحقّق 215x) |
-| engines/storeEngine.ts:32 | 5300 | أب | store_cogs | **5110** تكلفة البضاعة المباعة |
-| engines/storeEngine.ts:33 | 1500 | غير موجود | store_inventory | **1151** مخزون (تحقّق) |
+| ~~storeEngine (5 مواضع)~~ | — | — | — | **✅ أُصلح (#store-postable): 1111/4111/2131/5110/1151**
 | finance-hardening.ts:139 | 1200 | أب | intercompany AR | **1131** عملاء محليون (أو ورقة بينية) |
 | finance-hardening.ts:140 | 2100 | أب | intercompany AP | **2111** موردون محليون |
 | finance-hardening.ts:141 | 4000 | أب | intercompany revenue | **4130** إيرادات الخدمات |
