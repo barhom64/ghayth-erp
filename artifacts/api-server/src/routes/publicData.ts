@@ -288,15 +288,12 @@ router.post("/onboarding/:token", publicLimiter, async (req, res) => {
       return;
     }
     const data = zodParse(selfOnboardingSchema.safeParse(req.body ?? {}));
-    const updated = await rawQuery<{ name: string }>(
-      `UPDATE employees
-          SET "selfSubmittedData" = $1::jsonb, "selfSubmittedAt" = NOW(), "activationStatus" = 'self_submitted'
-        WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
-        RETURNING name`,
-      [JSON.stringify(data), verified.employeeId, verified.companyId],
-    );
+    // حدود المسارات (#2839): الكتابة في جدول HR المملوك (employees) تتمّ عبر عقد
+    // المسار القائد (HR) لا مباشرةً من مسار البيانات العامة.
+    const { applySelfOnboardingSubmission } = await import("./employees.js");
+    const updatedRow = await applySelfOnboardingSubmission(verified.employeeId, verified.companyId, data);
     await markOnboardingTokenUsed(verified.tokenId);
-    const empName = updated[0]?.name ?? "موظف";
+    const empName = updatedRow?.name ?? "موظف";
     // إغلاق الحلقة: إشعار داخلي لمسؤولي الموارد البشرية بأن طلبًا بانتظار المراجعة.
     // الإشعارات مسار خادم (إرسال فقط) — لا قرار ولا سياسة هنا.
     void sendNotification({
