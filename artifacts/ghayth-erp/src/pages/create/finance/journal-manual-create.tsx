@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
 import { formatCurrency, roundMoney , todayLocal } from "@/lib/formatters";
-import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
+import { CreatePageLayout, CreationDateField, DataTable } from "@workspace/ui-core";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { NumberField } from "@/components/shared/form-field-wrapper";
@@ -132,65 +132,60 @@ export default function JournalManualCreatePage() {
               />
             </div>
 
-            <div className="rounded-xl border overflow-hidden">
-              <div className="overflow-x-auto"><table className="w-full text-sm">
-                <thead className="bg-surface-subtle">
-                  <tr>
-                    <th className="px-3 py-2 text-right">رمز الحساب</th>
-                    <th className="px-3 py-2 text-right">البيان</th>
-                    <th className="px-3 py-2 text-right">مدين</th>
-                    <th className="px-3 py-2 text-right">دائن</th>
-                    <th className="px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {form.lines.map((line, i) => (
-                    <>
-                      <tr key={`row-${i}`} className="border-t">
-                        <td className="px-2 py-1">
-                          <PostingAccountSelect
-                            value={line.accountCode}
-                            onChange={(v) => updateLine(i, "accountCode", v)}
-                            label="رمز الحساب"
-                            placeholder="اختر حسابًا قابلًا للترحيل"
-                            error={fieldErrors[`lines.${i}.accountCode`]}
-                          />
-                        </td>
-                        <td className="px-2 py-1">
-                          <Input value={line.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
-                        </td>
-                        <td className="px-2 py-1">
-                          <NumberField label="مدين" hideLabel className="w-24" min={0} value={line.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
-                        </td>
-                        <td className="px-2 py-1">
-                          <NumberField label="دائن" hideLabel className="w-24" min={0} value={line.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
-                        </td>
-                        <td className="px-2 py-1">
-                          <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
-                        </td>
-                      </tr>
-                      <tr key={`alloc-${i}`}>
-                        <td colSpan={5} className="px-2 pb-2">
-                          <LineAllocationPanel
-                            value={line.allocation ?? {}}
-                            onChange={(next) => updateLine(i, "allocation" as any, next as any)}
-                            status={deriveAllocationStatus(line.allocation ?? {})}
-                          />
-                        </td>
-                      </tr>
-                    </>
-                  ))}
-                </tbody>
-                <tfoot className="bg-surface-subtle font-semibold">
-                  <tr>
-                    <td colSpan={2} className="px-3 py-2 text-muted-foreground">المجموع</td>
-                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalDebit)}</td>
-                    <td className={`px-3 py-2 ${isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(totalCredit)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table></div>
-            </div>
+            <DataTable<JournalLine & { _idx: number }>
+              noToolbar
+              pageSize={0}
+              data={form.lines.map((line, i) => ({ ...line, _idx: i }))}
+              rowKey={(row) => row._idx}
+              renderRowExtras={(row) => (
+                <LineAllocationPanel
+                  value={row.allocation ?? {}}
+                  onChange={(next) => updateLine(row._idx, "allocation" as any, next as any)}
+                  status={deriveAllocationStatus(row.allocation ?? {})}
+                />
+              )}
+              columns={[
+                {
+                  key: "accountCode", header: "رمز الحساب", sortable: false,
+                  render: (row, i) => (
+                    <PostingAccountSelect
+                      value={row.accountCode}
+                      onChange={(v) => updateLine(i, "accountCode", v)}
+                      label="رمز الحساب"
+                      placeholder="اختر حسابًا قابلًا للترحيل"
+                      error={fieldErrors[`lines.${i}.accountCode`]}
+                    />
+                  ),
+                  footer: () => "المجموع",
+                },
+                {
+                  key: "description", header: "البيان", sortable: false,
+                  render: (row, i) => (
+                    <Input value={row.description} onChange={e => updateLine(i, "description", e.target.value)} placeholder="البيان" />
+                  ),
+                },
+                {
+                  key: "debit", header: "مدين", sortable: false,
+                  render: (row, i) => (
+                    <NumberField label="مدين" hideLabel className="w-24" min={0} value={row.debit || ""} onChange={v => updateLine(i, "debit", v)} placeholder="0" />
+                  ),
+                  footer: () => <span className={isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}>{formatCurrency(totalDebit)}</span>,
+                },
+                {
+                  key: "credit", header: "دائن", sortable: false,
+                  render: (row, i) => (
+                    <NumberField label="دائن" hideLabel className="w-24" min={0} value={row.credit || ""} onChange={v => updateLine(i, "credit", v)} placeholder="0" />
+                  ),
+                  footer: () => <span className={isBalanced ? "text-status-success-foreground" : "text-status-error-foreground"}>{formatCurrency(totalCredit)}</span>,
+                },
+                {
+                  key: "_actions", header: "", sortable: false,
+                  render: (_row, i) => (
+                    <button type="button" onClick={() => removeLine(i)} className="text-red-400 hover:text-status-error-foreground text-lg leading-none">&times;</button>
+                  ),
+                },
+              ]}
+            />
 
             {!isBalanced && totalDebit > 0 && (
               <div className="text-sm text-status-error-foreground bg-status-error-surface border border-status-error-surface rounded-lg px-3 py-2">

@@ -8,13 +8,14 @@
 #   node scripts/src/check-display-tables.mjs --write-allowlist
 # When a page is moved to <DataTable>, prune its line.
 #
-# Baseline captured: 13 page(s). Each verified bespoke (read the table body
+# Baseline captured: 11 page(s). Each verified bespoke (read the table body
 # before adding a new line — a convertible display list does NOT belong here).
 
 # editable-form — data-entry grids: cells are <Input>/<Select>/NumberField
 # driving page state. DataTable is a DISPLAY component; a form is not a list.
-artifacts/ghayth-erp/src/pages/create/finance/customer-receipt.tsx        # editable-form (ledger: receipt application lines)
-artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx   # editable-form (ledger: journal lines + allocation panel)
+# (journal-manual-create + customer-receipt were converted 2026-06: the JE
+#  input grid hosts its inputs in DataTable cells + renderRowExtras, and the
+#  receipt's JE preview is a plain display list — both with ledger-line tests.)
 artifacts/ghayth-erp/src/pages/finance/account-reconciliation-workpaper.tsx # editable-form (recon worksheet: Input ref/desc/amount + delete)
 artifacts/ghayth-erp/src/pages/fleet/transport-rules-admin.tsx            # editable-form (rule rows with inputs)
 artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx           # editable-form (commission tiers editor)
