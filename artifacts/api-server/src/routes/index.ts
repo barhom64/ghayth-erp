@@ -132,6 +132,10 @@ import umrahStatementsRouter from "./umrah-statements.js";
 // U-07 Phase 10 — attachments (polymorphic document storage) split; imported
 // for the wiring-scanner hint below. Mounted via umrah-entities.ts.
 import umrahAttachmentsRouter from "./umrah-attachments.js";
+// U-07 Phase 11 — operational reports (daily-runsheet, reconciliation,
+// exempt-pilgrims, group/season portfolio) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahReportsRouter from "./umrah-reports.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -210,6 +214,7 @@ if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", umrahImportBatchesRouter);
   router.use("/umrah", umrahStatementsRouter);
   router.use("/umrah", umrahAttachmentsRouter);
+  router.use("/umrah", umrahReportsRouter);
 }
 
 router.use(healthRouter);
