@@ -323,6 +323,7 @@ export default function UmrahAgentPortfolioPage() {
                     key: "name",
                     header: "الوكيل",
                     render: (p) => <span className="font-medium">{p.name}</span>,
+                    footer: () => "الإجمالي",
                   },
                   {
                     key: "country",
@@ -346,6 +347,7 @@ export default function UmrahAgentPortfolioPage() {
                     ltr: true,
                     className: "tabular-nums",
                     render: (p) => formatCurrency(p.revenue),
+                    footer: () => formatCurrency(totals.revenue),
                   },
                   {
                     key: "expense",
@@ -354,6 +356,7 @@ export default function UmrahAgentPortfolioPage() {
                     ltr: true,
                     className: "tabular-nums text-status-danger-foreground",
                     render: (p) => formatCurrency(p.expense),
+                    footer: () => formatCurrency(totals.expense),
                   },
                   {
                     key: "profit",
@@ -364,6 +367,11 @@ export default function UmrahAgentPortfolioPage() {
                     render: (p) => (
                       <span className={p.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}>
                         {p.profit >= 0 ? "+" : ""}{formatCurrency(p.profit)}
+                      </span>
+                    ),
+                    footer: () => (
+                      <span className={totals.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}>
+                        {totals.profit >= 0 ? "+" : ""}{formatCurrency(totals.profit)}
                       </span>
                     ),
                   },
@@ -379,6 +387,7 @@ export default function UmrahAgentPortfolioPage() {
                         {p.margin.toFixed(1)}%
                       </span>
                     ),
+                    footer: () => `${portfolioMargin.toFixed(1)}%`,
                   },
                   {
                     key: "_actions",
@@ -394,22 +403,6 @@ export default function UmrahAgentPortfolioPage() {
                     ),
                   },
                 ] satisfies DataTableColumn<typeof tableRows[number]>[]}
-                renderGrandTotal={() => (
-                  <table className="w-full text-sm">
-                    <tbody>
-                      <tr>
-                        <td colSpan={4} className="py-0 px-2">الإجمالي</td>
-                        <td className="py-0 px-2 text-end tabular-nums" dir="ltr">{formatCurrency(totals.revenue)}</td>
-                        <td className="py-0 px-2 text-end tabular-nums text-status-danger-foreground" dir="ltr">{formatCurrency(totals.expense)}</td>
-                        <td className={`py-0 px-2 text-end tabular-nums ${totals.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`} dir="ltr">
-                          {totals.profit >= 0 ? "+" : ""}{formatCurrency(totals.profit)}
-                        </td>
-                        <td className="py-0 px-2 text-end tabular-nums" dir="ltr">{portfolioMargin.toFixed(1)}%</td>
-                        <td className="w-8" />
-                      </tr>
-                    </tbody>
-                  </table>
-                )}
               />
             </CardContent>
           </Card>

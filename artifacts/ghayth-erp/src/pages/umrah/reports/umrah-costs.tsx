@@ -169,6 +169,7 @@ export default function UmrahCostsReport() {
                     align: "start",
                     className: "font-medium sticky right-0 bg-background",
                     render: (r) => r.name ?? "—",
+                    footer: () => "الإجمالي",
                   },
                   ...(subColumnLabel
                     ? ([{
@@ -186,6 +187,7 @@ export default function UmrahCostsReport() {
                     className: "font-mono whitespace-nowrap",
                     render: (r) => formatCurrency(Number(r[c.key]) || 0),
                     exportValue: (r) => Number(r[c.key]) || 0,
+                    footer: () => formatCurrency(totals[c.key as string] ?? 0),
                   })),
                   {
                     key: "totalAmount",
@@ -194,27 +196,9 @@ export default function UmrahCostsReport() {
                     className: "font-mono font-bold whitespace-nowrap text-status-error-foreground",
                     render: (r) => formatCurrency(Number(r.totalAmount) || 0),
                     exportValue: (r) => Number(r.totalAmount) || 0,
+                    footer: () => formatCurrency(totals.totalAmount ?? 0),
                   },
                 ]}
-                renderGrandTotal={() => (
-                  <table className="w-full text-sm bg-muted/60">
-                    <tbody>
-                      <tr>
-                        <td className="p-2 font-bold sticky right-0 bg-muted/60" colSpan={subColumnLabel ? 2 : 1}>
-                          الإجمالي
-                        </td>
-                        {COST_COLUMNS.map((c) => (
-                          <td key={String(c.key)} className="p-2 text-end font-mono font-bold whitespace-nowrap">
-                            {formatCurrency(totals[c.key as string] ?? 0)}
-                          </td>
-                        ))}
-                        <td className="p-2 text-end font-mono font-bold whitespace-nowrap text-status-error-foreground">
-                          {formatCurrency(totals.totalAmount ?? 0)}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                )}
               />
             </div>
           )}
