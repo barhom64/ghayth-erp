@@ -323,21 +323,21 @@ const columnMappingSchema = z.record(z.string(), z.string()).optional();
 
 const importPreviewSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات المعاينة غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات المعاينة غير مكتملة").max(5000, "عدد صفوف المعاينة يتجاوز الحدّ المسموح (5000)"),
   fileType: z.string().optional(),
   columnMapping: columnMappingSchema,
 });
 
 const importMutamersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة").max(5000, "عدد صفوف الاستيراد يتجاوز الحدّ المسموح (5000)"),
   fileName: z.string().trim().optional(),
   columnMapping: columnMappingSchema,
 });
 
 const importVouchersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة").max(5000, "عدد صفوف الاستيراد يتجاوز الحدّ المسموح (5000)"),
   fileName: z.string().trim().optional(),
   /** Cash box that will fund the NUSK supplier payment (gap #2). */
   treasuryId: z.coerce.number().int().positive().optional().nullable(),
@@ -359,7 +359,7 @@ const importVouchersSchema = z.object({
 
 const importSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة").max(5000, "عدد صفوف الاستيراد يتجاوز الحدّ المسموح (5000)"),
   fileType: z.string().optional(),
   fileName: z.string().optional(),
 });
