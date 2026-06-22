@@ -70,15 +70,24 @@ describe("discount applied BEFORE VAT (Saudi convention)", () => {
 });
 
 describe("INSERT INTO invoices persists discount columns", () => {
+  // Anchor on the POST /invoices create-handler INSERT, identified by its
+  // VALUES signature that binds the discount columns as placeholders
+  // ($20,$21). The finance service contract createServiceInvoiceWithLines
+  // (#2837) shares the same column list but binds discounts as literals
+  // (0,0) for the draft path, so a generic indexOf("INSERT INTO invoices ")
+  // would match it first — anchor precisely to the handler instead.
+  const VALUES_SIG = "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)";
+  const valuesIdx = INVOICES.indexOf(VALUES_SIG);
+  // Column list sits in the ~300 chars preceding the VALUES clause.
+  const section = INVOICES.slice(Math.max(0, valuesIdx - 400), valuesIdx + VALUES_SIG.length);
+  it("the create-handler INSERT exists (anchored on its placeholder signature)", () => {
+    expect(valuesIdx).toBeGreaterThan(-1);
+  });
   it("column list includes discountAmount + discountPercent", () => {
-    const idx = INVOICES.indexOf("INSERT INTO invoices ");
-    const section = INVOICES.slice(idx, idx + 1500);
     expect(section).toContain('"discountAmount"');
     expect(section).toContain('"discountPercent"');
   });
   it("VALUES array binds 21 placeholders (was 19 before)", () => {
-    const idx = INVOICES.indexOf("INSERT INTO invoices ");
-    const section = INVOICES.slice(idx, idx + 1500);
     expect(section).toContain("$21");
     expect(section).not.toMatch(/VALUES\s*\([^)]*\$22/);
   });

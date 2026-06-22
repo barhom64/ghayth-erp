@@ -227,14 +227,14 @@ const createInsuranceSchema = z.object({
 });
 
 // ─── Zod schemas for PATCH / action route body validation ──────────────────
-const updateVehicleSchema = z.object({
+export const updateVehicleSchema = z.object({
   plateNumber: z.string().optional(),
   make: z.string().optional(),
   model: z.string().optional(),
   year: z.coerce.number().optional(),
   color: z.string().optional(),
   status: z.string().optional(),
-  fuelType: z.string().optional(),
+  fuelType: z.enum(["gasoline", "diesel", "electric", "hybrid", "lpg"]).optional(),
   notes: z.string().optional(),
   assignedDriverId: z.coerce.number().nullable().optional(),
   registrationNumber: z.string().optional(),

@@ -56,10 +56,10 @@ const newPolicyVersionSchema = z.object({
   expiryDate: z.string().optional().nullable(),
 }).refine(policyDatesOrdered, policyDatesRefine);
 
-const updateRiskSchema = z.object({
+export const updateRiskSchema = z.object({
   title: z.string().optional(),
   description: z.string().optional().nullable(),
-  severity: z.string().optional(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional(),
   likelihood: z.string().optional().nullable(),
   impact: z.string().optional().nullable(),
   status: z.string().optional(),
