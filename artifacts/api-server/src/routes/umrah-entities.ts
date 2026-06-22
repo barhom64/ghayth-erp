@@ -4,7 +4,9 @@
 // Owns: groups (CRUD), nusk-invoices,
 //       sales-invoices (generate + update), payments,
 //       letters, daily-runsheet + reconciliation/portfolio reports,
-//       attachments, employee-assignments.
+//       employee-assignments.
+//   (attachments — polymorphic document storage — live in
+//    umrah-attachments.ts — U-07 Phase 10)
 //   (sub-agent statements JSON + PDF live in umrah-statements.ts — U-07 Phase 9)
 //   (import-batches listing + unlinked-rows recovery live in
 //    umrah-import-batches.ts — U-07 Phase 8)
@@ -86,6 +88,9 @@ import importBatchesRouter from "./umrah-import-batches.js";
 // U-07 Phase 9 — sub-agent statements (JSON + PDF) moved to a dedicated
 // sub-router. Paths still resolve at /umrah/statements/...
 import statementsRouter from "./umrah-statements.js";
+// U-07 Phase 10 — attachments (polymorphic document storage) moved to a
+// dedicated sub-router. Paths still resolve at /umrah/attachments...
+import attachmentsRouter from "./umrah-attachments.js";
 
 const router = Router();
 router.use(journeyReportsRouter);
@@ -96,6 +101,7 @@ router.use(subAgentsRouter);
 router.use(pricingRouter);
 router.use(importBatchesRouter);
 router.use(statementsRouter);
+router.use(attachmentsRouter);
 
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
@@ -1413,168 +1419,6 @@ router.get("/reports/daily-runsheet/pdf", authorize({ feature: "umrah", action: 
     if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
     res.send(result.bytes);
   } catch (err) { handleRouteError(err, res, "Daily run-sheet PDF"); }
-});
-
-// ============================================================================
-// ATTACHMENTS — polymorphic document storage for umrah entities (#4)
-// ============================================================================
-
-const ATTACH_ENTITY_TYPES = ["mutamer","sub_agent","group","agent","nusk_invoice","season","sales_invoice","violation"] as const;
-const ATTACH_TYPES = ["passport","visa","contract","nusk_file","identity","transfer_receipt","other"] as const;
-
-const createAttachmentSchema = z.object({
-  entityType: z.enum(ATTACH_ENTITY_TYPES),
-  entityId: z.number().int().positive(),
-  type: z.enum(ATTACH_TYPES),
-  title: z.string().min(1).max(255),
-  notes: z.string().optional(),
-  fileUrl: z.string().url().max(2000).optional(),
-  storageKey: z.string().max(500).optional(),
-  fileSize: z.number().int().nonnegative().optional(),
-  mimeType: z.string().max(120).optional(),
-});
-
-// Map entityType → table for ownership verification. Keeps the route from
-// trusting arbitrary entityIds — every attachment must point at a row the
-// caller's company actually owns.
-const ATTACH_OWNER_TABLE: Record<string, string> = {
-  mutamer:        "umrah_pilgrims",
-  sub_agent:      "umrah_sub_agents",
-  group:          "umrah_groups",
-  agent:          "umrah_agents",
-  nusk_invoice:   "umrah_nusk_invoices",
-  season:         "umrah_seasons",
-  sales_invoice:  "umrah_sales_invoices",
-  violation:      "umrah_violations",
-};
-
-async function assertAttachmentOwner(companyId: number, entityType: string, entityId: number): Promise<void> {
-  const table = ATTACH_OWNER_TABLE[entityType];
-  if (!table) throw new ValidationError("نوع كيان غير مدعوم", { field: "entityType" });
-  const safeTable = table.replace(/[^a-zA-Z0-9_]/g, "");
-  const [row] = await rawQuery<Record<string, unknown>>(
-    `SELECT id FROM "${safeTable}" WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-    [entityId, companyId]
-  );
-  if (!row) throw new NotFoundError("الكيان المرفق به غير موجود أو محذوف");
-}
-
-router.get("/attachments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { entityType, entityId, type } = req.query as Record<string, string | undefined>;
-    // DOC-VIOLATION unification (migration 237): umrah attachments now live in
-    // the shared documents + document_entity_links store. The polymorphic owner
-    // is namespaced as 'umrah_<entityType>' in the link table; type → category,
-    // notes → description. Response shape is preserved (entityType stripped back
-    // to the umrah-local value) so the umrah attachments panel is unchanged.
-    let where = `d."companyId" = $1 AND d."deletedAt" IS NULL AND del."entityType" LIKE 'umrah\\_%'`;
-    const params: unknown[] = [scope.companyId];
-    if (entityType) { params.push(`umrah_${entityType}`); where += ` AND del."entityType" = $${params.length}`; }
-    if (entityId)   { params.push(Number(entityId)); where += ` AND del."entityId" = $${params.length}`; }
-    if (type)       { params.push(type); where += ` AND d.category = $${params.length}`; }
-    const docs = await rawQuery<Record<string, unknown>>(
-      `SELECT d.id, del."entityType" AS "linkEntityType", del."entityId" AS "entityId",
-              d.category AS type, d.title, d.description AS notes, d."fileUrl", d."storageKey",
-              d."fileSize", d."mimeType", d."uploadedBy", d."createdAt"
-         FROM documents d
-         JOIN document_entity_links del ON del."documentId" = d.id
-        WHERE ${where}
-        ORDER BY d."createdAt" DESC
-        LIMIT 500`,
-      params
-    );
-    const rows = docs.map((d) => ({
-      id: d.id,
-      entityType: String(d.linkEntityType).replace(/^umrah_/, ""),
-      entityId: d.entityId,
-      type: d.type,
-      title: d.title,
-      notes: d.notes,
-      fileUrl: d.fileUrl,
-      storageKey: d.storageKey,
-      fileSize: d.fileSize,
-      mimeType: d.mimeType,
-      uploadedBy: d.uploadedBy,
-      createdAt: d.createdAt,
-    }));
-    res.json(maskFields(req, { data: rows }));
-  } catch (err) { handleRouteError(err, res, "List attachments"); }
-});
-
-router.post("/attachments", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const body = zodParse(createAttachmentSchema.safeParse(req.body));
-    await assertAttachmentOwner(scope.companyId, body.entityType, body.entityId);
-
-    // DOC-VIOLATION unification (migration 237): write to the shared documents
-    // store (+ document_entity_links) instead of the per-track umrah_attachments
-    // table. type → category, notes → description, owner namespaced as
-    // 'umrah_<entityType>'. Atomic so a document is never left without its link.
-    let newId!: number;
-    await withTransaction(async (client) => {
-      const r = await client.query(
-        `INSERT INTO documents
-           (title, description, category, "fileName", "fileUrl", "storageKey",
-            "fileSize", "mimeType", status, "currentVersion", "uploadedBy", "companyId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',1,$9,$10) RETURNING id`,
-        [
-          body.title, body.notes || null, body.type, body.title,
-          body.fileUrl || null, body.storageKey || null,
-          body.fileSize ?? null, body.mimeType || null,
-          scope.userId, scope.companyId,
-        ]
-      );
-      newId = r.rows[0].id;
-      await client.query(
-        `INSERT INTO document_entity_links ("documentId", "entityType", "entityId")
-         VALUES ($1, $2, $3) ON CONFLICT ("documentId", "entityType", "entityId") DO NOTHING`,
-        [newId, `umrah_${body.entityType}`, body.entityId]
-      );
-    });
-    const row = { id: newId };
-
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId,
-      action: "create", entity: "umrah_attachments", entityId: row.id,
-      after: { entityType: body.entityType, entityId: body.entityId, type: body.type, title: body.title },
-    }).catch((e) => logger.error(e, "umrah attachments bg"));
-    emitEvent({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.attachment.created", entity: "umrah_attachments", entityId: row.id,
-      details: JSON.stringify({ entityType: body.entityType, entityId: body.entityId, type: body.type }),
-    }).catch((e) => logger.error(e, "umrah attachments bg"));
-
-    res.status(201).json({ id: row.id });
-  } catch (err) { handleRouteError(err, res, "Create attachment"); }
-});
-
-router.delete("/attachments/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    // DOC-VIOLATION unification (migration 237): the id is now a documents.id.
-    // Only allow deleting documents that belong to this company AND are linked
-    // to an umrah owner (entityType LIKE 'umrah\_%') so this endpoint can't be
-    // used to delete arbitrary documents.
-    const [row] = await rawQuery<Record<string, unknown>>(
-      `SELECT d.id FROM documents d
-         JOIN document_entity_links del ON del."documentId" = d.id
-        WHERE d.id=$1 AND d."companyId"=$2 AND d."deletedAt" IS NULL
-          AND del."entityType" LIKE 'umrah\\_%'
-        LIMIT 1`,
-      [id, scope.companyId]
-    );
-    if (!row) throw new NotFoundError("المرفق غير موجود");
-    await rawExecute(
-      `UPDATE documents SET "deletedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
-      [id, scope.companyId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_attachments", entityId: id }).catch((e) => logger.error(e, "umrah attachments bg"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.attachment.deleted", entity: "umrah_attachments", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah attachments bg"));
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "Delete attachment"); }
 });
 
 // ============================================================================
