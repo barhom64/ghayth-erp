@@ -330,7 +330,8 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
   try {
     const scope = req.scope!;
     const { search = "", status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
-    const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
+    const safeLim = Math.min(Math.max(Number(lim) || 20, 1), 500);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     const filters = parseScopeFilters(req);
     if (search) filters.search = String(search);
@@ -364,7 +365,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       paramIdx++;
     }
 
-    params.push(Math.min(Number(lim) || 20, 500));
+    params.push(safeLim);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -417,7 +418,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       countParams
     );
 
-    res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
+    res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: safeLim }));
   } catch (err) {
     handleRouteError(err, res, "List employees error:");
   }
