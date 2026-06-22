@@ -214,3 +214,13 @@ export function useAuth() {
   }
   return context;
 }
+
+/**
+ * Non-throwing auth accessor for shared components (e.g. DataTable) that may
+ * render outside an AuthProvider (tests, storybook). Returns null when there
+ * is no provider instead of throwing, so such components degrade gracefully
+ * (no persisted prefs) rather than crashing the render.
+ */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
+}

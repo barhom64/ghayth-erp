@@ -14,7 +14,7 @@
  * BulkCheckbox) into a single API that pages can adopt instead of wiring these
  * pieces by hand.
  */
-import { Fragment, ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   Table,
   TableBody,
@@ -41,6 +41,7 @@ import { useSortedData } from "@/hooks/use-sorted-data";
 import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { BulkCheckbox, useBulkSelection } from "@/components/shared/bulk-actions";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useOptionalAuth } from "@/lib/auth";
 
 export type Align = "start" | "center" | "end";
 
@@ -68,6 +69,10 @@ export interface DataTableColumn<T> {
   className?: string;
   /** Hide the column entirely — used for feature gating without re-declaring. */
   hidden?: boolean;
+  /** Value used when exporting selected rows to CSV. Defaults to `row[key]`.
+   *  Set this when the cell uses `render` and the raw value differs from the
+   *  displayed text. */
+  exportValue?: (row: T) => string | number;
 }
 
 export interface BulkAction {
@@ -133,6 +138,8 @@ interface DataTableProps<T> {
   onSortedDataChange?: (rows: T[]) => void;
   /** Bulk action buttons shown when ≥1 row selected. */
   bulkActions?: BulkAction[];
+  /** Override the built-in "تصدير المحدّد" CSV export of the selected rows. */
+  onExportSelected?: (rows: T[]) => void;
 
   /** Global search input placeholder. Set to null to hide the search input. */
   searchPlaceholder?: string | null;
@@ -212,6 +219,53 @@ function alignClass(align?: Align): string {
   return "text-start";
 }
 
+/** Row-count choices for the page-size selector. */
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+
+/** Structural columns (not backed by sortable data) — never auto-sortable. */
+const NON_DATA_COLUMN_KEY =
+  /^(actions?|_actions?|select|_select|controls?|menu|buttons?|rowactions?|expand|drag|handle)$/i;
+
+/**
+ * Whether a column should be sortable. An explicit `sortable` always wins;
+ * when unset, every data column sorts by DEFAULT — except structural columns
+ * (action/select columns, or columns with no header text).
+ */
+function isSortableColumn<T>(col: DataTableColumn<T>): boolean {
+  if (col.sortable !== undefined) return col.sortable;
+  if (!col.header || !col.header.trim()) return false;
+  if (NON_DATA_COLUMN_KEY.test(col.key)) return false;
+  return true;
+}
+
+/** CSV-escape a single cell value. */
+function csvCell(value: unknown): string {
+  const s = value == null ? "" : String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Download the given rows as a CSV of the visible columns (selected-rows export). */
+function downloadRowsCsv<T>(columns: DataTableColumn<T>[], rows: T[]): void {
+  const cols = columns.filter((c) => !c.hidden);
+  const header = cols.map((c) => csvCell(c.header)).join(",");
+  const body = rows.map((row) =>
+    cols
+      .map((c) => csvCell(c.exportValue ? c.exportValue(row) : (row as any)[c.key]))
+      .join(","),
+  );
+  // Prepend a BOM so Excel renders the Arabic headers/content correctly.
+  const csv = "﻿" + [header, ...body].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `selected-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function DataTable<T>({
   columns,
   data,
@@ -226,6 +280,7 @@ export function DataTable<T>({
   onSelectionChange,
   onSortedDataChange,
   bulkActions,
+  onExportSelected,
   searchPlaceholder = "بحث...",
   statusOptions,
   statusField = "status",
@@ -250,6 +305,11 @@ export function DataTable<T>({
   className,
 }: DataTableProps<T>) {
   const visibleColumns = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
+
+  // Non-throwing — DataTable also renders in tests/storybook without an
+  // AuthProvider, where this is null and persistence simply no-ops.
+  const auth = useOptionalAuth();
+  const persistedPageSize = auth?.user?.tablePrefs?.pageSize;
 
   // --- Search / status / quick filters (internal when noToolbar is false) ---
   const [search, setSearch] = useState("");
@@ -305,12 +365,40 @@ export function DataTable<T>({
     else setLocalPage(p);
   };
 
+  // Effective page size. The caller's `pageSize` is the default (0 disables
+  // pagination entirely — structural, never overridden). For client-side
+  // tables we adopt the user's persisted choice once it loads, unless the
+  // user changed it this session. Server-paginated and grouped tables keep
+  // the caller's size (the server / grouping controls the layout).
+  const [pageSizeState, setPageSizeState] = useState<number>(
+    pageSize === 0 ? 0 : pageSize || 20,
+  );
+  const userTouchedPageSize = useRef(false);
+  useEffect(() => {
+    if (pageSize === 0 || isServerPaginated || groupBy) return;
+    if (userTouchedPageSize.current) return;
+    if (persistedPageSize && PAGE_SIZE_OPTIONS.includes(persistedPageSize)) {
+      setPageSizeState((cur) => (cur === persistedPageSize ? cur : persistedPageSize));
+    }
+  }, [persistedPageSize, pageSize, isServerPaginated, groupBy]);
+
+  const handlePageSizeChange = (size: number) => {
+    userTouchedPageSize.current = true;
+    setPageSizeState(size);
+    setCurrentPage(1);
+    if (auth?.setPreferences && PAGE_SIZE_OPTIONS.includes(size)) {
+      // Persist to the user's account; the local change already applied, so a
+      // failed save is non-fatal (swallow rather than reject).
+      auth.setPreferences({ tablePrefs: { pageSize: size } }).catch(() => {});
+    }
+  };
+
   const pagedData = useMemo(() => {
     if (isServerPaginated || !sortedData) return sortedData;
-    if (!pageSize) return sortedData;
-    const start = (currentPage - 1) * pageSize;
-    return sortedData.slice(start, start + pageSize);
-  }, [sortedData, currentPage, pageSize, isServerPaginated]);
+    if (!pageSizeState) return sortedData;
+    const start = (currentPage - 1) * pageSizeState;
+    return sortedData.slice(start, start + pageSizeState);
+  }, [sortedData, currentPage, pageSizeState, isServerPaginated]);
 
   const effectiveTotal = isServerPaginated ? total! : (sortedData?.length ?? 0);
 
@@ -353,6 +441,19 @@ export function DataTable<T>({
   const handleClearSelection = () => {
     clear();
     notifySelection(new Set());
+  };
+
+  // Selected rows (resolved from the current filtered+sorted set) for the
+  // built-in "تصدير المحدّد" export.
+  const selectedRows = useMemo(() => {
+    const src = (sortedData ?? (data as T[] | null) ?? []) as T[];
+    return src.filter((r) => selectedIds.has((r as any).id as number));
+  }, [sortedData, data, selectedIds]);
+
+  const handleExportSelected = () => {
+    if (selectedRows.length === 0) return;
+    if (onExportSelected) onExportSelected(selectedRows);
+    else downloadRowsCsv(visibleColumns, selectedRows);
   };
 
   const colCount = visibleColumns.length + (selectable ? 1 : 0);
@@ -483,6 +584,15 @@ export function DataTable<T>({
             سجل محدد
           </span>
           <div className="ms-auto flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportSelected}
+              className="gap-1"
+            >
+              <Download className="h-3.5 w-3.5" />
+              تصدير المحدّد
+            </Button>
             {bulkActions?.map((action, i) => (
               <Button
                 key={i}
@@ -567,7 +677,7 @@ export function DataTable<T>({
                 </TableHead>
               )}
               {visibleColumns.map((col) =>
-                col.sortable ? (
+                isSortableColumn(col) ? (
                   <SortableTableHead
                     key={col.key}
                     column={col.sortKey ?? col.key}
@@ -575,6 +685,7 @@ export function DataTable<T>({
                     sortState={sortState}
                     onSort={handleSort}
                     className={cn(alignClass(col.align), col.className)}
+                    style={col.width ? { width: col.width } : undefined}
                   />
                 ) : (
                   <TableHead
@@ -714,12 +825,14 @@ export function DataTable<T>({
           </DataTableWrapper>
         </Table>
         )}
-        {pageSize > 0 && (
+        {pageSizeState > 0 && (
           <PaginationBar
             page={currentPage}
-            pageSize={pageSize}
+            pageSize={pageSizeState}
             total={effectiveTotal}
             onPageChange={setCurrentPage}
+            pageSizeOptions={isServerPaginated || groupBy ? undefined : PAGE_SIZE_OPTIONS}
+            onPageSizeChange={isServerPaginated || groupBy ? undefined : handlePageSizeChange}
           />
         )}
       </div>

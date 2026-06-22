@@ -3,6 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, RefreshCw, Inbox } from "lucide-react";
 
 interface DataTableWrapperProps {
@@ -117,45 +124,85 @@ interface PaginationBarProps {
   pageSize: number;
   total: number;
   onPageChange: (page: number) => void;
+  /** Row-count options. When provided together with onPageSizeChange, a
+   *  "عدد الصفوف" selector is shown. */
+  pageSizeOptions?: number[];
+  onPageSizeChange?: (size: number) => void;
 }
 
-export function PaginationBar({ page, pageSize, total, onPageChange }: PaginationBarProps) {
+export function PaginationBar({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  pageSizeOptions,
+  onPageSizeChange,
+}: PaginationBarProps) {
   const totalPages = Math.ceil(total / pageSize);
-  if (totalPages <= 1) return null;
+  const showSizeSelector =
+    !!onPageSizeChange &&
+    !!pageSizeOptions &&
+    pageSizeOptions.length > 0 &&
+    total > Math.min(...pageSizeOptions);
+  // Hide the bar entirely only when there is neither pagination nor a size
+  // selector to show (preserves the prior "single page → no bar" behaviour
+  // for every existing caller that passes no size options).
+  if (totalPages <= 1 && !showSizeSelector) return null;
 
-  const from = (page - 1) * pageSize + 1;
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t">
-      <p className="text-sm text-muted-foreground">
-        عرض {from} - {to} من {total}
-      </p>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(page - 1)}
-          disabled={page <= 1}
-          className="gap-1"
-        >
-          <ChevronRight className="h-4 w-4" />
-          السابق
-        </Button>
-        <span className="text-sm text-muted-foreground px-2">
-          {page} / {totalPages}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(page + 1)}
-          disabled={page >= totalPages}
-          className="gap-1"
-        >
-          التالي
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
+    <div className="flex flex-col gap-2 px-4 py-3 border-t sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center gap-3">
+        <p className="text-sm text-muted-foreground">
+          عرض {from} - {to} من {total}
+        </p>
+        {showSizeSelector && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm text-muted-foreground">عدد الصفوف</span>
+            <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange!(Number(v))}>
+              <SelectTrigger className="h-8 w-[78px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageSizeOptions!.map((opt) => (
+                  <SelectItem key={opt} value={String(opt)}>
+                    {opt}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
+      {totalPages > 1 && (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(page - 1)}
+            disabled={page <= 1}
+            className="gap-1"
+          >
+            <ChevronRight className="h-4 w-4" />
+            السابق
+          </Button>
+          <span className="text-sm text-muted-foreground px-2">
+            {page} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(page + 1)}
+            disabled={page >= totalPages}
+            className="gap-1"
+          >
+            التالي
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
