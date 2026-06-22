@@ -48,8 +48,9 @@ import {
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
-const UMRAH_ENTITIES_ROUTE = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+// U-07 Phase 6: link-by-nusk route now lives in the dedicated sub-router.
+const UMRAH_SUB_AGENTS_ROUTE = readFileSync(
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"),
   "utf8",
 );
 const IMPORT_ENGINE = readFileSync(
@@ -69,7 +70,7 @@ const IMPORT_WIZARD_FE = readFileSync(
 );
 
 // Pulls the body of the `POST /sub-agents/link-by-nusk` handler from
-// umrah-entities.ts. Anchors on the route declaration + the next
+// umrah-sub-agents.ts. Anchors on the route declaration + the next
 // `router.` line so the matched block is exactly the handler body.
 function extractLinkByNuskHandler(src: string): string {
   const start = src.match(
@@ -88,13 +89,13 @@ function extractLinkByNuskHandler(src: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-11 Phase 3b §A — link-by-nusk records before/after + reason + real entityId", () => {
   it("zod schema includes optional `reason` capped at 500 chars", () => {
-    expect(UMRAH_ENTITIES_ROUTE).toMatch(
+    expect(UMRAH_SUB_AGENTS_ROUTE).toMatch(
       /linkByNuskSchema\s*=[\s\S]{0,800}?reason:\s*z\.string\(\)\.max\(500\)\.optional\(\)/,
     );
   });
 
   it("route SELECTs the sub-agent BEFORE the UPDATE to capture before.clientId", () => {
-    const body = extractLinkByNuskHandler(UMRAH_ENTITIES_ROUTE);
+    const body = extractLinkByNuskHandler(UMRAH_SUB_AGENTS_ROUTE);
     expect(body.length).toBeGreaterThan(0);
     // Order matters: SELECT must appear above the UPDATE so the
     // captured `existingSubAgent.clientId` is the prior value, not
@@ -107,25 +108,27 @@ describe("U-11 Phase 3b §A — link-by-nusk records before/after + reason + rea
     expect(updateIdx).toBeGreaterThan(selectIdx);
   });
 
-  it("createAuditLog receives before + after + reason and a REAL entityId (not 0)", () => {
-    const body = extractLinkByNuskHandler(UMRAH_ENTITIES_ROUTE);
-    expect(body).toMatch(/createAuditLog\(\{[\s\S]{0,800}?entityId:\s*subAgentId/);
+  it("auditFromRequest records before + after + reason with REAL entityId (subAgentId, not 0)", () => {
+    const body = extractLinkByNuskHandler(UMRAH_SUB_AGENTS_ROUTE);
+    // U-07 Phase 6: converted from createAuditLog to auditFromRequest (IGOC ratchet).
+    // entityId is now the 4th positional argument — subAgentId.
+    expect(body).toMatch(/auditFromRequest\(\s*req,\s*"update",\s*"umrah_sub_agents",\s*subAgentId/);
     expect(body).toMatch(/before:\s*\{\s*clientId:\s*beforeClientId\s*\}/);
     expect(body).toMatch(/after:\s*\{\s*nuskCode,\s*clientId\s*\}/);
-    expect(body).toMatch(/reason,?\s*\n/);
-    // Legacy `entityId: 0` must NOT come back.
-    expect(body).not.toMatch(/createAuditLog\(\{[\s\S]{0,800}?entityId:\s*0/);
+    expect(body).toMatch(/reason[,}]/);
+    // The old `entityId: 0` pattern (legacy bug) must NOT return.
+    expect(body).not.toMatch(/auditFromRequest[\s\S]{0,200}?,\s*0[,)]/);
   });
 
   it("emitEvent details carry beforeClientId + reason + source = import_wizard_explicit_confirmation", () => {
-    const body = extractLinkByNuskHandler(UMRAH_ENTITIES_ROUTE);
+    const body = extractLinkByNuskHandler(UMRAH_SUB_AGENTS_ROUTE);
     expect(body).toMatch(/emitEvent\(\{[\s\S]{0,1200}?action:\s*"umrah\.sub_agent\.linked_by_nusk"/);
     expect(body).toMatch(/beforeClientId/);
     expect(body).toMatch(/source:\s*"import_wizard_explicit_confirmation"/);
   });
 
   it("404 path: route raises NotFoundError when no matching sub-agent exists", () => {
-    const body = extractLinkByNuskHandler(UMRAH_ENTITIES_ROUTE);
+    const body = extractLinkByNuskHandler(UMRAH_SUB_AGENTS_ROUTE);
     expect(body).toMatch(
       /if\s*\(!existingSubAgent\)\s*throw\s+new\s+NotFoundError/,
     );
@@ -137,12 +140,12 @@ describe("U-11 Phase 3b §A — link-by-nusk records before/after + reason + rea
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-11 Phase 3b §B — no client creation, no createNew branch on the import-wizard path", () => {
   it("link-by-nusk handler does NOT INSERT INTO clients", () => {
-    const body = extractLinkByNuskHandler(UMRAH_ENTITIES_ROUTE);
+    const body = extractLinkByNuskHandler(UMRAH_SUB_AGENTS_ROUTE);
     expect(body).not.toMatch(/INSERT\s+INTO\s+clients\b/i);
   });
 
   it("link-by-nusk handler does NOT have a `createNew` branch (only existing-client linkage)", () => {
-    const body = extractLinkByNuskHandler(UMRAH_ENTITIES_ROUTE);
+    const body = extractLinkByNuskHandler(UMRAH_SUB_AGENTS_ROUTE);
     expect(body).not.toMatch(/\bcreateNew\b/);
   });
 
@@ -221,13 +224,13 @@ describe("U-11 Phase 3b §E — no bulk silent linker was added", () => {
     // Bulk linkers are the most common shape Phase 3b could regress
     // into; pin a few likely names so a future PR that introduces
     // any of them shows up here.
-    expect(UMRAH_ENTITIES_ROUTE).not.toMatch(
+    expect(UMRAH_SUB_AGENTS_ROUTE).not.toMatch(
       /router\.(post|put)\(\s*"\/sub-agents\/bulk-link"/i,
     );
-    expect(UMRAH_ENTITIES_ROUTE).not.toMatch(
+    expect(UMRAH_SUB_AGENTS_ROUTE).not.toMatch(
       /router\.(post|put)\(\s*"\/sub-agents\/bulk-link-by-nusk"/i,
     );
-    expect(UMRAH_ENTITIES_ROUTE).not.toMatch(
+    expect(UMRAH_SUB_AGENTS_ROUTE).not.toMatch(
       /router\.(post|put)\(\s*"\/sub-agents\/auto-link"/i,
     );
   });
@@ -236,10 +239,10 @@ describe("U-11 Phase 3b §E — no bulk silent linker was added", () => {
     // A bulk shape would change `nuskCode` to `nuskCodes: z.array(...)`
     // or accept `clientId` as a many-to-many shape. Pin the singular
     // shape so any such drift fails here.
-    expect(UMRAH_ENTITIES_ROUTE).toMatch(
+    expect(UMRAH_SUB_AGENTS_ROUTE).toMatch(
       /linkByNuskSchema\s*=[\s\S]{0,400}?nuskCode:\s*z\.string\(\)/,
     );
-    expect(UMRAH_ENTITIES_ROUTE).not.toMatch(
+    expect(UMRAH_SUB_AGENTS_ROUTE).not.toMatch(
       /linkByNuskSchema\s*=[\s\S]{0,400}?nuskCodes:\s*z\.array/,
     );
   });
