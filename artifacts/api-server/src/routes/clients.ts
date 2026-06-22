@@ -146,7 +146,8 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
   try {
     const scope = req.scope!;
     const { search = "", classification = "", page = "1", limit: lim = "20", deleted = "" } = req.query as Record<string, string | undefined>;
-    const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
+    const safeLim = Math.min(Math.max(Number(lim) || 20, 1), 500);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     const filters = parseScopeFilters(req);
     if (search) { filters.search = String(search); filters.searchColumns = ['name', 'email', 'phone']; }
@@ -163,7 +164,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
       paramIdx++;
     }
 
-    params.push(Math.min(Number(lim) || 20, 500));
+    params.push(safeLim);
     const limitParam = paramIdx++;
     params.push(offset);
     const offsetParam = paramIdx++;
@@ -184,7 +185,7 @@ router.get("/", authorize({ feature: "crm.clients", action: "list" }), async (re
       countParams
     );
 
-    res.json(maskFields(req, { data: clients, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
+    res.json(maskFields(req, { data: clients, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: safeLim }));
   } catch (err) {
     handleRouteError(err, res, "List clients error:");
   }

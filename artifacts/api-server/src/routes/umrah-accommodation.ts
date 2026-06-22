@@ -122,7 +122,7 @@ router.delete("/hotels/:id", authorize({ feature: "umrah", action: "delete" }), 
 
 // Room blocks
 
-const createBlockSchema = z.object({
+export const createBlockSchema = z.object({
   hotelId: z.coerce.number().int().positive(),
   seasonId: z.coerce.number().int().positive().optional(),
   checkInDate: z.string().optional(),
@@ -132,7 +132,14 @@ const createBlockSchema = z.object({
   ratePerNight: z.coerce.number().nonnegative().optional(),
   currency: z.string().length(3).optional(),
   notes: z.string().optional(),
-});
+}).refine(
+  (d) => {
+    const s = d.checkInDate ? Date.parse(d.checkInDate) : NaN;
+    const e = d.checkOutDate ? Date.parse(d.checkOutDate) : NaN;
+    return Number.isNaN(s) || Number.isNaN(e) || e >= s;
+  },
+  { path: ["checkOutDate"], message: "تاريخ المغادرة يجب ألا يسبق تاريخ الوصول" },
+);
 
 router.get("/room-blocks", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
