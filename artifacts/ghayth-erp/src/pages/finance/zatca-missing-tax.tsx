@@ -6,6 +6,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { formatDateAr, formatNumber } from "@/lib/formatters";
 import { AlertTriangle, Save, ExternalLink, ShieldCheck, History, Lock, KeyRound } from "lucide-react";
@@ -270,94 +271,84 @@ export default function ZatcaMissingTaxPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <LoadingSpinner />
-          ) : error ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-red-600 mb-3">
-                تعذّر تحميل القائمة. حاول مرة أخرى.
-              </p>
-              <Button variant="outline" onClick={() => refetch()}>
-                إعادة المحاولة
-              </Button>
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="text-center py-12 text-sm text-gray-500">
-              لا يوجد عملاء بلا رقم ضريبي يوقفون إرسال ZATCA حالياً.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-right text-gray-600">
-                    <th className="py-2 px-2">العميل</th>
-                    <th className="py-2 px-2">البريد / الهاتف</th>
-                    <th className="py-2 px-2">فواتير اليوم</th>
-                    <th className="py-2 px-2">إجمالي المعلّق</th>
-                    <th className="py-2 px-2">آخر فاتورة</th>
-                    <th className="py-2 px-2 w-72">رقم السجل الضريبي</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const draft = drafts[row.clientId] ?? "";
-                    const isSaving = savingId === row.clientId && saveMut.isPending;
-                    return (
-                      <tr
-                        key={row.clientId}
-                        className="border-b hover:bg-gray-50 align-middle"
+          <DataTable
+            noToolbar
+            data={rows}
+            isLoading={isLoading}
+            isError={!!error}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            rowKey={(row) => row.clientId}
+            emptyMessage="لا يوجد عملاء بلا رقم ضريبي يوقفون إرسال ZATCA حالياً."
+            columns={[
+              {
+                key: "clientName", header: "العميل", className: "font-medium",
+                render: (row) => (
+                  <>
+                    {row.clientName || `#${row.clientId}`}
+                    <Link
+                      to={`/clients/${row.clientId}`}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary mr-2"
+                      title="فتح صفحة العميل (يحتاج صلاحية وحدة العملاء)"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </Link>
+                  </>
+                ),
+              },
+              {
+                key: "email", header: "البريد / الهاتف", className: "text-xs text-gray-600",
+                render: (row) => (
+                  <>
+                    <div>{row.email ?? "—"}</div>
+                    <div>{row.phone ?? "—"}</div>
+                  </>
+                ),
+              },
+              {
+                key: "todayCount", header: "فواتير اليوم", className: "font-semibold",
+                render: (row) => row.todayCount,
+              },
+              {
+                key: "pendingCount", header: "إجمالي المعلّق",
+                render: (row) => row.pendingCount,
+              },
+              {
+                key: "lastInvoiceAt", header: "آخر فاتورة", className: "text-xs text-gray-600",
+                render: (row) => (row.lastInvoiceAt ? formatDateAr(row.lastInvoiceAt) : "—"),
+              },
+              {
+                key: "taxNumber", header: "رقم السجل الضريبي", sortable: false, width: "18rem",
+                render: (row) => {
+                  const draft = drafts[row.clientId] ?? "";
+                  const isSaving = savingId === row.clientId && saveMut.isPending;
+                  return (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={draft}
+                        onChange={(e) =>
+                          setDrafts((d) => ({ ...d, [row.clientId]: e.target.value }))
+                        }
+                        placeholder="3xxxxxxxxxxxxx3"
+                        dir="ltr"
+                        className="font-mono text-sm"
+                        disabled={isSaving}
+                        maxLength={20}
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleSave(row)}
+                        disabled={isSaving || draft.trim().length === 0}
                       >
-                        <td className="py-2 px-2 font-medium">
-                          {row.clientName || `#${row.clientId}`}
-                          <Link
-                            to={`/clients/${row.clientId}`}
-                            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary mr-2"
-                            title="فتح صفحة العميل (يحتاج صلاحية وحدة العملاء)"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                          </Link>
-                        </td>
-                        <td className="py-2 px-2 text-xs text-gray-600">
-                          <div>{row.email ?? "—"}</div>
-                          <div>{row.phone ?? "—"}</div>
-                        </td>
-                        <td className="py-2 px-2 font-semibold">
-                          {row.todayCount}
-                        </td>
-                        <td className="py-2 px-2">{row.pendingCount}</td>
-                        <td className="py-2 px-2 text-xs text-gray-600">
-                          {row.lastInvoiceAt ? formatDateAr(row.lastInvoiceAt) : "—"}
-                        </td>
-                        <td className="py-2 px-2">
-                          <div className="flex items-center gap-2">
-                            <Input
-                              value={draft}
-                              onChange={(e) =>
-                                setDrafts((d) => ({ ...d, [row.clientId]: e.target.value }))
-                              }
-                              placeholder="3xxxxxxxxxxxxx3"
-                              dir="ltr"
-                              className="font-mono text-sm"
-                              disabled={isSaving}
-                              maxLength={20}
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() => handleSave(row)}
-                              disabled={isSaving || draft.trim().length === 0}
-                            >
-                              <Save className="w-4 h-4 ml-1" />
-                              {isSaving ? "جارٍ الحفظ…" : "حفظ"}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                        <Save className="w-4 h-4 ml-1" />
+                        {isSaving ? "جارٍ الحفظ…" : "حفظ"}
+                      </Button>
+                    </div>
+                  );
+                },
+              },
+            ] satisfies DataTableColumn<MissingTaxRow>[]}
+          />
         </CardContent>
       </Card>
 
@@ -372,79 +363,63 @@ export default function ZatcaMissingTaxPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          {pauseQuery.isLoading ? (
-            <LoadingSpinner />
-          ) : pauseQuery.error ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-red-600 mb-3">تعذّر تحميل السجلّ.</p>
-              <Button variant="outline" onClick={() => pauseQuery.refetch()}>
-                إعادة المحاولة
-              </Button>
-            </div>
-          ) : pauseRows.length === 0 ? (
-            <div className="text-center py-12 text-sm text-gray-500">
-              لم تُفعَّل بوّابة الإيقاف بعد — لا توجد إيقافات مسجَّلة.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-right text-gray-600">
-                    <th className="py-2 px-2">التاريخ</th>
-                    <th className="py-2 px-2">عدد فواتير اليوم</th>
-                    <th className="py-2 px-2">المتوسّط (٧ أيام)</th>
-                    <th className="py-2 px-2">العميل الأكثر تأثيراً وقت الإيقاف</th>
-                    <th className="py-2 px-2">فواتير تم منع إرسالها</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pauseRows.map((row) => {
-                    const baseline = Number(row.baseline) || 0;
-                    return (
-                      <tr key={row.id} className="border-b hover:bg-gray-50 align-middle">
-                        <td className="py-2 px-2 text-xs text-gray-700">
-                          {formatDateAr(row.pauseDate)}
-                        </td>
-                        <td className="py-2 px-2 font-semibold">
-                          {formatNumber(row.todayCount)}
-                        </td>
-                        <td className="py-2 px-2 text-gray-700">
-                          {formatNumber(Number(baseline.toFixed(1)))} / يوم
-                        </td>
-                        <td className="py-2 px-2 text-xs">
-                          {row.topClientId ? (
-                            <Link
-                              to={`/clients/${row.topClientId}`}
-                              className="inline-flex items-center gap-1 hover:text-primary"
-                              title="فتح صفحة العميل (يحتاج صلاحية وحدة العملاء)"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              <span>
-                                {row.topClientName ?? `#${row.topClientId}`}
-                                {row.topClientCount != null
-                                  ? ` — ${formatNumber(row.topClientCount)}`
-                                  : ""}
-                              </span>
-                            </Link>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 font-semibold text-emerald-700">
-                          {formatNumber(row.todayCount)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <p className="text-xs text-gray-500 mt-3 leading-6">
-                صف واحد لكل يوم متوقّف لكل شركة. تُحدَّث القيم تلقائياً مع
-                وصول فواتير جديدة خلال نفس اليوم. حدّ التشغيل الحالي:{" "}
-                ×{pauseRows[0]?.multiplier ?? "—"} على المتوسّط، بحدّ أدنى{" "}
-                {formatNumber(pauseRows[0]?.minAbs ?? 0)} فاتورة.
-              </p>
-            </div>
+          <DataTable
+            noToolbar
+            data={pauseRows}
+            isLoading={pauseQuery.isLoading}
+            isError={!!pauseQuery.error}
+            error={pauseQuery.error as Error | null}
+            onRetry={() => pauseQuery.refetch()}
+            emptyMessage="لم تُفعَّل بوّابة الإيقاف بعد — لا توجد إيقافات مسجَّلة."
+            columns={[
+              {
+                key: "pauseDate", header: "التاريخ", className: "text-xs text-gray-700",
+                render: (row) => formatDateAr(row.pauseDate),
+              },
+              {
+                key: "todayCount", header: "عدد فواتير اليوم", className: "font-semibold",
+                render: (row) => formatNumber(row.todayCount),
+              },
+              {
+                key: "baseline", header: "المتوسّط (٧ أيام)", className: "text-gray-700",
+                render: (row) => `${formatNumber(Number((Number(row.baseline) || 0).toFixed(1)))} / يوم`,
+                exportValue: (row) => Number(row.baseline) || 0,
+              },
+              {
+                key: "topClientName", header: "العميل الأكثر تأثيراً وقت الإيقاف", className: "text-xs",
+                render: (row) =>
+                  row.topClientId ? (
+                    <Link
+                      to={`/clients/${row.topClientId}`}
+                      className="inline-flex items-center gap-1 hover:text-primary"
+                      title="فتح صفحة العميل (يحتاج صلاحية وحدة العملاء)"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>
+                        {row.topClientName ?? `#${row.topClientId}`}
+                        {row.topClientCount != null
+                          ? ` — ${formatNumber(row.topClientCount)}`
+                          : ""}
+                      </span>
+                    </Link>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  ),
+              },
+              {
+                key: "prevented", header: "فواتير تم منع إرسالها", sortable: false,
+                className: "font-semibold text-emerald-700",
+                render: (row) => formatNumber(row.todayCount),
+              },
+            ] satisfies DataTableColumn<PauseHistoryRow>[]}
+          />
+          {pauseRows.length > 0 && (
+            <p className="text-xs text-gray-500 mt-3 leading-6">
+              صف واحد لكل يوم متوقّف لكل شركة. تُحدَّث القيم تلقائياً مع
+              وصول فواتير جديدة خلال نفس اليوم. حدّ التشغيل الحالي:{" "}
+              ×{pauseRows[0]?.multiplier ?? "—"} على المتوسّط، بحدّ أدنى{" "}
+              {formatNumber(pauseRows[0]?.minAbs ?? 0)} فاتورة.
+            </p>
           )}
         </CardContent>
       </Card>

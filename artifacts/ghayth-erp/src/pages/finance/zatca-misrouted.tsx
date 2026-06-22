@@ -5,7 +5,7 @@ import { PageShell } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { AlertTriangle } from "lucide-react";
@@ -92,87 +92,71 @@ export default function ZatcaMisroutedPage() {
           </Button>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <LoadingSpinner />
-          ) : error ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-red-600 mb-3">
-                تعذّر تحميل القائمة. حاول مرة أخرى.
-              </p>
-              <Button variant="outline" onClick={() => refetch()}>
-                إعادة المحاولة
-              </Button>
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="text-center py-12 text-sm text-gray-500">
-              لا توجد فواتير تحتاج إلى تصحيح. كل الفواتير الضريبية للعملاء
-              المسجَّلين سُلِّكت عبر المسار الصحيح.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-right text-gray-600">
-                    <th className="py-2 px-2">رقم الفاتورة</th>
-                    <th className="py-2 px-2">العميل</th>
-                    <th className="py-2 px-2">الرقم الضريبي</th>
-                    <th className="py-2 px-2">المبلغ</th>
-                    <th className="py-2 px-2">VAT</th>
-                    <th className="py-2 px-2">تاريخ التبليغ إلى ZATCA</th>
-                    <th className="py-2 px-2">إجراء</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const total = Number(row.total) || 0;
-                    const paid = Number(row.paidAmount) || 0;
-                    const open = Math.max(0, total - paid);
-                    const isProcessing =
-                      creditMut.isPending &&
-                      confirmRow?.id === row.id;
-                    return (
-                      <tr
-                        key={row.id}
-                        className="border-b hover:bg-gray-50 align-middle"
-                      >
-                        <td className="py-2 px-2 font-medium">
-                          <Link
-                            to={`/finance/invoices/${row.id}`}
-                            className="text-primary hover:underline"
-                          >
-                            {row.ref}
-                          </Link>
-                        </td>
-                        <td className="py-2 px-2">{row.clientName ?? "—"}</td>
-                        <td className="py-2 px-2 font-mono text-xs">
-                          {row.clientTaxNumber ?? "—"}
-                        </td>
-                        <td className="py-2 px-2">{formatCurrency(total)}</td>
-                        <td className="py-2 px-2">
-                          {formatCurrency(Number(row.vatAmount) || 0)}
-                        </td>
-                        <td className="py-2 px-2 text-xs text-gray-600">
-                          {formatDateAr(row.zatcaReportedAt)}
-                        </td>
-                        <td className="py-2 px-2">
-                          <Button
-                            size="sm"
-                            variant="default"
-                            disabled={open <= 0 || isProcessing}
-                            onClick={() => setConfirmRow(row)}
-                          >
-                            {open <= 0
-                              ? "لا رصيد مفتوح"
-                              : "إصدار إشعار دائن + إعادة إصدار"}
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            noToolbar
+            data={rows}
+            isLoading={isLoading}
+            isError={!!error}
+            error={error as Error | null}
+            onRetry={() => refetch()}
+            emptyMessage="لا توجد فواتير تحتاج إلى تصحيح. كل الفواتير الضريبية للعملاء المسجَّلين سُلِّكت عبر المسار الصحيح."
+            columns={[
+              {
+                key: "ref", header: "رقم الفاتورة", className: "font-medium",
+                render: (row) => (
+                  <Link
+                    to={`/finance/invoices/${row.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {row.ref}
+                  </Link>
+                ),
+              },
+              {
+                key: "clientName", header: "العميل",
+                render: (row) => row.clientName ?? "—",
+              },
+              {
+                key: "clientTaxNumber", header: "الرقم الضريبي", className: "font-mono text-xs",
+                render: (row) => row.clientTaxNumber ?? "—",
+              },
+              {
+                key: "total", header: "المبلغ",
+                render: (row) => formatCurrency(Number(row.total) || 0),
+                exportValue: (row) => Number(row.total) || 0,
+              },
+              {
+                key: "vatAmount", header: "VAT",
+                render: (row) => formatCurrency(Number(row.vatAmount) || 0),
+                exportValue: (row) => Number(row.vatAmount) || 0,
+              },
+              {
+                key: "zatcaReportedAt", header: "تاريخ التبليغ إلى ZATCA", className: "text-xs text-gray-600",
+                render: (row) => formatDateAr(row.zatcaReportedAt),
+              },
+              {
+                key: "action", header: "إجراء", sortable: false,
+                render: (row) => {
+                  const total = Number(row.total) || 0;
+                  const paid = Number(row.paidAmount) || 0;
+                  const open = Math.max(0, total - paid);
+                  const isProcessing = creditMut.isPending && confirmRow?.id === row.id;
+                  return (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      disabled={open <= 0 || isProcessing}
+                      onClick={() => setConfirmRow(row)}
+                    >
+                      {open <= 0
+                        ? "لا رصيد مفتوح"
+                        : "إصدار إشعار دائن + إعادة إصدار"}
+                    </Button>
+                  );
+                },
+              },
+            ] satisfies DataTableColumn<MisroutedRow>[]}
+          />
         </CardContent>
       </Card>
 

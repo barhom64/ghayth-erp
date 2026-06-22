@@ -2,6 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { CreatePageLayout } from "@workspace/ui-core";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function IntercompanyConsolidationPage() {
@@ -53,28 +54,35 @@ export default function IntercompanyConsolidationPage() {
               {consolidation.byCompany?.length > 0 && (
                 <div>
                   <div className="text-sm font-semibold mb-2 text-status-neutral-foreground">الأداء حسب الشركة</div>
-                  <div className="rounded-xl border overflow-hidden">
-                    <div className="overflow-x-auto"><table className="w-full text-sm">
-                      <thead className="bg-surface-subtle">
-                        <tr>
-                          <th className="px-3 py-2 text-right">الشركة</th>
-                          <th className="px-3 py-2 text-right">الإيرادات</th>
-                          <th className="px-3 py-2 text-right">المصروفات</th>
-                          <th className="px-3 py-2 text-right">صافي الربح</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {consolidation.byCompany.map((c: any) => (
-                          <tr key={c.companyId} className="border-t">
-                            <td className="px-3 py-2 font-medium">{c.companyName}</td>
-                            <td className="px-3 py-2 text-status-success-foreground">{formatCurrency(c.revenue)}</td>
-                            <td className="px-3 py-2 text-status-error-foreground">{formatCurrency(c.expenses)}</td>
-                            <td className={`px-3 py-2 font-semibold ${roundMoney(c.revenue) - roundMoney(c.expenses) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}`}>{formatCurrency(roundMoney(roundMoney(c.revenue) - roundMoney(c.expenses)))}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table></div>
-                  </div>
+                  <DataTable
+                    noToolbar
+                    pageSize={0}
+                    data={consolidation.byCompany as any[]}
+                    rowKey={(c) => c.companyId}
+                    columns={[
+                      {
+                        key: "companyName", header: "الشركة", className: "font-medium",
+                        render: (c) => c.companyName,
+                      },
+                      {
+                        key: "revenue", header: "الإيرادات", className: "text-status-success-foreground",
+                        render: (c) => formatCurrency(c.revenue),
+                      },
+                      {
+                        key: "expenses", header: "المصروفات", className: "text-status-error-foreground",
+                        render: (c) => formatCurrency(c.expenses),
+                      },
+                      {
+                        key: "netProfit", header: "صافي الربح", className: "font-semibold",
+                        render: (c) => (
+                          <span className={roundMoney(c.revenue) - roundMoney(c.expenses) >= 0 ? "text-status-success-foreground" : "text-status-error-foreground"}>
+                            {formatCurrency(roundMoney(roundMoney(c.revenue) - roundMoney(c.expenses)))}
+                          </span>
+                        ),
+                        exportValue: (c) => roundMoney(roundMoney(c.revenue) - roundMoney(c.expenses)),
+                      },
+                    ] satisfies DataTableColumn<any>[]}
+                  />
                 </div>
               )}
             </div>

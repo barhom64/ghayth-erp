@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import {
@@ -14,6 +15,7 @@ import {
   Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Calendar,
 } from "lucide-react";
 import { formatCurrency, formatDateAr, todayLocal } from "@/lib/formatters";
+import { cn } from "@/lib/utils";
 
 /**
  * Cash Position Calculator (What-If)
@@ -172,6 +174,15 @@ export default function CashPositionCalculatorPage() {
     }
     return days;
   }, [horizon, today, movements, startingCash]);
+
+  // Visible projection rows: collapse consecutive days with no movements and an
+  // unchanged balance (same rule the raw table used) before handing to DataTable.
+  const visibleDays = useMemo(
+    () => projection.filter((day, i) =>
+      !(day.items.length === 0 && i > 0 && projection[i - 1]?.balance === day.balance)
+    ),
+    [projection],
+  );
 
   const finalBalance = projection.length > 0 ? projection[projection.length - 1]!.balance : startingCash;
   const totalInflow = movements.filter(m => m.type === "in").reduce((s, m) => s + m.amount, 0);
@@ -401,67 +412,79 @@ export default function CashPositionCalculatorPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto"><table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground">
-                    <th className="text-start py-2 px-2 w-32">اليوم</th>
-                    <th className="text-end py-2 px-2 w-24">داخل</th>
-                    <th className="text-end py-2 px-2 w-24">خارج</th>
-                    <th className="text-end py-2 px-2 w-24">صافي</th>
-                    <th className="text-end py-2 px-2 w-32">الرصيد المتوقع</th>
-                    <th className="py-2 px-2">حركات اليوم</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {projection.map((day, i) => {
-                    if (day.items.length === 0 && i > 0 && projection[i - 1]?.balance === day.balance) return null;
-                    return (
-                      <tr key={day.date} className={`border-b ${day.isToday ? "bg-status-info-surface" : ""} ${day.balance < 0 ? "bg-status-danger-surface" : ""}`}>
-                        <td className="py-2 px-2">
-                          <div className="font-medium text-xs">{day.label}</div>
-                          <div className="text-[10px] text-muted-foreground tabular-nums">{day.date}</div>
-                        </td>
-                        <td className="py-2 px-2 text-end tabular-nums">
-                          {day.inflow > 0 ? (
-                            <span className="text-status-success-foreground">+{formatCurrency(day.inflow)}</span>
-                          ) : "—"}
-                        </td>
-                        <td className="py-2 px-2 text-end tabular-nums">
-                          {day.outflow > 0 ? (
-                            <span className="text-status-danger-foreground">-{formatCurrency(day.outflow)}</span>
-                          ) : "—"}
-                        </td>
-                        <td className={`py-2 px-2 text-end tabular-nums ${day.net > 0 ? "text-status-success-foreground" : day.net < 0 ? "text-status-danger-foreground" : ""}`}>
-                          {day.net !== 0 ? (day.net > 0 ? "+" : "") + formatCurrency(day.net) : "—"}
-                        </td>
-                        <td className={`py-2 px-2 text-end tabular-nums font-bold ${day.balance < 0 ? "text-status-danger-foreground" : ""}`}>
-                          {formatCurrency(day.balance)}
-                        </td>
-                        <td className="py-2 px-2 text-xs">
-                          {day.items.length > 0 ? (
-                            <ul className="space-y-0.5">
-                              {day.items.slice(0, 3).map((it, j) => (
-                                <li key={j} className="truncate" title={it.description}>
-                                  <span className={it.type === "in" ? "text-status-success-foreground" : "text-status-danger-foreground"}>
-                                    {it.type === "in" ? "+" : "-"}
-                                  </span>{" "}
-                                  {it.description}
-                                  {it.source === "adhoc" && <Badge variant="outline" className="text-[9px] mr-1">افتراضي</Badge>}
-                                </li>
-                              ))}
-                              {day.items.length > 3 && (
-                                <li className="text-muted-foreground">+ {day.items.length - 3} حركة أخرى</li>
-                              )}
-                            </ul>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
+              <DataTable
+                noToolbar
+                pageSize={0}
+                data={visibleDays}
+                rowKey={(day) => day.date}
+                rowClassName={(day) =>
+                  cn(day.isToday && "bg-status-info-surface", day.balance < 0 && "bg-status-danger-surface")
+                }
+                columns={[
+                  {
+                    key: "date", header: "اليوم", width: "8rem", ltr: true,
+                    render: (day) => (
+                      <>
+                        <div className="font-medium text-xs">{day.label}</div>
+                        <div className="text-[10px] text-muted-foreground tabular-nums">{day.date}</div>
+                      </>
+                    ),
+                  },
+                  {
+                    key: "inflow", header: "داخل", align: "end", width: "6rem", className: "tabular-nums",
+                    render: (day) =>
+                      day.inflow > 0
+                        ? <span className="text-status-success-foreground">+{formatCurrency(day.inflow)}</span>
+                        : "—",
+                  },
+                  {
+                    key: "outflow", header: "خارج", align: "end", width: "6rem", className: "tabular-nums",
+                    render: (day) =>
+                      day.outflow > 0
+                        ? <span className="text-status-danger-foreground">-{formatCurrency(day.outflow)}</span>
+                        : "—",
+                  },
+                  {
+                    key: "net", header: "صافي", align: "end", width: "6rem", className: "tabular-nums",
+                    render: (day) => (
+                      <span className={day.net > 0 ? "text-status-success-foreground" : day.net < 0 ? "text-status-danger-foreground" : ""}>
+                        {day.net !== 0 ? (day.net > 0 ? "+" : "") + formatCurrency(day.net) : "—"}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "balance", header: "الرصيد المتوقع", align: "end", width: "8rem",
+                    className: "tabular-nums font-bold",
+                    render: (day) => (
+                      <span className={day.balance < 0 ? "text-status-danger-foreground" : ""}>
+                        {formatCurrency(day.balance)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "items", header: "حركات اليوم", sortable: false, className: "text-xs",
+                    render: (day) =>
+                      day.items.length > 0 ? (
+                        <ul className="space-y-0.5">
+                          {day.items.slice(0, 3).map((it, j) => (
+                            <li key={j} className="truncate" title={it.description}>
+                              <span className={it.type === "in" ? "text-status-success-foreground" : "text-status-danger-foreground"}>
+                                {it.type === "in" ? "+" : "-"}
+                              </span>{" "}
+                              {it.description}
+                              {it.source === "adhoc" && <Badge variant="outline" className="text-[9px] mr-1">افتراضي</Badge>}
+                            </li>
+                          ))}
+                          {day.items.length > 3 && (
+                            <li className="text-muted-foreground">+ {day.items.length - 3} حركة أخرى</li>
                           )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table></div>
+                        </ul>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      ),
+                  },
+                ] satisfies DataTableColumn<(typeof visibleDays)[number]>[]}
+              />
             </CardContent>
           </Card>
         </>
