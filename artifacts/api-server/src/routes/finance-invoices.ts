@@ -51,7 +51,7 @@ const createInvoiceSchema = z.object({
   // still works exactly as today, falling back to the company-level
   // generic revenue account on approval.
   lines: z.array(z.object({
-    description: z.string().optional(),
+    description: z.string().max(2000, "الوصف طويل جدًا").optional(),
     quantity: z.coerce.number().optional(),
     unitPrice: z.coerce.number().nonnegative().optional(),
     accountCode: z.string().optional(),
@@ -94,7 +94,7 @@ const createInvoiceSchema = z.object({
   description: z.string().max(1000).optional(),
   subtotal: z.coerce.number().optional(),
   total: z.coerce.number().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
   paymentTermsDays: z.coerce.number().optional(),
   branchId: z.coerce.number().optional(),
   companyId: z.coerce.number().optional(),
@@ -121,7 +121,7 @@ const createPaymentSchema = z.object({
 
 const createCreditMemoSchema = z.object({
   amount: z.coerce.number().positive("المبلغ مطلوب"),
-  reason: z.string().min(1, "السبب مطلوب"),
+  reason: z.string().min(1, "السبب مطلوب").max(2000, "النص طويل جدًا"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
 });
@@ -129,7 +129,7 @@ const createCreditMemoSchema = z.object({
 // Preview-time schema — same shape, but `reason` is optional since the
 // operator may not have settled on a justification yet when previewing.
 const previewCreditMemoSchema = createCreditMemoSchema.omit({ reason: true }).extend({
-  reason: z.string().optional(),
+  reason: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 // ZATCA invoice amendment — the only legal way to "edit" an approved
@@ -143,7 +143,7 @@ const previewCreditMemoSchema = createCreditMemoSchema.omit({ reason: true }).ex
 // — omitted fields fall back to the original invoice's value. `reason`
 // is mandatory because ZATCA filings include it on the chain.
 const amendInvoiceSchema = z.object({
-  reason: z.string().min(1, "سبب التعديل مطلوب"),
+  reason: z.string().min(1, "سبب التعديل مطلوب").max(2000, "النص طويل جدًا"),
   // Optional overrides — when set, the new invoice carries this value;
   // when omitted, the value carries over from the original. Same shape
   // as createInvoiceSchema so the orchestrator can spread it through.
@@ -152,7 +152,7 @@ const amendInvoiceSchema = z.object({
   dueDate: z.string().optional(),
   date: z.string().optional(),
   description: z.string().max(1000).optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
   discountAmount: z.coerce.number().min(0).optional(),
   discountPercent: z.coerce.number().min(0).max(100).optional(),
   taxCode: z.string().optional(),
@@ -164,7 +164,7 @@ const createCustomerAdvanceSchema = z.object({
   amount: z.coerce.number().positive("المبلغ مطلوب"),
   method: z.string().optional(),
   reference: z.string().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
   receivedDate: z.string().optional(),
   // Operator's explicit branch pick. Required for multi-branch users;
   // single-branch users auto-resolve via the resolver. The advance JE
@@ -206,13 +206,13 @@ const impactPreviewSchema = z.object({
 
 const patchInvoiceSchema = z.object({
   status: z.enum(["draft", "pending_approval", "approved", "sent", "partial", "partially_paid", "paid", "overdue", "void", "rejected", "cancelled", "returned", "delivered", "ordered", "posted", "closed", "invoiced"]).optional(),
-  description: z.string().optional(),
+  description: z.string().max(2000, "الوصف طويل جدًا").optional(),
   dueDate: z.string().optional(),
 });
 
 const createDebitMemoSchema = z.object({
   amount: z.coerce.number().positive("المبلغ مطلوب ويجب أن يكون أكبر من صفر"),
-  reason: z.string().min(1, "سبب الإشعار المدين مطلوب"),
+  reason: z.string().min(1, "سبب الإشعار المدين مطلوب").max(2000, "النص طويل جدًا"),
   vatIncluded: z.boolean().optional(),
   memoDate: z.string().optional(),
 });
@@ -220,7 +220,7 @@ const createDebitMemoSchema = z.object({
 // Preview-time schema — same shape, but `reason` is optional since the
 // operator may not have settled on a justification yet when previewing.
 const previewDebitMemoSchema = createDebitMemoSchema.omit({ reason: true }).extend({
-  reason: z.string().optional(),
+  reason: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 const badDebtPostSchema = z.object({
@@ -233,7 +233,7 @@ const badDebtPostSchema = z.object({
     d90: z.coerce.number().optional(),
     d90plus: z.coerce.number().optional(),
   }).optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
 });
 
 const applyAdvanceSchema = z.object({
@@ -242,7 +242,7 @@ const applyAdvanceSchema = z.object({
 });
 
 const invoiceApprovalActionSchema = z.object({
-  notes: z.string().optional(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional(),
 });
 
 const dunningSendSchema = z.object({
