@@ -47,8 +47,8 @@ routes/storage.ts:documents
 routes/training.ts:training_enrollments
 routes/umrah-entities.ts:umrah_agents
 routes/umrah-entities.ts:umrah_groups
-routes/umrah-entities.ts:umrah_import_changes
 routes/umrah-entities.ts:umrah_sub_agents
+routes/umrah-import-batches.ts:umrah_import_changes
 routes/umrah.ts:fleet_drivers
 routes/umrah.ts:fleet_vehicles
 routes/umrah.ts:umrah_agents
