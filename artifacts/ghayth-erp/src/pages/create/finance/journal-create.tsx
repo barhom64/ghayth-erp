@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CreatePageLayout, AutoField, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
@@ -136,27 +136,49 @@ export default function JournalCreate() {
 
       <Card className="mb-4">
         <CardContent className="pt-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">بنود القيد</h3>
-            <Button variant="outline" size="sm" onClick={addLine}><Plus className="h-4 w-4 me-1" />إضافة بند</Button>
-          </div>
-          <div className="space-y-2">
-            <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 text-sm font-medium text-muted-foreground">
-              <span>الحساب</span><span>البيان</span><span>مدين</span><span>دائن</span><span></span>
-            </div>
-            {lines.map((line, idx) => (
-              <div key={idx} className="space-y-1">
-                <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2">
+          <h3 className="font-semibold mb-3">بنود القيد</h3>
+          {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
+              بدل شبكة CSS يدوية (الحساب/البيان/مدين/دائن أعمدة؛ أبعاد السطر
+              (مركز تكلفة/قسم/مشروع) + لوحة الأبعاد الكاملة عبر renderExpansion؛
+              صف الإجمالي عبر renderTotals). */}
+          <LineItemsTable<JournalLine>
+            items={lines}
+            minItems={2}
+            onAdd={addLine}
+            onRemove={removeLine}
+            addLabel="إضافة بند"
+            columns={[
+              {
+                header: "الحساب",
+                render: (line, idx) => (
                   <PostingAccountSelect
                     value={line.accountCode}
                     onChange={(v) => updateLine(idx, "accountCode", v)}
                     label="" allowCreate={false}
                   />
+                ),
+              },
+              {
+                header: "البيان",
+                render: (line, idx) => (
                   <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} placeholder="وصف البند" />
+                ),
+              },
+              {
+                header: "مدين", width: "120px",
+                render: (line, idx) => (
                   <NumberField label="مدين" hideLabel value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
+                ),
+              },
+              {
+                header: "دائن", width: "120px",
+                render: (line, idx) => (
                   <NumberField label="دائن" hideLabel value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
-                  <Button variant="ghost" size="icon" title="حذف" onClick={() => removeLine(idx)} disabled={lines.length <= 2}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                </div>
+                ),
+              },
+            ]}
+            renderExpansion={(line, idx) => (
+              <div className="space-y-1">
                 <div className="grid grid-cols-3 gap-2 ps-1">
                   <Input
                     className="h-8 text-xs"
@@ -195,18 +217,20 @@ export default function JournalCreate() {
                   required={false}
                 />
               </div>
-            ))}
-            <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">
-              <span></span>
-              <span>الإجمالي</span>
-              <span>{formatCurrency(totalDebit)}</span>
-              <span>{formatCurrency(totalCredit)}</span>
-              <span></span>
-            </div>
-            {!isBalanced && totalDebit > 0 && (
-              <p className="text-destructive text-sm">القيد غير متوازن — المدين يجب أن يساوي الدائن</p>
             )}
-          </div>
+            renderTotals={() => (
+              <tr className="bg-surface-subtle font-semibold border-t text-sm">
+                <td></td>
+                <td className="px-3 py-2">الإجمالي</td>
+                <td className="px-3 py-2">{formatCurrency(totalDebit)}</td>
+                <td className="px-3 py-2">{formatCurrency(totalCredit)}</td>
+                <td></td>
+              </tr>
+            )}
+            footer={!isBalanced && totalDebit > 0 ? (
+              <p className="text-destructive text-sm">القيد غير متوازن — المدين يجب أن يساوي الدائن</p>
+            ) : undefined}
+          />
         </CardContent>
       </Card>
 
