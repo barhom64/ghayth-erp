@@ -119,6 +119,66 @@ describe("buildCycleCountEntryInput — both branches", () => {
     }
   });
 
+  // ─── Warehouse dimension (dim-loss gap closed) ────────────────────────
+  // Pre-fix: variance lines were posted with NO dimension, so per-warehouse
+  // GL drilldowns silently excluded the entire cycle-count entry even though
+  // warehouse_cycle_counts.warehouseId is NOT NULL. journal_lines has no
+  // typed warehouseId column, so the dimension rides in dimensionJson
+  // (the sanctioned arbitrary-dimension bag — migration 201).
+
+  it("stamps dimensionJson.warehouseId on EVERY line (both legs, both branches)", () => {
+    const input = buildCycleCountEntryInput({
+      description: "x",
+      totals: { totalGainValue: 30, totalLossValue: 50 },
+      accounts: ACCOUNTS,
+      cycleCountId: 7,
+      warehouseId: 99,
+    });
+    // 4 lines (overage DR/CR + shrinkage DR/CR) — none may drop the dim.
+    expect(input.lines).toHaveLength(4);
+    for (const line of input.lines) {
+      expect(line.dimensionJson).toEqual({ warehouseId: 99 });
+    }
+  });
+
+  it("warehouse dimension is metadata only — balance + amounts unchanged", () => {
+    const withDim = buildCycleCountEntryInput({
+      description: "x",
+      totals: { totalGainValue: 30, totalLossValue: 50 },
+      accounts: ACCOUNTS,
+      cycleCountId: 7,
+      warehouseId: 99,
+    });
+    const withoutDim = buildCycleCountEntryInput({
+      description: "x",
+      totals: { totalGainValue: 30, totalLossValue: 50 },
+      accounts: ACCOUNTS,
+      cycleCountId: 7,
+    });
+    // Same accounts + same amounts on every line regardless of the dim.
+    expect(withDim.lines.map((l) => [l.accountId, l.amount])).toEqual(
+      withoutDim.lines.map((l) => [l.accountId, l.amount]),
+    );
+    // Entry still balances identically.
+    const entry = buildEntry(withDim);
+    expect(entry.balanced).toBe(true);
+    expect(entry.totalDebit).toBe(80);
+    expect(entry.totalCredit).toBe(80);
+    expect(entry.totalDebit).toBe(buildEntry(withoutDim).totalDebit);
+  });
+
+  it("omits dimensionJson when no warehouseId is supplied", () => {
+    const input = buildCycleCountEntryInput({
+      description: "x",
+      totals: { totalGainValue: 30, totalLossValue: 0 },
+      accounts: ACCOUNTS,
+      cycleCountId: 7,
+    });
+    for (const line of input.lines) {
+      expect(line.dimensionJson).toBeUndefined();
+    }
+  });
+
   it("uses inventory_asset (1400), variance gain (4620), and variance loss (5620)", () => {
     // Guard against the accidental wiring bug — variance accounts
     // are 4620/5620, distinct from the FX revaluation (4900/5900)
