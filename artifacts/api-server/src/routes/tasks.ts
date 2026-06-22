@@ -18,8 +18,8 @@ import { logger } from "../lib/logger.js";
 const assigneeRefSchema = z.union([z.string(), z.coerce.number()]);
 
 const createTaskSchema = z.object({
-  title: z.string().min(1, "عنوان المهمة مطلوب"),
-  description: z.string().optional().nullable(),
+  title: z.string().min(1, "عنوان المهمة مطلوب").max(500, "العنوان طويل جدًا"),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   type: z.string().optional().nullable(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional().default("medium"),
   scheduledStart: z.string().optional().nullable(),
@@ -27,7 +27,7 @@ const createTaskSchema = z.object({
   scheduledDate: z.string().optional().nullable(),
   clientName: z.string().optional().nullable(),
   clientId: z.coerce.number().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(5000, "الملاحظات طويلة جدًا").optional().nullable(),
   // Single-assignee legacy field. The primary owner of the task. If
   // `assignees` is also provided, the first element of `assignees`
   // becomes the primary and `assignedTo` is ignored.
@@ -42,15 +42,15 @@ const createTaskSchema = z.object({
 });
 
 const updateTaskSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional().nullable(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   type: z.string().optional().nullable(),
   priority: z.enum(["low", "medium", "high", "critical"]).optional(),
   status: z.string().optional(),
   scheduledStart: z.string().optional().nullable(),
   scheduledEnd: z.string().optional().nullable(),
   scheduledDate: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(5000, "الملاحظات طويلة جدًا").optional().nullable(),
   // Reassign primary owner (also overwrites tasks.assignedTo mirror).
   assignedTo: assigneeRefSchema.optional().nullable(),
   // Full replacement of the assignee team. Empty array clears the team.
