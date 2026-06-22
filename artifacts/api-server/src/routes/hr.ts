@@ -164,12 +164,26 @@ const performanceSchema = z.object({
   status: z.enum(["pending", "in_progress", "completed", "acknowledged"]).optional(),
 });
 
-const salaryComponentSchema = z.object({
+// value is validated CONDITIONALLY by calculationType (Ibrahim 2026-06-21:
+// ثابت/نسبة/معادلة حسب اختيار المستخدم). The payroll calc (computePayroll)
+// uses value as `basic * value/100` for percentage and as a direct amount for
+// fixed/formula — so: percentage ⇒ 0..100, fixed/formula ⇒ non-negative amount.
+// A flat .min(0).max(100) would wrongly cap a fixed SAR amount; hence superRefine.
+export const salaryComponentSchema = z.object({
   name: z.string().min(1, "اسم مكوّن الراتب مطلوب"),
   type: z.enum(["earning", "deduction", "benefit"]).optional(),
   calculationType: z.enum(["fixed", "percentage", "formula"]).optional(),
   value: z.coerce.number().optional(),
   taxable: z.boolean().optional(),
+}).superRefine((d, ctx) => {
+  if (d.value == null) return;
+  if ((d.calculationType ?? "fixed") === "percentage") {
+    if (d.value < 0 || d.value > 100) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "نسبة المكوّن يجب أن تكون بين 0 و100" });
+    }
+  } else if (d.value < 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: "قيمة المكوّن يجب ألا تكون سالبة" });
+  }
 });
 
 const salaryComponentPatchSchema = z.object({
@@ -4146,6 +4160,22 @@ router.patch("/salary-components/:id", authorize({ feature: "hr.payroll.runs", a
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     sets.push(`"updatedAt"=NOW()`);
     const [beforeRow] = await rawQuery<Record<string, unknown>>(`SELECT * FROM salary_components WHERE id=$1 AND "companyId"=$2`, [id, scope.companyId]);
+    // validate value against the EFFECTIVE (merged) calculationType — a partial
+    // update can change value without calculationType (or vice-versa). percentage
+    // ⇒ 0..100, fixed/formula ⇒ non-negative (mirrors the create-time superRefine).
+    {
+      const effType = String(b.calculationType ?? beforeRow?.calculationType ?? "fixed");
+      const effValue = b.value !== undefined
+        ? Number(b.value)
+        : (beforeRow?.value != null ? Number(beforeRow.value) : undefined);
+      if (effValue != null) {
+        if (effType === "percentage") {
+          if (effValue < 0 || effValue > 100) throw new ValidationError("نسبة المكوّن يجب أن تكون بين 0 و100", { field: "value" });
+        } else if (effValue < 0) {
+          throw new ValidationError("قيمة المكوّن يجب ألا تكون سالبة", { field: "value" });
+        }
+      }
+    }
     params.push(id); params.push(scope.companyId);
     const { affectedRows } = await rawExecute(`UPDATE salary_components SET ${sets.join(",")} WHERE id=$${params.length - 1} AND "companyId"=$${params.length}`, params);
     if (!affectedRows) throw new NotFoundError("مكوّن الراتب غير موجود");
