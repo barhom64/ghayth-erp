@@ -2782,8 +2782,8 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     }
 
     const [existing] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND "revaluationDate"=$2::date`,
-      [scope.companyId, periodEndDate]
+      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND period=$2`,
+      [scope.companyId, period]
     );
     if (existing) {
       throw new ConflictError(`تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً`);
