@@ -74,6 +74,7 @@ const EXECUTIVE_TABLES = new Set([
   "hr_exit_requests",
   "vendor_advances",            // ref — AP mirror of customer_advances (#1141)
   "vendor_credit_memos",        // ref — AP twin of credit_memos (#1141)
+  "intercompany_transactions",  // ref — each leg its own center-issued IC number (#1141)
 ]);
 
 // Files we don't expect to issue numbers — admin / read-only / engine
