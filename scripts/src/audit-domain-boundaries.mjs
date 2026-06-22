@@ -153,7 +153,8 @@ const BASELINE = new Set([
   // (لم يُدخلها هذا الـPR؛ كانت قائمة على main قبل توسيع التغطية.)
   "finance-hardening.ts:projects",          // finance يكتب projects (أداة hardening/datafix؟)
   "finance-invoices.ts:warehouse_movements",// ربط الفاتورة بحركة مخزون/COGS؟
-  "publicData.ts:employees",                // تحديث employees من مسار بيانات عامة (استكمال ذاتي)
+  // (publicData→employees عُولِج في #2839: نُقل لعقد HR applySelfOnboardingSubmission
+  //  — الاستكمال الذاتي يُطبَّق عبر المسار القائد لا مباشرةً.)
   // (settings→employee_assignments/purchase_orders عُولِجا في #2839: نُقلا لعقدَي
   //  HR/المالية القائدين عند تعطيل الفرع — لم تعد الإعدادات تكتبهما مباشرة.)
 ]);

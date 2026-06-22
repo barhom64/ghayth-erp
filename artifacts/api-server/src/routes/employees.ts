@@ -302,6 +302,26 @@ async function registerEmployeeExpiryObligations(
   }
 }
 
+// عقد قائد/خادم (#2839): تطبيق بيانات الاستكمال الذاتي على سجل الموظف. مسار
+// البيانات العامة (publicData، خادم بواجهة عامة) يستقبل النموذج عبر رابط token
+// مُتحقَّق، لكن **الكتابة** في جدول HR المملوك (employees) تبقى هنا في المسار
+// القائد (HR): تُكتب حقول الـstaging فقط (selfSubmittedData/At + حالة
+// 'self_submitted') بانتظار اعتماد HR — لا تغيير لأي حقل تشغيلي آخر.
+export async function applySelfOnboardingSubmission(
+  employeeId: number,
+  companyId: number,
+  data: unknown,
+): Promise<{ name: string } | undefined> {
+  const updated = await rawQuery<{ name: string }>(
+    `UPDATE employees
+        SET "selfSubmittedData" = $1::jsonb, "selfSubmittedAt" = NOW(), "activationStatus" = 'self_submitted'
+      WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
+      RETURNING name`,
+    [JSON.stringify(data), employeeId, companyId],
+  );
+  return updated[0];
+}
+
 const router = Router();
 
 // RBAC v2: list with scope-aware response. maskFields applied so any
