@@ -1499,12 +1499,15 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
         });
         projectRef = issuedProj.number;
       }
-      const { insertId } = await rawExecute(
-        `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
-      );
-      assertInsert(insertId, "projects");
+      // حدود المسارات (#2839): الكتابة في جدول المشاريع المملوك تتمّ عبر عقد
+      // المسار القائد (المشاريع) لا مباشرةً من المالية.
+      const { insertProjectRecord } = await import("./projects.js");
+      const insertId = await insertProjectRecord({
+        companyId: scope.companyId, ref: projectRef, name,
+        description: description ?? null, budget: Number(budget ?? 0),
+        startDate: startDate ?? null, endDate: endDate ?? null,
+        managerId: scope.activeAssignmentId,
+      });
       return { insertId, issuedProj };
     });
     if (issuedProj) {
