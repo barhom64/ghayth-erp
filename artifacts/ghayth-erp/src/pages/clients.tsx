@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 export default function Clients() {
   const { roleLevel, scopeQueryString } = useAppContext();
@@ -34,6 +35,10 @@ export default function Clients() {
   const [filters, setFilters] = useFilters();
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [page, setPage] = useState(1);
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة عميل» يفتح
+  // النموذج الكامل في درج بدل الانتقال لصفحة /create. صفحة الإنشاء الكاملة
+  // تبقى متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
   // #2713 — سلة المحذوفات: تبديل بين القائمة النشطة والمحذوفة (للاسترجاع).
   const [showDeleted, setShowDeleted] = useState(false);
   const pageSize = 20;
@@ -260,12 +265,10 @@ export default function Clients() {
             >
               + سريع
             </GuardedButton>
-            <Link href="/clients/create">
-              <GuardedButton perm="clients:create" className="gap-2">
-                <Plus className="h-4 w-4" />
-                إضافة عميل
-              </GuardedButton>
-            </Link>
+            <GuardedButton perm="clients:create" className="gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              إضافة عميل
+            </GuardedButton>
           </>
           )}
         </div>
@@ -347,6 +350,16 @@ export default function Clients() {
       />
 
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة العميل" data={previewItem} fields={previewFields} />
+
+      <AllowCreateDrawer
+        kind="client"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء العميل" });
+          refetch();
+        }}
+      />
     </PageShell>
   );
 }

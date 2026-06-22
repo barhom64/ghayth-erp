@@ -8,7 +8,7 @@
 #   node scripts/src/check-display-tables.mjs --write-allowlist
 # When a page is moved to <DataTable>, prune its line.
 #
-# Baseline captured: 6 page(s). Each verified bespoke (read the table body
+# Baseline captured: 8 page(s). Each verified bespoke (read the table body
 # before adding a new line — a convertible display list does NOT belong here).
 
 # editable-form — data-entry grids. The 2026-06 pass converted every
@@ -18,6 +18,8 @@
 # admin, account-reconciliation-workpaper. Only this one genuinely can't — its
 # row selection state is pinned by tests:
 artifacts/ghayth-erp/src/pages/umrah/import-unlinked.tsx                  # editable-form (test-pinned selection checkboxes)
+artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx        # editable-form (invoice line-item entry: product/qty/price/tax cells)
+artifacts/ghayth-erp/src/pages/create/finance/vendor-invoice-create.tsx  # editable-form (vendor-invoice line-item entry cells)
 
 # statement — vertical financial statements / equations: hierarchical or
 # fixed label/value rows with arithmetic, not a column dataset.

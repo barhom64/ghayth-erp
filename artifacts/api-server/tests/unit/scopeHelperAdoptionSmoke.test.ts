@@ -241,13 +241,44 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // schedule template. List/lookup keyed on (companyId, id) — same shape as
   // the other transport surfaces; buildScopedWhere has no branch cascade to add.
   "transport-route-patterns.ts",
+  // umrah-accommodation.ts: U-07 Phase 4 split — 9 accommodation routes (hotels /
+  // room-blocks / room-allocations) carved verbatim out of umrah-entities.ts.
+  // Point lookups + per-tenant CRUD keyed on (companyId, id); inherits the same
+  // allowlist justification as the parent umrah-entities.ts.
+  "umrah-accommodation.ts",
+  // umrah-commission.ts: U-07 Phase 5 split — 8 commission-plan / calculation
+  // routes carved verbatim out of umrah-entities.ts. Point lookups + per-tenant
+  // CRUD keyed on (companyId, id); inherits the same allowlist justification as
+  // the parent umrah-entities.ts.
+  "umrah-commission.ts",
   "umrah-entities.ts",
+  // umrah-sub-agents.ts: U-07 Phase 6 split — 9 sub-agents CRUD + linking routes
+  // carved verbatim out of umrah-entities.ts. Point lookups + per-tenant CRUD
+  // keyed on (companyId, id); inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-sub-agents.ts",
+  // umrah-pricing.ts: U-07 Phase 7 split — 4 pricing CRUD routes carved verbatim
+  // out of umrah-entities.ts. Point lookups + per-tenant CRUD keyed on
+  // (companyId, id); inherits the same allowlist justification as the parent
+  // umrah-entities.ts.
+  "umrah-pricing.ts",
+  // umrah-import-batches.ts: U-07 Phase 8 split — import-batches listing +
+  // unlinked-rows recovery (4 routes) carved verbatim out of umrah-entities.ts.
+  // Per-tenant point lookups + a transactional bulk-link keyed on
+  // (companyId, id/batchId); inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-import-batches.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
   // justification as the parent umrah-entities.ts (calendar/aggregate shape,
   // not list cascades).
   "umrah-journey-reports.ts",
+  // umrah-families.ts: U-07 Phase 2 split — 5 families CRUD routes carved
+  // verbatim out of umrah-entities.ts. Point lookups + per-tenant CRUD keyed
+  // on (companyId, id); inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-families.ts",
   "umrah.ts",
   "wiring-stubs.ts",
   "workspace.ts",
@@ -398,9 +429,27 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: routes/finance-pricing.ts — إحياء «قواعد التسعير»
       // (مخطّط 171 المُطبّع). CRUD نقطي + upserts على (companyId, id) داخل
       // transactions، يطابق finance-amortization.ts؛ لا cascade فروع. allowlisted.
-      total: 135,
+      // +1 total/manualOnly: U-07 Phase 2 routes/umrah-families.ts — 5 families
+      // CRUD routes carved verbatim out of umrah-entities.ts. Same allowlist
+      // justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 4 routes/umrah-accommodation.ts — 9
+      // accommodation routes (hotels / room-blocks / allocations) carved verbatim
+      // out of umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 5 routes/umrah-commission.ts — 8
+      // commission-plan / calculation routes carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 6 routes/umrah-sub-agents.ts — 9
+      // sub-agents CRUD + linking routes carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 7 routes/umrah-pricing.ts — 4 pricing
+      // CRUD routes carved verbatim out of umrah-entities.ts. Same allowlist
+      // justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 8 routes/umrah-import-batches.ts —
+      // import-batches listing + unlinked-rows recovery carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      total: 141,
       helperUsers: 39,
-      manualOnly: 92,
+      manualOnly: 98,
     });
   });
 });

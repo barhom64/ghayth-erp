@@ -3,8 +3,6 @@ import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +48,6 @@ export default function WarehouseLotsPage() {
     searchFields: ["lotNumber", "productName", "warehouseName"],
     statusField: "status",
   });
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const columns = useMemo<any[]>(() => [
     { key: "lotNumber", header: "رقم الدفعة", cell: (r: any) => <span className="font-mono">{r.lotNumber}</span> },
@@ -123,23 +120,7 @@ export default function WarehouseLotsPage() {
 
   return (
     <PageShell title="الدفعات المخزنية" 
-      actions={
-        <div className="flex items-center gap-2">
-          <PrintButton
-            entityType="report_warehouse_lots"
-            entityId="list"
-            size="icon"
-            payload={() => ({
-              entity: { title: "الدفعات المخزنية", total: printRows.length },
-              items: printRows.map((r: any) => Object.fromEntries(
-                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
-              )),
-            })}
-          />
-          <Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />استلام دفعة</Button>
-        </div>
-      }
+      actions={<Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />استلام دفعة</Button>}
     >
       <WarehouseTabsNav />
       <AdvancedFilters
@@ -182,7 +163,7 @@ export default function WarehouseLotsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <DataTable data={filtered} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد دفعات" noToolbar />
+          <DataTable data={filtered} columns={columns} emptyMessage="لا توجد دفعات" noToolbar />
         </CardContent>
       </Card>
 

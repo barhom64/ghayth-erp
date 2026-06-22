@@ -13,12 +13,10 @@
 //   DELETE /org/scoring-weights/:id
 //   GET    /org/scoring-ranking        — Top N employees by composite
 // ════════════════════════════════════════════════════════════════════════════
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -248,15 +246,6 @@ function RankingTab() {
     ["scoring-ranking", scope], `/org/scoring-ranking?scope=${scope}&limit=100`,
   );
   const rows = asList<RankingRow>(data?.data || []);
-  const [q, setQ] = useState("");
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter((r) =>
-      [r.employeeName, r.jobTitle].some((f) => String(f ?? "").toLowerCase().includes(term)),
-    );
-  }, [rows, q]);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const scoreClass = (s: number): string => {
     if (s >= 85) return "text-emerald-700 font-bold";
@@ -307,29 +296,7 @@ function RankingTab() {
         {data?.periodKey && (
           <Badge variant="secondary" className="font-mono">{data.periodKey}</Badge>
         )}
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="بحث بالموظف أو المسمى…"
-          className="h-9 w-56"
-        />
-        <span className="text-xs text-muted-foreground">{filtered.length} موظف</span>
-        <PrintButton
-          entityType="report_org_scoring_ranking"
-          entityId="list"
-          size="icon"
-          payload={() => ({
-            entity: { title: `ترتيب الأداء (${data?.periodKey ?? scope})`, total: printRows.length },
-            items: printRows.map((r: any) => ({
-              "#": r.rank,
-              "الموظف": r.employeeName,
-              "النتيجة": Math.round(Number(r.compositeScore)),
-              "انضباط": Math.round(Number(r.disciplineScore)),
-              "نشاط": Math.round(Number(r.activityScore)),
-              "إنتاجية": Math.round(Number(r.productivityScore)),
-            })),
-          })}
-        />
+        <span className="text-xs text-muted-foreground">{rows.length} موظف</span>
       </div>
 
       {data?.message ? (
@@ -337,7 +304,7 @@ function RankingTab() {
       ) : (
         <Card>
           <CardContent className="p-3">
-            <DataTable data={filtered} columns={columns} onSortedDataChange={setPrintRows} pageSize={50} noToolbar emptyMessage="لا توجد بيانات تقييم لهذه الفترة." />
+            <DataTable data={rows} columns={columns} pageSize={50} noToolbar emptyMessage="لا توجد بيانات تقييم لهذه الفترة." />
           </CardContent>
         </Card>
       )}

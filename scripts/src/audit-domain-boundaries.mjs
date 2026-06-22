@@ -126,12 +126,17 @@ function inferDomain(basename) {
 const BASELINE = new Set([
   // (الحذف العابر admin→employee_assignments عولِج ودُمج في #2828؛ بقي فقط
   //  INSERT الـbootstrap المعتمد، المُدرج ضمن قسم الـbootstrap أدناه.)
-  // communications (خادم) يقرر دعم/CRM ويكتب جداولهما — قرار نطاق مؤجّل.
+  // communications → support_tickets: بقي فقط مسار «التحويل» بمبادرة المستخدم
+  // (communications.ts:856) وهو ضمن دور «التحويل» الدستوري المعتمد للاتصالات.
+  // المسار التلقائي (AI) عُولِج في #2838 بتمريره عبر عقد الدعم القائد.
   "communications.ts:support_tickets",
-  "communications.ts:crm_opportunities",
-  // transport-pricing (خادم) ينشئ فاتورة ويحسب ضريبة — يحتاج استخراج خدمة مالية
-  // مشتركة (refactor واسع، مادة 15) — قرار نطاق مؤجّل.
-  "transport-pricing.ts:invoices",
+  // (communications → crm_opportunities عُولِج في #2838: مُرِّر عبر عقد CRM القائد
+  //  createOpportunityFromInboundComm — لم تعد الاتصالات تكتب الجدول مباشرة.)
+  // (transport-pricing→invoices عُولِج في #2837: النقل (خادم) كان يكتب invoices/
+  //  invoice_lines مباشرةً لإصدار فاتورة خدمة مسوّدة. نُقلت الكتابتان لعقد المالية
+  //  createServiceInvoiceWithLines — لا قيد محاسبي هنا (الفاتورة مسوّدة؛ القيد
+  //  يُرحّل لاحقًا عبر اعتماد المالية القياسي). النقل يحتفظ بالترقيم/التسعير/مراكز
+  //  التكلفة وجداوله الخادمة. لم تعد النقل تكتب جدولَي المالية مباشرة.)
   // transport يعدّل حالة دوام سائق مملوكة للأسطول — متوسط، موثّق.
   "transport-bookings.ts:fleet_drivers",
   "transport-planning.ts:fleet_drivers",
@@ -148,11 +153,14 @@ const BASELINE = new Set([
 
   // ── كتابات عابرة أظهرها توسيع الحارس — تحتاج فرزًا لاحقًا (دَين موثّق) ───────
   // (لم يُدخلها هذا الـPR؛ كانت قائمة على main قبل توسيع التغطية.)
-  "finance-hardening.ts:projects",          // finance يكتب projects (أداة hardening/datafix؟)
-  "finance-invoices.ts:warehouse_movements",// ربط الفاتورة بحركة مخزون/COGS؟
-  "publicData.ts:employees",                // تحديث employees من مسار بيانات عامة
-  "settings.ts:employee_assignments",       // settings يحدّث تكليفات HR
-  "settings.ts:purchase_orders",            // settings يحدّث أوامر شراء مالية
+  // (finance-hardening→projects عُولِج في #2839: نُقل لعقد المشاريع insertProjectRecord
+  //  — المالية لم تعد تكتب جدول projects مباشرة.)
+  // (finance-invoices→warehouse_movements عُولِج في #2839: ختم journalEntryId نُقل
+  //  لعقد المخزون stampMovementsJournalEntry — المالية لم تعد تكتب الجدول مباشرة.)
+  // (publicData→employees عُولِج في #2839: نُقل لعقد HR applySelfOnboardingSubmission
+  //  — الاستكمال الذاتي يُطبَّق عبر المسار القائد لا مباشرةً.)
+  // (settings→employee_assignments/purchase_orders عُولِجا في #2839: نُقلا لعقدَي
+  //  HR/المالية القائدين عند تعطيل الفرع — لم تعد الإعدادات تكتبهما مباشرة.)
 ]);
 
 // Build reverse index: table → owning domain

@@ -108,6 +108,24 @@ import umrahEntitiesRouter from "./umrah-entities.js";
 // A dead-code wiring-scanner mount lives below the `router` declaration so
 // the FE↔BE wiring audit can discover the routes inside this file.
 import journeyReportsRouter from "./umrah-journey-reports.js";
+// U-07 Phase 2 — families CRUD split; imported for the wiring-scanner hint
+// below. Mounted at runtime via umrah-entities.ts (router.use(familiesRouter)).
+import familiesRouter from "./umrah-families.js";
+// U-07 Phase 4 — accommodation (hotels/room-blocks/allocations) split; imported
+// for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import accommodationRouter from "./umrah-accommodation.js";
+// U-07 Phase 5 — commission plans/calculations split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import commissionRouter from "./umrah-commission.js";
+// U-07 Phase 6 — sub-agents (CRUD + linking) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import subAgentsRouter from "./umrah-sub-agents.js";
+// U-07 Phase 7 — pricing (CRUD) split; imported for the wiring-scanner
+// hint below. Mounted via umrah-entities.ts.
+import umrahPricingRouter from "./umrah-pricing.js";
+// U-07 Phase 8 — import-batches (listing + unlinked-rows recovery) split;
+// imported for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahImportBatchesRouter from "./umrah-import-batches.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -178,6 +196,12 @@ const router: IRouter = Router();
 const __WIRING_SCANNER_HINT__: boolean = false;
 if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", journeyReportsRouter);
+  router.use("/umrah", familiesRouter);
+  router.use("/umrah", accommodationRouter);
+  router.use("/umrah", commissionRouter);
+  router.use("/umrah", subAgentsRouter);
+  router.use("/umrah", umrahPricingRouter);
+  router.use("/umrah", umrahImportBatchesRouter);
 }
 
 router.use(healthRouter);

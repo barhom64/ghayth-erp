@@ -2,8 +2,6 @@ import { useMemo } from "react";
 import { useApiQuery, asList } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +11,6 @@ import { formatNumber } from "@/lib/formatters";
 export default function CycleCountAccuracyPage() {
   const { data } = useApiQuery<any>(["cc-accuracy"], "/warehouse/reports/cycle-count-accuracy");
   const rows = asList(data?.data || data);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const columns = useMemo<any[]>(() => [
     { key: "warehouseName", header: "المخزن", cell: (r: any) => r.warehouseName ?? `#${r.warehouseId}` },
@@ -32,29 +29,10 @@ export default function CycleCountAccuracyPage() {
   ], []);
 
   return (
-    <PageShell title="دقة الجرد الدوري"
-      actions={
-        <PrintButton
-          entityType="report_warehouse_cc_accuracy"
-          entityId="list"
-          size="icon"
-          payload={() => ({
-            entity: { title: "دقة الجرد الدوري", total: printRows.length },
-            items: printRows.map((r: any) => ({
-              "المخزن": r.warehouseName ?? `#${r.warehouseId}`,
-              "إجمالي الأسطر": Number(r.totalLines ?? 0),
-              "أسطر مطابقة": Number(r.matchedLines ?? 0),
-              "نسبة الدقة": r.accuracyPct == null ? "—" : `${formatNumber(Number(r.accuracyPct))}%`,
-              "زيادات (ر.س)": Number(r.totalGain ?? 0),
-              "نواقص (ر.س)": Number(r.totalLoss ?? 0),
-            })),
-          })}
-        />
-      }
-    >
+    <PageShell title="دقة الجرد الدوري" >
       <WarehouseTabsNav />
       <Card><CardContent className="pt-6">
-        <DataTable data={rows} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد بيانات اعتماد جرد" />
+        <DataTable data={rows} columns={columns} emptyMessage="لا توجد بيانات اعتماد جرد" />
       </CardContent></Card>
     </PageShell>
   );

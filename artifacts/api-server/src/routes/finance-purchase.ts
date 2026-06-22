@@ -38,6 +38,21 @@ import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestId
 import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
+// عقد قائد/خادم (#2839): إعادة إسناد أوامر الشراء المفتوحة لفرع بديل. مسار
+// الإعدادات يُنسّق تعطيل الفرع، لكن **الكتابة** في جدول المالية المملوك
+// (purchase_orders) تبقى هنا في المسار القائد (المالية). يعمل ضمن المعاملة
+// المحيطة (rawExecute ينضمّ لـ txStore) فتبقى ذرّية مع تعطيل الفرع.
+export async function reassignOpenPurchaseOrdersToBranch(
+  companyId: number,
+  fromBranchId: number,
+  toBranchId: number,
+): Promise<void> {
+  await rawExecute(
+    `UPDATE purchase_orders SET "branchId" = $1 WHERE "branchId" = $2 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $3 AND "deletedAt" IS NULL`,
+    [toBranchId, fromBranchId, companyId],
+  );
+}
+
 export const purchaseRouter = Router();
 purchaseRouter.use(authMiddleware);
 
@@ -203,7 +218,7 @@ const createPurchaseRequestSchema = z.object({
     unitPrice: z.coerce.number().nonnegative().optional(),
     productId: z.coerce.number().optional(),
     ...purchaseLineDimsSchema,
-  })).min(1, "يجب إضافة بند واحد على الأقل"),
+  })).min(1, "يجب إضافة بند واحد على الأقل").max(1000, "عدد بنود الطلب يتجاوز الحدّ المسموح (1000)"),
   supplierId: z.coerce.number().optional(),
   notes: z.string().optional(),
   expectedDate: z.string().optional(),

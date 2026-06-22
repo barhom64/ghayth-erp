@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useApiQuery, useApiMutation, apiFetch, apiUrl } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +52,6 @@ export default function InspectionsReview() {
     `/fleet/inspections${status === "all" ? "" : `?status=${status}`}`,
   );
   const rows = listQ.data?.data ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const approveMut = useApiMutation<unknown, { id: number }>(
     (b) => `/fleet/inspections/${b.id}/approve`, "POST", [["fleet-inspections"]],
@@ -93,26 +90,7 @@ export default function InspectionsReview() {
   if (listQ.isError) return <ErrorState />;
 
   return (
-    <PageShell title="مراجعة فحوص المركبات" breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "مراجعة الفحوص" }]}
-      actions={
-        <PrintButton
-          entityType="report_fleet_inspections_review"
-          entityId="list"
-          size="icon"
-          payload={() => ({
-            entity: { title: "مراجعة فحوص المركبات", total: printRows.length },
-            items: printRows.map((r: any) => ({
-              "المركبة": r.plateNumber ?? `#${r.vehicleId}`,
-              "النوع": TYPE_AR[r.inspectionType] ?? r.inspectionType,
-              "العداد": r.odometer != null ? r.odometer : "—",
-              "الصور": r.photoCount,
-              "الحالة": STATUS_AR[r.status] ?? r.status,
-              "وقت الالتقاط": r.capturedAt ?? "—",
-            })),
-          })}
-        />
-      }
-    >
+    <PageShell title="مراجعة فحوص المركبات" breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "مراجعة الفحوص" }]}>
       <FleetTabsNav />
       <div className="mb-3 flex gap-2">
         {(["submitted", "approved", "rejected", "all"] as const).map((s) => (
@@ -122,7 +100,7 @@ export default function InspectionsReview() {
         ))}
       </div>
 
-      <DataTable columns={columns} data={rows} onSortedDataChange={setPrintRows} searchPlaceholder="بحث برقم اللوحة…" />
+      <DataTable columns={columns} data={rows} searchPlaceholder="بحث برقم اللوحة…" />
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && closeDialog()}>
         <DialogContent>

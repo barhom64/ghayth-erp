@@ -3,8 +3,6 @@ import { z } from "zod";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
 import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +39,6 @@ export default function WarehouseSerialsPage() {
     searchFields: ["serialNumber", "productName", "currentLocation"],
     statusField: "status",
   });
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   async function changeStatus(id: number, status: string) {
     try {
@@ -82,23 +79,7 @@ export default function WarehouseSerialsPage() {
 
   return (
     <PageShell title="العناصر التسلسلية" 
-      actions={
-        <div className="flex items-center gap-2">
-          <PrintButton
-            entityType="report_warehouse_serials"
-            entityId="list"
-            size="icon"
-            payload={() => ({
-              entity: { title: "العناصر التسلسلية", total: printRows.length },
-              items: printRows.map((r: any) => Object.fromEntries(
-                columns.filter((c: any) => c.header && !/_?select|action|إجراء/i.test(String(c.key)))
-                  .map((c: any) => [c.header, r[c.key] ?? "—"]),
-              )),
-            })}
-          />
-          <Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />تسجيل عنصر</Button>
-        </div>
-      }
+      actions={<Button onClick={() => setShowForm((v) => !v)}><Plus className="ml-1 h-4 w-4" />تسجيل عنصر</Button>}
     >
       <WarehouseTabsNav />
       <AdvancedFilters
@@ -135,7 +116,7 @@ export default function WarehouseSerialsPage() {
       )}
 
       <Card><CardContent className="pt-6">
-        <DataTable data={filtered} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد عناصر تسلسلية" noToolbar />
+        <DataTable data={filtered} columns={columns} emptyMessage="لا توجد عناصر تسلسلية" noToolbar />
       </CardContent></Card>
     </PageShell>
   );

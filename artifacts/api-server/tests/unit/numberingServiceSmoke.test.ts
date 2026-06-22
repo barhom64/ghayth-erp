@@ -488,6 +488,8 @@ describe("phase-6 — 9 priority-2 routes migrated to numberingService", () => {
   const FLT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/fleet.ts"), "utf8");
   const CMC = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/communications.ts"), "utf8");
   const UME = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
+  // U-07 Phase 6: sub-agents routes (including client_code numbering) live here.
+  const UMSA = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"), "utf8");
 
   it("hr-loans.ts now issues hr.loan", () => {
     expect(HRL).toContain('entityKey: "loan"');
@@ -523,8 +525,9 @@ describe("phase-6 — 9 priority-2 routes migrated to numberingService", () => {
     expect(CMC).toMatch(/entityKey:\s*"support_ticket"/);
     expect(CMC).toMatch(/entityKey:\s*"general_request"/);
   });
-  it("umrah-entities.ts issues client_code + umrah_group internalRef", () => {
-    expect(UME).toContain('entityKey: "client_code"');
+  it("umrah routes issue client_code (sub-agents) + umrah_group internalRef", () => {
+    // client_code moved to umrah-sub-agents.ts (U-07 Phase 6 carve-out)
+    expect(UMSA).toContain('entityKey: "client_code"');
     expect(UME).toContain('entityKey: "umrah_group"');
   });
 });

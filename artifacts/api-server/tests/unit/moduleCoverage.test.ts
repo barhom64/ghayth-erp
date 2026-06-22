@@ -220,6 +220,8 @@ describe("Module coverage: Finance", () => {
 describe("Module coverage: Umrah", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 6: sub-agent CRUD + linking routes live here.
+  const subAgents = read("routes/umrah-sub-agents.ts");
   const indexTs = read("routes/index.ts");
 
   // Permissions
@@ -258,8 +260,9 @@ describe("Module coverage: Umrah", () => {
     expect(entities).toContain("emitEvent");
   });
 
-  it("entities emits umrah.sub_agent.created event", () => {
-    expect(entities).toContain('"umrah.sub_agent.created"');
+  it("sub-agents router emits umrah.sub_agent.created event", () => {
+    // event moved to umrah-sub-agents.ts (U-07 Phase 6 carve-out)
+    expect(subAgents).toContain('"umrah.sub_agent.created"');
   });
 
   // Lifecycle

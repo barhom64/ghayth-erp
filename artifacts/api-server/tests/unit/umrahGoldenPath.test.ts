@@ -5,6 +5,14 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const UMRAH_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"), "utf8");
 const UMRAH_ENT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
+// U-07 Phase 6: sub-agent CRUD + linking routes carved into a dedicated sub-router.
+const UMRAH_SUB_AGENTS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"), "utf8");
+// U-07 Phase 7: pricing CRUD routes carved into a dedicated sub-router.
+const UMRAH_PRICING = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-pricing.ts"), "utf8");
+// U-07 Phase 8: import-batches (listing + unlinked-rows recovery) carved into a dedicated sub-router.
+const UMRAH_IMPORT_BATCHES = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-import-batches.ts"), "utf8");
+// U-07 Phase 5: commission-plan routes carved into a dedicated sub-router.
+const UMRAH_COMMISSION = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-commission.ts"), "utf8");
 // The penalty creation pipeline (overstayed → violated transition,
 // postPenaltyGL call, INSERT umrah_penalties) was extracted from the
 // `/run-penalty-engine` route into a dedicated engine module so the
@@ -87,17 +95,18 @@ describe("Umrah route structure", () => {
 
 describe("Umrah entities route structure", () => {
   it("sub-agent CRUD endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('router.get("/sub-agents"');
-    expect(UMRAH_ENT).toContain('router.post("/sub-agents"');
-    expect(UMRAH_ENT).toContain('router.patch("/sub-agents/:id"');
-    expect(UMRAH_ENT).toContain('router.delete("/sub-agents/:id"');
+    // routes moved to umrah-sub-agents.ts (U-07 Phase 6)
+    expect(UMRAH_SUB_AGENTS).toContain('router.get("/sub-agents"');
+    expect(UMRAH_SUB_AGENTS).toContain('router.post("/sub-agents"');
+    expect(UMRAH_SUB_AGENTS).toContain('router.patch("/sub-agents/:id"');
+    expect(UMRAH_SUB_AGENTS).toContain('router.delete("/sub-agents/:id"');
   });
 
   it("pricing CRUD endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('router.get("/pricing"');
-    expect(UMRAH_ENT).toContain('router.post("/pricing"');
-    expect(UMRAH_ENT).toContain('router.patch("/pricing/:id"');
-    expect(UMRAH_ENT).toContain('router.delete("/pricing/:id"');
+    expect(UMRAH_PRICING).toContain('router.get("/pricing"');
+    expect(UMRAH_PRICING).toContain('router.post("/pricing"');
+    expect(UMRAH_PRICING).toContain('router.patch("/pricing/:id"');
+    expect(UMRAH_PRICING).toContain('router.delete("/pricing/:id"');
   });
 
   it("violations CRUD endpoints exist", () => {
@@ -113,9 +122,9 @@ describe("Umrah entities route structure", () => {
   });
 
   it("commission plan endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('"/commission-plans"');
-    expect(UMRAH_ENT).toContain('"/commission-plans/:id/simulate"');
-    expect(UMRAH_ENT).toContain('"/commission-plans/:id/calculate"');
+    expect(UMRAH_COMMISSION).toContain('"/commission-plans"');
+    expect(UMRAH_COMMISSION).toContain('"/commission-plans/:id/simulate"');
+    expect(UMRAH_COMMISSION).toContain('"/commission-plans/:id/calculate"');
   });
 
   it("sales invoice and payment endpoints exist", () => {
@@ -127,7 +136,7 @@ describe("Umrah entities route structure", () => {
     expect(UMRAH_ROUTE).toContain('"/import/preview"');
     expect(UMRAH_ROUTE).toContain('"/import/mutamers"');
     expect(UMRAH_ROUTE).toContain('"/import/vouchers"');
-    expect(UMRAH_ENT).toContain('"/import/batches"');
+    expect(UMRAH_IMPORT_BATCHES).toContain('"/import/batches"');
   });
 
   it("statement endpoint exists", () => {
@@ -373,14 +382,16 @@ describe("Umrah security contracts", () => {
 
 describe("Umrah entities security", () => {
   it("pricing validates date range overlap", () => {
-    const idx = UMRAH_ENT.indexOf('router.post("/pricing"');
-    const endIdx = UMRAH_ENT.indexOf("router.", idx + 10);
-    const section = UMRAH_ENT.slice(idx, endIdx);
+    // route moved to umrah-pricing.ts (U-07 Phase 7)
+    const idx = UMRAH_PRICING.indexOf('router.post("/pricing"');
+    const endIdx = UMRAH_PRICING.indexOf("router.", idx + 10);
+    const section = UMRAH_PRICING.slice(idx, endIdx);
     expect(section).toContain("تداخل");
   });
 
   it("sub-agent link validates client exists", () => {
-    expect(UMRAH_ENT).toContain("link-client");
+    // route moved to umrah-sub-agents.ts (U-07 Phase 6)
+    expect(UMRAH_SUB_AGENTS).toContain("link-client");
   });
 
   it("entities create audit logs", () => {

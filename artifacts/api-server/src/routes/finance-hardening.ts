@@ -136,10 +136,10 @@ const createIntercompanySchema = z.object({
   amount: z.coerce.number().positive("مبلغ التحويل يجب أن يكون موجبًا"),
   description: z.string().optional(),
   transactionDate: z.string().optional(),
-  arAccountCode: z.string().default("1200"),
-  apAccountCode: z.string().default("2100"),
-  revenueAccountCode: z.string().default("4000"),
-  expenseAccountCode: z.string().default("5000"),
+  arAccountCode: z.string().default("1131"),
+  apAccountCode: z.string().default("2111"),
+  revenueAccountCode: z.string().default("4130"),
+  expenseAccountCode: z.string().default("5399"),
 });
 
 const createProjectSchema = z.object({
@@ -1597,12 +1597,15 @@ financeHardeningRouter.post("/projects", authorize({ feature: "finance.hardening
         });
         projectRef = issuedProj.number;
       }
-      const { insertId } = await rawExecute(
-        `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [scope.companyId, projectRef, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, scope.activeAssignmentId]
-      );
-      assertInsert(insertId, "projects");
+      // حدود المسارات (#2839): الكتابة في جدول المشاريع المملوك تتمّ عبر عقد
+      // المسار القائد (المشاريع) لا مباشرةً من المالية.
+      const { insertProjectRecord } = await import("./projects.js");
+      const insertId = await insertProjectRecord({
+        companyId: scope.companyId, ref: projectRef, name,
+        description: description ?? null, budget: Number(budget ?? 0),
+        startDate: startDate ?? null, endDate: endDate ?? null,
+        managerId: scope.activeAssignmentId,
+      });
       return { insertId, issuedProj };
     });
     if (issuedProj) {

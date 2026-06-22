@@ -20,6 +20,28 @@ import { applyTransition, LifecycleError, lifecycleErrorResponse, STATE_MACHINES
 import type { ExtraValue } from "../lib/lifecycleEngine.js";
 import { escalateSla } from "../lib/supportSlaEscalation.js";
 
+// عقد قائد/خادم (#2838): إنشاء تذكرة من رسالة اتصالات واردة. مسار الاتصالات
+// (خادم) يصنّف الوارد ويطلب فتح تذكرة، لكن **قرار** سياسة الحالة الابتدائية
+// ('open') و**ملكية الكتابة** في جدول support_tickets يبقيان هنا في المسار
+// القائد (الدعم) — لا في الاتصالات (حدود المسارات، مواد 4–9). سلوكيًا مطابق
+// لِما كانت الاتصالات تنشئه سابقًا (نُقل فقط عبر الحد).
+export async function createTicketFromInboundComm(params: {
+  companyId: number;
+  title: string;
+  description: string;
+  priority: string;
+}): Promise<number> {
+  const { companyId, title, description, priority } = params;
+  const result = await rawExecute(
+    `INSERT INTO support_tickets ("companyId", title, description, status, priority, "createdAt")
+     VALUES ($1, $2, $3, 'open', $4, NOW())`,
+    [companyId, title, description, priority],
+  );
+  assertInsert(result.insertId, "support_tickets");
+  return result.insertId;
+}
+
+
 // Local row shapes for support tables.
 
 interface SupportTicketRow {
@@ -110,9 +132,9 @@ interface AssignmentRow { id: number }
 const router = Router();
 
 const createTicketSchema = z.object({
-  title: z.string().optional(),
-  subject: z.string().min(1, "موضوع التذكرة مطلوب"),
-  description: z.string().min(1, "وصف المشكلة مطلوب"),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  subject: z.string().min(1, "موضوع التذكرة مطلوب").max(1000, "الموضوع طويل جدًا"),
+  description: z.string().min(1, "وصف المشكلة مطلوب").max(5000, "الوصف طويل جدًا"),
   clientId: z.coerce.number().optional(),
   category: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
@@ -122,18 +144,18 @@ const createTicketSchema = z.object({
 
 const createReplySchema = z.object({
   authorName: z.string().optional(),
-  message: z.string().min(1, "نص الرد مطلوب"),
+  message: z.string().min(1, "نص الرد مطلوب").max(20000, "النص طويل جدًا"),
   isInternal: z.boolean().optional(),
 });
 
 const createCSATSchema = z.object({
   score: z.coerce.number().min(1).max(5, "التقييم يجب أن يكون بين 1 و 5"),
-  comment: z.string().optional(),
+  comment: z.string().max(5000, "التعليق طويل جدًا").optional(),
 });
 
 const createKbSchema = z.object({
-  title: z.string().min(1, "عنوان المقال مطلوب"),
-  content: z.string().min(1, "محتوى المقال مطلوب"),
+  title: z.string().min(1, "عنوان المقال مطلوب").max(500, "العنوان طويل جدًا"),
+  content: z.string().min(1, "محتوى المقال مطلوب").max(100000, "المحتوى طويل جدًا"),
   category: z.string().optional(),
   tags: z.any().optional(),
 });
@@ -146,8 +168,8 @@ const updateTicketSchema = z.object({
 });
 
 const updateKbSchema = z.object({
-  title: z.string().optional(),
-  content: z.string().optional(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  content: z.string().max(100000, "المحتوى طويل جدًا").optional(),
   category: z.string().optional(),
   tags: z.any().optional(),
   status: z.enum(["published", "draft", "archived"]).optional(),

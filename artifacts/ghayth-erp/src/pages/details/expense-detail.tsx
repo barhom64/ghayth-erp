@@ -243,7 +243,49 @@ export default function ExpenseDetail() {
         }),
       }),
   });
-  const journalPreview = previewData?.journalPreview ?? null;
+  // preview-unify: for a SAVED expense the STORED journal IS the truth that
+  // will post — show it, don't re-derive. The journal_entries row doesn't carry
+  // the expense's routing context (operationType / relatedEntity), so
+  // impact-preview falls to a GENERIC fallback and both DIVERGES from the real
+  // posted lines AND falsely blocks approval («الحساب غير قابل للترحيل») even
+  // though the stored lines are valid. Build the review preview from the stored
+  // journal; fall back to the re-computed preview only when no journal exists.
+  const journalPreview = useMemo(() => {
+    if (Array.isArray(expense?.lines) && expense.lines.length > 0) {
+      const mapped = lines.map((l: any, i: number) => {
+        const debit = Number(l.debit) || 0;
+        const credit = Number(l.credit) || 0;
+        return {
+          lineNo: i + 1,
+          accountCode: l.accountCode ?? "",
+          accountName: l.accountName ?? null,
+          debit, credit,
+          role: debit > 0 ? "debit" : "credit",
+          dimensions: {},
+          derivationReason: "القيد المخزَّن",
+          accountSource: "selected" as const,
+          status: "ok" as const,
+        };
+      });
+      const totals = mapped.reduce(
+        (a, l) => ({ debit: a.debit + l.debit, credit: a.credit + l.credit }),
+        { debit: 0, credit: 0 },
+      );
+      return {
+        ready: true,
+        lines: mapped,
+        totals,
+        balanced: Math.abs(totals.debit - totals.credit) < 0.01,
+        blockers: [],
+        warnings: [],
+        sourceContext: { paymentMethod: expense?.paymentMethod ?? null, sourceAccountCode: null, sourceAccountName: null },
+        suggestedDocumentStatus: "draft",
+        suggestedPaymentStatus: "paid",
+        suggestedPostingStatus: "unposted",
+      };
+    }
+    return previewData?.journalPreview ?? null;
+  }, [expense, lines, previewData]);
 
   // Governance/causedBy effects derived from the record: a vehicle-linked or
   // fuel/maintenance expense emits an OPERATIONAL event on approval — surfaced

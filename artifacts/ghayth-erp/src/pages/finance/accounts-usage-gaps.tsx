@@ -7,8 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { CheckCircle2, Wand2 } from "lucide-react";
 import { formatNumber } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
@@ -49,7 +47,6 @@ export default function AccountsUsageGaps() {
   if (isError) return <ErrorState />;
 
   const rows = data?.data ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
   const total = data?.total ?? 0;
   const byType = data?.byType ?? {};
 
@@ -78,22 +75,6 @@ export default function AccountsUsageGaps() {
         { href: "/finance/accounts", label: "الحسابات" },
         { label: "فجوات التصنيف" },
       ]}
-      actions={
-        <PrintButton
-          entityType="report_finance_account_usage_gaps"
-          entityId="list"
-          size="icon"
-          payload={() => ({
-            entity: { title: "فجوات تصنيف الحسابات", total: printRows.length },
-            items: printRows.map((r: any) => ({
-              "الرمز": r.code,
-              "اسم الحساب": r.name,
-              "النوع": TYPE_LABELS[r.type] ?? r.type,
-              "الأولوية": r.allowPosting ? "قابل للترحيل — صنّفه أولاً" : "تجميعي",
-            })),
-          })}
-        />
-      }
     >
       <FinanceTabsNav />
       {total > 0 && (
@@ -142,7 +123,7 @@ export default function AccountsUsageGaps() {
               </Card>
             ))}
           </div>
-          <DataTable columns={columns} data={rows} onSortedDataChange={setPrintRows} emptyMessage="—" pageSize={50} />
+          <DataTable columns={columns} data={rows} emptyMessage="—" pageSize={50} />
         </>
       )}
     </PageShell>

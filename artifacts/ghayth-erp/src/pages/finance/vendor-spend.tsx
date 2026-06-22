@@ -413,7 +413,7 @@ export default function VendorSpendPage() {
             <p className={`text-lg font-bold font-mono ${top5Share > 70 ? "text-red-700" : top5Share > 50 ? "text-amber-700" : ""}`}>
               {top5Share.toFixed(1)}%
             </p>
-            <p className="text-[9px] text-muted-foreground">Top 1 = {top1Share.toFixed(1)}%</p>
+            <p className="text-[9px] text-muted-foreground">الأعلى = {top1Share.toFixed(1)}%</p>
           </CardContent>
         </Card>
         <Card className={(expiringContracts + noContract) > 0 ? "border-amber-300" : ""}>

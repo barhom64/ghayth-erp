@@ -359,7 +359,7 @@ function OpportunitiesTab() {
             page={page}
             total={total}
             onPageChange={setPage}
-            onRowClick={(o) => navigate(`/crm/leads/${o.id}`)}
+            onRowClick={(o) => navigate(`/crm/${o.id}`)}
             renderRowExtras={(o) => {
               if (editingId === o.id) {
                 return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(o.id, values)} onCancel={cancelEdit} isPending={isPending} />;

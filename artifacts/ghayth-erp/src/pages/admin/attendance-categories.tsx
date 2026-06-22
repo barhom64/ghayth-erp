@@ -11,8 +11,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, apiFetch, asList } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { HrTabsNav } from "@/components/shared/hr-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -99,7 +97,6 @@ export default function AttendanceCategoriesPage() {
     ["attendance-policies-per-category"], "/org/attendance-policies-per-category",
   );
   const categories = asList<EmployeeCategory>(catData?.data || []);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(categories);
   const overrides = asList<PolicyOverride>(ovrData?.data || []);
 
   const [showForm, setShowForm] = useState(false);
@@ -216,23 +213,6 @@ export default function AttendanceCategoriesPage() {
         { href: "/admin", label: "الإدارة" },
         { label: "فئات الحضور" },
       ]}
-      actions={
-        <PrintButton
-          entityType="report_admin_attendance_categories"
-          entityId="list"
-          size="icon"
-          payload={() => ({
-            entity: { title: "فئات الموظفين وسياسات الحضور", total: printRows.length },
-            items: printRows.map((c: any) => ({
-              "الفئة": c.labelAr,
-              "المفتاح": c.categoryKey,
-              "مُعفى من الخصم؟": c.exemptFromAutoDeduction ? "نعم" : "لا",
-              "تردد التتبع GPS": c.trackingFrequencySeconds === 0 ? "لا يُتتبع" : `كل ${c.trackingFrequencySeconds}s`,
-              "نوع": c.isSystem ? "نظام" : "شركة",
-            })),
-          })}
-        />
-      }
     >
       {onHrRoute && <HrTabsNav />}
       {/* System categories — read-only summary */}
@@ -244,7 +224,7 @@ export default function AttendanceCategoriesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <DataTable data={categories} columns={catColumns} onSortedDataChange={setPrintRows} pageSize={10} noToolbar emptyMessage="لا توجد فئات" />
+          <DataTable data={categories} columns={catColumns} pageSize={10} noToolbar emptyMessage="لا توجد فئات" />
           <p className="text-xs text-muted-foreground mt-2">
             الفئات الـ6 الأولى نظام (seeded في migration 270). لا يمكن تعديلها من هنا — استعمل overrides أدناه لتغيير سلوكها لشركتك.
           </p>

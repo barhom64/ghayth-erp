@@ -22,8 +22,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
+// U-07 Phase 4: room-blocks routes now live in the dedicated sub-router.
 const SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-accommodation.ts"),
   "utf8",
 );
 

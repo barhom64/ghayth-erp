@@ -219,7 +219,7 @@ const createEmployeeSchema = z.object({
     capacity: z.string().trim().max(80).optional().nullable(),
     allocationPercent: z.coerce.number().positive().max(100),
     costCenterId: z.coerce.number().int().positive().optional().nullable(),
-  })).optional().nullable(),
+  })).max(50, "عدد تخصيصات الفروع يتجاوز الحدّ المسموح (50)").optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
@@ -302,6 +302,26 @@ async function registerEmployeeExpiryObligations(
   }
 }
 
+// عقد قائد/خادم (#2839): تطبيق بيانات الاستكمال الذاتي على سجل الموظف. مسار
+// البيانات العامة (publicData، خادم بواجهة عامة) يستقبل النموذج عبر رابط token
+// مُتحقَّق، لكن **الكتابة** في جدول HR المملوك (employees) تبقى هنا في المسار
+// القائد (HR): تُكتب حقول الـstaging فقط (selfSubmittedData/At + حالة
+// 'self_submitted') بانتظار اعتماد HR — لا تغيير لأي حقل تشغيلي آخر.
+export async function applySelfOnboardingSubmission(
+  employeeId: number,
+  companyId: number,
+  data: unknown,
+): Promise<{ name: string } | undefined> {
+  const updated = await rawQuery<{ name: string }>(
+    `UPDATE employees
+        SET "selfSubmittedData" = $1::jsonb, "selfSubmittedAt" = NOW(), "activationStatus" = 'self_submitted'
+      WHERE id = $2 AND "companyId" = $3 AND "deletedAt" IS NULL
+      RETURNING name`,
+    [JSON.stringify(data), employeeId, companyId],
+  );
+  return updated[0];
+}
+
 const router = Router();
 
 // RBAC v2: list with scope-aware response. maskFields applied so any
@@ -310,7 +330,8 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
   try {
     const scope = req.scope!;
     const { search = "", status, page = "1", limit: lim = "20" } = req.query as Record<string, string | undefined>;
-    const offset = (Math.max(Number(page) || 1, 1) - 1) * (Number(lim) || 20);
+    const safeLim = Math.min(Math.max(Number(lim) || 20, 1), 500);
+    const offset = (Math.max(Number(page) || 1, 1) - 1) * safeLim;
 
     const filters = parseScopeFilters(req);
     if (search) filters.search = String(search);
@@ -344,7 +365,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       paramIdx++;
     }
 
-    params.push(Math.min(Number(lim) || 20, 500));
+    params.push(safeLim);
     const limitIdx = paramIdx++;
     params.push(offset);
     const offsetIdx = paramIdx++;
@@ -397,7 +418,7 @@ router.get("/", authorize({ feature: "hr.employees", action: "list" }), async (r
       countParams
     );
 
-    res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: Number(lim) }));
+    res.json(maskFields(req, { data: employees, total: Number(countRow?.total ?? 0), page: Number(page), pageSize: safeLim }));
   } catch (err) {
     handleRouteError(err, res, "List employees error:");
   }

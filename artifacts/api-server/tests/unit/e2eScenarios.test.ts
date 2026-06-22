@@ -12,6 +12,8 @@ const read = (p: string) => readFileSync(join(SRC, p), "utf8");
 describe("E2E: Umrah full lifecycle scenario", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 6: sub-agent CRUD + linking routes live here.
+  const subAgents = read("routes/umrah-sub-agents.ts");
   const importEngine = read("lib/umrahImportEngine.ts");
   const invoiceEngine = read("lib/umrahInvoicingEngine.ts");
 
@@ -26,9 +28,10 @@ describe("E2E: Umrah full lifecycle scenario", () => {
   });
 
   it("3. Sub-agent CRUD exists", () => {
-    expect(entities).toContain('router.post("/sub-agents"');
-    expect(entities).toContain('router.patch("/sub-agents/:id"');
-    expect(entities).toContain('"/sub-agents/:id/link"');
+    // routes moved to umrah-sub-agents.ts (U-07 Phase 6)
+    expect(subAgents).toContain('router.post("/sub-agents"');
+    expect(subAgents).toContain('router.patch("/sub-agents/:id"');
+    expect(subAgents).toContain('"/sub-agents/:id/link"');
   });
 
   it("4. Package CRUD exists", () => {

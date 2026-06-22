@@ -18,8 +18,8 @@ const policyDatesOrdered = (d: { effectiveDate?: string | null; expiryDate?: str
 const policyDatesRefine = { message: "تاريخ الانتهاء يجب أن يكون بعد تاريخ السريان", path: ["expiryDate"] };
 
 const createPolicySchema = z.object({
-  title: z.string().min(1, "عنوان السياسة مطلوب"),
-  description: z.string().optional().nullable(),
+  title: z.string().min(1, "عنوان السياسة مطلوب").max(500, "العنوان طويل جدًا"),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   category: z.string().optional().nullable(),
   status: z.string().optional().nullable(),
   effectiveDate: z.string().optional().nullable(),
@@ -28,19 +28,19 @@ const createPolicySchema = z.object({
 }).refine(policyDatesOrdered, policyDatesRefine);
 
 const createRiskSchema = z.object({
-  title: z.string().min(1, "عنوان المخاطرة مطلوب"),
-  description: z.string().optional().nullable(),
+  title: z.string().min(1, "عنوان المخاطرة مطلوب").max(500, "العنوان طويل جدًا"),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   severity: z.enum(["low", "medium", "high", "critical"]).optional().nullable(),
   likelihood: z.string().optional().nullable(),
   impact: z.string().optional().nullable(),
   status: z.string().optional().nullable(),
-  mitigationPlan: z.string().optional().nullable(),
+  mitigationPlan: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
   assignedTo: z.coerce.number().optional().nullable(),
 });
 
 const updatePolicySchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional().nullable(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   category: z.string().optional().nullable(),
   status: z.string().optional(),
   effectiveDate: z.string().optional().nullable(),
@@ -49,65 +49,72 @@ const updatePolicySchema = z.object({
 }).refine(policyDatesOrdered, policyDatesRefine);
 
 const newPolicyVersionSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional().nullable(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   category: z.string().optional().nullable(),
   effectiveDate: z.string().optional().nullable(),
   expiryDate: z.string().optional().nullable(),
 }).refine(policyDatesOrdered, policyDatesRefine);
 
-const updateRiskSchema = z.object({
-  title: z.string().optional(),
-  description: z.string().optional().nullable(),
-  severity: z.string().optional(),
+export const updateRiskSchema = z.object({
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
+  severity: z.enum(["low", "medium", "high", "critical"]).optional(),
   likelihood: z.string().optional().nullable(),
   impact: z.string().optional().nullable(),
   status: z.string().optional(),
-  mitigationPlan: z.string().optional().nullable(),
+  mitigationPlan: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
 });
 
-const createAuditSchema = z.object({
-  title: z.string().min(1, "عنوان المراجعة مطلوب"),
-  scope: z.string().optional().nullable(),
+export const createAuditSchema = z.object({
+  title: z.string().min(1, "عنوان المراجعة مطلوب").max(500, "العنوان طويل جدًا"),
+  scope: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
   status: z.string().optional(),
   auditorName: z.string().optional().nullable(),
   startDate: z.string().optional().nullable(),
   endDate: z.string().optional().nullable(),
-  findings: z.string().optional().nullable(),
-});
+  findings: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
+}).refine(
+  (d) => {
+    const s = d.startDate ? Date.parse(d.startDate) : NaN;
+    const e = d.endDate ? Date.parse(d.endDate) : NaN;
+    return Number.isNaN(s) || Number.isNaN(e) || e >= s;
+  },
+  { path: ["endDate"], message: "تاريخ نهاية المراجعة يجب ألا يسبق تاريخ بدايتها" },
+);
 
 const updateAuditSchema = z.object({
-  title: z.string().optional(),
-  scope: z.string().optional().nullable(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  scope: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
   status: z.string().optional(),
   auditorName: z.string().optional().nullable(),
-  findings: z.string().optional().nullable(),
+  findings: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
 });
 
 const createComplianceSchema = z.object({
   regulation: z.string().min(1, "اسم اللائحة مطلوب"),
-  description: z.string().optional().nullable(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   status: z.string().optional(),
   dueDate: z.string().optional().nullable(),
   responsiblePerson: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional().nullable(),
 });
 
 const updateComplianceSchema = z.object({
   regulation: z.string().optional(),
-  description: z.string().optional().nullable(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   status: z.string().optional(),
   dueDate: z.string().optional().nullable(),
   responsiblePerson: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional().nullable(),
 });
 
 const createCapaSchema = z.object({
   auditId: z.coerce.number().optional().nullable(),
   finding: z.string().min(1, "الملاحظة مطلوبة"),
-  rootCause: z.string().optional().nullable(),
-  correctiveAction: z.string().optional().nullable(),
-  preventiveAction: z.string().optional().nullable(),
+  rootCause: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
+  correctiveAction: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
+  preventiveAction: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
   status: z.enum(["open", "in_progress", "closed", "overdue"]).optional(),
   responsiblePerson: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
@@ -115,52 +122,52 @@ const createCapaSchema = z.object({
 
 const updateCapaSchema = z.object({
   finding: z.string().optional(),
-  rootCause: z.string().optional().nullable(),
-  correctiveAction: z.string().optional().nullable(),
-  preventiveAction: z.string().optional().nullable(),
+  rootCause: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
+  correctiveAction: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
+  preventiveAction: z.string().max(5000, "النص طويل جدًا").optional().nullable(),
   status: z.enum(["open", "in_progress", "closed", "overdue"]).optional(),
   responsiblePerson: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
 });
 
 const createComplianceActionSchema = z.object({
-  title: z.string().min(1, "عنوان الإجراء مطلوب"),
+  title: z.string().min(1, "عنوان الإجراء مطلوب").max(500, "العنوان طويل جدًا"),
   regulation: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
   owner: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   status: z.enum(["open", "in_progress", "done", "overdue"]).optional().nullable(),
 });
 
 const updateComplianceActionSchema = z.object({
-  title: z.string().optional(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
   regulation: z.string().optional().nullable(),
   owner: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   status: z.enum(["open", "in_progress", "done", "overdue"]).optional(),
-  description: z.string().optional().nullable(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
 });
 
 const createPolicyComplianceActionSchema = z.object({
   action: z.string().optional(),
-  title: z.string().optional(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
   status: z.enum(["open", "in_progress", "done", "overdue"]).optional().nullable(),
   responsiblePerson: z.string().optional().nullable(),
   owner: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional().nullable(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
 });
 
 const updatePolicyComplianceActionSchema = z.object({
   status: z.enum(["open", "in_progress", "done", "overdue"]).optional(),
   action: z.string().optional(),
-  title: z.string().optional(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
   responsiblePerson: z.string().optional().nullable(),
   owner: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-  description: z.string().optional().nullable(),
+  notes: z.string().max(2000, "الملاحظات طويلة جدًا").optional().nullable(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional().nullable(),
 });
 
 const updateRiskTreatmentSchema = z.object({

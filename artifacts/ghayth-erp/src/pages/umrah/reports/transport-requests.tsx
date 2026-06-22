@@ -14,8 +14,6 @@ import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { Bus } from "lucide-react";
 
@@ -89,7 +87,6 @@ export default function UmrahTransportReport() {
   const seasons = seasonsResp?.data ?? [];
   const rows = data?.data ?? [];
   const counts = data?.counts ?? {};
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -103,24 +100,6 @@ export default function UmrahTransportReport() {
         { href: "/umrah/reports", label: "التقارير" },
         { label: "تقرير النقل" },
       ]}
-      actions={
-        <PrintButton
-          entityType="report_umrah_transport_requests"
-          entityId="list"
-          size="icon"
-          payload={() => ({
-            entity: { title: "تقرير النقل المرتبط بالعمرة", total: printRows.length },
-            items: printRows.map((r: any) => ({
-              "رقم الطلب": r.bookingNumber,
-              "المجموعة": r.groupName ?? r.nuskGroupNumber ?? (r.groupId ? `#${r.groupId}` : "—"),
-              "الوكيل": r.agentName ?? (r.agentId ? `#${r.agentId}` : "—"),
-              "المسار": `${r.fromLocation ?? "—"} ← ${r.toLocation ?? "—"}`,
-              "التاريخ": r.requestedPickupDate ?? "—",
-              "الحالة": STATUS_LABEL_AR[r.status] ?? r.status,
-            })),
-          })}
-        />
-      }
     >
       <UmrahTabsNav />
 
@@ -165,7 +144,6 @@ export default function UmrahTransportReport() {
           <DataTable
             data={rows}
             rowKey={(r) => String(r.bookingId)}
-            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا طلبات نقل تطابق الفلاتر."

@@ -528,22 +528,39 @@ transportPricingRouter.post(
           expectedTiming: "on_draft",
         });
 
-        const invRes = await tx.query<{ id: number }>(
-          `INSERT INTO invoices ("companyId","branchId","clientId",ref,description,
-                  subtotal,"vatRate","vatAmount",total,"paidAmount",status,"dueDate","createdBy",notes,
-                  "isTaxLinked","invoiceTypeCode","taxCategoryCode","exemptionReason","costCenter",
-                  "taxCode","taxInclusive","discountAmount","discountPercent")
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,0,'draft',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-           RETURNING id`,
-          [
-            scope.companyId, scope.branchId ?? null, b.customerId, issued.number,
-            `دفعة فوترة نقل — ${lines.length} بند`,
-            subtotal, Number(headerVatRate), vatTotal, grandTotal, null, scope.activeAssignmentId, b.notes ?? null,
-            true, "388", "S", null, null,
-            defaultTaxCode?.code ?? null, false, 0, 0,
-          ],
-        );
-        const invoiceId = invRes.rows[0]!.id;
+        // المالية تملك invoices/invoice_lines — لا نكتبهما مباشرةً. ننشئ
+        // الفاتورة المسوّدة + سطورها عبر عقد المالية createServiceInvoiceWithLines
+        // (import ديناميكي ضمن هذه المعاملة؛ rawExecute داخل العقد ينضمّ لـtxStore
+        // فيبقى ذرّيًا). النقل يحتفظ بالترقيم ومراكز التكلفة وجداوله الخادمة أدناه.
+        const { createServiceInvoiceWithLines } = await import("./finance-invoices.js");
+        const { invoiceId, lineIds } = await createServiceInvoiceWithLines({
+          companyId: scope.companyId,
+          branchId: scope.branchId ?? null,
+          clientId: b.customerId,
+          ref: issued.number,
+          description: `دفعة فوترة نقل — ${lines.length} بند`,
+          subtotal,
+          vatRate: Number(headerVatRate),
+          vatAmount: vatTotal,
+          total: grandTotal,
+          dueDate: null,
+          createdBy: scope.activeAssignmentId,
+          notes: b.notes ?? null,
+          taxCode: defaultTaxCode?.code ?? null,
+          lines: prepared.map((p) => ({
+            description: p.description,
+            quantity: p.quantity,
+            unitPrice: p.unitPrice,
+            lineTotal: p.net,
+            vatAmount: p.vat,
+            lineGross: p.gross,
+            accountCode: p.accountCode,
+            costCenterId: p.costCenterId,
+            vehicleId: p.vehicleId,
+            driverId: p.driverId,
+            taxCode: p.taxCode,
+          })),
+        });
 
         // Link the numbering assignment back to the new invoice id (audit drill-down).
         await tx.query(
@@ -551,31 +568,13 @@ transportPricingRouter.post(
           [invoiceId, issued.assignmentId],
         );
 
-        // One invoice line per service line; flip the line to invoiced with the
-        // REAL invoiceId/invoiceLineId, and write the transport_invoice_links
-        // junction (uq_transport_invoice_link_service is the idempotency backstop).
-        for (const p of prepared) {
-          const lineRes = await tx.query<{ id: number }>(
-            `INSERT INTO invoice_lines (
-               "invoiceId",description,quantity,"unitPrice","lineTotal","vatAmount","lineGross",
-               "accountId","accountCode","costCenterId","activityType",
-               "projectId","vehicleId","propertyId","unitId","assetId",
-               "employeeId","driverId","contractId","umrahSeasonId","umrahAgentId",
-               "productId","taxCode","taxInclusive","allocationRuleId","allocationStatus",
-               "dimensionJson","manualOverrideReason"
-             )
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
-             RETURNING id`,
-            [
-              invoiceId, p.description, p.quantity, p.unitPrice, p.net, p.vat, p.gross,
-              null, p.accountCode, p.costCenterId, null,
-              null, p.vehicleId, null, null, null,
-              null, p.driverId, null, null, null,
-              null, p.taxCode, false, null, "resolved",
-              null, null,
-            ],
-          );
-          const invoiceLineId = lineRes.rows[0]!.id;
+        // Flip each service line to invoiced with the REAL invoiceId/invoiceLineId
+        // (returned by the finance contract, in order), and write the
+        // transport_invoice_links junction (uq_transport_invoice_link_service is
+        // the idempotency backstop).
+        for (let i = 0; i < prepared.length; i++) {
+          const p = prepared[i]!;
+          const invoiceLineId = lineIds[i]!;
 
           await tx.query(
             `UPDATE transport_service_lines
