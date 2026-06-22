@@ -26,7 +26,7 @@ const recordSchema = z.object({
     productId: z.coerce.number().int().positive(),
     countedQuantity: z.coerce.number().min(0),
     reason: z.string().max(500).optional().nullable(),
-  })).min(1, "أدخل سطراً واحداً على الأقل"),
+  })).min(1, "أدخل سطراً واحداً على الأقل").max(1000, "عدد بنود الجرد يتجاوز الحدّ المسموح (1000)"),
 });
 
 /** Find the company's default warehouse, creating "المستودع الرئيسي" once. */

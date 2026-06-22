@@ -219,7 +219,7 @@ const createEmployeeSchema = z.object({
     capacity: z.string().trim().max(80).optional().nullable(),
     allocationPercent: z.coerce.number().positive().max(100),
     costCenterId: z.coerce.number().int().positive().optional().nullable(),
-  })).optional().nullable(),
+  })).max(50, "عدد تخصيصات الفروع يتجاوز الحدّ المسموح (50)").optional().nullable(),
 });
 
 const patchEmployeeSchema = z.object({
