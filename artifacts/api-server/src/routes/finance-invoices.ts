@@ -3053,15 +3053,12 @@ invoicesRouter.post("/invoices/:id/credit-memo", authorize({ feature: "finance.i
         // — the reference is unique-per-memo so this targets exactly
         // the rows from this run. Migration 211 added the column.
         if (cogsReversalPlan.lineUpdates.length > 0) {
-          await client.query(
-            `UPDATE warehouse_movements
-                SET "journalEntryId" = $1
-              WHERE "companyId" = $2
-                AND reference = $3
-                AND type = 'return'
-                AND "journalEntryId" IS NULL`,
-            [memoJournalResult.journalId, scope.companyId, `CM-${memoId}`],
-          );
+          // حدّ المخزون (#2839): ختم معرّف القيد على حركات المخزون عبر عقد المخزون المالك.
+          const { stampMovementsJournalEntry } = await import("./warehouse.js");
+          await stampMovementsJournalEntry({
+            companyId: scope.companyId, reference: `CM-${memoId}`, type: "return",
+            journalEntryId: memoJournalResult.journalId,
+          });
         }
       }
     });
@@ -3363,15 +3360,12 @@ invoicesRouter.post("/invoices/:id/amend", authorize({ feature: "finance.invoice
           [memoPost.journalId, memoId, scope.companyId]
         );
         if (cogsReversalPlan.lineUpdates.length > 0) {
-          await client.query(
-            `UPDATE warehouse_movements
-                SET "journalEntryId" = $1
-              WHERE "companyId" = $2
-                AND reference = $3
-                AND type = 'return'
-                AND "journalEntryId" IS NULL`,
-            [memoPost.journalId, scope.companyId, `CM-${memoId}`],
-          );
+          // حدّ المخزون (#2839): ختم معرّف القيد على حركات المخزون عبر عقد المخزون المالك.
+          const { stampMovementsJournalEntry } = await import("./warehouse.js");
+          await stampMovementsJournalEntry({
+            companyId: scope.companyId, reference: `CM-${memoId}`, type: "return",
+            journalEntryId: memoPost.journalId,
+          });
         }
       }
 
