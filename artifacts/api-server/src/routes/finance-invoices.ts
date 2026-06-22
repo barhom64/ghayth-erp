@@ -80,7 +80,7 @@ const createInvoiceSchema = z.object({
     dimensionJson: z.record(z.any()).optional(),
     manualOverrideReason: z.string().optional(),
     total: z.coerce.number().optional(),
-  })).min(1, "يجب إضافة بند واحد على الأقل").optional(),
+  })).min(1, "يجب إضافة بند واحد على الأقل").max(500, "عدد بنود الفاتورة يتجاوز الحدّ المسموح (500)").optional(),
   // `vatRate` retained for backwards compatibility — old API callers
   // that don't know about tax_codes can still pass a literal rate.
   // New flow: pick a `taxCode` (header default) and the line math is
