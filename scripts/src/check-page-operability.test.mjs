@@ -36,6 +36,11 @@ assert(hasSearch("<AdvancedFilters/>"), "AdvancedFilters ⇒ search");
 assert(hasSearch("<DataTable data={x}/>"), "DataTable w/o noToolbar ⇒ built-in search");
 assert(!hasSearch("<DataTable data={x} noToolbar/>"), "DataTable noToolbar + nothing ⇒ no search");
 assert(hasSearch('<DataTable noToolbar/><AdvancedFilters/>'), "noToolbar but AdvancedFilters ⇒ search");
+// custom controlled search box (state named *search*/query bound to an input)
+assert(hasSearch('const [search, setSearch] = useState(""); <Input value={search} placeholder="اسم..." /><DataTable noToolbar/>'), "custom search state+binding ⇒ search");
+assert(hasSearch('const [userSearch, setUserSearch] = useState(""); <Input value={userSearch} /><DataTable noToolbar/>'), "userSearch state+binding ⇒ search");
+assert(!hasSearch('const [search, setSearch] = useState(""); <DataTable noToolbar/>'), "search state but no input binding ⇒ no search");
+assert(!hasSearch('const [count, setCount] = useState(0); <Input value={count} /><DataTable noToolbar/>'), "non-search state binding ⇒ no search");
 
 console.log("pageType");
 assert(pageType("/x/create", "", "") === "form", "/create ⇒ form");

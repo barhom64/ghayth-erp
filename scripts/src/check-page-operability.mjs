@@ -65,6 +65,15 @@ export function hasSearch(src) {
   if (/placeholder=("|'|`)[^"'`]*(بحث|ابحث)/.test(src)) return true;
   // A <DataTable> WITHOUT noToolbar renders the built-in search toolbar.
   if (/<\s*DataTable\b/.test(src) && !/\bnoToolbar\b/.test(src)) return true;
+  // A custom controlled search box: a state variable whose name contains
+  // "search" (case-insensitive) or is "query", bound to an input's value
+  // (`value={search}`). Several pages roll their own search with a
+  // field-name placeholder (e.g. "اسم المستخدم…") that lacks the word
+  // بحث, so the placeholder heuristic alone under-reports them. Requiring
+  // BOTH a search-named state AND an input binding keeps false positives
+  // near zero.
+  const m = src.match(/const\s*\[\s*(\w*[Ss]earch\w*|query)\s*,/);
+  if (m && new RegExp(`value=\\{${m[1]}\\}`).test(src)) return true;
   return false;
 }
 

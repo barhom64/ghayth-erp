@@ -125,18 +125,35 @@ manager-board · admin/attendance-categories · admin/scoring-weights.
 
 **حملة الطباعة مكتملة 100% — لا توجد فجوة طباعة واحدة.**
 
-### بُعد البحث — أُضيف 8، وبقي 36 (متخطّاة بمبرر)
-أُضيف شريط بحث مدمج إلى: finance/{bank-guarantees, intercompany, payment-run,
-inventory-valuation, negative-stock, cogs-summary}، hr/{accruals, delegations}.
+### بُعد البحث — اكتمل العمليّ منه (214/230)
 
-الباقي (36) متخطّى **بمبرر موثّق** لا إهمالًا — أحد:
-- **لوحات KPI/رسوم** بلا قائمة صفوف (exec-dashboard, bi-operations, intelligence,
-  automation, admin/*…) → البحث غير منطبق.
-- **server-paginated** أو فيه بحث مخصّص قائم (admin/logs, fixed-asset-register…).
-- **أعمدة مفاتيحها محسوبة/enum/رقمية** (umrah/violations, vat-reconciliation,
-  gl-posting-queue, auto-detection) — بحث DataTable يطابق `row[key]` الخام لا
-  المُصيَّر، فتفعيله عليها يعطي صندوقًا لا يطابق شيئًا. يلزمه إعادة هيكلة مفاتيح
-  الأعمدة (خارج الإصلاح الآمن الموضعي).
+بعد توجيه «اعتمد وأكمل»، أُضيف بحث عبر موجتي وكلاء فرعيين:
+- **الموجة 1 (8):** finance/{bank-guarantees, intercompany, payment-run,
+  inventory-valuation, negative-stock, cogs-summary}، hr/{accruals, delegations}.
+- **الموجة 2 (17):** بحث يُصفّي على **حقول البيانات الحقيقية** لا مفاتيح الأعمدة
+  (فيعمل مع الأعمدة المحسوبة)، والطباعة تتبع المصفوفة المفلترة:
+  umrah/{commissions-summary, nusk-invoices-summary, violations-summary,
+  profitability, violations}، finance/{gl-integrity-gaps, unmapped-lines,
+  operation-gaps, gl-posting-queue}، admin-{gl-reconciliation, posting-failures,
+  integrations, infra-alerts}، admin/{org-memberships, scoring-weights}،
+  hr/{field-tracking, tracking-policies}.
+- **تصحيح أداة الجرد:** `hasSearch` صار يكشف صناديق البحث المخصّصة (حالة باسم
+  *search*/query مربوطة بـ`value=`)، فصُحّحت 3 سلبيّات كاذبة (subagent-balances،
+  fixed-asset-register، admin/logs لها بحث فعلًا). + اختبارات.
 
-> القرار المتبقي الوحيد لإبراهيم: بُعد البحث على المجموعة الأخيرة (مفاتيح محسوبة)
-> يحتاج إعادة هيكلة أعمدة لكل صفحة — أنفّذها صفحةً صفحة عند الطلب.
+### الباقي (16) — بحث غير منطبق فعلًا (موثّق)
+- **لوحات KPI/مراقبة متعددة الألواح (11):** exec-dashboard، bi-operations،
+  admin-{ai-governance, communication-control, event-monitor, monitoring,
+  observability, pbx-control, policy-engine, system-registry}، umrah/dashboard.
+- **finance/reports** (فهرس 16 جدول)، **finance/ledger-truth** (تقرير 6 أقسام
+  تجميعية)، **finance/vat-reconciliation** (تجميع ≤9 صفوف).
+- **hr/auto-detection** (لا عمود نص — تواريخ/أعداد فقط).
+- **admin/attendance-categories** (إعداد — 6 فئات نظام ثابتة).
+
+> لا قرار متبقٍّ على إبراهيم في هذا البُعد: ما تبقّى لا ينطبق عليه البحث.
+
+## الخلاصة النهائية (قراءة آلية)
+- **طباعة: 230/230 قوائم + 101/101 تفاصيل — 100%.**
+- **فرز: 230/230 — 100%.**
+- **بحث: 214/230 — والباقي 16 غير منطبق موثّق.**
+- **رجوع: مركزي عبر `SidebarLayout` لكل المسارات.**
