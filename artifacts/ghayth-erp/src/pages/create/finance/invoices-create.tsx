@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, Fragment } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { INVOICE_TYPE_CODES, TAX_CATEGORY_CODES } from "@/lib/finance-type-maps";
 import { useLocation, useSearch } from "wouter";
 import { useApiMutation, useApiQuery } from "@/lib/api";
@@ -23,6 +23,7 @@ import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { ClientSelect, BranchSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 import { ProductSelect } from "@/components/shared/product-select";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 
 interface TaxCode {
   id: number;
@@ -344,127 +345,134 @@ export default function InvoicesCreate() {
           </span>
         </div>
         {fieldErrors.lines && <p className="text-xs text-status-error-foreground mt-1">{fieldErrors.lines}</p>}
-        <div className="rounded-xl border overflow-hidden mt-3">
-          <div className="overflow-x-auto"><table className="w-full text-sm">
-            <thead className="bg-surface-subtle">
-              <tr>
-                <th className="px-3 py-2 text-right min-w-[10rem]">المنتج / الخدمة</th>
-                <th className="px-3 py-2 text-right min-w-[10rem]">الوصف</th>
-                <th className="px-3 py-2 text-right">كمية</th>
-                <th className="px-3 py-2 text-right">سعر الوحدة</th>
-                <th className="px-3 py-2 text-right">رمز الضريبة</th>
-                <th className="px-3 py-2 text-right">نوع السعر</th>
-                <th className="px-3 py-2 text-right">الإجمالي</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line, idx) => {
-                const split = lineSplits[idx];
-                const lineCode = line.taxCode || form.taxCode;
-                const lineInclusive = line.taxInclusive ?? form.taxInclusive;
-                const hasSplit = Number(line.quantity) > 0 && Number(line.unitPrice) > 0;
-                return (
-                  <Fragment key={idx}>
-                    <tr className="border-t align-top">
-                      <td className="px-2 py-1 min-w-[10rem]">
-                        <ProductSelect
-                          value={line.productId}
-                          includeFreeOption
-                          allowCreate
-                          placeholder="منتج / خدمة"
-                          onChange={(id, p) => {
-                            if (!id || !p) {
-                              updateLine(idx, "productId", "");
-                              return;
-                            }
-                            // Snap description + unitPrice to the catalog item;
-                            // operator can still tweak afterwards.
-                            const updated = [...lines];
-                            updated[idx] = {
-                              ...updated[idx],
-                              productId: id,
-                              description: p.name + (p.sku ? ` (${p.sku})` : ""),
-                              unitPrice: String(p.sellPrice ?? p.salePrice ?? p.price ?? updated[idx].unitPrice ?? ""),
-                            };
-                            setLines(updated);
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-1 min-w-[10rem]">
-                        <Input value={line.description} placeholder="الوصف"
-                          onChange={(e) => updateLine(idx, "description", e.target.value)} />
-                      </td>
-                      <td className="px-2 py-1">
-                        <NumberField label="كمية" hideLabel className="w-20" value={line.quantity}
-                          onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
-                      </td>
-                      <td className="px-2 py-1">
-                        <NumberField label="سعر الوحدة" hideLabel className="w-24" value={line.unitPrice}
-                          onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Select
-                          value={line.taxCode || "_inherit"}
-                          onValueChange={(v) => updateLine(idx, "taxCode", v === "_inherit" ? "" : v)}
-                        >
-                          <SelectTrigger className="h-9 text-xs w-28"><SelectValue placeholder={form.taxCode ? `↓ ${form.taxCode}` : "بدون"} /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="_inherit">↓ يرث من الترويسة ({form.taxCode || "بدون"})</SelectItem>
-                            {taxCodes.filter((t: any) => t.code).map((t) => (
-                              <SelectItem key={t.code} value={t.code}>
-                                {t.code} ({Number(t.rate).toFixed(0)}%)
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1">
-                        <Select
-                          value={line.taxInclusive === undefined ? "_inherit" : line.taxInclusive ? "inclusive" : "exclusive"}
-                          onValueChange={(v) => updateLine(idx, "taxInclusive", v === "_inherit" ? undefined : v === "inclusive")}
-                        >
-                          <SelectTrigger className="h-9 text-xs w-28"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="_inherit">↓ يرث ({form.taxInclusive ? "شامل" : "غير شامل"})</SelectItem>
-                            <SelectItem value="inclusive">شامل الضريبة</SelectItem>
-                            <SelectItem value="exclusive">غير شامل</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1 whitespace-nowrap font-semibold text-emerald-700">
-                        {hasSplit ? formatCurrency(split.gross) : "—"}
-                      </td>
-                      <td className="px-2 py-1">
-                        <button type="button" onClick={() => removeLine(idx)} disabled={lines.length <= 1}
-                          className="text-red-400 hover:text-status-error-foreground disabled:opacity-40 text-lg leading-none">&times;</button>
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colSpan={8} className="px-2 pb-2">
-                        {hasSplit && (
-                          <div className="mb-2 flex flex-wrap items-center gap-3 text-xs">
-                            <Badge variant="outline" className="font-mono">{lineCode || "—"}</Badge>
-                            <Badge variant="secondary">{lineInclusive ? "شامل" : "غير شامل"}</Badge>
-                            <span className="text-muted-foreground">صافي: <span className="font-semibold text-foreground">{formatCurrency(split.net)}</span></span>
-                            <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-status-warning-foreground">{formatCurrency(split.vat)}</span></span>
-                          </div>
-                        )}
-                        <LineAllocationPanel
-                          value={line.allocation ?? {}}
-                          onChange={(next) => updateLine(idx, "allocation", next)}
-                          status={deriveAllocationStatus(line.allocation ?? {})}
-                          required={false}
-                        />
-                      </td>
-                    </tr>
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table></div>
+        {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
+            بدل جدول HTML يدوي (نفس الأعمدة والسلوك: منتقي المنتج، الضريبة لكل
+            سطر، الإجمالي، لوحة الأبعاد عبر renderExpansion، إضافة/حذف بند). */}
+        <div className="mt-3">
+          <LineItemsTable
+            items={lines}
+            minItems={1}
+            onAdd={addLine}
+            onRemove={removeLine}
+            addLabel="إضافة بند"
+            columns={[
+              {
+                header: "المنتج / الخدمة", className: "min-w-[10rem]",
+                render: (line, idx) => (
+                  <ProductSelect
+                    value={line.productId}
+                    includeFreeOption
+                    allowCreate
+                    placeholder="منتج / خدمة"
+                    onChange={(id, p) => {
+                      if (!id || !p) {
+                        updateLine(idx, "productId", "");
+                        return;
+                      }
+                      // Snap description + unitPrice to the catalog item;
+                      // operator can still tweak afterwards.
+                      const updated = [...lines];
+                      updated[idx] = {
+                        ...updated[idx],
+                        productId: id,
+                        description: p.name + (p.sku ? ` (${p.sku})` : ""),
+                        unitPrice: String(p.sellPrice ?? p.salePrice ?? p.price ?? updated[idx].unitPrice ?? ""),
+                      };
+                      setLines(updated);
+                    }}
+                  />
+                ),
+              },
+              {
+                header: "الوصف", className: "min-w-[10rem]",
+                render: (line, idx) => (
+                  <Input value={line.description} placeholder="الوصف"
+                    onChange={(e) => updateLine(idx, "description", e.target.value)} />
+                ),
+              },
+              {
+                header: "كمية",
+                render: (line, idx) => (
+                  <NumberField label="كمية" hideLabel className="w-20" value={line.quantity}
+                    onChange={(v) => updateLine(idx, "quantity", v)} placeholder="1" />
+                ),
+              },
+              {
+                header: "سعر الوحدة",
+                render: (line, idx) => (
+                  <NumberField label="سعر الوحدة" hideLabel className="w-24" value={line.unitPrice}
+                    onChange={(v) => updateLine(idx, "unitPrice", v)} placeholder="0.00" />
+                ),
+              },
+              {
+                header: "رمز الضريبة",
+                render: (line, idx) => (
+                  <Select
+                    value={line.taxCode || "_inherit"}
+                    onValueChange={(v) => updateLine(idx, "taxCode", v === "_inherit" ? "" : v)}
+                  >
+                    <SelectTrigger className="h-9 text-xs w-28"><SelectValue placeholder={form.taxCode ? `↓ ${form.taxCode}` : "بدون"} /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_inherit">↓ يرث من الترويسة ({form.taxCode || "بدون"})</SelectItem>
+                      {taxCodes.filter((t: any) => t.code).map((t) => (
+                        <SelectItem key={t.code} value={t.code}>
+                          {t.code} ({Number(t.rate).toFixed(0)}%)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ),
+              },
+              {
+                header: "نوع السعر",
+                render: (line, idx) => (
+                  <Select
+                    value={line.taxInclusive === undefined ? "_inherit" : line.taxInclusive ? "inclusive" : "exclusive"}
+                    onValueChange={(v) => updateLine(idx, "taxInclusive", v === "_inherit" ? undefined : v === "inclusive")}
+                  >
+                    <SelectTrigger className="h-9 text-xs w-28"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_inherit">↓ يرث ({form.taxInclusive ? "شامل" : "غير شامل"})</SelectItem>
+                      <SelectItem value="inclusive">شامل الضريبة</SelectItem>
+                      <SelectItem value="exclusive">غير شامل</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ),
+              },
+              {
+                header: "الإجمالي", className: "whitespace-nowrap font-semibold text-emerald-700",
+                render: (line, idx) => {
+                  const hasSplit = Number(line.quantity) > 0 && Number(line.unitPrice) > 0;
+                  return hasSplit ? formatCurrency(lineSplits[idx].gross) : "—";
+                },
+              },
+            ]}
+            renderExpansion={(line, idx) => {
+              const split = lineSplits[idx];
+              const lineCode = line.taxCode || form.taxCode;
+              const lineInclusive = line.taxInclusive ?? form.taxInclusive;
+              const hasSplit = Number(line.quantity) > 0 && Number(line.unitPrice) > 0;
+              return (
+                <>
+                  {hasSplit && (
+                    <div className="mb-2 flex flex-wrap items-center gap-3 text-xs">
+                      <Badge variant="outline" className="font-mono">{lineCode || "—"}</Badge>
+                      <Badge variant="secondary">{lineInclusive ? "شامل" : "غير شامل"}</Badge>
+                      <span className="text-muted-foreground">صافي: <span className="font-semibold text-foreground">{formatCurrency(split.net)}</span></span>
+                      <span className="text-muted-foreground">ضريبة: <span className="font-semibold text-status-warning-foreground">{formatCurrency(split.vat)}</span></span>
+                    </div>
+                  )}
+                  <LineAllocationPanel
+                    value={line.allocation ?? {}}
+                    onChange={(next) => updateLine(idx, "allocation", next)}
+                    status={deriveAllocationStatus(line.allocation ?? {})}
+                    required={false}
+                  />
+                </>
+              );
+            }}
+          />
         </div>
-        <Button type="button" variant="outline" size="sm" className="mt-3" onClick={addLine}>+ إضافة بند</Button>
       </div>
 
       <div className={`bg-muted/50 p-4 rounded-md text-sm space-y-1 ${fieldErrorClass(fieldErrors.totalAmount)}`}>
