@@ -102,6 +102,8 @@ router.get("/sub-agents", authorize({ feature: "umrah", action: "list" }), async
       `SELECT sa.*, a.name AS "agentName", c.name AS "clientName"
        FROM umrah_sub_agents sa
        LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+                                AND a."companyId" = sa."companyId"
+                                AND a."deletedAt" IS NULL
        LEFT JOIN clients c ON sa."clientId" = c.id AND c."companyId" = sa."companyId" AND c."deletedAt" IS NULL
        WHERE sa."companyId" = $1 AND sa."deletedAt" IS NULL
        ORDER BY sa.name
@@ -159,6 +161,8 @@ router.get("/sub-agents/unlinked", authorize({ feature: "umrah", action: "list" 
                ORDER BY sa3."createdAt" DESC LIMIT 1) AS "suggestedClientName"
        FROM umrah_sub_agents sa
        LEFT JOIN umrah_agents a ON sa."agentId" = a.id
+                                AND a."companyId" = sa."companyId"
+                                AND a."deletedAt" IS NULL
        WHERE ${where}
        ORDER BY sa.name`,
       params
