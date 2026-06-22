@@ -16,8 +16,9 @@ import { join } from "node:path";
  * quoted identifier the schema dump doesn't carry.)
  */
 
+// U-07 Phase 4: room-allocation routes now live in the dedicated sub-router.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-accommodation.ts"),
   "utf8",
 );
 
@@ -41,7 +42,9 @@ describe("DELETE /umrah/room-allocations/:id — audit trail", () => {
   });
 
   it("audit before-payload carries the full snapshot for reconstruction", () => {
-    expect(ROUTE).toMatch(/action: "umrah\.room_allocation\.deleted"[\s\S]{0,400}before: existing/);
+    // U-07 Phase 4: auditFromRequest(req, action, entity, id, {before, after})
+    // — action is a positional arg, not a named property.
+    expect(ROUTE).toMatch(/auditFromRequest\(req, "umrah\.room_allocation\.deleted"[\s\S]{0,400}before: existing/);
   });
 
   it("event details broadcast pilgrim + block ids (no row-by-row room geometry)", () => {
