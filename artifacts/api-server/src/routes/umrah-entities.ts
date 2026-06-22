@@ -1,9 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // umrah-entities.ts — COMMERCIAL/FINANCE entities for the umrah module
 //
-// Owns: pricing, groups (CRUD), nusk-invoices,
+// Owns: groups (CRUD), nusk-invoices,
 //       sales-invoices (generate + update), payments, statements,
-//       import-batches, employee-assignments.
+//       employee-assignments.
+//   (import-batches listing + unlinked-rows recovery live in
+//    umrah-import-batches.ts — U-07 Phase 8)
+//   (pricing CRUD lives in umrah-pricing.ts — U-07 Phase 7)
 //   (sub-agents CRUD + linking live in umrah-sub-agents.ts — U-07 Phase 6)
 //   (commission plans/calculations live in umrah-commission.ts — U-07 Phase 5)
 //
@@ -73,6 +76,12 @@ import commissionRouter from "./umrah-commission.js";
 // U-07 Phase 6 — sub-agents (CRUD + linking) moved to a dedicated sub-router.
 // Paths still resolve at /umrah/sub-agents/...
 import subAgentsRouter from "./umrah-sub-agents.js";
+// U-07 Phase 7 — pricing (CRUD) moved to a dedicated sub-router.
+// Paths still resolve at /umrah/pricing...
+import pricingRouter from "./umrah-pricing.js";
+// U-07 Phase 8 — import-batches (listing + unlinked-rows recovery) moved to a
+// dedicated sub-router. Paths still resolve at /umrah/import/batches...
+import importBatchesRouter from "./umrah-import-batches.js";
 
 const router = Router();
 router.use(journeyReportsRouter);
@@ -80,6 +89,8 @@ router.use(familiesRouter);
 router.use(accommodationRouter);
 router.use(commissionRouter);
 router.use(subAgentsRouter);
+router.use(pricingRouter);
+router.use(importBatchesRouter);
 
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
@@ -95,30 +106,6 @@ async function requireOpenSeason(seasonId: number, companyId: number): Promise<v
 // ============================================================================
 // ZOD SCHEMAS
 // ============================================================================
-
-const createPricingSchema = z.object({
-  agentId: z.coerce.number({ required_error: "الوكيل مطلوب" }),
-  pricePerMutamer: z.coerce.number({ required_error: "السعر مطلوب" }),
-  validFrom: z.string().min(1, "تاريخ البدء مطلوب"),
-  validTo: z.string().min(1, "تاريخ الانتهاء مطلوب"),
-  subAgentId: z.coerce.number().optional(),
-  seasonId: z.coerce.number().optional(),
-  includesHotel: z.boolean().optional(),
-  includesTransport: z.boolean().optional(),
-  notes: z.string().optional(),
-}).refine((d) => d.validTo >= d.validFrom, { message: "تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", path: ["validTo"] });
-
-const updatePricingSchema = z.object({
-  subAgentId: z.coerce.number().nullable().optional(),
-  agentId: z.coerce.number().optional(),
-  seasonId: z.coerce.number().nullable().optional(),
-  pricePerMutamer: z.coerce.number().optional(),
-  includesHotel: z.boolean().optional(),
-  includesTransport: z.boolean().optional(),
-  validFrom: z.string().optional(),
-  validTo: z.string().optional(),
-  notes: z.string().nullable().optional(),
-});
 
 const generateInvoiceSchema = z.object({
   subAgentId: z.coerce.number({ required_error: "الوكيل الفرعي مطلوب" }),
@@ -143,124 +130,6 @@ const createPaymentSchema = z.object({
   method: z.string().optional(),
   reference: z.string().optional(),
   invoiceIds: z.array(z.coerce.number()).optional(),
-});
-
-// ============================================================================
-// PRICING
-// ============================================================================
-
-router.get("/pricing", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const rows = await rawQuery(
-      `SELECT p.*, a.name AS "agentName", sa.name AS "subAgentName", s.title AS "seasonTitle"
-       FROM umrah_pricing p
-       LEFT JOIN umrah_agents a ON p."agentId" = a.id
-       LEFT JOIN umrah_sub_agents sa ON p."subAgentId" = sa.id
-       LEFT JOIN umrah_seasons s ON p."seasonId" = s.id AND s."deletedAt" IS NULL
-       WHERE p."companyId" = $1 AND p."deletedAt" IS NULL
-       ORDER BY p."validFrom" DESC
-       LIMIT 500`,
-      [scope.companyId]
-    );
-    res.json(maskFields(req, { data: rows }));
-  } catch (err) { handleRouteError(err, res, "List pricing"); }
-});
-
-router.post("/pricing", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const parsed = zodParse(createPricingSchema.safeParse(req.body));
-    const b = parsed;
-    const overlap = await rawQuery(
-      `SELECT id FROM umrah_pricing
-       WHERE "companyId" = $1 AND "agentId" = $2 AND "deletedAt" IS NULL
-         AND (("subAgentId" IS NULL AND $3::int IS NULL) OR "subAgentId" = $3)
-         AND (("seasonId" IS NULL AND $4::int IS NULL) OR "seasonId" = $4)
-         AND "validFrom" <= $6 AND "validTo" >= $5`,
-      [scope.companyId, b.agentId, b.subAgentId || null, b.seasonId || null, b.validFrom, b.validTo]
-    );
-    if (overlap.length > 0) {
-      throw new ConflictError("يوجد تداخل في فترات الأسعار لنفس الوكيل والموسم", { field: "validFrom" });
-    }
-    const rows = await rawQuery(
-      `INSERT INTO umrah_pricing
-       ("companyId","branchId","subAgentId","agentId","seasonId","pricePerMutamer",
-        "includesHotel","includesTransport","validFrom","validTo",notes,"createdBy","createdAt","updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW()) RETURNING *`,
-      [scope.companyId, scope.branchId, b.subAgentId || null, b.agentId, b.seasonId || null,
-       b.pricePerMutamer, b.includesHotel ?? false, b.includesTransport ?? false,
-       b.validFrom, b.validTo, b.notes || null, scope.userId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_pricing", entityId: rows[0]?.id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.created", entity: "umrah_pricing", entityId: rows[0]?.id, details: JSON.stringify({ agentId: b.agentId, pricePerMutamer: b.pricePerMutamer }) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.status(201).json(rows[0]);
-  } catch (err) { handleRouteError(err, res, "Create pricing"); }
-});
-
-router.patch("/pricing/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const parsed = zodParse(updatePricingSchema.safeParse(req.body));
-    const b = parsed as Record<string, any>;
-    const params: unknown[] = [];
-    const sets: string[] = [];
-    for (const key of ["subAgentId","agentId","seasonId","pricePerMutamer","includesHotel","includesTransport","validFrom","validTo","notes"]) {
-      if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
-    }
-    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
-    if (b.validFrom || b.validTo) {
-      const [current] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-      if (current) {
-        const vf = b.validFrom || current.validFrom;
-        const vt = b.validTo || current.validTo;
-        // re-validate ordering against the effective (merged) values — a partial
-        // update must not place validFrom after validTo. This also keeps the
-        // overlap query below correct (it assumes validFrom <= validTo).
-        if (new Date(vt).getTime() < new Date(vf).getTime()) {
-          throw new ValidationError("تاريخ الانتهاء يجب أن يكون بعد تاريخ البدء", { field: "validTo" });
-        }
-        const agId = b.agentId ?? current.agentId;
-        const saId = b.subAgentId ?? current.subAgentId;
-        const sId = b.seasonId ?? current.seasonId;
-        const overlap = await rawQuery(
-          `SELECT id FROM umrah_pricing
-           WHERE "companyId" = $1 AND "agentId" = $2 AND "deletedAt" IS NULL AND id != $3
-             AND (("subAgentId" IS NULL AND $4::int IS NULL) OR "subAgentId" = $4)
-             AND (("seasonId" IS NULL AND $5::int IS NULL) OR "seasonId" = $5)
-             AND "validFrom" <= $7 AND "validTo" >= $6`,
-          [scope.companyId, agId, id, saId || null, sId || null, vf, vt]
-        );
-        if (overlap.length > 0) {
-          throw new ConflictError("يوجد تداخل في فترات الأسعار لنفس الوكيل والموسم", { field: "validFrom" });
-        }
-      }
-    }
-    params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
-    sets.push(`"updatedAt"=NOW()`);
-    params.push(id); params.push(scope.companyId);
-    const { affectedRows } = await rawExecute(`UPDATE umrah_pricing SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    if (!affectedRows) throw new NotFoundError("التسعير غير موجود");
-    const [row] = await rawQuery(`SELECT * FROM umrah_pricing WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_pricing", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.updated", entity: "umrah_pricing", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update pricing"); }
-});
-
-router.delete("/pricing/:id", authorize({ feature: "umrah", action: "delete" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    await rawExecute(
-      `UPDATE umrah_pricing SET "deletedAt"=NOW(), "updatedBy"=$1 WHERE id=$2 AND "companyId"=$3 AND "deletedAt" IS NULL`,
-      [scope.userId, id, scope.companyId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "delete", entity: "umrah_pricing", entityId: id }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pricing.deleted", entity: "umrah_pricing", entityId: id, details: "{}" }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.json({ success: true });
-  } catch (err) { handleRouteError(err, res, "Delete pricing"); }
 });
 
 // ============================================================================
@@ -1191,242 +1060,6 @@ router.get("/employees/:employeeId/assignments", authorize({ feature: "umrah", a
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Employee assignments error"); }
-});
-
-// ============================================================================
-// IMPORT — preview + confirm
-// ============================================================================
-
-router.get("/import/batches", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId } = req.query as Record<string, string | undefined>;
-    let where = `b."companyId" = $1 AND b."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
-    if (seasonId) { params.push(seasonId); where += ` AND b."seasonId" = $${params.length}`; }
-    const rows = await rawQuery(
-      `SELECT b.* FROM umrah_import_batches b WHERE ${where} ORDER BY b."createdAt" DESC LIMIT 500`,
-      params
-    );
-    res.json(maskFields(req, { data: rows }));
-  } catch (err) { handleRouteError(err, res, "List import batches"); }
-});
-
-router.get("/import/batches/:id/changes", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const [batch] = await rawQuery(
-      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!batch) throw new NotFoundError("الدفعة غير موجودة");
-    const rows = await rawQuery(
-      `SELECT * FROM umrah_import_changes WHERE "batchId" = $1 AND "companyId" = $2 ORDER BY id LIMIT 1000`,
-      [id, scope.companyId]
-    );
-    res.json(maskFields(req, { data: rows }));
-  } catch (err) { handleRouteError(err, res, "List batch changes"); }
-});
-
-// ============================================================================
-// IMPORT — unlinked-rows recovery (§3 of #1870)
-// ============================================================================
-//
-// Why this exists. The engine resolvers fall back to NULL when the source
-// row lacks the lookup key (nuskAgentNumber / nuskGroupNumber / nuskCode).
-// The row still lands in umrah_pilgrims, but with NULL agentId / groupId /
-// subAgentId — meaning it's invisible on the agent → group → sub-agent
-// drill-down and on per-entity rollup queries. The wizard now shows
-// pre-confirm counts; this endpoint pair is the after-confirm recovery
-// path so the operator can bulk-assign without re-importing the file.
-
-router.get("/import/batches/:id/unlinked", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const dimension = String(req.query.dimension ?? "agent");
-    if (!["agent", "group", "subAgent"].includes(dimension)) {
-      throw new ValidationError("البُعد المطلوب غير صالح", { field: "dimension" });
-    }
-    const [batch] = await rawQuery<{ id: number }>(
-      `SELECT id FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!batch) throw new NotFoundError("الدفعة غير موجودة");
-
-    // The pilgrim row carries no batchId column, so we join through
-    // umrah_import_changes which DOES tag every row written during
-    // a batch. Filter to entityType='mutamer' + changeType in
-    // ('created','updated') so we don't sweep in skips / errors.
-    const fkColumn = dimension === "agent" ? "agentId"
-                   : dimension === "group" ? "groupId"
-                   : "subAgentId";
-    const rows = await rawQuery<{
-      id: number; nuskNumber: string | null; fullName: string;
-      nationality: string | null; status: string | null;
-      agentId: number | null; groupId: number | null; subAgentId: number | null;
-    }>(
-      `SELECT p.id, p."nuskNumber", p."fullName", p.nationality, p.status,
-              p."agentId", p."groupId", p."subAgentId"
-       FROM umrah_pilgrims p
-       WHERE p."companyId" = $1
-         AND p."${fkColumn}" IS NULL
-         AND p."deletedAt" IS NULL
-         AND EXISTS (
-           SELECT 1 FROM umrah_import_changes ic
-           WHERE ic."batchId" = $2
-             AND ic."entityType" = 'mutamer'
-             AND ic."entityId" = p.id
-             AND ic."changeType" IN ('created','updated')
-         )
-       ORDER BY p."nuskNumber" NULLS LAST, p.id
-       LIMIT 1000`,
-      [scope.companyId, id]
-    );
-    res.json(maskFields(req, { data: rows, dimension, batchId: id }));
-  } catch (err) { handleRouteError(err, res, "List unlinked rows"); }
-});
-
-const linkUnlinkedSchema = z.object({
-  dimension: z.enum(["agent", "group", "subAgent"]),
-  pilgrimIds: z.array(z.coerce.number().int().positive()).min(1, "اختر صفًا واحدًا على الأقل"),
-  // exactly one of: existing target id, or new-entity name to create
-  targetId: z.coerce.number().int().positive().optional(),
-  newEntityName: z.string().trim().min(1).optional(),
-  // optional parent linkage for sub-agent creation (must belong to an agent)
-  parentAgentId: z.coerce.number().int().positive().optional(),
-}).refine((v) => (v.targetId !== undefined) !== (v.newEntityName !== undefined), {
-  message: "يجب تحديد إما هدف موجود أو اسم لإنشاء كيان جديد، لا الاثنين معًا",
-});
-
-router.post("/import/batches/:id/unlinked/link", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const b = zodParse(linkUnlinkedSchema.safeParse(req.body));
-    const [batch] = await rawQuery<{ id: number; seasonId: number | null }>(
-      `SELECT id, "seasonId" FROM umrah_import_batches WHERE id = $1 AND "companyId" = $2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    if (!batch) throw new NotFoundError("الدفعة غير موجودة");
-
-    const result = await withTransaction(async (client) => {
-      // Resolve the target FK. Either look up the existing one and
-      // verify it belongs to the same tenant, or create a fresh row
-      // in the dimension table. Both branches return the id we'll
-      // stamp on every selected pilgrim.
-      let resolvedTargetId: number;
-      if (b.targetId !== undefined) {
-        const table = b.dimension === "agent" ? "umrah_agents"
-                    : b.dimension === "group" ? "umrah_groups"
-                    : "umrah_sub_agents";
-        const exists = await client.query(
-          `SELECT id FROM ${table} WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
-          [b.targetId, scope.companyId]
-        );
-        if (exists.rows.length === 0) {
-          throw new NotFoundError(
-            b.dimension === "agent" ? "الوكيل غير موجود"
-            : b.dimension === "group" ? "المجموعة غير موجودة"
-            : "الوكيل الفرعي غير موجود"
-          );
-        }
-        resolvedTargetId = b.targetId;
-      } else {
-        const name = b.newEntityName!;
-        if (b.dimension === "agent") {
-          const ins = await client.query(
-            `INSERT INTO umrah_agents ("companyId","branchId",name,"createdBy","createdAt","updatedAt")
-             VALUES ($1,$2,$3,$4,NOW(),NOW()) RETURNING id`,
-            [scope.companyId, scope.branchId || null, name, scope.userId]
-          );
-          resolvedTargetId = ins.rows[0].id;
-        } else if (b.dimension === "group") {
-          // nuskGroupNumber is NOT NULL (external Nusk portal id). A group
-          // auto-created by name during batch resolution has no external id yet,
-          // so stamp an internal placeholder ref (via lib/ so it doesn't bypass
-          // the numbering-center lint guard) until the real Nusk number is set.
-          // The (companyId, nuskGroupNumber) index is non-unique, so no collision.
-          const autoNusk = internalTechRef("UGRP");
-          const ins = await client.query(
-            `INSERT INTO umrah_groups ("companyId","branchId","nuskGroupNumber","seasonId",name,"agentId","createdBy","createdAt","updatedAt")
-             VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW()) RETURNING id`,
-            [scope.companyId, scope.branchId || null, autoNusk, batch.seasonId, name, b.parentAgentId || null, scope.userId]
-          );
-          resolvedTargetId = ins.rows[0].id;
-        } else {
-          // Sub-agent needs a parent agent — refuse fast if missing,
-          // otherwise the rollup queries on per-agent statements
-          // wouldn't pick up the new sub-agent at all.
-          if (!b.parentAgentId) {
-            throw new ValidationError("يجب اختيار الوكيل الأم للوكيل الفرعي", { field: "parentAgentId" });
-          }
-          const parent = await client.query(
-            `SELECT id FROM umrah_agents WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL LIMIT 1`,
-            [b.parentAgentId, scope.companyId]
-          );
-          if (parent.rows.length === 0) throw new NotFoundError("الوكيل الأم غير موجود");
-          const ins = await client.query(
-            `INSERT INTO umrah_sub_agents ("companyId","branchId","agentId",name,"createdBy","createdAt","updatedAt")
-             VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING id`,
-            [scope.companyId, scope.branchId || null, b.parentAgentId, name, scope.userId]
-          );
-          resolvedTargetId = ins.rows[0].id;
-        }
-      }
-
-      const fkColumn = b.dimension === "agent" ? "agentId"
-                     : b.dimension === "group" ? "groupId"
-                     : "subAgentId";
-      // Only UPDATE rows that are STILL unlinked + that were touched
-      // by THIS batch — defence against concurrent edits and against
-      // an operator pasting pilgrimIds from a different batch.
-      const upd = await client.query(
-        `UPDATE umrah_pilgrims p
-         SET "${fkColumn}"=$1, "updatedBy"=$2, "updatedAt"=NOW()
-         WHERE p."companyId"=$3
-           AND p.id = ANY($4::int[])
-           AND p."${fkColumn}" IS NULL
-           AND p."deletedAt" IS NULL
-           AND EXISTS (
-             SELECT 1 FROM umrah_import_changes ic
-             WHERE ic."batchId" = $5 AND ic."entityType" = 'mutamer'
-               AND ic."entityId" = p.id
-           )
-         RETURNING id`,
-        [resolvedTargetId, scope.userId, scope.companyId, b.pilgrimIds, id]
-      );
-      const linkedCount = upd.rows.length;
-
-      // Decrement the batch counter so the recovery screen shows
-      // remaining work, not the pre-link count.
-      const counterCol = b.dimension === "agent" ? "unlinkedAgentCount"
-                       : b.dimension === "group" ? "unlinkedGroupCount"
-                       : "unlinkedSubAgentCount";
-      await client.query(
-        `UPDATE umrah_import_batches
-         SET "${counterCol}" = GREATEST(0, COALESCE("${counterCol}", 0) - $1),
-             "updatedAt" = NOW()
-         WHERE id = $2 AND "companyId" = $3`,
-        [linkedCount, id, scope.companyId]
-      );
-
-      return { linkedCount, resolvedTargetId };
-    });
-
-    createAuditLog({
-      companyId: scope.companyId, userId: scope.userId, action: "update",
-      entity: "umrah_pilgrims", entityId: 0,
-      after: { batchId: id, dimension: b.dimension, targetId: result.resolvedTargetId, linkedCount: result.linkedCount },
-    }).catch((e) => logger.error(e, "unlinked-link bg"));
-    emitEvent({
-      companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
-      action: "umrah.import.unlinked_rows_linked", entity: "umrah_import_batches", entityId: id,
-      after: { dimension: b.dimension, linkedCount: result.linkedCount },
-    }).catch((e) => logger.error(e, "unlinked-link bg"));
-    res.json(result);
-  } catch (err) { handleRouteError(err, res, "Link unlinked rows"); }
 });
 
 // ============================================================================
