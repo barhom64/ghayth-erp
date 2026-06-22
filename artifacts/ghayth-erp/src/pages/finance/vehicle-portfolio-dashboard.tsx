@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
 import {
   Car, TrendingUp, TrendingDown, Download, BarChart3,
@@ -116,6 +117,17 @@ export default function VehiclePortfolioDashboardPage() {
     sorted.map((p) => p.profit),
     80,
   );
+
+  // Detail-table rows: carry the profit-DESC rank and the precomputed Pareto
+  // cumulative on each row so the "#" and "حصة تراكمية" columns stay correct
+  // regardless of any header re-sort; constant group key enables the
+  // grand-total footer row in DataTable.
+  const tableRows = sorted.map((p, idx) => ({
+    ...p,
+    rank: idx + 1,
+    cumulativePct: cumulativePcts[idx] ?? 0,
+    isThresholdRow: idx === thresholdIdx,
+  }));
 
   const exportCSV = () => {
     const lines: string[] = [];
@@ -345,65 +357,113 @@ export default function VehiclePortfolioDashboardPage() {
             <CardHeader>
               <CardTitle className="text-base">الجدول التفصيلي ({portfolio.length})</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2 w-12">#</th>
-                      <th className="text-start py-2 px-2">المركبة</th>
-                      <th className="text-start py-2 px-2">السائق</th>
-                      <th className="text-end py-2 px-2">الإيرادات</th>
-                      <th className="text-end py-2 px-2">المصاريف</th>
-                      <th className="text-end py-2 px-2">الربح</th>
-                      <th className="text-end py-2 px-2 w-20">الهامش</th>
-                      <th className="text-start py-2 px-2 w-24">حصة تراكمية</th>
-                      <th className="py-2 px-2 w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map((p, idx) => (
-                      <tr key={p.id} className="border-b hover:bg-muted/30">
-                        <td className="py-1.5 px-2 text-muted-foreground">{idx + 1}</td>
-                        <td className="py-1.5 px-2 font-medium">{p.label}</td>
-                        <td className="py-1.5 px-2 text-xs text-muted-foreground">{p.driverName ?? "—"}</td>
-                        <td className="py-1.5 px-2 text-end tabular-nums">{formatCurrency(p.revenue)}</td>
-                        <td className="py-1.5 px-2 text-end tabular-nums text-status-danger-foreground">
-                          {formatCurrency(p.expense)}
+            <CardContent className="p-0">
+              <DataTable
+                data={tableRows}
+                rowKey={(p) => p.id}
+                noToolbar
+                pageSize={0}                columns={[
+                  {
+                    key: "rank",
+                    header: "#",
+                    width: "3rem",
+                    sortable: false,
+                    render: (p) => <span className="text-muted-foreground">{p.rank}</span>,
+                  },
+                  {
+                    key: "label",
+                    header: "المركبة",
+                    render: (p) => <span className="font-medium">{p.label}</span>,
+                  },
+                  {
+                    key: "driverName",
+                    header: "السائق",
+                    className: "text-xs text-muted-foreground",
+                    render: (p) => p.driverName ?? "—",
+                  },
+                  {
+                    key: "revenue",
+                    header: "الإيرادات",
+                    align: "end",
+                    ltr: true,
+                    className: "tabular-nums",
+                    render: (p) => formatCurrency(p.revenue),
+                  },
+                  {
+                    key: "expense",
+                    header: "المصاريف",
+                    align: "end",
+                    ltr: true,
+                    className: "tabular-nums text-status-danger-foreground",
+                    render: (p) => formatCurrency(p.expense),
+                  },
+                  {
+                    key: "profit",
+                    header: "الربح",
+                    align: "end",
+                    ltr: true,
+                    className: "tabular-nums font-semibold",
+                    render: (p) => (
+                      <span className={p.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}>
+                        {p.profit >= 0 ? "+" : ""}{formatCurrency(p.profit)}
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "margin",
+                    header: "الهامش",
+                    align: "end",
+                    width: "5rem",
+                    ltr: true,
+                    className: "tabular-nums font-bold",
+                    render: (p) => (
+                      <span className={p.margin >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}>
+                        {p.margin.toFixed(1)}%
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "cumulativePct",
+                    header: "حصة تراكمية",
+                    width: "6rem",
+                    sortable: false,
+                    render: (p) => (
+                      <ParetoMarker
+                        cumulativePct={p.cumulativePct}
+                        isThresholdRow={p.isThresholdRow}
+                        testidPrefix={`vehicle-portfolio-pareto-${p.id}`}
+                      />
+                    ),
+                  },
+                  {
+                    key: "_actions",
+                    header: "",
+                    width: "2rem",
+                    sortable: false,
+                    render: (p) => (
+                      <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7">
+                        <Link href={`/fleet/${p.id}`}><ExternalLink className="w-3 h-3" /></Link>
+                      </Button>
+                    ),
+                  },
+                ] satisfies DataTableColumn<typeof tableRows[number]>[]}
+                renderGrandTotal={() => (
+                  <table className="w-full text-sm">
+                    <tbody>
+                      <tr>
+                        <td colSpan={3} className="py-0 px-2">الإجمالي</td>
+                        <td className="py-0 px-2 text-end tabular-nums" dir="ltr">{formatCurrency(totals.revenue)}</td>
+                        <td className="py-0 px-2 text-end tabular-nums text-status-danger-foreground" dir="ltr">{formatCurrency(totals.expense)}</td>
+                        <td className={`py-0 px-2 text-end tabular-nums ${totals.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`} dir="ltr">
+                          {totals.profit >= 0 ? "+" : ""}{formatCurrency(totals.profit)}
                         </td>
-                        <td className={`py-1.5 px-2 text-end tabular-nums font-semibold ${p.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                          {p.profit >= 0 ? "+" : ""}{formatCurrency(p.profit)}
-                        </td>
-                        <td className={`py-1.5 px-2 text-end tabular-nums font-bold ${p.margin >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                          {p.margin.toFixed(1)}%
-                        </td>
-                        <td className="py-1.5 px-2">
-                          <ParetoMarker
-                            cumulativePct={cumulativePcts[idx] ?? 0}
-                            isThresholdRow={idx === thresholdIdx}
-                            testidPrefix={`vehicle-portfolio-pareto-${p.id}`}
-                          />
-                        </td>
-                        <td className="py-1.5 px-2">
-                          <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/fleet/${p.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                        </td>
+                        <td className="py-0 px-2 text-end tabular-nums" dir="ltr">{portfolioMargin.toFixed(1)}%</td>
+                        <td colSpan={2} />
                       </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold bg-muted/40 border-t-2">
-                      <td colSpan={3} className="py-2 px-2">الإجمالي</td>
-                      <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totals.revenue)}</td>
-                      <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">{formatCurrency(totals.expense)}</td>
-                      <td className={`py-2 px-2 text-end tabular-nums ${totals.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                        {totals.profit >= 0 ? "+" : ""}{formatCurrency(totals.profit)}
-                      </td>
-                      <td className="py-2 px-2 text-end tabular-nums">{portfolioMargin.toFixed(1)}%</td>
-                      <td colSpan={2}></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                    </tbody>
+                  </table>
+                )}
+              />
             </CardContent>
           </Card>
         </>

@@ -15,6 +15,7 @@ import {
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Layers, TrendingUp, TrendingDown, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -277,83 +278,111 @@ export default function UmrahGroupPortfolioDashboard() {
 
       <Card>
         <CardContent className="p-0">
-          {rows.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground text-sm" data-testid="group-portfolio-empty">
-              لا توجد مجموعات ضمن الفلتر الحالي.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs" data-testid="group-portfolio-table">
-                <thead>
-                  <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                    <th className="p-2 font-medium">المجموعة</th>
-                    <th className="p-2 font-medium">الموسم</th>
-                    <th className="p-2 font-medium">الوكيل</th>
-                    <th className="p-2 font-medium">الحالة</th>
-                    <th className="p-2 font-medium">معتمرون</th>
-                    <th className="p-2 font-medium">الإيرادات</th>
-                    <th className="p-2 font-medium">التكلفة</th>
-                    <th className="p-2 font-medium">الهامش</th>
-                    <th className="p-2 font-medium">%</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const margin = Number(r.margin);
-                    const revenue = Number(r.revenue);
-                    const pct = revenue > 0 ? (margin / revenue) * 100 : 0;
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-b last:border-b-0 hover:bg-muted/30"
-                        data-testid={`group-portfolio-row-${r.id}`}
-                      >
-                        <td className="p-2">
-                          <Link href={`/umrah/groups/${r.id}`} className="text-blue-600 hover:underline">
-                            {r.name || r.nuskGroupNumber}
-                          </Link>
-                          <p className="text-[10px] text-muted-foreground font-mono">{r.nuskGroupNumber}</p>
-                        </td>
-                        <td className="p-2 text-xs">
-                          {r.seasonId ? (
-                            <Link href={`/umrah/seasons/${r.seasonId}`} className="text-blue-600 hover:underline">
-                              {r.seasonTitle || `#${r.seasonId}`}
-                            </Link>
-                          ) : "—"}
-                        </td>
-                        <td className="p-2 text-xs">
-                          {r.agentId ? (
-                            <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline">
-                              {r.agentName || `#${r.agentId}`}
-                            </Link>
-                          ) : "—"}
-                        </td>
-                        <td className="p-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {STATUS_LABELS[r.status] || r.status}
-                          </Badge>
-                        </td>
-                        <td className="p-2">
-                          {r.actualPilgrims} / {r.expectedPilgrims ?? "?"}
-                        </td>
-                        <td className="p-2 font-semibold">{formatCurrency(Number(r.revenue))}</td>
-                        <td className="p-2">{formatCurrency(Number(r.cost))}</td>
-                        <td
-                          className={`p-2 font-bold ${margin < 0 ? "text-status-error-foreground" : "text-status-success-foreground"}`}
-                          data-testid={`group-portfolio-margin-${r.id}`}
-                        >
-                          {formatCurrency(margin)}
-                        </td>
-                        <td className="p-2 text-xs">
-                          {revenue > 0 ? `${pct.toFixed(1)}%` : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            data={rows}
+            rowKey={(r) => r.id}
+            noToolbar
+            pageSize={0}
+            isLoading={isLoading}
+            isError={isError}
+            onRetry={refetch}
+            emptyMessage="لا توجد مجموعات ضمن الفلتر الحالي."
+            columns={[
+              {
+                key: "name",
+                header: "المجموعة",
+                render: (r) => (
+                  <>
+                    <Link href={`/umrah/groups/${r.id}`} className="text-blue-600 hover:underline">
+                      {r.name || r.nuskGroupNumber}
+                    </Link>
+                    <p className="text-[10px] text-muted-foreground font-mono">{r.nuskGroupNumber}</p>
+                  </>
+                ),
+                exportValue: (r) => r.name || r.nuskGroupNumber,
+              },
+              {
+                key: "seasonTitle",
+                header: "الموسم",
+                className: "text-xs",
+                render: (r) =>
+                  r.seasonId ? (
+                    <Link href={`/umrah/seasons/${r.seasonId}`} className="text-blue-600 hover:underline">
+                      {r.seasonTitle || `#${r.seasonId}`}
+                    </Link>
+                  ) : (
+                    "—"
+                  ),
+              },
+              {
+                key: "agentName",
+                header: "الوكيل",
+                className: "text-xs",
+                render: (r) =>
+                  r.agentId ? (
+                    <Link href={`/umrah/agents/${r.agentId}`} className="text-blue-600 hover:underline">
+                      {r.agentName || `#${r.agentId}`}
+                    </Link>
+                  ) : (
+                    "—"
+                  ),
+              },
+              {
+                key: "status",
+                header: "الحالة",
+                render: (r) => (
+                  <Badge variant="outline" className="text-[10px]">
+                    {STATUS_LABELS[r.status] || r.status}
+                  </Badge>
+                ),
+                exportValue: (r) => STATUS_LABELS[r.status] || r.status,
+              },
+              {
+                key: "actualPilgrims",
+                header: "معتمرون",
+                render: (r) => `${r.actualPilgrims} / ${r.expectedPilgrims ?? "?"}`,
+              },
+              {
+                key: "revenue",
+                header: "الإيرادات",
+                render: (r) => <span className="font-semibold">{formatCurrency(Number(r.revenue))}</span>,
+                exportValue: (r) => Number(r.revenue),
+              },
+              {
+                key: "cost",
+                header: "التكلفة",
+                render: (r) => formatCurrency(Number(r.cost)),
+                exportValue: (r) => Number(r.cost),
+              },
+              {
+                key: "margin",
+                header: "الهامش",
+                render: (r) => {
+                  const margin = Number(r.margin);
+                  return (
+                    <span
+                      className={`font-bold ${margin < 0 ? "text-status-error-foreground" : "text-status-success-foreground"}`}
+                      data-testid={`group-portfolio-margin-${r.id}`}
+                    >
+                      {formatCurrency(margin)}
+                    </span>
+                  );
+                },
+                exportValue: (r) => Number(r.margin),
+              },
+              {
+                key: "marginPct",
+                header: "%",
+                className: "text-xs",
+                sortable: false,
+                render: (r) => {
+                  const revenue = Number(r.revenue);
+                  const pct = revenue > 0 ? (Number(r.margin) / revenue) * 100 : 0;
+                  return revenue > 0 ? `${pct.toFixed(1)}%` : "—";
+                },
+              },
+            ] satisfies DataTableColumn<GroupRow>[]}
+          />
         </CardContent>
       </Card>
     </PageShell>

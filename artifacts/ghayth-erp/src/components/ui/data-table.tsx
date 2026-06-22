@@ -822,6 +822,13 @@ export function DataTable<T>({
                     </Fragment>
                   );
                 })}
+                {!groupBy && renderGrandTotal && sortedData && sortedData.length > 0 && (
+                  <TableRow className="border-t-4 bg-muted font-bold">
+                    <TableCell colSpan={colCount} className="py-2 px-3">
+                      {renderGrandTotal(sortedData)}
+                    </TableCell>
+                  </TableRow>
+                )}
           </DataTableWrapper>
         </Table>
         )}
