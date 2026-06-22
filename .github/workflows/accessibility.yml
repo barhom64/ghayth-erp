@@ -1,0 +1,51 @@
+name: accessibility
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  accessibility-contract:
+    name: Accessibility contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify accessibility acceptance contract
+        run: |
+          set -euo pipefail
+          grep -q 'الوصول Accessibility' docs/ux/UX_SCORECARD.md
+          grep -q 'تنقل بالكيبورد' docs/ux/UX_SCORECARD.md
+          grep -q 'أسماء الأزرار' docs/ux/UX_SCORECARD.md
+          grep -q 'تسميات الحقول' docs/ux/UX_SCORECARD.md
+          echo 'Accessibility acceptance contract exists.'
+
+      - name: Optional axe scan against deployed/staging URL
+        env:
+          UX_BASE_URL: ${{ vars.UX_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${UX_BASE_URL:-}" ]; then
+            echo '::notice::Set repository variable UX_BASE_URL to run live axe scans against staging.'
+            exit 0
+          fi
+          npx --yes @axe-core/cli "$UX_BASE_URL" --exit
+
+      - name: Write accessibility summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'MD'
+          ## Accessibility — نظام غيث
+
+          - العقد الملزم موجود في `docs/ux/UX_SCORECARD.md`.
+          - الفحص الحي عبر axe يعمل عند ضبط Repository Variable باسم `UX_BASE_URL` على رابط بيئة اختبار أو staging.
+          - فحص الصفحات الداخلية المصادق عليها يتم عبر Playwright `@ux-gate` ضمن مسار `e2e`، ثم يوسع لاحقًا بـ axe داخل الجلسة المصادق عليها عند إضافة الحزمة لملف القفل.
+          MD
