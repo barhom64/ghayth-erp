@@ -153,7 +153,8 @@ const BASELINE = new Set([
   // (لم يُدخلها هذا الـPR؛ كانت قائمة على main قبل توسيع التغطية.)
   // (finance-hardening→projects عُولِج في #2839: نُقل لعقد المشاريع insertProjectRecord
   //  — المالية لم تعد تكتب جدول projects مباشرة.)
-  "finance-invoices.ts:warehouse_movements",// ربط الفاتورة بحركة مخزون/COGS؟ (يُعالَج في #2867)
+  // (finance-invoices→warehouse_movements عُولِج في #2839: ختم journalEntryId نُقل
+  //  لعقد المخزون stampMovementsJournalEntry — المالية لم تعد تكتب الجدول مباشرة.)
   // (publicData→employees عُولِج في #2839: نُقل لعقد HR applySelfOnboardingSubmission
   //  — الاستكمال الذاتي يُطبَّق عبر المسار القائد لا مباشرةً.)
   // (settings→employee_assignments/purchase_orders عُولِجا في #2839: نُقلا لعقدَي
