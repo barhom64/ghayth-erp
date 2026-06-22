@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -67,6 +67,12 @@ export interface LineItemsTableProps<T> {
    * Return one or more `<tr>` elements.
    */
   renderTotals?: () => ReactNode;
+  /**
+   * Optional secondary content rendered in its own full-width `<tr>` directly
+   * below each item row (e.g. a per-line allocation panel). Return the inner
+   * content only — the wrapping `<tr><td colSpan>` is provided. Falsy → no row.
+   */
+  renderExpansion?: (item: T, index: number) => ReactNode;
   /** Extra content rendered below the table (e.g. balance indicator). */
   footer?: ReactNode;
   className?: string;
@@ -80,6 +86,7 @@ export function LineItemsTable<T>({
   minItems = 1,
   addLabel = "إضافة سطر",
   renderTotals,
+  renderExpansion,
   footer,
   className,
 }: LineItemsTableProps<T>) {
@@ -104,27 +111,39 @@ export function LineItemsTable<T>({
             </tr>
           </thead>
           <tbody>
-            {items.map((item, rowIndex) => (
-              <tr key={rowIndex} className="border-t">
-                {columns.map((col, colIndex) => (
-                  <td key={colIndex} className={cn("px-2 py-1", col.className)}>
-                    {col.render(item, rowIndex)}
-                  </td>
-                ))}
-                <td className="px-2 py-1 text-center">
-                  {items.length > minItems && (
-                    <button
-                      type="button"
-                      onClick={() => onRemove(rowIndex)}
-                      className="text-muted-foreground hover:text-status-error-foreground transition-colors"
-                      aria-label="حذف السطر"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {items.map((item, rowIndex) => {
+              const expansion = renderExpansion?.(item, rowIndex);
+              return (
+                <Fragment key={rowIndex}>
+                  <tr className="border-t">
+                    {columns.map((col, colIndex) => (
+                      <td key={colIndex} className={cn("px-2 py-1", col.className)}>
+                        {col.render(item, rowIndex)}
+                      </td>
+                    ))}
+                    <td className="px-2 py-1 text-center">
+                      {items.length > minItems && (
+                        <button
+                          type="button"
+                          onClick={() => onRemove(rowIndex)}
+                          className="text-muted-foreground hover:text-status-error-foreground transition-colors"
+                          aria-label="حذف السطر"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                  {expansion ? (
+                    <tr>
+                      <td colSpan={columns.length + 1} className="px-2 pb-2">
+                        {expansion}
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
             {renderTotals?.()}
           </tbody>
         </table>
