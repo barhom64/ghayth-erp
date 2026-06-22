@@ -27,6 +27,29 @@ import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.
 import { runningWeightedAverageCost } from "../lib/inventory/valuation/running-average.js";
 import { logger } from "../lib/logger.js";
 
+// عقد قائد/خادم (#2839): ختم معرّف القيد المحاسبي على حركات المخزون المرتبطة.
+// المالية تُنشئ قيد عكس تكلفة المبيعات (COGS) ثم تطلب من المخزون (مالك جدول
+// warehouse_movements) ختم journalEntryId على حركاته — الكتابة في جدول المخزون
+// تبقى ملك المخزون لا المالية (حدود المسارات، مواد 4–9). يعمل ضمن المعاملة
+// المحيطة (rawExecute ينضمّ لـ txStore) فيبقى الختم ذرّيًا مع ترحيل القيد.
+export async function stampMovementsJournalEntry(params: {
+  companyId: number;
+  reference: string;
+  type: string;
+  journalEntryId: number;
+}): Promise<void> {
+  const { companyId, reference, type, journalEntryId } = params;
+  await rawExecute(
+    `UPDATE warehouse_movements
+        SET "journalEntryId" = $1
+      WHERE "companyId" = $2
+        AND reference = $3
+        AND type = $4
+        AND "journalEntryId" IS NULL`,
+    [journalEntryId, companyId, reference, type],
+  );
+}
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
