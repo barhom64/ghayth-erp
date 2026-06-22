@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -332,55 +332,81 @@ export default function IncomeStatementVsBudgetPage() {
                 </CardHeader>
                 {isOpen && (
                   <CardContent className="pt-0">
-                    <div className="overflow-x-auto"><table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-xs text-muted-foreground">
-                          <th className="text-start py-2 px-2 w-24">الرمز</th>
-                          <th className="text-start py-2 px-2">الاسم</th>
-                          <th className="text-end py-2 px-2 w-28">الميزانية</th>
-                          <th className="text-end py-2 px-2 w-28">الفعلي</th>
-                          <th className="text-end py-2 px-2 w-28">الانحراف</th>
-                          <th className="text-end py-2 px-2 w-20">%</th>
-                          <th className="py-2 px-2 w-32">المؤشر</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sec.items.map(it => {
-                          const actual = Number(it.amount);
-                          const bud = budgetMap.get(it.accountCode) ?? 0;
-                          const v = sec.kind === "revenue" ? actual - bud : bud - actual;
-                          const itemFavorable = v >= 0;
-                          const itemPct = bud > 0 ? (v / bud) * 100 : 0;
-                          const pctOfTotal = sec.actualTotal > 0 ? (actual / sec.actualTotal) * 100 : 0;
-                          return (
-                            <tr key={it.accountCode} className="border-b hover:bg-muted/30">
-                              <td className="py-2 px-2 font-mono text-xs">{it.accountCode}</td>
-                              <td className="py-2 px-2">{it.accountName}</td>
-                              <td className="py-2 px-2 text-end tabular-nums text-muted-foreground">
-                                {bud > 0 ? formatCurrency(bud) : "—"}
-                              </td>
-                              <td className="py-2 px-2 text-end tabular-nums font-semibold">
-                                {formatCurrency(actual)}
-                              </td>
-                              <td className={`py-2 px-2 text-end tabular-nums font-semibold ${itemFavorable ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                                {v >= 0 ? "+" : ""}{formatCurrency(v)}
-                              </td>
-                              <td className={`py-2 px-2 text-end tabular-nums ${itemFavorable ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                                {bud > 0 ? `${itemPct >= 0 ? "+" : ""}${itemPct.toFixed(1)}%` : "—"}
-                              </td>
-                              <td className="py-2 px-2">
+                    <div className="overflow-x-auto">
+                      <DataTable<IncomeStmtLine>
+                        data={sec.items}
+                        rowKey={(it) => it.accountCode}
+                        noToolbar
+                        pageSize={0}
+                        className="text-sm"
+                        columns={[
+                          {
+                            key: "accountCode", header: "الرمز", width: "6rem", sortable: false, ltr: true,
+                            render: (it) => <span className="font-mono text-xs">{it.accountCode}</span>,
+                          },
+                          { key: "accountName", header: "الاسم", sortable: false },
+                          {
+                            key: "budget", header: "الميزانية", align: "end", width: "7rem", sortable: false,
+                            render: (it) => {
+                              const bud = budgetMap.get(it.accountCode) ?? 0;
+                              return (
+                                <span className="tabular-nums text-muted-foreground">
+                                  {bud > 0 ? formatCurrency(bud) : "—"}
+                                </span>
+                              );
+                            },
+                          },
+                          {
+                            key: "actual", header: "الفعلي", align: "end", width: "7rem", sortable: false,
+                            render: (it) => <span className="tabular-nums font-semibold">{formatCurrency(Number(it.amount))}</span>,
+                          },
+                          {
+                            key: "variance", header: "الانحراف", align: "end", width: "7rem", sortable: false,
+                            render: (it) => {
+                              const actual = Number(it.amount);
+                              const bud = budgetMap.get(it.accountCode) ?? 0;
+                              const v = sec.kind === "revenue" ? actual - bud : bud - actual;
+                              const itemFavorable = v >= 0;
+                              return (
+                                <span className={`tabular-nums font-semibold ${itemFavorable ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
+                                  {v >= 0 ? "+" : ""}{formatCurrency(v)}
+                                </span>
+                              );
+                            },
+                          },
+                          {
+                            key: "pct", header: "%", align: "end", width: "5rem", sortable: false,
+                            render: (it) => {
+                              const actual = Number(it.amount);
+                              const bud = budgetMap.get(it.accountCode) ?? 0;
+                              const v = sec.kind === "revenue" ? actual - bud : bud - actual;
+                              const itemFavorable = v >= 0;
+                              const itemPct = bud > 0 ? (v / bud) * 100 : 0;
+                              return (
+                                <span className={`tabular-nums ${itemFavorable ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
+                                  {bud > 0 ? `${itemPct >= 0 ? "+" : ""}${itemPct.toFixed(1)}%` : "—"}
+                                </span>
+                              );
+                            },
+                          },
+                          {
+                            key: "indicator", header: "المؤشر", width: "8rem", sortable: false,
+                            render: (it) => {
+                              const actual = Number(it.amount);
+                              const pctOfTotal = sec.actualTotal > 0 ? (actual / sec.actualTotal) * 100 : 0;
+                              return (
                                 <div className="h-1.5 bg-muted rounded overflow-hidden">
                                   <div
                                     className={sec.kind === "revenue" ? "bg-status-success-foreground" : "bg-status-warning-foreground"}
                                     style={{ width: `${Math.min(pctOfTotal, 100)}%`, height: "100%" }}
                                   />
                                 </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table></div>
+                              );
+                            },
+                          },
+                        ] satisfies DataTableColumn<IncomeStmtLine>[]}
+                      />
+                    </div>
                   </CardContent>
                 )}
               </Card>

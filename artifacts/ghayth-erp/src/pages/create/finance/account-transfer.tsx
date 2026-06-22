@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { AccountSelect } from "@/components/shared/entity-selects";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -303,28 +304,39 @@ export default function AccountTransferPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            <div className="overflow-x-auto"><table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted-foreground border-b">
-                  <th className="text-end p-1">الحساب</th>
-                  <th className="text-end p-1">الوصف</th>
-                  <th className="text-end p-1">مدين</th>
-                  <th className="text-end p-1">دائن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {buildJournalLines().lines.map((jl, i) => (
-                  <tr key={i} className="border-b border-dashed">
-                    <td className="p-1 font-mono">{jl.accountCode}</td>
-                    <td className="p-1 text-muted-foreground">{jl.description}</td>
-                    <td className="p-1 font-mono text-end text-emerald-700">
+            <DataTable<{ accountCode: string; debit: number; credit: number; description: string }>
+              noToolbar
+              pageSize={0}
+              className="text-xs"
+              data={buildJournalLines().lines}
+              rowKey={(_jl, i) => i}
+              columns={[
+                {
+                  key: "accountCode", header: "الحساب", align: "end",
+                  render: (jl) => <span className="font-mono">{jl.accountCode}</span>,
+                },
+                {
+                  key: "description", header: "الوصف", align: "end",
+                  render: (jl) => <span className="text-muted-foreground">{jl.description}</span>,
+                },
+                {
+                  key: "debit", header: "مدين", align: "end",
+                  render: (jl) => (
+                    <span className="font-mono text-emerald-700">
                       {Number(jl.debit) > 0 ? formatCurrency(Number(jl.debit)) : "—"}
-                    </td>
-                    <td className="p-1 font-mono text-end text-red-700">
+                    </span>
+                  ),
+                },
+                {
+                  key: "credit", header: "دائن", align: "end",
+                  render: (jl) => (
+                    <span className="font-mono text-red-700">
                       {Number(jl.credit) > 0 ? formatCurrency(Number(jl.credit)) : "—"}
-                    </td>
-                  </tr>
-                ))}
+                    </span>
+                  ),
+                },
+              ] satisfies DataTableColumn<{ accountCode: string; debit: number; credit: number; description: string }>[]}
+              renderGrandTotal={() => (
                 <tr className="bg-muted/40 font-bold">
                   <td colSpan={2} className="p-1 text-end">الإجمالي</td>
                   <td className="p-1 font-mono text-end text-emerald-700">
@@ -334,8 +346,8 @@ export default function AccountTransferPage() {
                     {formatCurrency(transferAmount + feeAmount)}
                   </td>
                 </tr>
-              </tbody>
-            </table></div>
+              )}
+            />
           </CardContent>
         </Card>
       )}

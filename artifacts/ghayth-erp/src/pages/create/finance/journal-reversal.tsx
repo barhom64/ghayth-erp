@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Undo2, AlertTriangle, FileSignature, Lock, CheckCircle2, Search,
   ArrowRight, Calendar, RotateCcw,
@@ -195,28 +196,35 @@ export default function JournalReversalPage() {
                 <div className="text-sm font-medium mb-2 truncate" title={selected.description}>
                   {selected.description}
                 </div>
-                <div className="overflow-x-auto"><table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-muted-foreground border-b">
-                      <th className="text-start py-1">الحساب</th>
-                      <th className="text-end py-1">مدين</th>
-                      <th className="text-end py-1">دائن</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.lines.map((l, i) => (
-                      <tr key={i} className="border-b">
-                        <td className="py-1 font-mono">{l.accountCode}</td>
-                        <td className="py-1 text-end tabular-nums">
+                <DataTable<JeLine>
+                  noToolbar
+                  pageSize={0}
+                  className="text-xs"
+                  data={selected.lines}
+                  rowKey={(_l, i) => i}
+                  columns={[
+                    {
+                      key: "accountCode", header: "الحساب",
+                      render: (l) => <span className="font-mono">{l.accountCode}</span>,
+                    },
+                    {
+                      key: "debit", header: "مدين", align: "end",
+                      render: (l) => (
+                        <span className="tabular-nums">
                           {Number(l.debit) > 0 ? formatCurrency(Number(l.debit)) : "—"}
-                        </td>
-                        <td className="py-1 text-end tabular-nums">
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "credit", header: "دائن", align: "end",
+                      render: (l) => (
+                        <span className="tabular-nums">
                           {Number(l.credit) > 0 ? formatCurrency(Number(l.credit)) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
+                        </span>
+                      ),
+                    },
+                  ] satisfies DataTableColumn<JeLine>[]}
+                />
               </div>
 
               {/* Reversal preview */}
@@ -233,28 +241,35 @@ export default function JournalReversalPage() {
                 <div className="text-sm font-medium mb-2 truncate">
                   عكس قيد: {selected.description}
                 </div>
-                <div className="overflow-x-auto"><table className="w-full text-xs">
-                  <thead>
-                    <tr className="text-muted-foreground border-b border-status-warning-foreground/30">
-                      <th className="text-start py-1">الحساب</th>
-                      <th className="text-end py-1">مدين</th>
-                      <th className="text-end py-1">دائن</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.lines.map((l, i) => (
-                      <tr key={i} className="border-b border-status-warning-foreground/20">
-                        <td className="py-1 font-mono">{l.accountCode}</td>
-                        <td className="py-1 text-end tabular-nums">
+                <DataTable<JeLine>
+                  noToolbar
+                  pageSize={0}
+                  className="text-xs"
+                  data={selected.lines}
+                  rowKey={(_l, i) => i}
+                  columns={[
+                    {
+                      key: "accountCode", header: "الحساب",
+                      render: (l) => <span className="font-mono">{l.accountCode}</span>,
+                    },
+                    {
+                      key: "debit", header: "مدين", align: "end",
+                      render: (l) => (
+                        <span className="tabular-nums">
                           {Number(l.credit) > 0 ? <span className="text-status-success-foreground font-semibold">{formatCurrency(Number(l.credit))}</span> : "—"}
-                        </td>
-                        <td className="py-1 text-end tabular-nums">
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "credit", header: "دائن", align: "end",
+                      render: (l) => (
+                        <span className="tabular-nums">
                           {Number(l.debit) > 0 ? <span className="text-status-danger-foreground font-semibold">{formatCurrency(Number(l.debit))}</span> : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
+                        </span>
+                      ),
+                    },
+                  ] satisfies DataTableColumn<JeLine>[]}
+                />
               </div>
             </div>
 
