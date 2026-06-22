@@ -14,13 +14,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PrintButton } from "@/components/shared/print-button";
 import { useAuth } from "@/lib/auth";
 import type { LucideIcon } from "lucide-react";
-import { Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check } from "lucide-react";
+import { Target, DollarSign, Calendar, User, TrendingUp, Phone, Mail, MessageSquare, Pencil, Trash2, X, Check, CheckCircle2 } from "lucide-react";
 import {
   DetailPageLayout,
   EntityComments,
+  type ExtraTab,
 } from "@workspace/entity-kit";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { Badge } from "@/components/ui/badge";
 import { EntityTags } from "@/components/shared/entity-tags";
 import { useRegistryTabs } from "@/hooks/use-registry-tabs";
+
+// مصطلحات مراحل الفرصة البيعية موحّدة (المرجع الوحيد لعرض المرحلة).
+const STAGE_LABELS: Record<string, string> = {
+  lead: "عميل محتمل",
+  qualified: "مؤهل",
+  proposal: "عرض سعر",
+  negotiation: "تفاوض",
+  closed_won: "تم الإغلاق (ربح)",
+  closed_lost: "تم الإغلاق (خسارة)",
+};
 
 export default function OpportunityDetail() {
   const [, params] = useRoute("/crm/:id");
@@ -36,6 +49,14 @@ export default function OpportunityDetail() {
   const { data: opportunity, isLoading, isError, error } = useApiQuery<any>(["opportunity-detail", id || ""], `/crm/opportunities/${id}`, !!id);
   const { data: activitiesResp } = useApiQuery<any>(["opportunity-activities", id || ""], `/crm/opportunities/${id}/activities`, !!id && !!opportunity);
   const activities = asList(activitiesResp);
+
+  // الصفقات/الفرص المرتبطة — مُرحَّلة من صفحة العميل المحتمل السابقة (التوحيد).
+  const { data: relatedResp } = useApiQuery<any>(
+    ["opportunity-related", id || ""],
+    `/crm/opportunities/${id}/related`,
+    !!id && !!opportunity
+  );
+  const deals: any[] = relatedResp?.data || (Array.isArray(relatedResp) ? relatedResp : []);
 
   const [editForm, setEditForm] = useState<Record<string, string>>({});
 
@@ -89,6 +110,28 @@ export default function OpportunityDetail() {
     }
   };
 
+  // تحويل الفرصة إلى عميل — مُرحَّل من صفحة العميل المحتمل السابقة.
+  // يستخدم نقطة النهاية الكنسية idempotent (handleDealWon + applyTransition).
+  // لا تغيير في منطق الأعمال ولا في الصلاحية (crm:create) — توحيد عرض فقط.
+  const handleConvert = async () => {
+    try {
+      const result = await apiFetch<any>(`/crm/opportunities/${id}/convert`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      qc.invalidateQueries({ queryKey: ["opportunity-detail", id] });
+      toast({ title: "تم تحويل العميل المحتمل إلى عميل بنجاح" });
+      const clientId = result?.convertedClientId;
+      navigate(clientId ? `/clients/${clientId}` : "/clients");
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "تعذر تحويل العميل المحتمل",
+        description: getErrorMessage(err),
+      });
+    }
+  };
+
   const submitActivity = async () => {
     if (!actForm.description.trim() || !actForm.scheduledAt) {
       toast({ variant: "destructive", title: "الوصف وتاريخ النشاط مطلوبان" });
@@ -119,7 +162,6 @@ export default function OpportunityDetail() {
 
   const actions = (
     <div className="flex items-center gap-2 flex-wrap">
-      <PageStatusBadge status={opportunity?.stage} />
       {opportunity && (
         <PrintButton
           entityType="quotation"
@@ -127,6 +169,9 @@ export default function OpportunityDetail() {
           formats={["a4", "excel"]}
           label="طباعة عرض السعر"
         />
+      )}
+      {opportunity && opportunity.stage !== "closed_won" && opportunity.stage !== "closed_lost" && (
+        <GuardedButton perm="crm:create" size="sm" onClick={handleConvert} className="gap-1"><CheckCircle2 className="h-4 w-4" />تحويل</GuardedButton>
       )}
       <GuardedButton perm="crm:update" variant="outline" size="sm" onClick={startEdit}><Pencil className="h-4 w-4 me-1" />تعديل</GuardedButton>
       {deleting ? (
@@ -276,21 +321,44 @@ export default function OpportunityDetail() {
     </>
   );
 
+  // تبويب الصفقات/الفرص المرتبطة — مُرحَّل من صفحة العميل المحتمل (التوحيد).
+  const dealsColumns: DataTableColumn<any>[] = [
+    { key: "title", header: "الفرصة", sortable: true, render: (r) => <span className="font-medium">{r.title}</span> },
+    { key: "stage", header: "المرحلة", sortable: true, render: (r) => <Badge variant="outline">{STAGE_LABELS[r.stage] || r.stage || "-"}</Badge> },
+    { key: "value", header: "القيمة", sortable: true, render: (r) => <span className="font-semibold">{formatCurrency(Number(r.value) || 0)}</span> },
+    { key: "probability", header: "الاحتمالية", sortable: true, render: (r) => `${r.probability || 0}%` },
+  ];
+
+  const dealsTab: ExtraTab = {
+    key: "deals",
+    label: "الصفقات",
+    icon: DollarSign,
+    badge: deals.length || undefined,
+    content: () =>
+      deals.length === 0 ? (
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-10 text-center text-sm text-muted-foreground">لا توجد صفقات أخرى مرتبطة</CardContent>
+        </Card>
+      ) : (
+        <DataTable columns={dealsColumns} data={deals} pageSize={10} emptyMessage="لا توجد صفقات" noToolbar />
+      ),
+  };
+
   return (
     <>
       <DetailPageLayout
-        title={opportunity?.title || "الفرصة"}
+        title={opportunity?.title || opportunity?.contactName || "الفرصة"}
         subtitle={opportunity?.clientName || opportunity?.contactName || undefined}
         backPath="/crm"
         backLabel="العودة"
+        status={opportunity?.stage ? { label: STAGE_LABELS[opportunity.stage] || opportunity.stage, tone: "info" } : undefined}
         entityType="opportunity"
         entityId={id!}
         isLoading={isLoading}
         error={isError ? error : undefined}
-       
         createdAt={opportunity?.createdAt}
         updatedAt={opportunity?.updatedAt}
-        extraTabs={registryExtraTabs}
+        extraTabs={[dealsTab, ...registryExtraTabs]}
         hideTabs={registryHideTabs}
         overview={overview}
         actions={actions}
