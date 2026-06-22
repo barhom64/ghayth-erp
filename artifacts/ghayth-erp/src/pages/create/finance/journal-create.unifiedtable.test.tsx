@@ -13,7 +13,8 @@ const PAGE = readFileSync(join(import.meta.dirname!, "journal-create.tsx"), "utf
 describe("journal-create adopts the shared unified LineItemsTable", () => {
   it("imports and renders <LineItemsTable>", () => {
     expect(PAGE).toMatch(/import \{ LineItemsTable \} from "@\/components\/shared\/line-items-table"/);
-    expect(PAGE).toMatch(/<LineItemsTable<JournalLine>/);
+    expect(PAGE).toMatch(/<LineItemsTable\b/);
+    expect(PAGE).not.toMatch(/<LineItemsTable</); // JSX type-arg breaks dev preview (check-jsx-generic-component); T inferred
   });
 
   it("no longer hand-rolls a grid-cols line pseudo-table", () => {

@@ -12,7 +12,8 @@ const PAGE = readFileSync(join(import.meta.dirname!, "vendor-invoice-create.tsx"
 describe("vendor-invoice-create adopts the shared unified LineItemsTable", () => {
   it("imports and renders <LineItemsTable>", () => {
     expect(PAGE).toMatch(/import \{ LineItemsTable \} from "@\/components\/shared\/line-items-table"/);
-    expect(PAGE).toMatch(/<LineItemsTable<VendorInvoiceLine>/);
+    expect(PAGE).toMatch(/<LineItemsTable\b/);
+    expect(PAGE).not.toMatch(/<LineItemsTable</); // JSX type-arg breaks dev preview (check-jsx-generic-component); T inferred
   });
 
   it("no longer hand-rolls its own <thead>/<tbody> line table", () => {

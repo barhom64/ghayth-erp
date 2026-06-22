@@ -286,7 +286,7 @@ export default function VendorInvoiceCreate() {
             {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
                 بدل جدول HTML يدوي (نفس الأعمدة السبعة، منتقي صنف المورد + مركز
                 التكلفة + لوحة الأبعاد عبر renderExpansion، إضافة/حذف بند). */}
-            <LineItemsTable<VendorInvoiceLine>
+            <LineItemsTable
               items={lines}
               minItems={1}
               onAdd={() => setLines((p) => [...p, emptyLine({ accountPurpose: supplierDefaults?.defaultAccountPurpose ?? "", costCenterId: supplierDefaults?.defaultCostCenterId != null ? String(supplierDefaults.defaultCostCenterId) : "" })])}

@@ -136,7 +136,7 @@ export default function JournalManualCreatePage() {
             {/* الجدول الموحّد للإدخالات المالية — يعتمد المكوّن المشترك
                 <LineItemsTable> بدل جدول يدوي مكرّر (نفس الأعمدة والسلوك:
                 إضافة/حذف سطر، لوحة الأبعاد لكل سطر، صف المجموع). */}
-            <LineItemsTable<JournalLine>
+            <LineItemsTable
               items={form.lines}
               minItems={2}
               onAdd={addLine}

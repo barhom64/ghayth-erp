@@ -196,7 +196,7 @@ export default function PurchaseOrdersCreate() {
             بدل بطاقة لكل بند (المنتج/الكمية/سعر الوحدة أعمدة؛ معالجة البند
             والتوجيه المحاسبي ولوحة الأبعاد عبر renderExpansion). */}
         <div className="mt-2">
-          <LineItemsTable<(typeof items)[number]>
+          <LineItemsTable
             items={items}
             minItems={1}
             onAdd={addItem}

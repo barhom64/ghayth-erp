@@ -141,7 +141,7 @@ export default function JournalCreate() {
               بدل شبكة CSS يدوية (الحساب/البيان/مدين/دائن أعمدة؛ أبعاد السطر
               (مركز تكلفة/قسم/مشروع) + لوحة الأبعاد الكاملة عبر renderExpansion؛
               صف الإجمالي عبر renderTotals). */}
-          <LineItemsTable<JournalLine>
+          <LineItemsTable
             items={lines}
             minItems={2}
             onAdd={addLine}

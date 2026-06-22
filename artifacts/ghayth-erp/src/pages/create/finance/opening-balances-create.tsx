@@ -169,7 +169,7 @@ export default function OpeningBalancesCreatePage() {
           {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
               بدل شبكة CSS يدوية (نفس الأعمدة والسلوك: إضافة/حذف بند، صف الإجمالي
               مع شارة التوازن). */}
-          <LineItemsTable<OBLine>
+          <LineItemsTable
             items={lines}
             minItems={2}
             onAdd={addLine}

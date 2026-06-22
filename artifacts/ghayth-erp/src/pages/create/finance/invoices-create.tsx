@@ -349,7 +349,7 @@ export default function InvoicesCreate() {
             بدل جدول HTML يدوي (نفس الأعمدة والسلوك: منتقي المنتج، الضريبة لكل
             سطر، الإجمالي، لوحة الأبعاد عبر renderExpansion، إضافة/حذف بند). */}
         <div className="mt-3">
-          <LineItemsTable<(typeof lines)[number]>
+          <LineItemsTable
             items={lines}
             minItems={1}
             onAdd={addLine}
