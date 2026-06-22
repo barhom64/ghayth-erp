@@ -602,7 +602,7 @@ custodiesRouter.post("/custodies", authorize({ feature: "finance.custodies", act
       });
     }
 
-    const sourceAcct = sourceAccountCode || "1100";
+    const sourceAcct = sourceAccountCode || "1111";
 
     // #1715 guardrail #6 — the custody disbursement is a finance operation,
     // so it flows through the unified FinanceOperationContext. When the caller
@@ -871,7 +871,7 @@ custodiesRouter.post("/custodies/settle", authorize({ feature: "finance.custodie
         );
       }
 
-      const sourceAcct = sourceAccountCode || "1100";
+      const sourceAcct = sourceAccountCode || "1111";
       const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
       // Settlement lands on the custody grant's branch, not the operator's
       // working branch. The header was pulled with branchId above (the
@@ -1052,7 +1052,7 @@ custodiesRouter.post("/custodies/:id/settle", authorize({ feature: "finance.cust
         );
       }
 
-      const sourceAcct = sourceAccountCode || "1100";
+      const sourceAcct = sourceAccountCode || "1111";
       const { financialEngine } = await import("../lib/engines/index.js");
       const settleRef = `CUSTODY-SETTLE-${idempotencyToken}`;
       const { journalId, alreadyExists } = await financialEngine.postJournalEntry({

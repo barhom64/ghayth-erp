@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 // TA-T18-DR — driver reputation badge. The score (0..100) is the
 // persisted `reputationScore` from the compute service (#2397);
@@ -49,6 +50,10 @@ function ReputationBadge({ score }: { score: number | string | null | undefined 
 export default function DriversPage() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة سائق» يفتح
+  // النموذج الكامل في درج بدل الانتقال لصفحة /create. الصفحة الكاملة تبقى
+  // متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
   // #2713 (تعميم) — سلة المحذوفات للسائقين.
   const [showDeleted, setShowDeleted] = useState(false);
   const { data, isLoading, isError, error, refetch } = useApiQuery<any>(
@@ -239,9 +244,7 @@ export default function DriversPage() {
               })),
             })}
           />
-          <Link href="/fleet/drivers/create">
-            <GuardedButton perm="fleet:create" size="sm"><Plus className="h-4 w-4 me-1" />إضافة سائق</GuardedButton>
-          </Link>
+          <GuardedButton perm="fleet:create" size="sm" onClick={() => setCreateOpen(true)}><Plus className="h-4 w-4 me-1" />إضافة سائق</GuardedButton>
         </div>
       }
     >
@@ -409,6 +412,16 @@ export default function DriversPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AllowCreateDrawer
+        kind="driver"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء السائق" });
+          refetch();
+        }}
+      />
     </PageShell>
   );
 }

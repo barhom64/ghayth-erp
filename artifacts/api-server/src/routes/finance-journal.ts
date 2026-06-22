@@ -594,7 +594,7 @@ async function buildExpenseJournalPreview(
   p: z.infer<typeof expenseImpactPreviewSchema>,
 ): Promise<JournalPreviewView> {
   const paymentMethod = p.paymentMethod ?? null;
-  const sourceAccountCode = p.sourceAccountCode || "1100";
+  const sourceAccountCode = p.sourceAccountCode || "1111";
   const baseAmount = roundTo2(Number(p.amount) || 0);
 
   const empty = (incompleteReason: string): JournalPreviewView => ({
@@ -673,9 +673,9 @@ async function buildExpenseJournalPreview(
     derivationReason = "حساب فرعي محدّد يدويًا";
   }
   if (!expenseAccountCode) {
-    expenseAccountCode = "5000";
+    expenseAccountCode = "5399";
     accountSource = "fallback";
-    derivationReason = "حساب مصروف عام افتراضي — لا قاعدة توجيه مطابقة";
+    derivationReason = "حساب «مصروفات عمومية أخرى» (5399) — يُنصح بربط قاعدة توجيه للمصروف";
   }
 
   // 3) VAT input account (purpose-resolved) + amounts.
@@ -1019,7 +1019,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     }
 
     const targetPeriod = period ?? currentPeriod();
-    const sourceAcct = sourceAccountCode || "1100";
+    const sourceAcct = sourceAccountCode || "1111";
 
     // #1715 wave-1 consolidation: the expense create flow now converges on
     // the unified FinanceOperationContext (guardrail #6 — no finance
@@ -1215,7 +1215,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     // byte-identical to the pre-refactor lines.
     const expenseLegAccount = (subAccountCode && subAccountCode !== accountCode)
       ? subAccountCode
-      : (overrideAccountCode ?? "5000");
+      : (overrideAccountCode ?? "5399");
     let inputVatCode: string | null = null;
     if (computedVat > 0) {
       inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1180");
@@ -1495,7 +1495,7 @@ async function resolveVendorInvoicePlan(
       scope.companyId,
       line.accountPurpose,
       "debit",
-      "5000",
+      "5399",
     );
     const net = roundTo2(Number(line.amount) || 0);
     const vat = roundTo2(Number(line.vatAmount) || 0);
@@ -2164,7 +2164,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       );
     }
 
-    const resolvedSourceAccount = sourceAccountCode || "1100";
+    const resolvedSourceAccount = sourceAccountCode || "1111";
     const [sourceAcctRow] = await rawQuery<Record<string, unknown>>(
       `SELECT id, code, name, type, subtype, "accountSubtype" FROM chart_of_accounts
        WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -2216,7 +2216,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const cashAcct = sourceAccountCode || "1100";
+    const cashAcct = sourceAccountCode || "1111";
 
     // #1715 wave-1 consolidation: the voucher create flow converges on the
     // unified FinanceOperationContext (guardrail #6). The adapter maps the
@@ -2756,7 +2756,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
 
     const { employeeName, amount, description, deductMonths, sourceAccountCode, employeeId } = zodParse(createSalaryAdvanceSchema.safeParse(req.body ?? {}));
     if (!amount || !employeeName) { throw new ValidationError("اسم الموظف والمبلغ مطلوبان"); return; }
-    const sourceAcct = sourceAccountCode || "1100";
+    const sourceAcct = sourceAccountCode || "1111";
     const idempotencyToken = requestIdempotencyToken(req);
     const ref = `SALARY-ADV-${idempotencyToken}`;
 

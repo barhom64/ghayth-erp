@@ -76,8 +76,22 @@ export function buildCycleCountEntryInput(opts: {
   totals: CycleCountTotals;
   accounts: CycleCountAccounts;
   cycleCountId: number;
+  /** Warehouse the cycle-count run belongs to. Stamped onto EVERY line
+   *  as a `dimensionJson.warehouseId` analytic dimension so per-warehouse
+   *  GL drilldowns (and the warehouse-360 financial tab) see both legs of
+   *  the variance entry instead of silently dropping it. journal_lines has
+   *  no typed `warehouseId` FK column — the sanctioned `dimensionJson` bag
+   *  carries arbitrary dimensions without a schema migration (migration
+   *  201). Metadata only: never touches debit/credit/account/balance. */
+  warehouseId?: number | null;
 }): BuildEntryInput {
   const lines: BuildEntryInput["lines"] = [];
+
+  // Pure analytic dimension — identical on every leg so reports that filter
+  // by warehouse never drop one side of the entry. NOT a posting target;
+  // debit/credit, accounts and the balance invariant are untouched.
+  const dimensionJson =
+    opts.warehouseId != null ? { warehouseId: opts.warehouseId } : undefined;
 
   // Overage: DR inventory / CR gain.
   if (opts.totals.totalGainValue > 0) {
@@ -87,6 +101,7 @@ export function buildCycleCountEntryInput(opts: {
       description: `Cycle-count overage (${opts.accounts.inventory.accountCode})`,
       referenceType: "warehouse_cycle_counts",
       referenceId: opts.cycleCountId,
+      dimensionJson,
     });
     lines.push({
       accountId: opts.accounts.gain.accountId,
@@ -94,6 +109,7 @@ export function buildCycleCountEntryInput(opts: {
       description: `Cycle-count gain (${opts.accounts.gain.accountCode})`,
       referenceType: "warehouse_cycle_counts",
       referenceId: opts.cycleCountId,
+      dimensionJson,
     });
   }
 
@@ -105,6 +121,7 @@ export function buildCycleCountEntryInput(opts: {
       description: `Cycle-count loss (${opts.accounts.loss.accountCode})`,
       referenceType: "warehouse_cycle_counts",
       referenceId: opts.cycleCountId,
+      dimensionJson,
     });
     lines.push({
       accountId: opts.accounts.inventory.accountId,
@@ -112,6 +129,7 @@ export function buildCycleCountEntryInput(opts: {
       description: `Cycle-count shrinkage (${opts.accounts.inventory.accountCode})`,
       referenceType: "warehouse_cycle_counts",
       referenceId: opts.cycleCountId,
+      dimensionJson,
     });
   }
 
@@ -248,6 +266,11 @@ export async function postCycleCountVarianceJournal(
       totals,
       accounts: { inventory, gain, loss },
       cycleCountId: opts.cycleCountId,
+      // Warehouse dimension from the run header (NOT NULL on
+      // warehouse_cycle_counts) — already in hand from the SELECT above,
+      // no extra query. Stamped on every line so per-warehouse GL reports
+      // see both legs of the variance entry.
+      warehouseId: header.warehouseId,
     });
 
     if (buildInput.lines.length === 0) {
