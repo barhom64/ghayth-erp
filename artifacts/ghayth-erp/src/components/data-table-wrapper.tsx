@@ -29,6 +29,24 @@ interface DataTableWrapperProps {
   onPageChange?: (page: number) => void;
 }
 
+/**
+ * Retry button for the error state. `useQueryClient` is reached ONLY here
+ * (the error branch), so the loading / empty / data paths render without a
+ * QueryClientProvider — letting pages that mount a DataTable bare in unit
+ * tests work without wiring a provider, while production (always inside the
+ * app-wide provider) is unchanged.
+ */
+function DefaultRetry({ onRetry }: { onRetry?: () => void }) {
+  const qc = useQueryClient();
+  const handleRetry = onRetry ?? (() => qc.invalidateQueries());
+  return (
+    <Button variant="outline" size="sm" onClick={handleRetry} className="gap-2">
+      <RefreshCw className="h-4 w-4" />
+      إعادة المحاولة
+    </Button>
+  );
+}
+
 export function DataTableWrapper({
   isLoading,
   isError,
@@ -45,9 +63,6 @@ export function DataTableWrapper({
   total,
   onPageChange,
 }: DataTableWrapperProps) {
-  const qc = useQueryClient();
-  const handleRetry = onRetry ?? (() => qc.invalidateQueries());
-
   if (isLoading) {
     return (
       <TableBody>
@@ -79,10 +94,7 @@ export function DataTableWrapper({
                   {error?.message || "يرجى المحاولة مرة أخرى"}
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={handleRetry} className="gap-2">
-                <RefreshCw className="h-4 w-4" />
-                إعادة المحاولة
-              </Button>
+              <DefaultRetry onRetry={onRetry} />
             </div>
           </TableCell>
         </TableRow>
