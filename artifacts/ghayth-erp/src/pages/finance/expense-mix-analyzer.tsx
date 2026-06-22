@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,70 @@ export default function ExpenseMixAnalyzerPage() {
   }, [rows, total]);
 
   const maxAmount = Math.max(...rows.map(r => Number(r.amount)), 1);
+
+  // Full-list table columns. Leading label columns are CONDITIONAL on `lens`:
+  // when lens==="account" there are 3 leading cols (#, الرمز, الاسم), else 2
+  // (#, الاسم) — so the array is built dynamically. The footer total row is
+  // expressed column-aligned via `footer` (الإجمالي under #, total under المبلغ,
+  // 100% under %). Rows are rank-ordered (bars) → every column sortable:false.
+  const fullTableColumns = useMemo<DataTableColumn<Row>[]>(() => {
+    const cols: DataTableColumn<Row>[] = [];
+    cols.push({
+      key: "rank",
+      header: "#",
+      sortable: false,
+      width: "3rem",
+      className: "py-1.5 px-2 text-muted-foreground",
+      render: (_r, idx) => idx + 1,
+      footer: () => "الإجمالي",
+    });
+    if (lens === "account") {
+      cols.push({
+        key: "code",
+        header: "الرمز",
+        sortable: false,
+        width: "6rem",
+        className: "py-1.5 px-2 font-mono text-xs",
+        render: (r) => r.key,
+      });
+    }
+    cols.push({
+      key: "label",
+      header: "الاسم",
+      sortable: false,
+      className: "py-1.5 px-2",
+      render: (r) => r.label,
+    });
+    cols.push({
+      key: "amount",
+      header: "المبلغ",
+      sortable: false,
+      align: "end",
+      className: "py-1.5 px-2 text-end tabular-nums font-semibold",
+      render: (r) => formatCurrency(Number(r.amount)),
+      footer: () => formatCurrency(total),
+    });
+    cols.push({
+      key: "percent",
+      header: "%",
+      sortable: false,
+      align: "end",
+      width: "5rem",
+      className: "py-1.5 px-2 text-end tabular-nums text-muted-foreground",
+      render: (r) => `${(total > 0 ? (Number(r.amount) / total) * 100 : 0).toFixed(1)}%`,
+      footer: () => "100%",
+    });
+    cols.push({
+      key: "entryCount",
+      header: "قيود",
+      sortable: false,
+      align: "end",
+      width: "5rem",
+      className: "py-1.5 px-2 text-end tabular-nums",
+      render: (r) => String(r.entryCount),
+    });
+    return cols;
+  }, [lens, total]);
 
   const exportCSV = () => {
     if (!data) return;
@@ -283,50 +347,13 @@ export default function ExpenseMixAnalyzerPage() {
                 <CardTitle className="text-base">القائمة الكاملة ({rows.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="text-start py-2 px-2 w-12">#</th>
-                        {lens === "account" && <th className="text-start py-2 px-2 w-24">الرمز</th>}
-                        <th className="text-start py-2 px-2">الاسم</th>
-                        <th className="text-end py-2 px-2">المبلغ</th>
-                        <th className="text-end py-2 px-2 w-20">%</th>
-                        <th className="text-end py-2 px-2 w-20">قيود</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((r, idx) => {
-                        const value = Number(r.amount);
-                        const pct = total > 0 ? (value / total) * 100 : 0;
-                        return (
-                          <tr key={String(r.key)} className="border-b hover:bg-muted/30">
-                            <td className="py-1.5 px-2 text-muted-foreground">{idx + 1}</td>
-                            {lens === "account" && (
-                              <td className="py-1.5 px-2 font-mono text-xs">{r.key}</td>
-                            )}
-                            <td className="py-1.5 px-2">{r.label}</td>
-                            <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                              {formatCurrency(value)}
-                            </td>
-                            <td className="py-1.5 px-2 text-end tabular-nums text-muted-foreground">
-                              {pct.toFixed(1)}%
-                            </td>
-                            <td className="py-1.5 px-2 text-end tabular-nums">{String(r.entryCount)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="font-semibold bg-muted/40">
-                        <td colSpan={lens === "account" ? 3 : 2} className="py-2 px-2">الإجمالي</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(total)}</td>
-                        <td className="py-2 px-2 text-end">100%</td>
-                        <td></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                <DataTable<Row>
+                  columns={fullTableColumns}
+                  data={rows}
+                  rowKey={(r) => String(r.key)}
+                  noToolbar
+                  pageSize={0}
+                />
               </CardContent>
             </Card>
           )}

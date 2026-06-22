@@ -85,6 +85,15 @@ export interface DataTableColumn<T> {
    * total cell.
    */
   footer?: (rows: T[]) => ReactNode;
+  /**
+   * Per-COLUMN group subtotal cell, rendered in a column-aligned subtotal row
+   * after each group (only when `groupBy` is set). The column-aligned analogue
+   * of `renderGroupSubtotal` (which spans all columns in one cell) — use it for
+   * statement-style tables (P&L / cash-flow) whose section subtotals must sit
+   * under their own columns. Receives that group's rows + value. Columns without
+   * `groupFooter` render an empty subtotal cell.
+   */
+  groupFooter?: (groupRows: T[], groupValue: string) => ReactNode;
   /** Hide the column entirely — used for feature gating without re-declaring. */
   hidden?: boolean;
   /** Value used when exporting selected rows to CSV. Defaults to `row[key]`.
@@ -810,6 +819,20 @@ export function DataTable<T>({
                               <TableCell colSpan={colCount} className="py-1.5 px-3">
                                 {renderGroupSubtotal(groupValue, groupRows)}
                               </TableCell>
+                            </TableRow>
+                          )}
+                          {visibleColumns.some((c) => c.groupFooter) && (
+                            <TableRow className="border-t-2 bg-surface-subtle font-medium">
+                              {selectable && <TableCell className="w-[44px]" />}
+                              {visibleColumns.map((col) => (
+                                <TableCell
+                                  key={col.key}
+                                  className={cn(alignClass(col.align), col.className)}
+                                  dir={col.ltr ? "ltr" : undefined}
+                                >
+                                  {col.groupFooter ? col.groupFooter(groupRows, groupValue) : null}
+                                </TableCell>
+                              ))}
                             </TableRow>
                           )}
                         </Fragment>

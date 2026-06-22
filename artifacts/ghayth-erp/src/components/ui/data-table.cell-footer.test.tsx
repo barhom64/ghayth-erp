@@ -63,6 +63,27 @@ describe("Foundation — cellClassName + footer", () => {
     expect(tableRowCount()).toBe(4);
   });
 
+  it("renders a column-aligned group subtotal row per group when a column declares groupFooter", () => {
+    interface GRow { id: number; section: string; name: string; value: number }
+    const gdata: GRow[] = [
+      { id: 1, section: "rev", name: "a", value: 10 },
+      { id: 2, section: "rev", name: "b", value: 20 },
+      { id: 3, section: "exp", name: "c", value: 5 },
+    ];
+    const gcols: DataTableColumn<GRow>[] = [
+      { key: "name", header: "الاسم" },
+      { key: "value", header: "القيمة", render: (r) => String(r.value), groupFooter: (rows) => `Σ${rows.reduce((s, r) => s + r.value, 0)}` },
+    ];
+    render(
+      <DataTable columns={gcols} data={gdata} pageSize={0} searchPlaceholder={null} groupBy="section" renderGroupHeader={(g) => g} />,
+    );
+    // Section subtotals: rev = 10+20 = 30, exp = 5.
+    const revSub = screen.getByText("Σ30").closest("tr")!;
+    expect(screen.getByText("Σ5")).toBeInTheDocument();
+    // Column-aligned: the subtotal row has one cell per column (not a colSpan).
+    expect(within(revSub).getAllByRole("cell").length).toBe(2);
+  });
+
   it("renders no footer total row when no column declares footer (backward compatible)", () => {
     const noFooter: DataTableColumn<Row>[] = [
       { key: "name", header: "الاسم" },
