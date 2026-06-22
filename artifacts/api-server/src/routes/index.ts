@@ -23,6 +23,7 @@ import { zatcaRouter } from "./finance-zatca.js";
 import notificationsRouter from "./notifications.js";
 import tasksRouter from "./tasks.js";
 import fleetRouter from "./fleet.js";
+import fleetInspectionsRouter from "./fleet-inspections.js";
 import fleetTelematicsRouter from "./fleet-telematics.js";
 import fleetTelematicsWebhookRouter from "./fleet-telematics-webhook.js";
 import cargoRouter from "./cargo.js";
@@ -83,6 +84,8 @@ import accountingEngineRouter from "./accounting-engine.js";
 import { financeAlgorithmsRouter } from "./finance-algorithms.js";
 import financeHardeningRouter from "./finance-hardening.js";
 import { recurringRouter } from "./finance-recurring.js";
+import { recurringInvoicesRouter } from "./finance-recurring-invoices.js";
+import { cashInTransitRouter } from "./finance-cash-in-transit.js";
 import { financeMemoryRouter } from "./finance-memory.js";
 import { financeAmortizationRouter } from "./finance-amortization.js";
 import { financeDeferredRevenueRouter } from "./finance-deferred-revenue.js";
@@ -105,6 +108,18 @@ import umrahEntitiesRouter from "./umrah-entities.js";
 // A dead-code wiring-scanner mount lives below the `router` declaration so
 // the FE↔BE wiring audit can discover the routes inside this file.
 import journeyReportsRouter from "./umrah-journey-reports.js";
+// U-07 Phase 2 — families CRUD split; imported for the wiring-scanner hint
+// below. Mounted at runtime via umrah-entities.ts (router.use(familiesRouter)).
+import familiesRouter from "./umrah-families.js";
+// U-07 Phase 4 — accommodation (hotels/room-blocks/allocations) split; imported
+// for the wiring-scanner hint below. Mounted via umrah-entities.ts.
+import accommodationRouter from "./umrah-accommodation.js";
+// U-07 Phase 5 — commission plans/calculations split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import commissionRouter from "./umrah-commission.js";
+// U-07 Phase 6 — sub-agents (CRUD + linking) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import subAgentsRouter from "./umrah-sub-agents.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -114,6 +129,7 @@ import {
   adminStubsRouter,
   wiringScopeErrorHandler,
 } from "./wiring-stubs.js";
+import pricingRouter from "./finance-pricing.js";
 import notificationEngineRouter from "./notification-engine.js";
 import printRouter from "./print.js";
 import printVerifyRouter from "./printVerify.js";
@@ -154,6 +170,7 @@ import { execDashboardRouter } from "./execDashboard.js";
 import assistantRouter from "./assistant.js";
 import { obligationsRouter } from "./obligations.js";
 import { calendarRouter } from "./calendar.js";
+import { customFieldsRouter } from "./customFields.js";
 import contractsRouter from "./hr-contracts.js";
 import correspondenceRouter from "./correspondence.js";
 import numberingRouter from "./numbering.js";
@@ -173,6 +190,10 @@ const router: IRouter = Router();
 const __WIRING_SCANNER_HINT__: boolean = false;
 if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", journeyReportsRouter);
+  router.use("/umrah", familiesRouter);
+  router.use("/umrah", accommodationRouter);
+  router.use("/umrah", commissionRouter);
+  router.use("/umrah", subAgentsRouter);
 }
 
 router.use(healthRouter);
@@ -434,6 +455,10 @@ router.use("/finance", requireModule("finance"), requireGuards("financial"), ven
 router.use("/finance", requireModule("finance"), requireGuards("financial"), vendorContractsRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeHardeningRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringRouter);
+// قوالب الفوترة المتكررة للعملاء (#كلها). CRUD غير دفتري؛ التوليد دفعة لاحقة.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), recurringInvoicesRouter);
+// النقد في الطريق (#2714). طوران يُرحَّلان عبر postJournalEntry القائم.
+router.use("/finance", requireModule("finance"), requireGuards("financial"), cashInTransitRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeMemoryRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeAmortizationRouter);
 router.use("/finance", requireModule("finance"), requireGuards("financial"), financeDeferredRevenueRouter);
@@ -453,6 +478,8 @@ router.use("/notifications", notificationsRouter);
 router.use("/tasks", requireModule("operations"), tasksRouter);
 router.use("/fleet", fleetUserLimiter);
 router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetRouter);
+// Vehicle inspections + photos (متابعة النقل بالصور). Same /fleet module gate.
+router.use("/fleet", requireModule("fleet"), requireGuards("financial"), fleetInspectionsRouter);
 // Telematics surface (#1354). Mounted under /fleet so it inherits the same
 // module + financial guard + per-user limiter as the rest of the fleet
 // module, and so URLs stay /fleet/telematics/* in the SPA.
@@ -544,6 +571,9 @@ router.use("/request-catalog", requireModule("requests"), (req, res, next) => {
 });
 router.use("/marketing", requireModule("marketing"), marketingRouter);
 router.use("/settings", requireModule("settings"), requireMinLevel(70), settingsRouter);
+// #2719 — الحقول المخصّصة لكل شركة: تعريفات + قيم EAV (هجرة 394). إدارة المخطط
+// عبر صلاحية settings؛ القيم تُحفظ في جدولها فقط (لا مساس بجداول الكيانات).
+router.use("/custom-fields", requireModule("settings"), requireMinLevel(50), customFieldsRouter);
 // Numbering center (Issue #1141): admin surface for the central numbering
 // authority. authMiddleware is applied inside the router (it carries
 // per-route authorize() guards on `settings.numbering[.override|.reset|.audit]`).
@@ -653,6 +683,11 @@ router.use("/operations-center", requireModule("operations"), requireMinLevel(50
 router.use("/warehouse", requireModule("warehouse"), requireMinLevel(10), warehouseStubsRouter);
 router.use("/documents", requireModule("documents"), requireMinLevel(10), documentsStubsRouter);
 router.use("/hr", requireModule("hr"), requireMinLevel(10), hrStubsRouter);
+// Pricing rules — real CRUD + engine preview (migration 171). Mounted BEFORE
+// financeStubsRouter so /finance/pricing/* resolves to the real handlers (the
+// 6 stubs were removed from wiring-stubs.ts). Carries its own authMiddleware +
+// per-route authorize({feature:"finance.invoices"}).
+router.use("/finance", requireModule("finance"), requireMinLevel(10), pricingRouter);
 router.use("/finance", requireModule("finance"), requireMinLevel(10), financeStubsRouter);
 router.use("/admin", requireModule("admin"), requireMinLevel(90), adminStubsRouter);
 router.use(wiringScopeErrorHandler);

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
+import { UmrahAgentSelect } from "@/components/shared/entity-selects";
 import { formatUmrahDate, todayLocal } from "@/lib/formatters";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -78,9 +79,11 @@ export default function UmrahPilgrims() {
   // operator can flip the active filter (set by the banner click) on
   // and off. Empty string means "no filter".
   const visaExpiringWithin = (filters as Record<string, string>).visaExpiringWithin || "";
+  // #2713 (تعميم) — سلة المحذوفات للمعتمرين.
+  const [showDeleted, setShowDeleted] = useState(false);
   const { data: resp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, flight, arrivalDate, departureDate, visaExpiringWithin, String(page)],
-    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}&visaExpiringWithin=${encodeURIComponent(visaExpiringWithin)}&page=${page}&limit=${pageSize}`,
+    ["umrah-pilgrims", filters.search, filters.status, seasonId, groupId, flight, arrivalDate, departureDate, visaExpiringWithin, String(page), showDeleted ? "deleted" : "active"],
+    `/umrah/pilgrims?search=${encodeURIComponent(filters.search)}&status=${filters.status || ""}&seasonId=${encodeURIComponent(seasonId)}&groupId=${encodeURIComponent(groupId)}&flight=${encodeURIComponent(flight)}&arrivalDate=${encodeURIComponent(arrivalDate)}&departureDate=${encodeURIComponent(departureDate)}&visaExpiringWithin=${encodeURIComponent(visaExpiringWithin)}&page=${page}&limit=${pageSize}${showDeleted ? "&deleted=true" : ""}`,
   );
 
   // Independent count query — banner shows even when the operator
@@ -120,8 +123,6 @@ export default function UmrahPilgrims() {
   // least one row is selected.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkAgentId, setBulkAgentId] = useState<string>("");
-  const { data: agentsResp } = useApiQuery<any>(["umrah-agents"], "/umrah/agents");
-  const agents = asList(agentsResp?.data || agentsResp);
   const bulkAssignMut = useApiMutation<unknown, { pilgrimIds: number[]; agentId: number }>(
     "/umrah/assign-bulk",
     "POST",
@@ -198,6 +199,16 @@ export default function UmrahPilgrims() {
     { label: "بدون وكيل", value: (items ?? []).filter((p: any) => !p.agentId).length, icon: UserPlus, color: "text-orange-600 bg-orange-50" },
   ];
 
+  async function handleRestorePilgrim(id: number) {
+    try {
+      await apiFetch(`/umrah/pilgrims/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع المعتمر" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -248,6 +259,13 @@ export default function UmrahPilgrims() {
       sortable: true,
       render: (p) => <PageStatusBadge status={p.status} />,
     },
+    ...(showDeleted ? [{
+      key: "_restore",
+      header: "إجراء",
+      render: (p: any) => (
+        <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleRestorePilgrim(p.id); }}>استرجاع</Button>
+      ),
+    } as DataTableColumn<any>] : []),
   ];
 
   return (
@@ -257,6 +275,13 @@ export default function UmrahPilgrims() {
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "المعتمرين" }]}
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant={showDeleted ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setShowDeleted((v) => !v); setPage(1); }}
+          >
+            {showDeleted ? "المعتمرون النشطون" : "سلة المحذوفات"}
+          </Button>
           <PrintButton
             entityType="report_umrah_pilgrims"
             entityId="list"
@@ -433,12 +458,14 @@ export default function UmrahPilgrims() {
               <span className="font-semibold">{selectedIds.size}</span>
               <span className="text-muted-foreground">معتمر محدّد للإسناد</span>
             </div>
-            <Select value={bulkAgentId} onValueChange={setBulkAgentId}>
-              <SelectTrigger className="w-56 h-8 text-xs"><SelectValue placeholder="اختر الوكيل" /></SelectTrigger>
-              <SelectContent>
-                {agents.map((a: any) => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <UmrahAgentSelect
+              label="الوكيل"
+              hideLabel
+              className="w-56"
+              placeholder="اختر الوكيل"
+              value={bulkAgentId}
+              onChange={setBulkAgentId}
+            />
             <GuardedButton
               perm="umrah:create"
               size="sm"

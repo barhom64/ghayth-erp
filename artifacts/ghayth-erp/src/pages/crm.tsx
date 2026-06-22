@@ -4,7 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch, asList } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Target, BarChart3, Plus, Eye, DollarSign, TrendingUp } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
@@ -122,9 +123,12 @@ function OpportunitiesTab() {
   const [filters, setFilters] = useFilters();
   const { selectedIds, toggle: toggleSelect, toggleAll, clear: clearSelection } = useBulkSelection();
   const pageSize = 20;
+  // #2713 (تعميم) — سلة المحذوفات للفرص.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const { toast } = useToast();
   const { data: oppsResp, isLoading, isError, error, refetch } = useApiQuery<any>(
-    ["crm-opportunities", String(page), filters.search, filters.status, filters.dateFrom, filters.dateTo],
-    withListFilters(`/crm/opportunities?page=${page}&limit=${pageSize}`, filters),
+    ["crm-opportunities", String(page), filters.search, filters.status, filters.dateFrom, filters.dateTo, showDeleted ? "deleted" : "active"],
+    withListFilters(`/crm/opportunities?page=${page}&limit=${pageSize}${showDeleted ? "&deleted=true" : ""}`, filters),
   );
   const opportunities = asList(oppsResp);
   const total = oppsResp?.total || opportunities.length;
@@ -144,6 +148,16 @@ function OpportunitiesTab() {
     queryKeys: [["crm-opportunities", String(page)], ["crm-stats"]],
     onSuccess: () => refetch(),
   });
+
+  async function handleRestoreOpportunity(id: number) {
+    try {
+      await apiFetch(`/crm/opportunities/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع الفرصة" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
 
   const editFields = [
     { key: "title", label: "الفرصة" },
@@ -184,13 +198,19 @@ function OpportunitiesTab() {
       header: "الإجراءات",
       render: (o) => (
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" onClick={() => setPreviewItem(o)}><Eye className="h-4 w-4" /></Button>
-          <RowActions
-            canEdit={canManage}
-            onEdit={() => startEdit(o.id, { title: o.title, stage: o.stage, value: o.value || 0, probability: o.probability || 0, status: o.status || "open" })}
-            onDelete={() => startDelete(o.id)}
-            deletePerm="crm:delete"
-          />
+          {showDeleted ? (
+            <Button variant="outline" size="sm" onClick={() => handleRestoreOpportunity(o.id)}>استرجاع</Button>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setPreviewItem(o)}><Eye className="h-4 w-4" /></Button>
+              <RowActions
+                canEdit={canManage}
+                onEdit={() => startEdit(o.id, { title: o.title, stage: o.stage, value: o.value || 0, probability: o.probability || 0, status: o.status || "open" })}
+                onDelete={() => startDelete(o.id)}
+                deletePerm="crm:delete"
+              />
+            </>
+          )}
         </div>
       ),
     },
@@ -317,7 +337,12 @@ function OpportunitiesTab() {
       />
 
       <Card>
-        <CardHeader><CardTitle>الفرص التجارية</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{showDeleted ? "الفرص المحذوفة" : "الفرص التجارية"}</CardTitle>
+          <Button variant={showDeleted ? "default" : "outline"} size="sm" onClick={() => { setShowDeleted((v) => !v); setPage(1); }}>
+            {showDeleted ? "الفرص النشطة" : "سلة المحذوفات"}
+          </Button>
+        </CardHeader>
         <CardContent>
           <DataTable
             columns={columns}
@@ -334,7 +359,7 @@ function OpportunitiesTab() {
             page={page}
             total={total}
             onPageChange={setPage}
-            onRowClick={(o) => navigate(`/crm/leads/${o.id}`)}
+            onRowClick={(o) => navigate(`/crm/${o.id}`)}
             renderRowExtras={(o) => {
               if (editingId === o.id) {
                 return <InlineEditForm fields={editFields} initialValues={editForm} onSave={(values) => handleSave(o.id, values)} onCancel={cancelEdit} isPending={isPending} />;

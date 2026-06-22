@@ -7,6 +7,9 @@ import {
   type DataTableColumn,
   FormShell,
   FormTextareaField,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PageStateWrapper } from "@/components/shared/page-state";
@@ -24,7 +27,6 @@ import {
   XCircle,
   ClipboardCheck,
   Loader2,
-  Inbox,
   AlertCircle,
 } from "lucide-react";
 import { useFormContext } from "react-hook-form";
@@ -107,16 +109,19 @@ const decideSchema = z.object({
 type DecideForm = z.infer<typeof decideSchema>;
 
 export default function HrApprovalsPage() {
-  const [statusFilter, setStatusFilter] = useState<"pending" | "approved" | "rejected">("pending");
+  const [filters, setFilters] = useFilters({ status: "pending" });
   const [deciding, setDeciding] = useState<ApprovalRequestRow | null>(null);
   const { data, isLoading, error, refetch } = useApiQuery<{
     data: ApprovalRequestRow[];
     total: number;
   }>(
-    ["hr-approval-requests", statusFilter],
-    `/hr/approval-requests?status=${statusFilter}`,
+    ["hr-approval-requests", filters.status],
+    `/hr/approval-requests${filters.status ? `?status=${filters.status}` : ""}`,
   );
   const rows = data?.data ?? [];
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["assignedToName", "refType"],
+  });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const columns: DataTableColumn<ApprovalRequestRow>[] = [
@@ -248,12 +253,12 @@ export default function HrApprovalsPage() {
       actions={
         <PrintButton
           entityType="report_hr_approval_inbox"
-          entityId={statusFilter}
+          entityId={filters.status || "all"}
           size="icon"
           payload={() => ({
             entity: {
-              title: `صندوق موافقات HR — ${statusFilter}`,
-              statusFilter,
+              title: `صندوق موافقات HR — ${filters.status || "الكل"}`,
+              statusFilter: filters.status,
               total: printRows.length,
               overdue: overdueCount,
             },
@@ -270,51 +275,42 @@ export default function HrApprovalsPage() {
       }
     >
       <HrTabsNav />
-      <Card>
-        <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex gap-1">
-            {(["pending", "approved", "rejected"] as const).map((s) => (
-              <Button
-                key={s}
-                size="sm"
-                variant={statusFilter === s ? "default" : "outline"}
-                onClick={() => setStatusFilter(s)}
-                className="gap-1"
-              >
-                {s === "pending" ? (
-                  <Inbox className="h-3.5 w-3.5" />
-                ) : s === "approved" ? (
-                  <CheckCircle className="h-3.5 w-3.5" />
-                ) : (
-                  <XCircle className="h-3.5 w-3.5" />
-                )}
-                {s === "pending"
-                  ? "بانتظار البت"
-                  : s === "approved"
-                    ? "مُعتمدة"
-                    : "مرفوضة"}
-              </Button>
-            ))}
-          </div>
-          {statusFilter === "pending" && overdueCount > 0 && (
-            <div className="flex items-center gap-2 text-sm text-status-error-foreground">
-              <AlertCircle className="h-4 w-4" />
-              {overdueCount} طلب متأخر عن موعد البت
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث بالمُسنَد إليه أو نوع الطلب...",
+          statuses: [
+            { value: "pending", label: "بانتظار البت" },
+            { value: "approved", label: "مُعتمدة" },
+            { value: "rejected", label: "مرفوضة" },
+          ],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
+      {filters.status === "pending" && overdueCount > 0 && (
+        <div className="flex items-center gap-2 text-sm text-status-error-foreground mb-3">
+          <AlertCircle className="h-4 w-4" />
+          {overdueCount} طلب متأخر عن موعد البت
+        </div>
+      )}
 
       <PageStateWrapper isLoading={isLoading} error={error} onRetry={() => refetch()}>
         <DataTable
           columns={columns}
           onSortedDataChange={setPrintRows}
-          data={rows}
+          data={filtered}
           rowKey={(r) => r.id}
+          noToolbar
           emptyMessage={
-            statusFilter === "pending"
+            filters.status === "pending"
               ? "لا توجد طلبات تنتظر قرارك"
-              : `لا توجد طلبات ${statusFilter === "approved" ? "معتمدة" : "مرفوضة"} في السجل`
+              : filters.status === "approved"
+                ? "لا توجد طلبات معتمدة في السجل"
+                : filters.status === "rejected"
+                  ? "لا توجد طلبات مرفوضة في السجل"
+                  : "لا توجد طلبات"
           }
         />
       </PageStateWrapper>

@@ -9,46 +9,7 @@
 # As real gaps get audit wired in, prune their line here — the covered %
 # climbs monotonically and can never silently regress.
 #
-# ── Verified HELPER-AUDITED false positives (kept; the static 200-line window
-#    cannot see audit written by a delegated helper). Each of the following IS
-#    audited — do NOT churn them with a redundant in-handler createAuditLog:
-#      • POST /finance/journal/:id/reverse            → createAuditLog L~3475 (beyond window)
-#      • POST /finance/fiscal-periods-v2/:id/close     → closeFiscalPeriodCanonical (event_logs + audit)
-#      • POST /finance/fiscal-periods-v2/:id/reopen    → applyTransition (event_logs + createAuditLog)
-#      • POST /finance/fiscal-periods-v2/:id/lock      → applyTransition
-#      • PATCH /finance/journal-manual/:id/submit      → applyTransition
-#      • PATCH /finance/journal-manual/:id/review      → applyTransition
-#      • PATCH /finance/journal-manual/:id/approve     → applyTransition
-#      • PATCH /finance/journal-manual/:id/post        → applyTransition
-#      • POST /finance/bank-guarantees/:id/cancel      → applyTransition
-#      • POST /finance/bank-guarantees/:id/release     → applyTransition
-#      • PATCH /finance/budgets/:id/approve            → applyTransition
-#      • PATCH /finance/commitments/:id/approve        → applyTransition
-#      • PATCH /finance/financial-requests/:id/approve → applyTransition
-#      • PATCH /finance/receivables/:id/approve        → applyTransition
-#      • POST /finance/payment-run/execute             → emitEvent("payment_run.executed") L~2185 + per-PO applyTransition (both beyond window)
-#    (applyTransition lives in lib/lifecycleEngine.ts; it writes an event_logs
-#     row AND calls createAuditLog inside the transition transaction.)
-#
-# ── Non-mutating tombstone (kept; returns HTTP 410, performs no write — no audit needed):
-#      • POST /finance/fiscal-periods/:period/close    → 410 Gone, redirects to fiscal-periods-v2/:id/close
-#
-# ── Audited via an IMPORTED lib helper (the wrapper-detector only sees file-local
-#    wrappers, so a helper defined in lib/ stays invisible — these ARE audited):
-#      • POST /inbox/send, POST /inbox/threads/:id/reply, POST /inbox/drafts/:id/send
-#                                       → lib/messageSender.sendMessage (emitEvent + createAuditLog + communications_log)
-#      • POST /umrah/reclassify-revenue → lib/umrahReclassifyEngine (emitEvent + createAuditLog)
-#      • POST /umrah/groups/:id/transport-requests → lib/umrahTransportContract (createAuditLog)
-#      • POST /umrah/import/vouchers    → lib/umrahImportEngine (emitEvent)
-#
-# ── Low-sensitivity PERSONAL / UI state (kept; the constitution requires audit for
-#    "important operational actions" — these are personal scratch/preferences/UI
-#    toggles, not operational mutations, so an audit row would be noise):
-#      • inbox email drafts CRUD, email signatures CRUD (per-user content/prefs)
-#      • inbox messages :id/read, :id/star; threads .../read, .../snooze (read-state)
-#      • umrah import/presets (per-user CSV column-mapping templates)
-#
-# Baseline captured: 199 unaudited write endpoint(s).
+# Baseline captured: 107 unaudited write endpoint(s).
 DELETE /admin/pricing/rules/:id
 DELETE /admin/saudi/wps/credentials/:bankCode
 DELETE /documents/pricing/rules/:id
@@ -62,7 +23,6 @@ DELETE /inbox/signatures/:id
 DELETE /inbox/threads/:channel/:address/snooze
 DELETE /umrah/hotels/:id
 DELETE /umrah/import/presets/:id
-DELETE /umrah/packages/:id
 DELETE /warehouse/pricing/rules/:id
 DELETE /warehouse/saudi/wps/credentials/:bankCode
 PATCH /admin/zatca/missing-tax-numbers/:id
@@ -76,14 +36,10 @@ PATCH /finance/journal-manual/:id/review
 PATCH /finance/journal-manual/:id/submit
 PATCH /finance/receivables/:id/approve
 PATCH /finance/zatca/missing-tax-numbers/:id
-PATCH /hr/excuse-requests/:id/approve
-PATCH /hr/exit/:id/approve
-PATCH /hr/exit/:id/complete
 PATCH /hr/zatca/missing-tax-numbers/:id
 PATCH /inbox/drafts/:id
 PATCH /inbox/signatures/:id
 PATCH /umrah/hotels/:id
-PATCH /umrah/penalties/:id/waive
 PATCH /warehouse/zatca/missing-tax-numbers/:id
 POST /admin/:id/ocr/rerun
 POST /admin/ai-governance/prompts/:id/simulate
@@ -112,10 +68,6 @@ POST /finance/fiscal-periods-v2/:id/close
 POST /finance/fiscal-periods-v2/:id/lock
 POST /finance/fiscal-periods-v2/:id/reopen
 POST /finance/fiscal-periods/:period/close
-# Already audited — createAuditLog("journal.reversed") + emitEvent fire after the
-# reversal transaction commits (finance-journal.ts), but the handler body exceeds
-# the guard's 200-line static window so the call reads as a gap. Kept as a
-# documented window false-positive, NOT a real gap.
 POST /finance/journal/:id/reverse
 POST /finance/ocr/extractions/:id/confirm
 POST /finance/ocr/extractions/:id/reject
@@ -126,13 +78,6 @@ POST /finance/vendor-invoices/impact-preview
 POST /finance/zatca/test-connection
 POST /hr/:id/ocr/rerun
 POST /hr/attendance/field-ping
-POST /hr/discipline/memos/:id/appeal
-POST /hr/discipline/memos/:id/appeal-decision
-POST /hr/discipline/memos/:id/cancel
-POST /hr/discipline/memos/:id/close
-POST /hr/discipline/memos/:id/gm-decision
-POST /hr/discipline/memos/:id/justify
-POST /hr/discipline/memos/:id/manager-recommendation
 POST /hr/ocr/extractions/:id/confirm
 POST /hr/ocr/extractions/:id/reject
 POST /hr/pricing/resolve
@@ -152,15 +97,12 @@ POST /mailboxes/:id/test
 POST /print/render
 POST /print/reprint-requests
 POST /rbac/v2/simulate
-POST /umrah/agent-invoices/:id/record-payment
+POST /umrah/commission-plans/simulate
 POST /umrah/groups/:id/transport-requests
 POST /umrah/import/presets
 POST /umrah/import/vouchers
 POST /umrah/reclassify-revenue
 POST /warehouse/:id/ocr/rerun
-POST /warehouse/cycle-counts/:id/approve
-POST /warehouse/cycle-counts/:id/submit
-POST /warehouse/inventory-counts/:id/approve
 POST /warehouse/ocr/extractions/:id/confirm
 POST /warehouse/ocr/extractions/:id/reject
 POST /warehouse/pricing/resolve
@@ -175,4 +117,3 @@ PUT /hr/pricing/rules/:id
 PUT /hr/saudi/wps/credentials/:bankCode
 PUT /warehouse/pricing/rules/:id
 PUT /warehouse/saudi/wps/credentials/:bankCode
-POST /umrah/commission-plans/simulate

@@ -67,7 +67,11 @@ describe("FE — transport report page", () => {
   });
 
   it("renders a status filter with the booking-status enum", () => {
-    expect(PAGE).toMatch(/data-testid="transport-filter-status"/);
+    // The status filter is now the unified <AdvancedFilters> bar (was a
+    // bespoke <Select data-testid="transport-filter-status">); the booking
+    // statuses feed its `statuses` config from STATUS_LABEL_AR.
+    expect(PAGE).toMatch(/<AdvancedFilters/);
+    expect(PAGE).toMatch(/statuses:\s*Object\.entries\(STATUS_LABEL_AR\)/);
     // Pin a few key status labels Arabic so a translation drift
     // is caught.
     expect(PAGE).toContain("مُقدَّم");

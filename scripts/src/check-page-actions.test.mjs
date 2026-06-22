@@ -2,17 +2,19 @@
 //
 // scripts/src/check-page-actions.test.mjs
 //
-// Pure-logic fixtures for the page action-bar refresh detector. Exercises
-// `fileHasManualRefresh` against positive (hand-rolled refresh) and negative
-// (unified component, decorative icon, or a longer-phrase toggle) snippets
-// without touching any file or DB — so it runs in every environment and
-// guards the guard itself.
+// Pure-logic fixtures for the page action-bar detector (refresh/print/export).
+// Exercises `fileHasManualRefresh` / `fileManualActions` against positive
+// (hand-rolled) and negative (unified component, decorative icon, longer-phrase,
+// or non-<Button> element) snippets without touching any file or DB — so it runs
+// in every environment and guards the guard itself.
 //
 // Run:  node scripts/src/check-page-actions.test.mjs
 // Exits 0 on pass, 1 on any assertion failure.
 //
 
-import { fileHasManualRefresh } from "./check-page-actions.mjs";
+import { fileHasManualRefresh, fileManualActions, fileManualActionCounts } from "./check-page-actions.mjs";
+const hasPrint = (t) => fileManualActions(t).has("print");
+const hasExport = (t) => fileManualActions(t).has("export");
 
 let failed = 0;
 function assert(cond, label) {
@@ -72,6 +74,66 @@ assert(
 assert(
   !fileHasManualRefresh(`<Button onClick={refetch} aria-label="تحديث"><RefreshCw className="h-4 w-4" /></Button>`),
   "icon-only refresh, «تحديث» only in aria-label (not a visible body label)",
+);
+
+// ── print: hand-rolled print button (Printer + bare «طباعة») ──────────────
+console.log("print — must FLAG / NOT flag");
+assert(
+  hasPrint(`<Button variant="outline" size="sm" onClick={() => { logClientPrint("x"); window.print(); }}><Printer className="h-4 w-4 ml-2" /> طباعة</Button>`),
+  "bespoke browser-print button (Printer + «طباعة»)",
+);
+assert(
+  hasPrint(`<Button onClick={handlePrint}><Printer className="h-4 w-4 me-1" />طباعة</Button>`),
+  "print button, label adjacent to icon",
+);
+assert(
+  !hasPrint(`<PrintButton documentType="invoice" documentId={id} />`),
+  "unified PrintButton (no bare «طباعة» inside a <Button>)",
+);
+assert(
+  !hasPrint(`<Button onClick={a4}><Printer /> طباعة A4</Button>`),
+  "«طباعة A4» — longer phrase, not the bare label",
+);
+assert(
+  !hasPrint(`<Button onClick={save}><Save className="h-4 w-4" /> طباعة</Button>`),
+  "«طباعة» label with a non-Printer icon",
+);
+
+// ── export: hand-rolled export button (Download + bare «تصدير») ───────────
+console.log("export — must FLAG / NOT flag");
+assert(
+  hasExport(`<Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4" /> تصدير</Button>`),
+  "bespoke export button (Download + «تصدير»)",
+);
+assert(
+  !hasExport(`<ExportAction onExport={exportCsv} />`),
+  "unified ExportAction (the desired form)",
+);
+assert(
+  !hasExport(`<Button onClick={x}><Download /> تصدير Excel</Button>`),
+  "«تصدير Excel» — longer phrase, not the bare label",
+);
+assert(
+  !hasExport(`<a href={url} download><Download className="h-4 w-4" /> تصدير</a>`),
+  "download <a> link, not a <Button>",
+);
+
+// ── occurrence counts: a file's count rises with each bespoke button, so a NEW
+//    one inside an already-allowlisted file still trips the gate (the baseline
+//    count is recorded in the allowlist) ───────────────────────────────────
+console.log("counts — occurrences per file/action");
+assert(
+  fileManualActionCounts(
+    `<Button onClick={p1}><Printer /> طباعة</Button>\n<div/>\n<Button onClick={p2}><Printer className="h-4 w-4 me-1" />طباعة</Button>`,
+  ).get("print") === 2,
+  "two bespoke print buttons in one file count as 2",
+);
+const mixed = fileManualActionCounts(
+  `<Button onClick={r}><RefreshCw /> تحديث</Button>\n<Button onClick={p}><Printer /> طباعة</Button>`,
+);
+assert(
+  mixed.get("refresh") === 1 && mixed.get("print") === 1,
+  "different actions in one file are counted independently",
 );
 
 if (failed) {

@@ -102,6 +102,9 @@ run_step "check:ghost-rows:tests" node scripts/src/check-ghost-rows.test.mjs
 # Pure-logic fixtures for the ambiguous-column scanner — no DB needed, so
 # this runs in every environment to guard the guard itself.
 run_step "check:sql-ambiguity:tests" node scripts/src/check-sql-ambiguity.test.mjs
+# Pure-logic fixtures for the negative-journal-lines diagnostic (formatter +
+# psql-row parser) — no DB needed; guards the report tool's logic.
+run_step "report:negative-journal-lines:tests" node scripts/src/report-negative-journal-lines.test.mjs
 if [ -n "${DATABASE_URL:-}" ]; then
   run_step "check:schema-drift" node scripts/src/check-schema-drift.mjs
   run_step "check:ghost-rows"   node scripts/src/check-ghost-rows.mjs
@@ -184,12 +187,13 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # Pure-logic fixtures guard the detector.
 run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
 run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
-# Page action-bar consistency (refresh): a hand-rolled refresh control (a
-# <Button> pairing the RefreshCw icon with the bare «تحديث» label) instead of
-# the unified <RefreshAction onRefresh={…}/> — so the same action looked and
-# behaved differently on every page before unification. OFFLINE source scan;
-# deliberate section/per-row exceptions in
-# scripts/page-actions-refresh-allowlist.txt, fails only on a NEW offender.
+# Page action-bar consistency (refresh/print/export): a hand-rolled control —
+# a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
+# / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
+# (<RefreshAction/> / <PrintButton/> / <ExportAction/>), so the same action looked
+# and behaved differently on every page before unification. OFFLINE source scan;
+# deliberate framework/section/per-row exceptions (action:path) in
+# scripts/page-actions-allowlist.txt, fails only on a NEW offender.
 # Pure-logic fixtures guard the detector.
 run_step "check:page-actions:tests" node scripts/src/check-page-actions.test.mjs
 run_step "check:page-actions" node scripts/src/check-page-actions.mjs
@@ -295,6 +299,22 @@ run_step "check:redirect-targets" node scripts/src/check-redirect-targets.mjs
 # redirect-target nav guards). Pure-logic fixtures first, then the live scan.
 run_step "check:tabs-coverage:tests" node scripts/src/check-tabs-coverage.test.mjs
 run_step "check:tabs-coverage" node scripts/src/check-tabs-coverage.mjs --strict
+# MODULE-STRIP COVERAGE: the INVERSE of tabs-coverage — every routed MAIN page
+# (list/dashboard/report/tool) that lives inside a module must RENDER that
+# module's top strip (<XxxTabsNav/>), so the horizontal nav never disappears as
+# the user moves between pages of the same module. Generalises the 5-page HR
+# contract (hrNavStabilitySmoke) to all 12 strip-bearing modules. Detail/create
+# forms + focused/standalone layouts are exempt by design. Pure helpers first.
+run_step "check:module-strip-coverage:tests" node scripts/src/check-module-strip-coverage.test.mjs
+run_step "check:module-strip-coverage" node scripts/src/check-module-strip-coverage.mjs --strict
+# FILTER-BAR INVENTORY (جرد): report-only census of every list page's filter/
+# search bar — canonical (<AdvancedFilters>/DataTable toolbar) vs hand-rolled
+# (client = safe to migrate onto the canonical bar; server = keep server-side
+# filtering, only the LAYOUT should be normalised). Report-only by design:
+# server-side filtering is a legitimate pattern and must NOT fail the build. The
+# pure classifiers are gated by the :tests sibling.
+run_step "check:filter-bar-coverage:tests" node scripts/src/check-filter-bar-coverage.test.mjs
+run_step "check:filter-bar-coverage" node scripts/src/check-filter-bar-coverage.mjs
 # SIDEBAR COVERAGE: every mounted route must be reachable from the left sidebar
 # (navigation.registry.ts) or be legitimately off-sidebar (detail / create /
 # redirect-stub / allowlisted); and no nav entry may be a dead link or a
@@ -351,6 +371,15 @@ run_step "check:gl-swallow" node scripts/src/check-gl-swallow.mjs
 # global auditMiddleware provides baseline coverage) and don't fail the
 # build. Route-level exemptions live in scripts/src/audit-stop-ship.mjs.
 run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
+# E2E login-entry guard (#flaky-test): a Playwright spec that opens the app
+# at the bare root `page.goto("/")` before driving the login form races the
+# SPA's unauthenticated "/" → "/login" redirect against the field fills,
+# producing a non-deterministic empty-email login that bounces to /login.
+# The product is healthy — the failure is the test. Use the race-free
+# e2e/tests/_helpers/login.ts (goto "/login" directly) instead. Pure-logic
+# fixtures first, then the live spec scan.
+run_step "check:e2e-login:tests" node scripts/src/check-e2e-login-pattern.test.mjs
+run_step "check:e2e-login"    node scripts/src/check-e2e-login-pattern.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 # Frontend component tests (jsdom + @testing-library/react). Real behavioural
 # verification for sensitive UI (e.g. ProductSelect snap-to-catalog) without a

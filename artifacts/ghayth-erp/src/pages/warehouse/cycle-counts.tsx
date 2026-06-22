@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useApiQuery, asList, apiFetch } from "@/lib/api";
 import { PageShell } from "@workspace/ui-core";
+import { WarehouseTabsNav } from "@/components/shared/warehouse-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -88,6 +89,7 @@ export default function CycleCountsPage() {
 
   return (
     <PageShell title="الجرد الدوري" >
+      <WarehouseTabsNav />
       <Card className="mb-4">
         <CardContent className="pt-6 flex flex-wrap gap-3 items-end">
           <div>

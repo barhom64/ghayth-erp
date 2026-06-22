@@ -564,6 +564,57 @@ export async function proactiveVehicleBreakdown(payload: {
   });
 }
 
+/**
+ * بلاغ حادث مركبة (من السائق ميدانيًا أو من الإدارة) → مهمة تقييم عاجلة لمدير
+ * الأسطول + إشعار. لا يُغلَق خلف قاعدة أتمتة اختيارية: تنبيه الحادث سلامة حرجة
+ * يجب أن يصل دائمًا. dedup عبر automation_logs (مهمة واحدة لكل حادث).
+ */
+export async function proactiveVehicleAccident(payload: {
+  companyId: number;
+  accidentId: number;
+  vehicleId: number;
+  plateNumber: string;
+  description?: string;
+  severity?: string;
+  hasInjuries?: boolean;
+}): Promise<void> {
+  const existing = await rawQuery<Record<string, unknown>>(
+    `SELECT id FROM automation_logs WHERE "automationType" = 'vehicle_accident_assessment'
+       AND "entityType" = 'fleet_accident' AND "entityId" = $1`,
+    [payload.accidentId]
+  );
+  if (existing.length > 0) return;
+
+  const fleetMgr = await getFleetManagerAssignment(payload.companyId);
+  if (!fleetMgr) return;
+
+  const urgent = payload.hasInjuries || payload.severity === "severe" || payload.severity === "total_loss";
+  const injuryNote = payload.hasInjuries ? " ⚠️ يوجد إصابات." : "";
+  const taskId = await createTaskForAssignment({
+    companyId: payload.companyId,
+    title: `تقييم حادث: ${payload.plateNumber}`,
+    description: `بلاغ حادث للمركبة ${payload.plateNumber}.${injuryNote} ${payload.description || ''} — يرجى التقييم وتحديد المتحمّل (حادث #${payload.accidentId}).`,
+    priority: urgent ? "urgent" : "high",
+    assignedTo: fleetMgr,
+  });
+  await createNotification({
+    companyId: payload.companyId, assignmentId: fleetMgr,
+    type: "proactive_automation",
+    title: `بلاغ حادث مركبة: ${payload.plateNumber}`,
+    body: `وردَ بلاغ حادث${injuryNote} يحتاج تقييمًا وتحديد المتحمّل.`,
+    priority: urgent ? "urgent" : "high",
+    refType: "fleet_accident", refId: payload.accidentId,
+  });
+  await logAutomation({
+    companyId: payload.companyId,
+    automationType: "vehicle_accident_assessment",
+    triggerReason: `بلاغ حادث للمركبة ${payload.plateNumber}${injuryNote}`,
+    actionTaken: `إنشاء مهمة تقييم${taskId ? ` #${taskId}` : ''} وإشعار لمدير الأسطول`,
+    entityType: "fleet_accident", entityId: payload.accidentId,
+    assignedTo: fleetMgr,
+  });
+}
+
 let proactiveListenersRegistered = false;
 
 export function registerProactiveEventListeners(): void {
@@ -586,6 +637,24 @@ export function registerProactiveEventListeners(): void {
       }
     } catch (err) {
       logger.error(err, "[ProactiveEngine] Vehicle breakdown handler failed:");
+    }
+  });
+
+  eventBus.on("fleet.accident.reported", async (payload) => {
+    try {
+      if (payload.companyId && payload.entityId && payload.vehicleId) {
+        await proactiveVehicleAccident({
+          companyId: payload.companyId,
+          accidentId: payload.entityId as number,
+          vehicleId: payload.vehicleId as number,
+          plateNumber: (payload.plateNumber as string) || `مركبة #${payload.vehicleId}`,
+          description: payload.description as string | undefined,
+          severity: payload.severity as string | undefined,
+          hasInjuries: payload.hasInjuries as boolean | undefined,
+        });
+      }
+    } catch (err) {
+      logger.error(err, "[ProactiveEngine] Vehicle accident handler failed:");
     }
   });
 

@@ -737,19 +737,18 @@ router.delete("/branches/:id", authorize({ feature: "settings", action: "update"
 
     // Move the blocking active data to the destination branch (if any) and
     // disable the source branch atomically.
+    // حدود المسارات (#2839): الإعدادات تُنسّق تعطيل الفرع وتكتب جدولها (branches)،
+    // لكن إعادة إسناد بيانات HR/المالية المملوكة تتمّ عبر عقدَي المسارين القائدين
+    // (rawExecute فيهما ينضمّ للمعاملة المحيطة فتبقى العملية ذرّية).
     await withTransaction(async () => {
       if (reassignToBranchId !== null) {
         if (empCount > 0) {
-          await rawExecute(
-            `UPDATE employee_assignments SET "branchId" = $1 WHERE "branchId" = $2 AND status = 'active' AND "companyId" = $3`,
-            [reassignToBranchId, branchId, scope.companyId],
-          );
+          const { reassignActiveAssignmentsToBranch } = await import("./hr.js");
+          await reassignActiveAssignmentsToBranch(scope.companyId, branchId, reassignToBranchId);
         }
         if (poCount > 0) {
-          await rawExecute(
-            `UPDATE purchase_orders SET "branchId" = $1 WHERE "branchId" = $2 AND status NOT IN ('cancelled','received','completed') AND "companyId" = $3 AND "deletedAt" IS NULL`,
-            [reassignToBranchId, branchId, scope.companyId],
-          );
+          const { reassignOpenPurchaseOrdersToBranch } = await import("./finance-purchase.js");
+          await reassignOpenPurchaseOrdersToBranch(scope.companyId, branchId, reassignToBranchId);
         }
       }
       await rawExecute(

@@ -335,6 +335,25 @@ export default function ExpensesCreate() {
     }
   }, [isFuelScenario, fuelDerivedAmount]);
 
+  // #2230 — money source follows the payment method: clear a source that no
+  // longer matches the chosen method (cash must not post via a bank account),
+  // and auto-select when exactly ONE account matches (نقدي + صندوق واحد →
+  // يُختار تلقائيًا). Multiple matches → the operator picks from the filtered
+  // list. The backend (financePostingPolicy) remains the hard guard.
+  useEffect(() => {
+    const codes = filterAccountsForPaymentMethod(moneyAccounts, form.paymentMethod)
+      .map((a: any) => a.code || String(a.id));
+    setForm((prev) => {
+      if (prev.sourceAccountCode && !codes.includes(prev.sourceAccountCode)) {
+        return { ...prev, sourceAccountCode: "" };
+      }
+      if (!prev.sourceAccountCode && codes.length === 1) {
+        return { ...prev, sourceAccountCode: codes[0] };
+      }
+      return prev;
+    });
+  }, [form.paymentMethod, moneyAccounts.length]);
+
   // #2238 — the journal-preview verdict gates save: a critical blocker (account
   // not found / unbalanced / required dimension missing / illegal money source)
   // disables the save button so the operator fixes the routing before posting,
@@ -377,7 +396,9 @@ export default function ExpensesCreate() {
   // multi-line workflow without a second form.
   const handleSubmit = async (opts: { addAnother?: boolean } = {}) => {
     const firstError = validate({
-      accountCode: form.accountCode ? null : "بند المصروفات مطلوب",
+      // بند المصروفات اختياري: إن تُرك فارغًا يُوجّهه المحرّك المالي تلقائيًا
+      // (قاعدة توجيه → «مصروفات عمومية أخرى» 5399 القابلة للترحيل). غير المحاسب
+      // لا يُجبَر على اختيار حساب — النظام يَحضُر لا يُحضَر له.
       amount: form.amount ? null : "المبلغ مطلوب",
       // الفرع ومركز التكلفة أبعاد اختيارية في الخلفية (.optional) — يُشتقّان من
       // سياق الدخول والربط؛ لا يُفرضان على المستخدم (النظام يَحضُر لا يُحضَر له).
@@ -637,10 +658,13 @@ export default function ExpensesCreate() {
                 </div>
               </FormFieldWrapper>
             ) : (
-              <FormFieldWrapper label="بند المصروفات" required>
+              <FormFieldWrapper label="بند المصروفات (اختياري — توجيه تلقائي)">
                 <Autocomplete options={expenseOptions} value={form.accountCode}
                   onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
-                  placeholder="ابحث عن بند مصروفات..." loading={accountsLoading} />
+                  placeholder="اتركه فارغًا للتوجيه التلقائي…" loading={accountsLoading} />
+                <p className="text-xs text-muted-foreground mt-1">
+                  إن تركته فارغًا، يوجّهه النظام تلقائيًا حسب نوع المصروف (أو «مصروفات عمومية أخرى»).
+                </p>
               </FormFieldWrapper>
             )}
             <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">

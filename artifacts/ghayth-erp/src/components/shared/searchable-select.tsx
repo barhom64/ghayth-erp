@@ -184,6 +184,8 @@ interface SearchableSelectFieldProps extends SearchableSelectProps {
   error?: string;
   hint?: ReactNode;
   fieldClassName?: string;
+  /** Visually hide the label (sr-only) for dense inline/toolbar contexts. */
+  hideLabel?: boolean;
 }
 
 export function SearchableSelectField({
@@ -192,6 +194,7 @@ export function SearchableSelectField({
   error,
   hint,
   fieldClassName,
+  hideLabel,
   className,
   ...selectProps
 }: SearchableSelectFieldProps) {
@@ -202,6 +205,7 @@ export function SearchableSelectField({
       error={error}
       hint={hint}
       className={fieldClassName}
+      hideLabel={hideLabel}
     >
       <SearchableSelect
         {...selectProps}

@@ -325,29 +325,29 @@ router.get("/regulation/:id", authorize({ feature: "hr.discipline", action: "vie
 const createRegulationSchema = z.object({
   section: z.enum(["work_time", "work_organization", "conduct"], { message: "القسم غير صحيح" }),
   articleNumber: z.coerce.number({ message: "رقم المادة مطلوب" }),
-  title: z.string().min(1, "العنوان مطلوب"),
-  description: z.string().optional(),
-  penalty1: z.string().optional(),
-  penalty2: z.string().optional(),
-  penalty3: z.string().optional(),
-  penalty4: z.string().optional(),
+  title: z.string().min(1, "العنوان مطلوب").max(500, "العنوان طويل جدًا"),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional(),
+  penalty1: z.string().max(2000, "النص طويل جدًا").optional(),
+  penalty2: z.string().max(2000, "النص طويل جدًا").optional(),
+  penalty3: z.string().max(2000, "النص طويل جدًا").optional(),
+  penalty4: z.string().max(2000, "النص طويل جدًا").optional(),
   extraDeduction: z.coerce.number().optional(),
   severity: z.enum(["low", "medium", "high"]).optional(),
   isTermination: z.boolean().optional(),
-  legalReference: z.string().optional(),
+  legalReference: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 const updateRegulationSchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().optional(),
-  penalty1: z.string().optional(),
-  penalty2: z.string().optional(),
-  penalty3: z.string().optional(),
-  penalty4: z.string().optional(),
+  title: z.string().min(1).max(500, "العنوان طويل جدًا").optional(),
+  description: z.string().max(5000, "الوصف طويل جدًا").optional(),
+  penalty1: z.string().max(2000, "النص طويل جدًا").optional(),
+  penalty2: z.string().max(2000, "النص طويل جدًا").optional(),
+  penalty3: z.string().max(2000, "النص طويل جدًا").optional(),
+  penalty4: z.string().max(2000, "النص طويل جدًا").optional(),
   extraDeduction: z.coerce.number().optional(),
   severity: z.enum(["low", "medium", "high"]).optional(),
   isTermination: z.boolean().optional(),
-  legalReference: z.string().optional(),
+  legalReference: z.string().max(2000, "النص طويل جدًا").optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -357,9 +357,9 @@ const createMemoSchema = z.object({
   assignmentId: z.coerce.number({ message: "assignmentId مطلوب" }),
   incidentType: incidentTypeEnum,
   incidentDate: z.string().min(1, "incidentDate مطلوب"),
-  incidentDurationMinutes: z.coerce.number().optional(),
-  absenceDays: z.coerce.number().optional(),
-  incidentDescription: z.string().optional(),
+  incidentDurationMinutes: z.coerce.number().nonnegative("مدة الحادثة (دقائق) يجب ألا تكون سالبة").optional(),
+  absenceDays: z.coerce.number().nonnegative("أيام الغياب يجب ألا تكون سالبة").optional(),
+  incidentDescription: z.string().max(2000, "النص طويل جدًا").optional(),
   regulationId: z.coerce.number().optional(),
   disruptsOthers: z.boolean().optional(),
   witnesses: z.any().optional(),
@@ -370,30 +370,30 @@ const createMemoSchema = z.object({
 });
 
 const justifyMemoSchema = z.object({
-  justification: z.string().optional(),
+  justification: z.string().max(2000, "النص طويل جدًا").optional(),
   declined: z.boolean().optional(),
 });
 
 const managerRecommendationSchema = z.object({
   recommendation: z.enum(["approve_excuse", "reject_excuse"], { message: "التوصية غير صحيحة" }),
-  comment: z.string().optional(),
+  comment: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 const gmDecisionSchema = z.object({
   decision: z.enum(["approved", "rejected", "other"], { message: "القرار غير صحيح" }),
-  comment: z.string().optional(),
+  comment: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 const cancelMemoSchema = z.object({
-  reason: z.string().optional(),
+  reason: z.string().max(2000, "النص طويل جدًا").optional(),
 });
 
 const penaltyPreviewSchema = z.object({
   assignmentId: z.coerce.number({ message: "assignmentId مطلوب" }),
   incidentType: incidentTypeEnum,
   incidentDate: z.string().min(1, "incidentDate مطلوب"),
-  durationMinutes: z.coerce.number().optional(),
-  absenceDays: z.coerce.number().optional(),
+  durationMinutes: z.coerce.number().nonnegative("مدة الحادثة (دقائق) يجب ألا تكون سالبة").optional(),
+  absenceDays: z.coerce.number().nonnegative("أيام الغياب يجب ألا تكون سالبة").optional(),
   disruptsOthers: z.boolean().optional(),
   regulationId: z.coerce.number().optional(),
 });
@@ -416,16 +416,16 @@ const autoDetectionRunSchema = z.object({
 });
 
 const appealSchema = z.object({
-  reason: z.string().min(1, "سبب الاستئناف مطلوب"),
+  reason: z.string().min(1, "سبب الاستئناف مطلوب").max(2000, "النص طويل جدًا"),
 });
 
 const appealDecisionSchema = z.object({
   decision: z.enum(["accepted", "rejected"], { message: "القرار مطلوب (accepted أو rejected)" }),
-  comment: z.string().optional().nullable(),
+  comment: z.string().max(2000, "النص طويل جدًا").optional().nullable(),
 });
 
 const closeMemoSchema = z.object({
-  note: z.string().optional().nullable(),
+  note: z.string().max(2000, "النص طويل جدًا").optional().nullable(),
 });
 
 router.post("/regulation", authorize({ feature: "hr.discipline", action: "create" }), async (req, res) => {

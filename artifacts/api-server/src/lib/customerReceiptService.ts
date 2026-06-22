@@ -30,6 +30,7 @@ import {
 } from "./businessHelpers.js";
 import { issueNumber } from "./numberingService.js";
 import { ValidationError, NotFoundError, ConflictError } from "./errorHandler.js";
+import { assertPaymentSourceAllowed } from "./financePostingPolicy.js";
 
 export interface CustomerReceiptApplication {
   invoiceId: number;
@@ -46,6 +47,10 @@ export interface CustomerReceiptParams {
    *  matters for the engine fallback; the resolved account comes from the
    *  company's accounting_mappings / intent search. */
   method: string;
+  /** #2698 — حساب الخزنة/البنك الذي أُودِع فيه المبلغ صراحةً. عند ضبطه يتجاوز
+   *  الحلّ الآلي بالطريقة، بعد التحقق من وجوده وقابليته للترحيل وتطابق تصنيفه
+   *  مع طريقة الدفع (نفس قاعدة سندات الصرف #1715). الغياب = السلوك القديم. */
+  cashAccountCode?: string | null;
   /** Caller-stable idempotency key (one per logical receipt, e.g. a UUID
    *  generated once per wizard session). Replays return the same journal. */
   receiptKey: string;
@@ -132,13 +137,29 @@ export async function postCustomerReceipt(p: CustomerReceiptParams): Promise<Cus
   // tenant's mapping configures all customer-money flows in one place.
   const isCash = p.method === "cash";
   const { financialEngine } = await import("./engines/index.js");
-  const [cashCode, arCode, advCode] = await Promise.all([
-    financialEngine.resolveAccountCode(p.companyId, "invoice_payment_cash", "debit", isCash ? "1111" : "1124"),
+  const [arCode, advCode] = await Promise.all([
     financialEngine.resolveAccountCode(p.companyId, "invoice_payment_ar", "credit", "1131"),
     leftover > 0.005
       ? financialEngine.resolveAccountCode(p.companyId, "customer_advance_liability", "credit", "2160")
       : Promise.resolve(""),
   ]);
+  // #2698 — خزنة/بنك الإيداع: عند تحديده صراحةً يتجاوز الحلّ الآلي بالطريقة،
+  // بعد التحقق من وجوده وقابليته للترحيل وتطابق تصنيفه مع طريقة الدفع
+  // (assertPaymentSourceAllowed — نفس قاعدة مصدر سندات الصرف #1715). الغياب
+  // يُبقي السلوك القديم حرفيًا (resolveAccountCode بالطريقة).
+  let cashCode: string;
+  if (p.cashAccountCode) {
+    const [acct] = await rawQuery<{ code: string; allowPosting: boolean }>(
+      `SELECT code, "allowPosting" FROM chart_of_accounts WHERE "companyId"=$1 AND code=$2 AND "deletedAt" IS NULL LIMIT 1`,
+      [p.companyId, p.cashAccountCode],
+    );
+    if (!acct) throw new ValidationError("حساب الخزنة/البنك غير موجود", { field: "cashAccountCode" });
+    if (!acct.allowPosting) throw new ValidationError("حساب الخزنة/البنك غير قابل للترحيل — اختر حسابًا فرعيًا", { field: "cashAccountCode" });
+    await assertPaymentSourceAllowed({ companyId: p.companyId, accountCode: p.cashAccountCode, paymentMethod: p.method });
+    cashCode = acct.code;
+  } else {
+    cashCode = await financialEngine.resolveAccountCode(p.companyId, "invoice_payment_cash", "debit", isCash ? "1111" : "1124");
+  }
 
   const sourceKey = `finance:customer_receipt:${p.companyId}:${p.receiptKey}`;
   const ref = `REC-${recvDate}-${p.receiptKey.slice(0, 8)}`;

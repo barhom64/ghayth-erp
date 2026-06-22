@@ -183,6 +183,30 @@ const updateDevUnitSchema = createDevUnitSchema.partial().extend({
   status: z.enum(["under_development", "for_sale", "cancelled"]).optional(),
 });
 
+// عقد قائد/خادم (#2839): إدراج سجل مشروع. مسار المالية (finance-hardening) كان
+// يكتب جدول projects مباشرةً عند إنشاء مشروع من شاشته؛ الكتابة في جدول المشاريع
+// المملوك تبقى هنا في المسار القائد (المشاريع). يعمل ضمن المعاملة المحيطة
+// (rawExecute ينضمّ لـ txStore) فيبقى الإدراج ذرّيًا مع ترقيمه. سلوكيًا مطابق.
+export async function insertProjectRecord(params: {
+  companyId: number;
+  ref: string;
+  name: string;
+  description?: string | null;
+  budget?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  managerId?: number | null;
+}): Promise<number> {
+  const { companyId, ref, name, description, budget, startDate, endDate, managerId } = params;
+  const { insertId } = await rawExecute(
+    `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [companyId, ref, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, managerId ?? null],
+  );
+  assertInsert(insertId, "projects");
+  return insertId;
+}
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -340,6 +364,8 @@ router.get("/", authorize({ feature: "projects.list", action: "list" }), async (
   try {
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض المشاريع المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     const filters = parseScopeFilters(req);
     const { where: baseWhere, params, nextParamIndex } = buildScopedWhere(scope, filters, { companyColumn: 'p."companyId"', disableBranchScope: true });
     let where = baseWhere;
@@ -359,8 +385,9 @@ router.get("/", authorize({ feature: "projects.list", action: "list" }), async (
       paramIdx++;
     }
 
+    where += showDeleted ? ` AND p."deletedAt" IS NOT NULL` : ` AND p."deletedAt" IS NULL`;
     const rows = await rawQuery<Record<string, unknown>>(
-      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."companyId"=p."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} AND p."deletedAt" IS NULL ORDER BY p.id DESC LIMIT 500`,
+      `SELECT p.*, cl.name AS "clientName", e.name AS "managerName" FROM projects p LEFT JOIN clients cl ON cl.id=p."clientId" AND cl."companyId"=p."companyId" AND cl."deletedAt" IS NULL LEFT JOIN employees e ON e.id=p."managerId" AND e."deletedAt" IS NULL WHERE ${where} ORDER BY p.id DESC LIMIT 500`,
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -824,6 +851,19 @@ router.delete("/:id", authorize({ feature: "projects.list", action: "delete", re
 
     res.json({ message: "تم حذف المشروع بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete project error:"); }
+});
+
+// #2713 (تعميم) — استرجاع مشروع محذوف ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/:id/restore", authorize({ feature: "projects.list", action: "delete", resource: { table: "projects", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE projects SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد مشروع محذوف بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "projects", entityId: id }).catch((e) => logger.error(e, "projects background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "project.restored", entity: "projects", entityId: id }).catch((e) => logger.error(e, "projects background task failed"));
+    res.json({ message: "تم استرجاع المشروع" });
+  } catch (err) { handleRouteError(err, res, "Restore project error:"); }
 });
 
 router.post("/:id/phases", authorize({ feature: "projects.tasks", action: "create" }), async (req, res) => {

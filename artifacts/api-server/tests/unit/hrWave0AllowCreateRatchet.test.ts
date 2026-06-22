@@ -11,10 +11,12 @@
  * the same React Query cache key.
  *
  * This ratchet pins:
- *   1. `buildEntitySelect` keeps its `allowCreate = true` default.
- *      Flipping that default would silently turn 9 reference pickers
- *      into read-only dropdowns and break the «no half-created entity»
- *      doctrine.
+ *   1. `buildEntitySelect` keeps its `allowCreate = config.allowCreateDefault
+ *      ?? true` default. Inline-create stays the standard for every picker;
+ *      only a select that explicitly sets `allowCreateDefault: false` (one with
+ *      no create endpoint) opts out. Flipping the `?? true` fallback would
+ *      silently turn 9 reference pickers into read-only dropdowns and break the
+ *      «no half-created entity» doctrine.
  *   2. The `onCreateNew` plumb (passed to SearchableSelectField) is
  *      gated by `allowCreate` — if the gate vanishes, even pickers
  *      that opt out get the create button. If the gate fires when
@@ -42,7 +44,12 @@ const ENTITY_SELECTS_SRC = readFileSync(
 
 describe("HR-Wave-0 / 0.4 — buildEntitySelect defaults + plumbing", () => {
   it("allowCreate defaults to true (inline-create is the standard, opt-out is the exception)", () => {
-    expect(ENTITY_SELECTS_SRC).toMatch(/allowCreate = true,/);
+    // #deep-audit — the default is now per-select via `config.allowCreateDefault`,
+    // falling back to `true`. This keeps inline-create the standard everywhere
+    // while letting a select with NO create endpoint (e.g. EmployeeCategorySelect)
+    // opt the «+» button out centrally — instead of relying on every call site to
+    // remember `allowCreate={false}`. The `?? true` preserves the ratchet's intent.
+    expect(ENTITY_SELECTS_SRC).toMatch(/allowCreate = config\.allowCreateDefault \?\? true,/);
   });
 
   it("onCreateNew is gated by allowCreate — opt-outs MUST hide the «+» button", () => {

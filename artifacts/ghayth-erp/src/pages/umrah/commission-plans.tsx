@@ -2,15 +2,15 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DataTable,
   type DataTableColumn,
   PageShell,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -96,18 +96,13 @@ export default function UmrahCommissionPlans() {
     );
   };
 
-  const [empFilter, setEmpFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [seasonFilter, setSeasonFilter] = useState<string>("");
+  const [filters, setFilters] = useFilters();
 
-  const filtered = useMemo(() => {
-    return plans.filter((p) => {
-      if (empFilter && String(p.employeeId) !== empFilter) return false;
-      if (statusFilter && p.status !== statusFilter) return false;
-      if (seasonFilter && String(p.seasonId) !== seasonFilter) return false;
-      return true;
-    });
-  }, [plans, empFilter, statusFilter, seasonFilter]);
+  const filtered = useMemo(() => applyFilters(plans, filters, {
+    searchFields: ["planName", "employeeName"],
+    statusField: "status",
+    extraFields: { employeeId: "employeeId", seasonId: "seasonId" },
+  }), [plans, filters]);
 
   const counts = useMemo(() => ({
     total: plans.length,
@@ -278,44 +273,20 @@ export default function UmrahCommissionPlans() {
         </CardContent></Card>
       </div>
 
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="min-w-[220px]">
-          <Label className="text-xs">الموظف</Label>
-          <Select value={empFilter || "all"} onValueChange={(v) => setEmpFilter(v === "all" ? "" : v)}>
-            <SelectTrigger><SelectValue placeholder="كل الموظفين" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">كل الموظفين</SelectItem>
-              {employees.map((e: any) => (
-                <SelectItem key={e.id} value={String(e.id)}>{e.fullName ?? e.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="min-w-[180px]">
-          <Label className="text-xs">الحالة</Label>
-          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
-            <SelectTrigger><SelectValue placeholder="كل الحالات" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">كل الحالات</SelectItem>
-              {Object.entries(STATUS_LABEL).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="min-w-[180px]">
-          <Label className="text-xs">الموسم</Label>
-          <Select value={seasonFilter || "all"} onValueChange={(v) => setSeasonFilter(v === "all" ? "" : v)}>
-            <SelectTrigger><SelectValue placeholder="كل المواسم" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">كل المواسم</SelectItem>
-              {seasons.map((s: any) => (
-                <SelectItem key={s.id} value={String(s.id)}>{s.title}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث باسم الخطة أو الموظف...",
+          statuses: Object.entries(STATUS_LABEL).map(([value, v]) => ({ value, label: v.label })),
+          extraFilters: [
+            { key: "employeeId", label: "الموظف", options: employees.map((e: any) => ({ value: String(e.id), label: e.fullName ?? e.name })) },
+            { key: "seasonId", label: "الموسم", options: seasons.map((s: any) => ({ value: String(s.id), label: s.title })) },
+          ],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       <PageStateWrapper
         isLoading={plansQ.isLoading}

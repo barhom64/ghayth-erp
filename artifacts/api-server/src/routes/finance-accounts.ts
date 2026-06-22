@@ -435,8 +435,8 @@ accountsRouter.get("/accounts", authorize({ feature: "finance.accounts", action:
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (_e) { logger.error(_e, "accounts list query failed");
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+  } catch (err) {
+    handleRouteError(err, res, "accounts list query failed");
   }
 });
 
@@ -757,8 +757,8 @@ accountsRouter.get("/journal", authorize({ feature: "finance.accounts", action: 
       params
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
-  } catch (_e) { logger.error(_e, "journal list query failed");
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+  } catch (err) {
+    handleRouteError(err, res, "journal list query failed");
   }
 });
 

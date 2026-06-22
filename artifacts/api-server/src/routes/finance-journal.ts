@@ -143,7 +143,7 @@ const operationalEffectsShape = {
   fuelLog: z.object({
     create: z.boolean().optional(),
     liters: z.coerce.number().optional(),
-    costPerLiter: z.coerce.number().optional(),
+    costPerLiter: z.coerce.number().nonnegative().optional(),
     odometer: z.coerce.number().optional(),
     stationName: z.string().optional(),
     // #2234 — the SAVED fuel supplier (vendorId references suppliers.id) is the
@@ -215,7 +215,7 @@ const vendorInvoiceLineSchema = z.object({
   itemName: z.string().optional(),
   quantity: z.coerce.number().optional(),
   unit: z.string().optional(),
-  unitPrice: z.coerce.number().optional(),
+  unitPrice: z.coerce.number().nonnegative().optional(),
   taxCode: z.string().optional(),
   // amount = qty × unitPrice (net of VAT) — the line's debit base.
   amount: z.coerce.number(),
@@ -377,7 +377,7 @@ const createJournalSchema = z.object({
   branchId: z.coerce.number().optional(),
   branchSplits: z.array(z.object({
     branchId: z.coerce.number(),
-    percentage: z.coerce.number().optional(),
+    percentage: z.coerce.number().min(0, "النسبة يجب ألا تكون سالبة").max(100, "النسبة يجب ألا تتجاوز 100").optional(),
     amount: z.coerce.number().optional(),
   })).optional(),
 });
@@ -401,8 +401,10 @@ const yearEndCloseSchema = z.object({
 
 const openingBalanceLineSchema = z.object({
   accountCode: z.string(),
-  debit: z.coerce.number(),
-  credit: z.coerce.number(),
+  // F9-B2: لا رصيد افتتاحي سالب (نمط finance-accounts). السالب خطأ إدخال —
+  // يُستعمل الجانب المقابل لعكس الإشارة لا الرقم السالب.
+  debit: z.coerce.number().min(0, "المدين لا يكون سالبًا"),
+  credit: z.coerce.number().min(0, "الدائن لا يكون سالبًا"),
 });
 
 const openingBalancesSchema = z.object({
@@ -512,8 +514,7 @@ journalRouter.get("/expenses", authorize({ feature: "finance.journal", action: "
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
-    logger.error(err, "Get expenses error:");
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+    handleRouteError(err, res, "Get expenses error:");
   }
 });
 
@@ -549,8 +550,7 @@ journalRouter.get("/maintenance-ticket-options", authorize({ feature: "finance.j
     }
     res.json({ data: options });
   } catch (err) {
-    logger.error(err, "Get maintenance ticket options error:");
-    res.json({ data: [] });
+    handleRouteError(err, res, "Get maintenance ticket options error:");
   }
 });
 
@@ -594,7 +594,7 @@ async function buildExpenseJournalPreview(
   p: z.infer<typeof expenseImpactPreviewSchema>,
 ): Promise<JournalPreviewView> {
   const paymentMethod = p.paymentMethod ?? null;
-  const sourceAccountCode = p.sourceAccountCode || "1100";
+  const sourceAccountCode = p.sourceAccountCode || "1111";
   const baseAmount = roundTo2(Number(p.amount) || 0);
 
   const empty = (incompleteReason: string): JournalPreviewView => ({
@@ -673,9 +673,9 @@ async function buildExpenseJournalPreview(
     derivationReason = "حساب فرعي محدّد يدويًا";
   }
   if (!expenseAccountCode) {
-    expenseAccountCode = "5000";
+    expenseAccountCode = "5399";
     accountSource = "fallback";
-    derivationReason = "حساب مصروف عام افتراضي — لا قاعدة توجيه مطابقة";
+    derivationReason = "حساب «مصروفات عمومية أخرى» (5399) — يُنصح بربط قاعدة توجيه للمصروف";
   }
 
   // 3) VAT input account (purpose-resolved) + amounts.
@@ -1019,7 +1019,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     }
 
     const targetPeriod = period ?? currentPeriod();
-    const sourceAcct = sourceAccountCode || "1100";
+    const sourceAcct = sourceAccountCode || "1111";
 
     // #1715 wave-1 consolidation: the expense create flow now converges on
     // the unified FinanceOperationContext (guardrail #6 — no finance
@@ -1215,7 +1215,7 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     // byte-identical to the pre-refactor lines.
     const expenseLegAccount = (subAccountCode && subAccountCode !== accountCode)
       ? subAccountCode
-      : (overrideAccountCode ?? "5000");
+      : (overrideAccountCode ?? "5399");
     let inputVatCode: string | null = null;
     if (computedVat > 0) {
       inputVatCode = await financialEngine.resolveAccountCode(effectiveCompanyId, "vat_input", "debit", "1180");
@@ -1495,7 +1495,7 @@ async function resolveVendorInvoicePlan(
       scope.companyId,
       line.accountPurpose,
       "debit",
-      "5000",
+      "5399",
     );
     const net = roundTo2(Number(line.amount) || 0);
     const vat = roundTo2(Number(line.vatAmount) || 0);
@@ -2069,8 +2069,7 @@ journalRouter.get("/vouchers", authorize({ feature: "finance.journal", action: "
     );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) {
-    logger.error(err, "Get vouchers error:");
-    res.json({ data: [], total: 0, page: 1, pageSize: 0 });
+    handleRouteError(err, res, "Get vouchers error:");
   }
 });
 
@@ -2165,7 +2164,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
       );
     }
 
-    const resolvedSourceAccount = sourceAccountCode || "1100";
+    const resolvedSourceAccount = sourceAccountCode || "1111";
     const [sourceAcctRow] = await rawQuery<Record<string, unknown>>(
       `SELECT id, code, name, type, subtype, "accountSubtype" FROM chart_of_accounts
        WHERE "companyId" = $1 AND code = $2 AND "deletedAt" IS NULL LIMIT 1`,
@@ -2217,7 +2216,7 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
     }
 
     const { financialEngine } = await import("../lib/engines/index.js");
-    const cashAcct = sourceAccountCode || "1100";
+    const cashAcct = sourceAccountCode || "1111";
 
     // #1715 wave-1 consolidation: the voucher create flow converges on the
     // unified FinanceOperationContext (guardrail #6). The adapter maps the
@@ -2716,7 +2715,7 @@ journalRouter.get("/salary-advances", authorize({ feature: "finance.journal", ac
     const rows = await rawQuery<Record<string, unknown>>(`SELECT je.id, je.ref, je.description, COALESCE(SUM(jl.debit), 0) AS amount, je."createdAt" AS date, je.status, je."documentStatus", je."paymentStatus", je."postingStatus" FROM journal_entries je JOIN journal_lines jl ON jl."journalId" = je.id AND jl."deletedAt" IS NULL WHERE je."companyId" = $1 AND je."deletedAt" IS NULL AND je.ref LIKE 'SALARY-ADV%' GROUP BY je.id, je.ref, je.description, je.status, je."documentStatus", je."paymentStatus", je."postingStatus", je."createdAt" ORDER BY je."createdAt" DESC LIMIT 500`, [scope.companyId]);
     res.json(maskFields(req, { data: rows, summary: { total: rows.length, totalAmount: rows.reduce((s: number, r) => s + Number(r.amount), 0) } }));
   } catch (err) {
-    res.json({ data: [], summary: { total: 0, totalAmount: 0 } });
+    handleRouteError(err, res, "Get salary advances error:");
   }
 });
 
@@ -2757,7 +2756,7 @@ journalRouter.post("/salary-advances", authorize({ feature: "finance.journal", a
 
     const { employeeName, amount, description, deductMonths, sourceAccountCode, employeeId } = zodParse(createSalaryAdvanceSchema.safeParse(req.body ?? {}));
     if (!amount || !employeeName) { throw new ValidationError("اسم الموظف والمبلغ مطلوبان"); return; }
-    const sourceAcct = sourceAccountCode || "1100";
+    const sourceAcct = sourceAccountCode || "1111";
     const idempotencyToken = requestIdempotencyToken(req);
     const ref = `SALARY-ADV-${idempotencyToken}`;
 

@@ -6,6 +6,9 @@ import {
   PageShell,
   DataTable,
   type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,14 +59,14 @@ const LEVEL_COLOR: Record<BudgetApprovalRequest["approvalLevel"], string> = {
 
 export default function BudgetApprovalsPage() {
   const { toast } = useToast();
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [filters, setFilters] = useFilters({ status: "pending" });
   const [decideId, setDecideId] = useState<number | null>(null);
   const [decisionNotes, setDecisionNotes] = useState<string>("");
   const [decisionType, setDecisionType] = useState<"approve" | "reject" | null>(null);
 
   const { data, isLoading, isError } = useApiQuery<{ data: BudgetApprovalRequest[] }>(
-    ["budget-approvals", statusFilter],
-    `/finance/budget/approval-requests?status=${statusFilter}`,
+    ["budget-approvals", filters.status],
+    `/finance/budget/approval-requests${filters.status ? `?status=${filters.status}` : ""}`,
   );
 
   const decideMut = useApiMutation<unknown, { id: number; decision: string; notes?: string }>(
@@ -73,6 +76,9 @@ export default function BudgetApprovalsPage() {
   );
 
   const rows = data?.data ?? [];
+  const filtered = applyFilters(rows, filters, {
+    searchFields: ["accountCode", "accountName", "reason"],
+  });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   if (isLoading) return <LoadingSpinner />;
@@ -286,18 +292,20 @@ export default function BudgetApprovalsPage() {
         </Card>
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <span className="text-xs text-muted-foreground">الحالة:</span>
-        <Badge variant={statusFilter === "pending" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("pending")}>معلّقة</Badge>
-        <Badge variant={statusFilter === "approved" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("approved")}>معتمدة</Badge>
-        <Badge variant={statusFilter === "rejected" ? "default" : "outline"}
-          className="cursor-pointer text-xs"
-          onClick={() => setStatusFilter("rejected")}>مرفوضة</Badge>
-      </div>
+      <AdvancedFilters
+        config={{
+          searchPlaceholder: "بحث برمز/اسم الحساب أو السبب...",
+          statuses: [
+            { value: "pending", label: "معلّقة" },
+            { value: "approved", label: "معتمدة" },
+            { value: "rejected", label: "مرفوضة" },
+          ],
+          showDateRange: false,
+        }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
 
       <Card>
         <CardHeader className="pb-2">
@@ -305,13 +313,14 @@ export default function BudgetApprovalsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <DataTable
-            columns={cols} data={rows}
+            columns={cols} data={filtered}
             onSortedDataChange={setPrintRows}
             pageSize={30}
+            noToolbar
             emptyMessage={
-              statusFilter === "pending"
+              filters.status === "pending"
                 ? "ما في طلبات اعتماد معلّقة — كل التزامات الفترة ضمن الميزانية أو معتمدة"
-                : `لا توجد طلبات بحالة ${statusFilter}`
+                : `لا توجد طلبات بحالة ${filters.status || "—"}`
             }
           />
         </CardContent>

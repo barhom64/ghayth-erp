@@ -7,11 +7,12 @@ import {
   useFilters,
   exportToCSV,
 } from "@workspace/ui-core";
-import { useApiQuery, useApiMutation } from "@/lib/api";
+import { useApiQuery, useApiMutation, apiFetch } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,14 +25,22 @@ import { useAppContext } from "@/contexts/app-context";
 import { QuickPreviewDialog, type PreviewField } from "@/components/shared/quick-preview-dialog";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { CrmTabsNav } from "@/components/shared/crm-tabs-nav";
+import { AllowCreateDrawer } from "@/components/shared/allow-create-drawer";
 
 export default function Clients() {
   const { roleLevel, scopeQueryString } = useAppContext();
   const canManage = roleLevel >= 50;
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [filters, setFilters] = useFilters();
   const [previewItem, setPreviewItem] = useState<any>(null);
   const [page, setPage] = useState(1);
+  // تعميم نمط «درج الإنشاء» (AllowCreateDrawer) — زر «إضافة عميل» يفتح
+  // النموذج الكامل في درج بدل الانتقال لصفحة /create. صفحة الإنشاء الكاملة
+  // تبقى متاحة عبر «فتح الصفحة الكاملة» داخل الدرج وللوصول المباشر.
+  const [createOpen, setCreateOpen] = useState(false);
+  // #2713 — سلة المحذوفات: تبديل بين القائمة النشطة والمحذوفة (للاسترجاع).
+  const [showDeleted, setShowDeleted] = useState(false);
   const pageSize = 20;
 
   // POST /clients/auto-create — find-or-create-by-phone shortcut used
@@ -72,11 +81,23 @@ export default function Clients() {
   if (filters.status) params.set("classification", filters.status);
   params.set("page", String(page));
   params.set("limit", String(pageSize));
+  if (showDeleted) params.set("deleted", "true");
   if (scopeQueryString) { scopeQueryString.split("&").forEach(p => { const [k,v] = p.split("="); if (k) params.set(k, v); }); }
   const { data: clientsResponse, isLoading, isError, error, refetch } = useApiQuery<{ data: any[]; total: number }>(
-    ["clients", filters.search, filters.status, String(page), scopeQueryString],
+    ["clients", filters.search, filters.status, String(page), scopeQueryString, showDeleted ? "deleted" : "active"],
     `/clients?${params.toString()}`
   );
+
+  // #2713 — استرجاع عميل محذوف ثم تحديث القائمة.
+  async function handleRestore(id: number) {
+    try {
+      await apiFetch(`/clients/${id}/restore`, { method: "POST" });
+      toast({ title: "تم استرجاع العميل" });
+      refetch();
+    } catch (e: any) {
+      toast({ variant: "destructive", title: e?.message || "تعذّر الاسترجاع" });
+    }
+  }
   const clients = clientsResponse?.data;
   const total = clientsResponse?.total || 0;
   const filteredClients = clients || [];
@@ -169,12 +190,18 @@ export default function Clients() {
           <Button variant="ghost" size="sm" onClick={() => setPreviewItem(client)}>
             <Eye className="h-4 w-4" />
           </Button>
-          <RowActions
-            canEdit={canManage}
-            onEdit={() => startEdit(client.id, { name: client.name || "", phone: client.phone || "", classification: client.classification || "regular" })}
-            onDelete={() => startDelete(client.id)}
-            deletePerm="clients:delete"
-          />
+          {showDeleted ? (
+            canManage && (
+              <Button variant="outline" size="sm" onClick={() => handleRestore(client.id)}>استرجاع</Button>
+            )
+          ) : (
+            <RowActions
+              canEdit={canManage}
+              onEdit={() => startEdit(client.id, { name: client.name || "", phone: client.phone || "", classification: client.classification || "regular" })}
+              onDelete={() => startDelete(client.id)}
+              deletePerm="clients:delete"
+            />
+          )}
         </div>
       ),
     },
@@ -190,6 +217,13 @@ export default function Clients() {
       loading={isLoading}
       actions={
         <div className="flex items-center gap-2">
+          <Button
+            variant={showDeleted ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setShowDeleted((v) => !v); setPage(1); }}
+          >
+            {showDeleted ? "العملاء النشطون" : "سلة المحذوفات"}
+          </Button>
           <PrintButton
             entityType="report_clients"
             entityId="list"
@@ -231,12 +265,10 @@ export default function Clients() {
             >
               + سريع
             </GuardedButton>
-            <Link href="/clients/create">
-              <GuardedButton perm="clients:create" className="gap-2">
-                <Plus className="h-4 w-4" />
-                إضافة عميل
-              </GuardedButton>
-            </Link>
+            <GuardedButton perm="clients:create" className="gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              إضافة عميل
+            </GuardedButton>
           </>
           )}
         </div>
@@ -318,6 +350,16 @@ export default function Clients() {
       />
 
       <QuickPreviewDialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)} title="معاينة العميل" data={previewItem} fields={previewFields} />
+
+      <AllowCreateDrawer
+        kind="client"
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={() => {
+          toast({ title: "تم إنشاء العميل" });
+          refetch();
+        }}
+      />
     </PageShell>
   );
 }

@@ -260,6 +260,6 @@ describe("PR-1 (#2077) — entity-selects: 4 new master pickers exist", () => {
     expect(ENTITY_SELECTS).toMatch(/export const CommitteeSelect = buildEntitySelect\(\{[\s\S]{0,300}endpoint:\s*"\/org\/committees"/);
   });
   it("EmployeeCategorySelect targets /org/employee-categories and emits categoryKey (not id)", () => {
-    expect(ENTITY_SELECTS).toMatch(/export const EmployeeCategorySelect = buildEntitySelect\(\{[\s\S]{0,500}endpoint:\s*"\/org\/employee-categories"[\s\S]{0,400}getValueField:\s*"categoryKey"/);
+    expect(ENTITY_SELECTS).toMatch(/export const EmployeeCategorySelect = buildEntitySelect\(\{[\s\S]{0,500}endpoint:\s*"\/org\/employee-categories"[\s\S]{0,700}getValueField:\s*"categoryKey"/);
   });
 });

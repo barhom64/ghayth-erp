@@ -607,26 +607,32 @@ transportIntegrationRouter.post(
             continue;
           }
 
-          // Create the dispatch order.
-          const insRes = await rawExecute(
-            `INSERT INTO transport_dispatch_orders
-               ("companyId", "branchId", "bookingId", "bookingLineId",
-                "vehicleId", "driverId", "scheduledStartAt", "scheduledEndAt",
-                status, "dispatchedBy", "dispatchedAt")
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, NOW())`,
-            [
-              scope.companyId, scope.branchId ?? null, bookingId, lineId,
-              top.vehicleId, top.driverId, startAt, endAt, scope.userId,
-            ],
-          );
-          assertInsert(insRes.insertId, "transport_dispatch_orders");
+          // Create the dispatch order + flip its line to 'dispatched'
+          // atomically (per booking): a dispatch order must never exist
+          // without its line marked dispatched. The per-booking try/catch
+          // around this keeps one failure from aborting the whole batch.
+          const dispatchOrderId = await withTransaction(async () => {
+            const insRes = await rawExecute(
+              `INSERT INTO transport_dispatch_orders
+                 ("companyId", "branchId", "bookingId", "bookingLineId",
+                  "vehicleId", "driverId", "scheduledStartAt", "scheduledEndAt",
+                  status, "dispatchedBy", "dispatchedAt")
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, NOW())`,
+              [
+                scope.companyId, scope.branchId ?? null, bookingId, lineId,
+                top.vehicleId, top.driverId, startAt, endAt, scope.userId,
+              ],
+            );
+            assertInsert(insRes.insertId, "transport_dispatch_orders");
 
-          await rawExecute(
-            `UPDATE transport_booking_lines
-                SET status = 'dispatched', "updatedAt" = NOW()
-              WHERE id = $1 AND "companyId" = $2`,
-            [lineId, scope.companyId],
-          );
+            await rawExecute(
+              `UPDATE transport_booking_lines
+                  SET status = 'dispatched', "updatedAt" = NOW()
+                WHERE id = $1 AND "companyId" = $2`,
+              [lineId, scope.companyId],
+            );
+            return insRes.insertId;
+          });
 
           // Record the claim so subsequent bookings in this batch
           // don't pick the same (vehicle | driver) for an overlapping
@@ -640,13 +646,13 @@ transportIntegrationRouter.post(
             score: top.score,
             vehicleId: top.vehicleId,
             driverId: top.driverId,
-            dispatchOrderId: insRes.insertId,
+            dispatchOrderId,
           });
 
           emitEvent({
             companyId: scope.companyId, branchId: scope.branchId ?? null, userId: scope.userId,
             action: "fleet.dispatch.created",
-            entity: "transport_dispatch_orders", entityId: insRes.insertId,
+            entity: "transport_dispatch_orders", entityId: dispatchOrderId,
             details: JSON.stringify({
               bookingId, vehicleId: top.vehicleId, driverId: top.driverId,
               autoPlanned: true, score: top.score,

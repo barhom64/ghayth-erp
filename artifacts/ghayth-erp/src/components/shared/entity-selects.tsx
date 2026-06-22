@@ -196,6 +196,13 @@ interface EntitySelectConfig {
    * selector-by-selector). See allow-create-drawer.tsx.
    */
   createEntityKind?: EntityKind;
+  /**
+   * Default value for the component's `allowCreate` prop. Defaults to true.
+   * Set false for selects with NO working create endpoint (e.g.
+   * EmployeeCategorySelect → no POST /org/employee-categories) so a call site
+   * that forgets `allowCreate={false}` doesn't expose a "+ create" that 404s.
+   */
+  allowCreateDefault?: boolean;
 }
 
 /**
@@ -231,6 +238,8 @@ interface EntitySelectProps {
   error?: string;
   allowCreate?: boolean;
   filter?: (item: any) => boolean;
+  /** Visually hide the label (sr-only) for dense inline/toolbar contexts. */
+  hideLabel?: boolean;
 }
 
 function buildEntitySelect(config: EntitySelectConfig) {
@@ -242,8 +251,12 @@ function buildEntitySelect(config: EntitySelectConfig) {
     placeholder = config.defaultPlaceholder,
     className,
     error,
-    allowCreate = true,
+    // Default per-select via config.allowCreateDefault (true unless the select
+    // has no working create endpoint, e.g. EmployeeCategorySelect). A call site
+    // can still override explicitly.
+    allowCreate = config.allowCreateDefault ?? true,
     filter,
+    hideLabel,
   }: EntitySelectProps) {
     const [showCreate, setShowCreate] = useState(false);
     // #2134 — entities created from «+ جديد» are appended locally so they
@@ -308,6 +321,7 @@ function buildEntitySelect(config: EntitySelectConfig) {
           label={label}
           required={required}
           error={error}
+          hideLabel={hideLabel}
           options={options}
           value={value}
           onValueChange={onChange}
@@ -737,6 +751,9 @@ export const EmployeeCategorySelect = buildEntitySelect({
   createTitle: "إضافة فئة موظفين",
   createLabel: "+ فئة جديدة",
   createApiPath: "/org/employee-categories",
+  // لا يوجد POST /org/employee-categories (الفئات مبذورة بالهجرة) — فالإنشاء
+  // معطّل افتراضيًا كي لا يظهر «+» يُرجع 404 من أي موضع استخدام.
+  allowCreateDefault: false,
   createFields: [
     { key: "categoryKey", label: "مفتاح الفئة", required: true },
     { key: "labelAr", label: "الاسم بالعربية", required: true },

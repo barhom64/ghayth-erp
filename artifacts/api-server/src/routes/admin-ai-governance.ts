@@ -456,21 +456,28 @@ router.post("/prompts/:id/reviews", authorize({ feature: "admin", action: "appro
       throw new ForbiddenError("لا يجوز للمؤلّف مراجعة prompt من تأليفه (Separation-of-Duties)");
     }
 
-    const { insertId } = await rawExecute(
-      `INSERT INTO ai_prompt_reviews ("promptId", "reviewerId", decision, comments)
-       VALUES ($1, $2, $3, $4)`,
-      [id, scope.userId, body.decision, body.comments ?? null],
-    );
+    // The review record + its effect on the prompt status are written
+    // atomically: a 'rejected'/'changes_requested' decision must not be
+    // recorded without flipping the prompt (or vice versa). rawQuery joins
+    // the ambient transaction (txStore).
+    const insertId = await withTransaction(async () => {
+      const { insertId: reviewId } = await rawExecute(
+        `INSERT INTO ai_prompt_reviews ("promptId", "reviewerId", decision, comments)
+         VALUES ($1, $2, $3, $4)`,
+        [id, scope.userId, body.decision, body.comments ?? null],
+      );
 
-    // Side-effects on the prompt itself: a 'rejected' review terminates
-    // the version; 'changes_requested' bounces it back to draft. An
-    // 'approved' review does NOT yet flip the prompt — the explicit
-    // /approve endpoint does (so the author can preview before promotion).
-    if (body.decision === "rejected") {
-      await rawExecute(`UPDATE ai_prompts SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [id]);
-    } else if (body.decision === "changes_requested") {
-      await rawExecute(`UPDATE ai_prompts SET status = 'draft', "updatedAt" = NOW() WHERE id = $1`, [id]);
-    }
+      // Side-effects on the prompt itself: a 'rejected' review terminates
+      // the version; 'changes_requested' bounces it back to draft. An
+      // 'approved' review does NOT yet flip the prompt — the explicit
+      // /approve endpoint does (so the author can preview before promotion).
+      if (body.decision === "rejected") {
+        await rawExecute(`UPDATE ai_prompts SET status = 'rejected', "updatedAt" = NOW() WHERE id = $1`, [id]);
+      } else if (body.decision === "changes_requested") {
+        await rawExecute(`UPDATE ai_prompts SET status = 'draft', "updatedAt" = NOW() WHERE id = $1`, [id]);
+      }
+      return reviewId;
+    });
 
     void emitEvent({
       companyId: scope.companyId, userId: scope.userId,
@@ -1013,5 +1020,57 @@ router.get("/evaluations/:id/results", authorize({ feature: "admin", action: "li
     handleRouteError(err, res, "admin/ai-governance/evaluations/results");
   }
 });
+
+// ── connection test / activation status ─────────────────────────────────────
+// Lets an admin verify the Anthropic integration is configured AND reachable
+// without exposing any secret. Reports the env-backed config flags; if
+// configured, sends a tiny 4-token ping so activation is self-verifiable the
+// moment AI_INTEGRATIONS_ANTHROPIC_API_KEY / _BASE_URL are set (no key needed
+// to call this — it just reports state + optionally pings).
+router.get(
+  "/connection-test",
+  authorize({ feature: "admin", action: "list" }),
+  async (_req, res) => {
+    const apiKeySet = Boolean(config.ai.anthropicApiKey);
+    const baseUrlSet = Boolean(config.ai.anthropicBaseUrl);
+    const out: {
+      configured: boolean;
+      apiKeySet: boolean;
+      baseUrlSet: boolean;
+      model: string;
+      reachable: boolean;
+      latencyMs: number | null;
+      error: string | null;
+    } = {
+      configured: apiKeySet && baseUrlSet,
+      apiKeySet,
+      baseUrlSet,
+      model: ANTHROPIC_MODEL,
+      reachable: false,
+      latencyMs: null,
+      error: null,
+    };
+    const client = getAnthropicClient();
+    if (!client) {
+      out.error =
+        "غير مضبوط: اضبط AI_INTEGRATIONS_ANTHROPIC_API_KEY و AI_INTEGRATIONS_ANTHROPIC_BASE_URL ثم أعد تشغيل الخادم.";
+      res.json(out);
+      return;
+    }
+    try {
+      const t0 = Date.now();
+      const msg = await client.messages.create({
+        model: ANTHROPIC_MODEL,
+        max_tokens: 4,
+        messages: [{ role: "user", content: "ping" }],
+      });
+      out.reachable = Array.isArray(msg.content) && msg.content.length > 0;
+      out.latencyMs = Date.now() - t0;
+    } catch (err) {
+      out.error = err instanceof Error ? err.message : String(err);
+    }
+    res.json(out);
+  },
+);
 
 export default router;

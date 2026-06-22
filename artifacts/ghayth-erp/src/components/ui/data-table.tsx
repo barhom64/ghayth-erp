@@ -83,6 +83,23 @@ export interface StatusFilterOption {
   label: string;
 }
 
+/**
+ * A one-click toolbar toggle that narrows the rows to those matching a
+ * predicate the caller owns — e.g. «يحتاج إجراء مني» (rows awaiting the
+ * current user's decision). Unlike a status filter (single field equality),
+ * a quick filter expresses arbitrary row logic the page already knows. Pure
+ * client-side filtering over the rows already in hand — no new fetch, no
+ * cross-path logic.
+ */
+export interface QuickFilter<T> {
+  /** Stable key for toggle state. */
+  key: string;
+  /** Toolbar label (Arabic). */
+  label: string;
+  /** Rows for which this returns true are kept while the toggle is active. */
+  predicate: (row: T) => boolean;
+}
+
 interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   data: T[] | undefined | null;
@@ -123,6 +140,12 @@ interface DataTableProps<T> {
   statusOptions?: StatusFilterOption[];
   /** Key on the row object used by the status filter. Default "status". */
   statusField?: string;
+  /**
+   * One-click toolbar toggles (e.g. «يحتاج إجراء مني») that filter the rows
+   * by an arbitrary predicate. Multiple active toggles combine with AND.
+   * Omit to render none. Ignored when `noToolbar` is set.
+   */
+  quickFilters?: QuickFilter<T>[];
   /** Additional toolbar content (rendered on the start side of the toolbar). */
   toolbarStart?: ReactNode;
   /** Additional toolbar content (rendered on the end side of the toolbar). */
@@ -206,6 +229,7 @@ export function DataTable<T>({
   searchPlaceholder = "بحث...",
   statusOptions,
   statusField = "status",
+  quickFilters,
   toolbarStart,
   toolbarEnd,
   onExportCSV,
@@ -227,9 +251,10 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   const visibleColumns = useMemo(() => columns.filter((c) => !c.hidden), [columns]);
 
-  // --- Search / status filter (internal when noToolbar is false) ---
+  // --- Search / status / quick filters (internal when noToolbar is false) ---
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [activeQuick, setActiveQuick] = useState<Set<string>>(new Set());
   // Task #170 — pause typing while a 429 cooldown is active so we don't
   // fire a fresh request on every keystroke and keep getting throttled.
   const cooldown = useRateLimitCooldown();
@@ -255,8 +280,12 @@ export function DataTable<T>({
     if (!noToolbar && status && statusOptions) {
       out = out.filter((row) => String((row as any)[statusField] ?? "") === status);
     }
+    if (!noToolbar && quickFilters && activeQuick.size > 0) {
+      const active = quickFilters.filter((q) => activeQuick.has(q.key));
+      out = out.filter((row) => active.every((q) => q.predicate(row)));
+    }
     return out;
-  }, [data, search, status, noToolbar, searchableKeys, statusOptions, statusField]);
+  }, [data, search, status, activeQuick, noToolbar, searchableKeys, statusOptions, statusField, quickFilters]);
 
   // --- Sort ---
   const { sortedData, sortState, handleSort } = useSortedData<T>(filteredData ?? []);
@@ -391,13 +420,39 @@ export function DataTable<T>({
                 </SelectContent>
               </Select>
             )}
-            {(search || status) && (
+            {quickFilters && quickFilters.length > 0 && quickFilters.map((q) => {
+              const on = activeQuick.has(q.key);
+              return (
+                <Button
+                  key={q.key}
+                  type="button"
+                  variant={on ? "default" : "outline"}
+                  size="sm"
+                  aria-pressed={on}
+                  onClick={() => {
+                    setActiveQuick((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(q.key)) next.delete(q.key);
+                      else next.add(q.key);
+                      return next;
+                    });
+                    setCurrentPage(1);
+                  }}
+                  className="gap-1"
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  {q.label}
+                </Button>
+              );
+            })}
+            {(search || status || activeQuick.size > 0) && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setSearch("");
                   setStatus("");
+                  setActiveQuick(new Set());
                   setCurrentPage(1);
                 }}
                 className="gap-1"

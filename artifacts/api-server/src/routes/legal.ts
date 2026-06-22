@@ -173,15 +173,16 @@ router.get("/contracts", authorize({ feature: "legal.contracts", action: "list" 
   try {
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض العقود المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     // legal_contracts has no branchId column → disableBranchScope. The helper
     // still centralises the company predicate, honours the multi-company
     // picker (?companyIds=), and applies the soft-delete filter.
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params } = buildScopedWhere(scope, filters, {
-      disableBranchScope: true,
-      softDeleteColumn: '"deletedAt"',
-    });
+    const { where: baseWhere, params } = buildScopedWhere(scope, filters,
+      showDeleted ? { disableBranchScope: true } : { disableBranchScope: true, softDeleteColumn: '"deletedAt"' });
     let where = baseWhere;
+    if (showDeleted) where += ` AND "deletedAt" IS NOT NULL`;
     if (status) { params.push(status); where += ` AND status = $${params.length}`; }
     const rows = await rawQuery<Record<string, unknown>>(`SELECT *, ("endDate"::date - CURRENT_DATE) AS "daysToExpiry" FROM legal_contracts WHERE ${where} ORDER BY id DESC LIMIT 500`, params);
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -493,6 +494,19 @@ router.delete("/contracts/:id", authorize({ feature: "legal.contracts", action: 
   } catch (err) { handleRouteError(err, res, "Delete contract error:"); }
 });
 
+// #2713 (تعميم) — استرجاع عقد محذوف ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/contracts/:id/restore", authorize({ feature: "legal.contracts", action: "delete", resource: { table: "legal_contracts", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE legal_contracts SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد عقد محذوف بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "legal_contracts", entityId: id }).catch((e) => logger.error(e, "legal background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "legal.contract.restored", entity: "legal_contracts", entityId: id }).catch((e) => logger.error(e, "legal background task failed"));
+    res.json({ message: "تم استرجاع العقد" });
+  } catch (err) { handleRouteError(err, res, "Restore contract error:"); }
+});
+
 // ---------------------------------------------------------------------------
 // Lifecycle endpoints: renew and terminate
 // ---------------------------------------------------------------------------
@@ -632,13 +646,14 @@ router.get("/cases", authorize({ feature: "legal.cases", action: "list" }), asyn
   try {
     const scope = req.scope!;
     const { status } = req.query as Record<string, string | undefined>;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض القضايا المحذوفة فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
     // legal_cases has no branchId column → disableBranchScope. See /contracts.
     const filters = parseScopeFilters(req);
-    const { where: baseWhere, params } = buildScopedWhere(scope, filters, {
-      disableBranchScope: true,
-      softDeleteColumn: '"deletedAt"',
-    });
+    const { where: baseWhere, params } = buildScopedWhere(scope, filters,
+      showDeleted ? { disableBranchScope: true } : { disableBranchScope: true, softDeleteColumn: '"deletedAt"' });
     let where = baseWhere;
+    if (showDeleted) where += ` AND "deletedAt" IS NOT NULL`;
     if (status) { params.push(status); where += ` AND status = $${params.length}`; }
     const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM legal_cases WHERE ${where} ORDER BY id DESC LIMIT 500`, params);
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
@@ -894,6 +909,19 @@ router.delete("/cases/:id", authorize({ feature: "legal.cases", action: "delete"
 
     res.json({ message: "تم حذف القضية بنجاح" });
   } catch (err) { handleRouteError(err, res, "Delete case error:"); }
+});
+
+// #2713 (تعميم) — استرجاع قضية محذوفة ناعمًا (سلة المحذوفات). صلاحية حذف + Audit.
+router.post("/cases/:id/restore", authorize({ feature: "legal.cases", action: "delete", resource: { table: "legal_cases", idParam: "id" } }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE legal_cases SET "deletedAt"=NULL WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا توجد قضية محذوفة بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "restore", entity: "legal_cases", entityId: id }).catch((e) => logger.error(e, "legal background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "legal.case.restored", entity: "legal_cases", entityId: id }).catch((e) => logger.error(e, "legal background task failed"));
+    res.json({ message: "تم استرجاع القضية" });
+  } catch (err) { handleRouteError(err, res, "Restore case error:"); }
 });
 
 /** Close a legal case — cancels all outstanding obligations and emits event */

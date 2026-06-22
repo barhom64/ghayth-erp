@@ -12,6 +12,7 @@ import { useRateLimitCooldown } from "@/hooks/use-rate-limit-cooldown";
 import { formatDateAr } from "@/lib/formatters";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FormShell } from "@workspace/ui-core";
 import {
@@ -20,7 +21,7 @@ import {
   Trophy, Newspaper, Mail, CheckCircle2, Clock
 } from "lucide-react";
 
-type ViewType = "login" | "forgot";
+type ViewType = "login" | "forgot" | "twofa";
 
 interface Announcement {
   id: number;
@@ -239,6 +240,11 @@ export default function Login() {
   const [currentView, setCurrentView] = useState<ViewType>("login");
 
   const [loginError, setLoginError] = useState("");
+  // #2712 (1ب) — خطوة المصادقة الثنائية بعد كلمة المرور.
+  const [pendingToken, setPendingToken] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [useBackupCode, setUseBackupCode] = useState(false);
+  const [twoFactorError, setTwoFactorError] = useState("");
 
   const cooldown = useRateLimitCooldown();
 
@@ -290,6 +296,7 @@ export default function Login() {
           method: "POST",
           body: JSON.stringify({ email: values.email, password: values.password }),
         });
+        if (data.twoFactorRequired) { setPendingToken(data.pendingToken); setTwoFactorCode(""); setUseBackupCode(false); setTwoFactorError(""); setCurrentView("twofa"); return; }
         setNativeTokens(data.accessToken, data.refreshToken);
         login(data.assignments);
       } else {
@@ -297,10 +304,28 @@ export default function Login() {
           method: "POST",
           body: JSON.stringify({ email: values.email, password: values.password }),
         });
+        if (data.twoFactorRequired) { setPendingToken(data.pendingToken); setTwoFactorCode(""); setUseBackupCode(false); setTwoFactorError(""); setCurrentView("twofa"); return; }
         login(data.assignments);
       }
     } catch (err: any) {
       setLoginError(err.message || "بيانات الدخول غير صحيحة");
+    }
+  };
+
+  // #2712 (1ب) — يكمل الدخول لمن فعّل 2FA: رمز TOTP أو رمز احتياطي.
+  const handleVerify2fa = async (e?: { preventDefault?: () => void }) => {
+    e?.preventDefault?.();
+    setTwoFactorError("");
+    const value = twoFactorCode.trim();
+    if (!value) return;
+    const body = useBackupCode ? { pendingToken, backupCode: value } : { pendingToken, token: value };
+    try {
+      const path = isNativeAuth() ? "/auth/mobile/2fa/verify-login" : "/auth/2fa/verify-login";
+      const data = await apiFetch(path, { method: "POST", body: JSON.stringify(body) });
+      if (isNativeAuth()) setNativeTokens(data.accessToken, data.refreshToken);
+      login(data.assignments);
+    } catch (err: any) {
+      setTwoFactorError(err.message || "رمز التحقق غير صحيح");
     }
   };
 
@@ -525,6 +550,59 @@ export default function Login() {
                     )}
                   </div>
                 </FormShell>
+              </>
+            ) : currentView === "twofa" ? (
+              <>
+                <div className="mb-8 text-center">
+                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 shadow-lg bg-status-info-surface border border-status-info-surface">
+                    <ShieldCheck className="h-7 w-7 text-status-info-foreground" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900">التحقق بخطوتين</h2>
+                  <p className="text-muted-foreground text-sm mt-1">
+                    {useBackupCode ? "أدخل أحد الرموز الاحتياطية" : "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة"}
+                  </p>
+                </div>
+
+                <form onSubmit={handleVerify2fa} className="space-y-5">
+                  {twoFactorError && (
+                    <Alert className="border-status-error-surface bg-status-error-surface text-end">
+                      <AlertCircle className="h-4 w-4 text-status-error" />
+                      <AlertDescription className="text-status-error-foreground text-sm">{twoFactorError}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div>
+                    <Label htmlFor="twofa-code" className="text-status-neutral-foreground font-medium text-sm">
+                      {useBackupCode ? "الرمز الاحتياطي" : "رمز التحقق"}
+                    </Label>
+                    <Input
+                      id="twofa-code"
+                      dir="ltr"
+                      inputMode={useBackupCode ? "text" : "numeric"}
+                      autoComplete="one-time-code"
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value)}
+                      className="mt-1 text-center tracking-widest"
+                      placeholder={useBackupCode ? "xxxxx-xxxxx" : "______"}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={!twoFactorCode.trim()} rateLimitAware>تحقّق ودخول</Button>
+                  <div className="flex justify-between items-center">
+                    <button
+                      type="button"
+                      onClick={() => { setUseBackupCode((v) => !v); setTwoFactorCode(""); setTwoFactorError(""); }}
+                      className="text-sm text-status-info-foreground hover:underline transition-colors"
+                    >
+                      {useBackupCode ? "استخدام رمز التطبيق" : "استخدام رمز احتياطي"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCurrentView("login"); setPendingToken(""); setTwoFactorCode(""); setTwoFactorError(""); setUseBackupCode(false); }}
+                      className="text-sm text-muted-foreground hover:underline transition-colors"
+                    >
+                      رجوع
+                    </button>
+                  </div>
+                </form>
               </>
             ) : (
               <>

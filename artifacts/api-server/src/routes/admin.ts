@@ -429,13 +429,12 @@ router.delete("/users/:id", authorize({ feature: "admin", action: "update" }), a
         `DELETE FROM rbac_user_roles WHERE "userId"=$1 AND "companyId"=$2`,
         [id, scope.companyId]
       );
-      await tx.query(
-        `DELETE FROM employee_assignments ea
-         USING employees e
-         WHERE ea."employeeId" = e.id AND e.id = (SELECT "employeeId" FROM users WHERE id=$1)
-           AND ea."companyId"=$2`,
-        [id, scope.companyId]
-      );
+      // ملاحظة معمارية (مادة 4–9 + 18): هذا الإجراء «إلغاء وصول» لا «حذف موظف».
+      // إلغاء الوصول = سحب أدوار RBAC + إبطال الجلسات (أدناه). أما تكليفات الموظف
+      // (employee_assignments) فهي بيانات تشغيلية مملوكة لمسار الموارد البشرية،
+      // ولا يجوز لمسار الإدارة (خادم) أن يحذفها فيزيائيًا عبر حدود المسار. أي
+      // إنهاء خدمة فعلي يتولاه HR عبر تدفّقه الخاص، ويمكنه الاشتراك في الحدث
+      // المُصدَر أدناه (admin.user.deleted) للتفاعل ضمن اختصاصه.
       await tx.query(
         `UPDATE refresh_tokens SET "revokedAt" = NOW() WHERE "userId" = $1 AND "revokedAt" IS NULL`,
         [id]
@@ -615,30 +614,36 @@ router.post("/user-roles", authorize({ feature: "admin", action: "update" }), as
     }
     // Resolve the v2 role id; seed it from the predefined catalog if this company
     // doesn't have it yet, so assignment works on a fresh tenant (#1791).
-    let [roleRow] = await rawQuery<{ id: number; label: string }>(
-      `SELECT id, label_ar AS label FROM rbac_roles WHERE "companyId"=$1 AND role_key=$2 LIMIT 1`,
-      [scope.companyId, roleKey]
-    );
-    if (!roleRow) {
-      const def = PREDEFINED_ROLES.find((r) => r.roleKey === roleKey);
-      if (!def) { throw new ValidationError("دور غير معروف"); }
-      await rawExecute(
-        `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
-         VALUES ($1,$2,$3,$4,'#3b82f6',true)
-         ON CONFLICT ("companyId", role_key) DO NOTHING`,
-        [scope.companyId, def.roleKey, def.label, def.level]
-      );
-      [roleRow] = await rawQuery<{ id: number; label: string }>(
+    // Seed + assignment run atomically: a failed assignment must not leave a
+    // half-applied grant. rawQuery/rawExecute join the ambient transaction
+    // (txStore) automatically, so the statements need no rewrite.
+    const roleRow = await withTransaction(async () => {
+      let [row] = await rawQuery<{ id: number; label: string }>(
         `SELECT id, label_ar AS label FROM rbac_roles WHERE "companyId"=$1 AND role_key=$2 LIMIT 1`,
         [scope.companyId, roleKey]
       );
-    }
-    if (!roleRow) { throw new ValidationError("دور غير معروف"); }
-    await rawExecute(
-      `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary) VALUES ($1,$2,$3,false)
-       ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
-      [userId, scope.companyId, roleRow.id]
-    );
+      if (!row) {
+        const def = PREDEFINED_ROLES.find((r) => r.roleKey === roleKey);
+        if (!def) { throw new ValidationError("دور غير معروف"); }
+        await rawExecute(
+          `INSERT INTO rbac_roles ("companyId", role_key, label_ar, level, color, is_system)
+           VALUES ($1,$2,$3,$4,'#3b82f6',true)
+           ON CONFLICT ("companyId", role_key) DO NOTHING`,
+          [scope.companyId, def.roleKey, def.label, def.level]
+        );
+        [row] = await rawQuery<{ id: number; label: string }>(
+          `SELECT id, label_ar AS label FROM rbac_roles WHERE "companyId"=$1 AND role_key=$2 LIMIT 1`,
+          [scope.companyId, roleKey]
+        );
+      }
+      if (!row) { throw new ValidationError("دور غير معروف"); }
+      await rawExecute(
+        `INSERT INTO rbac_user_roles ("userId", "companyId", role_id, is_primary) VALUES ($1,$2,$3,false)
+         ON CONFLICT ("userId","companyId",role_id) DO NOTHING`,
+        [userId, scope.companyId, row.id]
+      );
+      return row;
+    });
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,
       action: "update", entity: "roles", entityId: userId,
@@ -1907,7 +1912,7 @@ const onboardSchema = z.object({
   // migration 249) so activating a new employee is one choice, not a manual
   // role hunt. Explicit `roles` below still override / extend it.
   jobTitleId: z.coerce.number().int().positive().optional().nullable(),
-  salary: z.coerce.number().optional(),
+  salary: z.coerce.number().nonnegative().optional(),
   // account
   password: z.string().min(8, "كلمة المرور 8 أحرف على الأقل").optional(),
   // roles — one user, MULTIPLE roles, each with its own scope (#1413 core rule).

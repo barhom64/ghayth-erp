@@ -28,9 +28,9 @@ const sendCommunicationSchema = z.object({
   channel: z.string({ required_error: "قناة المراسلة مطلوبة" }).min(1, "قناة المراسلة مطلوبة"),
   toNumber: z.string().optional(),
   toEmail: z.string().optional(),
-  body: z.string({ required_error: "محتوى الرسالة مطلوب" }).min(1, "محتوى الرسالة مطلوب"),
+  body: z.string({ required_error: "محتوى الرسالة مطلوب" }).min(1, "محتوى الرسالة مطلوب").max(20000, "المحتوى طويل جدًا"),
   fromNumber: z.string().optional(),
-  subject: z.string().optional(),
+  subject: z.string().max(1000, "الموضوع طويل جدًا").optional(),
   relatedType: z.string().optional(),
   relatedId: z.coerce.number().optional(),
   attachments: z.array(z.any()).optional(),
@@ -50,9 +50,9 @@ const pushSubscribeSchema = z.object({
 });
 
 const updateLogSchema = z.object({
-  body: z.string().optional(),
-  content: z.string().optional(),
-  subject: z.string().optional(),
+  body: z.string().max(20000, "المحتوى طويل جدًا").optional(),
+  content: z.string().max(20000, "المحتوى طويل جدًا").optional(),
+  subject: z.string().max(1000, "الموضوع طويل جدًا").optional(),
   direction: z.string().optional(),
   status: z.string().optional(),
 });
@@ -315,24 +315,25 @@ publicWebhookRouter.post("/whatsapp/webhook", async (req, res): Promise<void> =>
       let relatedType: string | null = null;
       let relatedId: number | null = null;
 
+      // حدود المسارات (#2838): الاتصالات (خادم) تصنّف الوارد وتطلب فتح
+      // تذكرة/فرصة، لكن إنشاءهما وسياسة حالتهما الابتدائية يملكهما المسار
+      // القائد (الدعم/CRM) عبر عقد خدمته — لا كتابة مباشرة من الاتصالات.
       if (categorized.category === "support" || categorized.priority === "urgent") {
-        const { insertId } = await rawExecute(
-          `INSERT INTO support_tickets ("companyId",title,description,status,priority,"createdAt")
-           VALUES ($1,$2,$3,'open',$4,NOW())`,
-          [companyId, `WhatsApp: ${msgText.substring(0, 100)}`, `${msgText}\n\nمن: ${sender.name} (${from})`, categorized.priority]
-        );
-        assertInsert(insertId, "support_tickets");
+        const { createTicketFromInboundComm } = await import("./support.js");
+        relatedId = await createTicketFromInboundComm({
+          companyId,
+          title: `WhatsApp: ${msgText.substring(0, 100)}`,
+          description: `${msgText}\n\nمن: ${sender.name} (${from})`,
+          priority: categorized.priority,
+        });
         relatedType = "support_ticket";
-        relatedId = insertId;
       } else if (sender.type === "unknown" && categorized.category === "crm") {
-        const { insertId } = await rawExecute(
-          `INSERT INTO crm_opportunities ("companyId",title,stage,status,"createdAt")
-           VALUES ($1,$2,'lead','active',NOW())`,
-          [companyId, `WhatsApp Lead: ${sender.name}`]
-        );
-        assertInsert(insertId, "crm_opportunities");
+        const { createOpportunityFromInboundComm } = await import("./crm.js");
+        relatedId = await createOpportunityFromInboundComm({
+          companyId,
+          title: `WhatsApp Lead: ${sender.name}`,
+        });
         relatedType = "crm_opportunity";
-        relatedId = insertId;
       }
 
       const ackMessage = `مرحباً ${sender.name !== from ? sender.name : ""}، شكراً لتواصلك معنا. سنقوم بالرد عليك في أقرب وقت ممكن. رقم طلبك: WA-${msgId.substring(0, 8)}`;
@@ -1377,29 +1378,34 @@ router.post("/click-to-call", authorize({ feature: "communications", action: "cr
     }
 
     // Always log the attempt — the operator should see who tried what
-    // even when the backend gracefully fell back to a tel: link.
-    const { insertId: callPk } = await rawExecute(
-      `INSERT INTO pbx_calls
-         ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
-       VALUES ($1, $2, $3, $4, 'outbound', 0, $5, NOW())`,
-      [scope.companyId, callId, callerExt?.extension ?? `user:${scope.userId}`, body.target, mode === "pbx" ? "initiated" : "pending"],
-    );
-    assertInsert(callPk, "pbx_calls");
+    // even when the backend gracefully fell back to a tel: link. The call
+    // log + its message_log mirror are written atomically so a logged call
+    // can never be missing from the unified thread view.
+    const callPk = await withTransaction(async () => {
+      const { insertId } = await rawExecute(
+        `INSERT INTO pbx_calls
+           ("companyId", "callId", "callerNumber", "calledNumber", direction, duration, status, "createdAt")
+         VALUES ($1, $2, $3, $4, 'outbound', 0, $5, NOW())`,
+        [scope.companyId, callId, callerExt?.extension ?? `user:${scope.userId}`, body.target, mode === "pbx" ? "initiated" : "pending"],
+      );
+      assertInsert(insertId, "pbx_calls");
 
-    await rawExecute(
-      `INSERT INTO message_log
-         ("companyId", channel, direction, "fromAddress", "toAddress",
-          body, status, folder, "relatedType", "relatedId", "createdAt")
-       VALUES ($1, 'pbx', 'outbound', $2, $3, $4, 'logged', 'sent', $5, $6, NOW())`,
-      [
-        scope.companyId,
-        callerExt?.extension ?? `user:${scope.userId}`,
-        body.target,
-        `click-to-call · mode=${mode} · ${detail}`,
-        body.relatedType ?? (targetEmployeeId ? "employees" : null),
-        body.relatedId ?? targetEmployeeId,
-      ],
-    );
+      await rawExecute(
+        `INSERT INTO message_log
+           ("companyId", channel, direction, "fromAddress", "toAddress",
+            body, status, folder, "relatedType", "relatedId", "createdAt")
+         VALUES ($1, 'pbx', 'outbound', $2, $3, $4, 'logged', 'sent', $5, $6, NOW())`,
+        [
+          scope.companyId,
+          callerExt?.extension ?? `user:${scope.userId}`,
+          body.target,
+          `click-to-call · mode=${mode} · ${detail}`,
+          body.relatedType ?? (targetEmployeeId ? "employees" : null),
+          body.relatedId ?? targetEmployeeId,
+        ],
+      );
+      return insertId;
+    });
 
     void emitEvent({
       companyId: scope.companyId, userId: scope.userId,

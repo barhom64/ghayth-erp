@@ -59,27 +59,27 @@ interface CorrespondenceStatsRow {
 }
 
 const respondSchema = z.object({
-  subject: z.string().optional(),
-  content: z.string().optional(),
-  notes: z.string().optional(),
+  subject: z.string().max(1000, "الموضوع طويل جدًا").optional(),
+  content: z.string().max(20000, "المحتوى طويل جدًا").optional(),
+  notes: z.string().max(5000, "الملاحظات طويلة جدًا").optional(),
 });
 
 const patchCorrespondenceSchema = z.object({
-  subject: z.string().optional(),
-  content: z.string().optional(),
+  subject: z.string().max(1000, "الموضوع طويل جدًا").optional(),
+  content: z.string().max(20000, "المحتوى طويل جدًا").optional(),
   senderName: z.string().optional(),
   senderOrg: z.string().optional(),
   recipientName: z.string().optional(),
   recipientOrg: z.string().optional(),
   channel: z.string().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(5000, "الملاحظات طويلة جدًا").optional(),
   branchId: z.coerce.number().optional(),
 });
 
 const createSchema = z.object({
   direction: z.enum(["outgoing", "incoming"]),
-  subject: z.string().min(1, "الموضوع مطلوب"),
-  content: z.string().optional(),
+  subject: z.string().min(1, "الموضوع مطلوب").max(1000, "الموضوع طويل جدًا"),
+  content: z.string().max(20000, "المحتوى طويل جدًا").optional(),
   entityType: z.string().optional(),
   entityId: z.coerce.number().optional(),
   senderName: z.string().optional(),
@@ -88,7 +88,7 @@ const createSchema = z.object({
   recipientOrg: z.string().optional(),
   channel: z.string().optional(),
   branchId: z.coerce.number().optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(5000, "الملاحظات طويلة جدًا").optional(),
   attachments: z.array(z.any()).optional(),
 });
 

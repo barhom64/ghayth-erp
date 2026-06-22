@@ -215,8 +215,8 @@ const createTransportSchema = z.object({
   toLocation: z.string(),
   vehicleId: z.coerce.number().optional(),
   driverId: z.coerce.number().optional(),
-  capacity: z.coerce.number().optional(),
-  pilgrimCount: z.coerce.number().optional(),
+  capacity: z.coerce.number().nonnegative("السعة يجب ألا تكون سالبة").optional(),
+  pilgrimCount: z.coerce.number().nonnegative("عدد المعتمرين يجب ألا يكون سالبًا").optional(),
   cost: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
@@ -263,6 +263,9 @@ const patchPackageSchema = z.object({
   includesZiyarat: z.boolean().optional(),
   duration: z.coerce.number().optional(),
   description: z.string().optional(),
+  // #2718 — قفل تعارض اختياري: النسخة المعروفة للعميل وقت الفتح. لا يكسر
+  // النداءات التي لا ترسله (opt-in)؛ إن أُرسل وتغيّر السجل → 409.
+  updatedAt: z.string().optional(),
 });
 
 // Lets the reassign modal (pilgrim-detail.tsx) ship an empty string
@@ -320,21 +323,21 @@ const columnMappingSchema = z.record(z.string(), z.string()).optional();
 
 const importPreviewSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات المعاينة غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات المعاينة غير مكتملة").max(5000, "عدد صفوف المعاينة يتجاوز الحدّ المسموح (5000)"),
   fileType: z.string().optional(),
   columnMapping: columnMappingSchema,
 });
 
 const importMutamersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة").max(5000, "عدد صفوف الاستيراد يتجاوز الحدّ المسموح (5000)"),
   fileName: z.string().trim().optional(),
   columnMapping: columnMappingSchema,
 });
 
 const importVouchersSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة").max(5000, "عدد صفوف الاستيراد يتجاوز الحدّ المسموح (5000)"),
   fileName: z.string().trim().optional(),
   /** Cash box that will fund the NUSK supplier payment (gap #2). */
   treasuryId: z.coerce.number().int().positive().optional().nullable(),
@@ -356,7 +359,7 @@ const importVouchersSchema = z.object({
 
 const importSchema = z.object({
   seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة"),
+  rows: z.array(z.any()).min(1, "بيانات الاستيراد غير مكتملة").max(5000, "عدد صفوف الاستيراد يتجاوز الحدّ المسموح (5000)"),
   fileType: z.string().optional(),
   fileName: z.string().optional(),
 });
@@ -394,8 +397,8 @@ const patchTransportSchema = z.object({
   toLocation: z.string().optional(),
   vehicleId: z.coerce.number().optional(),
   driverId: z.coerce.number().optional(),
-  capacity: z.coerce.number().optional(),
-  pilgrimCount: z.coerce.number().optional(),
+  capacity: z.coerce.number().nonnegative("السعة يجب ألا تكون سالبة").optional(),
+  pilgrimCount: z.coerce.number().nonnegative("عدد المعتمرين يجب ألا يكون سالبًا").optional(),
   cost: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
@@ -439,7 +442,9 @@ const createPenaltySchema = z.object({
   agentId: z.coerce.number().optional().nullable(),
   seasonId: z.coerce.number().optional().nullable(),
   type: z.string().optional(),
-  amount: z.coerce.number().optional(),
+  // F9-B3b: لا جزاء بمبلغ سالب. المعالج يسمح بـ0 (مسوّدة) ويُرحّل فقط إن >0،
+  // والإعفاء تدفّق عكس مستقل — فـ nonnegative يحفظ سلوك الصفر ويرفض السالب فقط.
+  amount: z.coerce.number().nonnegative("مبلغ الجزاء لا يكون سالبًا").optional(),
   reason: z.string().optional().nullable(),
   status: z.string().optional(),
 });
@@ -607,6 +612,21 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
     const b = zodParse(patchSeasonSchema.safeParse(req.body));
+    // re-validate date ordering against the effective (merged) values:
+    // patchSeasonSchema lets startDate/endDate change independently, so a partial
+    // update must not place startDate after endDate (createSeasonSchema enforces this).
+    if (b.startDate !== undefined || b.endDate !== undefined) {
+      const [curDates] = await rawQuery<{ startDate: string; endDate: string }>(
+        `SELECT "startDate"::text AS "startDate", "endDate"::text AS "endDate" FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
+        [id, scope.companyId],
+      );
+      if (!curDates) throw new NotFoundError("الموسم غير موجود");
+      const effStart = b.startDate ?? curDates.startDate;
+      const effEnd = b.endDate ?? curDates.endDate;
+      if (effEnd < effStart) {
+        throw new ValidationError("تاريخ النهاية يجب أن يكون بعد تاريخ البداية", { field: "endDate" });
+      }
+    }
     let originalStatus: string | undefined;
     if (b.status !== undefined) {
       const [existing] = await rawQuery<Record<string, unknown>>(`SELECT status FROM umrah_seasons WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
@@ -663,7 +683,12 @@ router.patch("/seasons/:id", authorize({ feature: "umrah", action: "update" }), 
 router.get("/agents", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery(`SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`, [scope.companyId]);
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض الوكلاء المحذوفين فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
+    const sql = showDeleted
+      ? `SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NOT NULL ORDER BY name LIMIT 500`
+      : `SELECT * FROM umrah_agents WHERE "companyId"=$1 AND "deletedAt" IS NULL ORDER BY name LIMIT 500`;
+    const rows = await rawQuery(sql, [scope.companyId]);
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "List agents error"); }
 });
@@ -832,6 +857,19 @@ router.delete("/agents/:id", authorize({ feature: "umrah", action: "delete" }), 
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.deleted", entity: "umrah_agents", entityId: id, details: JSON.stringify({ name: existing.name }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete agent error"); }
+});
+
+// #2713 (تعميم) — استرجاع وكيل محذوف ناعمًا (سلة المحذوفات). صلاحية تعديل + Audit.
+router.post("/agents/:id/restore", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE umrah_agents SET "deletedAt"=NULL, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد وكيل محذوف بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "restore", entity: "umrah_agents", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.agent.restored", entity: "umrah_agents", entityId: id, details: JSON.stringify({ restored: true }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Restore agent error"); }
 });
 
 // BILL-MAIN P3 (#2080) — explicit-confirmation linker that ties a main
@@ -1036,9 +1074,21 @@ router.patch("/packages/:id", authorize({ feature: "umrah", action: "update" }),
     }
     if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
     sets.push(`"updatedAt"=NOW()`);
-    params.push(id); params.push(scope.companyId);
-    const { affectedRows } = await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`, params);
-    if (!affectedRows) throw new NotFoundError("الباقة غير موجودة");
+    // #2718 — قفل تعارض اختياري: إن أرسل العميل النسخة المعروفة (updatedAt)
+    // نفرضها في الشرط؛ اختلافها = عدّل مستخدم آخر السجل بيننا → 409.
+    let versionClause = "";
+    if (b.updatedAt) { params.push(b.updatedAt); versionClause = ` AND "updatedAt"=$${params.length}`; }
+    params.push(id); const idIdx = params.length;
+    params.push(scope.companyId); const coIdx = params.length;
+    const { affectedRows } = await rawExecute(`UPDATE umrah_packages SET ${sets.join(",")} WHERE id=$${idIdx} AND "companyId"=$${coIdx} AND "deletedAt" IS NULL${versionClause}`, params);
+    if (!affectedRows) {
+      // فرّق «غير موجود» عن «تعارض نسخة»: أعد الفحص بلا شرط النسخة.
+      const [stillThere] = await rawQuery<{ id: number }>(`SELECT id FROM umrah_packages WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
+      if (stillThere && b.updatedAt) {
+        throw new ConflictError("عُدّلت الباقة من مستخدم آخر منذ فتحك لها. أعد التحميل ثم احفظ.", { fix: "أعد تحميل الصفحة لرؤية آخر نسخة قبل الحفظ" });
+      }
+      throw new NotFoundError("الباقة غير موجودة");
+    }
     const [row] = await rawQuery(`SELECT * FROM umrah_packages WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`, [id, scope.companyId]);
     createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_packages", entityId: id, after: b }).catch((e) => logger.error(e, "umrah background task failed"));
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.package.updated", entity: "umrah_packages", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah background task failed"));
@@ -1072,7 +1122,11 @@ router.get("/pilgrims", authorize({ feature: "umrah", action: "list" }), async (
   try {
     const scope = req.scope!;
     const { seasonId, status, agentId, groupId, nationality, flight, arrivalDate, departureDate, visaExpiringWithin, search, page = "1", limit = "20" } = req.query as Record<string, string | undefined>;
-    let where = `p."companyId"=$1 AND p."deletedAt" IS NULL`;
+    // #2713 (تعميم) — سلة المحذوفات: deleted=true يعرض المعتمرين المحذوفين فقط.
+    const showDeleted = (req.query as Record<string, string | undefined>).deleted === "true";
+    let where = showDeleted
+      ? `p."companyId"=$1 AND p."deletedAt" IS NOT NULL`
+      : `p."companyId"=$1 AND p."deletedAt" IS NULL`;
     const params: unknown[] = [scope.companyId];
     if (seasonId) { params.push(seasonId); where += ` AND p."seasonId"=$${params.length}`; }
     if (status) { params.push(status); where += ` AND p.status=$${params.length}`; }
@@ -1668,6 +1722,19 @@ router.delete("/pilgrims/:id", authorize({ feature: "umrah", action: "delete" })
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.deleted", entity: "umrah_pilgrims", entityId: id, details: JSON.stringify({ fullName: existing.fullName }) }).catch((e) => logger.error(e, "umrah background task failed"));
     res.json({ success: true });
   } catch (err) { handleRouteError(err, res, "Delete pilgrim error"); }
+});
+
+// #2713 (تعميم) — استرجاع معتمر محذوف ناعمًا (سلة المحذوفات). صلاحية تعديل + Audit.
+router.post("/pilgrims/:id/restore", authorize({ feature: "umrah", action: "update" }), async (req, res): Promise<void> => {
+  try {
+    const scope = req.scope!;
+    const id = parseId(req.params.id, "id");
+    const { affectedRows } = await rawExecute(`UPDATE umrah_pilgrims SET "deletedAt"=NULL, "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NOT NULL`, [id, scope.companyId]);
+    if (!affectedRows) throw new NotFoundError("لا يوجد معتمر محذوف بهذا المعرّف");
+    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "restore", entity: "umrah_pilgrims", entityId: id }).catch((e) => logger.error(e, "umrah background task failed"));
+    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.pilgrim.restored", entity: "umrah_pilgrims", entityId: id, details: JSON.stringify({ restored: true }) }).catch((e) => logger.error(e, "umrah background task failed"));
+    res.json({ success: true });
+  } catch (err) { handleRouteError(err, res, "Restore pilgrim error"); }
 });
 
 router.post("/import/preview", authorize({ feature: "umrah", action: "create" }), async (req, res): Promise<void> => {
@@ -3705,19 +3772,10 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       sets.push(`"${field}" = $${params.length}`);
       auditAfter[field] = value;
     }
-    if (sets.length > 0) {
-      await rawExecute(
-        `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
-        params,
-      );
-    }
-
-    // Overstay-penalty knobs + §8 finance-hygiene knobs live in
-    // system_settings (not companies). Same omit/null/value semantics
-    // as the FK fields above. We UPSERT when the value is non-null,
-    // DELETE the company-scoped row when the value is explicitly null
-    // — clearing reverts to the global default (key with
-    // companyId IS NULL).
+    // The companies FK fields + the system_settings knobs are one logical
+    // settings save across two tables — write them atomically so a partial
+    // failure can't leave the page half-applied. rawQuery joins the ambient
+    // transaction (txStore).
     const settingsFields: Array<[string, number | string | boolean | null | undefined]> = [
       ["umrah.overstay_daily_penalty", b.umrahOverstayDailyPenalty],
       ["umrah.overstay_tier_days",     b.umrahOverstayTierDays],
@@ -3736,30 +3794,45 @@ router.patch("/settings", authorize({ feature: "umrah", action: "update" }), asy
       "umrah_vat_mode":               "umrahVatMode",
       "commission_via_hr":            "commissionViaHr",
     };
-    for (const [key, value] of settingsFields) {
-      if (value === undefined) continue;
-      if (value === null) {
+    await withTransaction(async () => {
+      if (sets.length > 0) {
         await rawExecute(
-          `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
-          [key, scope.companyId],
+          `UPDATE companies SET ${sets.join(", ")} WHERE id = $1`,
+          params,
         );
-      } else {
-        // UPSERT — UPDATE first; INSERT only if no row exists.
-        // Matches the pattern in routes/settings.ts so a future
-        // shared helper can replace both call sites.
-        const result = await rawExecute(
-          `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
-          [String(value), key, scope.companyId],
-        );
-        if (!result.affectedRows) {
-          await rawExecute(
-            `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
-            [key, String(value), scope.companyId],
-          );
-        }
       }
-      auditAfter[keyToAuditField[key]!] = value;
-    }
+
+      // Overstay-penalty knobs + §8 finance-hygiene knobs live in
+      // system_settings (not companies). Same omit/null/value semantics
+      // as the FK fields above. We UPSERT when the value is non-null,
+      // DELETE the company-scoped row when the value is explicitly null
+      // — clearing reverts to the global default (key with
+      // companyId IS NULL).
+      for (const [key, value] of settingsFields) {
+        if (value === undefined) continue;
+        if (value === null) {
+          await rawExecute(
+            `DELETE FROM system_settings WHERE key = $1 AND "companyId" = $2 AND "branchId" IS NULL`,
+            [key, scope.companyId],
+          );
+        } else {
+          // UPSERT — UPDATE first; INSERT only if no row exists.
+          // Matches the pattern in routes/settings.ts so a future
+          // shared helper can replace both call sites.
+          const result = await rawExecute(
+            `UPDATE system_settings SET value=$1, "updatedAt"=NOW() WHERE key=$2 AND "companyId"=$3 AND "branchId" IS NULL`,
+            [String(value), key, scope.companyId],
+          );
+          if (!result.affectedRows) {
+            await rawExecute(
+              `INSERT INTO system_settings (key, value, "companyId") VALUES ($1, $2, $3)`,
+              [key, String(value), scope.companyId],
+            );
+          }
+        }
+        auditAfter[keyToAuditField[key]!] = value;
+      }
+    });
 
     createAuditLog({
       companyId: scope.companyId, userId: scope.userId,

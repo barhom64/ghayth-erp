@@ -15,8 +15,8 @@
 //   • The actual MONTHLY JOURNAL is posted by
 //     POST /finance/fixed-assets/:id/depreciate (~line 1352) and the batch
 //     POST /finance/fixed-assets/depreciate-all — two legs:
-//        DR depreciationAccountCode (6100)      assetId
-//        CR accDepreciationAccountCode (1590)   assetId
+//        DR depreciationAccountCode (5790)      assetId
+//        CR accDepreciationAccountCode (1290)   assetId
 //     equal amounts ⇒ balanced, both stamped with assetId.
 //
 // TESTABILITY: `calcDepreciationAmount` is NOT exported and the journal posting
@@ -61,8 +61,8 @@ function straightLineSchedule(opts: {
     salvageValue,
     usefulLifeYears,
     purchaseDate,
-    depreciationAccountCode = "6100",
-    accDepreciationAccountCode = "1590",
+    depreciationAccountCode = "5790",
+    accDepreciationAccountCode = "1290",
   } = opts;
   const months = usefulLifeYears * 12;
   const depreciable = purchaseCost - salvageValue;
@@ -135,8 +135,8 @@ describe("Scenario 5 — Depreciation: balanced periodic journal lines carrying 
     const p = schedule[0];
     const dr = p.lines.find((l) => l.debit > 0)!;
     const cr = p.lines.find((l) => l.credit > 0)!;
-    expect(dr.accountCode).toBe("6100");
-    expect(cr.accountCode).toBe("1590");
+    expect(dr.accountCode).toBe("5790");
+    expect(cr.accountCode).toBe("1290");
   });
 
   it("accumulated depreciation converges to (cost − salvage); book value lands at salvage", () => {
@@ -159,11 +159,11 @@ describe("Scenario 5 — Depreciation posting path: static contract (real route,
   it("monthly depreciate route posts a balanced two-leg entry, both legs stamped assetId", () => {
     // DR depreciation expense …
     expect(ALGO_ROUTE).toMatch(
-      /accountCode:\s*\(asset\.depreciationAccountCode[^)]*\)\s*\?\?\s*"6100",\s*debit:\s*depAmount,\s*credit:\s*0[\s\S]{0,80}assetId:\s*asset\.id/,
+      /accountCode:\s*\(asset\.depreciationAccountCode[^)]*\)\s*\?\?\s*"5790",\s*debit:\s*depAmount,\s*credit:\s*0[\s\S]{0,80}assetId:\s*asset\.id/,
     );
     // … CR accumulated depreciation, same amount ⇒ balanced.
     expect(ALGO_ROUTE).toMatch(
-      /accountCode:\s*\(asset\.accDepreciationAccountCode[^)]*\)\s*\?\?\s*"1590",\s*debit:\s*0,\s*credit:\s*depAmount[\s\S]{0,90}assetId:\s*asset\.id/,
+      /accountCode:\s*\(asset\.accDepreciationAccountCode[^)]*\)\s*\?\?\s*"1290",\s*debit:\s*0,\s*credit:\s*depAmount[\s\S]{0,90}assetId:\s*asset\.id/,
     );
   });
 

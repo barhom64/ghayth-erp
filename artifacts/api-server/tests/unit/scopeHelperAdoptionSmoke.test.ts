@@ -67,6 +67,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // companyId. Manual scope is correct here.
   "communications-sms-webhook.ts",
   "correspondence.ts",
+  // customFields.ts: per-company custom-field schema (#2719) — definitions +
+  // EAV values. Point lookups / upserts keyed by (companyId, entityType,
+  // fieldKey) / (companyId, id); the table is newer than the schema dump so it
+  // carries no resource guard (mirrors employee_tracking_policies). Manual
+  // companyId scoping is correct here — not a branch list cascade.
+  "customFields.ts",
   "digital-signature.ts",
   "documents.ts",
   // employeeTrackingPolicy.ts: Tracking Eligibility Contract control plane —
@@ -80,6 +86,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   "execDashboard.ts",
   "export.ts",
   "finance-algorithms.ts",
+  // finance-cash-in-transit.ts: #2714 clearing-account transfers (2-phase JE
+  // via the existing engine). List/lookup/confirm keyed by (companyId, id /
+  // status); point-lookup + per-row state advance, not a branch list cascade.
+  // Manual companyId scoping is correct here (mirrors finance-memory.ts).
+  "finance-cash-in-transit.ts",
   // finance-amortization.ts: FIN-TIME-SPREADING (#2247) prepaid-amortization
   // CRUD + run trigger. List/insert/run keyed by (companyId, …) — point
   // lookups + a per-company recognition run, not a branch list cascade.
@@ -112,6 +123,23 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // correct here (mirrors parties.ts/org.ts), buildScopedWhere targets
   // company/branch list cascades which this surface intentionally isn't.
   "finance-memory.ts",
+  // finance-recurring-invoices.ts: customer recurring-invoice templates +
+  // run/run-due (generation reuses financialEngine.postSalesInvoice). List/
+  // lookup/run keyed by (companyId, id); point-lookup + per-company due run,
+  // not a branch list cascade. Manual companyId scoping is correct here.
+  "finance-recurring-invoices.ts",
+  // finance-pricing.ts: إحياء «قواعد التسعير» (مخطّط 171 المُطبّع). CRUD نقطي على
+  // pricing_rules/conditions/actions، كلّها مفلترة بـ scope.companyId داخل
+  // transactions (point-lookup/per-company، يطابق finance-amortization.ts؛ لا
+  // cascade فروع). معتمد بمراجعة المجلس «يُعتمد» + تحقّق مستقلّ.
+  "finance-pricing.ts",
+  // fleet-inspections.ts: vehicle inspection + photos (متابعة النقل بالصور,
+  // PR1). Mostly point operations keyed by (companyId, id) — get/update/delete/
+  // approve/reject a single inspection or photo — plus one filtered list. The
+  // company predicate is a literal `"companyId" = $N` per tenant-point-lookup;
+  // buildScopedWhere targets multi-company branch list cascades which this
+  // surface intentionally isn't. Manual scope.companyId is correct here.
+  "fleet-inspections.ts",
   // fleet-optimizer.ts: TA-T18-VRP Phase 2 — five short handlers that
   // each touch a single tenant-scoped table with literal `"companyId" =
   // $N`; the buildScopedWhere helper adds noise without changing
@@ -213,13 +241,33 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // schedule template. List/lookup keyed on (companyId, id) — same shape as
   // the other transport surfaces; buildScopedWhere has no branch cascade to add.
   "transport-route-patterns.ts",
+  // umrah-accommodation.ts: U-07 Phase 4 split — 9 accommodation routes (hotels /
+  // room-blocks / room-allocations) carved verbatim out of umrah-entities.ts.
+  // Point lookups + per-tenant CRUD keyed on (companyId, id); inherits the same
+  // allowlist justification as the parent umrah-entities.ts.
+  "umrah-accommodation.ts",
+  // umrah-commission.ts: U-07 Phase 5 split — 8 commission-plan / calculation
+  // routes carved verbatim out of umrah-entities.ts. Point lookups + per-tenant
+  // CRUD keyed on (companyId, id); inherits the same allowlist justification as
+  // the parent umrah-entities.ts.
+  "umrah-commission.ts",
   "umrah-entities.ts",
+  // umrah-sub-agents.ts: U-07 Phase 6 split — 9 sub-agents CRUD + linking routes
+  // carved verbatim out of umrah-entities.ts. Point lookups + per-tenant CRUD
+  // keyed on (companyId, id); inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-sub-agents.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
   // justification as the parent umrah-entities.ts (calendar/aggregate shape,
   // not list cascades).
   "umrah-journey-reports.ts",
+  // umrah-families.ts: U-07 Phase 2 split — 5 families CRUD routes carved
+  // verbatim out of umrah-entities.ts. Point lookups + per-tenant CRUD keyed
+  // on (companyId, id); inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-families.ts",
   "umrah.ts",
   "wiring-stubs.ts",
   "workspace.ts",
@@ -351,6 +399,9 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // disable + AUDITED location view). Point lookups/upserts keyed on the
       // caller's single active scope.companyId + a per-target gated location
       // view, not a multi-company list cascade. Allowlisted with justification.
+      // +3 total/manualOnly: this session's three new finance/settings route
+      // files ship with manual companyId scoping: routes/customFields.ts (#2719),
+      // routes/finance-cash-in-transit.ts (#2714), routes/finance-recurring-invoices.ts.
       // +1 total ONLY: routes/realtime.ts — SSE live-push stream. A single GET
       // that self-authenticates (EventSource can't set headers) and derives the
       // tenant from the active assignment by id; it holds an open stream rather
@@ -358,9 +409,30 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // manual companyId list-predicate (its lookup is keyed by assignment id).
       // Tenant isolation is enforced in realtimeHub (per-company buckets), not
       // a SQL predicate — so it counts under neither helperUsers nor manualOnly.
-      total: 130,
+      // +3 total/manualOnly: this session (customFields/finance-cash-in-transit/
+      // finance-recurring-invoices) + see entries above.
+      // +1 total/manualOnly: routes/fleet-inspections.ts (متابعة النقل بالصور,
+      // PR1) — vehicle inspection + photos CRUD, point ops keyed by
+      // (companyId, id) + one filtered list; allowlisted with justification
+      // (mirrors fleet-optimizer.ts, tenant-point-lookup, no branch cascade).
+      // +1 total/manualOnly: routes/finance-pricing.ts — إحياء «قواعد التسعير»
+      // (مخطّط 171 المُطبّع). CRUD نقطي + upserts على (companyId, id) داخل
+      // transactions، يطابق finance-amortization.ts؛ لا cascade فروع. allowlisted.
+      // +1 total/manualOnly: U-07 Phase 2 routes/umrah-families.ts — 5 families
+      // CRUD routes carved verbatim out of umrah-entities.ts. Same allowlist
+      // justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 4 routes/umrah-accommodation.ts — 9
+      // accommodation routes (hotels / room-blocks / allocations) carved verbatim
+      // out of umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 5 routes/umrah-commission.ts — 8
+      // commission-plan / calculation routes carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 6 routes/umrah-sub-agents.ts — 9
+      // sub-agents CRUD + linking routes carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      total: 139,
       helperUsers: 39,
-      manualOnly: 87,
+      manualOnly: 96,
     });
   });
 });
