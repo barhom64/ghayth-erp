@@ -17,6 +17,7 @@ import { SupplierContextCard } from "@/components/shared/supplier-context-card";
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
 import { LineAllocationPanel, type LineAllocation, deriveAllocationStatus, buildAllocationPayload } from "@/components/shared/line-allocation-panel";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 import { Select as LineTreatmentSelect, SelectContent as LTSC, SelectItem as LTSI, SelectTrigger as LTST, SelectValue as LTSV } from "@/components/ui/select";
 // #1945 — the line-treatment list + its expected accounting come from the
 // central finance model (mirrors the backend TREATMENT_PURPOSE; parity tested).
@@ -191,58 +192,80 @@ export default function PurchaseOrdersCreate() {
 
       <div className="mb-4">
         <Label className="text-base font-semibold">البنود</Label>
-        {items.map((item, idx) => (
-          <div key={idx} className="border rounded-lg p-3 mt-2">
-            <div className="grid grid-cols-4 gap-2 items-end">
-              <div>
-                <Label className="text-xs">المنتج</Label>
-                <ProductSelect
-                  value={item.productId}
-                  onChange={(v) => updateItem(idx, "productId", v)}
-                  placeholder="اختر من المخزون"
-                  allowCreate
-                  className="text-sm"
+        {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
+            بدل بطاقة لكل بند (المنتج/الكمية/سعر الوحدة أعمدة؛ معالجة البند
+            والتوجيه المحاسبي ولوحة الأبعاد عبر renderExpansion). */}
+        <div className="mt-2">
+          <LineItemsTable<(typeof items)[number]>
+            items={items}
+            minItems={1}
+            onAdd={addItem}
+            onRemove={removeItem}
+            addLabel="إضافة بند"
+            columns={[
+              {
+                header: "المنتج", className: "min-w-[10rem]",
+                render: (item, idx) => (
+                  <ProductSelect
+                    value={item.productId}
+                    onChange={(v) => updateItem(idx, "productId", v)}
+                    placeholder="اختر من المخزون"
+                    allowCreate
+                    className="text-sm"
+                  />
+                ),
+              },
+              {
+                header: "الكمية",
+                render: (item, idx) => (
+                  <NumberField label="الكمية" hideLabel className="w-24" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
+                ),
+              },
+              {
+                header: "سعر الوحدة",
+                render: (item, idx) => (
+                  <NumberField label="سعر الوحدة" hideLabel className="w-24" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
+                ),
+              },
+            ]}
+            renderExpansion={(item, idx) => (
+              <div className="space-y-2">
+                <div>
+                  <Label className="text-xs">معالجة البند (Line Treatment)</Label>
+                  <LineTreatmentSelect value={item.lineTreatment} onValueChange={(v) => updateItem(idx, "lineTreatment", v)}>
+                    <LTST className="text-sm"><LTSV /></LTST>
+                    <LTSC>
+                      {LINE_TREATMENTS.map((t) => (
+                        <LTSI key={t.value} value={t.value}>{t.label}</LTSI>
+                      ))}
+                    </LTSC>
+                  </LineTreatmentSelect>
+                  {/* #1945 — التوجيه المحاسبي المتوقع لهذا البند، مشتق من النموذج
+                      المركزي (مطابق لتوجيه الخادم عند الـ GRN). */}
+                  {(() => {
+                    const t = resolvePurchaseTreatment(item.lineTreatment);
+                    return (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        ⓘ التوجيه المحاسبي عند الـ GRN:{" "}
+                        {t ? `${t.hint}${t.capitalize ? " (رسملة — ميزانية)" : " (مصروف — قائمة الدخل)"}` : "يُحدَّد حسب نوع البند."}
+                      </p>
+                    );
+                  })()}
+                </div>
+                <LineAllocationPanel
+                  value={item.allocation ?? {}}
+                  onChange={(next) => {
+                    const updated = [...items];
+                    (updated[idx] as any).allocation = next;
+                    setItems(updated);
+                  }}
+                  status={deriveAllocationStatus(item.allocation ?? {})}
+                  required={false}
                 />
               </div>
-              <NumberField label="الكمية" value={item.quantity} onChange={(v) => updateItem(idx, "quantity", v)} placeholder="1" />
-              <NumberField label="سعر الوحدة" value={item.unitPrice} onChange={(v) => updateItem(idx, "unitPrice", v)} placeholder="0.00" />
-              <Button type="button" variant="destructive" size="sm" onClick={() => removeItem(idx)} disabled={items.length <= 1}>حذف</Button>
-            </div>
-            <div className="mt-2">
-              <Label className="text-xs">معالجة البند (Line Treatment)</Label>
-              <LineTreatmentSelect value={item.lineTreatment} onValueChange={(v) => updateItem(idx, "lineTreatment", v)}>
-                <LTST className="text-sm"><LTSV /></LTST>
-                <LTSC>
-                  {LINE_TREATMENTS.map((t) => (
-                    <LTSI key={t.value} value={t.value}>{t.label}</LTSI>
-                  ))}
-                </LTSC>
-              </LineTreatmentSelect>
-              {/* #1945 — التوجيه المحاسبي المتوقع لهذا البند، مشتق من النموذج
-                  المركزي (مطابق لتوجيه الخادم عند الـ GRN). */}
-              {(() => {
-                const t = resolvePurchaseTreatment(item.lineTreatment);
-                return (
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    ⓘ التوجيه المحاسبي عند الـ GRN:{" "}
-                    {t ? `${t.hint}${t.capitalize ? " (رسملة — ميزانية)" : " (مصروف — قائمة الدخل)"}` : "يُحدَّد حسب نوع البند."}
-                  </p>
-                );
-              })()}
-            </div>
-            <LineAllocationPanel
-              value={item.allocation ?? {}}
-              onChange={(next) => {
-                const updated = [...items];
-                (updated[idx] as any).allocation = next;
-                setItems(updated);
-              }}
-              status={deriveAllocationStatus(item.allocation ?? {})}
-              required={false}
-            />
-          </div>
-        ))}
-        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addItem}>+ إضافة بند</Button>
+            )}
+          />
+        </div>
       </div>
 
       <div className="bg-muted/50 p-4 rounded-md text-sm">
