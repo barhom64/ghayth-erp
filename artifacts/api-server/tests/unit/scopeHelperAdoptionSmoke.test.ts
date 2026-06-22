@@ -274,6 +274,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // generateStatement (engine). No list cascade for buildScopedWhere — inherits
   // the same allowlist justification as the parent umrah-entities.ts.
   "umrah-statements.ts",
+  // umrah-attachments.ts: U-07 Phase 10 split — 3 attachments routes (polymorphic
+  // document storage) carved verbatim out of umrah-entities.ts. Per-tenant point
+  // ops on the shared documents store keyed on (companyId, …) + a per-entityType
+  // owner-table whitelist; no list cascade for buildScopedWhere — inherits the
+  // same allowlist justification as the parent umrah-entities.ts.
+  "umrah-attachments.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -456,9 +462,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 9 routes/umrah-statements.ts — 2
       // read-only sub-agent statement routes (JSON + PDF) carved verbatim out of
       // umrah-entities.ts. Same allowlist justification as the parent.
-      total: 142,
+      // +1 total/manualOnly: U-07 Phase 10 routes/umrah-attachments.ts — 3
+      // attachments routes (polymorphic document storage) carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      total: 143,
       helperUsers: 39,
-      manualOnly: 99,
+      manualOnly: 100,
     });
   });
 });
