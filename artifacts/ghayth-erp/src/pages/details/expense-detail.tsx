@@ -22,6 +22,7 @@ import {
 } from "@/components/shared/detail-edit-delete-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { ActionHistory } from "@workspace/workflow-kit";
 import { FinancialDecisionPanel } from "@/components/shared/financial-decision-panel";
 import {
@@ -97,6 +98,56 @@ const expenseEditSchema = z.object({
   description: z.string().min(1, "الوصف مطلوب"),
 });
 type ExpenseEditForm = z.infer<typeof expenseEditSchema>;
+
+// Read-only journal-line columns for the linked-journal trace table. The
+// cell renderers reproduce the prior raw-<table> markup byte-for-byte (mono
+// account code + name, dimensions joined with " · ", and the exact
+// `Number(l?.debit||0) ? formatCurrency(...) : "-"` amount formatting) so the
+// GL display is unchanged — only the table shell is now the canonical DataTable.
+const JOURNAL_LINE_COLUMNS: DataTableColumn<any>[] = [
+  {
+    key: "account",
+    header: "الحساب",
+    sortable: false,
+    render: (l: any) => (
+      <>
+        <span className="font-mono text-muted-foreground">{l?.accountCode ?? "-"}</span>{" "}
+        <span className="text-status-neutral-foreground">{l?.accountName ?? ""}</span>
+      </>
+    ),
+  },
+  {
+    key: "dims",
+    header: "الأبعاد",
+    sortable: false,
+    className: "text-muted-foreground",
+    render: (l: any) => {
+      const dims = [
+        l?.vehicleId ? `مركبة #${l.vehicleId}` : null,
+        l?.costCenter ? `مركز: ${l.costCenter}` : null,
+        l?.projectId ? `مشروع #${l.projectId}` : null,
+        l?.project ? `مشروع: ${l.project}` : null,
+      ].filter(Boolean);
+      return dims.length ? dims.join(" · ") : "-";
+    },
+  },
+  {
+    key: "debit",
+    header: "مدين",
+    sortable: false,
+    align: "end",
+    className: "tabular-nums",
+    render: (l: any) => (Number(l?.debit || 0) ? formatCurrency(Number(l.debit)) : "-"),
+  },
+  {
+    key: "credit",
+    header: "دائن",
+    sortable: false,
+    align: "end",
+    className: "tabular-nums",
+    render: (l: any) => (Number(l?.credit || 0) ? formatCurrency(Number(l.credit)) : "-"),
+  },
+];
 
 export default function ExpenseDetail() {
   const [, params] = useRoute("/finance/expenses/:id");
@@ -659,50 +710,22 @@ export default function ExpenseDetail() {
               {lines.length === 0 ? (
                 <p className="text-xs text-muted-foreground">لا توجد بنود للقيد.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs" data-testid="lines-table">
-                    <thead>
-                      <tr className="border-b text-muted-foreground text-right">
-                        <th className="py-1.5 pe-2 font-medium">الحساب</th>
-                        <th className="py-1.5 px-2 font-medium">الأبعاد</th>
-                        <th className="py-1.5 px-2 font-medium text-left">مدين</th>
-                        <th className="py-1.5 ps-2 font-medium text-left">دائن</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines.map((l: any, i: number) => {
-                        const dims = [
-                          l?.vehicleId ? `مركبة #${l.vehicleId}` : null,
-                          l?.costCenter ? `مركز: ${l.costCenter}` : null,
-                          l?.projectId ? `مشروع #${l.projectId}` : null,
-                          l?.project ? `مشروع: ${l.project}` : null,
-                        ].filter(Boolean);
-                        return (
-                          <tr key={l?.id ?? i} className="border-b last:border-0">
-                            <td className="py-1.5 pe-2">
-                              <span className="font-mono text-muted-foreground">{l?.accountCode ?? "-"}</span>{" "}
-                              <span className="text-status-neutral-foreground">{l?.accountName ?? ""}</span>
-                            </td>
-                            <td className="py-1.5 px-2 text-muted-foreground">
-                              {dims.length ? dims.join(" · ") : "-"}
-                            </td>
-                            <td className="py-1.5 px-2 text-left tabular-nums">
-                              {Number(l?.debit || 0) ? formatCurrency(Number(l.debit)) : "-"}
-                            </td>
-                            <td className="py-1.5 ps-2 text-left tabular-nums">
-                              {Number(l?.credit || 0) ? formatCurrency(Number(l.credit)) : "-"}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="font-semibold">
-                        <td className="py-1.5 pe-2">الإجمالي</td>
-                        <td className="py-1.5 px-2" />
-                        <td className="py-1.5 px-2 text-left tabular-nums">{formatCurrency(totalDebit)}</td>
-                        <td className="py-1.5 ps-2 text-left tabular-nums">{formatCurrency(totalCredit)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div className="overflow-x-auto" data-testid="lines-table">
+                  <DataTable<any>
+                    columns={JOURNAL_LINE_COLUMNS}
+                    data={lines}
+                    rowKey={(l, i) => l?.id ?? i}
+                    noToolbar
+                    pageSize={0}
+                    className="text-xs"
+                    renderGrandTotal={() => (
+                      <div className="flex items-center gap-2 font-semibold tabular-nums">
+                        <span className="flex-1">الإجمالي</span>
+                        <span className="text-end">{formatCurrency(totalDebit)}</span>
+                        <span className="text-end">{formatCurrency(totalCredit)}</span>
+                      </div>
+                    )}
+                  />
                 </div>
               )}
             </CardContent>
