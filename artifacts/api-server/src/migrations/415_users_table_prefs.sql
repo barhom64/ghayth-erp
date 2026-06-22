@@ -1,4 +1,4 @@
--- 412_users_table_prefs.sql
+-- 415_users_table_prefs.sql
 --
 -- Adds one user-level preference column:
 --   - tablePrefs: per-user table UI preferences as JSONB (default '{}')

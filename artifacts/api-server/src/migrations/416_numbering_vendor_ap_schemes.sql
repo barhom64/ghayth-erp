@@ -1,4 +1,4 @@
--- Migration 413 — vendor AP numbering schemes (#1141 cleanup, AP side)
+-- Migration 416 — vendor AP numbering schemes (#1141 cleanup, AP side)
 --
 -- @rollback:
 --   DELETE FROM numbering_schemes
