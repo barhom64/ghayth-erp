@@ -32,10 +32,8 @@ const BOOTSTRAP = join(SRC, "lib/companyBootstrap.ts");
 // line as its owning flow repoints it to a postable leaf. Do NOT add NEW entries
 // — repoint to a postable leaf instead.
 const ALLOWLIST = new Set([
-  "routes/finance-algorithms.ts:1290", "routes/finance-algorithms.ts:6100",
-  "routes/finance-algorithms.ts:1590", "routes/finance-algorithms.ts:1530",
-  "routes/finance-algorithms.ts:1500", "routes/finance-algorithms.ts:1120",
-  "lib/cronScheduler.ts:6100", "lib/cronScheduler.ts:1590",
+  // CIP capitalization target accounts — fixed-asset module owner decision.
+  "routes/finance-algorithms.ts:1530", "routes/finance-algorithms.ts:1500",
   "lib/eventListeners.ts:5200", "lib/eventListeners.ts:6200",
   "lib/umrahCommissionEngine.ts:6200",
   "lib/finance/datafixInventory.ts:1130", "lib/finance/datafixInventory.ts:1140",

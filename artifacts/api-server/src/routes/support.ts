@@ -132,9 +132,9 @@ interface AssignmentRow { id: number }
 const router = Router();
 
 const createTicketSchema = z.object({
-  title: z.string().optional(),
-  subject: z.string().min(1, "موضوع التذكرة مطلوب"),
-  description: z.string().min(1, "وصف المشكلة مطلوب"),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  subject: z.string().min(1, "موضوع التذكرة مطلوب").max(1000, "الموضوع طويل جدًا"),
+  description: z.string().min(1, "وصف المشكلة مطلوب").max(5000, "الوصف طويل جدًا"),
   clientId: z.coerce.number().optional(),
   category: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent", "critical"]).optional(),
@@ -144,18 +144,18 @@ const createTicketSchema = z.object({
 
 const createReplySchema = z.object({
   authorName: z.string().optional(),
-  message: z.string().min(1, "نص الرد مطلوب"),
+  message: z.string().min(1, "نص الرد مطلوب").max(20000, "النص طويل جدًا"),
   isInternal: z.boolean().optional(),
 });
 
 const createCSATSchema = z.object({
   score: z.coerce.number().min(1).max(5, "التقييم يجب أن يكون بين 1 و 5"),
-  comment: z.string().optional(),
+  comment: z.string().max(5000, "التعليق طويل جدًا").optional(),
 });
 
 const createKbSchema = z.object({
-  title: z.string().min(1, "عنوان المقال مطلوب"),
-  content: z.string().min(1, "محتوى المقال مطلوب"),
+  title: z.string().min(1, "عنوان المقال مطلوب").max(500, "العنوان طويل جدًا"),
+  content: z.string().min(1, "محتوى المقال مطلوب").max(100000, "المحتوى طويل جدًا"),
   category: z.string().optional(),
   tags: z.any().optional(),
 });
@@ -168,8 +168,8 @@ const updateTicketSchema = z.object({
 });
 
 const updateKbSchema = z.object({
-  title: z.string().optional(),
-  content: z.string().optional(),
+  title: z.string().max(500, "العنوان طويل جدًا").optional(),
+  content: z.string().max(100000, "المحتوى طويل جدًا").optional(),
   category: z.string().optional(),
   tags: z.any().optional(),
   status: z.enum(["published", "draft", "archived"]).optional(),

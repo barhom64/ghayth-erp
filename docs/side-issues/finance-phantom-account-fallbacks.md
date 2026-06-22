@@ -14,7 +14,7 @@
 | ~~finance-custodies~~ | 1400 | — | custody | **✅ أُصلح: 1113 العهد النقدية** |
 | eventListeners.ts:1803 | 5200 | أب (رواتب!) | commission_expense | ورقة عمولات (لا 5200 الرواتب) |
 | eventListeners.ts:1934 · umrahCommissionEngine.ts:204 | 6200 | غير موجود | عمولة عمرة | ورقة مصروف عمولة حقيقية |
-| finance-algorithms.ts:40/46 | 1120 | أب | bank | **1124** بنوك (أو ورقة بنك رئيسي) |
+| ~~finance-algorithms (إهلاك+بنك)~~ | — | — | — | **✅ أُصلح: بنك 1124 · إهلاك 5790/1290** |
 | finance-algorithms.ts:1290 | 1290 | غير موجود | accumulated depreciation | ورقة مجمّع إهلاك حقيقية |
 | finance-algorithms.ts:1500/1530/1590 · cron:1590 | 15xx | غير موجود | prepaid/other assets | أوراق 117x المدفوعات المقدمة |
 | finance-algorithms.ts:6100 · cron:6100 | 6100 | غير موجود | COGS/depreciation expense | **5110/5710** |
