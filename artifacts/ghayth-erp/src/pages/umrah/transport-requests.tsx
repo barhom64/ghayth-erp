@@ -30,7 +30,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
 import { statusLabel } from "@/lib/transport-status-labels";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -319,52 +319,28 @@ export default function UmrahTransportRequestsPage() {
                 لا توجد طلبات نقل مرتبطة بهذه المجموعة عبر العقد الموحّد بعد.
               </p>
             ) : (
-              <div className="overflow-x-auto"><table
-                className="w-full text-sm"
-                data-testid="transport-requests-table"
-              >
-                <thead className="bg-muted/40">
-                  <tr>
-                    <th className="p-2 text-start">رقم الطلب</th>
-                    <th className="p-2 text-start">المركبة</th>
-                    <th className="p-2 text-start">السائق</th>
-                    <th className="p-2 text-end">التكلفة التقديرية</th>
-                    <th className="p-2 text-end">التكلفة الفعلية</th>
-                    <th className="p-2 text-start">الحالة</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => {
-                    const tone = statusLabel("booking", r.status).tone;
-                    return (
-                      <tr
-                        key={r.transportRequestId}
-                        className="border-t hover:bg-muted/20"
-                        data-testid={`transport-requests-row-${r.transportRequestId}`}
-                      >
-                        <td className="p-2 font-mono text-xs">
-                          #{r.transportRequestId}
-                        </td>
-                        <td className="p-2">{r.vehicleId ?? "—"}</td>
-                        <td className="p-2">{r.driverId ?? "—"}</td>
-                        <td className="p-2 text-end font-mono">
-                          {r.estimatedCost ?? "—"}
-                        </td>
-                        <td className="p-2 text-end font-mono">
-                          {r.actualCost ?? "—"}
-                        </td>
-                        <td className="p-2">
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}
-                          >
-                            {statusLabel("booking", r.status).label}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table></div>
+              <div className="overflow-x-auto" data-testid="transport-requests-table">
+                <DataTable<TransportRequestRow>
+                  noToolbar
+                  pageSize={0}
+                  data={rows}
+                  rowKey={(r) => r.transportRequestId}
+                  columns={[
+                    { key: "transportRequestId", header: "رقم الطلب", sortable: false, className: "font-mono text-xs", render: (r) => `#${r.transportRequestId}` },
+                    { key: "vehicleId", header: "المركبة", sortable: false, render: (r) => r.vehicleId ?? "—" },
+                    { key: "driverId", header: "السائق", sortable: false, render: (r) => r.driverId ?? "—" },
+                    { key: "estimatedCost", header: "التكلفة التقديرية", sortable: false, align: "end", className: "font-mono", render: (r) => r.estimatedCost ?? "—" },
+                    { key: "actualCost", header: "التكلفة الفعلية", sortable: false, align: "end", className: "font-mono", render: (r) => r.actualCost ?? "—" },
+                    {
+                      key: "status", header: "الحالة", sortable: false,
+                      render: (r) => {
+                        const { tone, label } = statusLabel("booking", r.status);
+                        return <span className={`text-[10px] px-2 py-0.5 rounded border whitespace-nowrap ${tone}`}>{label}</span>;
+                      },
+                    },
+                  ]}
+                />
+              </div>
             )}
           </CardContent>
         </Card>

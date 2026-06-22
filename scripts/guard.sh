@@ -187,6 +187,15 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # Pure-logic fixtures guard the detector.
 run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
 run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
+# Display-table canonicalization: a page-level list/display table must use the
+# shared <DataTable> (sort, per-user page-size, mobile cards, column footers,
+# CSV export), not a hand-rolled raw <table>. The 2026-06 table-unification
+# pass converted them all; this keeps NEW raw tables out of src/pages/**.
+# OFFLINE source scan; baseline of verified-bespoke pages (forms / statements /
+# tree / info-blocks) in scripts/display-tables-allowlist.txt. Fixtures guard
+# the detector.
+run_step "check:display-tables:tests" node scripts/src/check-display-tables.test.mjs
+run_step "check:display-tables" node scripts/src/check-display-tables.mjs
 # Page action-bar consistency (refresh/print/export): a hand-rolled control —
 # a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
 # / Printer+«طباعة» / Download+«تصدير») — instead of the unified component

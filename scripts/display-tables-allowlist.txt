@@ -1,0 +1,35 @@
+# display-tables-allowlist.txt
+#
+# Pages that keep a raw <table> on purpose — DataTable (a column data
+# grid) cannot faithfully express them. The guard fails only on a PAGE
+# with a raw <table> NOT listed here. Append the reason after the path:
+#   path/to/page.tsx   # editable-form | statement | merged-header | tree | info-block
+# Regenerate the baseline with:
+#   node scripts/src/check-display-tables.mjs --write-allowlist
+# When a page is moved to <DataTable>, prune its line.
+#
+# Baseline captured: 13 page(s). Each verified bespoke (read the table body
+# before adding a new line — a convertible display list does NOT belong here).
+
+# editable-form — data-entry grids: cells are <Input>/<Select>/NumberField
+# driving page state. DataTable is a DISPLAY component; a form is not a list.
+artifacts/ghayth-erp/src/pages/create/finance/customer-receipt.tsx        # editable-form (ledger: receipt application lines)
+artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx   # editable-form (ledger: journal lines + allocation panel)
+artifacts/ghayth-erp/src/pages/finance/account-reconciliation-workpaper.tsx # editable-form (recon worksheet: Input ref/desc/amount + delete)
+artifacts/ghayth-erp/src/pages/fleet/transport-rules-admin.tsx            # editable-form (rule rows with inputs)
+artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx           # editable-form (commission tiers editor)
+artifacts/ghayth-erp/src/pages/umrah/import-unlinked.tsx                  # editable-form (test-pinned selection checkboxes)
+artifacts/ghayth-erp/src/pages/umrah/sales-wizard.tsx                     # editable-form (inline price/seat inputs)
+artifacts/ghayth-erp/src/pages/warehouse-advanced.tsx                    # editable-form (cycle-count entry grid)
+
+# statement — vertical financial statements / equations: hierarchical or
+# fixed label/value rows with arithmetic, not a column dataset.
+artifacts/ghayth-erp/src/pages/finance/monthly-close-pack.tsx            # statement (P&L / balance sheet / cash-flow via <PlRow>)
+artifacts/ghayth-erp/src/pages/finance/vat-filing-readiness.tsx          # statement (static VAT equation: output − input = net)
+artifacts/ghayth-erp/src/pages/finance/bad-debt-provision.tsx            # statement (static 2-row JE preview: Dr 5170 / Cr 1210)
+
+# tree — collapsible hierarchy, not a flat list.
+artifacts/ghayth-erp/src/pages/finance/reports.tsx                       # tree (report catalogue hierarchy)
+
+# info-block — tiny fixed letterhead / key-value print blocks on a document.
+artifacts/ghayth-erp/src/pages/fleet/transport-booking-confirmation.tsx  # info-block (print letterhead / fixed info grids)
