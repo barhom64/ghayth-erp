@@ -134,43 +134,23 @@ export default function JournalReversalPage() {
               {search ? "لا قيود مطابقة" : "لا توجد قيود قابلة للعكس"}
             </div>
           ) : (
-            <div className="max-h-96 overflow-y-auto border rounded">
-              <div className="overflow-x-auto"><table className="w-full text-sm">
-                <thead className="bg-muted sticky top-0">
-                  <tr className="text-xs text-muted-foreground">
-                    <th className="text-start py-2 px-2">المرجع</th>
-                    <th className="text-start py-2 px-2">الوصف</th>
-                    <th className="text-start py-2 px-2">التاريخ</th>
-                    <th className="text-end py-2 px-2">الإجمالي</th>
-                    <th className="py-2 px-2">الحالة</th>
-                    <th className="py-2 px-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.slice(0, 50).map(je => (
-                    <tr
-                      key={je.id}
-                      className={`border-t hover:bg-muted/30 cursor-pointer ${selectedId === je.id ? "bg-status-info-surface" : ""}`}
-                      onClick={() => setSelectedId(je.id)}
-                    >
-                      <td className="py-2 px-2 font-mono text-xs">{je.ref}</td>
-                      <td className="py-2 px-2 text-xs max-w-md truncate">{je.description}</td>
-                      <td className="py-2 px-2 text-xs whitespace-nowrap">
-                        {formatDateAr(je.createdAt.split("T")[0])}
-                      </td>
-                      <td className="py-2 px-2 text-end tabular-nums">
-                        {formatCurrency(Number(je.totalDebit))}
-                      </td>
-                      <td className="py-2 px-2">
-                        <Badge variant="outline" className="text-[10px]">{je.status}</Badge>
-                      </td>
-                      <td className="py-2 px-2">
-                        {selectedId === je.id && <CheckCircle2 className="w-4 h-4 text-status-info-foreground" />}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+            <div className="max-h-96 overflow-y-auto">
+              <DataTable<Je>
+                noToolbar
+                pageSize={0}
+                data={filtered.slice(0, 50)}
+                rowKey={(je) => je.id}
+                onRowClick={(je) => setSelectedId(je.id)}
+                rowClassName={(je) => (selectedId === je.id ? "bg-status-info-surface" : undefined)}
+                columns={[
+                  { key: "ref", header: "المرجع", sortable: false, className: "font-mono text-xs", render: (je) => je.ref },
+                  { key: "description", header: "الوصف", sortable: false, className: "text-xs max-w-md truncate", render: (je) => je.description },
+                  { key: "date", header: "التاريخ", sortable: false, className: "text-xs whitespace-nowrap", render: (je) => formatDateAr(je.createdAt.split("T")[0]) },
+                  { key: "total", header: "الإجمالي", sortable: false, align: "end", className: "tabular-nums", render: (je) => formatCurrency(Number(je.totalDebit)) },
+                  { key: "status", header: "الحالة", sortable: false, render: (je) => <Badge variant="outline" className="text-[10px]">{je.status}</Badge> },
+                  { key: "_sel", header: "", sortable: false, render: (je) => (selectedId === je.id ? <CheckCircle2 className="w-4 h-4 text-status-info-foreground" /> : null) },
+                ]}
+              />
             </div>
           )}
         </CardContent>
