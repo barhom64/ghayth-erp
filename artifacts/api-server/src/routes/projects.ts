@@ -183,6 +183,30 @@ const updateDevUnitSchema = createDevUnitSchema.partial().extend({
   status: z.enum(["under_development", "for_sale", "cancelled"]).optional(),
 });
 
+// عقد قائد/خادم (#2839): إدراج سجل مشروع. مسار المالية (finance-hardening) كان
+// يكتب جدول projects مباشرةً عند إنشاء مشروع من شاشته؛ الكتابة في جدول المشاريع
+// المملوك تبقى هنا في المسار القائد (المشاريع). يعمل ضمن المعاملة المحيطة
+// (rawExecute ينضمّ لـ txStore) فيبقى الإدراج ذرّيًا مع ترقيمه. سلوكيًا مطابق.
+export async function insertProjectRecord(params: {
+  companyId: number;
+  ref: string;
+  name: string;
+  description?: string | null;
+  budget?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  managerId?: number | null;
+}): Promise<number> {
+  const { companyId, ref, name, description, budget, startDate, endDate, managerId } = params;
+  const { insertId } = await rawExecute(
+    `INSERT INTO projects ("companyId",ref,name,description,budget,"startDate","endDate","managerId")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [companyId, ref, name, description ?? null, Number(budget ?? 0), startDate ?? null, endDate ?? null, managerId ?? null],
+  );
+  assertInsert(insertId, "projects");
+  return insertId;
+}
+
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────────
