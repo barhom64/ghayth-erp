@@ -286,7 +286,7 @@ const createTripSchema = z.object({
   fromLng: z.coerce.number().optional(),
   toLat: z.coerce.number().optional(),
   toLng: z.coerce.number().optional(),
-  distance: z.coerce.number().optional(),
+  distance: z.coerce.number().nonnegative("المسافة يجب ألا تكون سالبة").optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
   notes: z.string().optional(),
