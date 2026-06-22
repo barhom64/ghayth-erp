@@ -14,7 +14,8 @@ import { join } from "node:path";
 const API_SRC = join(import.meta.dirname!, "../../src");
 const INVOICES = readFileSync(join(API_SRC, "routes/finance-invoices.ts"), "utf8");
 const JOURNAL = readFileSync(join(API_SRC, "routes/finance-journal.ts"), "utf8");
-const UMRAH = readFileSync(join(API_SRC, "routes/umrah-entities.ts"), "utf8");
+// U-07 Phase 5: commission plan schemas now live in the dedicated sub-router.
+const UMRAH = readFileSync(join(API_SRC, "routes/umrah-commission.ts"), "utf8");
 
 describe("percent bounds — invoice tax rates (feed the GL tax line via rate/100)", () => {
   it("vatRate is bounded 0..100 (nonnegative + max 100)", () => {

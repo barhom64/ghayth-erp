@@ -9,7 +9,8 @@
  */
 import { describe, it, expect } from "vitest";
 import { createAuditSchema } from "../../src/routes/governance.js";
-import { createBlockSchema } from "../../src/routes/umrah-entities.js";
+// U-07 Phase 4: room-block schema/routes now live in the dedicated sub-router.
+import { createBlockSchema } from "../../src/routes/umrah-accommodation.js";
 import { dispatchOrderSchema } from "../../src/routes/transport-bookings.js";
 
 describe("date-range order — governance audit (startDate ≤ endDate)", () => {
