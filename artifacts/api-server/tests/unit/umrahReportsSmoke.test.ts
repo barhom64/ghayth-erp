@@ -22,6 +22,8 @@ const readMig = (f: string) => readFileSync(join(root, "src/migrations", f), "ut
 const readLib = (f: string) => readFileSync(join(root, "src/lib", f), "utf8");
 
 const UMRAH_ENTITIES = readRoute("umrah-entities.ts");
+// U-07 Phase 9: sub-agent statements (JSON + PDF) carved into a dedicated sub-router.
+const UMRAH_STATEMENTS = readRoute("umrah-statements.ts");
 const TEMPLATE_RESOLVER = readLib("print/templateResolver.ts");
 const MIG_154 = readMig("154_umrah_attachments.sql");
 
@@ -229,34 +231,34 @@ describe("umrah-entities — daily run-sheet (PR #305)", () => {
   });
 });
 
-describe("umrah-entities — sub-agent statement PDF (PR #305)", () => {
+describe("umrah-statements — sub-agent statement PDF (PR #305; carved U-07 Phase 9)", () => {
   it("mounts GET /statements/:subAgentId/pdf", () => {
-    expect(UMRAH_ENTITIES).toMatch(/router\.get\(["']\/statements\/:subAgentId\/pdf["']/);
+    expect(UMRAH_STATEMENTS).toMatch(/router\.get\(["']\/statements\/:subAgentId\/pdf["']/);
   });
 
   it("authorize gate (view)", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/statements/:subAgentId/pdf"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 300);
+    const idx = UMRAH_STATEMENTS.indexOf('"/statements/:subAgentId/pdf"');
+    const section = UMRAH_STATEMENTS.slice(idx, idx + 300);
     expect(section).toMatch(/action:\s*["']view["']/);
   });
 
   it("reuses generateStatement(detailed) — no per-route balance recomputation", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/statements/:subAgentId/pdf"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 1200);
+    const idx = UMRAH_STATEMENTS.indexOf('"/statements/:subAgentId/pdf"');
+    const section = UMRAH_STATEMENTS.slice(idx, idx + 1200);
     expect(section).toContain("generateStatement");
     expect(section).toContain('"detailed"');
   });
 
   it("PDF path proxies through Print Engine v2 (renderPrint) with the umrah_statement entityType", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/statements/:subAgentId/pdf"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 3500);
+    const idx = UMRAH_STATEMENTS.indexOf('"/statements/:subAgentId/pdf"');
+    const section = UMRAH_STATEMENTS.slice(idx, idx + 3500);
     expect(section).toContain("renderPrint");
     expect(section).toContain("umrah_statement");
   });
 
   it("statement PDF route scopes sub-agent header lookup by companyId + soft delete", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/statements/:subAgentId/pdf"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 3500);
+    const idx = UMRAH_STATEMENTS.indexOf('"/statements/:subAgentId/pdf"');
+    const section = UMRAH_STATEMENTS.slice(idx, idx + 3500);
     expect(section).toMatch(/FROM\s+umrah_sub_agents[\s\S]*?"companyId"\s*=/);
     expect(section).toMatch(/"deletedAt"\s+IS\s+NULL/i);
   });
