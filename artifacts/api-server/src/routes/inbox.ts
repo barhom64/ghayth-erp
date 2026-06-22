@@ -1099,7 +1099,7 @@ router.post("/drafts/:id/send", authorize({ feature: "communications", action: "
     if (!result.blocked) {
       // Only delete the draft on successful queue. If DLP blocked,
       // the operator can still edit and retry.
-      await rawExecute(`DELETE FROM email_drafts WHERE id = $1`, [id]);
+      await rawExecute(`DELETE FROM email_drafts WHERE id = $1 AND "companyId" = $2 AND "userId" = $3`, [id, scope.companyId, scope.userId]);
     }
     res.status(result.blocked ? 422 : 201).json(maskFields(req, result));
   } catch (err) {
