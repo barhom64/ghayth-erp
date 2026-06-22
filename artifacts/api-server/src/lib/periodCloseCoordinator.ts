@@ -29,7 +29,8 @@ export type PeriodCloseBlockerType =
   | "dimension"
   | "mapping_fallback"
   | "manual_no_reason"
-  | "posting_failure";
+  | "posting_failure"
+  | "orphan_source";
 
 export interface PeriodCloseBlocker {
   /** Stable machine class — drives the per-class fix UI. */
@@ -263,6 +264,47 @@ export async function collectPeriodCloseBlockers(opts: {
       reason: `يوجد ${postingFailures} فشل ترحيل مالي غير معالَج داخل الفترة`,
       requiredAction:
         "عالج/أعد محاولة فشل الترحيل المالي (شاشة فشل الترحيل) قبل إقفال الفترة",
+    });
+  }
+
+  // ── 8. Orphan-source posted JEs in the period (#2874 — BLOCKING, زيرو تسامح). ─
+  // قرار إبراهيم: القيد اليتيم بالمصدر = مانع حاجب بصفر تسامح — وجود ≥1 قيد يتيم
+  // يرفض إقفال الفترة. تعريف اليتيم مُعاد استخدامه حرفياً من تقرير حقيقة الدفتر
+  // (/finance/reports/ledger-truth في routes/finance-reports.ts): قيد آلي مُرحَّل
+  // بلا مصدر (sourceType أو sourceId = NULL)، غير يدوي، مُطبَّق، غير معكوس، غير
+  // محذوف، ونوعه ليس من أبواب الإقفال/التسوية/المطابقة النظامية المستثناة. مُقيَّد
+  // بالشركة + نطاق الفترة بنفس عمود التاريخ (createdAt) الذي تستخدمه بقية الموانع.
+  // قراءة فقط — COUNT(*) لا غير.
+  const ORPHAN_EXCLUDED_TYPES = [
+    "closing",
+    "monthly_closing",
+    "opening_balance",
+    "fx_revaluation",
+    "fx_realised",
+    "asset_revaluation",
+    "bank_adjustment",
+  ];
+  const orphanRows = await rawQuery<{ orphanCount: string }>(
+    `SELECT COUNT(*)::text AS "orphanCount"
+       FROM journal_entries je
+      WHERE je."companyId" = $1 AND je."deletedAt" IS NULL
+        AND je."isManual" = false
+        AND je."balancesApplied" = true
+        AND je."reversedById" IS NULL
+        AND (je."sourceType" IS NULL OR je."sourceId" IS NULL)
+        AND COALESCE(je.type, '') <> ALL($4::text[])
+        AND je."createdAt"::date BETWEEN $2 AND $3`,
+    [companyId, startDate, endDate, ORPHAN_EXCLUDED_TYPES],
+  );
+  const orphanCount = Number(orphanRows[0]?.orphanCount ?? 0);
+  if (orphanCount > 0) {
+    blockers.push({
+      type: "orphan_source",
+      source: "journal_entries (ledger-truth orphan source)",
+      recordRef: `count=${orphanCount}`,
+      reason: `يوجد ${orphanCount} قيد مُرحَّل بلا مصدر (قيود يتيمة) داخل الفترة — تمنع الإقفال`,
+      requiredAction:
+        "اربط القيود المُرحَّلة اليتيمة بمصدرها (sourceType/sourceId) أو عالجها قبل إقفال الفترة",
     });
   }
 
