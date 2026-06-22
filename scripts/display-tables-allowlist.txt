@@ -8,20 +8,17 @@
 #   node scripts/src/check-display-tables.mjs --write-allowlist
 # When a page is moved to <DataTable>, prune its line.
 #
-# Baseline captured: 11 page(s). Each verified bespoke (read the table body
+# Baseline captured: 8 page(s). Each verified bespoke (read the table body
 # before adding a new line — a convertible display list does NOT belong here).
 
 # editable-form — data-entry grids: cells are <Input>/<Select>/NumberField
-# driving page state. DataTable is a DISPLAY component; a form is not a list.
-# (journal-manual-create + customer-receipt were converted 2026-06: the JE
-#  input grid hosts its inputs in DataTable cells + renderRowExtras, and the
-#  receipt's JE preview is a plain display list — both with ledger-line tests.)
+# driving page state. The 2026-06 pass converted every CONVERTIBLE one (hosting
+# the inputs in DataTable cells / renderRowExtras): journal-manual-create +
+# customer-receipt (ledger, with line-assertion tests), sales-wizard,
+# warehouse-advanced, commission-plan-editor. These remaining keep a raw table:
 artifacts/ghayth-erp/src/pages/finance/account-reconciliation-workpaper.tsx # editable-form (recon worksheet: Input ref/desc/amount + delete)
 artifacts/ghayth-erp/src/pages/fleet/transport-rules-admin.tsx            # editable-form (rule rows with inputs)
-artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx           # editable-form (commission tiers editor)
 artifacts/ghayth-erp/src/pages/umrah/import-unlinked.tsx                  # editable-form (test-pinned selection checkboxes)
-artifacts/ghayth-erp/src/pages/umrah/sales-wizard.tsx                     # editable-form (inline price/seat inputs)
-artifacts/ghayth-erp/src/pages/warehouse-advanced.tsx                    # editable-form (cycle-count entry grid)
 
 # statement — vertical financial statements / equations: hierarchical or
 # fixed label/value rows with arithmetic, not a column dataset.
