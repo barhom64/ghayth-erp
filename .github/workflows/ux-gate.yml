@@ -1,0 +1,44 @@
+name: ux-gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ux-static-gate:
+    name: UX static acceptance gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run UX static gate
+        run: pnpm run gate:ux:static
+
+      - name: Write UX summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'MD'
+          ## UX Gate — نظام غيث
+
+          هذا الفحص يتحقق من وجود وثائق القبول، بطاقة القياس، مصفوفة الرحلات، قالب التقرير، واختبار Playwright `@ux-gate`.
+
+          الفحص التشغيلي للواجهات يعمل ضمن حزمة `e2e` لأن بيئة النظام تحتاج API + Frontend + DB.
+          MD
