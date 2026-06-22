@@ -219,7 +219,7 @@ const createPurchaseRequestSchema = z.object({
     unitPrice: z.coerce.number().nonnegative().optional(),
     productId: z.coerce.number().optional(),
     ...purchaseLineDimsSchema,
-  })).min(1, "يجب إضافة بند واحد على الأقل"),
+  })).min(1, "يجب إضافة بند واحد على الأقل").max(1000, "عدد بنود الطلب يتجاوز الحدّ المسموح (1000)"),
   supplierId: z.coerce.number().optional(),
   notes: z.string().optional(),
   expectedDate: z.string().optional(),
