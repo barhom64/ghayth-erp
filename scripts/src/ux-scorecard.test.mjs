@@ -27,6 +27,28 @@ test("parseSpecRoutes يرجع [] عند غياب المصفوفة", () => {
   assert.deepEqual(parseSpecRoutes("no routes here"), []);
 });
 
+test("parseMatrixRoutes يرجع [] عند غياب قسم القائمة", () => {
+  assert.deepEqual(parseMatrixRoutes("# مصفوفة بلا قسم القائمة الآلية"), []);
+});
+
+test("parseMatrixRoutes يرجع [] عند وجود القسم فارغًا (لا رحلات)", () => {
+  const src = `
+## Automated route smoke list
+
+## Manual success definition
+
+- \`/ignored\`
+`;
+  assert.deepEqual(parseMatrixRoutes(src), []);
+});
+
+test("diffRoutes يعتبر كل رحلات الاختبار مفقودة عند مصفوفة فارغة", () => {
+  // يعكس منطق السكربت: مصفوفة فارغة ⇒ لا تطابق ⇒ يجب أن تُرصد كخرق.
+  const d = diffRoutes(["/", "/employees"], []);
+  assert.deepEqual(d.missingFromMatrix, ["/", "/employees"]);
+  assert.deepEqual(d.missingFromSpec, []);
+});
+
 test("parseMatrixRoutes يستخرج قائمة الرحلات من المصفوفة فقط", () => {
   const src = `
 ## Core journeys

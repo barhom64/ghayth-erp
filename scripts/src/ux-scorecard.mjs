@@ -107,12 +107,18 @@ async function main() {
   let specRoutes = [];
   let matrixRoutes = [];
   if (specSource) specRoutes = parseSpecRoutes(specSource);
+  let matrixPresent = false;
   try {
     matrixRoutes = parseMatrixRoutes(await readRepo(MATRIX_PATH));
+    matrixPresent = true;
   } catch {
     /* عُولج كوثيقة ناقصة أعلاه */
   }
   if (specRoutes.length === 0 && specSource) problems.push(`تعذّر استخراج الرحلات الحرجة من ${SPEC_PATH}`);
+  // مصفوفة موجودة لكن بلا أي رحلة = فشل صريح (وثيقة بوابة فارغة لا تحرس شيئًا).
+  if (matrixPresent && matrixRoutes.length === 0) {
+    problems.push(`لا توجد أي رحلة في قائمة "Automated route smoke list" داخل ${MATRIX_PATH} — مصفوفة فارغة`);
+  }
   if (specRoutes.length && matrixRoutes.length) {
     const { missingFromMatrix, missingFromSpec } = diffRoutes(specRoutes, matrixRoutes);
     for (const r of missingFromMatrix) problems.push(`الرحلة ${r} في الاختبار لكنها غير مذكورة في ${MATRIX_PATH}`);

@@ -58,8 +58,28 @@ const FALLBACK_PAGE_PATTERNS: RegExp[] = [
   /Access Denied/i,
 ];
 
+// Visible headings rendered by the real fallback shells (NotFound /
+// AccessDenied). Asserted EXPLICITLY via dedicated locators below — not only
+// through the aggregate bodyText regex — so a 404 / access-denied shell fails
+// loudly and on its own line, independent of how innerText is composed.
+const FALLBACK_SHELL_TEXTS = [
+  "الصفحة غير موجودة",
+  "غير مصرح بالوصول",
+  "ليس لديك صلاحية الوصول",
+];
+
 function hasArabic(text: string): boolean {
   return /[؀-ۿ]/.test(text);
+}
+
+// Explicit DOM-level rejection of the not-found / access-denied shells. Uses
+// per-text locators (visible only) so the failure names the exact shell that
+// leaked, rather than relying on the body innerText snapshot alone.
+async function expectNotFallbackShell(page: import("@playwright/test").Page, route: string) {
+  for (const shellText of FALLBACK_SHELL_TEXTS) {
+    const count = await page.getByText(shellText, { exact: false }).count();
+    expect(count, `${route} rendered a fallback shell ("${shellText}") — journey did not reach a real page`).toBe(0);
+  }
 }
 
 function expectArabicOperationalText(text: string, route: string) {
@@ -92,6 +112,8 @@ test.describe("@ux-gate final Arabic user experience", () => {
       });
       expect(direction, `${route} must render in RTL`).toMatch(/rtl/i);
 
+      await expectNotFallbackShell(page, route);
+
       const bodyText = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
       expectArabicOperationalText(bodyText, route);
 
@@ -110,6 +132,7 @@ test.describe("@ux-gate final Arabic user experience", () => {
     }
 
     await page.locator("body").waitFor({ state: "visible" });
+    await expectNotFallbackShell(page, "mobile /");
     const bodyText = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
     expectArabicOperationalText(bodyText, "mobile /");
 
