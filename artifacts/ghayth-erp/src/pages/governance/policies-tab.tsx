@@ -101,7 +101,7 @@ export function PoliciesTab() {
       render: (p) => (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="sm" onClick={() => setPreviewItem(p)}><Eye className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="sm" onClick={() => handleNewVersion(p.id)} title="إصدار جديد"><GitBranch className="h-4 w-4" /></Button>
+          <GuardedButton perm="governance:create" variant="ghost" size="sm" onClick={() => handleNewVersion(p.id)} title="إصدار جديد"><GitBranch className="h-4 w-4" /></GuardedButton>
           <RowActions
             onEdit={() => startEdit(p.id, { title: p.title, category: p.category || "", description: p.description || "", effectiveDate: p.effectiveDate || "", status: p.status || "draft" })}
             onDelete={() => startDelete(p.id)}

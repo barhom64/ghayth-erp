@@ -229,7 +229,7 @@ export default function LeadDetailPage() {
 
   return (
     <DetailPageLayout
-      title={lead?.title || lead?.contactName || "العميل المحتمل"}
+      title={lead?.title || lead?.contactName || (lead?.stage && lead.stage !== "lead" ? "فرصة بيعية" : "العميل المحتمل")}
       subtitle={lead?.clientName || undefined}
       backPath="/crm"
       backLabel="العودة للعملاء المحتملين"
