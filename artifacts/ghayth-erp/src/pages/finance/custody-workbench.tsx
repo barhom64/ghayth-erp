@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   KeyRound, AlertTriangle, ChevronDown, ChevronRight, Search,
   ExternalLink, Download, Users, Clock, CheckCircle2,
@@ -352,54 +353,71 @@ export default function CustodyWorkbenchPage() {
                     </CardHeader>
                     {isOpen && (
                       <CardContent className="pt-0">
-                        <div className="overflow-x-auto"><table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b text-xs text-muted-foreground">
-                              <th className="text-start py-2 px-2">المرجع</th>
-                              <th className="text-start py-2 px-2">الوصف</th>
-                              <th className="text-start py-2 px-2 w-24">التاريخ</th>
-                              <th className="text-end py-2 px-2 w-28">المبلغ</th>
-                              <th className="text-end py-2 px-2 w-28">مسوّى</th>
-                              <th className="text-end py-2 px-2 w-28">متبقي</th>
-                              <th className="py-2 px-2 w-24">الحالة</th>
-                              <th className="py-2 px-2 w-16"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {g.custodies.map(c => {
-                              const status = STATUS_DEFS[c.status];
-                              return (
-                                <tr key={c.id} className="border-b hover:bg-muted/30">
-                                  <td className="py-1.5 px-2 font-mono text-xs">{c.ref}</td>
-                                  <td className="py-1.5 px-2 text-xs max-w-xs truncate" title={c.description ?? c.purpose ?? ""}>
-                                    {c.description ?? c.purpose ?? "—"}
-                                  </td>
-                                  <td className="py-1.5 px-2 text-xs whitespace-nowrap">
-                                    {formatDateAr(c.date.split("T")[0])}
-                                  </td>
-                                  <td className="py-1.5 px-2 text-end tabular-nums">{formatCurrency(Number(c.amount))}</td>
-                                  <td className="py-1.5 px-2 text-end tabular-nums text-status-success-foreground">
-                                    {c.settledAmount > 0 ? formatCurrency(c.settledAmount) : "—"}
-                                  </td>
-                                  <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                                    {c.remainingAmount > 0.01 ? formatCurrency(c.remainingAmount) : "—"}
-                                  </td>
-                                  <td className="py-1.5 px-2">
-                                    <Badge variant="outline" className={`text-[10px] ${status.color}`}>
-                                      {status.label}
-                                      {c.status === "overdue" && c.daysOverdue > 0 && (
-                                        <span className="ml-1">({c.daysOverdue}ي)</span>
-                                      )}
-                                    </Badge>
-                                  </td>
-                                  <td className="py-1.5 px-2">
-                                    <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/custodies/${c.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table></div>
+                        <DataTable
+                          noToolbar
+                          pageSize={0}
+                          className="text-sm"
+                          data={g.custodies}
+                          rowKey={(c) => c.id}
+                          columns={[
+                            {
+                              key: "ref", header: "المرجع", className: "font-mono text-xs",
+                              render: (c) => c.ref,
+                            },
+                            {
+                              key: "description", header: "الوصف", className: "text-xs max-w-xs truncate",
+                              render: (c) => (
+                                <span title={c.description ?? c.purpose ?? ""}>
+                                  {c.description ?? c.purpose ?? "—"}
+                                </span>
+                              ),
+                              exportValue: (c) => c.description ?? c.purpose ?? "",
+                            },
+                            {
+                              key: "date", header: "التاريخ", width: "6rem", className: "text-xs whitespace-nowrap",
+                              render: (c) => formatDateAr(c.date.split("T")[0]),
+                              exportValue: (c) => c.date.split("T")[0],
+                            },
+                            {
+                              key: "amount", header: "المبلغ", align: "end", width: "7rem", className: "tabular-nums",
+                              render: (c) => formatCurrency(Number(c.amount)),
+                              exportValue: (c) => Number(c.amount),
+                            },
+                            {
+                              key: "settledAmount", header: "مسوّى", align: "end", width: "7rem",
+                              className: "tabular-nums text-status-success-foreground",
+                              render: (c) => (c.settledAmount > 0 ? formatCurrency(c.settledAmount) : "—"),
+                              exportValue: (c) => c.settledAmount,
+                            },
+                            {
+                              key: "remainingAmount", header: "متبقي", align: "end", width: "7rem",
+                              className: "tabular-nums font-semibold",
+                              render: (c) => (c.remainingAmount > 0.01 ? formatCurrency(c.remainingAmount) : "—"),
+                              exportValue: (c) => c.remainingAmount,
+                            },
+                            {
+                              key: "status", header: "الحالة", width: "6rem",
+                              render: (c) => {
+                                const status = STATUS_DEFS[c.status];
+                                return (
+                                  <Badge variant="outline" className={`text-[10px] ${status.color}`}>
+                                    {status.label}
+                                    {c.status === "overdue" && c.daysOverdue > 0 && (
+                                      <span className="ml-1">({c.daysOverdue}ي)</span>
+                                    )}
+                                  </Badge>
+                                );
+                              },
+                              exportValue: (c) => STATUS_DEFS[c.status]?.label ?? c.status,
+                            },
+                            {
+                              key: "_actions", header: "", width: "4rem", sortable: false,
+                              render: (c) => (
+                                <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/custodies/${c.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
+                              ),
+                            },
+                          ] satisfies DataTableColumn<CustodyRow>[]}
+                        />
                       </CardContent>
                     )}
                   </Card>
