@@ -117,6 +117,9 @@ import accommodationRouter from "./umrah-accommodation.js";
 // U-07 Phase 5 — commission plans/calculations split; imported for the
 // wiring-scanner hint below. Mounted via umrah-entities.ts.
 import commissionRouter from "./umrah-commission.js";
+// U-07 Phase 6 — sub-agents (CRUD + linking) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import subAgentsRouter from "./umrah-sub-agents.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -190,6 +193,7 @@ if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", familiesRouter);
   router.use("/umrah", accommodationRouter);
   router.use("/umrah", commissionRouter);
+  router.use("/umrah", subAgentsRouter);
 }
 
 router.use(healthRouter);
