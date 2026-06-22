@@ -79,7 +79,10 @@ describe("الدفعة أ — المسار العام", () => {
   });
   it("POST يحفظ في المرحلة المؤقتة ويضبط الحالة self_submitted", () => {
     expect(PUBLIC).toMatch(/router\.post\("\/onboarding\/:token", publicLimiter/);
-    expect(PUBLIC).toMatch(/SET "selfSubmittedData" = \$1::jsonb[\s\S]{0,120}"activationStatus" = 'self_submitted'/);
+    // #2839 — الكتابة في جدول HR (employees) نُقلت لعقد المسار القائد
+    // applySelfOnboardingSubmission؛ publicData يستدعيه ولم يعد يكتب الجدول مباشرة.
+    expect(PUBLIC).toMatch(/applySelfOnboardingSubmission\(verified\.employeeId, verified\.companyId/);
+    expect(EMPLOYEES).toMatch(/SET "selfSubmittedData" = \$1::jsonb[\s\S]{0,120}"activationStatus" = 'self_submitted'/);
     expect(PUBLIC).toMatch(/markOnboardingTokenUsed\(verified\.tokenId\)/);
   });
   it("مخطط الاستكمال لا يقبل حقول المالك (لا منصب/راتب/فرع/مدير)", () => {
