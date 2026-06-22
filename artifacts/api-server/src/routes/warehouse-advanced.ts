@@ -115,13 +115,13 @@ async function setLotQc(req: any, res: any, to: "approved" | "rejected"): Promis
   // A rejected lot is quarantined; an approved one keeps its current status.
   if (to === "rejected") {
     await rawExecute(
-      `UPDATE warehouse_stock_lots SET "qualityControlStatus"='rejected', status='quarantine', "updatedAt"=NOW() WHERE id=$1`,
-      [id]
+      `UPDATE warehouse_stock_lots SET "qualityControlStatus"='rejected', status='quarantine', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
     );
   } else {
     await rawExecute(
-      `UPDATE warehouse_stock_lots SET "qualityControlStatus"='approved', "updatedAt"=NOW() WHERE id=$1`,
-      [id]
+      `UPDATE warehouse_stock_lots SET "qualityControlStatus"='approved', "updatedAt"=NOW() WHERE id=$1 AND "companyId"=$2`,
+      [id, scope.companyId]
     );
   }
   createAuditLog({
