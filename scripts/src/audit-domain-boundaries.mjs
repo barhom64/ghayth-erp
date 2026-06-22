@@ -152,7 +152,8 @@ const BASELINE = new Set([
   // ── كتابات عابرة أظهرها توسيع الحارس — تحتاج فرزًا لاحقًا (دَين موثّق) ───────
   // (لم يُدخلها هذا الـPR؛ كانت قائمة على main قبل توسيع التغطية.)
   "finance-hardening.ts:projects",          // finance يكتب projects (أداة hardening/datafix؟)
-  "finance-invoices.ts:warehouse_movements",// ربط الفاتورة بحركة مخزون/COGS؟
+  // (finance-invoices→warehouse_movements عُولِج في #2839: ختم journalEntryId نُقل
+  //  لعقد المخزون stampMovementsJournalEntry — المالية لم تعد تكتب الجدول مباشرة.)
   // (publicData→employees عُولِج في #2839: نُقل لعقد HR applySelfOnboardingSubmission
   //  — الاستكمال الذاتي يُطبَّق عبر المسار القائد لا مباشرةً.)
   // (settings→employee_assignments/purchase_orders عُولِجا في #2839: نُقلا لعقدَي
