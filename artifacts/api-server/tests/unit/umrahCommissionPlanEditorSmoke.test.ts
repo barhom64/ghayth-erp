@@ -25,8 +25,9 @@ import { join } from "node:path";
  *          avgSalePrice, salesPercent) are honoured on BOTH paths;
  *          previously the FE sent them and the engine ignored them.
  */
+// U-07 Phase 5: commission-plan routes/schemas now live in the dedicated sub-router.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-commission.ts"),
   "utf8",
 );
 const ENGINE = readFileSync(

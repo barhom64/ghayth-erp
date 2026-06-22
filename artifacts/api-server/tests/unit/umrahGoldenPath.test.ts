@@ -5,6 +5,8 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 const UMRAH_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"), "utf8");
 const UMRAH_ENT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
+// U-07 Phase 5: commission-plan routes carved into a dedicated sub-router.
+const UMRAH_COMMISSION = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-commission.ts"), "utf8");
 // The penalty creation pipeline (overstayed → violated transition,
 // postPenaltyGL call, INSERT umrah_penalties) was extracted from the
 // `/run-penalty-engine` route into a dedicated engine module so the
@@ -113,9 +115,9 @@ describe("Umrah entities route structure", () => {
   });
 
   it("commission plan endpoints exist", () => {
-    expect(UMRAH_ENT).toContain('"/commission-plans"');
-    expect(UMRAH_ENT).toContain('"/commission-plans/:id/simulate"');
-    expect(UMRAH_ENT).toContain('"/commission-plans/:id/calculate"');
+    expect(UMRAH_COMMISSION).toContain('"/commission-plans"');
+    expect(UMRAH_COMMISSION).toContain('"/commission-plans/:id/simulate"');
+    expect(UMRAH_COMMISSION).toContain('"/commission-plans/:id/calculate"');
   });
 
   it("sales invoice and payment endpoints exist", () => {
