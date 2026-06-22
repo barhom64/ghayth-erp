@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Receipt, Wallet, AlertTriangle, Users, TrendingUp, Calendar, Download, FileText,
 } from "lucide-react";
@@ -125,38 +126,32 @@ function BreakdownRows({ rows, testid, label }: {
     );
   }
   const totalCount = rows.reduce((acc, r) => acc + num(r.count as number), 0);
+  const columns: DataTableColumn<Record<string, unknown>>[] = [
+    { key: "البند", header: "البند", className: "font-medium", render: (r) => label(r) },
+    { key: "count", header: "العدد", render: (r) => num(r.count as number) },
+    {
+      key: "pct",
+      header: "٪",
+      className: "text-muted-foreground",
+      render: (r) => `${totalCount > 0 ? Math.round((num(r.count as number) / totalCount) * 100) : 0}٪`,
+    },
+    { key: "totalAmount", header: "إجمالي", className: "font-semibold", render: (r) => formatCurrency(num(r.totalAmount as number)) },
+    {
+      key: "paidAmount",
+      header: "مدفوع",
+      className: "text-status-success-foreground",
+      render: (r) => formatCurrency(num(r.paidAmount as number)),
+    },
+  ];
   return (
-    <div className="overflow-x-auto"><table className="w-full text-xs" data-testid={testid}>
-      <thead>
-        <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-          <th className="p-2 font-medium">البند</th>
-          <th className="p-2 font-medium">العدد</th>
-          <th className="p-2 font-medium">٪</th>
-          <th className="p-2 font-medium">إجمالي</th>
-          <th className="p-2 font-medium">مدفوع</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, idx) => {
-          const pct = totalCount > 0 ? Math.round((num(r.count as number) / totalCount) * 100) : 0;
-          return (
-            <tr
-              key={idx}
-              className="border-b last:border-b-0 hover:bg-muted/30"
-              data-testid={`${testid}-row-${idx}`}
-            >
-              <td className="p-2 font-medium">{label(r)}</td>
-              <td className="p-2">{num(r.count as number)}</td>
-              <td className="p-2 text-muted-foreground">{pct}٪</td>
-              <td className="p-2 font-semibold">{formatCurrency(num(r.totalAmount as number))}</td>
-              <td className="p-2 text-status-success-foreground">
-                {formatCurrency(num(r.paidAmount as number))}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table></div>
+    <DataTable
+      columns={columns}
+      data={rows}
+      rowKey={(_r, idx) => idx}
+      noToolbar
+      pageSize={0}
+      className="text-xs"
+    />
   );
 }
 
@@ -281,6 +276,98 @@ export default function UmrahSalesInvoicesSummaryReport() {
       icon: Receipt,
       tone: "text-status-info-foreground bg-status-info-surface",
       testid: "sales-invoices-kpi-subagents",
+    },
+  ];
+
+  const recentColumns: DataTableColumn<RecentRow>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      className: "font-mono text-[11px]",
+      render: (r) => (
+        <Link href={`/umrah/invoices/${r.id}`} className="text-blue-600 hover:underline">
+          {r.ref || `#${r.id}`}
+        </Link>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r) => (
+        <Badge className={`text-[10px] ${STATUS_TONES[r.status] || ""}`}>
+          {STATUS_LABELS[r.status] || r.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "invoiceDate",
+      header: "التاريخ",
+      render: (r) => (r.invoiceDate ? formatUmrahDate(r.invoiceDate) : "—"),
+    },
+    {
+      key: "dueDate",
+      header: "الاستحقاق",
+      render: (r) => {
+        const outstanding = num(r.outstanding);
+        const overdue = r.dueDate && new Date(r.dueDate) < new Date() && outstanding > 0
+          && r.status !== "paid" && r.status !== "cancelled";
+        return (
+          <span className={overdue ? "text-status-error-foreground font-semibold" : ""}>
+            {r.dueDate ? formatUmrahDate(r.dueDate) : "—"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "subAgentName",
+      header: "الوكيل الفرعي",
+      render: (r) => (
+        <>
+          {r.subAgentId ? (
+            <Link href={`/umrah/sub-agents/${r.subAgentId}`} className="text-blue-600 hover:underline">
+              {r.subAgentName || `#${r.subAgentId}`}
+            </Link>
+          ) : "—"}
+          {r.subAgentNuskCode && (
+            <p className="text-[10px] font-mono text-muted-foreground">{r.subAgentNuskCode}</p>
+          )}
+        </>
+      ),
+    },
+    { key: "clientName", header: "العميل", render: (r) => r.clientName || "—" },
+    { key: "seasonTitle", header: "الموسم", render: (r) => r.seasonTitle || "—" },
+    { key: "pilgrimCount", header: "معتمرون", render: (r) => r.pilgrimCount ?? 0 },
+    { key: "total", header: "الإجمالي", className: "font-semibold", render: (r) => formatCurrency(num(r.total)) },
+    { key: "paidAmount", header: "المدفوع", className: "text-status-success-foreground", render: (r) => formatCurrency(num(r.paidAmount)) },
+    {
+      key: "outstanding",
+      header: "المتبقي",
+      render: (r) => {
+        const outstanding = num(r.outstanding);
+        return (
+          <span
+            className={`font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}
+            data-testid={`sales-invoices-recent-outstanding-${r.id}`}
+          >
+            {formatCurrency(outstanding)}
+          </span>
+        );
+      },
+    },
+    {
+      key: "journalEntryId",
+      header: "القيد",
+      className: "text-[11px]",
+      render: (r) =>
+        r.journalEntryId ? (
+          <Badge variant="outline" className="text-[10px] gap-1 bg-status-success-surface text-status-success-foreground">
+            ✓ {r.journalEntryId}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-[10px] text-muted-foreground">
+            بدون قيد
+          </Badge>
+        ),
     },
   ];
 
@@ -433,90 +520,13 @@ export default function UmrahSalesInvoicesSummaryReport() {
               لا فواتير ضمن الفلتر الحالي.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs" data-testid="sales-invoices-recent-table">
-                <thead>
-                  <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                    <th className="p-2 font-medium">المرجع</th>
-                    <th className="p-2 font-medium">الحالة</th>
-                    <th className="p-2 font-medium">التاريخ</th>
-                    <th className="p-2 font-medium">الاستحقاق</th>
-                    <th className="p-2 font-medium">الوكيل الفرعي</th>
-                    <th className="p-2 font-medium">العميل</th>
-                    <th className="p-2 font-medium">الموسم</th>
-                    <th className="p-2 font-medium">معتمرون</th>
-                    <th className="p-2 font-medium">الإجمالي</th>
-                    <th className="p-2 font-medium">المدفوع</th>
-                    <th className="p-2 font-medium">المتبقي</th>
-                    <th className="p-2 font-medium">القيد</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((r) => {
-                    const outstanding = num(r.outstanding);
-                    const overdue = r.dueDate && new Date(r.dueDate) < new Date() && outstanding > 0
-                      && r.status !== "paid" && r.status !== "cancelled";
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-b last:border-b-0 hover:bg-muted/30"
-                        data-testid={`sales-invoices-recent-row-${r.id}`}
-                      >
-                        <td className="p-2 font-mono text-[11px]">
-                          <Link
-                            href={`/umrah/invoices/${r.id}`}
-                            className="text-blue-600 hover:underline"
-                          >
-                            {r.ref || `#${r.id}`}
-                          </Link>
-                        </td>
-                        <td className="p-2">
-                          <Badge className={`text-[10px] ${STATUS_TONES[r.status] || ""}`}>
-                            {STATUS_LABELS[r.status] || r.status}
-                          </Badge>
-                        </td>
-                        <td className="p-2">{r.invoiceDate ? formatUmrahDate(r.invoiceDate) : "—"}</td>
-                        <td className={`p-2 ${overdue ? "text-status-error-foreground font-semibold" : ""}`}>
-                          {r.dueDate ? formatUmrahDate(r.dueDate) : "—"}
-                        </td>
-                        <td className="p-2">
-                          {r.subAgentId ? (
-                            <Link href={`/umrah/sub-agents/${r.subAgentId}`} className="text-blue-600 hover:underline">
-                              {r.subAgentName || `#${r.subAgentId}`}
-                            </Link>
-                          ) : "—"}
-                          {r.subAgentNuskCode && (
-                            <p className="text-[10px] font-mono text-muted-foreground">{r.subAgentNuskCode}</p>
-                          )}
-                        </td>
-                        <td className="p-2">{r.clientName || "—"}</td>
-                        <td className="p-2">{r.seasonTitle || "—"}</td>
-                        <td className="p-2">{r.pilgrimCount ?? 0}</td>
-                        <td className="p-2 font-semibold">{formatCurrency(num(r.total))}</td>
-                        <td className="p-2 text-status-success-foreground">{formatCurrency(num(r.paidAmount))}</td>
-                        <td
-                          className={`p-2 font-bold ${outstanding > 0 ? "text-status-error-foreground" : ""}`}
-                          data-testid={`sales-invoices-recent-outstanding-${r.id}`}
-                        >
-                          {formatCurrency(outstanding)}
-                        </td>
-                        <td className="p-2 text-[11px]">
-                          {r.journalEntryId ? (
-                            <Badge variant="outline" className="text-[10px] gap-1 bg-status-success-surface text-status-success-foreground">
-                              ✓ {r.journalEntryId}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                              بدون قيد
-                            </Badge>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={recentColumns}
+              data={recent}
+              noToolbar
+              pageSize={0}
+              className="text-xs"
+            />
           )}
         </CardContent>
       </Card>

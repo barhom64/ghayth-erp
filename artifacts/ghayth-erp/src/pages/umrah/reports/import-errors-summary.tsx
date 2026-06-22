@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   AlertTriangle, FileWarning, Upload, Users, Download,
   CheckCircle2, XCircle, FileText,
@@ -256,6 +257,169 @@ export default function UmrahImportErrorsSummaryReport() {
     },
   ];
 
+  const byStatusColumns: DataTableColumn<BreakdownByStatus>[] = [
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r) => (
+        <Badge className={`text-[10px] ${STATUS_TONES[r.status] || ""}`}>
+          {STATUS_LABELS[r.status] || r.status}
+        </Badge>
+      ),
+    },
+    { key: "count", header: "عدد الدفعات", className: "font-semibold", render: (r) => r.count },
+    { key: "totalRows", header: "إجمالي السطور", render: (r) => r.totalRows },
+    {
+      key: "errorRows",
+      header: "المرفوضة",
+      render: (r) => (
+        <span className={`font-bold ${r.errorRows > 0 ? "text-status-error-foreground" : ""}`}>
+          {r.errorRows}
+        </span>
+      ),
+    },
+  ];
+
+  const byFileTypeColumns: DataTableColumn<BreakdownByFileType>[] = [
+    { key: "fileType", header: "النوع", className: "font-medium", render: (r) => FILETYPE_LABELS[r.fileType] || r.fileType },
+    { key: "count", header: "عدد الدفعات", render: (r) => r.count },
+    { key: "totalRows", header: "إجمالي السطور", render: (r) => r.totalRows },
+    {
+      key: "errorRows",
+      header: "المرفوضة",
+      render: (r) => (
+        <span className={`font-bold ${r.errorRows > 0 ? "text-status-error-foreground" : ""}`}>{r.errorRows}</span>
+      ),
+    },
+    { key: "skippedRows", header: "المتخطّاة", render: (r) => r.skippedRows },
+  ];
+
+  const byUploaderColumns: DataTableColumn<BreakdownByUploader>[] = [
+    {
+      key: "uploader",
+      header: "المستخدم",
+      className: "font-medium",
+      render: (r) => (
+        <>
+          {r.uploaderName || r.uploaderEmail || `#${r.uploadedBy ?? "—"}`}
+          {r.uploaderEmail && r.uploaderName && (
+            <p className="text-[10px] text-muted-foreground" dir="ltr">{r.uploaderEmail}</p>
+          )}
+        </>
+      ),
+    },
+    { key: "count", header: "عدد الدفعات", render: (r) => r.count },
+    {
+      key: "failedCount",
+      header: "فاشلة",
+      render: (r) => (
+        <span className={r.failedCount > 0 ? "text-status-error-foreground font-semibold" : ""}>
+          {r.failedCount}
+        </span>
+      ),
+    },
+    { key: "totalRows", header: "السطور", render: (r) => r.totalRows },
+    {
+      key: "errorRows",
+      header: "المرفوضة",
+      render: (r) => (
+        <span className={`font-bold ${r.errorRows > 0 ? "text-status-error-foreground" : ""}`}>
+          {r.errorRows}
+        </span>
+      ),
+    },
+  ];
+
+  const recentColumns: DataTableColumn<RecentBatch>[] = [
+    {
+      key: "fileName",
+      header: "الملف",
+      render: (r) => (
+        <>
+          <span className="font-medium">{r.fileName || `دفعة #${r.id}`}</span>
+          {r.notes && (
+            <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">{r.notes}</p>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "fileType",
+      header: "النوع",
+      render: (r) => (
+        <Badge variant="outline" className="text-[10px]">
+          {FILETYPE_LABELS[r.fileType] || r.fileType}
+        </Badge>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r) => (
+        <Badge className={`text-[10px] ${STATUS_TONES[r.status] || ""}`}>
+          {STATUS_LABELS[r.status] || r.status}
+        </Badge>
+      ),
+    },
+    { key: "createdAt", header: "التاريخ", render: (r) => formatUmrahDate(r.createdAt) },
+    { key: "seasonTitle", header: "الموسم", render: (r) => r.seasonTitle || "—" },
+    {
+      key: "uploaderName",
+      header: "المستخدم",
+      className: "text-[11px]",
+      render: (r) => r.uploaderName || `#${r.uploadedBy ?? "—"}`,
+    },
+    { key: "totalRows", header: "السطور", render: (r) => r.totalRows ?? 0 },
+    { key: "newCount", header: "جديد", className: "text-status-success-foreground", render: (r) => r.newCount ?? 0 },
+    { key: "updatedCount", header: "محدث", render: (r) => r.updatedCount ?? 0 },
+    { key: "skippedCount", header: "متخطّى", className: "text-status-warning-foreground", render: (r) => r.skippedCount ?? 0 },
+    {
+      key: "errorCount",
+      header: "أخطاء",
+      render: (r) => {
+        const errCount = Number(r.errorCount ?? 0);
+        return (
+          <span
+            className={`font-bold ${errCount > 0 ? "text-status-error-foreground" : ""}`}
+            data-testid={`import-errors-recent-errors-${r.id}`}
+          >
+            {errCount}
+          </span>
+        );
+      },
+    },
+    {
+      key: "financialImpactCount",
+      header: "أثر مالي",
+      render: (r) =>
+        (r.financialImpactCount ?? 0) > 0 ? (
+          <Badge variant="outline" className="text-[10px] bg-status-warning-surface text-status-warning-foreground">
+            {r.financialImpactCount}
+          </Badge>
+        ) : (
+          <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+        ),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      className: "text-[11px]",
+      render: (r) => {
+        const errCount = Number(r.errorCount ?? 0);
+        const hasIssues = errCount > 0 || r.status === "failed" || Number(r.skippedCount ?? 0) > 0;
+        return hasIssues ? (
+          <Link
+            href={`/umrah/import/${r.id}/unlinked`}
+            className="text-blue-600 hover:underline"
+            data-testid={`import-errors-recent-unlinked-link-${r.id}`}
+          >
+            السطور غير المربوطة
+          </Link>
+        ) : null;
+      },
+    },
+  ];
+
   return (
     <PageShell
       title="ملخّص أخطاء الاستيراد — تقرير مجمَّع"
@@ -370,32 +534,14 @@ export default function UmrahImportErrorsSummaryReport() {
               {byStatus.length === 0 ? (
                 <p className="p-4 text-center text-xs text-muted-foreground" data-testid="import-errors-breakdown-status-empty">لا بيانات.</p>
               ) : (
-                <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-errors-breakdown-status">
-                  <thead>
-                    <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                      <th className="p-2 font-medium">الحالة</th>
-                      <th className="p-2 font-medium">عدد الدفعات</th>
-                      <th className="p-2 font-medium">إجمالي السطور</th>
-                      <th className="p-2 font-medium">المرفوضة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {byStatus.map((r, idx) => (
-                      <tr key={idx} className="border-b last:border-b-0 hover:bg-muted/30" data-testid={`import-errors-breakdown-status-row-${idx}`}>
-                        <td className="p-2">
-                          <Badge className={`text-[10px] ${STATUS_TONES[r.status] || ""}`}>
-                            {STATUS_LABELS[r.status] || r.status}
-                          </Badge>
-                        </td>
-                        <td className="p-2 font-semibold">{r.count}</td>
-                        <td className="p-2">{r.totalRows}</td>
-                        <td className={`p-2 font-bold ${r.errorRows > 0 ? "text-status-error-foreground" : ""}`}>
-                          {r.errorRows}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
+                <DataTable
+                  columns={byStatusColumns}
+                  data={byStatus}
+                  rowKey={(_r, idx) => idx}
+                  noToolbar
+                  pageSize={0}
+                  className="text-xs"
+                />
               )}
             </TabsContent>
 
@@ -403,28 +549,14 @@ export default function UmrahImportErrorsSummaryReport() {
               {byFileType.length === 0 ? (
                 <p className="p-4 text-center text-xs text-muted-foreground" data-testid="import-errors-breakdown-filetype-empty">لا بيانات.</p>
               ) : (
-                <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-errors-breakdown-filetype">
-                  <thead>
-                    <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                      <th className="p-2 font-medium">النوع</th>
-                      <th className="p-2 font-medium">عدد الدفعات</th>
-                      <th className="p-2 font-medium">إجمالي السطور</th>
-                      <th className="p-2 font-medium">المرفوضة</th>
-                      <th className="p-2 font-medium">المتخطّاة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {byFileType.map((r, idx) => (
-                      <tr key={idx} className="border-b last:border-b-0 hover:bg-muted/30" data-testid={`import-errors-breakdown-filetype-row-${idx}`}>
-                        <td className="p-2 font-medium">{FILETYPE_LABELS[r.fileType] || r.fileType}</td>
-                        <td className="p-2">{r.count}</td>
-                        <td className="p-2">{r.totalRows}</td>
-                        <td className={`p-2 font-bold ${r.errorRows > 0 ? "text-status-error-foreground" : ""}`}>{r.errorRows}</td>
-                        <td className="p-2">{r.skippedRows}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
+                <DataTable
+                  columns={byFileTypeColumns}
+                  data={byFileType}
+                  rowKey={(_r, idx) => idx}
+                  noToolbar
+                  pageSize={0}
+                  className="text-xs"
+                />
               )}
             </TabsContent>
 
@@ -432,37 +564,14 @@ export default function UmrahImportErrorsSummaryReport() {
               {byUploader.length === 0 ? (
                 <p className="p-4 text-center text-xs text-muted-foreground" data-testid="import-errors-breakdown-uploader-empty">لا بيانات.</p>
               ) : (
-                <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-errors-breakdown-uploader">
-                  <thead>
-                    <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                      <th className="p-2 font-medium">المستخدم</th>
-                      <th className="p-2 font-medium">عدد الدفعات</th>
-                      <th className="p-2 font-medium">فاشلة</th>
-                      <th className="p-2 font-medium">السطور</th>
-                      <th className="p-2 font-medium">المرفوضة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {byUploader.map((r, idx) => (
-                      <tr key={idx} className="border-b last:border-b-0 hover:bg-muted/30" data-testid={`import-errors-breakdown-uploader-row-${idx}`}>
-                        <td className="p-2 font-medium">
-                          {r.uploaderName || r.uploaderEmail || `#${r.uploadedBy ?? "—"}`}
-                          {r.uploaderEmail && r.uploaderName && (
-                            <p className="text-[10px] text-muted-foreground" dir="ltr">{r.uploaderEmail}</p>
-                          )}
-                        </td>
-                        <td className="p-2">{r.count}</td>
-                        <td className={`p-2 ${r.failedCount > 0 ? "text-status-error-foreground font-semibold" : ""}`}>
-                          {r.failedCount}
-                        </td>
-                        <td className="p-2">{r.totalRows}</td>
-                        <td className={`p-2 font-bold ${r.errorRows > 0 ? "text-status-error-foreground" : ""}`}>
-                          {r.errorRows}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
+                <DataTable
+                  columns={byUploaderColumns}
+                  data={byUploader}
+                  rowKey={(_r, idx) => idx}
+                  noToolbar
+                  pageSize={0}
+                  className="text-xs"
+                />
               )}
             </TabsContent>
           </Tabs>
@@ -482,92 +591,13 @@ export default function UmrahImportErrorsSummaryReport() {
               لا دفعات ضمن الفلتر الحالي.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs" data-testid="import-errors-recent-table">
-                <thead>
-                  <tr className="text-right text-muted-foreground border-b bg-surface-subtle">
-                    <th className="p-2 font-medium">الملف</th>
-                    <th className="p-2 font-medium">النوع</th>
-                    <th className="p-2 font-medium">الحالة</th>
-                    <th className="p-2 font-medium">التاريخ</th>
-                    <th className="p-2 font-medium">الموسم</th>
-                    <th className="p-2 font-medium">المستخدم</th>
-                    <th className="p-2 font-medium">السطور</th>
-                    <th className="p-2 font-medium">جديد</th>
-                    <th className="p-2 font-medium">محدث</th>
-                    <th className="p-2 font-medium">متخطّى</th>
-                    <th className="p-2 font-medium">أخطاء</th>
-                    <th className="p-2 font-medium">أثر مالي</th>
-                    <th className="p-2 font-medium">إجراءات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recent.map((r) => {
-                    const errCount = Number(r.errorCount ?? 0);
-                    const hasIssues = errCount > 0 || r.status === "failed" || Number(r.skippedCount ?? 0) > 0;
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-b last:border-b-0 hover:bg-muted/30"
-                        data-testid={`import-errors-recent-row-${r.id}`}
-                      >
-                        <td className="p-2">
-                          <span className="font-medium">{r.fileName || `دفعة #${r.id}`}</span>
-                          {r.notes && (
-                            <p className="text-[10px] text-muted-foreground truncate max-w-[200px]">{r.notes}</p>
-                          )}
-                        </td>
-                        <td className="p-2">
-                          <Badge variant="outline" className="text-[10px]">
-                            {FILETYPE_LABELS[r.fileType] || r.fileType}
-                          </Badge>
-                        </td>
-                        <td className="p-2">
-                          <Badge className={`text-[10px] ${STATUS_TONES[r.status] || ""}`}>
-                            {STATUS_LABELS[r.status] || r.status}
-                          </Badge>
-                        </td>
-                        <td className="p-2">{formatUmrahDate(r.createdAt)}</td>
-                        <td className="p-2">{r.seasonTitle || "—"}</td>
-                        <td className="p-2 text-[11px]">
-                          {r.uploaderName || `#${r.uploadedBy ?? "—"}`}
-                        </td>
-                        <td className="p-2">{r.totalRows ?? 0}</td>
-                        <td className="p-2 text-status-success-foreground">{r.newCount ?? 0}</td>
-                        <td className="p-2">{r.updatedCount ?? 0}</td>
-                        <td className="p-2 text-status-warning-foreground">{r.skippedCount ?? 0}</td>
-                        <td
-                          className={`p-2 font-bold ${errCount > 0 ? "text-status-error-foreground" : ""}`}
-                          data-testid={`import-errors-recent-errors-${r.id}`}
-                        >
-                          {errCount}
-                        </td>
-                        <td className="p-2">
-                          {(r.financialImpactCount ?? 0) > 0 ? (
-                            <Badge variant="outline" className="text-[10px] bg-status-warning-surface text-status-warning-foreground">
-                              {r.financialImpactCount}
-                            </Badge>
-                          ) : (
-                            <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
-                          )}
-                        </td>
-                        <td className="p-2 text-[11px]">
-                          {hasIssues && (
-                            <Link
-                              href={`/umrah/import/${r.id}/unlinked`}
-                              className="text-blue-600 hover:underline"
-                              data-testid={`import-errors-recent-unlinked-link-${r.id}`}
-                            >
-                              السطور غير المربوطة
-                            </Link>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              columns={recentColumns}
+              data={recent}
+              noToolbar
+              pageSize={0}
+              className="text-xs"
+            />
           )}
         </CardContent>
       </Card>
