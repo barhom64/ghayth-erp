@@ -187,11 +187,11 @@ export default function AdminIntegrationsDiagnosticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-status-info" />WhatsApp Business
+              <MessageSquare className="h-4 w-4 text-status-info" />واتساب للأعمال
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-xs">
-            <p className="text-muted-foreground">Meta webhook endpoint. GET=verify, POST=incoming events.</p>
+            <p className="text-muted-foreground">نقطة نهاية webhook من Meta — GET=تحقّق، POST=أحداث واردة.</p>
             <div className="flex gap-2">
               <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleWhatsappVerify}>اختبار التحقق (GET)</GuardedButton>
               <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleWhatsappWebhook}>إرسال حدث (POST)</GuardedButton>
@@ -202,7 +202,7 @@ export default function AdminIntegrationsDiagnosticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <PhoneCall className="h-4 w-4 text-status-info" />PBX (3CX/FreeSWITCH)
+              <PhoneCall className="h-4 w-4 text-status-info" />مقسم هاتفي (3CX/FreeSWITCH)
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs space-y-2">
@@ -217,7 +217,7 @@ export default function AdminIntegrationsDiagnosticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Truck className="h-4 w-4 text-status-info" />Fleet telematics (CMSV6)
+              <Truck className="h-4 w-4 text-status-info" />تتبّع الأسطول (CMSV6)
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs space-y-2">
@@ -241,11 +241,11 @@ export default function AdminIntegrationsDiagnosticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-status-info" />Finance gates
+              <Wallet className="h-4 w-4 text-status-info" />بوابات المالية
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs space-y-2">
-            <p className="text-muted-foreground">Budget gate + legacy fiscal-period stub (410 expected).</p>
+            <p className="text-muted-foreground">بوابة الموازنة + وحدة الفترة المحاسبية القديمة (410 متوقّع).</p>
             <div className="flex gap-1 flex-wrap">
               <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleBudgetValidate}>فحص الموازنة</GuardedButton>
               <GuardedButton perm="admin:update" size="sm" rateLimitAware onClick={handleBudgetApproval}>طلب اعتماد</GuardedButton>
@@ -257,7 +257,7 @@ export default function AdminIntegrationsDiagnosticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-status-info" />Auth probes
+              <KeyRound className="h-4 w-4 text-status-info" />اختبارات المصادقة
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs space-y-2">
@@ -292,12 +292,12 @@ export default function AdminIntegrationsDiagnosticsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Settings className="h-4 w-4 text-status-info" />Vendor settings lookup
+              <Settings className="h-4 w-4 text-status-info" />البحث عن إعدادات المورّد
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs space-y-2">
             <Input
-              placeholder="slug (e.g. zatca, pbx)"
+              placeholder="معرّف المورّد (مثل zatca، pbx)"
               dir="ltr"
               value={vendorSlug}
               onChange={(e) => setVendorSlug(e.target.value)}
