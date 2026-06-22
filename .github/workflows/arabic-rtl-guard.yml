@@ -1,0 +1,43 @@
+name: arabic-rtl-guard
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arabic-rtl-contract:
+    name: Arabic/RTL contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Playwright UX gate is wired
+        run: |
+          set -euo pipefail
+          test -f e2e/tests/ux-acceptance-gate.spec.ts
+          grep -q '@ux-gate' e2e/tests/ux-acceptance-gate.spec.ts
+          grep -q 'RTL' e2e/tests/ux-acceptance-gate.spec.ts
+          grep -q 'UX_GATE_ROUTES' e2e/tests/ux-acceptance-gate.spec.ts
+          echo 'Arabic/RTL Playwright contract exists.'
+
+      - name: Runtime command reference
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'MD'
+          ## Arabic/RTL Guard
+
+          Runtime command used by the full E2E lane:
+
+          ```bash
+          pnpm --filter @workspace/e2e test --grep "@ux-gate"
+          ```
+
+          This repository boots DB + API + frontend in the existing `e2e` workflow; the `@ux-gate` spec is inside `e2e/tests`, so it is included in that lane automatically.
+          MD
