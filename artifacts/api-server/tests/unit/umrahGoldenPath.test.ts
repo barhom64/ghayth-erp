@@ -9,6 +9,8 @@ const UMRAH_ENT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/
 const UMRAH_SUB_AGENTS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"), "utf8");
 // U-07 Phase 7: pricing CRUD routes carved into a dedicated sub-router.
 const UMRAH_PRICING = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-pricing.ts"), "utf8");
+// U-07 Phase 8: import-batches (listing + unlinked-rows recovery) carved into a dedicated sub-router.
+const UMRAH_IMPORT_BATCHES = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-import-batches.ts"), "utf8");
 // U-07 Phase 5: commission-plan routes carved into a dedicated sub-router.
 const UMRAH_COMMISSION = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-commission.ts"), "utf8");
 // The penalty creation pipeline (overstayed → violated transition,
@@ -134,7 +136,7 @@ describe("Umrah entities route structure", () => {
     expect(UMRAH_ROUTE).toContain('"/import/preview"');
     expect(UMRAH_ROUTE).toContain('"/import/mutamers"');
     expect(UMRAH_ROUTE).toContain('"/import/vouchers"');
-    expect(UMRAH_ENT).toContain('"/import/batches"');
+    expect(UMRAH_IMPORT_BATCHES).toContain('"/import/batches"');
   });
 
   it("statement endpoint exists", () => {
