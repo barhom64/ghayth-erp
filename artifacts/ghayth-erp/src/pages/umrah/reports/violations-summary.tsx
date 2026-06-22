@@ -9,7 +9,7 @@
  * Filters: date range (detectedAt), season, agent. Each updates
  * the KPI tiles + every breakdown via a single endpoint call.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -78,6 +78,7 @@ export default function ViolationsSummaryReport() {
   const [agentFilter, setAgentFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [q, setQ] = useState("");
 
   const qsParts: string[] = [];
   if (seasonFilter !== "all") qsParts.push(`seasonId=${seasonFilter}`);
@@ -101,7 +102,16 @@ export default function ViolationsSummaryReport() {
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
   const recent = data?.recent ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(recent);
+  const filtered = useMemo(
+    () => recent.filter((r) =>
+      !q.trim() ||
+      ["type", "mutamerName", "agentName", "description"].some((k) =>
+        String((r as any)[k] ?? "").toLowerCase().includes(q.trim().toLowerCase()),
+      ),
+    ),
+    [recent, q],
+  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -172,6 +182,16 @@ export default function ViolationsSummaryReport() {
             <Label className="text-xs">إلى تاريخ</Label>
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} data-testid="violations-filter-to" />
           </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <Label className="text-xs">بحث</Label>
+            <Input
+              type="text"
+              placeholder="بحث بالنوع أو المعتمر أو الوكيل…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="violations-summary-search"
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -240,7 +260,7 @@ export default function ViolationsSummaryReport() {
           </div>
           <div data-testid="violations-recent-empty">
           <DataTable
-            data={recent}
+            data={filtered}
             rowKey={(r) => String(r.id)}
             onSortedDataChange={setPrintRows}
             noToolbar

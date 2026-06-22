@@ -86,7 +86,15 @@ function TeamsMembersTab() {
     { enabled: !!teamId },
   );
   const members = asList<Member>(membersData?.data || []);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<Member>(members);
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return members;
+    return members.filter((m) =>
+      [m.employeeName, m.role, m.jobTitle].some((f) => String(f ?? "").toLowerCase().includes(term)),
+    );
+  }, [members, q]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<Member>(filtered);
 
   const add = async () => {
     const aid = Number(form.assignmentId);
@@ -181,8 +189,15 @@ function TeamsMembersTab() {
               />
             </CardHeader>
             <CardContent>
+              <div className="mb-3 max-w-sm">
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="بحث بالموظف أو الدور أو المسمى…"
+                />
+              </div>
               {isLoading ? <LoadingSpinner /> : (
-                <DataTable data={members} columns={columns} onSortedDataChange={setPrintRows} pageSize={20} noToolbar emptyMessage="لا يوجد أعضاء بعد." />
+                <DataTable data={filtered} columns={columns} onSortedDataChange={setPrintRows} pageSize={20} noToolbar emptyMessage="لا يوجد أعضاء بعد." />
               )}
             </CardContent>
           </Card>

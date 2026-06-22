@@ -7,7 +7,7 @@
  * with drill-through. The existing /umrah/commission-calculations
  * page stays as the list/edit screen.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -84,6 +84,7 @@ export default function CommissionsSummaryReport() {
   const [employeeFilter, setEmployeeFilter] = useState("all");
   const [statusFilter, setStatusFilter]     = useState("all");
   const [yearFilter, setYearFilter]         = useState("");
+  const [q, setQ]                           = useState("");
 
   const qsParts: string[] = [];
   if (seasonFilter !== "all")    qsParts.push(`seasonId=${seasonFilter}`);
@@ -107,7 +108,16 @@ export default function CommissionsSummaryReport() {
   const seasons = seasonsResp?.data ?? [];
   const employees = employeesResp?.data ?? [];
   const recent = data?.recent ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(recent);
+  const filtered = useMemo(
+    () => recent.filter((r) =>
+      !q.trim() ||
+      ["employeeName", "planName"].some((k) =>
+        String((r as any)[k] ?? "").toLowerCase().includes(q.trim().toLowerCase()),
+      ),
+    ),
+    [recent, q],
+  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -190,6 +200,16 @@ export default function CommissionsSummaryReport() {
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
               data-testid="commissions-filter-year"
+            />
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <Label className="text-xs">بحث</Label>
+            <Input
+              type="text"
+              placeholder="بحث بالموظف أو الخطة…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="commissions-search"
             />
           </div>
         </CardContent>
@@ -278,7 +298,7 @@ export default function CommissionsSummaryReport() {
           </div>
           <div data-testid="commissions-recent-empty">
           <DataTable
-            data={recent}
+            data={filtered}
             rowKey={(r) => String(r.id)}
             onSortedDataChange={setPrintRows}
             noToolbar

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -17,6 +17,7 @@ import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -291,7 +292,15 @@ function IntegrationsList() {
 function IntegrationLogs() {
   const { data: logsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["admin-int-logs"], "/admin/integration-logs");
   const logs = asList(logsResp);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(logs);
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return logs;
+    return logs.filter((log: any) =>
+      [log.recipient, log.subject, log.channel].some((f) => String(f ?? "").toLowerCase().includes(term)),
+    );
+  }, [logs, q]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
   const { toast } = useToast();
 
   const retryMut = useApiMutation<any, Record<string, never>>(
@@ -341,6 +350,12 @@ function IntegrationLogs() {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">سجل الإرسال</h3>
         <div className="flex items-center gap-2">
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="بحث بالمستلم أو الموضوع أو القناة…"
+            className="h-9 w-60"
+          />
           <PrintButton
             entityType="report_admin_integration_logs"
             entityId="list"
@@ -366,7 +381,7 @@ function IntegrationLogs() {
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            data={logs}
+            data={filtered}
             onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}

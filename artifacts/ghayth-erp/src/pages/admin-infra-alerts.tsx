@@ -91,7 +91,15 @@ export default function AdminInfraAlerts() {
   );
 
   const rows = data?.data ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.title, r.type, r.companyName].some((f) => String(f ?? "").toLowerCase().includes(term)),
+    );
+  }, [rows, q]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
   const openTotal = data?.open ?? 0;
   const openCritical = data?.openCritical ?? 0;
 
@@ -510,10 +518,17 @@ export default function AdminInfraAlerts() {
           </Card>
 
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-3 space-y-3">
+              <div className="max-w-sm">
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="بحث بالتنبيه أو النوع أو الشركة…"
+                />
+              </div>
               <DataTable
                 columns={columns}
-                data={rows}
+                data={filtered}
                 onSortedDataChange={setPrintRows}
                 noToolbar
                 pageSize={0}

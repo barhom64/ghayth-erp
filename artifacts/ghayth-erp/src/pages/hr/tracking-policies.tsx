@@ -9,6 +9,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -73,13 +74,27 @@ export default function TrackingPoliciesPage() {
   const { data: empData } = useApiQuery<any>(["employees-list"], "/employees?limit=500");
   const policies = asList(data);
   const employees = asList(empData);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(policies);
 
   const empName = useMemo(() => {
     const map: Record<string, string> = {};
     for (const e of employees) map[String(e.id)] = e.name || `#${e.id}`;
     return map;
   }, [employees]);
+
+  // بحث على اسم الموظف (المُحلّل من empName) + نمط التتبع + السبب.
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return policies;
+    return policies.filter((p: any) => {
+      const name = empName[String(p.employeeId)] || `#${p.employeeId}`;
+      const mode = MODE_LABEL[p.trackingMode] || p.trackingMode || "";
+      const reason = p.reason || "";
+      return [name, mode, reason].some((f) => String(f).toLowerCase().includes(term));
+    });
+  }, [policies, q, empName]);
+
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   // ── Enable / update form state ────────────────────────────────────────────
   const [employeeId, setEmployeeId] = useState("");
@@ -308,9 +323,17 @@ export default function TrackingPoliciesPage() {
         </CardContent>
       </Card>
 
+      <div className="max-w-md">
+        <Input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="بحث بالموظف أو نمط التتبع أو السبب…"
+        />
+      </div>
+
       <DataTable
         columns={columns}
-        data={policies}
+        data={filtered}
         onSortedDataChange={setPrintRows}
         noToolbar
         pageSize={20}

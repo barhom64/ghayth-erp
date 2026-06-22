@@ -1,7 +1,7 @@
 import { useApiQuery } from "@/lib/api";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn, AdvancedFilters, useFilters, applyFilters } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -110,13 +110,25 @@ export default function UnmappedLinesPage() {
     ["unmapped-lines"], "/finance/reports/unmapped-lines",
   );
 
+  // Search filters the PRIMARY (first non-empty) section's rows. Hook runs
+  // before the early returns below.
+  const [filters, setFilters] = useFilters();
+
   if (isLoading) return <LoadingSpinner />;
   if (isError || !data) return <ErrorState />;
 
   const nonEmptySections = data.sections.filter((s) => s.rows.length > 0);
   const isClean = data.summary.totalCount === 0;
+  const primarySource = nonEmptySections[0]?.source ?? null;
 
   const renderSection = (section: { source: string; rows: UnmappedRow[] }) => {
+    const isPrimary = primarySource !== null && section.source === primarySource;
+    // The primary section is searchable; its table renders the filtered set.
+    const tableRows = isPrimary
+      ? applyFilters(section.rows, filters, {
+          searchFields: ["invoiceRef", "orderRef", "grnRef", "description", "itemName"],
+        })
+      : section.rows;
     const cols: DataTableColumn<UnmappedRow>[] = [
       { key: "ref", header: "المرجع", render: (r) => entityLink(section.source, r) },
       { key: "description", header: "البيان",
@@ -144,7 +156,15 @@ export default function UnmappedLinesPage() {
           <p className="text-xs text-muted-foreground bg-status-warning-surface/50 border border-status-warning-surface rounded p-2">
             ⓘ {SECTION_HINT[section.source] ?? ""}
           </p>
-          <DataTable columns={cols} data={section.rows}
+          {isPrimary && (
+            <AdvancedFilters
+              config={{ searchPlaceholder: "بحث بالمرجع أو البيان…", showDateRange: false }}
+              values={filters}
+              onChange={setFilters}
+              resultCount={tableRows.length}
+            />
+          )}
+          <DataTable columns={cols} data={tableRows}
             emptyMessage="—" pageSize={50} noToolbar />
         </CardContent>
       </Card>

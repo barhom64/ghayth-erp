@@ -8,7 +8,7 @@
  * The existing /umrah/nusk-invoices page stays as the list/edit
  * screen for individual rows.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -84,6 +84,7 @@ export default function NuskInvoicesSummaryReport() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [fromDate, setFromDate]         = useState("");
   const [toDate, setToDate]             = useState("");
+  const [q, setQ]                       = useState("");
 
   const qsParts: string[] = [];
   if (seasonFilter !== "all") qsParts.push(`seasonId=${seasonFilter}`);
@@ -108,7 +109,16 @@ export default function NuskInvoicesSummaryReport() {
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
   const recent = data?.recent ?? [];
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(recent);
+  const filtered = useMemo(
+    () => recent.filter((r) =>
+      !q.trim() ||
+      ["nuskInvoiceNumber", "agentName", "groupName"].some((k) =>
+        String((r as any)[k] ?? "").toLowerCase().includes(q.trim().toLowerCase()),
+      ),
+    ),
+    [recent, q],
+  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -191,6 +201,16 @@ export default function NuskInvoicesSummaryReport() {
             <Label className="text-xs">إلى تاريخ الإصدار</Label>
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} data-testid="nusk-filter-to" />
           </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <Label className="text-xs">بحث</Label>
+            <Input
+              type="text"
+              placeholder="بحث برقم نُسك أو الوكيل أو المجموعة…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="nusk-search"
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -272,7 +292,7 @@ export default function NuskInvoicesSummaryReport() {
           </div>
           <div data-testid="nusk-recent-empty">
           <DataTable
-            data={recent}
+            data={filtered}
             rowKey={(r) => String(r.id)}
             onSortedDataChange={setPrintRows}
             noToolbar
