@@ -18,7 +18,7 @@ import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ActionHistory } from "@workspace/workflow-kit";
 import { FinancialDecisionPanel } from "@/components/shared/financial-decision-panel";
 import {

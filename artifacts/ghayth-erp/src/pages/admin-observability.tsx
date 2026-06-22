@@ -22,7 +22,7 @@ import {
 import { useState } from "react";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { resolveStatus } from "@/components/page-status-badge";
+import { resolveStatus } from "@workspace/ui-core";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { apiFetch, useApiQuery, API_BASE, nativeAuthHeaders } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";

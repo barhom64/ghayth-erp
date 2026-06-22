@@ -2,7 +2,7 @@ import { useApiQuery } from "@/lib/api";
 import { useAppContext } from "@/contexts/app-context";
 import { formatCurrency, roundMoney } from "@/lib/formatters";
 import { CreatePageLayout } from "@workspace/ui-core";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 
 export default function IntercompanyConsolidationPage() {

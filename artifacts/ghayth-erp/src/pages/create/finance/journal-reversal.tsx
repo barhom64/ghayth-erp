@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Undo2, AlertTriangle, FileSignature, Lock, CheckCircle2, Search,
   ArrowRight, Calendar, RotateCcw,

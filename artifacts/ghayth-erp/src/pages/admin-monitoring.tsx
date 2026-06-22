@@ -32,7 +32,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { RefreshAction } from "@/components/page-actions";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { resolveStatus } from "@/components/page-status-badge";
+import { resolveStatus } from "@workspace/ui-core";
 
 interface SystemStopRow {
   id: number;

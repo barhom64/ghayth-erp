@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Search, AlertTriangle, ChevronRight, ExternalLink,
   ScaleIcon, DollarSign, Clock, RotateCcw, Copy, Layers,

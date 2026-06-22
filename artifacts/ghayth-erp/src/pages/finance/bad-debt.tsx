@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { GuardedButton } from "@/components/shared/permission-gate";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { AlertTriangle, Calculator, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";

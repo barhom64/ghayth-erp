@@ -3,7 +3,7 @@ import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { ArrowLeft } from "lucide-react";

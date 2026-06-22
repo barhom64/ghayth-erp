@@ -16,7 +16,7 @@ import {
   SupplierSelect, AccountSelect, CostCenterSelect, VehicleSelect,
   ProjectSelect, EmployeeSelect, DriverSelect, ClientSelect,
 } from "@/components/shared/entity-selects";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency, roundMoney, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {

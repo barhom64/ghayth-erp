@@ -30,7 +30,7 @@ import { PropertyUnitContextCard } from "@/components/shared/property-unit-conte
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 import { Switch } from "@/components/ui/switch";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 
 const voucherTaxSplit = amountTaxSplit;

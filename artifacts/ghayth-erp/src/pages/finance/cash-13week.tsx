@@ -7,7 +7,7 @@ import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";

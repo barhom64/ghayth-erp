@@ -6,7 +6,7 @@ import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { formatDateAr, formatNumber } from "@/lib/formatters";
 import { AlertTriangle, Save, ExternalLink, ShieldCheck, History, Lock, KeyRound } from "lucide-react";

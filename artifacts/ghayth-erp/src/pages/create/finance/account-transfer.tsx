@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { AccountSelect } from "@/components/shared/entity-selects";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
 import { useToast } from "@/hooks/use-toast";
 import {

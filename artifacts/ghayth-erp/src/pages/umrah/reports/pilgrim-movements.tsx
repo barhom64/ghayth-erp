@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { PlaneTakeoff, PlaneLanding, AlertTriangle, Clock, MapPin, Calendar } from "lucide-react";
 import { todayLocal, formatUmrahDate } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";

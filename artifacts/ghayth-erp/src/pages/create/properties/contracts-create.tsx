@@ -21,7 +21,7 @@ import { PropertyUnitContextCard } from "@/components/shared/property-unit-conte
 import { PropertyOwnerSelect } from "@/components/shared/entity-selects";
 import { fieldErrorClass, TextField, NumberField, TextAreaField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { ImpactPreviewButton } from "@/components/shared/impact-preview";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 export default function ContractsCreate() {
   const [, setLocation] = useLocation();

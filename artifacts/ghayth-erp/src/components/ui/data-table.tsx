@@ -477,7 +477,7 @@ export function DataTable<T>({
     return src.filter((r) => selectedIds.has((r as any).id as number));
   }, [sortedData, data, selectedIds]);
 
-  const handleExportSelected = () => {
+  const downloadSelectedCsv = () => {
     if (selectedRows.length === 0) return;
     if (onExportSelected) onExportSelected(selectedRows);
     else downloadRowsCsv(visibleColumns, selectedRows);
@@ -635,7 +635,7 @@ export function DataTable<T>({
             <Button
               size="sm"
               variant="outline"
-              onClick={handleExportSelected}
+              onClick={downloadSelectedCsv}
               className="gap-1"
             >
               <Download className="h-3.5 w-3.5" />
@@ -710,6 +710,23 @@ export function DataTable<T>({
                 </div>
               );
             })}
+            {/* Column footers (totals/balances) also belong on mobile — the
+                desktop <tfoot> row has no place in a card list, so mirror it as
+                a final bold card of header:total pairs for the footable columns. */}
+            {hasFooter && sortedData && sortedData.length > 0 && (
+              <div className="p-3 bg-muted font-bold" data-testid="data-table-mobile-footer">
+                <div className="space-y-1.5">
+                  {visibleColumns.filter((col) => col.footer).map((col) => (
+                    <div key={col.key} className="flex items-start justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground shrink-0">{col.header}</span>
+                      <span className={cn("min-w-0 break-words text-end", col.className)} dir={col.ltr ? "ltr" : undefined}>
+                        {col.footer!(sortedData)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
         <Table>

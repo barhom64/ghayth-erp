@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { AccountSelect } from "@/components/shared/entity-selects";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Layers, FileSignature, ChevronRight, CheckCircle2, AlertTriangle,
   Building2, TrendingDown, TrendingUp, Banknote, Calendar, Users,

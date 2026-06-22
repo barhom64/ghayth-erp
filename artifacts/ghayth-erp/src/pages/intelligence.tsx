@@ -13,7 +13,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { resolveStatus } from "@/components/page-status-badge";
+import { resolveStatus } from "@workspace/ui-core";
 import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, TrendingDown, AlertTriangle, Search, Radar, Check, Loader2, Target, Activity } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";

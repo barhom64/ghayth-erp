@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   ScaleIcon, ChevronRight, Search, Download, ChevronDown,
   TrendingUp, TrendingDown, X, ExternalLink, Filter,

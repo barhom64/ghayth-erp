@@ -21,7 +21,7 @@ import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { resolveStatus } from "@/components/page-status-badge";
+import { resolveStatus } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

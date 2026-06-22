@@ -7,7 +7,7 @@ import {
 } from "@workspace/entity-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable } from "@workspace/ui-core";
 import { Users, Plane, Wallet, AlertTriangle, Shield, Calendar } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";

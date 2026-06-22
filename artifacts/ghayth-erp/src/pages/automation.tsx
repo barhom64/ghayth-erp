@@ -13,7 +13,7 @@ import { useApiQuery, useApiMutation, asList } from "@/lib/api";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
 import { usePrintRows } from "@/hooks/use-print-rows";
-import { resolveStatus } from "@/components/page-status-badge";
+import { resolveStatus } from "@workspace/ui-core";
 import { Cog, Play, Clock, Search, Zap, Activity, Bot, TrendingUp } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

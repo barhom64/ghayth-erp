@@ -13,7 +13,7 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber, todayLocal } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";

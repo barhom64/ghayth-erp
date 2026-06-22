@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ParetoMarker, computeParetoCumulative } from "@/components/shared/pareto-marker";
 import {
   Car, TrendingUp, TrendingDown, Download, BarChart3,

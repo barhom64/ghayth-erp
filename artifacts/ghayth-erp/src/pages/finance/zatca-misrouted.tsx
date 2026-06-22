@@ -5,7 +5,7 @@ import { PageShell } from "@workspace/ui-core";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { ConfirmActionDialog } from "@/components/shared/confirm-action-dialog";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { AlertTriangle } from "lucide-react";

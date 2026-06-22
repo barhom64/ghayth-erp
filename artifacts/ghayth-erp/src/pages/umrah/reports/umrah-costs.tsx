@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency } from "@/lib/formatters";
 
 type Dimension = "season" | "group" | "agent";

@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   AlertTriangle, FileWarning, Upload, Users, Download,
   CheckCircle2, XCircle, FileText,

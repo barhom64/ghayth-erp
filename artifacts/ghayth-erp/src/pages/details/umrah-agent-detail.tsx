@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/shared/print-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DataTable } from "@/components/ui/data-table";
+import { DataTable } from "@workspace/ui-core";
 import { Edit, Phone, Mail, MapPin, Users, Wallet, TrendingUp } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { EntityTags } from "@/components/shared/entity-tags";
