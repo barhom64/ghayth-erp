@@ -32,6 +32,9 @@ interface UserInfo {
   userRoles?: UserRole[];
   preferredCalendar: PreferredCalendar;
   preferredLocale: PreferredLocale;
+  // Per-user table UI prefs from /auth/me. `pageSize` is the persisted
+  // table page size; other keys (future column order / sort) pass through.
+  tablePrefs?: { pageSize?: number } & Record<string, unknown>;
 }
 
 interface Assignment {
@@ -63,6 +66,7 @@ interface AuthContextType {
   setPreferences: (prefs: {
     preferredCalendar?: PreferredCalendar;
     preferredLocale?: PreferredLocale;
+    tablePrefs?: { pageSize?: number } & Record<string, unknown>;
   }) => Promise<void>;
 }
 
@@ -103,6 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // braces for old API responses during deploy windows.
         preferredCalendar: (data.preferredCalendar as PreferredCalendar) ?? "hijri",
         preferredLocale: (data.preferredLocale as PreferredLocale) ?? "ar",
+        // Empty object server-side default → old API responses (deploy
+        // windows) fall back here so consumers read an object, not undefined.
+        tablePrefs: (data.tablePrefs as UserInfo["tablePrefs"]) ?? {},
       });
       // Tie subsequent observability captures to this user. Once a real
       // backend (Sentry / Datadog / …) is wired in, every error after
@@ -164,10 +171,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setPreferences = async (prefs: {
     preferredCalendar?: PreferredCalendar;
     preferredLocale?: PreferredLocale;
+    tablePrefs?: { pageSize?: number } & Record<string, unknown>;
   }) => {
     // Optimistic update for snappy UX — if the PATCH fails we re-fetch
-    // and restore the truth.
-    setUser((prev) => (prev ? { ...prev, ...prefs } : prev));
+    // and restore the truth. tablePrefs is shallow-merged (not overwritten)
+    // to mirror the server-side jsonb merge, so partial updates like
+    // { tablePrefs: { pageSize } } keep any other table prefs intact.
+    const { tablePrefs, ...rest } = prefs;
+    setUser((prev) =>
+      prev
+        ? {
+            ...prev,
+            ...rest,
+            ...(tablePrefs !== undefined
+              ? { tablePrefs: { ...prev.tablePrefs, ...tablePrefs } }
+              : {}),
+          }
+        : prev,
+    );
     try {
       await apiFetch("/auth/me/preferences", {
         method: "PATCH",
