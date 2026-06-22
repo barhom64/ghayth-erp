@@ -9,7 +9,7 @@
 import { useMemo, useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -126,6 +126,46 @@ export default function OptimizerRunDetailPage() {
   const assignments = run.assignmentsJson ?? [];
   const unassigned = run.unassignedJson ?? [];
 
+  const assignmentColumns: DataTableColumn<Assignment>[] = [
+    {
+      key: "sequenceOrder",
+      header: "#",
+      className: "font-mono text-xs",
+      render: (a) => a.sequenceOrder + 1,
+    },
+    {
+      key: "bookingLineId",
+      header: "سطر الحجز",
+      className: "font-mono",
+      render: (a) => `#${a.bookingLineId}`,
+    },
+    {
+      key: "vehicleId",
+      header: "المركبة",
+      className: "font-mono",
+      render: (a) => `#${a.vehicleId}`,
+    },
+    {
+      key: "driverId",
+      header: "السائق",
+      className: "font-mono",
+      render: (a) => (a.driverId != null ? `#${a.driverId}` : "—"),
+    },
+    {
+      key: "distanceMeters",
+      header: "المسافة (كم)",
+      align: "end",
+      className: "font-mono",
+      render: (a) => (a.distanceMeters / 1000).toFixed(2),
+    },
+    {
+      key: "reason",
+      header: "السبب",
+      className: "text-xs text-muted-foreground",
+      render: (a) => a.reason,
+    },
+  ];
+
   return (
     <PageShell
       title={`عملية تحسين #${run.id}`}
@@ -235,39 +275,14 @@ export default function OptimizerRunDetailPage() {
       <Card className="mt-4">
         <CardContent className="p-0">
           <div className="bg-muted/30 px-4 py-2 text-sm font-medium">الإسنادات المقترحة</div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/20 text-xs">
-                <tr>
-                  <th className="text-start p-2">#</th>
-                  <th className="text-start p-2">سطر الحجز</th>
-                  <th className="text-start p-2">المركبة</th>
-                  <th className="text-start p-2">السائق</th>
-                  <th className="text-end p-2">المسافة (كم)</th>
-                  <th className="text-start p-2">السبب</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assignments.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
-                      لا توجد إسنادات مقترحة في هذه الخطة.
-                    </td>
-                  </tr>
-                )}
-                {assignments.map((a) => (
-                  <tr key={`${a.sequenceOrder}-${a.bookingLineId}`} className="border-t hover:bg-muted/20">
-                    <td className="p-2 font-mono text-xs">{a.sequenceOrder + 1}</td>
-                    <td className="p-2 font-mono">#{a.bookingLineId}</td>
-                    <td className="p-2 font-mono">#{a.vehicleId}</td>
-                    <td className="p-2 font-mono">{a.driverId != null ? `#${a.driverId}` : "—"}</td>
-                    <td className="p-2 text-end font-mono">{(a.distanceMeters / 1000).toFixed(2)}</td>
-                    <td className="p-2 text-xs text-muted-foreground">{a.reason}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={assignmentColumns}
+            data={assignments}
+            rowKey={(a) => `${a.sequenceOrder}-${a.bookingLineId}`}
+            pageSize={0}
+            noToolbar
+            emptyMessage="لا توجد إسنادات مقترحة في هذه الخطة."
+          />
         </CardContent>
       </Card>
 
