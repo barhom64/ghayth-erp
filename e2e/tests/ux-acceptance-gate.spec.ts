@@ -42,6 +42,22 @@ const TECHNICAL_TEXT_PATTERNS: RegExp[] = [
   /stack trace/i,
 ];
 
+// Fallback shells that are Arabic + RTL yet mean the journey FAILED — a
+// not-found route or an RBAC-blocked section. Without this guard the gate
+// would pass a false green on these (they satisfy the Arabic/RTL checks).
+// Strings are pinned to the real shells:
+//   - pages/not-found.tsx        → "الصفحة غير موجودة"
+//   - App.tsx <AccessDenied>     → "غير مصرح بالوصول" / "ليس لديك صلاحية الوصول"
+//   - components/page-error-boundary.tsx → "غير مصرح بالوصول"
+const FALLBACK_PAGE_PATTERNS: RegExp[] = [
+  /الصفحة غير موجودة/,
+  /غير مصرح بالوصول/,
+  /ليس لديك صلاحية الوصول/,
+  /\bAccessDenied\b/i,
+  /\bNotFound\b/i,
+  /Access Denied/i,
+];
+
 function hasArabic(text: string): boolean {
   return /[؀-ۿ]/.test(text);
 }
@@ -51,6 +67,9 @@ function expectArabicOperationalText(text: string, route: string) {
   expect(hasArabic(text), `${route} did not render Arabic UI text`).toBeTruthy();
   for (const pattern of TECHNICAL_TEXT_PATTERNS) {
     expect(text, `${route} leaked technical text matching ${pattern}`).not.toMatch(pattern);
+  }
+  for (const pattern of FALLBACK_PAGE_PATTERNS) {
+    expect(text, `${route} rendered a fallback shell (not-found / access-denied) matching ${pattern}`).not.toMatch(pattern);
   }
 }
 

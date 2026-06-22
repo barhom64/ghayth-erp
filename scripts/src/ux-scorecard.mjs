@@ -96,6 +96,11 @@ async function main() {
   if (specSource) {
     if (!specSource.includes("@ux-gate")) problems.push(`الاختبار ${SPEC_PATH} لا يحمل الوسم @ux-gate`);
     if (!specSource.includes("@mobile")) problems.push(`الاختبار ${SPEC_PATH} لا يحمل وسم الجوال @mobile`);
+    // منع النجاح الكاذب: يجب أن يرفض الاختبار صفحات fallback (غير موجودة / غير مصرح)
+    // وإلا اعتبر صفحة محظورة عربية RTL نجاحًا. (حارس ضد ارتداد هذا الإصلاح.)
+    if (!specSource.includes("FALLBACK_PAGE_PATTERNS") || !specSource.includes("الصفحة غير موجودة")) {
+      problems.push(`الاختبار ${SPEC_PATH} لا يرفض صفحات fallback (غير موجودة/غير مصرح) — خطر نجاح كاذب`);
+    }
   }
 
   // 3) تطابق الرحلات الحرجة بين الاختبار والمصفوفة.
