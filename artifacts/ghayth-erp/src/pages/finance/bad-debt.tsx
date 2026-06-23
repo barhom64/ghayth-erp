@@ -234,10 +234,12 @@ export default function BadDebtPage() {
                 key: "label", header: "الشريحة",
                 render: (r) => <Badge className={`text-xs ${r.tone}`}>{r.label}</Badge>,
                 exportValue: (r) => r.label,
+                footer: () => "الإجمالي",
               },
               {
                 key: "balance", header: "الرصيد المفتوح", align: "end", className: "font-mono",
                 render: (r) => formatCurrency(r.balance),
+                footer: () => formatCurrency(totalOpen),
               },
               {
                 key: "rate", header: "النسبة", align: "end", className: "text-muted-foreground",
@@ -247,18 +249,9 @@ export default function BadDebtPage() {
                 key: "provision", header: "المخصص", align: "end",
                 className: "font-mono font-bold text-status-error-foreground",
                 render: (r) => formatCurrency(r.provision),
+                footer: () => formatCurrency(data.totalProvision),
               },
             ] satisfies DataTableColumn<(typeof bucketRows)[number]>[]}
-            renderGrandTotal={() => (
-              <tr className="bg-muted/30 font-bold">
-                <td className="p-2">الإجمالي</td>
-                <td className="p-2 text-end font-mono">{formatCurrency(totalOpen)}</td>
-                <td />
-                <td className="p-2 text-end font-mono text-status-error-foreground">
-                  {formatCurrency(data.totalProvision)}
-                </td>
-              </tr>
-            )}
           />
         </CardContent>
       </Card>
