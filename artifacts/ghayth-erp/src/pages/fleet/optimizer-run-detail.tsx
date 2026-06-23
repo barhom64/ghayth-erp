@@ -117,7 +117,7 @@ export default function OptimizerRunDetailPage() {
   if (isLoading || !run) {
     return (
       <PageShell title="تفاصيل عملية التحسين" breadcrumbs={[]}>
-        <div className="text-center text-muted-foreground p-12">جارٍ التحميل…</div>
+        <div className="text-center text-muted-foreground p-12">جاري التحميل…</div>
       </PageShell>
     );
   }

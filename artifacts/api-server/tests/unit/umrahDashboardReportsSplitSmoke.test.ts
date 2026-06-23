@@ -83,9 +83,18 @@ describe("U-07 Phase 13 §B — moved reports are read-only (no ledger leak)", (
     expect(REPORTS).not.toMatch(/postNuskJournalEntries\s*\(|reclassifyRevenueForInvoices\s*\(/);
   });
 
-  it("the ledger-touching reclassify endpoint did NOT move (stays in parent)", () => {
+  it("the ledger-touching reclassify endpoint did NOT leak into the reports carve", () => {
+    // Phase 13 invariant: the dashboard-reports carve must not drag the
+    // ledger-touching reclassify endpoint into umrah-reports.ts. It originally
+    // stayed in the parent; U-07 Phase 20 later moved it to umrah-payments.ts
+    // (its own finance sub-router) — never into reports.
+    const PAYMENTS = readFileSync(
+      join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-payments.ts"),
+      "utf8",
+    );
     expect(REPORTS).not.toMatch(/router\.(post|put)\(\s*["']\/reclassify-revenue["']/);
-    expect(PARENT).toMatch(/router\.(post|put)\(\s*["']\/reclassify-revenue["']/);
+    expect(PARENT).not.toMatch(/router\.(post|put)\(\s*["']\/reclassify-revenue["']/);
+    expect(PAYMENTS).toMatch(/router\.(post|put)\(\s*["']\/reclassify-revenue["']/);
   });
 });
 

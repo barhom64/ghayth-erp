@@ -153,7 +153,7 @@ export default function EmployeeScorePage() {
           </Button>
           <GuardedButton perm="hr.employees:update" onClick={recompute} disabled={recomputing}>
             <RefreshCw className={`h-4 w-4 me-1 ${recomputing ? "animate-spin" : ""}`} />
-            {recomputing ? "جارٍ الحساب..." : "إعادة الحساب الآن"}
+            {recomputing ? "جاري الحساب..." : "إعادة الحساب الآن"}
           </GuardedButton>
           <PrintButton
             entityType="report_hr_employee_score"
