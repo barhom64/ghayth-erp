@@ -19,8 +19,9 @@ import {
  *      unknown keys + an audit row.
  *   5. The FE PoliciesTab is embedded in the settings page.
  */
+// U-07 Phase 18 — settings/policies routes carved into umrah-settings.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-settings.ts"),
   "utf8",
 );
 const TAB = readFileSync(
@@ -133,7 +134,9 @@ describe("API — PUT /settings/policies/:categoryId", () => {
   });
 
   it("emits an audit row for the save", () => {
-    expect(ROUTE).toMatch(/entity: "umrah_settings_policies"/);
+    // U-07 Phase 18 — converted to the IGOC auditFromRequest helper (positional
+    // entity arg) when carved into umrah-settings.ts.
+    expect(ROUTE).toMatch(/auditFromRequest\(\s*req,\s*"update",\s*"umrah_settings_policies"/);
   });
 });
 
