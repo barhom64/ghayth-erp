@@ -67,7 +67,7 @@ const createProgramSchema = z.object({
   endDate: z.string().optional(),
   location: z.string().optional(),
   trainer: z.string().optional(),
-  capacity: z.coerce.number().optional(),
+  capacity: z.coerce.number().int("السعة يجب أن تكون عددًا صحيحًا").nonnegative("السعة يجب ألا تكون سالبة").optional(),
   status: z.string().optional(),
   type: z.string().optional(),
   provider: z.string().optional(),
@@ -87,7 +87,7 @@ const patchProgramSchema = z.object({
   endDate: z.string().nullable().optional(),
   location: z.string().optional(),
   trainer: z.string().optional(),
-  capacity: z.coerce.number().optional(),
+  capacity: z.coerce.number().int("السعة يجب أن تكون عددًا صحيحًا").nonnegative("السعة يجب ألا تكون سالبة").optional(),
   status: z.string().optional(),
 });
 
