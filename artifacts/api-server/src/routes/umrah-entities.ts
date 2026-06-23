@@ -2,12 +2,13 @@
 // umrah-entities.ts — COMMERCIAL/FINANCE entities for the umrah module
 //
 // Owns: groups (CRUD),
-//       sales-invoices (generate + update),
-//       dashboard, employee-assignments.
+//       employee-assignments.
 //   (nusk-invoices — list/get/create/update/delete + AP journal posting —
 //    live in umrah-nusk-invoices.ts — U-07 Phase 19)
 //   (payments + revenue reclassification — register payment / reclassify —
 //    live in umrah-payments.ts — U-07 Phase 20)
+//   (sales-invoices — list/generate/sales-wizard/patch —
+//    live in umrah-invoices.ts — U-07 Phase 21)
 //   (letters PDF + dispatch live in umrah-letters.ts — U-07 Phase 12)
 //   (operational reports — daily-runsheet, reconciliation, exempt-pilgrims,
 //    group/season portfolio — live in umrah-reports.ts — U-07 Phase 11)
@@ -42,10 +43,6 @@ import {
   todayISO,
 } from "../lib/businessHelpers.js";
 import { internalTechRef } from "../lib/internalRef.js";
-import {
-  generateSalesInvoice,
-  listUninvoicedGroups,
-} from "../lib/umrahInvoicingEngine.js";
 import {
   calculateAllForCompany,
 } from "../lib/umrahCommissionEngine.js";
@@ -111,6 +108,11 @@ import nuskInvoicesRouter from "./umrah-nusk-invoices.js";
 // to a dedicated sub-router. Paths still resolve at /umrah/payments and
 // /umrah/reclassify-revenue.
 import paymentsRouter from "./umrah-payments.js";
+// U-07 Phase 21 — sales-invoices (list, generate via the generateSalesInvoice
+// engine, sales-wizard via listUninvoicedGroups, metadata patch) moved to a
+// dedicated sub-router. Paths still resolve at /umrah/invoices, /umrah/invoices/
+// generate, /umrah/sales-wizard/uninvoiced-groups and /umrah/invoices/:id.
+import invoicesRouter from "./umrah-invoices.js";
 
 const router = Router();
 router.use(journeyReportsRouter);
@@ -129,6 +131,7 @@ router.use(calendarRouter);
 router.use(settingsRouter);
 router.use(nuskInvoicesRouter);
 router.use(paymentsRouter);
+router.use(invoicesRouter);
 
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
@@ -144,20 +147,6 @@ async function requireOpenSeason(seasonId: number, companyId: number): Promise<v
 // ============================================================================
 // ZOD SCHEMAS
 // ============================================================================
-
-const generateInvoiceSchema = z.object({
-  subAgentId: z.coerce.number({ required_error: "الوكيل الفرعي مطلوب" }),
-  groupIds: z.array(z.coerce.number()).min(1, "المجموعات مطلوبة"),
-  seasonId: z.coerce.number({ required_error: "الموسم مطلوب" }),
-  /** groupId → manual price per mutamer (overrides pricing rules). */
-  manualPrices: z.record(z.coerce.number(), z.coerce.number().positive()).optional(),
-});
-
-const updateInvoiceSchema = z.object({
-  status: z.string().optional(),
-  notes: z.string().nullable().optional(),
-  dueDate: z.string().nullable().optional(),
-});
 
 // ============================================================================
 // GROUPS
@@ -867,111 +856,6 @@ router.get("/employees/:employeeId/assignments", authorize({ feature: "umrah", a
     );
     res.json(maskFields(req, { data: rows }));
   } catch (err) { handleRouteError(err, res, "Employee assignments error"); }
-});
-
-// ============================================================================
-// SALES INVOICES
-// ============================================================================
-
-router.get("/invoices", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { seasonId, subAgentId, status } = req.query as Record<string, string | undefined>;
-    let where = `si."companyId" = $1 AND si."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
-    if (seasonId) { params.push(seasonId); where += ` AND si."seasonId" = $${params.length}`; }
-    if (subAgentId) { params.push(subAgentId); where += ` AND si."subAgentId" = $${params.length}`; }
-    if (status) { params.push(status); where += ` AND si.status = $${params.length}`; }
-    const rows = await rawQuery(
-      // Defence-in-depth on the sub-agents JOIN — it previously matched
-      // only on id, so a stale FK could lift another tenant's name into
-      // the response. Matches the pattern PR #1425 added to GET
-      // /umrah/pilgrims/:id. Selecting si.* surfaces the costBasis +
-      // marginBase columns (populated by umrahInvoicingEngine since
-      // PR #1457) so the UI can display gross profit per row.
-      `SELECT si.*, sa.name AS "subAgentName", c.name AS "clientName"
-       FROM umrah_sales_invoices si
-       LEFT JOIN umrah_sub_agents sa
-              ON sa.id = si."subAgentId"
-             AND sa."companyId" = si."companyId"
-             AND sa."deletedAt" IS NULL
-       LEFT JOIN clients c
-              ON c.id = si."clientId"
-             AND c."companyId" = si."companyId"
-             AND c."deletedAt" IS NULL
-       WHERE ${where}
-       ORDER BY si."createdAt" DESC
-       LIMIT 500`,
-      params
-    );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (err) { handleRouteError(err, res, "List umrah invoices"); }
-});
-
-router.post("/invoices/generate", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const parsed = zodParse(generateInvoiceSchema.safeParse(req.body));
-    const { subAgentId, groupIds, seasonId, manualPrices } = parsed;
-    const result = await generateSalesInvoice(
-      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      { subAgentId, groupIds, seasonId, manualPrices }
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { subAgentId, groupIds, seasonId, manualPrices: manualPrices ? Object.keys(manualPrices).length : 0 } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.generated", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total, subAgentId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    // §10 of #1870 — canonical name (see eventCatalog).
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.sales_invoice.created", entity: "umrah_sales_invoices", entityId: result.invoiceId, after: { ref: result.ref, total: result.total, subAgentId } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.status(201).json(result);
-  } catch (err) { handleRouteError(err, res, "Generate umrah invoice"); }
-});
-
-// Sales-invoice wizard: lists uninvoiced groups for a sub-agent + smart
-// per-group price suggestions (last invoice → pricing rule →
-// sub-agent default → none). The UI pre-fills the suggested price and
-// the operator types only for exceptional cases. Pairs with the
-// `manualPrices` payload on POST /invoices/generate above.
-router.get("/sales-wizard/uninvoiced-groups", authorize({ feature: "umrah", action: "view" }), async (req, res): Promise<void> => {
-  try {
-    const scope = req.scope!;
-    const subAgentId = parseId(String(req.query.subAgentId ?? ""), "subAgentId");
-    const seasonRaw = req.query.seasonId;
-    const seasonId = seasonRaw != null && String(seasonRaw) !== "" ? Number(seasonRaw) : null;
-    const result = await listUninvoicedGroups(
-      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      subAgentId,
-      seasonId,
-    );
-    res.json(maskFields(req, result));
-  } catch (err) { handleRouteError(err, res, "List uninvoiced groups for sales wizard"); }
-});
-
-router.patch("/invoices/:id", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = parseId(req.params.id, "id");
-    const parsed = zodParse(updateInvoiceSchema.safeParse(req.body));
-    const b = parsed as Record<string, any>;
-    const params: unknown[] = [];
-    const sets: string[] = [];
-    for (const key of ["status","notes","dueDate"]) {
-      if (b[key] !== undefined) { params.push(b[key]); sets.push(`"${key}"=$${params.length}`); }
-    }
-    if (sets.length === 0) throw new ValidationError("لا توجد بيانات للتحديث");
-    params.push(scope.userId); sets.push(`"updatedBy"=$${params.length}`);
-    sets.push(`"updatedAt"=NOW()`);
-    params.push(id); params.push(scope.companyId);
-    await rawExecute(
-      `UPDATE umrah_sales_invoices SET ${sets.join(",")} WHERE id=$${params.length-1} AND "companyId"=$${params.length} AND "deletedAt" IS NULL`,
-      params
-    );
-    const [row] = await rawQuery(
-      `SELECT * FROM umrah_sales_invoices WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL`,
-      [id, scope.companyId]
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "update", entity: "umrah_sales_invoices", entityId: id, after: b }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.updated", entity: "umrah_sales_invoices", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.json(row);
-  } catch (err) { handleRouteError(err, res, "Update umrah invoice"); }
 });
 
 export default router;
