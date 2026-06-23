@@ -341,7 +341,7 @@ export default function CipPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>إلغاء</Button>
             <GuardedButton perm="finance:create" onClick={submitCreate} disabled={!createForm.name.trim() || !createForm.startDate || createMut.isPending}>
-              {createMut.isPending ? "جارٍ الإنشاء..." : "إنشاء"}
+              {createMut.isPending ? "جاري الإنشاء..." : "إنشاء"}
             </GuardedButton>
           </DialogFooter>
         </DialogContent>
@@ -375,7 +375,7 @@ export default function CipPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCostFor(null)}>إلغاء</Button>
             <GuardedButton perm="finance:create" onClick={submitCost} disabled={!costForm.description.trim() || !(Number(costForm.amount) > 0) || addCostMut.isPending}>
-              {addCostMut.isPending ? "جارٍ الإضافة..." : "إضافة التكلفة"}
+              {addCostMut.isPending ? "جاري الإضافة..." : "إضافة التكلفة"}
             </GuardedButton>
           </DialogFooter>
         </DialogContent>

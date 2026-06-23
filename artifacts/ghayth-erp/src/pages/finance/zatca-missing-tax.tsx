@@ -188,7 +188,7 @@ export default function ZatcaMissingTaxPage() {
                 {accessRequested
                   ? "تم إرسال الطلب"
                   : requestingAccess
-                    ? "جارٍ الإرسال…"
+                    ? "جاري الإرسال…"
                     : "طلب الصلاحية"}
               </Button>
             </div>
@@ -341,7 +341,7 @@ export default function ZatcaMissingTaxPage() {
                         disabled={isSaving || draft.trim().length === 0}
                       >
                         <Save className="w-4 h-4 ml-1" />
-                        {isSaving ? "جارٍ الحفظ…" : "حفظ"}
+                        {isSaving ? "جاري الحفظ…" : "حفظ"}
                       </Button>
                     </div>
                   );

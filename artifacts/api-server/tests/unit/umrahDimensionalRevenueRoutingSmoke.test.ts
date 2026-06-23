@@ -34,8 +34,10 @@ const ENGINE = readFileSync(
   join(import.meta.dirname!, "../../src/lib/umrahInvoicingEngine.ts"),
   "utf8",
 );
+// U-07 Phase 20 — the reclassify-revenue route (+ schema + engine import) was
+// carved into umrah-payments.ts; the thin-wrapper assertions read it there.
 const ROUTE_ENT = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-payments.ts"),
   "utf8",
 );
 const UI_PAGE = readFileSync(

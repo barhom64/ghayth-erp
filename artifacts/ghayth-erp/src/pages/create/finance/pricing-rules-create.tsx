@@ -287,7 +287,7 @@ export default function PricingRuleEditor() {
           إلغاء
         </Button>
         <Button onClick={submit} disabled={isPending}>
-          {isPending ? "جارٍ الحفظ..." : (isEdit ? "حفظ التعديلات" : "إنشاء القاعدة")}
+          {isPending ? "جاري الحفظ..." : (isEdit ? "حفظ التعديلات" : "إنشاء القاعدة")}
         </Button>
       </div>
     </PageShell>
