@@ -248,10 +248,15 @@ describe("Module coverage: Umrah", () => {
     expect(entities).toContain("createAuditLog");
   });
 
-  it("entities audits sub-agent creation and updates", () => {
-    expect(entities).toContain('"umrah_sub_agents"');
-    expect(entities).toContain("action: \"create\"");
-    expect(entities).toContain("action: \"update\"");
+  // Sub-agent CRUD + its audit trail live in umrah-sub-agents.ts since the
+  // U-07 Phase 6 carve-out (IGOC ratchet → auditFromRequest, positional args).
+  // (This previously read `entities` and passed only because the attachments
+  // ATTACH_OWNER_TABLE map happened to contain the "umrah_sub_agents" string;
+  // attachments moved to umrah-attachments.ts in U-07 Phase 10.)
+  it("sub-agents router audits sub-agent creation and updates", () => {
+    expect(subAgents).toContain('"umrah_sub_agents"');
+    expect(subAgents).toMatch(/auditFromRequest\(\s*req,\s*"create",\s*"umrah_sub_agents"/);
+    expect(subAgents).toMatch(/auditFromRequest\(\s*req,\s*"update",\s*"umrah_sub_agents"/);
   });
 
   // Events
