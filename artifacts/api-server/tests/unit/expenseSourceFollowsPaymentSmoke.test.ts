@@ -20,8 +20,11 @@ describe("expenses-create — money source follows the payment method", () => {
   it("recomputes the matching source accounts from the chosen method", () => {
     expect(FORM).toMatch(/filterAccountsForPaymentMethod\(moneyAccounts, form\.paymentMethod\)/);
   });
-  it("clears a source that no longer matches the method", () => {
-    expect(FORM).toMatch(/!codes\.includes\(prev\.sourceAccountCode\)/);
+  it("clears a source that no longer matches the method (single-pass: validity check + clear path)", () => {
+    // restructured to clear AND re-select in one pass (Codex P1 #2914): a stale
+    // source fails `stillValid` and is cleared unless a lone match replaces it.
+    expect(FORM).toMatch(/const stillValid = !!prev\.sourceAccountCode && codes\.includes\(prev\.sourceAccountCode\)/);
+    expect(FORM).toMatch(/return prev\.sourceAccountCode \? \{ \.\.\.prev, sourceAccountCode: "" \} : prev/);
   });
   it("auto-selects when exactly one account matches", () => {
     expect(FORM).toMatch(/codes\.length === 1/);
