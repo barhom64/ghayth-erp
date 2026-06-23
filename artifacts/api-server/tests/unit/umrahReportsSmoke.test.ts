@@ -21,7 +21,8 @@ const readRoute = (f: string) => readFileSync(join(root, "src/routes", f), "utf8
 const readMig = (f: string) => readFileSync(join(root, "src/migrations", f), "utf8");
 const readLib = (f: string) => readFileSync(join(root, "src/lib", f), "utf8");
 
-const UMRAH_ENTITIES = readRoute("umrah-entities.ts");
+// U-07 Phase 11: daily-runsheet + reconciliation reports carved into umrah-reports.ts.
+const UMRAH_REPORTS = readRoute("umrah-reports.ts");
 // U-07 Phase 9: sub-agent statements (JSON + PDF) carved into a dedicated sub-router.
 const UMRAH_STATEMENTS = readRoute("umrah-statements.ts");
 // U-07 Phase 10: attachments (polymorphic document storage) carved into a dedicated sub-router.
@@ -141,40 +142,40 @@ describe("umrah migration 154 — umrah_attachments table", () => {
 
 describe("umrah-entities — reconciliation report (PR #312)", () => {
   it("mounts GET /reports/reconciliation", () => {
-    expect(UMRAH_ENTITIES).toMatch(/router\.get\(["']\/reports\/reconciliation["']/);
+    expect(UMRAH_REPORTS).toMatch(/router\.get\(["']\/reports\/reconciliation["']/);
   });
 
   it("authorize gate (view)", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/reports/reconciliation"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 300);
+    const idx = UMRAH_REPORTS.indexOf('"/reports/reconciliation"');
+    const section = UMRAH_REPORTS.slice(idx, idx + 300);
     expect(section).toMatch(/action:\s*["']view["']/);
   });
 
   it("reports three diff axes (amount / count / overstay)", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/reports/reconciliation"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 5000);
+    const idx = UMRAH_REPORTS.indexOf('"/reports/reconciliation"');
+    const section = UMRAH_REPORTS.slice(idx, idx + 5000);
     expect(section).toContain("amountDiffs");
     expect(section).toContain("countDiffs");
     expect(section).toContain("overstayGaps");
   });
 
   it("amount diff joins journal_entries via purchaseInvoiceId + journalEntryId", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/reports/reconciliation"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 5000);
+    const idx = UMRAH_REPORTS.indexOf('"/reports/reconciliation"');
+    const section = UMRAH_REPORTS.slice(idx, idx + 5000);
     expect(section).toMatch(/journal_entries[\s\S]*?journal_lines/i);
     expect(section).toContain('ni."purchaseInvoiceId"');
     expect(section).toContain('ni."journalEntryId"');
   });
 
   it("overstay query excludes already-violated rows via NOT EXISTS umrah_violations", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/reports/reconciliation"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 5000);
+    const idx = UMRAH_REPORTS.indexOf('"/reports/reconciliation"');
+    const section = UMRAH_REPORTS.slice(idx, idx + 5000);
     expect(section).toMatch(/NOT EXISTS\s*\([\s\S]*?umrah_violations/i);
   });
 
   it("scopes every diff query by companyId + respects soft delete", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/reports/reconciliation"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 5000);
+    const idx = UMRAH_REPORTS.indexOf('"/reports/reconciliation"');
+    const section = UMRAH_REPORTS.slice(idx, idx + 5000);
     const compMatches = [...section.matchAll(/"companyId"\s*=\s*\$1/g)];
     expect(compMatches.length).toBeGreaterThanOrEqual(3);
     const softDeleteMatches = [...section.matchAll(/"deletedAt"\s+IS\s+NULL/gi)];
@@ -188,29 +189,29 @@ describe("umrah-entities — reconciliation report (PR #312)", () => {
 
 describe("umrah-entities — daily run-sheet (PR #305)", () => {
   it("mounts both JSON and PDF endpoints", () => {
-    expect(UMRAH_ENTITIES).toMatch(/router\.get\(["']\/reports\/daily-runsheet["']/);
-    expect(UMRAH_ENTITIES).toMatch(/router\.get\(["']\/reports\/daily-runsheet\/pdf["']/);
+    expect(UMRAH_REPORTS).toMatch(/router\.get\(["']\/reports\/daily-runsheet["']/);
+    expect(UMRAH_REPORTS).toMatch(/router\.get\(["']\/reports\/daily-runsheet\/pdf["']/);
   });
 
   it("authorize gate (view) on both endpoints", () => {
-    const jsonIdx = UMRAH_ENTITIES.indexOf('"/reports/daily-runsheet"');
-    const pdfIdx = UMRAH_ENTITIES.indexOf('"/reports/daily-runsheet/pdf"');
-    expect(UMRAH_ENTITIES.slice(jsonIdx, jsonIdx + 300)).toMatch(/action:\s*["']view["']/);
-    expect(UMRAH_ENTITIES.slice(pdfIdx, pdfIdx + 300)).toMatch(/action:\s*["']view["']/);
+    const jsonIdx = UMRAH_REPORTS.indexOf('"/reports/daily-runsheet"');
+    const pdfIdx = UMRAH_REPORTS.indexOf('"/reports/daily-runsheet/pdf"');
+    expect(UMRAH_REPORTS.slice(jsonIdx, jsonIdx + 300)).toMatch(/action:\s*["']view["']/);
+    expect(UMRAH_REPORTS.slice(pdfIdx, pdfIdx + 300)).toMatch(/action:\s*["']view["']/);
   });
 
   it("shares a single fetchDailyRunsheet helper between JSON and PDF (no logic divergence)", () => {
-    expect(UMRAH_ENTITIES).toMatch(/async\s+function\s+fetchDailyRunsheet/);
+    expect(UMRAH_REPORTS).toMatch(/async\s+function\s+fetchDailyRunsheet/);
     // Both routes call the same helper. (U-07 Phase 10: attachments moved out,
     // so the daily-runsheet section is now bounded by RECONCILIATION REPORT.)
-    const sec = UMRAH_ENTITIES.slice(UMRAH_ENTITIES.indexOf("Daily run-sheet"), UMRAH_ENTITIES.indexOf("RECONCILIATION"));
+    const sec = UMRAH_REPORTS.slice(UMRAH_REPORTS.indexOf("Daily run-sheet"), UMRAH_REPORTS.indexOf("RECONCILIATION"));
     const calls = [...sec.matchAll(/fetchDailyRunsheet\(/g)];
     expect(calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("queries pilgrims scoped by companyId on entryDate / exitDate / overstay", () => {
-    const idx = UMRAH_ENTITIES.indexOf("async function fetchDailyRunsheet");
-    const section = UMRAH_ENTITIES.slice(idx, idx + 1500);
+    const idx = UMRAH_REPORTS.indexOf("async function fetchDailyRunsheet");
+    const section = UMRAH_REPORTS.slice(idx, idx + 1500);
     expect(section).toMatch(/"companyId"\s*=\s*\$1/);
     expect(section).toContain('"entryDate" = $2');
     expect(section).toContain('"exitDate" = $2');
@@ -218,8 +219,8 @@ describe("umrah-entities — daily run-sheet (PR #305)", () => {
   });
 
   it("PDF path proxies through Print Engine v2 (renderPrint) with the umrah_runsheet entityType", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/reports/daily-runsheet/pdf"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 2000);
+    const idx = UMRAH_REPORTS.indexOf('"/reports/daily-runsheet/pdf"');
+    const section = UMRAH_REPORTS.slice(idx, idx + 2000);
     expect(section).toContain("renderPrint");
     expect(section).toContain("umrah_runsheet");
     expect(section).toContain('"Content-Type"');
