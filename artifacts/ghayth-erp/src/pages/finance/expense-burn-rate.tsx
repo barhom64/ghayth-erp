@@ -373,15 +373,26 @@ export default function ExpenseBurnRatePage() {
                   {
                     key: "label", header: "الشهر", ltr: true,
                     render: (m) => <span className="font-mono text-xs">{m.label}</span>,
+                    footer: () => "المتوسط",
                   },
                   {
                     key: "revenue", header: "الإيرادات", align: "end",
                     render: (m) => <span className="tabular-nums">{formatCurrency(m.revenue)}</span>,
+                    footer: () => (
+                      <span className="tabular-nums">
+                        {formatCurrency(monthlyStats.reduce((s, m) => s + m.revenue, 0) / 6)}
+                      </span>
+                    ),
                   },
                   {
                     key: "expenses", header: "المصاريف", align: "end",
                     render: (m) => (
                       <span className="tabular-nums text-status-danger-foreground">{formatCurrency(m.expenses)}</span>
+                    ),
+                    footer: () => (
+                      <span className="tabular-nums text-status-danger-foreground">
+                        {formatCurrency(monthlyStats.reduce((s, m) => s + m.expenses, 0) / 6)}
+                      </span>
                     ),
                   },
                   {
@@ -389,6 +400,11 @@ export default function ExpenseBurnRatePage() {
                     render: (m) => (
                       <span className={`tabular-nums font-semibold ${m.netIncome >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
                         {m.netIncome >= 0 ? "+" : ""}{formatCurrency(m.netIncome)}
+                      </span>
+                    ),
+                    footer: () => (
+                      <span className={`tabular-nums ${(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6) >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
+                        {formatCurrency(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6)}
                       </span>
                     ),
                   },
@@ -400,25 +416,9 @@ export default function ExpenseBurnRatePage() {
                       </Badge>
                     ),
                     exportValue: (m) => Math.abs(m.burn),
+                    footer: () => <span className="font-bold">{formatCurrency(avgBurn)}</span>,
                   },
                 ] satisfies DataTableColumn<(typeof monthlyStats)[number]>[]}
-                renderGrandTotal={() => (
-                  <tr className="font-semibold bg-muted/40 border-t-2">
-                    <td className="py-2 px-2">المتوسط</td>
-                    <td className="py-2 px-2 text-end tabular-nums">
-                      {formatCurrency(monthlyStats.reduce((s, m) => s + m.revenue, 0) / 6)}
-                    </td>
-                    <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">
-                      {formatCurrency(monthlyStats.reduce((s, m) => s + m.expenses, 0) / 6)}
-                    </td>
-                    <td className={`py-2 px-2 text-end tabular-nums ${(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6) >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                      {formatCurrency(monthlyStats.reduce((s, m) => s + m.netIncome, 0) / 6)}
-                    </td>
-                    <td className="py-2 px-2 text-end font-bold">
-                      {formatCurrency(avgBurn)}
-                    </td>
-                  </tr>
-                )}
               />
             </CardContent>
           </Card>

@@ -348,16 +348,19 @@ export default function TrialBalanceDrilldownPage() {
                       {
                         key: "name", header: "الاسم",
                         render: (r) => r.name,
+                        footer: () => `إجمالي ${meta.label}`,
                       },
                       {
                         key: "totalDebit", header: "مدين", align: "end", width: "8rem", className: "tabular-nums",
                         render: (r) => (Number(r.totalDebit) > 0 ? formatCurrency(Number(r.totalDebit)) : "—"),
                         exportValue: (r) => Number(r.totalDebit),
+                        footer: () => formatCurrency(typeTotalDebit),
                       },
                       {
                         key: "totalCredit", header: "دائن", align: "end", width: "8rem", className: "tabular-nums",
                         render: (r) => (Number(r.totalCredit) > 0 ? formatCurrency(Number(r.totalCredit)) : "—"),
                         exportValue: (r) => Number(r.totalCredit),
+                        footer: () => formatCurrency(typeTotalCredit),
                       },
                       {
                         key: "balance", header: "الرصيد", align: "end", width: "8rem",
@@ -369,6 +372,7 @@ export default function TrialBalanceDrilldownPage() {
                           );
                         },
                         exportValue: (r) => Number(r.balance),
+                        footer: () => formatCurrency(typeBalance),
                       },
                     ] satisfies DataTableColumn<TbRow>[]}
                     renderRowExtras={(r) => (
@@ -382,14 +386,6 @@ export default function TrialBalanceDrilldownPage() {
                           />
                         </div>
                       ) : null
-                    )}
-                    renderGrandTotal={() => (
-                      <tr className="font-semibold bg-muted/40">
-                        <td colSpan={3} className="py-2 px-2">إجمالي {meta.label}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(typeTotalDebit)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(typeTotalCredit)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(typeBalance)}</td>
-                      </tr>
                     )}
                   />
                 </CardContent>

@@ -265,6 +265,7 @@ export default function InvoiceSendQueuePage() {
                     {
                       key: "ref", header: "الفاتورة", ltr: true,
                       render: (i) => <span className="font-mono text-xs">{i.ref}</span>,
+                      footer: (rows) => `الإجمالي (${rows.length} فاتورة)`,
                     },
                     {
                       key: "clientName", header: "العميل",
@@ -282,6 +283,11 @@ export default function InvoiceSendQueuePage() {
                       key: "total", header: "المبلغ", align: "end",
                       render: (i) => (
                         <span className="tabular-nums font-semibold">{formatCurrency(Number(i.total))}</span>
+                      ),
+                      footer: (rows) => (
+                        <span className="tabular-nums">
+                          {formatCurrency(rows.reduce((s, i) => s + Number(i.total), 0))}
+                        </span>
                       ),
                     },
                     {
@@ -315,15 +321,6 @@ export default function InvoiceSendQueuePage() {
                       ),
                     },
                   ] satisfies DataTableColumn<Invoice>[]}
-                  renderGrandTotal={(rows) => (
-                    <tr className="font-semibold bg-muted/40">
-                      <td colSpan={2} className="py-2 px-2">الإجمالي ({rows.length} فاتورة)</td>
-                      <td className="py-2 px-2 text-end tabular-nums">
-                        {formatCurrency(rows.reduce((s, i) => s + Number(i.total), 0))}
-                      </td>
-                      <td colSpan={3}></td>
-                    </tr>
-                  )}
                 />
               </CardContent>
             </Card>
