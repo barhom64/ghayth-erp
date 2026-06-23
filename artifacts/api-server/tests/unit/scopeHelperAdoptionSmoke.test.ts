@@ -325,6 +325,11 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // `"companyId" = $n AND "deletedAt" IS NULL`; same allowlist justification as
   // the parent.
   "umrah-payments.ts",
+  // umrah-invoices.ts: U-07 Phase 21 split — sales-invoice list/generate/
+  // sales-wizard/patch carved verbatim out of umrah-entities.ts. The GET reads
+  // umrah_sales_invoices tenant-scoped with explicit `"companyId" = $n AND
+  // "deletedAt" IS NULL`; same allowlist justification as the parent.
+  "umrah-invoices.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -531,9 +536,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 20 routes/umrah-payments.ts — payments
       // register/list + revenue reclassification carved verbatim out of
       // umrah-entities.ts. Same allowlist justification.
-      total: 150,
+      // +1 total/manualOnly: U-07 Phase 21 routes/umrah-invoices.ts — sales-
+      // invoice list/generate/sales-wizard/patch carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification.
+      total: 151,
       helperUsers: 39,
-      manualOnly: 107,
+      manualOnly: 108,
     });
   });
 });
