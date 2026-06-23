@@ -383,14 +383,25 @@ export default function YoyComparisonPage() {
                     <span>{r.name}</span>
                   </div>
                 ),
+                footer: () => <span className="text-status-info-foreground">صافي الربح</span>,
               },
               {
                 key: "current", header: `${year} YTD`, align: "end", sortable: false,
                 render: (r) => <span className="font-mono">{r.current === 0 ? "—" : formatCurrency(r.current)}</span>,
+                footer: () => (
+                  <span className={`font-mono ${curNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {formatCurrency(curNet)}
+                  </span>
+                ),
               },
               {
                 key: "prior", header: `${year - 1} YTD`, align: "end", sortable: false,
                 render: (r) => <span className="font-mono text-muted-foreground">{r.prior === 0 ? "—" : formatCurrency(r.prior)}</span>,
+                footer: () => (
+                  <span className={`font-mono ${priorNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {formatCurrency(priorNet)}
+                  </span>
+                ),
               },
               {
                 key: "variance", header: "الفرق", align: "end", sortable: false,
@@ -401,10 +412,16 @@ export default function YoyComparisonPage() {
                     {Math.abs(r.variance) < 0.005 ? "—" : (r.variance > 0 ? "+" : "") + formatCurrency(r.variance)}
                   </span>
                 ),
+                footer: () => (
+                  <span className={`font-mono ${netVariance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
+                    {netVariance > 0 ? "+" : ""}{formatCurrency(netVariance)}
+                  </span>
+                ),
               },
               {
                 key: "variancePct", header: "% النمو", align: "end", sortable: false,
                 render: (r) => renderPct(r.variancePct, r.type === "revenue"),
+                footer: () => renderPct(netVariancePct, true),
               },
             ] satisfies DataTableColumn<ComparisonRow>[]}
             renderGroupHeader={(groupValue) => (
@@ -432,21 +449,6 @@ export default function YoyComparisonPage() {
                   <td className="p-2 text-end">{renderPct(expVariancePct, false)}</td>
                 </tr>
               )
-            )}
-            renderGrandTotal={() => (
-              <tr className="bg-status-info-surface/40 font-bold">
-                <td className="p-2 text-status-info-foreground">صافي الربح</td>
-                <td className={`p-2 text-end font-mono ${curNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {formatCurrency(curNet)}
-                </td>
-                <td className={`p-2 text-end font-mono ${priorNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {formatCurrency(priorNet)}
-                </td>
-                <td className={`p-2 text-end font-mono ${netVariance >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {netVariance > 0 ? "+" : ""}{formatCurrency(netVariance)}
-                </td>
-                <td className="p-2 text-end">{renderPct(netVariancePct, true)}</td>
-              </tr>
             )}
           />
         </CardContent>

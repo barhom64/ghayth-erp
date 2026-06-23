@@ -353,6 +353,7 @@ export default function Cash13WeekPage() {
                     <span className="text-[10px] text-muted-foreground font-mono">{w.label}</span>
                   </div>
                 ),
+                footer: () => "الإجمالي 13أ",
               },
               {
                 key: "inflow", header: "داخل", align: "end", className: "font-semibold",
@@ -370,6 +371,7 @@ export default function Cash13WeekPage() {
                       <span className="text-[9px] text-muted-foreground mt-0.5">{w.inflowCount} حدث</span>
                     </div>
                   ),
+                footer: () => <span className="font-mono text-emerald-700">+{formatCurrency(totalInflow)}</span>,
               },
               {
                 key: "outflow", header: "خارج", align: "end", className: "font-semibold",
@@ -387,6 +389,7 @@ export default function Cash13WeekPage() {
                       <span className="text-[9px] text-muted-foreground mt-0.5">{w.outflowCount} حدث</span>
                     </div>
                   ),
+                footer: () => <span className="font-mono text-red-700">-{formatCurrency(totalOutflow)}</span>,
               },
               {
                 key: "net", header: "صافي", align: "end", className: "font-mono text-xs font-bold",
@@ -395,17 +398,28 @@ export default function Cash13WeekPage() {
                     {w.net === 0 ? "—" : (w.net > 0 ? "+" : "") + formatCurrency(w.net)}
                   </span>
                 ),
+                footer: () => (
+                  <span className={(totalInflow - totalOutflow) >= 0 ? "text-emerald-700" : "text-red-700"}>
+                    {(totalInflow - totalOutflow) > 0 ? "+" : ""}{formatCurrency(totalInflow - totalOutflow)}
+                  </span>
+                ),
               },
               {
                 key: "openingBalance", header: "رصيد افتتاح", align: "end",
                 className: "font-mono text-xs text-muted-foreground",
                 render: (w) => formatCurrency(w.openingBalance),
+                footer: () => formatCurrency(startBalance),
               },
               {
                 key: "endingBalance", header: "رصيد ختامي", align: "end", className: "font-mono text-sm font-bold",
                 render: (w) => (
                   <span className={w.endingBalance < 0 ? "text-red-700" : "text-emerald-700"}>
                     {formatCurrency(w.endingBalance)}
+                  </span>
+                ),
+                footer: () => (
+                  <span className={endingBalance < 0 ? "text-red-700" : "text-emerald-700"}>
+                    {formatCurrency(endingBalance)}
                   </span>
                 ),
               },
@@ -420,21 +434,6 @@ export default function Cash13WeekPage() {
                 ),
               },
             ] satisfies DataTableColumn<WeekBucket>[]}
-            renderGrandTotal={() => (
-              <tr className="bg-status-info-surface/40 font-bold border-t-2 border-status-info-surface">
-                <td className="p-2 sticky right-0 bg-status-info-surface/40">الإجمالي 13أ</td>
-                <td className="p-2 text-end font-mono text-emerald-700">+{formatCurrency(totalInflow)}</td>
-                <td className="p-2 text-end font-mono text-red-700">-{formatCurrency(totalOutflow)}</td>
-                <td className={`p-2 text-end font-mono ${(totalInflow - totalOutflow) >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                  {(totalInflow - totalOutflow) > 0 ? "+" : ""}{formatCurrency(totalInflow - totalOutflow)}
-                </td>
-                <td className="p-2 text-end font-mono text-muted-foreground">{formatCurrency(startBalance)}</td>
-                <td className={`p-2 text-end font-mono ${endingBalance < 0 ? "text-red-700" : "text-emerald-700"}`}>
-                  {formatCurrency(endingBalance)}
-                </td>
-                <td></td>
-              </tr>
-            )}
           />
         </CardContent>
       </Card>

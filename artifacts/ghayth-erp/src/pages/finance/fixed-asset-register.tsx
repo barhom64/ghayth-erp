@@ -428,9 +428,10 @@ export default function FixedAssetRegisterPage() {
                         <div className="font-medium">{a.name}</div>
                       </>
                     ),
+                    footer: () => "الإجمالي",
                   },
                   { key: "category", header: "الفئة", render: (a) => <span className="text-xs">{a.category ?? "—"}</span> },
-                  { key: "purchaseCost", header: "التكلفة", align: "end", render: (a) => <span className="tabular-nums">{formatCurrency(Number(a.purchaseCost))}</span> },
+                  { key: "purchaseCost", header: "التكلفة", align: "end", render: (a) => <span className="tabular-nums">{formatCurrency(Number(a.purchaseCost))}</span>, footer: () => <span className="tabular-nums">{formatCurrency(totalCost)}</span> },
                   {
                     key: "usefulLifeYears", header: "العمر/طريقة", align: "end",
                     render: (a) => (
@@ -443,10 +444,12 @@ export default function FixedAssetRegisterPage() {
                   {
                     key: "accumulatedDepreciation", header: "الإهلاك", align: "end",
                     render: (a) => <span className="tabular-nums text-status-danger-foreground">{formatCurrency(Number(a.accumulatedDepreciation))}</span>,
+                    footer: () => <span className="tabular-nums text-status-danger-foreground">{formatCurrency(totalAccDep)}</span>,
                   },
                   {
                     key: "currentBookValue", header: "القيمة الدفترية", align: "end",
                     render: (a) => <span className="tabular-nums font-semibold text-status-success-foreground">{formatCurrency(Number(a.currentBookValue))}</span>,
+                    footer: () => <span className="tabular-nums text-status-success-foreground">{formatCurrency(totalNBV)}</span>,
                   },
                   {
                     key: "depreciationMethod", header: "تقدم الإهلاك",
@@ -463,6 +466,7 @@ export default function FixedAssetRegisterPage() {
                         </div>
                       );
                     },
+                    footer: () => <span className="tabular-nums text-end">{totalCost > 0 ? `${((totalAccDep / totalCost) * 100).toFixed(0)}%` : "—"}</span>,
                   },
                   {
                     key: "status", header: "الحالة",
@@ -485,17 +489,6 @@ export default function FixedAssetRegisterPage() {
                     ),
                   },
                 ] satisfies DataTableColumn<FixedAsset>[]}
-                renderGrandTotal={() => (
-                  <tr className="font-semibold bg-muted/40 border-t-2">
-                    <td colSpan={2} className="py-2 px-3">الإجمالي</td>
-                    <td className="py-2 px-3 text-end tabular-nums">{formatCurrency(totalCost)}</td>
-                    <td className="py-2 px-3" />
-                    <td className="py-2 px-3 text-end tabular-nums text-status-danger-foreground">{formatCurrency(totalAccDep)}</td>
-                    <td className="py-2 px-3 text-end tabular-nums text-status-success-foreground">{formatCurrency(totalNBV)}</td>
-                    <td className="py-2 px-3 text-end tabular-nums">{totalCost > 0 ? `${((totalAccDep / totalCost) * 100).toFixed(0)}%` : "—"}</td>
-                    <td colSpan={2} />
-                  </tr>
-                )}
               />
             </CardContent>
           </Card>
