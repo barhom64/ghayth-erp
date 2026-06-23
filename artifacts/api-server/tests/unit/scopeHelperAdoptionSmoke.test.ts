@@ -292,6 +292,13 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // cascade for buildScopedWhere — inherits the same allowlist justification as
   // the parent umrah-entities.ts.
   "umrah-letters.ts",
+  // umrah-refunds.ts: U-07 Phase 14 split — 6 refund-request lifecycle routes
+  // (request → approve/reject → pay → close) carved verbatim out of
+  // umrah-entities.ts. List + point lookups + status UPDATEs on the umrah-owned
+  // umrah_refund_requests table keyed on (companyId, id); no list cascade for
+  // buildScopedWhere — inherits the same allowlist justification as the parent
+  // umrah-entities.ts.
+  "umrah-refunds.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -483,9 +490,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 12 routes/umrah-letters.ts — 2 letter
       // routes (PDF + dispatch) carved verbatim out of umrah-entities.ts. Same
       // allowlist justification as the parent.
-      total: 145,
+      // +1 total/manualOnly: U-07 Phase 14 routes/umrah-refunds.ts — 6
+      // refund-request lifecycle routes carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      total: 146,
       helperUsers: 39,
-      manualOnly: 102,
+      manualOnly: 103,
     });
   });
 });
