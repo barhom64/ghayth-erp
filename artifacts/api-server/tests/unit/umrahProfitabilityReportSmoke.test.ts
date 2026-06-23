@@ -19,7 +19,7 @@ import { join } from "node:path";
  *      dimension prop (drives both routes).
  */
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const SHARED = readFileSync(

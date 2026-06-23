@@ -32,8 +32,9 @@ const UMRAH_ROUTES = readFileSync(
   join(REPO_ROOT, "artifacts/api-server/src/routes/umrah.ts"),
   "utf8",
 );
+// U-07 Phase 16 — commissions CSV export carved into umrah-reports.ts.
 const UMRAH_ENTITIES = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-reports.ts"),
   "utf8",
 );
 
