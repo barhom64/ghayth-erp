@@ -204,7 +204,7 @@ function LifecycleTabContent({ employeeId, status, history, onTransitioned }: {
           </div>
           <div className="flex justify-end">
             <Button onClick={submit} disabled={submitting || !reason.trim()} data-testid="lifecycle-submit-btn">
-              {submitting ? "جارٍ التنفيذ..." : "تسجيل الانتقال"}
+              {submitting ? "جاري التنفيذ..." : "تسجيل الانتقال"}
             </Button>
           </div>
         </div>

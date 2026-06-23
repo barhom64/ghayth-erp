@@ -147,7 +147,7 @@ export default function MeInspection() {
     >
       {!inspection ? (
         <Card><CardContent className="p-6 text-sm text-muted-foreground">
-          {listQ.isLoading ? "جارٍ التحميل…" : "الطلب غير موجود أو لا يخصّك."}
+          {listQ.isLoading ? "جاري التحميل…" : "الطلب غير موجود أو لا يخصّك."}
         </CardContent></Card>
       ) : (
         <div className="space-y-4 max-w-xl">
@@ -191,7 +191,7 @@ export default function MeInspection() {
                           disabled={locked || uploading === tile.type}
                           onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(tile.type, f); e.target.value = ""; }}
                         />
-                        {uploading === tile.type && <span className="text-xs text-muted-foreground">جارٍ…</span>}
+                        {uploading === tile.type && <span className="text-xs text-muted-foreground">جاري…</span>}
                       </label>
                     );
                   })}
@@ -205,7 +205,7 @@ export default function MeInspection() {
 
               <Button className="w-full" onClick={submit} disabled={locked || submitting}>
                 <Send className="h-4 w-4 me-1" />
-                {submitting ? "جارٍ الإرسال…" : "إرسال الفحص"}
+                {submitting ? "جاري الإرسال…" : "إرسال الفحص"}
               </Button>
             </CardContent>
           </Card>

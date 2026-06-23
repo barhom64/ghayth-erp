@@ -405,7 +405,7 @@ export default function AdminAiGovernance() {
               <CardContent className="space-y-2">
                 <div className="flex items-center gap-3 flex-wrap">
                   <Button size="sm" variant="outline" onClick={runConnectionTest} disabled={testingConn}>
-                    {testingConn ? "جارٍ الاختبار…" : "اختبار الاتصال"}
+                    {testingConn ? "جاري الاختبار…" : "اختبار الاتصال"}
                   </Button>
                   {connTest && (
                     <span
