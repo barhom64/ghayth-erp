@@ -1020,7 +1020,7 @@ export default function ProjectDetail() {
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => setSellUnitId(null)}>إلغاء</Button>
                     <Button size="sm" variant="destructive" onClick={sellUnit} disabled={!sellBuyerId || sellLoading}>
-                      {sellLoading ? "جارٍ البيع..." : "تأكيد البيع"}
+                      {sellLoading ? "جاري البيع..." : "تأكيد البيع"}
                     </Button>
                   </div>
                 </div>
@@ -1104,7 +1104,7 @@ export default function ProjectDetail() {
               <div className="flex gap-2">
                 <GuardedButton perm="projects.list:create" size="sm" variant="outline" className="gap-1"
                   onClick={billBoqItems} disabled={boqBilling || boqItems.length === 0}>
-                  {boqBilling ? "جارٍ الإرسال..." : "إرسال للفوترة"}
+                  {boqBilling ? "جاري الإرسال..." : "إرسال للفوترة"}
                 </GuardedButton>
                 <GuardedButton perm="projects.list:create" size="sm" className="gap-1" onClick={() => setShowBoqForm(v => !v)}>
                   <Plus className="w-4 h-4" /> بند جديد

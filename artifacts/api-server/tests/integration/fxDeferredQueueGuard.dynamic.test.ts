@@ -76,12 +76,12 @@ d("FX deferred queue revival + DB-enforced dedup guard", () => {
     return { companyId, branchId, periodId, clientId, supplierId, userId };
   }
 
-  // فاتورة بعملة USD مفتوحة (AR، أصل).
-  async function openInvoice(companyId: number, branchId: number, clientId: number, total: number, booked: number, paid = 0) {
+  // فاتورة بعملة أجنبية مفتوحة (AR، أصل). العملة افتراضيًا USD.
+  async function openInvoice(companyId: number, branchId: number, clientId: number, total: number, booked: number, paid = 0, ccy = "USD") {
     const [{ id }] = await rawQuery(
       `INSERT INTO invoices ("companyId","branchId","clientId",ref,currency,"exchangeRate",total,"paidAmount",status,"createdAt")
-       VALUES ($1,$2,$3,$4,'USD',$5,$6,$7,'sent','2026-04-10') RETURNING id`,
-      [companyId, branchId, clientId, `INV-${Date.now()}-${Math.floor(Math.random() * 1e6)}`, booked, total, paid],
+       VALUES ($1,$2,$3,$4,$8,$5,$6,$7,'sent','2026-04-10') RETURNING id`,
+      [companyId, branchId, clientId, `INV-${Date.now()}-${Math.floor(Math.random() * 1e6)}`, booked, total, paid, ccy],
     );
     return id;
   }
@@ -94,13 +94,13 @@ d("FX deferred queue revival + DB-enforced dedup guard", () => {
     );
     return id;
   }
-  // سعر الإقفال (closing) لـ USD→SAR في نهاية الفترة.
-  async function seedClosingRate(companyId: number, rate: number) {
+  // سعر الإقفال (closing) لعملة→SAR في نهاية الفترة. العملة افتراضيًا USD.
+  async function seedClosingRate(companyId: number, rate: number, ccy = "USD") {
     await rawExecute(
       `INSERT INTO fx_rates ("companyId","rateDate","effectiveDate","fromCurrency","toCurrency",rate,source)
-       VALUES ($1,'2026-04-30','2026-04-30','USD','SAR',$2,'period_end')
+       VALUES ($1,'2026-04-30','2026-04-30',$3,'SAR',$2,'period_end')
        ON CONFLICT DO NOTHING`,
-      [companyId, rate],
+      [companyId, rate, ccy],
     );
   }
 
@@ -137,19 +137,27 @@ d("FX deferred queue revival + DB-enforced dedup guard", () => {
     if (dup) throw new ConflictError(`تم تسجيل إعادة تقييم العملات لفترة ${PERIOD} مسبقاً`);
     const openInvoices = await rawQuery(
       `SELECT id, ref, currency, "exchangeRate", total, "paidAmount", "clientId" FROM invoices
-        WHERE "companyId"=$1 AND currency='USD' AND status NOT IN ('paid','cancelled') AND "deletedAt" IS NULL`,
+        WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled') AND "deletedAt" IS NULL`,
       [companyId],
     );
     const openPOs = await rawQuery(
       `SELECT id, ref, currency, "exchangeRate", "totalAmount", "supplierId" FROM purchase_orders
-        WHERE "companyId"=$1 AND currency='USD' AND status NOT IN ('paid','cancelled','draft') AND "deletedAt" IS NULL`,
+        WHERE "companyId"=$1 AND currency IS NOT NULL AND currency<>'SAR' AND status NOT IN ('paid','cancelled','draft') AND "deletedAt" IS NULL`,
       [companyId],
     );
-    const [{ rate }] = await rawQuery<{ rate: string }>(
-      `SELECT rate::text AS rate FROM fx_rates WHERE "companyId"=$1 AND "fromCurrency"='USD' AND "toCurrency"='SAR' ORDER BY "effectiveDate" DESC LIMIT 1`,
-      [companyId],
-    );
-    const rateMap = { USD: Number(rate) };
+    // rateMap لكل العملات الأجنبية (مطابق للمسار الحقيقي — متعدّد العملات).
+    const currencies = Array.from(new Set<string>([
+      ...openInvoices.map((i: any) => i.currency),
+      ...openPOs.map((p: any) => p.currency),
+    ]));
+    const rateMap: Record<string, number> = {};
+    for (const cur of currencies) {
+      const [r] = await rawQuery<{ rate: string }>(
+        `SELECT rate::text AS rate FROM fx_rates WHERE "companyId"=$1 AND "fromCurrency"=$2 AND "toCurrency"='SAR' ORDER BY "effectiveDate" DESC LIMIT 1`,
+        [companyId, cur],
+      );
+      rateMap[cur] = r ? Number(r.rate) : 0;
+    }
     const arCode = await financialEngine.resolveAccountCode(companyId, "fx_revaluation_ar", "debit", "1131");
     const apCode = await financialEngine.resolveAccountCode(companyId, "fx_revaluation_ap", "credit", "2111");
     const gainCode = await financialEngine.resolveAccountCode(companyId, "fx_revaluation_gain", "credit", "4910");
@@ -168,10 +176,16 @@ d("FX deferred queue revival + DB-enforced dedup guard", () => {
         sourceKey: `finance:fx_reval:${companyId}:${PERIOD}`, lines: built.lines,
       });
       journalEntryId = posted.journalId;
+      // صف واحد لكل فترة (مطابق للمسار الحقيقي بعد إصلاح تعدّد العملات) —
+      // التفصيل لكل عملة في details.perCurrency بدل صف لكل عملة (كان يفشل بـUNIQUE).
+      const perCurrency = currencies.map((cur) => ({
+        currency: cur,
+        impact: built.details.filter((d: any) => d.currency === cur).reduce((s: number, d: any) => s + d.diff, 0),
+      }));
       await client.query(
         `INSERT INTO fx_revaluations ("companyId","period","journalEntryId","totalGain","totalLoss",details,"postedBy","postedAt")
          VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,NOW())`,
-        [companyId, PERIOD, journalEntryId, built.totalGain, built.totalLoss, JSON.stringify({ source: "direct" }), userId],
+        [companyId, PERIOD, journalEntryId, built.totalGain, built.totalLoss, JSON.stringify({ source: "direct", perCurrency }), userId],
       );
     });
     return journalEntryId;
@@ -328,6 +342,38 @@ d("FX deferred queue revival + DB-enforced dedup guard", () => {
     expect(clients.has(client2)).toBe(true);
 
     const bal = await lineBalance(outcome.journalEntryId!);
+    expect(bal.dr).toBeCloseTo(bal.cr, 2);
+  });
+
+  // ── (هـ) المسار المباشر بعملتين (USD+EUR) — ينجح بصف fx_revaluations واحد ──
+  // قبل الإصلاح: المسار كان يُدرج صفًا في fx_revaluations لكل عملة بنفس period →
+  // العملة الثانية تصطدم بـUNIQUE(companyId, period) (23505) فتُلغى المعاملة
+  // بكاملها = فشل الترحيل لأي فترة فيها عملتان أجنبيتان أو أكثر.
+  it("(هـ) المسار المباشر بعملتين (USD+EUR) ينجح بصف fx_revaluations واحد للفترة", async () => {
+    const { companyId, branchId, clientId, userId } = await freshCompany("FX-MC");
+    const [{ id: client2 }] = await rawQuery(
+      `INSERT INTO clients ("companyId", name) VALUES ($1,'عميل EUR') RETURNING id`, [companyId]);
+    await openInvoice(companyId, branchId, clientId, 1000, 3.75, 0, "USD"); // USD: 1000*(3.80-3.75)=+50
+    await openInvoice(companyId, branchId, client2, 500, 4.00, 0, "EUR");   // EUR: 500*(4.10-4.00)=+50
+    await seedClosingRate(companyId, 3.8, "USD");
+    await seedClosingRate(companyId, 4.1, "EUR");
+
+    // لا يرمي (قبل الإصلاح: 23505 على إدراج العملة الثانية).
+    const jeId = await directPost(companyId, branchId, userId);
+    expect(jeId).toBeGreaterThan(0);
+
+    // صف fx_revaluations واحد فقط للفترة (لا صف لكل عملة)، والتفصيل لكل عملة محفوظ.
+    const revRows = await rawQuery<{ id: number; details: any }>(
+      `SELECT id, details FROM fx_revaluations WHERE "companyId"=$1 AND period=$2`,
+      [companyId, PERIOD]);
+    expect(revRows.length).toBe(1);
+    const details = typeof revRows[0].details === "string" ? JSON.parse(revRows[0].details) : revRows[0].details;
+    const ccys = new Set((details?.perCurrency ?? []).map((x: any) => x.currency));
+    expect(ccys).toEqual(new Set(["USD", "EUR"]));
+
+    // قيد واحد متوازن للفترة.
+    expect(await jeCountForPeriod(companyId, PERIOD)).toBe(1);
+    const bal = await lineBalance(jeId);
     expect(bal.dr).toBeCloseTo(bal.cr, 2);
   });
 });

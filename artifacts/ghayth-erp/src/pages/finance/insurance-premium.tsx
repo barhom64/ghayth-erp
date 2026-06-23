@@ -215,7 +215,7 @@ export default function InsurancePremiumPage() {
               onClick={submit}
               disabled={!valid || createMut.isPending}
             >
-              {createMut.isPending ? "جارٍ الحفظ..." : "فتح القسط"}
+              {createMut.isPending ? "جاري الحفظ..." : "فتح القسط"}
             </GuardedButton>
           </div>
         </CardContent>
