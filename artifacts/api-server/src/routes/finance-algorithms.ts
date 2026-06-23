@@ -2760,6 +2760,108 @@ financeAlgorithmsRouter.get("/fx/revaluation/preview", authorize({ feature: "fin
   }
 });
 
+// Compute FX revaluation into the deferred posting queue (لا ترحيل GL هنا).
+// مُشغِّل الحساب لمسار الطابور: يستدعي runPeriodEndRevaluation فيملأ
+// fx_revaluation_log + fx_revaluation_lines، فيظهر البند في طابور ترحيل GL
+// (POST /finance/gl-helpers/fx-revaluation/:revaluationLogId). نفس RBAC المسار
+// المباشر (finance.algorithms/create). حارس الازدواج: يرفض إن كانت الفترة
+// مُرحَّلة مباشرةً (صف fx_revaluations)، أو مُحسَبة في الطابور سلفًا (idempotency).
+financeAlgorithmsRouter.post("/fx/revaluation/compute", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
+  try {
+    const scope = req.scope!;
+    assertFinanceRole(scope);
+    const { period } = zodParse(fxRevaluationPostSchema.safeParse(req.body ?? {}));
+    await ensureFxTables();
+
+    const [y, m] = period.split("-").map(Number);
+    const periodEnd = toDateISO(new Date(y, m, 0)); // آخر يوم في الشهر = asOfDate
+
+    // الفترة المالية يجب أن تكون مُعرَّفة ومفتوحة (runPeriodEndRevaluation يطلب periodId FK).
+    const periodCheck = await checkFinancialPeriodOpen(scope.companyId, periodEnd);
+    if (!periodCheck.open) {
+      throw new ValidationError(`لا يمكن الحساب — الفترة ${periodCheck.periodName ?? period} مقفلة`);
+    }
+    const [finPeriod] = await rawQuery<{ id: number }>(
+      `SELECT id FROM financial_periods
+        WHERE "companyId"=$1 AND "deletedAt" IS NULL
+          AND "startDate" <= $2::date AND "endDate" >= $2::date
+        ORDER BY id ASC LIMIT 1`,
+      [scope.companyId, periodEnd]
+    );
+    if (!finPeriod) {
+      throw new ValidationError(
+        `لا توجد فترة مالية مُعرَّفة تشمل ${periodEnd} — عرّف الفترة المالية أولاً`,
+        { field: "period", fix: "أنشئ الفترة المالية المطابقة في إعدادات المالية ثم أعد المحاولة" },
+      );
+    }
+
+    // حارس الازدواج (1) — رُحّلت مباشرةً؟ صف fx_revaluations للفترة = ممنوع الحساب.
+    const [postedDirect] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND period=$2 LIMIT 1`,
+      [scope.companyId, period]
+    );
+    if (postedDirect) {
+      throw new ConflictError(
+        `تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً عبر الترحيل المباشر — لا حاجة لحسابها في الطابور`,
+      );
+    }
+    // حارس الازدواج (2) — idempotency: محسوبة في الطابور سلفًا (سجل غير مُرحَّل)؟
+    const [pendingQueue] = await rawQuery<{ id: number }>(
+      `SELECT id FROM fx_revaluation_log
+        WHERE "companyId"=$1 AND to_char("asOfDate",'YYYY-MM')=$2 AND "journalEntryId" IS NULL
+        LIMIT 1`,
+      [scope.companyId, period]
+    );
+    if (pendingQueue) {
+      throw new ConflictError(
+        `إعادة تقييم فترة ${period} محسوبة بالفعل في طابور الترحيل — رحّلها من الطابور`,
+      );
+    }
+
+    const { runPeriodEndRevaluation } = await import("../lib/fx/revaluation.js");
+    const result = await runPeriodEndRevaluation({
+      companyId: scope.companyId,
+      periodId: finPeriod.id,
+      asOfDate: periodEnd,
+      ranBy: scope.activeAssignmentId,
+    });
+
+    // أثر تدقيق — حساب أُدرج في طابور الترحيل (لا قيد بعد).
+    createAuditLog({
+      companyId: scope.companyId,
+      branchId: scope.branchId,
+      userId: scope.userId,
+      action: "fx_revaluation.compute",
+      entity: "fx_revaluation_log",
+      entityId: result.revaluationLogId,
+      after: {
+        period,
+        periodEnd,
+        periodId: finPeriod.id,
+        totalGain: result.totalGain,
+        totalLoss: result.totalLoss,
+        scanned: result.scanned,
+        reported: result.reported,
+        skippedCount: result.skipped.length,
+      },
+    }).catch((e) => logger.error(e, "finance-algorithms fx-revaluation compute audit failed"));
+
+    res.status(201).json({
+      revaluationLogId: result.revaluationLogId,
+      period,
+      periodEnd,
+      totalGain: result.totalGain,
+      totalLoss: result.totalLoss,
+      scanned: result.scanned,
+      reported: result.reported,
+      skipped: result.skipped,
+      message: `تم حساب إعادة تقييم العملات لفترة ${period} وإدراجها في طابور الترحيل`,
+    });
+  } catch (err) {
+    handleRouteError(err, res, "FX revaluation compute error:");
+  }
+});
+
 // Post FX revaluation journal entry for the period
 financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finance.algorithms", action: "create" }), async (req, res) => {
   try {
@@ -2780,6 +2882,24 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     );
     if (existing) {
       throw new ConflictError(`تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً`);
+    }
+
+    // حارس الازدواج (الجهة الأخرى) — فحص مبكر ودود: إن وُجد صف
+    // fx_revaluation_log غير مُرحَّل لنفس الفترة فالطابور قد حسبها (وربما هو في
+    // طريقه للترحيل) → ارفض الترحيل المباشر كي لا يتسابق المساران. الحاجز الصلب
+    // يبقى قيد UNIQUE(companyId, period) على fx_revaluations (يكتبه كلا المسارين)؛
+    // هذا الفحص رسالة ودودة قبل بلوغه. مطابقة الفترة عبر to_char(asOfDate,'YYYY-MM').
+    const [pendingQueue] = await rawQuery<Record<string, unknown>>(
+      `SELECT id FROM fx_revaluation_log
+        WHERE "companyId"=$1 AND to_char("asOfDate", 'YYYY-MM')=$2
+          AND "journalEntryId" IS NULL
+        LIMIT 1`,
+      [scope.companyId, period]
+    );
+    if (pendingQueue) {
+      throw new ConflictError(
+        `توجد إعادة تقييم محسوبة في طابور الترحيل لفترة ${period} — رحّلها من الطابور أو احذفها قبل الترحيل المباشر`,
+      );
     }
 
     // Reuse preview logic by calling it inline via the same query shape
