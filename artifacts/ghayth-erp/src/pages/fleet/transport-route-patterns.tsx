@@ -734,7 +734,7 @@ export default function TransportRoutePatternsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={busy}>إلغاء</Button>
-            <Button onClick={save} disabled={busy}>{busy ? "جارٍ الحفظ…" : "حفظ"}</Button>
+            <Button onClick={save} disabled={busy}>{busy ? "جاري الحفظ…" : "حفظ"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
