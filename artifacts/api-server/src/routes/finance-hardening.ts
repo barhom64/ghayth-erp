@@ -1289,7 +1289,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
     const idempotencyToken = requestIdempotencyToken(req);
     const txDate = transactionDate ?? todayISO();
     // Stable retry tuple — backs the partial UNIQUE (fromCompanyId,
-    // sourceKey) index added in migration 414 so concurrent races collide
+    // sourceKey) index added in migration 417 so concurrent races collide
     // on the index, while a sequential retry is short-circuited below
     // BEFORE any number is issued. Kept stable across retries (the token
     // comes from the Idempotency-Key header) so a retry returns the same
@@ -1345,7 +1345,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
 
     // #1141 — "each leg its own number". Issue TWO center numbers, one per
     // company scope, from the shared scheme finance.intercompany (seeded
-    // per company by migration 414). The from-leg JE ref + the parent
+    // per company by migration 417). The from-leg JE ref + the parent
     // intercompany_transactions.ref use the FROM company's number; the
     // to-leg JE ref uses the TO company's number. The two refs DIFFER and
     // each is sourced from its own company's IC counter. issueNumber runs
