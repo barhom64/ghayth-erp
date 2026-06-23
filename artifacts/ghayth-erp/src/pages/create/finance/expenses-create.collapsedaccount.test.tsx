@@ -43,4 +43,11 @@ describe("expense source treasury collapses when a single box matches (helper-no
     // the Autocomplete remains in the else-branch for the multi-source case.
     expect(PAGE).toMatch(/<Autocomplete options=\{sourceOptions\}/);
   });
+
+  it("the payment-method effect clears AND auto-selects in one pass (Codex P1: no empty lone source)", () => {
+    // switching between two single-source methods must end up with the new lone
+    // source selected, not cleared-then-stuck-empty under the collapsed display.
+    expect(PAGE).toMatch(/const stillValid = !!prev\.sourceAccountCode && codes\.includes\(prev\.sourceAccountCode\)/);
+    expect(PAGE).toMatch(/if \(codes\.length === 1\) return \{ \.\.\.prev, sourceAccountCode: codes\[0\] \}/);
+  });
 });

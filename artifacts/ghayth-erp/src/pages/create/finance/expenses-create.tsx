@@ -357,13 +357,13 @@ export default function ExpensesCreate() {
     const codes = filterAccountsForPaymentMethod(moneyAccounts, form.paymentMethod)
       .map((a: any) => a.code || String(a.id));
     setForm((prev) => {
-      if (prev.sourceAccountCode && !codes.includes(prev.sourceAccountCode)) {
-        return { ...prev, sourceAccountCode: "" };
-      }
-      if (!prev.sourceAccountCode && codes.length === 1) {
-        return { ...prev, sourceAccountCode: codes[0] };
-      }
-      return prev;
+      const stillValid = !!prev.sourceAccountCode && codes.includes(prev.sourceAccountCode);
+      if (stillValid) return prev;
+      // غير صالح (قديم لا يطابق الطريقة الجديدة، أو فارغ): اختر الخزنة الوحيدة
+      // فورًا إن وُجدت، وإلا امسح القديم. خطوة واحدة — لا «امسح ثم عُد» (كان
+      // التبديل بين طريقتين أحاديّتي المصدر يترك المصدر فارغًا، Codex P1).
+      if (codes.length === 1) return { ...prev, sourceAccountCode: codes[0] };
+      return prev.sourceAccountCode ? { ...prev, sourceAccountCode: "" } : prev;
     });
   }, [form.paymentMethod, moneyAccounts.length]);
 
