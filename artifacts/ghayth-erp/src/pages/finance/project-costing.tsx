@@ -189,7 +189,7 @@ export default function ProjectCostingPage() {
       ) : (
         <Card>
           <div className="overflow-x-auto">
-            <div className="inline-block min-w-full">
+            <div className="min-w-[760px]">
               <div className="bg-surface-subtle border-b px-4 py-3 text-xs font-semibold text-muted-foreground grid grid-cols-7 gap-2">
                 <div>الرقم</div>
                 <div>اسم المشروع</div>

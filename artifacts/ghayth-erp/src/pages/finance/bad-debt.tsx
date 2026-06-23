@@ -169,7 +169,7 @@ export default function BadDebtPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             {(["current", "d30", "d60", "d90", "d90plus"] as const).map((k) => (
               <div key={k}>
                 <Label className="text-xs">{bucketLabel[k]} %</Label>

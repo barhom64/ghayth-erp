@@ -42,7 +42,7 @@ export default function GovernancePage() {
     >
       <StatsCards stats={stats} />
       <Tabs defaultValue={initialTab} dir="rtl">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto md:h-9">
           <TabsTrigger value="policies"><FileCheck className="h-4 w-4 me-1" />السياسات</TabsTrigger>
           <TabsTrigger value="risks"><AlertTriangle className="h-4 w-4 me-1" />المخاطر</TabsTrigger>
           <TabsTrigger value="audits"><ClipboardCheck className="h-4 w-4 me-1" />التدقيق</TabsTrigger>

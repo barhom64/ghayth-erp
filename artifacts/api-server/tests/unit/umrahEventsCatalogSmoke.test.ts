@@ -31,8 +31,10 @@ const ROUTE = readFileSync(
   join(import.meta.dirname!, "../../src/routes/umrah.ts"),
   "utf8",
 );
+// U-07 Phase 21 — the sales-invoice generate route (and its dual emits) was
+// carved into umrah-invoices.ts; the route-path emit assertions read it there.
 const ENTITIES_ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-invoices.ts"),
   "utf8",
 );
 const NOTIFY = readFileSync(
