@@ -1800,7 +1800,7 @@ export function registerEventListeners() {
       const arCode = await getAccountCodeFromMapping(payload.companyId, "umrah_agent_receivable", "debit", "1210");
       const revenueCode = await getAccountCodeFromMapping(payload.companyId, "umrah_revenue", "credit", "4130");
       const penaltyCode = await getAccountCodeFromMapping(payload.companyId, "penalty_revenue", "credit", "4930");
-      const commissionCode = await getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5200");
+      const commissionCode = await getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5430");
 
       const lines: Array<{ accountCode: string; debit: number; credit: number; description: string }> = [
         { accountCode: arCode, debit: total, credit: 0, description: `ذمم وكيل — فاتورة ${ref}` },
@@ -1931,7 +1931,7 @@ export function registerEventListeners() {
         logger.warn(`[EventReaction] Commission plan #${planId} missing GL accrual — attempting recovery`);
         try {
           const [expenseCode, payableCode] = await Promise.all([
-            getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "6200"),
+            getAccountCodeFromMapping(payload.companyId, "commission_expense", "debit", "5430"),
             getAccountCodeFromMapping(payload.companyId, "commission_payable", "credit", "2155"),
           ]);
           await createGuardedJournalEntry({

@@ -201,7 +201,7 @@ export async function calculateCommissionForPlan(
       const viaHr = ((viaHrRow?.value as string | undefined) ?? "true") !== "false";
 
       const [expenseCode, payableCode] = await Promise.all([
-        getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "6200"),
+        getAccountCodeFromMapping(plan.companyId, "commission_expense", "debit", "5430"),
         viaHr
           ? getAccountCodeFromMapping(plan.companyId, "salary_payable",      "credit", "2120")
           : getAccountCodeFromMapping(plan.companyId, "commission_payable",  "credit", "2155"),

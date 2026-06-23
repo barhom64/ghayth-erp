@@ -23,7 +23,8 @@ describe("deriveSpecializedAccount", () => {
 
   it("capitalises a fixed_asset target (balance-sheet, not expense)", () => {
     const r = deriveSpecializedAccount({ targetType: "fixed_asset" });
-    expect(r.defaultCode).toBe("1500");
+    // Repointed 1500 (phantom) → 1280 «أصول ثابتة أخرى» (postable leaf + backfill 414).
+    expect(r.defaultCode).toBe("1280");
     expect(r.capitalize).toBe(true);
   });
 
