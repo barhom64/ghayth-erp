@@ -312,6 +312,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // buildScopedWhere — inherits the same allowlist justification as the parent
   // umrah-entities.ts.
   "umrah-settings.ts",
+  // umrah-nusk-invoices.ts: U-07 Phase 19 split — nusk-invoice CRUD (list/get/
+  // create/update/delete) + AP journal posting via the postNuskJournalEntries
+  // engine, carved verbatim out of umrah-entities.ts. All reads are tenant-scoped
+  // with explicit `"companyId" = $n AND "deletedAt" IS NULL`; the manual scoping
+  // inherits the same allowlist justification as the parent umrah-entities.ts.
+  "umrah-nusk-invoices.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -512,9 +518,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 18 routes/umrah-settings.ts — the
       // settings-policies catalog (GET) + per-category save (PUT) carved
       // verbatim out of umrah-entities.ts. Same allowlist justification.
-      total: 148,
+      // +1 total/manualOnly: U-07 Phase 19 routes/umrah-nusk-invoices.ts — the
+      // nusk-invoice CRUD + AP journal posting carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification.
+      total: 149,
       helperUsers: 39,
-      manualOnly: 105,
+      manualOnly: 106,
     });
   });
 });
