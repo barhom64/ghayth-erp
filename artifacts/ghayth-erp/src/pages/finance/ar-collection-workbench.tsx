@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Phone, Mail, AlertTriangle, ChevronDown, ChevronRight, Search,
   ExternalLink, Download, Users, FileText, Clock, Send,
@@ -404,49 +405,58 @@ export default function ArCollectionWorkbenchPage() {
                     </CardHeader>
                     {isOpen && (
                       <CardContent className="pt-0">
-                        <div className="overflow-x-auto"><table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b text-xs text-muted-foreground">
-                              <th className="text-start py-2 px-2">الفاتورة</th>
-                              <th className="text-start py-2 px-2">الاستحقاق</th>
-                              <th className="text-end py-2 px-2">أيام تأخر</th>
-                              <th className="py-2 px-2">السطل</th>
-                              <th className="text-end py-2 px-2">المتبقي</th>
-                              <th className="py-2 px-2 w-16"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {c.invoices.sort((a, b) => b.daysOverdue - a.daysOverdue).map(inv => {
-                              const bucket = BUCKETS.find(b => b.key === inv.bucket)!;
-                              return (
-                                <tr key={inv.id} className="border-b hover:bg-muted/30">
-                                  <td className="py-2 px-2 font-mono text-xs">{inv.ref}</td>
-                                  <td className="py-2 px-2 text-xs">{formatDateAr(inv.dueDate.split("T")[0])}</td>
-                                  <td className="py-2 px-2 text-end tabular-nums">
-                                    {inv.daysOverdue > 0 ? (
-                                      <span className={inv.daysOverdue > 90 ? "text-status-danger-foreground font-semibold" : inv.daysOverdue > 60 ? "text-status-warning-foreground" : ""}>
-                                        {inv.daysOverdue} يوم
-                                      </span>
-                                    ) : (
-                                      <span className="text-muted-foreground">لم يستحق</span>
-                                    )}
-                                  </td>
-                                  <td className="py-2 px-2">
-                                    <Badge variant="outline" className={`text-[10px] ${bucket.color}`}>
-                                      {bucket.label}
-                                    </Badge>
-                                  </td>
-                                  <td className="py-2 px-2 text-end tabular-nums font-semibold">
-                                    {formatCurrency(inv.outstanding)}
-                                  </td>
-                                  <td className="py-2 px-2">
-                                    <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/invoices/${inv.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table></div>
+                        <DataTable
+                          noToolbar
+                          pageSize={0}
+                          className="text-sm"
+                          data={c.invoices.slice().sort((a, b) => b.daysOverdue - a.daysOverdue)}
+                          rowKey={(inv) => inv.id}
+                          columns={[
+                            {
+                              key: "ref", header: "الفاتورة", className: "font-mono text-xs",
+                              render: (inv) => inv.ref,
+                            },
+                            {
+                              key: "dueDate", header: "الاستحقاق", className: "text-xs",
+                              render: (inv) => formatDateAr(inv.dueDate.split("T")[0]),
+                              exportValue: (inv) => inv.dueDate.split("T")[0],
+                            },
+                            {
+                              key: "daysOverdue", header: "أيام تأخر", align: "end", className: "tabular-nums",
+                              render: (inv) => (
+                                inv.daysOverdue > 0 ? (
+                                  <span className={inv.daysOverdue > 90 ? "text-status-danger-foreground font-semibold" : inv.daysOverdue > 60 ? "text-status-warning-foreground" : ""}>
+                                    {inv.daysOverdue} يوم
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">لم يستحق</span>
+                                )
+                              ),
+                            },
+                            {
+                              key: "bucket", header: "السطل", align: "center", sortable: false,
+                              render: (inv) => {
+                                const bucket = BUCKETS.find(b => b.key === inv.bucket)!;
+                                return (
+                                  <Badge variant="outline" className={`text-[10px] ${bucket.color}`}>
+                                    {bucket.label}
+                                  </Badge>
+                                );
+                              },
+                            },
+                            {
+                              key: "outstanding", header: "المتبقي", align: "end",
+                              className: "tabular-nums font-semibold",
+                              render: (inv) => formatCurrency(inv.outstanding),
+                            },
+                            {
+                              key: "_actions", header: "", width: "4rem", sortable: false,
+                              render: (inv) => (
+                                <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/invoices/${inv.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
+                              ),
+                            },
+                          ] satisfies DataTableColumn<AgingInvoice>[]}
+                        />
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                           <Button asChild size="sm" variant="outline"><Link href={`/finance/customer-360-sheet?clientId=${c.clientId}`}>
                               <Users className="w-4 h-4 ml-1" />

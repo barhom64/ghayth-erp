@@ -14,7 +14,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   ArrowLeft, Plus, Pencil, PlayCircle, AlertCircle, CheckCircle2,
 } from "lucide-react";
@@ -294,6 +294,106 @@ export default function TransportPriceRulesAdmin() {
     }
   };
 
+  const columns: DataTableColumn<PriceRule>[] = [
+    {
+      key: "transportServiceType",
+      header: "نوع الخدمة",
+      render: (r) => serviceLabel(r.transportServiceType),
+    },
+    {
+      key: "matchCriteria",
+      header: "معايير المطابقة",
+      sortable: false,
+      className: "text-xs space-y-0.5",
+      render: (r) => (
+        <>
+          {r.customerId != null && <div>العميل #{r.customerId}</div>}
+          {r.vehicleType && <div>المركبة: {r.vehicleType}</div>}
+          {(r.routeFrom || r.routeTo) && (
+            <div>
+              {r.routeFrom ?? "*"} → {r.routeTo ?? "*"}
+            </div>
+          )}
+          {r.cargoType && <div>البضاعة: {r.cargoType}</div>}
+          {!r.customerId && !r.vehicleType && !r.routeFrom && !r.routeTo && !r.cargoType && (
+            <span className="text-muted-foreground">قاعدة عامة</span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "unitOfMeasure",
+      header: "الوحدة",
+      render: (r) => uomLabel(r.unitOfMeasure),
+    },
+    {
+      key: "unitPrice",
+      header: "السعر",
+      className: "font-mono",
+      render: (r) => `${Number(r.unitPrice).toLocaleString("ar-SA")} ${r.currency}`,
+    },
+    {
+      key: "minimumCharge",
+      header: "الحد الأدنى",
+      className: "font-mono text-xs",
+      render: (r) =>
+        r.minimumCharge != null
+          ? `${Number(r.minimumCharge).toLocaleString("ar-SA")} ${r.currency}`
+          : "—",
+    },
+    {
+      key: "validFrom",
+      header: "السريان",
+      className: "text-xs font-mono",
+      render: (r) => `${r.validFrom?.slice(0, 10)} → ${r.validTo?.slice(0, 10) ?? "∞"}`,
+    },
+    {
+      key: "priority",
+      header: "الأولوية",
+      className: "font-mono",
+      render: (r) => r.priority,
+    },
+    {
+      key: "isActive",
+      header: "الحالة",
+      render: (r) =>
+        r.isActive ? (
+          <Badge className="bg-status-success-surface text-status-success-foreground">
+            مفعّلة
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-muted-foreground">
+            معطّلة
+          </Badge>
+        ),
+    },
+    {
+      key: "actions",
+      header: "",
+      sortable: false,
+      render: (r) => (
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => openEdit(r)}
+            title="تعديل"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => toggleActive(r)}
+            className="text-xs"
+          >
+            {r.isActive ? "تعطيل" : "تفعيل"}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
 
@@ -343,96 +443,12 @@ export default function TransportPriceRulesAdmin() {
             </div>
           </div>
 
-          {visible.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">
-              لا توجد قواعد تسعير حالياً. أنشئ قاعدة أولى ليتمكّن المحرّك من تسعير
-              بنود خدمات النقل تلقائياً.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-subtle text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 text-start">نوع الخدمة</th>
-                    <th className="px-3 py-2 text-start">معايير المطابقة</th>
-                    <th className="px-3 py-2 text-start">الوحدة</th>
-                    <th className="px-3 py-2 text-start">السعر</th>
-                    <th className="px-3 py-2 text-start">الحد الأدنى</th>
-                    <th className="px-3 py-2 text-start">السريان</th>
-                    <th className="px-3 py-2 text-start">الأولوية</th>
-                    <th className="px-3 py-2 text-start">الحالة</th>
-                    <th className="px-3 py-2 text-start" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visible.map((r) => (
-                    <tr key={r.id} className="border-t hover:bg-surface-subtle">
-                      <td className="px-3 py-2">{serviceLabel(r.transportServiceType)}</td>
-                      <td className="px-3 py-2 text-xs space-y-0.5">
-                        {r.customerId != null && (
-                          <div>العميل #{r.customerId}</div>
-                        )}
-                        {r.vehicleType && <div>المركبة: {r.vehicleType}</div>}
-                        {(r.routeFrom || r.routeTo) && (
-                          <div>
-                            {r.routeFrom ?? "*"} → {r.routeTo ?? "*"}
-                          </div>
-                        )}
-                        {r.cargoType && <div>البضاعة: {r.cargoType}</div>}
-                        {!r.customerId && !r.vehicleType && !r.routeFrom && !r.routeTo && !r.cargoType && (
-                          <span className="text-muted-foreground">قاعدة عامة</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{uomLabel(r.unitOfMeasure)}</td>
-                      <td className="px-3 py-2 font-mono">
-                        {Number(r.unitPrice).toLocaleString("ar-SA")} {r.currency}
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        {r.minimumCharge != null
-                          ? `${Number(r.minimumCharge).toLocaleString("ar-SA")} ${r.currency}`
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-xs font-mono">
-                        {r.validFrom?.slice(0, 10)} → {r.validTo?.slice(0, 10) ?? "∞"}
-                      </td>
-                      <td className="px-3 py-2 font-mono">{r.priority}</td>
-                      <td className="px-3 py-2">
-                        {r.isActive ? (
-                          <Badge className="bg-status-success-surface text-status-success-foreground">
-                            مفعّلة
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-muted-foreground">
-                            معطّلة
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEdit(r)}
-                            title="تعديل"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleActive(r)}
-                            className="text-xs"
-                          >
-                            {r.isActive ? "تعطيل" : "تفعيل"}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <DataTable
+            columns={columns}
+            data={visible}
+            noToolbar
+            emptyMessage="لا توجد قواعد تسعير حالياً. أنشئ قاعدة أولى ليتمكّن المحرّك من تسعير بنود خدمات النقل تلقائياً."
+          />
         </CardContent>
       </Card>
 

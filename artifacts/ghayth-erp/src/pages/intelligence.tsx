@@ -11,6 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { resolveStatus } from "@workspace/ui-core";
 import { Brain, Users, Car, Building, FolderKanban, Headphones, TrendingUp, TrendingDown, AlertTriangle, Search, Radar, Check, Loader2, Target, Activity } from "lucide-react";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -67,6 +70,7 @@ export default function Intelligence() {
 
   const tasks = (schedule?.tasks || []).filter((t: any) => !taskSearch || t.title?.includes(taskSearch) || t.assigneeName?.includes(taskSearch));
   const attendance = (schedule?.attendance || []).filter((a: any) => !attendSearch || a.employeeName?.includes(attendSearch));
+  const { sortedRows: printRows } = usePrintRows<any>(tasks);
 
   const taskColumns: DataTableColumn<any>[] = [
     { key: "title", header: "المهمة", sortable: true, render: (t) => <span className="font-medium">{t.title}</span> },
@@ -87,7 +91,22 @@ export default function Intelligence() {
       breadcrumbs={[
         { href: "/dashboard", label: "لوحة التحكم" },
         { label: "لوحة الذكاء" },
-      ]}>
+      ]}
+      actions={
+        <PrintButton
+          entityType="report_intelligence_daily_tasks"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "لوحة الذكاء — مهام اليوم", total: printRows.length },
+            items: printRows.map((t: any) => ({
+              "المهمة": t.title,
+              "المسؤول": t.assigneeName || "—",
+              "الحالة": resolveStatus(t.status, "project")?.label ?? t.status,
+            })),
+          })}
+        />
+      }>
       <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
         {loadingOverview ? [...Array(7)].map((_, i) => <Card key={i}><CardContent className="pt-6"><Skeleton className="h-10 w-full" /></CardContent></Card>) : (
           <>

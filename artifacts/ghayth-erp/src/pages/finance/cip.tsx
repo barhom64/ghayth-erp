@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Button } from "@/components/ui/button";
@@ -67,6 +69,7 @@ export default function CipPage() {
     `/finance/cip${scopeSuffix}`,
   );
   const items: Cip[] = (data?.data || []) as Cip[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ ...EMPTY_CREATE });
@@ -211,9 +214,27 @@ export default function CipPage() {
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "الأعمال الرأسمالية" }]}
       loading={isLoading}
       actions={
-        <GuardedButton perm="finance:create" size="sm" onClick={() => { setCreateForm({ ...EMPTY_CREATE }); setCreateOpen(true); }}>
-          <Plus className="h-4 w-4 me-1" /> مشروع جديد
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_finance_cip"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "الأعمال الرأسمالية تحت التنفيذ", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "المشروع": r.name || "—",
+                "الرمز": r.code || "—",
+                "الفئة": r.category || "—",
+                "التكلفة المتراكمة": Number(r.totalCost ?? 0),
+                "الإنجاز المتوقع": r.expectedCompletionDate || "—",
+                "الحالة": STATUS[r.status as string]?.label ?? r.status,
+              })),
+            })}
+          />
+          <GuardedButton perm="finance:create" size="sm" onClick={() => { setCreateForm({ ...EMPTY_CREATE }); setCreateOpen(true); }}>
+            <Plus className="h-4 w-4 me-1" /> مشروع جديد
+          </GuardedButton>
+        </div>
       }
     >
       <FinanceTabsNav />
@@ -257,6 +278,7 @@ export default function CipPage() {
       <DataTable
         columns={columns}
         data={items}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}

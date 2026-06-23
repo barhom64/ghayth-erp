@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
@@ -55,6 +55,90 @@ export default function OptimizerRunsPage() {
 
   const rows = data?.data?.rows ?? [];
 
+  const columns: DataTableColumn<RunRow>[] = [
+    {
+      key: "id",
+      header: "#",
+      width: "60px",
+      className: "font-mono text-xs",
+      render: (r) => r.id,
+    },
+    { key: "runDate", header: "تاريخ التشغيل", render: (r) => r.runDate },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r) => {
+        const meta = STATUS_LABELS[r.status] ?? { label: r.status, color: "bg-slate-100" };
+        return (
+          <span className={`px-2 py-0.5 rounded-full text-xs ${meta.color}`}>
+            {meta.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: "algorithm",
+      header: "الخوارزمية",
+      className: "text-xs text-muted-foreground",
+      render: (r) => r.algorithm ?? "—",
+    },
+    {
+      key: "assignmentCount",
+      header: "عدد الإسنادات",
+      align: "end",
+      className: "font-mono",
+      render: (r) => r.assignmentCount,
+    },
+    {
+      key: "unassignedCount",
+      header: "غير مسنَدة",
+      align: "end",
+      className: "font-mono",
+      render: (r) =>
+        r.unassignedCount > 0 ? (
+          <span className="text-rose-600">{r.unassignedCount}</span>
+        ) : (
+          <span className="text-muted-foreground">0</span>
+        ),
+    },
+    {
+      key: "totalDistanceMeters",
+      header: "مسافة (كم)",
+      align: "end",
+      className: "font-mono",
+      render: (r) =>
+        r.totalDistanceMeters != null
+          ? (r.totalDistanceMeters / 1000).toFixed(1)
+          : "—",
+    },
+    {
+      key: "solveDurationMs",
+      header: "زمن الحلّ (مللي)",
+      align: "end",
+      className: "font-mono text-xs text-muted-foreground",
+      render: (r) => r.solveDurationMs ?? "—",
+    },
+    {
+      key: "createdAt",
+      header: "أنشئ في",
+      className: "text-xs text-muted-foreground",
+      render: (r) => r.createdAt.slice(0, 16).replace("T", " "),
+    },
+    {
+      key: "actions",
+      header: "",
+      sortable: false,
+      width: "48px",
+      render: (r) => (
+        <Button asChild size="sm" variant="ghost">
+          <Link href={`/fleet/optimizer/runs/${r.id}`}>
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Link>
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <PageShell
       title="مُحسِّن الإسناد"
@@ -82,77 +166,14 @@ export default function OptimizerRunsPage() {
 
       <Card className="mt-4">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/30 text-xs">
-                <tr>
-                  <th className="text-start p-2">#</th>
-                  <th className="text-start p-2">تاريخ التشغيل</th>
-                  <th className="text-start p-2">الحالة</th>
-                  <th className="text-start p-2">الخوارزمية</th>
-                  <th className="text-end p-2">عدد الإسنادات</th>
-                  <th className="text-end p-2">غير مسنَدة</th>
-                  <th className="text-end p-2">مسافة (كم)</th>
-                  <th className="text-end p-2">زمن الحلّ (مللي)</th>
-                  <th className="text-start p-2">أنشئ في</th>
-                  <th className="p-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 && !isLoading && (
-                  <tr>
-                    <td colSpan={10} className="p-8 text-center text-muted-foreground">
-                      <Calculator className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                      لا توجد عمليات تحسين في هذه النافذة.
-                    </td>
-                  </tr>
-                )}
-                {rows.map((r) => {
-                  const meta = STATUS_LABELS[r.status] ?? { label: r.status, color: "bg-slate-100" };
-                  return (
-                    <tr key={r.id} className="border-t hover:bg-muted/20">
-                      <td className="p-2 font-mono text-xs">{r.id}</td>
-                      <td className="p-2">{r.runDate}</td>
-                      <td className="p-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs ${meta.color}`}>
-                          {meta.label}
-                        </span>
-                      </td>
-                      <td className="p-2 text-xs text-muted-foreground">
-                        {r.algorithm ?? "—"}
-                      </td>
-                      <td className="p-2 text-end font-mono">{r.assignmentCount}</td>
-                      <td className="p-2 text-end font-mono">
-                        {r.unassignedCount > 0 ? (
-                          <span className="text-rose-600">{r.unassignedCount}</span>
-                        ) : (
-                          <span className="text-muted-foreground">0</span>
-                        )}
-                      </td>
-                      <td className="p-2 text-end font-mono">
-                        {r.totalDistanceMeters != null
-                          ? (r.totalDistanceMeters / 1000).toFixed(1)
-                          : "—"}
-                      </td>
-                      <td className="p-2 text-end font-mono text-xs text-muted-foreground">
-                        {r.solveDurationMs ?? "—"}
-                      </td>
-                      <td className="p-2 text-xs text-muted-foreground">
-                        {r.createdAt.slice(0, 16).replace("T", " ")}
-                      </td>
-                      <td className="p-2">
-                        <Button asChild size="sm" variant="ghost">
-                          <Link href={`/fleet/optimizer/runs/${r.id}`}>
-                            <ChevronLeft className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            data={rows}
+            isLoading={isLoading}
+            noToolbar
+            emptyIcon={<Calculator className="h-6 w-6 mx-auto mb-2 opacity-50" />}
+            emptyMessage="لا توجد عمليات تحسين في هذه النافذة."
+          />
         </CardContent>
       </Card>
     </PageShell>

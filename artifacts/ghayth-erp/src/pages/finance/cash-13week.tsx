@@ -7,6 +7,8 @@ import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber, todayLocal } from "@/lib/formatters";
 import { PrintButton } from "@/components/shared/print-button";
 import {
@@ -325,83 +327,100 @@ export default function Cash13WeekPage() {
             <Calendar className="h-4 w-4" /> الجدول الأسبوعي
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-start p-2 font-semibold sticky right-0 bg-muted/50">الأسبوع</th>
-                <th className="text-end p-2 font-semibold">داخل</th>
-                <th className="text-end p-2 font-semibold">خارج</th>
-                <th className="text-end p-2 font-semibold">صافي</th>
-                <th className="text-end p-2 font-semibold">رصيد افتتاح</th>
-                <th className="text-end p-2 font-semibold">رصيد ختامي</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {weeks.map((w) => {
-                const cls = w.endingBalance < 0 ? "border-l-4 border-l-red-500 bg-red-50/40"
-                  : w.endingBalance < startBalance * 0.2 ? "border-l-4 border-l-amber-400 bg-amber-50/30"
-                  : "";
-                return (
-                  <tr key={w.weekIndex} className={`border-b hover:bg-muted/30 ${cls}`}>
-                    <td className="p-2 sticky right-0 bg-background">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold">أسبوع {w.weekIndex}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">{w.label}</span>
+        <CardContent className="p-0">
+          <DataTable
+            noToolbar
+            pageSize={0}
+            data={weeks}
+            rowKey={(w) => w.weekIndex}
+            className="text-xs"
+            rowClassName={(w) =>
+              cn(
+                "hover:bg-muted/30",
+                w.endingBalance < 0
+                  ? "border-l-4 border-l-red-500 bg-red-50/40"
+                  : w.endingBalance < startBalance * 0.2
+                    ? "border-l-4 border-l-amber-400 bg-amber-50/30"
+                    : "",
+              )
+            }
+            columns={[
+              {
+                key: "weekIndex", header: "الأسبوع", className: "sticky right-0 bg-background font-semibold",
+                render: (w) => (
+                  <div className="flex flex-col">
+                    <span className="text-xs font-semibold">أسبوع {w.weekIndex}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">{w.label}</span>
+                  </div>
+                ),
+              },
+              {
+                key: "inflow", header: "داخل", align: "end", className: "font-semibold",
+                render: (w) =>
+                  w.inflow === 0 ? (
+                    <span className="text-muted-foreground italic">—</span>
+                  ) : (
+                    <div className="flex flex-col items-end">
+                      <span className="font-mono text-xs font-semibold text-emerald-700">
+                        +{formatCurrency(w.inflow)}
+                      </span>
+                      <div className="h-1 w-16 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: `${(w.inflow / maxAbs) * 100}%` }} />
                       </div>
-                    </td>
-                    <td className="p-2 text-end">
-                      {w.inflow === 0
-                        ? <span className="text-muted-foreground italic">—</span>
-                        : (
-                          <div className="flex flex-col items-end">
-                            <span className="font-mono text-xs font-semibold text-emerald-700">
-                              +{formatCurrency(w.inflow)}
-                            </span>
-                            <div className="h-1 w-16 bg-muted rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500" style={{ width: `${(w.inflow / maxAbs) * 100}%` }} />
-                            </div>
-                            <span className="text-[9px] text-muted-foreground mt-0.5">{w.inflowCount} حدث</span>
-                          </div>
-                        )}
-                    </td>
-                    <td className="p-2 text-end">
-                      {w.outflow === 0
-                        ? <span className="text-muted-foreground italic">—</span>
-                        : (
-                          <div className="flex flex-col items-end">
-                            <span className="font-mono text-xs font-semibold text-red-700">
-                              -{formatCurrency(w.outflow)}
-                            </span>
-                            <div className="h-1 w-16 bg-muted rounded-full overflow-hidden">
-                              <div className="h-full bg-red-500" style={{ width: `${(w.outflow / maxAbs) * 100}%` }} />
-                            </div>
-                            <span className="text-[9px] text-muted-foreground mt-0.5">{w.outflowCount} حدث</span>
-                          </div>
-                        )}
-                    </td>
-                    <td className={`p-2 text-end font-mono text-xs font-bold ${
-                      w.net > 0 ? "text-emerald-700" : w.net < 0 ? "text-red-700" : "text-muted-foreground"
-                    }`}>
-                      {w.net === 0 ? "—" : (w.net > 0 ? "+" : "") + formatCurrency(w.net)}
-                    </td>
-                    <td className="p-2 text-end font-mono text-xs text-muted-foreground">
-                      {formatCurrency(w.openingBalance)}
-                    </td>
-                    <td className={`p-2 text-end font-mono text-sm font-bold ${
-                      w.endingBalance < 0 ? "text-red-700" : "text-emerald-700"
-                    }`}>
-                      {formatCurrency(w.endingBalance)}
-                    </td>
-                    <td className="p-2">
-                      <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="التالي"><Link href={`/finance/cash-calendar`}>
-                          <ChevronRight className="h-3 w-3" />
-                        </Link></Button>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <span className="text-[9px] text-muted-foreground mt-0.5">{w.inflowCount} حدث</span>
+                    </div>
+                  ),
+              },
+              {
+                key: "outflow", header: "خارج", align: "end", className: "font-semibold",
+                render: (w) =>
+                  w.outflow === 0 ? (
+                    <span className="text-muted-foreground italic">—</span>
+                  ) : (
+                    <div className="flex flex-col items-end">
+                      <span className="font-mono text-xs font-semibold text-red-700">
+                        -{formatCurrency(w.outflow)}
+                      </span>
+                      <div className="h-1 w-16 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-red-500" style={{ width: `${(w.outflow / maxAbs) * 100}%` }} />
+                      </div>
+                      <span className="text-[9px] text-muted-foreground mt-0.5">{w.outflowCount} حدث</span>
+                    </div>
+                  ),
+              },
+              {
+                key: "net", header: "صافي", align: "end", className: "font-mono text-xs font-bold",
+                render: (w) => (
+                  <span className={w.net > 0 ? "text-emerald-700" : w.net < 0 ? "text-red-700" : "text-muted-foreground"}>
+                    {w.net === 0 ? "—" : (w.net > 0 ? "+" : "") + formatCurrency(w.net)}
+                  </span>
+                ),
+              },
+              {
+                key: "openingBalance", header: "رصيد افتتاح", align: "end",
+                className: "font-mono text-xs text-muted-foreground",
+                render: (w) => formatCurrency(w.openingBalance),
+              },
+              {
+                key: "endingBalance", header: "رصيد ختامي", align: "end", className: "font-mono text-sm font-bold",
+                render: (w) => (
+                  <span className={w.endingBalance < 0 ? "text-red-700" : "text-emerald-700"}>
+                    {formatCurrency(w.endingBalance)}
+                  </span>
+                ),
+              },
+              {
+                key: "_nav", header: "", sortable: false,
+                render: () => (
+                  <Button asChild variant="ghost" size="sm" className="h-7 px-2" title="التالي">
+                    <Link href={`/finance/cash-calendar`}>
+                      <ChevronRight className="h-3 w-3" />
+                    </Link>
+                  </Button>
+                ),
+              },
+            ] satisfies DataTableColumn<WeekBucket>[]}
+            renderGrandTotal={() => (
               <tr className="bg-status-info-surface/40 font-bold border-t-2 border-status-info-surface">
                 <td className="p-2 sticky right-0 bg-status-info-surface/40">الإجمالي 13أ</td>
                 <td className="p-2 text-end font-mono text-emerald-700">+{formatCurrency(totalInflow)}</td>
@@ -415,8 +434,8 @@ export default function Cash13WeekPage() {
                 </td>
                 <td></td>
               </tr>
-            </tbody>
-          </table>
+            )}
+          />
         </CardContent>
       </Card>
 

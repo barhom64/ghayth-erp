@@ -35,7 +35,6 @@ import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
 import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
-import { internalTechRef } from "../lib/internalRef.js";
 import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
@@ -2773,21 +2772,54 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
     }
 
     const amt = roundTo2(Number(amount));
-    const advRef = reference || internalTechRef(`VENDOR-ADV-${supplierId}`);
-    const advSourceKey = `finance:vendor_advance:${supplierId}:${recvDate}:${requestIdempotencyToken(req)}`;
 
-    // Idempotency: short-circuit on retry.
+    // Idempotency separation (#1141): the user-facing number comes ONLY
+    // from the central numbering authority and is INDEPENDENT of the
+    // idempotency key (neither derives from the other). The stored
+    // sourceKey is the STABLE retry tuple (supplierId + date + caller
+    // token) — kept stable so the UNIQUE (companyId, sourceKey) index on
+    // vendor_advances (migration 232) catches concurrent races, while a
+    // sequential retry is short-circuited below BEFORE a number is issued.
+    const advIdemToken = requestIdempotencyToken(req);
+    const advReplayKey = `finance:vendor_advance:${supplierId}:${recvDate}:${advIdemToken}`;
+
+    // Idempotency: short-circuit a sequential retry BEFORE issuing, so no
+    // fresh number is burned and no duplicate document is created.
     const [existingAdv] = await rawQuery<{ id: number; ref: string }>(
       `SELECT id, ref FROM vendor_advances
         WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
         LIMIT 1`,
-      [scope.companyId, advSourceKey]
+      [scope.companyId, advReplayKey]
     ).catch(() => [] as { id: number; ref: string }[]);
     if (existingAdv) {
       markIdempotencyReplay(req, res, true);
       res.status(200).json({ advanceId: existingAdv.id, ref: existingAdv.ref, supplierId, amount: amt, replayed: true });
       return;
     }
+
+    // #1141 cleanup — vendor_advance ref through the numbering center
+    // (scheme `finance.vendor_advance`, seeded by migration 413). The AP
+    // mirror of the customer_advance flow in routes/finance-invoices.ts.
+    // The `reference` body field is still honoured for legacy imports.
+    let advRef: string;
+    let issuedAdv: Awaited<ReturnType<typeof issueNumber>> | null = null;
+    if (reference) {
+      advRef = reference;
+    } else {
+      issuedAdv = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? null,
+        moduleKey: "finance",
+        entityKey: "vendor_advance",
+        entityTable: "vendor_advances",
+        actorId: scope.userId,
+        metadata: { supplierId },
+        expectedTiming: "on_draft",
+      });
+      advRef = issuedAdv.number;
+    }
+    // Stored sourceKey = the STABLE retry tuple (backs the UNIQUE index).
+    const advSourceKey = advReplayKey;
 
     // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
     // withTransaction. Same shape as customer-advances fix.
@@ -2842,6 +2874,17 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
         } else {
           throw e;
         }
+      }
+
+      // Numbering link-back (documented exception to the bypass guard):
+      // point the reserved/assigned numbering row at the freshly-created
+      // vendor_advances row. Mirrors the customer_advance link-back in
+      // routes/finance-invoices.ts.
+      if (issuedAdv && advanceId) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [advanceId, issuedAdv.assignmentId],
+        );
       }
 
       const advResult = await financialEngine.postJournalEntry({
@@ -3022,8 +3065,51 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     const vatAmount = roundTo2(vatIncluded ? totalAmt - subtotal : totalAmt * vatRate);
     const fullAmount = vatIncluded ? totalAmt : roundTo2(totalAmt + vatAmount);
 
-    const creditRef = internalTechRef(`VCM-${supplierId}`);
-    const creditSourceKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
+    // Idempotency separation (#1141, mirrors vendor-advances): the stored
+    // sourceKey is the STABLE retry tuple (supplier + date + caller token),
+    // kept stable so the UNIQUE (companyId, sourceKey) index on
+    // vendor_credit_memos catches concurrent races; a sequential retry is
+    // short-circuited here BEFORE a number is issued, so no fresh VCN is
+    // burned and no duplicate memo/JE is created. The number comes only
+    // from issueNumber and is independent of this key.
+    const creditReplayKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
+    const [existingMemo] = await rawQuery<{ id: number; ref: string; amount: string; vatAmount: string; totalAmount: string; journalId: number | null; status: string }>(
+      `SELECT id, ref, amount::text, "vatAmount"::text, "totalAmount"::text, "journalId", status
+         FROM vendor_credit_memos
+        WHERE "companyId" = $1 AND "sourceKey" = $2 AND "deletedAt" IS NULL
+        LIMIT 1`,
+      [scope.companyId, creditReplayKey]
+    ).catch(() => [] as { id: number; ref: string; amount: string; vatAmount: string; totalAmount: string; journalId: number | null; status: string }[]);
+    if (existingMemo) {
+      markIdempotencyReplay(req, res, true);
+      res.status(201).json({
+        memoId: existingMemo.id, ref: existingMemo.ref, supplierId,
+        amount: Number(existingMemo.amount), vatAmount: Number(existingMemo.vatAmount),
+        totalAmount: Number(existingMemo.totalAmount), journalId: existingMemo.journalId,
+        status: existingMemo.status,
+      });
+      return;
+    }
+
+    // #1141 cleanup — vendor_credit_memo ref through the numbering center
+    // (scheme `finance.vendor_credit_memo`, seeded by migration 413). The
+    // AP twin of the customer credit_memo issuance in finance-invoices.ts.
+    // There is no legacy-import override field on createVendorCreditSchema,
+    // so the number is ALWAYS center-issued (the user-facing number comes
+    // only from issueNumber, never from a tech ref).
+    const issuedMemo = await issueNumber({
+      companyId: scope.companyId,
+      branchId: scope.branchId ?? null,
+      moduleKey: "finance",
+      entityKey: "vendor_credit_memo",
+      entityTable: "vendor_credit_memos",
+      actorId: scope.userId,
+      metadata: { supplierId, poId: poId ?? null },
+      expectedTiming: "on_draft",
+    });
+    const creditRef = issuedMemo.number;
+    // Stored sourceKey = the STABLE retry tuple (backs the UNIQUE index).
+    const creditSourceKey = creditReplayKey;
 
     // F2 (audit follow-up): JE post + journalId stamp INSIDE the same
     // withTransaction. Same shape as customer-advances fix.
@@ -3081,6 +3167,17 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
         } else {
           throw e;
         }
+      }
+
+      // Numbering link-back (documented exception to the bypass guard):
+      // point the assigned numbering row at the freshly-created
+      // vendor_credit_memos row. Mirrors the credit_memo link-back in
+      // routes/finance-invoices.ts.
+      if (memoId) {
+        await client.query(
+          `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+          [memoId, issuedMemo.assignmentId],
+        );
       }
 
       const memoResult = await financialEngine.postJournalEntry({

@@ -7,7 +7,7 @@
  * with drill-through. The existing /umrah/commission-calculations
  * page stays as the list/edit screen.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { TrendingUp } from "lucide-react";
@@ -82,6 +84,7 @@ export default function CommissionsSummaryReport() {
   const [employeeFilter, setEmployeeFilter] = useState("all");
   const [statusFilter, setStatusFilter]     = useState("all");
   const [yearFilter, setYearFilter]         = useState("");
+  const [q, setQ]                           = useState("");
 
   const qsParts: string[] = [];
   if (seasonFilter !== "all")    qsParts.push(`seasonId=${seasonFilter}`);
@@ -104,6 +107,17 @@ export default function CommissionsSummaryReport() {
   );
   const seasons = seasonsResp?.data ?? [];
   const employees = employeesResp?.data ?? [];
+  const recent = data?.recent ?? [];
+  const filtered = useMemo(
+    () => recent.filter((r) =>
+      !q.trim() ||
+      ["employeeName", "planName"].some((k) =>
+        String((r as any)[k] ?? "").toLowerCase().includes(q.trim().toLowerCase()),
+      ),
+    ),
+    [recent, q],
+  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -119,6 +133,24 @@ export default function CommissionsSummaryReport() {
         { href: "/umrah/reports", label: "التقارير" },
         { label: "ملخص العمولات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_commissions_recent"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير العمولات — آخر 100 احتساب", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "الموظف": r.employeeName ?? `#${r.employeeId}`,
+              "الخطة": r.planName ?? `#${r.planId}`,
+              "الشهر": `${MONTH_NAMES_AR[r.month - 1] ?? r.month} ${r.year}`,
+              "الحالة": STATUS_LABEL_AR[r.status] ?? r.status,
+              "المحتسبة": formatCurrency(Number(r.commissionAmount) || 0),
+              "النهائية": formatCurrency(Number(r.finalAmount) || 0),
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
@@ -168,6 +200,16 @@ export default function CommissionsSummaryReport() {
               value={yearFilter}
               onChange={(e) => setYearFilter(e.target.value)}
               data-testid="commissions-filter-year"
+            />
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <Label className="text-xs">بحث</Label>
+            <Input
+              type="text"
+              placeholder="بحث بالموظف أو الخطة…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="commissions-search"
             />
           </div>
         </CardContent>
@@ -256,8 +298,9 @@ export default function CommissionsSummaryReport() {
           </div>
           <div data-testid="commissions-recent-empty">
           <DataTable
-            data={data?.recent ?? []}
+            data={filtered}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا احتسابات تطابق الفلاتر."

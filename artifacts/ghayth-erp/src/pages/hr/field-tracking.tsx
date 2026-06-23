@@ -9,6 +9,9 @@ import {
   PageStatusBadge,
   DataTable,
   type DataTableColumn,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { MapPin, Navigation, Clock, AlertTriangle, Route, Battery, Gauge } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -279,7 +282,9 @@ function FieldBreadcrumbSection() {
 export default function FieldTrackingPage() {
   const { data, isLoading, isError } = useApiQuery<any>(["attendance"], "/hr/attendance");
   const items = asList(data);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(items);
+  const [filters, setFilters] = useFilters();
+  const filtered = applyFilters(items, filters, { searchFields: ["employeeName", "status", "date"] });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -334,6 +339,13 @@ export default function FieldTrackingPage() {
           this surfaces the through-the-day path drivers/field-staff make. */}
       <FieldBreadcrumbSection />
 
+      <AdvancedFilters
+        config={{ searchPlaceholder: "بحث بالموظف أو الحالة…", showDateRange: false }}
+        values={filters}
+        onChange={setFilters}
+        resultCount={filtered.length}
+      />
+
       <DataTable
         columns={[
           { key: "employeeName", header: "الموظف", sortable: true, render: (v) => <span className="font-medium">{v.employeeName}</span> },
@@ -342,7 +354,7 @@ export default function FieldTrackingPage() {
           { key: "status", header: "الحالة", sortable: true, render: (v) => <PageStatusBadge status={v.status} /> },
         ] as DataTableColumn<any>[]}
         onSortedDataChange={setPrintRows}
-        data={items}
+        data={filtered}
         noToolbar
         emptyMessage="لا توجد سجلات"
         pageSize={20}

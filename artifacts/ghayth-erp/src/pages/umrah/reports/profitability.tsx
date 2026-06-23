@@ -18,6 +18,9 @@ import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent } from "@/components/ui/card";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -51,6 +54,7 @@ interface SeasonOpt { id: number; title: string }
 
 export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent" }) {
   const [seasonFilter, setSeasonFilter] = useState("all");
+  const [q, setQ] = useState("");
   const qs = seasonFilter !== "all" ? `&seasonId=${seasonFilter}` : "";
 
   const { data, isLoading, isError, refetch } = useApiQuery<ProfitabilityResp>(
@@ -63,6 +67,16 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
   );
   const seasons = seasonsResp?.data ?? [];
   const rows = data?.data ?? [];
+  const filtered = useMemo(
+    () => rows.filter((r) =>
+      !q.trim() ||
+      ["name", "nuskGroupNumber"].some((k) =>
+        String((r as any)[k] ?? "").toLowerCase().includes(q.trim().toLowerCase()),
+      ),
+    ),
+    [rows, q],
+  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   const title = dimension === "group" ? "تقرير ربحية المجموعة" : "تقرير ربحية الوكيل";
   const idColumn = dimension === "group" ? "groupId" : "agentId";
@@ -91,6 +105,24 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
         { href: "/umrah/reports", label: "التقارير" },
         { label: title },
       ]}
+      actions={
+        <PrintButton
+          entityType={`report_umrah_profitability_${dimension}`}
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title, total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "الاسم": r.name ?? "—",
+              [subColumnLabel]: subColumnValue(r),
+              "الإيراد": formatCurrency(Number(r.revenue) || 0),
+              "التكلفة": formatCurrency(Number(r.cost) || 0),
+              "صافي الربح": formatCurrency(Number(r.netProfit) || 0),
+              "الهامش %": r.marginPercent == null ? "—" : `${Number(r.marginPercent)}%`,
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
@@ -109,6 +141,17 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">بحث</label>
+            <Input
+              type="text"
+              placeholder="بحث بالاسم أو رقم نسك…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="w-[220px]"
+              data-testid="profitability-search"
+            />
           </div>
         </CardContent>
       </Card>
@@ -133,14 +176,15 @@ export function ProfitabilityReport({ dimension }: { dimension: "group" | "agent
 
       <Card>
         <CardContent className="p-0 overflow-x-auto">
-          {rows.length === 0 && (
+          {filtered.length === 0 && (
             <p className="text-sm text-muted-foreground py-12 text-center" data-testid="profitability-empty">
               لا بيانات للموسم المحدد.
             </p>
           )}
           <DataTable
-            data={rows}
+            data={filtered}
             rowKey={(r) => { const rowKey = (r as any)[idColumn] ?? `${r.name}`; return String(rowKey); }}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage=""

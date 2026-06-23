@@ -9,7 +9,7 @@
  * Filters: date range (detectedAt), season, agent. Each updates
  * the KPI tiles + every breakdown via a single endpoint call.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { AlertTriangle } from "lucide-react";
@@ -76,6 +78,7 @@ export default function ViolationsSummaryReport() {
   const [agentFilter, setAgentFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [q, setQ] = useState("");
 
   const qsParts: string[] = [];
   if (seasonFilter !== "all") qsParts.push(`seasonId=${seasonFilter}`);
@@ -98,6 +101,17 @@ export default function ViolationsSummaryReport() {
   );
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
+  const recent = data?.recent ?? [];
+  const filtered = useMemo(
+    () => recent.filter((r) =>
+      !q.trim() ||
+      ["type", "mutamerName", "agentName", "description"].some((k) =>
+        String((r as any)[k] ?? "").toLowerCase().includes(q.trim().toLowerCase()),
+      ),
+    ),
+    [recent, q],
+  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -113,6 +127,24 @@ export default function ViolationsSummaryReport() {
         { href: "/umrah/reports", label: "التقارير" },
         { label: "ملخص المخالفات" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_violations_recent"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير المخالفات — آخر 100 مخالفة", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "التاريخ": r.detectedAt?.slice(0, 10) ?? "—",
+              "النوع": r.type,
+              "الحالة": STATUS_LABEL_AR[r.status] ?? r.status,
+              "المعتمر": r.mutamerName ?? (r.mutamerId ? `#${r.mutamerId}` : "—"),
+              "الوكيل": r.agentName ?? (r.agentId ? `#${r.agentId}` : "—"),
+              "الغرامة": formatCurrency(Number(r.penaltyAmount) || 0),
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
@@ -149,6 +181,16 @@ export default function ViolationsSummaryReport() {
           <div className="flex flex-col gap-1">
             <Label className="text-xs">إلى تاريخ</Label>
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} data-testid="violations-filter-to" />
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <Label className="text-xs">بحث</Label>
+            <Input
+              type="text"
+              placeholder="بحث بالنوع أو المعتمر أو الوكيل…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="violations-summary-search"
+            />
           </div>
         </CardContent>
       </Card>
@@ -218,8 +260,9 @@ export default function ViolationsSummaryReport() {
           </div>
           <div data-testid="violations-recent-empty">
           <DataTable
-            data={data?.recent ?? []}
+            data={filtered}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا مخالفات تطابق الفلاتر."

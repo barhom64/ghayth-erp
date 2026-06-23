@@ -30,6 +30,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface AiAlertRow {
   id: number;
@@ -100,6 +102,7 @@ export default function FleetTelematicsAiAlerts() {
     return () => clearInterval(t);
   }, [refetch]);
   const rows = asList(data) as AiAlertRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const ackMut = useApiMutation<unknown, { id: number }>(
     (body) => `/fleet/telematics/ai-alerts/${body.id}/acknowledge`,
@@ -262,6 +265,24 @@ export default function FleetTelematicsAiAlerts() {
         { href: "/fleet/telematics/live-map", label: "التتبع المباشر" },
         { label: "تنبيهات السلامة الذكية" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_fleet_ai_alerts"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تنبيهات السلامة الذكية", total: printRows.length },
+            items: printRows.map((a: any) => ({
+              "النوع": (CATEGORY_LABELS[a.category] ?? CATEGORY_LABELS.other).label,
+              "التنبيه": a.alertType,
+              "المركبة / السائق": a.vehiclePlate || a.deviceLabel || "—",
+              "الخطورة": SEVERITY_LABEL[a.severity] ?? a.severity,
+              "الوقت": new Date(a.occurredAt).toLocaleString("ar-SA"),
+              "الحالة": (STATUS_LABEL[a.status] ?? { label: a.status }).label,
+            })),
+          })}
+        />
+      }
     >
       <FleetTabsNav />
       <FleetTelematicsTabsNav />
@@ -304,6 +325,7 @@ export default function FleetTelematicsAiAlerts() {
           <DataTable
             columns={columns}
             data={rows}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             onRetry={refetch}

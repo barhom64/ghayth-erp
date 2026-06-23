@@ -8,7 +8,7 @@
  * The existing /umrah/nusk-invoices page stays as the list/edit
  * screen for individual rows.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency } from "@/lib/formatters";
 import { Receipt, AlertCircle } from "lucide-react";
@@ -82,6 +84,7 @@ export default function NuskInvoicesSummaryReport() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [fromDate, setFromDate]         = useState("");
   const [toDate, setToDate]             = useState("");
+  const [q, setQ]                       = useState("");
 
   const qsParts: string[] = [];
   if (seasonFilter !== "all") qsParts.push(`seasonId=${seasonFilter}`);
@@ -105,6 +108,17 @@ export default function NuskInvoicesSummaryReport() {
   );
   const seasons = seasonsResp?.data ?? [];
   const agents = agentsResp?.data ?? [];
+  const recent = data?.recent ?? [];
+  const filtered = useMemo(
+    () => recent.filter((r) =>
+      !q.trim() ||
+      ["nuskInvoiceNumber", "agentName", "groupName"].some((k) =>
+        String((r as any)[k] ?? "").toLowerCase().includes(q.trim().toLowerCase()),
+      ),
+    ),
+    [recent, q],
+  );
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState onRetry={refetch} />;
@@ -120,6 +134,24 @@ export default function NuskInvoicesSummaryReport() {
         { href: "/umrah/reports", label: "التقارير" },
         { label: "ملخص فواتير نُسك" },
       ]}
+      actions={
+        <PrintButton
+          entityType="report_umrah_nusk_invoices_recent"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "تقرير فواتير نُسك — آخر 100 فاتورة", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "رقم نُسك": r.nuskInvoiceNumber,
+              "المجموعة": r.groupName ?? (r.groupId ? `#${r.groupId}` : "—"),
+              "الوكيل": r.agentName ?? (r.agentId ? `#${r.agentId}` : "—"),
+              "الإجمالي": formatCurrency(Number(r.totalAmount) || 0),
+              "قيد AP": r.purchaseInvoiceId ? "مرحَّل" : "بانتظار",
+              "الحالة": STATUS_LABEL_AR[r.nuskStatus] ?? r.nuskStatus,
+            })),
+          })}
+        />
+      }
     >
       <UmrahTabsNav />
 
@@ -168,6 +200,16 @@ export default function NuskInvoicesSummaryReport() {
           <div className="flex flex-col gap-1">
             <Label className="text-xs">إلى تاريخ الإصدار</Label>
             <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} data-testid="nusk-filter-to" />
+          </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <Label className="text-xs">بحث</Label>
+            <Input
+              type="text"
+              placeholder="بحث برقم نُسك أو الوكيل أو المجموعة…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="nusk-search"
+            />
           </div>
         </CardContent>
       </Card>
@@ -250,8 +292,9 @@ export default function NuskInvoicesSummaryReport() {
           </div>
           <div data-testid="nusk-recent-empty">
           <DataTable
-            data={data?.recent ?? []}
+            data={filtered}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا فواتير تطابق الفلاتر."

@@ -30,6 +30,8 @@ import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-st
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 
 interface DeviceRow {
   id: number;
@@ -75,6 +77,7 @@ export default function FleetTelematicsDevices() {
     "/fleet/telematics/devices",
   );
   const rows = asList(data) as DeviceRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const { data: vehicles } = useApiQuery<{ data: VehicleOption[] }>(
     ["fleet-vehicles-options"],
@@ -196,6 +199,23 @@ export default function FleetTelematicsDevices() {
         { label: "أجهزة MDVR" },
       ]}
       actions={
+        <div className="flex items-center gap-2">
+        <PrintButton
+          entityType="report_fleet_mdvr_devices"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "أجهزة MDVR", total: printRows.length },
+            items: printRows.map((d: any) => ({
+              "رقم الجهاز": d.cmsv6DeviceNo,
+              "الوصف": d.deviceLabel || d.deviceModel || "—",
+              "المركبة": d.vehiclePlate || "غير مربوط",
+              "الحالة": (STATUS_LABEL[d.status] ?? { label: d.status }).label,
+              "القنوات": `${d.channelCount} CH`,
+              "آخر اتصال": d.lastOnlineAt ? new Date(d.lastOnlineAt).toLocaleString("ar-SA") : "—",
+            })),
+          })}
+        />
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <GuardedButton perm="fleet.telematics.devices:create" size="sm">
@@ -286,6 +306,7 @@ export default function FleetTelematicsDevices() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       }
     >
       <FleetTabsNav />
@@ -303,6 +324,7 @@ export default function FleetTelematicsDevices() {
           <DataTable
             columns={columns}
             data={rows}
+            onSortedDataChange={setPrintRows}
             isLoading={isLoading}
             isError={isError}
             onRetry={refetch}

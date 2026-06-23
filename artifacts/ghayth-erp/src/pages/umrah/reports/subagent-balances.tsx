@@ -13,6 +13,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Wallet, TrendingUp, AlertTriangle, Users, Download, Receipt } from "lucide-react";
 import { formatCurrency, formatUmrahDate } from "@/lib/formatters";
 
@@ -98,6 +100,7 @@ export default function UmrahSubAgentBalancesReport() {
       r.country?.toLowerCase().includes(q),
     );
   }, [rows, search]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(visibleRows);
 
   const exportCsv = () => {
     void exportRowsToCsv({
@@ -163,16 +166,34 @@ export default function UmrahSubAgentBalancesReport() {
       subtitle="كل الوكلاء الفرعيين مع المُفوتر / المُحصَّل / المستحق + سجل الدفعات"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "أرصدة الوكلاء الفرعيين" }]}
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={exportCsv}
-          disabled={visibleRows.length === 0}
-          className="gap-1"
-          data-testid="subagent-balances-export-csv"
-        >
-          <Download className="h-3 w-3" /> تصدير CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_subagent_balances"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "أرصدة الوكلاء الفرعيين — تقرير مجمَّع", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "الوكيل الفرعي": r.name,
+                "الوكيل الرئيسي": r.agentName || (r.agentId ? `#${r.agentId}` : "—"),
+                "المُفوتر": formatCurrency(Number(r.totalInvoiced ?? 0)),
+                "المُحصَّل": formatCurrency(Number(r.totalReceived ?? 0)),
+                "المستحق": formatCurrency(Number(r.outstanding ?? 0)),
+                "الحالة": r.isActive ? "نشط" : "غير نشط",
+              })),
+            })}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={visibleRows.length === 0}
+            className="gap-1"
+            data-testid="subagent-balances-export-csv"
+          >
+            <Download className="h-3 w-3" /> تصدير CSV
+          </Button>
+        </div>
       }
     >
       <UmrahTabsNav />
@@ -249,6 +270,7 @@ export default function UmrahSubAgentBalancesReport() {
           <DataTable
             data={visibleRows}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             noToolbar
             pageSize={0}
             emptyMessage="لا يوجد وكلاء فرعيون ضمن الفلتر الحالي."
