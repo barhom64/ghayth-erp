@@ -3,6 +3,7 @@ import { useRoute } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { PrintButton } from "@/components/shared/print-button";
 import { ArrowLeft } from "lucide-react";
@@ -85,6 +86,104 @@ const KIND_LABEL: Record<string, string> = {
 const fmtDate = (d: string | null): string => d ? new Date(d).toLocaleDateString("ar") : "—";
 const fmtTime = (t: string | null): string => t ? t.slice(0, 5) : "—";
 const fmtDateTime = (s: string | null): string => s ? new Date(s).toLocaleString("ar") : "—";
+
+type RouteSegment = ConfirmationData["lines"][number];
+
+// Route-segments list columns. Rendering preserved EXACTLY from the prior raw
+// <table>: line number (mono), from/to with kind label, scheduled pickup/
+// delivery. Non-sortable — this is an ordered itinerary, not a browsable list.
+const ROUTE_SEGMENT_COLUMNS: DataTableColumn<RouteSegment>[] = [
+  {
+    key: "lineNumber",
+    header: "#",
+    sortable: false,
+    className: "p-1 border font-mono",
+    render: (l) => <>{l.lineNumber}</>,
+  },
+  {
+    key: "from",
+    header: "من",
+    sortable: false,
+    className: "p-1 border",
+    render: (l) => (
+      <>
+        {l.fromLocationText || "—"}
+        {l.fromLocationKind && (
+          <span className="text-xs text-muted-foreground mr-1">
+            ({KIND_LABEL[l.fromLocationKind] || l.fromLocationKind})
+          </span>
+        )}
+      </>
+    ),
+  },
+  {
+    key: "to",
+    header: "إلى",
+    sortable: false,
+    className: "p-1 border",
+    render: (l) => (
+      <>
+        {l.toLocationText || "—"}
+        {l.toLocationKind && (
+          <span className="text-xs text-muted-foreground mr-1">
+            ({KIND_LABEL[l.toLocationKind] || l.toLocationKind})
+          </span>
+        )}
+      </>
+    ),
+  },
+  {
+    key: "scheduledPickupAt",
+    header: "الانطلاق",
+    sortable: false,
+    className: "p-1 border text-xs",
+    render: (l) => <>{fmtDateTime(l.scheduledPickupAt)}</>,
+  },
+  {
+    key: "scheduledDeliveryAt",
+    header: "الوصول",
+    sortable: false,
+    className: "p-1 border text-xs",
+    render: (l) => <>{fmtDateTime(l.scheduledDeliveryAt)}</>,
+  },
+];
+
+type DispatchOrder = ConfirmationData["dispatchOrders"][number];
+
+// Assigned vehicles/drivers list columns. Rendering preserved EXACTLY from the
+// prior raw <table>: plate (mono), driver, driver phone (mono/LTR), start time.
+// Non-sortable — fixed roster on a print sheet.
+const DISPATCH_COLUMNS: DataTableColumn<DispatchOrder>[] = [
+  {
+    key: "vehiclePlate",
+    header: "المركبة",
+    sortable: false,
+    className: "p-1 border font-mono",
+    render: (d) => <>{d.vehiclePlate || "—"}</>,
+  },
+  {
+    key: "driverName",
+    header: "السائق",
+    sortable: false,
+    className: "p-1 border",
+    render: (d) => <>{d.driverName || "—"}</>,
+  },
+  {
+    key: "driverPhone",
+    header: "هاتف السائق",
+    sortable: false,
+    ltr: true,
+    className: "p-1 border font-mono",
+    render: (d) => <>{d.driverPhone || "—"}</>,
+  },
+  {
+    key: "scheduledStartAt",
+    header: "البداية",
+    sortable: false,
+    className: "p-1 border text-xs",
+    render: (d) => <>{fmtDateTime(d.scheduledStartAt)}</>,
+  },
+];
 
 export default function TransportBookingConfirmation() {
   const [, params] = useRoute("/fleet/transport/bookings/:id/confirmation");
@@ -169,34 +268,15 @@ export default function TransportBookingConfirmation() {
           {c.lines.length > 0 && (
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">مقاطع المسار ({c.lines.length})</div>
-              <div className="overflow-x-auto"><table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr className="bg-surface-subtle">
-                    <th className="text-right p-1 border">#</th>
-                    <th className="text-right p-1 border">من</th>
-                    <th className="text-right p-1 border">إلى</th>
-                    <th className="text-right p-1 border">الانطلاق</th>
-                    <th className="text-right p-1 border">الوصول</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {c.lines.map((l) => (
-                    <tr key={l.id}>
-                      <td className="p-1 border font-mono">{l.lineNumber}</td>
-                      <td className="p-1 border">
-                        {l.fromLocationText || "—"}
-                        {l.fromLocationKind && <span className="text-xs text-muted-foreground mr-1">({KIND_LABEL[l.fromLocationKind] || l.fromLocationKind})</span>}
-                      </td>
-                      <td className="p-1 border">
-                        {l.toLocationText || "—"}
-                        {l.toLocationKind && <span className="text-xs text-muted-foreground mr-1">({KIND_LABEL[l.toLocationKind] || l.toLocationKind})</span>}
-                      </td>
-                      <td className="p-1 border text-xs">{fmtDateTime(l.scheduledPickupAt)}</td>
-                      <td className="p-1 border text-xs">{fmtDateTime(l.scheduledDeliveryAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+              <div className="overflow-x-auto text-sm">
+                <DataTable
+                  columns={ROUTE_SEGMENT_COLUMNS}
+                  data={c.lines}
+                  rowKey={(l) => l.id}
+                  noToolbar
+                  pageSize={0}
+                />
+              </div>
             </div>
           )}
 
@@ -215,26 +295,15 @@ export default function TransportBookingConfirmation() {
           {c.dispatchOrders.length > 0 && (
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">المركبات والسائقون المُسنَدون</div>
-              <div className="overflow-x-auto"><table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr className="bg-surface-subtle">
-                    <th className="text-right p-1 border">المركبة</th>
-                    <th className="text-right p-1 border">السائق</th>
-                    <th className="text-right p-1 border">هاتف السائق</th>
-                    <th className="text-right p-1 border">البداية</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {c.dispatchOrders.map((d) => (
-                    <tr key={d.id}>
-                      <td className="p-1 border font-mono">{d.vehiclePlate || "—"}</td>
-                      <td className="p-1 border">{d.driverName || "—"}</td>
-                      <td className="p-1 border font-mono" dir="ltr">{d.driverPhone || "—"}</td>
-                      <td className="p-1 border text-xs">{fmtDateTime(d.scheduledStartAt)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
+              <div className="overflow-x-auto text-sm">
+                <DataTable
+                  columns={DISPATCH_COLUMNS}
+                  data={c.dispatchOrders}
+                  rowKey={(d) => d.id}
+                  noToolbar
+                  pageSize={0}
+                />
+              </div>
             </div>
           )}
 

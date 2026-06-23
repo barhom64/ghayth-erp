@@ -21,8 +21,9 @@ const ROUTE_UMRAH = readFileSync(
   join(import.meta.dirname!, "../../src/routes/umrah.ts"),
   "utf8",
 );
+// U-07 Phase 13 — /reports/compliance carved into umrah-reports.ts.
 const ROUTE_ENT = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const COMPLIANCE_PAGE = readFileSync(

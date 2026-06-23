@@ -60,6 +60,7 @@ interface EmployeeMeRow {
   branchName: string | null;
   preferredCalendar: "hijri" | "gregorian";
   preferredLocale: "ar" | "en";
+  tablePrefs: Record<string, unknown>;
 }
 
 interface UserPasswordRow {
@@ -640,7 +641,7 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
               ea."jobTitleId", ea.role, ea.salary,
               ea."companyId", ea."branchId",
               c.name AS "companyName", b.name AS "branchName",
-              u."preferredCalendar", u."preferredLocale"
+              u."preferredCalendar", u."preferredLocale", u."tablePrefs"
        FROM employees e
        JOIN employee_assignments ea ON ea."employeeId" = e.id
        JOIN users u ON u."employeeId" = e.id
@@ -704,8 +705,15 @@ router.get("/me", authMiddleware, authedUserLimiter, async (req, res) => {
 const updatePreferencesSchema = z.object({
   preferredCalendar: z.enum(["hijri", "gregorian"]).optional(),
   preferredLocale: z.enum(["ar", "en"]).optional(),
+  // Per-user table UI prefs, merged into the existing jsonb (never
+  // overwritten). `pageSize` is validated against the allowed set; any
+  // other key (future column order / hidden columns / sort) passes through
+  // permissively so new prefs don't need another schema change.
+  tablePrefs: z.object({
+    pageSize: z.number().int().refine((v) => [10, 20, 50, 100, 200].includes(v)).optional(),
+  }).passthrough().optional(),
 }).refine(
-  (b) => b.preferredCalendar !== undefined || b.preferredLocale !== undefined,
+  (b) => b.preferredCalendar !== undefined || b.preferredLocale !== undefined || b.tablePrefs !== undefined,
   { message: "لم يتم تحديد أي تفضيل لتحديثه" },
 );
 
@@ -716,7 +724,7 @@ router.patch("/me/preferences", authMiddleware, authedUserLimiter, async (req, r
     if (!parsed.success) {
       throw new ValidationError(parsed.error.errors[0]?.message ?? "بيانات غير صالحة");
     }
-    const { preferredCalendar, preferredLocale } = parsed.data;
+    const { preferredCalendar, preferredLocale, tablePrefs } = parsed.data;
 
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -727,6 +735,12 @@ router.patch("/me/preferences", authMiddleware, authedUserLimiter, async (req, r
     if (preferredLocale !== undefined) {
       params.push(preferredLocale);
       sets.push(`"preferredLocale" = $${params.length}`);
+    }
+    if (tablePrefs !== undefined) {
+      // Merge into the existing object (|| is a shallow jsonb merge) so a
+      // PATCH carrying only { pageSize } keeps any other table prefs intact.
+      params.push(JSON.stringify(tablePrefs));
+      sets.push(`"tablePrefs" = COALESCE("tablePrefs", '{}'::jsonb) || $${params.length}::jsonb`);
     }
     params.push(scope.userId);
     const { affectedRows } = await rawExecute(
@@ -741,13 +755,14 @@ router.patch("/me/preferences", authMiddleware, authedUserLimiter, async (req, r
       action: "update",
       entity: "users",
       entityId: scope.userId,
-      after: { preferredCalendar, preferredLocale },
+      after: { preferredCalendar, preferredLocale, tablePrefs },
     }).catch((e) => logger.error(e, "auth background task failed"));
 
     res.json({
       success: true,
       preferredCalendar: preferredCalendar ?? null,
       preferredLocale: preferredLocale ?? null,
+      tablePrefs: tablePrefs ?? null,
     });
   } catch (err) {
     handleRouteError(err, res, "UpdatePreferences error:");

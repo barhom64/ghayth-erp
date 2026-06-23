@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
@@ -225,62 +225,62 @@ export default function UmrahSalesWizard() {
               <p className="text-xs text-muted-foreground">عدّل السعر يدوياً لو احتجت — الافتراضي مأخوذ من آخر فاتورة أو القاعدة المطابقة.</p>
             </CardHeader>
             <CardContent className="space-y-2">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-xs text-muted-foreground border-b">
-                    <tr>
-                      <th className="text-start py-2 px-2">المجموعة</th>
-                      <th className="text-start py-2 px-2">عدد المعتمرين</th>
-                      <th className="text-start py-2 px-2">تاريخ الدخول</th>
-                      <th className="text-start py-2 px-2">سعر المعتمر (ر.س)</th>
-                      <th className="text-start py-2 px-2">المصدر</th>
-                      <th className="text-end py-2 px-2">إجمالي المجموعة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groups.map((g) => {
+              <DataTable<(typeof groups)[number]>
+                noToolbar
+                pageSize={0}
+                data={groups}
+                rowKey={(g) => g.id}
+                columns={[
+                  {
+                    key: "group", header: "المجموعة", sortable: false,
+                    render: (g) => (
+                      <>
+                        <div className="font-medium">{g.nuskGroupNumber}</div>
+                        <div className="text-xs text-muted-foreground">{g.name ?? "—"}</div>
+                      </>
+                    ),
+                    footer: () => <span className="text-sm text-muted-foreground font-normal">الإجمالي قبل الضريبة + الغرامات</span>,
+                  },
+                  { key: "mutamerCount", header: "عدد المعتمرين", sortable: false, render: (g) => g.mutamerCount },
+                  { key: "entryDate", header: "تاريخ الدخول", sortable: false, className: "text-xs", render: (g) => (g.entryDate ? formatUmrahDate(g.entryDate) : "—") },
+                  {
+                    key: "price", header: "سعر المعتمر (ر.س)", sortable: false,
+                    render: (g) => (
+                      <Input
+                        type="number"
+                        min={0}
+                        step="any"
+                        className="h-8 w-32"
+                        value={prices[g.id] ?? ""}
+                        onChange={(e) => setPrices((p) => ({ ...p, [g.id]: e.target.value }))}
+                      />
+                    ),
+                  },
+                  {
+                    key: "source", header: "المصدر", sortable: false,
+                    render: (g) => {
                       const meta = SOURCE_LABEL[g.suggestedSource];
                       const SourceIcon = meta.icon;
+                      return (
+                        <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] ${meta.tone}`}>
+                          <SourceIcon className="h-3 w-3" />
+                          {meta.text}
+                        </span>
+                      );
+                    },
+                  },
+                  {
+                    key: "lineTotal", header: "إجمالي المجموعة", sortable: false, align: "end", className: "font-medium",
+                    render: (g) => {
                       const raw = prices[g.id];
                       const price = raw != null ? Number(raw) : NaN;
                       const lineTotal = Number.isFinite(price) && price > 0 ? price * g.mutamerCount : 0;
-                      return (
-                        <tr key={g.id} className="border-b last:border-0">
-                          <td className="py-2 px-2">
-                            <div className="font-medium">{g.nuskGroupNumber}</div>
-                            <div className="text-xs text-muted-foreground">{g.name ?? "—"}</div>
-                          </td>
-                          <td className="py-2 px-2">{g.mutamerCount}</td>
-                          <td className="py-2 px-2 text-xs">{g.entryDate ? formatUmrahDate(g.entryDate) : "—"}</td>
-                          <td className="py-2 px-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              step="any"
-                              className="h-8 w-32"
-                              value={prices[g.id] ?? ""}
-                              onChange={(e) => setPrices((p) => ({ ...p, [g.id]: e.target.value }))}
-                            />
-                          </td>
-                          <td className="py-2 px-2">
-                            <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] ${meta.tone}`}>
-                              <SourceIcon className="h-3 w-3" />
-                              {meta.text}
-                            </span>
-                          </td>
-                          <td className="py-2 px-2 text-end font-medium">{formatCurrency(lineTotal)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t">
-                      <td colSpan={5} className="py-2 px-2 text-end text-sm text-muted-foreground">الإجمالي قبل الضريبة + الغرامات</td>
-                      <td className="py-2 px-2 text-end font-semibold">{formatCurrency(total)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                      return formatCurrency(lineTotal);
+                    },
+                    footer: () => <span className="font-semibold">{formatCurrency(total)}</span>,
+                  },
+                ]}
+              />
 
               <div className="flex justify-end pt-2">
                 <GuardedButton

@@ -168,6 +168,43 @@ export default function CustomerAdvancesPage() {
     },
   ];
 
+  // Grouped (per-client accordion) view columns — matches the previous raw
+  // grouped table exactly (no client column; conditional applied/remaining
+  // displays; icon-only action links). Distinct from the flat-view `cols`.
+  const groupedCols: DataTableColumn<CustomerAdvance>[] = [
+    { key: "ref", header: "المرجع", sortable: false, className: "font-mono text-xs", render: (a) => a.ref },
+    { key: "date", header: "التاريخ", sortable: false, className: "text-xs", render: (a) => (a.receivedDate ? formatDateAr(a.receivedDate.split("T")[0]) : "—") },
+    { key: "method", header: "الطريقة", sortable: false, className: "text-xs", render: (a) => METHOD_LABEL[a.method ?? ""] ?? a.method ?? "—" },
+    { key: "amount", header: "المبلغ", sortable: false, align: "end", className: "tabular-nums", render: (a) => formatCurrency(Number(a.amount)) },
+    { key: "applied", header: "المُطبَّق", sortable: false, align: "end", className: "tabular-nums text-status-success-foreground", render: (a) => (Number(a.appliedAmount) > 0 ? formatCurrency(Number(a.appliedAmount)) : "—") },
+    {
+      key: "remaining", header: "المتبقي", sortable: false, align: "end",
+      className: "tabular-nums font-semibold",
+      cellClassName: (a) => (Number(a.remaining) > 0 ? "text-status-info-foreground" : undefined),
+      render: (a) => (Number(a.remaining) > 0.01 ? formatCurrency(Number(a.remaining)) : "—"),
+    },
+    {
+      key: "status", header: "الحالة", sortable: false,
+      render: (a) => {
+        const s = STATUS_LABEL[a.status] ?? { label: a.status, tone: "bg-muted" };
+        return <Badge className={`text-[10px] ${s.tone}`}>{s.label}</Badge>;
+      },
+    },
+    {
+      key: "actions", header: "", sortable: false,
+      render: (a) => (
+        <div className="flex gap-1">
+          {Number(a.remaining) > 0 && (
+            <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="تطبيق على فاتورة"><Link href={`/finance/customer-advances/${a.id}/apply`}><ArrowDownToLine className="w-3 h-3" /></Link></Button>
+          )}
+          {a.journalId && (
+            <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="القيد"><Link href={`/finance/journal/${a.journalId}`}><ExternalLink className="w-3 h-3" /></Link></Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   const customersWithRemaining = groups.filter((g) => g.totalRemaining > 0.01).length;
 
   return (
@@ -325,56 +362,13 @@ export default function CustomerAdvancesPage() {
                 </CardHeader>
                 {isOpen && (
                   <CardContent className="pt-0">
-                    <div className="overflow-x-auto"><table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b text-xs text-muted-foreground">
-                          <th className="text-start py-2 px-2">المرجع</th>
-                          <th className="text-start py-2 px-2">التاريخ</th>
-                          <th className="text-start py-2 px-2">الطريقة</th>
-                          <th className="text-end py-2 px-2">المبلغ</th>
-                          <th className="text-end py-2 px-2">المُطبَّق</th>
-                          <th className="text-end py-2 px-2">المتبقي</th>
-                          <th className="py-2 px-2">الحالة</th>
-                          <th className="py-2 px-2 w-16"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {g.advances.map((a) => {
-                          const status = STATUS_LABEL[a.status] ?? { label: a.status, tone: "bg-muted" };
-                          return (
-                            <tr key={a.id} className="border-b hover:bg-muted/30">
-                              <td className="py-1.5 px-2 font-mono text-xs">{a.ref}</td>
-                              <td className="py-1.5 px-2 text-xs">{a.receivedDate ? formatDateAr(a.receivedDate.split("T")[0]) : "—"}</td>
-                              <td className="py-1.5 px-2 text-xs">{METHOD_LABEL[a.method ?? ""] ?? a.method ?? "—"}</td>
-                              <td className="py-1.5 px-2 text-end tabular-nums">{formatCurrency(Number(a.amount))}</td>
-                              <td className="py-1.5 px-2 text-end tabular-nums text-status-success-foreground">
-                                {Number(a.appliedAmount) > 0 ? formatCurrency(Number(a.appliedAmount)) : "—"}
-                              </td>
-                              <td className={`py-1.5 px-2 text-end tabular-nums font-semibold ${Number(a.remaining) > 0 ? "text-status-info-foreground" : ""}`}>
-                                {Number(a.remaining) > 0.01 ? formatCurrency(Number(a.remaining)) : "—"}
-                              </td>
-                              <td className="py-1.5 px-2">
-                                <Badge className={`text-[10px] ${status.tone}`}>{status.label}</Badge>
-                              </td>
-                              <td className="py-1.5 px-2">
-                                <div className="flex gap-1">
-                                  {Number(a.remaining) > 0 && (
-                                    <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="تطبيق على فاتورة"><Link href={`/finance/customer-advances/${a.id}/apply`}>
-                                        <ArrowDownToLine className="w-3 h-3" />
-                                      </Link></Button>
-                                  )}
-                                  {a.journalId && (
-                                    <Button asChild variant="ghost" size="icon" className="h-7 w-7" title="القيد"><Link href={`/finance/journal/${a.journalId}`}>
-                                        <ExternalLink className="w-3 h-3" />
-                                      </Link></Button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table></div>
+                    <DataTable
+                      noToolbar
+                      pageSize={0}
+                      data={g.advances}
+                      rowKey={(a) => a.id}
+                      columns={groupedCols}
+                    />
                     {g.clientId && (
                       <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                         <Button asChild size="sm" variant="outline"><Link href={`/finance/customer-360-sheet?clientId=${g.clientId}`}>

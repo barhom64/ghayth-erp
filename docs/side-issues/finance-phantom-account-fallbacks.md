@@ -12,15 +12,25 @@
 | ~~storeEngine (5 مواضع)~~ | — | — | — | **✅ أُصلح (#store-postable): 1111/4111/2131/5110/1151**
 | ~~finance-hardening (3: بينية)~~ | — | — | — | **✅ أُصلح: 1131/2111/4130** |
 | ~~finance-custodies~~ | 1400 | — | custody | **✅ أُصلح: 1113 العهد النقدية** |
-| eventListeners.ts:1803 | 5200 | أب (رواتب!) | commission_expense | ورقة عمولات (لا 5200 الرواتب) |
-| eventListeners.ts:1934 · umrahCommissionEngine.ts:204 | 6200 | غير موجود | عمولة عمرة | ورقة مصروف عمولة حقيقية |
-| finance-algorithms.ts:40/46 | 1120 | أب | bank | **1124** بنوك (أو ورقة بنك رئيسي) |
-| finance-algorithms.ts:1290 | 1290 | غير موجود | accumulated depreciation | ورقة مجمّع إهلاك حقيقية |
-| finance-algorithms.ts:1500/1530/1590 · cron:1590 | 15xx | غير موجود | prepaid/other assets | أوراق 117x المدفوعات المقدمة |
-| finance-algorithms.ts:6100 · cron:6100 | 6100 | غير موجود | COGS/depreciation expense | **5110/5710** |
+| ~~eventListeners.ts:1803~~ | 5200 | أب (رواتب!) | commission_expense | **✅ أُصلح: 5430 «العمولات والوساطة»** |
+| ~~eventListeners.ts:1934 · umrahCommissionEngine.ts:204~~ | 6200 | غير موجود | عمولة عمرة | **✅ أُصلح: 5430 «العمولات والوساطة»** |
+| ~~finance-algorithms (إهلاك+بنك)~~ | — | — | — | **✅ أُصلح: بنك 1124 · إهلاك 5790/1290** |
+| ~~finance-algorithms.ts (CIP)~~ | 1530 | غير موجود | CIP account | **✅ أُصلح: 1270 «أعمال تحت التنفيذ»** |
+| ~~finance-algorithms.ts (CIP)~~ | 1500 | غير موجود | capitalized asset | **✅ أُصلح: 1280 «أصول ثابتة أخرى» (ورقة جديدة + backfill 414)** |
+| finance/datafixInventory.ts | 1130/1140/2110 | **آباء تحكّم (تصميم)** | AR/سلف/AP datafix | **❎ ليست عيبًا — أكواد آباء تحكّم؛ تبقى allowlisted دائمًا** |
 
-| finance/datafixInventory.ts | 1130/1140/2110 | آباء | AR/سلف/AP datafix | 1131 / 1141 / 2111 |
+> **تصحيح:** المواضع الثلاثة في `datafixInventory.ts` (1130/1140/2110) **ليست
+> fallbacks وهمية**. هي أكواد **حساب تحكّم أب** يُنشأ تحته دفتر مساعد (العملاء/سلف
+> الموظفين/الموردون) — الفروع المساعدة هي الأوراق القابلة للترحيل، والأب
+> `allowPosting:false` بقصد. تُطابق المزوِّد الحيّ `createSubsidiaryAccountsForEntity`
+> في `routes/accounting-engine.ts` (يتحقّق منه `datafixInventory.test.ts`).
+> توجيهها لأوراق يكسر إنشاء الدفتر المساعد. تبقى في `ALLOWLIST` دائمًا.
 
-**قاعدة الإصلاح:** كل موضع → حلّ لورقة قابلة للترحيل عبر `accounting_mappings`
-أولًا، والافتراضي ورقة حقيقية؛ وإن غاب → رسالة إرشاد لا قيد ميت. assertion test
-لكل قيد يُمسّ. ثم احذف السطر من ALLOWLIST في scripts/src/check-postable-fallbacks.mjs.
+**الحالة: مُغلق ✅** — كل الـ fallbacks الوهمية الحقيقية أُصلحت؛ يتبقّى في
+`ALLOWLIST` 3 مواضع آباء-تحكّم بقصد (datafix)، والحارس يمنع أي ارتداد جديد.
+assertion tests: `tests/integration/commissionCipPostableLeaves.dynamic.test.ts`
+(عمولة 5430 + رسملة CIP 1270→1280) و`depreciationPostableLeaves.dynamic.test.ts`.
+
+**قاعدة الإصلاح المعتمدة:** كل موضع → حلّ لورقة قابلة للترحيل عبر
+`accounting_mappings` أولًا، والافتراضي ورقة حقيقية؛ assertion test لكل قيد يُمسّ،
+ثم حذف السطر من ALLOWLIST.

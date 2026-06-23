@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { Request, Response } from "express";
 
 // Resolve a stable per-request token used as the deterministic suffix for
@@ -15,6 +15,20 @@ export function requestIdempotencyToken(req: Request): string {
     return trimmed;
   }
   return randomUUID();
+}
+
+// Bound a token so a `sourceKey` built from it (prefix + ids + date + amount +
+// token) fits its VARCHAR column. A valid Idempotency-Key is up to 128 chars;
+// concatenated into the retry tuple it can exceed the column (vendor-AP
+// VARCHAR(128), intercompany VARCHAR(160)) and raise a Postgres value-too-long
+// error BEFORE the idempotency row is stored — failing the whole post. Hash
+// tokens longer than 64 to a fixed 64-hex digest: deterministic, so a retry
+// with the same long key still collides on the same sourceKey for dedup. Short
+// tokens (UUIDs, normal keys ≤ 64) pass through unchanged — zero behaviour
+// change for existing rows (a > 64 token would previously have errored, so no
+// such row exists to mismatch).
+export function boundedIdempotencyToken(token: string): string {
+  return token.length > 64 ? createHash("sha256").update(token).digest("hex") : token;
 }
 
 // Surface the engine's idempotency-replay flag back to the caller so a

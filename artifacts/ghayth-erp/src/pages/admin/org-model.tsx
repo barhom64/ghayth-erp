@@ -26,6 +26,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber } from "@/lib/formatters";
 import { Plus, X, Trash2, Pencil, Building2, Briefcase, Users, Gavel, Network, Banknote } from "lucide-react";
@@ -81,6 +83,7 @@ function LegalEntitiesTab() {
   const { toast } = useToast();
   const { data, isLoading, isError, refetch } = useApi<LegalEntity>("/org/legal-entities");
   const rows = asList<LegalEntity>(data?.data || []);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<LegalEntity>(rows);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ nameAr: "", nameEn: "", crNumber: "", vatNumber: "", taxNumber: "" });
   const [editingRow, setEditingRow] = useState<LegalEntity | null>(null);
@@ -159,7 +162,21 @@ function LegalEntitiesTab() {
           </CardContent>
         </Card>
       )}
-      <div className="flex justify-end mb-3">
+      <div className="flex justify-end items-center gap-2 mb-3">
+        <PrintButton
+          entityType="report_admin_legal_entities"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "الكيانات القانونية", total: printRows.length },
+            items: printRows.map((r) => ({
+              "الاسم العربي": r.nameAr,
+              "السجل التجاري": r.crNumber || "—",
+              "الرقم الضريبي": r.vatNumber || "—",
+              "الحالة": r.isActive ? "نشط" : "غير نشط",
+            })),
+          })}
+        />
         {!showForm ? (
           <GuardedButton perm={PERM_WRITE} onClick={() => setShowForm(true)}>
             <Plus className="h-4 w-4 me-1" /> كيان جديد
@@ -183,7 +200,7 @@ function LegalEntitiesTab() {
           </CardContent>
         </Card>
       )}
-      <DataTable data={rows} columns={columns} emptyMessage="لا توجد كيانات قانونية بعد" />
+      <DataTable data={rows} columns={columns} onSortedDataChange={setPrintRows} emptyMessage="لا توجد كيانات قانونية بعد" />
     </div>
   );
 }

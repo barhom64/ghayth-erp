@@ -187,6 +187,15 @@ run_step "check:jsx-generic-component" node scripts/src/check-jsx-generic-compon
 # Pure-logic fixtures guard the detector.
 run_step "check:responsive-tables:tests" node scripts/src/check-responsive-tables.test.mjs
 run_step "check:responsive-tables" node scripts/src/check-responsive-tables.mjs
+# Display-table canonicalization: a page-level list/display table must use the
+# shared <DataTable> (sort, per-user page-size, mobile cards, column footers,
+# CSV export), not a hand-rolled raw <table>. The 2026-06 table-unification
+# pass converted them all; this keeps NEW raw tables out of src/pages/**.
+# OFFLINE source scan; baseline of verified-bespoke pages (forms / statements /
+# tree / info-blocks) in scripts/display-tables-allowlist.txt. Fixtures guard
+# the detector.
+run_step "check:display-tables:tests" node scripts/src/check-display-tables.test.mjs
+run_step "check:display-tables" node scripts/src/check-display-tables.mjs
 # Page action-bar consistency (refresh/print/export): a hand-rolled control —
 # a <Button> pairing the action's icon with its bare Arabic label (RefreshCw+«تحديث»
 # / Printer+«طباعة» / Download+«تصدير») — instead of the unified component
@@ -315,6 +324,12 @@ run_step "check:module-strip-coverage" node scripts/src/check-module-strip-cover
 # pure classifiers are gated by the :tests sibling.
 run_step "check:filter-bar-coverage:tests" node scripts/src/check-filter-bar-coverage.test.mjs
 run_step "check:filter-bar-coverage" node scripts/src/check-filter-bar-coverage.mjs
+# OPERABILITY CENSUS (جرد العمليّة): report-only per-page inventory of the
+# operational elements — back / print / sort / search — across every routed
+# page, classified by page type so every gap (or n/a) carries a reason. The
+# accounting tool behind the «back/print/search/sort» standardisation campaign.
+run_step "check:page-operability:tests" node scripts/src/check-page-operability.test.mjs
+run_step "check:page-operability" node scripts/src/check-page-operability.mjs
 # SIDEBAR COVERAGE: every mounted route must be reachable from the left sidebar
 # (navigation.registry.ts) or be legitimately off-sidebar (detail / create /
 # redirect-stub / allowlisted); and no nav entry may be a dead link or a

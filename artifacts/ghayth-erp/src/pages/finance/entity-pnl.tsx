@@ -13,6 +13,8 @@ import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { InlineSparkline } from "@/components/shared/inline-sparkline";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { TrendingUp, TrendingDown, ScrollText, ArrowLeftRight, User, Download } from "lucide-react";
 
 /**
@@ -155,6 +157,19 @@ export default function EntityPnlPage() {
 
   const backHref = BACK_LINK[entityType] ?? "/finance";
 
+  // P&L breakdown rows for print — the revenue / expense / net lines of
+  // the lifetime (or date-ranged) bucket. One line per row so the printed
+  // قائمة دخل mirrors the on-screen cards.
+  const pnlRows = useMemo(() => {
+    if (!data) return [] as { بند: string; المبلغ: number }[];
+    return [
+      { بند: "الإيرادات", المبلغ: data.bucket.revenue },
+      { بند: "المصروفات", المبلغ: data.bucket.expense },
+      { بند: "الصافي", المبلغ: data.bucket.net },
+    ];
+  }, [data]);
+  const { sortedRows: printRows } = usePrintRows<{ بند: string; المبلغ: number }>(pnlRows);
+
   return (
     <PageShell
       title={data ? `أرباح وخسائر — ${data.entity.name}` : "أرباح وخسائر الكيان"}
@@ -165,7 +180,24 @@ export default function EntityPnlPage() {
         { label: "أرباح وخسائر" },
       ]}
       actions={
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {data && entityId != null && (
+            <PrintButton
+              entityType="report_finance_entity_pnl"
+              entityId={String(entityId)}
+              size="icon"
+              payload={() => ({
+                entity: {
+                  title: `أرباح وخسائر — ${data.entity.name}`,
+                  total: printRows.length,
+                },
+                items: printRows.map((r) => ({
+                  "البند": r.بند,
+                  "المبلغ": r.المبلغ,
+                })),
+              })}
+            />
+          )}
           {data && (
             <Button
               variant="outline"

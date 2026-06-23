@@ -126,8 +126,8 @@ export default function PaymentRunPage() {
         </span>
       ),
     },
-    { key: "ref", header: "المرجع", className: "font-mono text-xs" },
-    { key: "supplierName", header: "المورد" },
+    { key: "ref", header: "المرجع", className: "font-mono text-xs", searchable: true },
+    { key: "supplierName", header: "المورد", searchable: true },
     { key: "expectedDelivery", header: "الاستحقاق", render: (p) => p.expectedDelivery ? formatDateAr(p.expectedDelivery) : formatDateAr(p.createdAt) },
     { key: "totalAmount", header: "المبلغ", render: (p) => <span className="font-bold">{formatCurrency(Number(p.totalAmount || 0))}</span> },
   ];
@@ -229,9 +229,9 @@ export default function PaymentRunPage() {
           <DataTable
             columns={columns}
             data={pos}
+            searchPlaceholder="بحث بالمرجع أو اسم المورد…"
             emptyMessage="لا توجد أوامر شراء جاهزة للدفع"
             emptyIcon={<Banknote className="h-6 w-6 text-slate-400" />}
-            noToolbar
           />
 
           {/* Execute block */}

@@ -257,6 +257,54 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // keyed on (companyId, id); inherits the same allowlist justification as the
   // parent umrah-entities.ts.
   "umrah-sub-agents.ts",
+  // umrah-pricing.ts: U-07 Phase 7 split — 4 pricing CRUD routes carved verbatim
+  // out of umrah-entities.ts. Point lookups + per-tenant CRUD keyed on
+  // (companyId, id); inherits the same allowlist justification as the parent
+  // umrah-entities.ts.
+  "umrah-pricing.ts",
+  // umrah-import-batches.ts: U-07 Phase 8 split — import-batches listing +
+  // unlinked-rows recovery (4 routes) carved verbatim out of umrah-entities.ts.
+  // Per-tenant point lookups + a transactional bulk-link keyed on
+  // (companyId, id/batchId); inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-import-batches.ts",
+  // umrah-statements.ts: U-07 Phase 9 split — 2 read-only sub-agent statement
+  // routes (JSON + PDF) carved verbatim out of umrah-entities.ts. The single
+  // SQL is a (companyId, id) sub-agent header lookup; the balances come from
+  // generateStatement (engine). No list cascade for buildScopedWhere — inherits
+  // the same allowlist justification as the parent umrah-entities.ts.
+  "umrah-statements.ts",
+  // umrah-attachments.ts: U-07 Phase 10 split — 3 attachments routes (polymorphic
+  // document storage) carved verbatim out of umrah-entities.ts. Per-tenant point
+  // ops on the shared documents store keyed on (companyId, …) + a per-entityType
+  // owner-table whitelist; no list cascade for buildScopedWhere — inherits the
+  // same allowlist justification as the parent umrah-entities.ts.
+  "umrah-attachments.ts",
+  // umrah-reports.ts: U-07 Phase 11 split — 6 read-only operational reports
+  // (daily-runsheet, reconciliation, exempt-pilgrims, group/season portfolio)
+  // carved verbatim out of umrah-entities.ts. Pure SELECT aggregates scoped on
+  // (companyId, …) at every reach; no list cascade for buildScopedWhere —
+  // inherits the same allowlist justification as the parent umrah-entities.ts.
+  "umrah-reports.ts",
+  // umrah-letters.ts: U-07 Phase 12 split — 2 letter routes (PDF + dispatch)
+  // carved verbatim out of umrah-entities.ts. Point lookups + a dispatch UPDATE
+  // on the shared official_letters table keyed on (companyId, id); no list
+  // cascade for buildScopedWhere — inherits the same allowlist justification as
+  // the parent umrah-entities.ts.
+  "umrah-letters.ts",
+  // umrah-refunds.ts: U-07 Phase 14 split — 6 refund-request lifecycle routes
+  // (request → approve/reject → pay → close) carved verbatim out of
+  // umrah-entities.ts. List + point lookups + status UPDATEs on the umrah-owned
+  // umrah_refund_requests table keyed on (companyId, id); no list cascade for
+  // buildScopedWhere — inherits the same allowlist justification as the parent
+  // umrah-entities.ts.
+  "umrah-refunds.ts",
+  // umrah-calendar.ts: U-07 Phase 15 split — the read-only operational calendar
+  // aggregator (/calendar/events) carved verbatim out of umrah-entities.ts.
+  // Pure SELECT aggregates per layer scoped on (companyId, …); no list cascade
+  // for buildScopedWhere — inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-calendar.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -430,9 +478,33 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 6 routes/umrah-sub-agents.ts — 9
       // sub-agents CRUD + linking routes carved verbatim out of
       // umrah-entities.ts. Same allowlist justification as the parent.
-      total: 139,
+      // +1 total/manualOnly: U-07 Phase 7 routes/umrah-pricing.ts — 4 pricing
+      // CRUD routes carved verbatim out of umrah-entities.ts. Same allowlist
+      // justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 8 routes/umrah-import-batches.ts —
+      // import-batches listing + unlinked-rows recovery carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 9 routes/umrah-statements.ts — 2
+      // read-only sub-agent statement routes (JSON + PDF) carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 10 routes/umrah-attachments.ts — 3
+      // attachments routes (polymorphic document storage) carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 11 routes/umrah-reports.ts — 6 read-only
+      // operational reports carved verbatim out of umrah-entities.ts. Same
+      // allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 12 routes/umrah-letters.ts — 2 letter
+      // routes (PDF + dispatch) carved verbatim out of umrah-entities.ts. Same
+      // allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 14 routes/umrah-refunds.ts — 6
+      // refund-request lifecycle routes carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      // +1 total/manualOnly: U-07 Phase 15 routes/umrah-calendar.ts — the
+      // read-only operational calendar aggregator carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      total: 147,
       helperUsers: 39,
-      manualOnly: 96,
+      manualOnly: 104,
     });
   });
 });

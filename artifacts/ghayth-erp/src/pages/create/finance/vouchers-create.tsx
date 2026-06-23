@@ -30,6 +30,7 @@ import { PropertyUnitContextCard } from "@/components/shared/property-unit-conte
 import { TextField, NumberField, FormFieldWrapper } from "@/components/shared/form-field-wrapper";
 import { AccountSelect, BranchSelect, DepartmentSelect, CostCenterSelect } from "@/components/shared/entity-selects";
 import { Switch } from "@/components/ui/switch";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 
 
 const voucherTaxSplit = amountTaxSplit;
@@ -532,24 +533,24 @@ export default function VouchersCreate() {
       {preview && preview.lines?.length > 0 && (
         <div className="mt-4 border rounded-lg p-3 bg-muted/30">
           <p className="text-xs font-semibold mb-2">معاينة القيد المُولّد (قبل الحفظ)</p>
-          <div className="overflow-x-auto"><table className="w-full text-xs font-mono">
-            <thead>
-              <tr className="text-muted-foreground">
-                <th className="text-start p-1">الحساب</th>
-                <th className="text-end p-1">مدين</th>
-                <th className="text-end p-1">دائن</th>
-              </tr>
-            </thead>
-            <tbody>
-              {preview.lines.map((jl, i) => (
-                <tr key={i} className="border-t">
-                  <td className="p-1">{jl.accountCode}</td>
-                  <td className="text-end p-1 text-orange-700">{jl.debit ? formatCurrency(jl.debit) : ""}</td>
-                  <td className="text-end p-1 text-emerald-700">{jl.credit ? formatCurrency(jl.credit) : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
+          <DataTable<{ accountCode: string; debit: number; credit: number }>
+            noToolbar
+            pageSize={0}
+            className="text-xs font-mono"
+            data={preview.lines}
+            rowKey={(_jl, i) => i}
+            columns={[
+              { key: "accountCode", header: "الحساب", render: (jl) => jl.accountCode },
+              {
+                key: "debit", header: "مدين", align: "end",
+                render: (jl) => <span className="text-orange-700">{jl.debit ? formatCurrency(jl.debit) : ""}</span>,
+              },
+              {
+                key: "credit", header: "دائن", align: "end",
+                render: (jl) => <span className="text-emerald-700">{jl.credit ? formatCurrency(jl.credit) : ""}</span>,
+              },
+            ] satisfies DataTableColumn<{ accountCode: string; debit: number; credit: number }>[]}
+          />
         </div>
       )}
 

@@ -9,6 +9,9 @@ interface SortableTableHeadProps {
   sortState: SortState;
   onSort: (column: string) => void;
   className?: string;
+  /** Inline style (e.g. a fixed `width`) so sortable columns keep their
+   *  layout exactly like the plain TableHead branch. */
+  style?: React.CSSProperties;
 }
 
 export function SortableTableHead({
@@ -17,6 +20,7 @@ export function SortableTableHead({
   sortState,
   onSort,
   className,
+  style,
 }: SortableTableHeadProps) {
   const isActive = sortState.column === column;
   const ariaSortValue = isActive
@@ -36,6 +40,7 @@ export function SortableTableHead({
     <TableHead
       aria-sort={ariaSortValue}
       className={cn("p-0", className)}
+      style={style}
     >
       <button
         type="button"

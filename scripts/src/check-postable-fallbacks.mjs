@@ -31,13 +31,21 @@ const BOOTSTRAP = join(SRC, "lib/companyBootstrap.ts");
 // fixed per docs/side-issues/finance-phantom-account-fallbacks.md; delete each
 // line as its owning flow repoints it to a postable leaf. Do NOT add NEW entries
 // — repoint to a postable leaf instead.
+// Repointed to POSTABLE leaves (removed from this list):
+//   commission_expense → 5430 «العمولات والوساطة» (كان 5200 رواتب-أب / 6200 وهمي)
+//   CIP account → 1270 «أعمال تحت التنفيذ» (كان 1530 وهمي)
+//   capitalized-asset target → 1280 «أصول ثابتة أخرى» (كان 1500 وهمي؛ ورقة
+//     جديدة + backfill migration 414).
+//
+// PERMANENT exception (NOT a phantom fallback): datafixInventory's 1130/1140/2110
+// are CONTROL-PARENT codes by design — customer/employee-advance/supplier
+// subsidiary ledgers are CREATED UNDER these control accounts (the subsidiaries
+// are the postable leaves; the parent is allowPosting:false on purpose). They
+// MIRROR the live provisioner createSubsidiaryAccountsForEntity in
+// routes/accounting-engine.ts (cross-checked by datafixInventory.test.ts «mirrors
+// the live specs»). Repointing them to leaves would break subsidiary creation.
+// Keep allowlisted. راجع docs/side-issues/finance-phantom-account-fallbacks.md.
 const ALLOWLIST = new Set([
-  "routes/finance-algorithms.ts:1290", "routes/finance-algorithms.ts:6100",
-  "routes/finance-algorithms.ts:1590", "routes/finance-algorithms.ts:1530",
-  "routes/finance-algorithms.ts:1500", "routes/finance-algorithms.ts:1120",
-  "lib/cronScheduler.ts:6100", "lib/cronScheduler.ts:1590",
-  "lib/eventListeners.ts:5200", "lib/eventListeners.ts:6200",
-  "lib/umrahCommissionEngine.ts:6200",
   "lib/finance/datafixInventory.ts:1130", "lib/finance/datafixInventory.ts:1140",
   "lib/finance/datafixInventory.ts:2110",
 ]);

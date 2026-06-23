@@ -1,14 +1,13 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useApiQuery, useApiMutation } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
-import { GuardedButton } from "@/components/shared/permission-gate";
+import { GuardedButton, usePermission } from "@/components/shared/permission-gate";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
 import {
@@ -77,27 +76,11 @@ export default function ExpenseBulkApprovalsPage() {
     );
   }, [data, search]);
 
+  const canApprove = usePermission("finance.journal.approve");
   const selectedRows = filtered.filter(r => selected.has(r.id));
   const selectedTotal = selectedRows.reduce(
     (s, r) => s + Number(r.totalAmount ?? r.amount ?? 0), 0
   );
-
-  const toggleSelect = (id: number) => {
-    setSelected(s => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (selected.size === filtered.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(filtered.map(r => r.id)));
-    }
-  };
 
   const runBulk = async (action: "approve" | "reject") => {
     if (action === "reject" && !rejectReason.trim()) return;
@@ -181,12 +164,6 @@ export default function ExpenseBulkApprovalsPage() {
                 className="pr-9"
               />
             </div>
-          </div>
-          <div>
-            <Button variant="outline" size="sm" onClick={toggleAll} disabled={filtered.length === 0}>
-              <CheckSquare className="w-4 h-4 ml-1" />
-              {selected.size === filtered.length && filtered.length > 0 ? "إلغاء التحديد" : "تحديد الكل"}
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -354,62 +331,66 @@ export default function ExpenseBulkApprovalsPage() {
                 <CardTitle className="text-base">المصاريف المعلقة ({filtered.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-xs text-muted-foreground">
-                        <th className="py-2 px-2 w-8">
-                          <Checkbox
-                            checked={selected.size === filtered.length && filtered.length > 0}
-                            onCheckedChange={toggleAll}
-                          />
-                        </th>
-                        <th className="text-start py-2 px-2">المرجع</th>
-                        <th className="text-start py-2 px-2">الوصف</th>
-                        <th className="text-start py-2 px-2">الموظف</th>
-                        <th className="text-start py-2 px-2">التاريخ</th>
-                        <th className="text-end py-2 px-2">المبلغ</th>
-                        <th className="py-2 px-2 w-8"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map(e => {
-                        const isSelected = selected.has(e.id);
-                        const amount = Number(e.totalAmount ?? e.amount ?? 0);
-                        return (
-                          <tr
-                            key={e.id}
-                            className={`border-b cursor-pointer ${isSelected ? "bg-status-info-surface" : "hover:bg-muted/30"}`}
-                            onClick={() => toggleSelect(e.id)}
-                          >
-                            <td className="py-2 px-2" onClick={(ev) => ev.stopPropagation()}>
-                              <Checkbox
-                                checked={isSelected}
-                                onCheckedChange={() => toggleSelect(e.id)}
-                              />
-                            </td>
-                            <td className="py-2 px-2 font-mono text-xs">{e.ref}</td>
-                            <td className="py-2 px-2 max-w-xs truncate" title={e.description ?? ""}>
-                              {e.description ?? "—"}
-                            </td>
-                            <td className="py-2 px-2 text-xs">{e.employeeName ?? "—"}</td>
-                            <td className="py-2 px-2 text-xs whitespace-nowrap">
-                              {formatDateAr(e.createdAt.split("T")[0])}
-                            </td>
-                            <td className="py-2 px-2 text-end tabular-nums font-semibold">
-                              {formatCurrency(amount)}
-                            </td>
-                            <td className="py-2 px-2">
-                              <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7" onClick={(ev) => ev.stopPropagation()}><Link href={`/finance/expenses/${e.id}`}>
-                                  <ExternalLink className="w-3 h-3" />
-                                </Link></Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  noToolbar
+                  selectable
+                  data={filtered}
+                  onSelectionChange={(ids) => setSelected(new Set(ids))}
+                  bulkActions={[
+                    {
+                      label: `اعتماد المحدد (${selected.size})`,
+                      icon: <CheckSquare className="w-3.5 h-3.5" />,
+                      onClick: () => setConfirming("approve"),
+                      disabled: !canApprove,
+                    },
+                    {
+                      label: "رفض المحدد",
+                      icon: <XSquare className="w-3.5 h-3.5" />,
+                      onClick: () => { setRejectMode(true); setConfirming("reject"); },
+                    },
+                  ]}
+                  columns={[
+                    {
+                      key: "ref", header: "المرجع", ltr: true,
+                      render: (e) => <span className="font-mono text-xs">{e.ref}</span>,
+                    },
+                    {
+                      key: "description", header: "الوصف", className: "max-w-xs",
+                      render: (e) => (
+                        <span className="block max-w-xs truncate" title={e.description ?? ""}>
+                          {e.description ?? "—"}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "employeeName", header: "الموظف",
+                      render: (e) => <span className="text-xs">{e.employeeName ?? "—"}</span>,
+                    },
+                    {
+                      key: "createdAt", header: "التاريخ",
+                      render: (e) => (
+                        <span className="text-xs whitespace-nowrap">{formatDateAr(e.createdAt.split("T")[0])}</span>
+                      ),
+                    },
+                    {
+                      key: "totalAmount", header: "المبلغ", align: "end",
+                      render: (e) => (
+                        <span className="tabular-nums font-semibold">
+                          {formatCurrency(Number(e.totalAmount ?? e.amount ?? 0))}
+                        </span>
+                      ),
+                      exportValue: (e) => Number(e.totalAmount ?? e.amount ?? 0),
+                    },
+                    {
+                      key: "_action", header: "", width: "2rem", sortable: false,
+                      render: (e) => (
+                        <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7" onClick={(ev) => ev.stopPropagation()}><Link href={`/finance/expenses/${e.id}`}>
+                            <ExternalLink className="w-3 h-3" />
+                          </Link></Button>
+                      ),
+                    },
+                  ] satisfies DataTableColumn<Expense>[]}
+                />
               </CardContent>
             </Card>
           )}

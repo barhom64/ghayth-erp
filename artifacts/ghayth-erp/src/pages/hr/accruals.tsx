@@ -68,7 +68,7 @@ export default function AccrualsPage() {
   );
 
   const columns: DataTableColumn<AccrualRow>[] = [
-    { key: "employeeName", header: "الموظف" },
+    { key: "employeeName", header: "الموظف", searchable: true },
     { key: "salary", header: "الراتب", render: (r) => formatCurrency(r.salary) },
     { key: "yearsOfService", header: "سنوات الخدمة", render: (r) => r.yearsOfService.toFixed(1) },
     { key: "leaveAccrual", header: "استحقاق إجازة", render: (r) => formatCurrency(r.leaveAccrual) },
@@ -170,8 +170,8 @@ export default function AccrualsPage() {
               <DataTable
                 columns={columns}
                 data={data?.rows ?? []}
+                searchPlaceholder="بحث باسم الموظف…"
                 emptyMessage="لا يوجد موظفون مؤهّلون للاستحقاق في هذه الفترة"
-                noToolbar
               />
             </CardContent>
           </Card>

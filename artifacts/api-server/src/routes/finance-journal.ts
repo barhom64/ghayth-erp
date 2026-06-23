@@ -982,7 +982,11 @@ journalRouter.post("/expenses", authorize({ feature: "finance.journal", action: 
     } = b;
     const effectiveCompanyId = bodyCompanyId && scope.allowedCompanies.includes(Number(bodyCompanyId)) ? Number(bodyCompanyId) : scope.companyId;
 
-    if (!accountCode) { throw new ValidationError("لا يمكن صرف بدون حساب محاسبي واضح", { field: "accountCode", fix: "حدد الحساب المحاسبي للمصروف (مثل 5100 رواتب، 5200 وقود)" }); }
+    // العقيدة «النظام مساعد لا عائق»: لا نرفض المصروف بلا حساب. عند تركه فارغًا
+    // يوجّهه هذا المعالج تلقائيًا — قاعدة التوجيه (resolveLineAllocation، سطر
+    // ~1197) أو الورقة العامة القابلة للترحيل «مصروفات عمومية أخرى» 5399 (سطر
+    // ~1218). كان حارسٌ هنا يرفض الفارغ ويناقض توجيه المعالج نفسه (راجَعه Codex
+    // P1، واعتمد إبراهيم إزالته 2026-06-23). غير المحاسب لا يُجبَر على اختيار حساب.
     if (!amount || Number(amount) <= 0) { throw new ValidationError("لا يمكن تسجيل مصروف بقيمة صفر أو سالبة", { field: "amount", fix: "أدخل مبلغ المصروف بقيمة موجبة" }); }
     if (!branchId && !scope.branchId) { throw new ValidationError("الفرع مطلوب لتسجيل المصروف", { field: "branchId", fix: "حدد الفرع الذي ينتمي إليه هذا المصروف" }); }
     if (branchId != null &&

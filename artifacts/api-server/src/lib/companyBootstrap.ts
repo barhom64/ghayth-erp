@@ -276,9 +276,11 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1231", name: "مجمع إهلاك الحاسبات", nameEn: "Accum. Depr. – Computers", type: "asset", level: 3, parentCode: "1200" },
   { code: "1240", name: "المباني والعقارات", nameEn: "Buildings & Real Estate", type: "asset", level: 3, parentCode: "1200" },
   { code: "1241", name: "مجمع إهلاك المباني", nameEn: "Accum. Depr. – Buildings", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1290", name: "مجمع إهلاك أصول أخرى", nameEn: "Accum. Depr. – Other", type: "asset", level: 3, parentCode: "1200" },
   { code: "1250", name: "تحسينات على مأجور", nameEn: "Leasehold Improvements", type: "asset", level: 3, parentCode: "1200" },
   { code: "1260", name: "الأصول غير الملموسة (برامج وتراخيص)", nameEn: "Intangible Assets", type: "asset", level: 3, parentCode: "1200" },
   { code: "1270", name: "أعمال تحت التنفيذ", nameEn: "Capital Work In Progress", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1280", name: "أصول ثابتة أخرى", nameEn: "Other Fixed Assets", type: "asset", level: 3, parentCode: "1200" },
 
   // 1291 مجمع انخفاض قيمة الأصول الثابتة — IAS 36 contra-asset مستقل عن مجمعات
   // الإهلاك (1211/1221/…) لضمان فصل مخصص الهبوط عن مخصص الإهلاك في الميزانية.
@@ -432,6 +434,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "5730", name: "إهلاك الحاسبات والمعدات", nameEn: "Computer Depreciation", type: "expense", level: 3, parentCode: "5700" },
   { code: "5740", name: "إهلاك المباني", nameEn: "Building Depreciation", type: "expense", level: 3, parentCode: "5700" },
   { code: "5750", name: "إطفاء الأصول غير الملموسة", nameEn: "Intangibles Amortization", type: "expense", level: 3, parentCode: "5700" },
+  { code: "5790", name: "إهلاك وإطفاء أخرى", nameEn: "Other Depreciation & Amortization", type: "expense", level: 3, parentCode: "5700" },
 
   // 58xx مصروفات أخرى ومخصصات
   { code: "5800", name: "مصروفات أخرى ومخصصات", nameEn: "Other Expenses & Provisions", type: "expense", level: 2, parentCode: "5000", allowPosting: false },

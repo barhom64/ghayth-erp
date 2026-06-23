@@ -1,0 +1,30 @@
+# display-tables-allowlist.txt
+#
+# Pages that keep a raw <table> on purpose — DataTable (a column data
+# grid) cannot faithfully express them. The guard fails only on a PAGE
+# with a raw <table> NOT listed here. Append the reason after the path:
+#   path/to/page.tsx   # editable-form | statement | merged-header | tree | info-block
+# Regenerate the baseline with:
+#   node scripts/src/check-display-tables.mjs --write-allowlist
+# When a page is moved to <DataTable>, prune its line.
+#
+# Baseline captured: 19 page(s).
+artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx
+artifacts/ghayth-erp/src/pages/details/umrah-group-detail.tsx
+artifacts/ghayth-erp/src/pages/details/voucher-detail.tsx
+artifacts/ghayth-erp/src/pages/finance/bad-debt-provision.tsx
+artifacts/ghayth-erp/src/pages/finance/income-statement-trend.tsx
+artifacts/ghayth-erp/src/pages/finance/monthly-close-pack.tsx
+artifacts/ghayth-erp/src/pages/finance/reports.tsx
+artifacts/ghayth-erp/src/pages/finance/umrah-group-portfolio.tsx
+artifacts/ghayth-erp/src/pages/finance/umrah-season-portfolio.tsx
+artifacts/ghayth-erp/src/pages/finance/vat-filing-readiness.tsx
+artifacts/ghayth-erp/src/pages/finance/vehicle-portfolio-dashboard.tsx
+artifacts/ghayth-erp/src/pages/fleet/transport-booking-confirmation.tsx
+artifacts/ghayth-erp/src/pages/umrah/commission-plan-editor.tsx
+artifacts/ghayth-erp/src/pages/umrah/import-unlinked.tsx
+artifacts/ghayth-erp/src/pages/umrah/import-wizard.tsx
+artifacts/ghayth-erp/src/pages/umrah/reports/import-errors-summary.tsx
+artifacts/ghayth-erp/src/pages/umrah/reports/sales-invoices-summary.tsx
+artifacts/ghayth-erp/src/pages/umrah/reports/umrah-costs.tsx
+artifacts/ghayth-erp/src/pages/umrah/transport-requests.tsx

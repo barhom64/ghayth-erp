@@ -37,13 +37,13 @@ const bankReconciliationRowSchema = z.object({
 
 const bankImportSchema = z.object({
   rows: z.array(bankReconciliationRowSchema).min(1),
-  accountCode: z.string().default("1120"),
+  accountCode: z.string().default("1124"),
   statementDate: z.string().optional(),
 });
 
 const bankAutoMatchSchema = z.object({
   batchId: z.string().min(1),
-  accountCode: z.string().default("1120"),
+  accountCode: z.string().default("1124"),
   toleranceDays: z.coerce.number().default(3),
 });
 
@@ -76,9 +76,9 @@ const createFixedAssetSchema = z.object({
   category: z.string().optional().nullable(),
   branchId: z.coerce.number().optional(),
   depreciationMethod: z.string().default("straight_line"),
-  assetAccountCode: z.string().default("1500"),
-  depreciationAccountCode: z.string().default("6100"),
-  accDepreciationAccountCode: z.string().default("1590"),
+  assetAccountCode: z.string().default("1280"),
+  depreciationAccountCode: z.string().default("5790"),
+  accDepreciationAccountCode: z.string().default("1290"),
   // Asset Acquisition Center: when a payment-source (credit) account is
   // supplied, the create also posts a balanced acquisition entry
   // (Dr asset account / Cr payment source) so the purchase is capitalised,
@@ -1411,8 +1411,8 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/depreciate", authorize({ feature
         sourceId: asset.id as number,
         sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
         lines: [
-          { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
-          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.depreciationAccountCode as string | null) ?? "5790", debit: depAmount, credit: 0, description: `إهلاك ${asset.name}`, assetId: asset.id as number },
+          { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1290", debit: 0, credit: depAmount, description: `مجمع إهلاك ${asset.name}`, assetId: asset.id as number },
         ],
       });
       journalId = posted.journalId;
@@ -1515,8 +1515,8 @@ financeAlgorithmsRouter.post("/fixed-assets/depreciate-all", authorize({ feature
           sourceId: asset.id as number,
           sourceKey: `finance:depreciation:${asset.id}:${targetPeriod}`,
           lines: [
-            { accountCode: (asset.depreciationAccountCode as string | null) ?? "6100", debit: depAmount, credit: 0, assetId: asset.id as number },
-            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1590", debit: 0, credit: depAmount, assetId: asset.id as number },
+            { accountCode: (asset.depreciationAccountCode as string | null) ?? "5790", debit: depAmount, credit: 0, assetId: asset.id as number },
+            { accountCode: (asset.accDepreciationAccountCode as string | null) ?? "1290", debit: 0, credit: depAmount, assetId: asset.id as number },
           ],
         });
 
@@ -1731,7 +1731,7 @@ financeAlgorithmsRouter.post("/fixed-assets/:id/dispose", authorize({ feature: "
       (storedAssetCode && storedAssetCode !== "1500")
         ? Promise.resolve(storedAssetCode)
         : financialEngine.resolveAccountCode(scope.companyId, "asset_cost", "credit", "1270"),
-      (storedAccDepCode && storedAccDepCode !== "1590")
+      (storedAccDepCode && storedAccDepCode !== "1290")
         ? Promise.resolve(storedAccDepCode)
         : financialEngine.resolveAccountCode(scope.companyId, "asset_accumulated_depreciation", "debit", "1290"),
       // fallback 1111 (نقدية صندوق — postable leaf) — main أصلح هذا في #2192
@@ -2093,9 +2093,9 @@ financeAlgorithmsRouter.post("/cip", authorize({ feature: "finance.algorithms", 
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,0,'in_progress',$16) RETURNING id`,
           [scope.companyId, scope.branchId, b.code ?? null, b.name, b.description ?? null,
            b.category ?? null, b.startDate, b.expectedCompletionDate ?? null,
-           b.cipAccountCode ?? "1530", b.targetAssetCategory ?? null,
-           b.targetAssetAccountCode ?? "1500", b.targetDepreciationAccountCode ?? "6100",
-           b.targetAccDepreciationAccountCode ?? "1590", b.targetUsefulLifeYears ?? null,
+           b.cipAccountCode ?? "1270", b.targetAssetCategory ?? null,
+           b.targetAssetAccountCode ?? "1280", b.targetDepreciationAccountCode ?? "5790",
+           b.targetAccDepreciationAccountCode ?? "1290", b.targetUsefulLifeYears ?? null,
            b.targetDepreciationMethod ?? "straight_line", scope.userId]
         );
         insertId = ins.rows[0].id;
@@ -2152,7 +2152,7 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
 
     const amt = roundTo2(b.amount);
     const { financialEngine } = await import("../lib/engines/index.js");
-    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1270";
     const cashCode = b.cashAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "cip_funding_cash", "credit", "1111");
 
@@ -2241,10 +2241,10 @@ financeAlgorithmsRouter.post("/cip/:id/capitalize", authorize({ feature: "financ
     const depMethod = b.depreciationMethod ?? (cip.targetDepreciationMethod as string | null) ?? "straight_line";
     const assetName = b.assetName ?? `${cip.name} (مرسمل)`;
     const assetCode = b.assetCode ?? (cip.code as string | null) ?? null;
-    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1500";
-    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "6100";
-    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1590";
-    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1280";
+    const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "5790";
+    const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1290";
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1270";
 
     let newAssetId: number | null = null;
     let journalId: number | null = null;
@@ -2538,7 +2538,12 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
 //
 // Tables are created lazily so no extra migration is needed:
 //   fx_rates(id, companyId, effectiveDate, fromCurrency, toCurrency, rate, source)
-//   fx_revaluations(id, companyId, currency, oldRate, newRate, revaluationDate, journalEntryId, totalImpact, createdBy, createdAt)
+// NOTE: fx_revaluations is NOT created here — it is owned by the canonical
+// schema (db/schema_pre.sql: companyId, period, journalEntryId, totalGain,
+// totalLoss, details, postedBy, postedAt; UNIQUE(companyId, period)). The
+// stale lazy CREATE that used a divergent shape (currency/oldRate/newRate/
+// revaluationDate/totalImpact) was removed — it was shadowed by the dump and
+// was the root cause of the `revaluationDate` mismatch fixed in #2897.
 
 async function ensureFxTables(client?: any) {
   const exec = client ? (sql: string, params?: any[]) => client.query(sql, params) : rawExecute;
@@ -2555,20 +2560,8 @@ async function ensureFxTables(client?: any) {
       UNIQUE ("companyId","effectiveDate","fromCurrency","toCurrency",source)
     )
   `);
-  await exec(`
-    CREATE TABLE IF NOT EXISTS fx_revaluations (
-      id SERIAL PRIMARY KEY,
-      "companyId" INTEGER NOT NULL,
-      currency VARCHAR(10) NOT NULL,
-      "oldRate" NUMERIC(15,6),
-      "newRate" NUMERIC(15,6),
-      "revaluationDate" DATE NOT NULL,
-      "journalEntryId" INTEGER,
-      "totalImpact" NUMERIC(15,2),
-      "createdBy" INTEGER,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+  // fx_revaluations is owned by the canonical schema (migrations/dump) —
+  // not created here. See note above ensureFxTables.
   // Ensure foreign-currency columns exist on invoices & purchase_orders
   await exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency VARCHAR(8) DEFAULT 'SAR'`);
   await exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "exchangeRate" NUMERIC(18,8) DEFAULT 1`);
@@ -2782,8 +2775,8 @@ financeAlgorithmsRouter.post("/fx/revaluation/post", authorize({ feature: "finan
     }
 
     const [existing] = await rawQuery<Record<string, unknown>>(
-      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND "revaluationDate"=$2::date`,
-      [scope.companyId, periodEndDate]
+      `SELECT id FROM fx_revaluations WHERE "companyId"=$1 AND period=$2`,
+      [scope.companyId, period]
     );
     if (existing) {
       throw new ConflictError(`تم تسجيل إعادة تقييم العملات لفترة ${period} مسبقاً`);
