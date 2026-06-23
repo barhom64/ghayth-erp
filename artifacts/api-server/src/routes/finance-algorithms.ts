@@ -2538,7 +2538,12 @@ financeAlgorithmsRouter.post("/rounding-differences/apply", authorize({ feature:
 //
 // Tables are created lazily so no extra migration is needed:
 //   fx_rates(id, companyId, effectiveDate, fromCurrency, toCurrency, rate, source)
-//   fx_revaluations(id, companyId, currency, oldRate, newRate, revaluationDate, journalEntryId, totalImpact, createdBy, createdAt)
+// NOTE: fx_revaluations is NOT created here — it is owned by the canonical
+// schema (db/schema_pre.sql: companyId, period, journalEntryId, totalGain,
+// totalLoss, details, postedBy, postedAt; UNIQUE(companyId, period)). The
+// stale lazy CREATE that used a divergent shape (currency/oldRate/newRate/
+// revaluationDate/totalImpact) was removed — it was shadowed by the dump and
+// was the root cause of the `revaluationDate` mismatch fixed in #2897.
 
 async function ensureFxTables(client?: any) {
   const exec = client ? (sql: string, params?: any[]) => client.query(sql, params) : rawExecute;
@@ -2555,20 +2560,8 @@ async function ensureFxTables(client?: any) {
       UNIQUE ("companyId","effectiveDate","fromCurrency","toCurrency",source)
     )
   `);
-  await exec(`
-    CREATE TABLE IF NOT EXISTS fx_revaluations (
-      id SERIAL PRIMARY KEY,
-      "companyId" INTEGER NOT NULL,
-      currency VARCHAR(10) NOT NULL,
-      "oldRate" NUMERIC(15,6),
-      "newRate" NUMERIC(15,6),
-      "revaluationDate" DATE NOT NULL,
-      "journalEntryId" INTEGER,
-      "totalImpact" NUMERIC(15,2),
-      "createdBy" INTEGER,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+  // fx_revaluations is owned by the canonical schema (migrations/dump) —
+  // not created here. See note above ensureFxTables.
   // Ensure foreign-currency columns exist on invoices & purchase_orders
   await exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency VARCHAR(8) DEFAULT 'SAR'`);
   await exec(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "exchangeRate" NUMERIC(18,8) DEFAULT 1`);
