@@ -142,6 +142,9 @@ import umrahLettersRouter from "./umrah-letters.js";
 // U-07 Phase 14 — refund requests split; imported for the wiring-scanner hint
 // below. Mounted via umrah-entities.ts.
 import umrahRefundsRouter from "./umrah-refunds.js";
+// U-07 Phase 15 — operational calendar split; imported for the wiring-scanner
+// hint below. Mounted via umrah-entities.ts.
+import umrahCalendarRouter from "./umrah-calendar.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -223,6 +226,7 @@ if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", umrahReportsRouter);
   router.use("/umrah", umrahLettersRouter);
   router.use("/umrah", umrahRefundsRouter);
+  router.use("/umrah", umrahCalendarRouter);
 }
 
 router.use(healthRouter);
