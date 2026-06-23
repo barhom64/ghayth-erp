@@ -314,6 +314,7 @@ export default function AccountTransferPage() {
                 {
                   key: "accountCode", header: "الحساب", align: "end",
                   render: (jl) => <span className="font-mono">{jl.accountCode}</span>,
+                  footer: () => "الإجمالي",
                 },
                 {
                   key: "description", header: "الوصف", align: "end",
@@ -326,6 +327,11 @@ export default function AccountTransferPage() {
                       {Number(jl.debit) > 0 ? formatCurrency(Number(jl.debit)) : "—"}
                     </span>
                   ),
+                  footer: () => (
+                    <span className="font-mono text-emerald-700">
+                      {formatCurrency(totalDebit + feeAmount)}
+                    </span>
+                  ),
                 },
                 {
                   key: "credit", header: "دائن", align: "end",
@@ -334,19 +340,13 @@ export default function AccountTransferPage() {
                       {Number(jl.credit) > 0 ? formatCurrency(Number(jl.credit)) : "—"}
                     </span>
                   ),
+                  footer: () => (
+                    <span className="font-mono text-red-700">
+                      {formatCurrency(transferAmount + feeAmount)}
+                    </span>
+                  ),
                 },
               ] satisfies DataTableColumn<{ accountCode: string; debit: number; credit: number; description: string }>[]}
-              renderGrandTotal={() => (
-                <tr className="bg-muted/40 font-bold">
-                  <td colSpan={2} className="p-1 text-end">الإجمالي</td>
-                  <td className="p-1 font-mono text-end text-emerald-700">
-                    {formatCurrency(totalDebit + feeAmount)}
-                  </td>
-                  <td className="p-1 font-mono text-end text-red-700">
-                    {formatCurrency(transferAmount + feeAmount)}
-                  </td>
-                </tr>
-              )}
             />
           </CardContent>
         </Card>
