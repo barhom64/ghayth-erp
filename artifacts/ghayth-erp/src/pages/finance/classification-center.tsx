@@ -373,7 +373,7 @@ export default function ClassificationCenterPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setLinkFor(null)}>إلغاء</Button>
             <GuardedButton perm="finance:create" onClick={submitLink} disabled={linkMut.isPending}>
-              {linkMut.isPending ? "جارٍ الربط..." : "ربط"}
+              {linkMut.isPending ? "جاري الربط..." : "ربط"}
             </GuardedButton>
           </DialogFooter>
         </DialogContent>
@@ -406,7 +406,7 @@ export default function ClassificationCenterPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setClassifyFor(null)}>إلغاء</Button>
             <GuardedButton perm="finance:create" onClick={submitClassify} disabled={classifyMut.isPending}>
-              {classifyMut.isPending ? "جارٍ التصنيف..." : "تصنيف"}
+              {classifyMut.isPending ? "جاري التصنيف..." : "تصنيف"}
             </GuardedButton>
           </DialogFooter>
         </DialogContent>

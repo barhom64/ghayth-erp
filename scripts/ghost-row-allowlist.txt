@@ -49,6 +49,13 @@ routes/umrah-entities.ts:umrah_agents
 routes/umrah-entities.ts:umrah_groups
 routes/umrah-entities.ts:umrah_sub_agents
 routes/umrah-import-batches.ts:umrah_import_changes
+# U-07 Phase 19 — nusk-invoices list/get display JOINs to agent/sub-agent/group
+# name columns, carved VERBATIM out of umrah-entities.ts. Same grandfathered
+# Task #163 baseline exception (display-only name lookups; the nusk row itself is
+# deletedAt-filtered). No behaviour change — moved as-is.
+routes/umrah-nusk-invoices.ts:umrah_agents
+routes/umrah-nusk-invoices.ts:umrah_groups
+routes/umrah-nusk-invoices.ts:umrah_sub_agents
 routes/umrah-reports.ts:umrah_groups
 routes/umrah-reports.ts:umrah_sub_agents
 routes/umrah.ts:fleet_drivers

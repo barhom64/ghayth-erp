@@ -8,6 +8,7 @@ import {
   zodParse,
 } from "../lib/errorHandler.js";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 import { FINANCE_ROLES, OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { Router } from "express";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
@@ -240,7 +241,7 @@ const vendorInvoiceLineSchema = z.object({
 
 const vendorInvoicePreviewSchema = z.object({
   supplierId: z.coerce.number().int().positive(),
-  paid: z.coerce.boolean().optional().default(false),
+  paid: zCoerceBoolean().optional().default(false),
   sourceAccountCode: z.string().optional(),
   branchId: z.any().optional(),
   lines: z.array(vendorInvoiceLineSchema).min(1, "أدخل بندًا واحدًا على الأقل"),
@@ -248,7 +249,7 @@ const vendorInvoicePreviewSchema = z.object({
 
 const createVendorInvoiceSchema = z.object({
   supplierId: z.coerce.number().int().positive(),
-  paid: z.coerce.boolean().optional().default(false),
+  paid: zCoerceBoolean().optional().default(false),
   sourceAccountCode: z.string().optional(),
   invoiceNo: z.string().optional(),
   invoiceDate: z.string().optional(),

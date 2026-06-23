@@ -21,6 +21,7 @@
  */
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 import { handleRouteError, zodParse } from "../lib/errorHandler.js";
 import { authorize } from "../lib/rbac/authorize.js";
 import { auditFromRequest, emitEvent } from "../lib/businessHelpers.js";
@@ -52,7 +53,7 @@ const premiumSchema = z
     endDate: z.string().min(8),
     prepaidAccountPurpose: z.string().min(1),
     expenseAccountPurpose: z.string().min(1),
-    paid: z.coerce.boolean().optional(),
+    paid: zCoerceBoolean().optional(),
     sourceAccountPurpose: z.string().min(1).optional(),
     branchId: z.coerce.number().int().positive().optional(),
     currency: z.string().optional(),
