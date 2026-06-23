@@ -30,7 +30,7 @@ import {
   todayISO,
   checkFinancialPeriodOpen,
 } from "../lib/businessHelpers.js";
-import { requestIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
+import { requestIdempotencyToken, boundedIdempotencyToken, markIdempotencyReplay, isDryRun } from "../lib/requestIdempotency.js";
 
 import { pushToDLQ } from "../lib/eventBus.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
@@ -1294,7 +1294,7 @@ financeHardeningRouter.post("/intercompany", authorize({ feature: "finance.harde
     // BEFORE any number is issued. Kept stable across retries (the token
     // comes from the Idempotency-Key header) so a retry returns the same
     // pair.
-    const icSourceKey = `finance:intercompany:${scope.companyId}:${Number(toCompanyId)}:${txDate}:${Number(amount)}:${idempotencyToken}`;
+    const icSourceKey = `finance:intercompany:${scope.companyId}:${Number(toCompanyId)}:${txDate}:${Number(amount)}:${boundedIdempotencyToken(idempotencyToken)}`;
 
     const fromLines = [
       { accountCode: arAccountCode, debit: Number(amount), credit: 0, description: "ذمم مدينة شركة شقيقة" },
