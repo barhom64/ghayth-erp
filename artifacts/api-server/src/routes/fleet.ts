@@ -31,6 +31,7 @@ import {
   recomputeAllDrivers,
 } from "../lib/fleet/driverReputation.js";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 
 // ─── Zod schemas for POST route body validation ─────────────────────────────
 
@@ -1057,8 +1058,8 @@ const driverAccidentSchema = z.object({
   locationLat: z.coerce.number().optional(),
   locationLng: z.coerce.number().optional(),
   odometer: z.coerce.number().optional(),
-  hasInjuries: z.coerce.boolean().optional(),
-  thirdPartyInvolved: z.coerce.boolean().optional(),
+  hasInjuries: zCoerceBoolean().optional(),
+  thirdPartyInvolved: zCoerceBoolean().optional(),
   thirdPartyDetails: z.string().optional(),
   policeReportNo: z.string().optional(),
   tripId: z.coerce.number().optional(),

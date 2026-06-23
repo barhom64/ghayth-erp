@@ -16,7 +16,7 @@ const ENGINE = readFileSync(
   "utf8",
 );
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const COMPONENT = readFileSync(
