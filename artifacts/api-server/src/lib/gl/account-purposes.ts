@@ -84,7 +84,12 @@ const FALLBACK_CODE: Record<AccountPurpose, string> = {
   fx_revaluation_ar:        "1131",
   fx_revaluation_ap:        "2111",
   fx_revaluation_gain:      "4950",
-  fx_revaluation_loss:      "5900",
+  // إصلاح: 5900 «مصروفات قانونية وتأمينية» رأسٌ غير قابل للترحيل (allowPosting=false)
+  // في companyBootstrap → getAccountForPurpose كان يعيد null فيتعطّل ترحيل مسار
+  // الطابور. 5910 ورقة قابلة للترحيل، وهي نفس fallback المسار المباشر
+  // (finance-algorithms /fx/revaluation/post) و realized_fx_loss أدناه — فيُرحّل
+  // المساران لنفس الحساب (لا تباعد في وجهة القيد لنفس الحدث الاقتصادي).
+  fx_revaluation_loss:      "5910",
   realized_fx_gain:         "4910",
   realized_fx_loss:         "5910",
   inventory_asset:          "1151",
