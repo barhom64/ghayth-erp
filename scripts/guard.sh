@@ -380,6 +380,11 @@ run_step "audit:stop-ship"    node scripts/src/audit-stop-ship.mjs
 # fixtures first, then the live spec scan.
 run_step "check:e2e-login:tests" node scripts/src/check-e2e-login-pattern.test.mjs
 run_step "check:e2e-login"    node scripts/src/check-e2e-login-pattern.mjs
+# Dangerous-action UX guard — native browser confirm() (RTL-broken, no
+# impact-preview / blockers / audit) must use the unified ConfirmDeleteDialog /
+# ConfirmActionDialog. Pure-logic fixtures first, then the baseline-frozen scan.
+run_step "check:dangerous-actions:tests" node scripts/src/check-dangerous-actions.test.mjs
+run_step "check:dangerous-actions" node scripts/src/check-dangerous-actions.mjs
 run_step "test"               pnpm -s --filter @workspace/api-server run test
 # Frontend component tests (jsdom + @testing-library/react). Real behavioural
 # verification for sensitive UI (e.g. ProductSelect snap-to-catalog) without a
