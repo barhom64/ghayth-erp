@@ -305,7 +305,8 @@ describe("E2E: Season locking enforcement", () => {
 
 // ─── E2E Scenario: Nusk Invoice CRUD ───────────────────────────────────────
 describe("E2E: Nusk invoice CRUD", () => {
-  const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 19 — nusk-invoices routes carved into umrah-nusk-invoices.ts.
+  const entities = read("routes/umrah-nusk-invoices.ts");
   const catalog = read("lib/eventCatalog.ts");
 
   it("GET /nusk-invoices list exists", () => {
@@ -351,6 +352,8 @@ describe("E2E: Nusk invoice CRUD", () => {
 describe("E2E: Full umrah lifecycle flow verification", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 19: nusk-invoice CRUD + createNuskInvoiceSchema live here.
+  const nuskInvoices = read("routes/umrah-nusk-invoices.ts");
   // U-07 Phase 9: sub-agent statement routes (JSON + PDF) live here.
   const statements = read("routes/umrah-statements.ts");
   const importEngine = read("lib/umrahImportEngine.ts");
@@ -393,8 +396,8 @@ describe("E2E: Full umrah lifecycle flow verification", () => {
   });
 
   it("Step 7: Nusk invoice is created with duplicate check", () => {
-    expect(entities).toContain('router.post("/nusk-invoices"');
-    expect(entities).toContain("createNuskInvoiceSchema");
+    expect(nuskInvoices).toContain('router.post("/nusk-invoices"');
+    expect(nuskInvoices).toContain("createNuskInvoiceSchema");
   });
 
   it("Step 8: Sales invoice is generated (prevents duplicates)", () => {

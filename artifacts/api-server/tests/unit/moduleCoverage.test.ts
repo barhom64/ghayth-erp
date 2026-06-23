@@ -220,6 +220,8 @@ describe("Module coverage: Finance", () => {
 describe("Module coverage: Umrah", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 19: nusk-invoice CRUD routes live here.
+  const nuskInvoices = read("routes/umrah-nusk-invoices.ts");
   // U-07 Phase 6: sub-agent CRUD + linking routes live here.
   const subAgents = read("routes/umrah-sub-agents.ts");
   const indexTs = read("routes/index.ts");
@@ -303,11 +305,11 @@ describe("Module coverage: Umrah", () => {
 
   // Nusk invoice CRUD
   it("has complete nusk invoice CRUD", () => {
-    expect(entities).toContain('router.get("/nusk-invoices"');
-    expect(entities).toContain('router.get("/nusk-invoices/:id"');
-    expect(entities).toContain('router.post("/nusk-invoices"');
-    expect(entities).toContain('router.patch("/nusk-invoices/:id"');
-    expect(entities).toContain('router.delete("/nusk-invoices/:id"');
+    expect(nuskInvoices).toContain('router.get("/nusk-invoices"');
+    expect(nuskInvoices).toContain('router.get("/nusk-invoices/:id"');
+    expect(nuskInvoices).toContain('router.post("/nusk-invoices"');
+    expect(nuskInvoices).toContain('router.patch("/nusk-invoices/:id"');
+    expect(nuskInvoices).toContain('router.delete("/nusk-invoices/:id"');
   });
 
   // Tests
