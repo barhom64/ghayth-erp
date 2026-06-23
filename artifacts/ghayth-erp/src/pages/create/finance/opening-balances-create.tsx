@@ -10,9 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useAutoDraft } from "@/hooks/use-auto-draft";
 import { useFieldErrors } from "@/hooks/use-field-errors";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { formatCurrency, roundMoney, currentYearRiyadh } from "@/lib/formatters";
 import { FormFieldWrapper, NumberField } from "@/components/shared/form-field-wrapper";
+import { LineItemsTable } from "@/components/shared/line-items-table";
 
 interface OBLine {
   accountCode: string;
@@ -140,97 +141,85 @@ export default function OpeningBalancesCreatePage() {
         <CardContent className="pt-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold">بنود الأرصدة الافتتاحية</h3>
-            <div className="flex gap-2">
-              <label className="inline-flex">
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleCsvFile(file);
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={(e) => {
-                    const input = (e.currentTarget.previousSibling as HTMLInputElement) || null;
-                    input?.click();
-                  }}
-                >
-                  <Upload className="h-4 w-4 me-1" />
-                  استيراد CSV
-                </Button>
-              </label>
-              <Button variant="outline" size="sm" type="button" onClick={addLine}>
-                <Plus className="h-4 w-4 me-1" />
-                إضافة بند
+            <label className="inline-flex">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleCsvFile(file);
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={(e) => {
+                  const input = (e.currentTarget.previousSibling as HTMLInputElement) || null;
+                  input?.click();
+                }}
+              >
+                <Upload className="h-4 w-4 me-1" />
+                استيراد CSV
               </Button>
-            </div>
+            </label>
           </div>
 
-          <div className="space-y-2">
-            <div className="grid grid-cols-[2fr_1fr_1fr_40px] gap-2 text-sm font-medium text-muted-foreground">
-              <span>الحساب</span>
-              <span>مدين</span>
-              <span>دائن</span>
-              <span></span>
-            </div>
-            {lines.map((line, idx) => (
-              <div key={idx} className="grid grid-cols-[2fr_1fr_1fr_40px] gap-2">
-                <AccountSelect
-                  value={line.accountCode}
-                  onChange={(v) => updateLine(idx, "accountCode", v)}
-                  label="" allowCreate={false}
-                />
-                <NumberField
-                  label="مدين"
-                  hideLabel
-                  min={0}
-                  value={line.debit}
-                  onChange={(v) => updateLine(idx, "debit", v)}
-                  placeholder="0"
-                />
-                <NumberField
-                  label="دائن"
-                  hideLabel
-                  min={0}
-                  value={line.credit}
-                  onChange={(v) => updateLine(idx, "credit", v)}
-                  placeholder="0"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon" title="حذف"
-                  type="button"
-                  onClick={() => removeLine(idx)}
-                  disabled={lines.length <= 2}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
-
-            <div className="grid grid-cols-[2fr_1fr_1fr_40px] gap-2 pt-2 border-t font-semibold text-sm">
-              <span className="flex items-center gap-2">
-                الإجمالي
-                <Badge className={isBalanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
-                  {isBalanced ? "متوازن" : "غير متوازن"}
-                </Badge>
-              </span>
-              <span className="text-status-success-foreground">{formatCurrency(totalDebit)}</span>
-              <span className="text-status-error-foreground">{formatCurrency(totalCredit)}</span>
-              <span></span>
-            </div>
-
-            {!isBalanced && totalDebit > 0 && (
+          {/* الجدول الموحّد للإدخالات المالية — المكوّن المشترك <LineItemsTable>
+              بدل شبكة CSS يدوية (نفس الأعمدة والسلوك: إضافة/حذف بند، صف الإجمالي
+              مع شارة التوازن). */}
+          <LineItemsTable
+            items={lines}
+            minItems={2}
+            onAdd={addLine}
+            onRemove={removeLine}
+            addLabel="إضافة بند"
+            columns={[
+              {
+                header: "الحساب",
+                render: (line, idx) => (
+                  <AccountSelect
+                    value={line.accountCode}
+                    onChange={(v) => updateLine(idx, "accountCode", v)}
+                    label="" allowCreate={false}
+                  />
+                ),
+              },
+              {
+                header: "مدين", width: "120px",
+                render: (line, idx) => (
+                  <NumberField label="مدين" hideLabel min={0} value={line.debit} onChange={(v) => updateLine(idx, "debit", v)} placeholder="0" />
+                ),
+              },
+              {
+                header: "دائن", width: "120px",
+                render: (line, idx) => (
+                  <NumberField label="دائن" hideLabel min={0} value={line.credit} onChange={(v) => updateLine(idx, "credit", v)} placeholder="0" />
+                ),
+              },
+            ]}
+            renderTotals={() => (
+              <tr className="bg-surface-subtle font-semibold border-t text-sm">
+                <td className="px-3 py-2">
+                  <span className="flex items-center gap-2">
+                    الإجمالي
+                    <Badge className={isBalanced ? "bg-status-success-surface text-status-success-foreground" : "bg-status-error-surface text-status-error-foreground"}>
+                      {isBalanced ? "متوازن" : "غير متوازن"}
+                    </Badge>
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-status-success-foreground">{formatCurrency(totalDebit)}</td>
+                <td className="px-3 py-2 text-status-error-foreground">{formatCurrency(totalCredit)}</td>
+                <td></td>
+              </tr>
+            )}
+            footer={!isBalanced && totalDebit > 0 ? (
               <p className="text-destructive text-sm">
                 فرق: {formatCurrency(Math.abs(totalDebit - totalCredit))}
               </p>
-            )}
-          </div>
+            ) : undefined}
+          />
         </CardContent>
       </Card>
 

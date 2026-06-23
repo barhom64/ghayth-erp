@@ -8,10 +8,7 @@
 #   node scripts/src/check-display-tables.mjs --write-allowlist
 # When a page is moved to <DataTable>, prune its line.
 #
-# Baseline captured: 22 page(s).
-artifacts/ghayth-erp/src/pages/create/finance/invoices-create.tsx
-artifacts/ghayth-erp/src/pages/create/finance/journal-manual-create.tsx
-artifacts/ghayth-erp/src/pages/create/finance/vendor-invoice-create.tsx
+# Baseline captured: 19 page(s).
 artifacts/ghayth-erp/src/pages/details/umrah-agent-detail.tsx
 artifacts/ghayth-erp/src/pages/details/umrah-group-detail.tsx
 artifacts/ghayth-erp/src/pages/details/voucher-detail.tsx

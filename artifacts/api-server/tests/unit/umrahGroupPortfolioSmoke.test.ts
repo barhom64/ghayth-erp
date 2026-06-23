@@ -16,8 +16,9 @@ import { join } from "node:path";
  *     navigate away + re-find the group; the card jumps to the
  *     existing invoice (if any) or opens the wizard.
  */
+// U-07 Phase 11: the group-portfolio report was carved into umrah-reports.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const PORTFOLIO_PAGE = readFileSync(

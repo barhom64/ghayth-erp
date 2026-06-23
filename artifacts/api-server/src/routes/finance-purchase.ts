@@ -77,7 +77,7 @@ const PURCHASE_LINE_TREATMENTS = [
 const GRN_TREATMENT_PURPOSE: Record<string, { purpose: string; side: "debit"; defaultCode: string }> = {
   inventory:            { purpose: "inventory_receipt",            side: "debit", defaultCode: "1150" },
   expense:              { purpose: "general_expense",              side: "debit", defaultCode: "6900" },
-  fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1500" },
+  fixed_asset:          { purpose: "fixed_asset_purchase",         side: "debit", defaultCode: "1280" },
   project_cost:         { purpose: "project_cost",                 side: "debit", defaultCode: "6800" },
   vehicle_cost:         { purpose: "vehicle_expense",              side: "debit", defaultCode: "6500" },
   property_maintenance: { purpose: "property_maintenance_expense", side: "debit", defaultCode: "6600" },
