@@ -26,8 +26,9 @@ import { join } from "node:path";
  * The unlinked-import-rows signal (§8: "Unlinked rows") lives in
  * a follow-up PR because it depends on migration 279 from PR #1878.
  */
+// U-07 Phase 13 — /reports/compliance carved into umrah-reports.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const COMPLIANCE = readFileSync(
