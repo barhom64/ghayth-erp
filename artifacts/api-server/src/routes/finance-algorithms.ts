@@ -76,7 +76,7 @@ const createFixedAssetSchema = z.object({
   category: z.string().optional().nullable(),
   branchId: z.coerce.number().optional(),
   depreciationMethod: z.string().default("straight_line"),
-  assetAccountCode: z.string().default("1500"),
+  assetAccountCode: z.string().default("1280"),
   depreciationAccountCode: z.string().default("5790"),
   accDepreciationAccountCode: z.string().default("1290"),
   // Asset Acquisition Center: when a payment-source (credit) account is
@@ -2093,8 +2093,8 @@ financeAlgorithmsRouter.post("/cip", authorize({ feature: "finance.algorithms", 
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,0,'in_progress',$16) RETURNING id`,
           [scope.companyId, scope.branchId, b.code ?? null, b.name, b.description ?? null,
            b.category ?? null, b.startDate, b.expectedCompletionDate ?? null,
-           b.cipAccountCode ?? "1530", b.targetAssetCategory ?? null,
-           b.targetAssetAccountCode ?? "1500", b.targetDepreciationAccountCode ?? "5790",
+           b.cipAccountCode ?? "1270", b.targetAssetCategory ?? null,
+           b.targetAssetAccountCode ?? "1280", b.targetDepreciationAccountCode ?? "5790",
            b.targetAccDepreciationAccountCode ?? "1290", b.targetUsefulLifeYears ?? null,
            b.targetDepreciationMethod ?? "straight_line", scope.userId]
         );
@@ -2152,7 +2152,7 @@ financeAlgorithmsRouter.post("/cip/:id/costs", authorize({ feature: "finance.alg
 
     const amt = roundTo2(b.amount);
     const { financialEngine } = await import("../lib/engines/index.js");
-    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1270";
     const cashCode = b.cashAccountCode
       ?? await financialEngine.resolveAccountCode(scope.companyId, "cip_funding_cash", "credit", "1111");
 
@@ -2241,10 +2241,10 @@ financeAlgorithmsRouter.post("/cip/:id/capitalize", authorize({ feature: "financ
     const depMethod = b.depreciationMethod ?? (cip.targetDepreciationMethod as string | null) ?? "straight_line";
     const assetName = b.assetName ?? `${cip.name} (مرسمل)`;
     const assetCode = b.assetCode ?? (cip.code as string | null) ?? null;
-    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1500";
+    const targetAssetCode = (cip.targetAssetAccountCode as string | null) ?? "1280";
     const targetDepCode = (cip.targetDepreciationAccountCode as string | null) ?? "5790";
     const targetAccDepCode = (cip.targetAccDepreciationAccountCode as string | null) ?? "1290";
-    const cipCode = (cip.cipAccountCode as string | null) ?? "1530";
+    const cipCode = (cip.cipAccountCode as string | null) ?? "1270";
 
     let newAssetId: number | null = null;
     let journalId: number | null = null;

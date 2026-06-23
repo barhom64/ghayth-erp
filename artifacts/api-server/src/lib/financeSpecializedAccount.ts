@@ -54,8 +54,8 @@ const ITEM_KIND: Record<string, SpecializedAccount> = {
   inventory: { purpose: "inventory_receipt", defaultCode: "1250", label: "مخزون", capitalize: true },
   product: { purpose: "inventory_receipt", defaultCode: "1250", label: "مخزون", capitalize: true },
   stock: { purpose: "inventory_receipt", defaultCode: "1250", label: "مخزون", capitalize: true },
-  asset: { purpose: "fixed_asset_purchase", defaultCode: "1500", label: "أصل ثابت (رسملة)", capitalize: true },
-  capital: { purpose: "fixed_asset_purchase", defaultCode: "1500", label: "أصل ثابت (رسملة)", capitalize: true },
+  asset: { purpose: "fixed_asset_purchase", defaultCode: "1280", label: "أصل ثابت (رسملة)", capitalize: true },
+  capital: { purpose: "fixed_asset_purchase", defaultCode: "1280", label: "أصل ثابت (رسملة)", capitalize: true },
 };
 
 const TARGET_MAP: Record<AllocationTargetType, SpecializedAccount> = {
@@ -69,7 +69,7 @@ const TARGET_MAP: Record<AllocationTargetType, SpecializedAccount> = {
   umrah_season:         { purpose: "umrah_cost",                   defaultCode: "6900", label: "تكاليف العمرة",      capitalize: false },
   umrah_agent:          { purpose: "umrah_cost",                   defaultCode: "6900", label: "تكاليف وكيل عمرة",   capitalize: false },
   transport_trip:       { purpose: "transport_cost",               defaultCode: "6900", label: "تكاليف النقل",       capitalize: false },
-  fixed_asset:          { purpose: "fixed_asset_purchase",         defaultCode: "1500", label: "أصل ثابت (رسملة)",   capitalize: true },
+  fixed_asset:          { purpose: "fixed_asset_purchase",         defaultCode: "1280", label: "أصل ثابت (رسملة)",   capitalize: true },
   supplier:             { purpose: "general_expense",              defaultCode: "6900", label: "مصروف عام",          capitalize: false },
   customer:             { purpose: "general_expense",              defaultCode: "6900", label: "مصروف عام",          capitalize: false },
   employee:             { purpose: "general_expense",              defaultCode: "6900", label: "مصروف عام",          capitalize: false },
