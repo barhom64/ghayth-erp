@@ -115,6 +115,7 @@ const JOURNAL_LINE_COLUMNS: DataTableColumn<any>[] = [
         <span className="text-status-neutral-foreground">{l?.accountName ?? ""}</span>
       </>
     ),
+    footer: () => "الإجمالي",
   },
   {
     key: "dims",
@@ -138,6 +139,7 @@ const JOURNAL_LINE_COLUMNS: DataTableColumn<any>[] = [
     align: "end",
     className: "tabular-nums",
     render: (l: any) => (Number(l?.debit || 0) ? formatCurrency(Number(l.debit)) : "-"),
+    footer: (rows: any[]) => formatCurrency(rows.reduce((s, l) => s + Number(l?.debit || 0), 0)),
   },
   {
     key: "credit",
@@ -146,6 +148,7 @@ const JOURNAL_LINE_COLUMNS: DataTableColumn<any>[] = [
     align: "end",
     className: "tabular-nums",
     render: (l: any) => (Number(l?.credit || 0) ? formatCurrency(Number(l.credit)) : "-"),
+    footer: (rows: any[]) => formatCurrency(rows.reduce((s, l) => s + Number(l?.credit || 0), 0)),
   },
 ];
 
@@ -760,13 +763,6 @@ export default function ExpenseDetail() {
                     noToolbar
                     pageSize={0}
                     className="text-xs"
-                    renderGrandTotal={() => (
-                      <div className="flex items-center gap-2 font-semibold tabular-nums">
-                        <span className="flex-1">الإجمالي</span>
-                        <span className="text-end">{formatCurrency(totalDebit)}</span>
-                        <span className="text-end">{formatCurrency(totalCredit)}</span>
-                      </div>
-                    )}
                   />
                 </div>
               )}

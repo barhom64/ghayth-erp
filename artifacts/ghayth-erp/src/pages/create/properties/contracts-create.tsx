@@ -485,6 +485,7 @@ export default function ContractsCreate() {
                     {
                       key: "num", header: "#",
                       render: (item) => <span className="font-mono">{item.num}</span>,
+                      footer: () => "الإجمالي",
                     },
                     {
                       key: "date", header: "تاريخ الاستحقاق",
@@ -493,14 +494,9 @@ export default function ContractsCreate() {
                     {
                       key: "amount", header: "المبلغ",
                       render: (item) => <span className="font-bold text-emerald-600">{formatCurrency(item.amount)}</span>,
+                      footer: () => <span className="text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</span>,
                     },
                   ] satisfies DataTableColumn<{ num: number; date: string; amount: number }>[]}
-                  renderGrandTotal={() => (
-                    <tr className="bg-surface-subtle font-bold border-t-2">
-                      <td className="p-2" colSpan={2}>الإجمالي</td>
-                      <td className="p-2 text-emerald-600">{formatCurrency(schedulePreview.reduce((s, i) => s + i.amount, 0))}</td>
-                    </tr>
-                  )}
                 />
               </div>
             </CardContent>
