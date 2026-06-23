@@ -4,7 +4,7 @@
  * العميل عند إرسال منطقي كنصّ. اختبار سلوكي يثبت التصحيح + استبدال كل المواضع.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { zCoerceBoolean } from "../../src/lib/zodCoerce.js";
@@ -43,9 +43,10 @@ describe("zCoerceBoolean — string 'false' is false (footgun fixed)", () => {
 
 describe("z.coerce.boolean() replaced in the operational batch", () => {
   const SRC = join(import.meta.dirname!, "../../src/routes");
-  for (const f of ["warehouse.ts", "fleet.ts", "employeeTrackingPolicy.ts"]) {
-    it(`${f} no longer uses the unsafe z.coerce.boolean()`, () => {
-      expect(readFileSync(join(SRC, f), "utf8")).not.toMatch(/z\.coerce\.boolean\(\)/);
-    });
-  }
+  it("NO route file uses the unsafe z.coerce.boolean() (footgun eliminated everywhere)", () => {
+    const offenders = readdirSync(SRC)
+      .filter((f) => f.endsWith(".ts"))
+      .filter((f) => /z\.coerce\.boolean\(\)/.test(readFileSync(join(SRC, f), "utf8")));
+    expect(offenders).toEqual([]);
+  });
 });
