@@ -136,6 +136,9 @@ import umrahAttachmentsRouter from "./umrah-attachments.js";
 // exempt-pilgrims, group/season portfolio) split; imported for the
 // wiring-scanner hint below. Mounted via umrah-entities.ts.
 import umrahReportsRouter from "./umrah-reports.js";
+// U-07 Phase 12 — letters (PDF + dispatch) split; imported for the
+// wiring-scanner hint below. Mounted via umrah-entities.ts.
+import umrahLettersRouter from "./umrah-letters.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -215,6 +218,7 @@ if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", umrahStatementsRouter);
   router.use("/umrah", umrahAttachmentsRouter);
   router.use("/umrah", umrahReportsRouter);
+  router.use("/umrah", umrahLettersRouter);
 }
 
 router.use(healthRouter);
