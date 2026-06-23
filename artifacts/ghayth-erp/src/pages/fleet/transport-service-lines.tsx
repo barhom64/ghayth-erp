@@ -295,7 +295,7 @@ export default function TransportServiceLines() {
                 disabled={batchLoading}
               >
                 <FileText className="w-4 h-4" />
-                {batchLoading ? "جارٍ الإنشاء..." : "إنشاء فاتورة مجمعة"}
+                {batchLoading ? "جاري الإنشاء..." : "إنشاء فاتورة مجمعة"}
               </GuardedButton>
             </div>
           </CardContent>
