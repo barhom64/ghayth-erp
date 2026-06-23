@@ -66,7 +66,7 @@ const ROUTE_UMRAH = readFileSync(
   "utf8",
 );
 const ROUTE_UMRAH_ENT = readFileSync(
-  join(SRC_DIR, "routes/umrah-entities.ts"),
+  join(SRC_DIR, "routes/umrah-reports.ts"),
   "utf8",
 );
 
@@ -199,7 +199,7 @@ describe("U-02b §B — legacy umrah.transport.* event emissions are frozen", ()
 // §C — report endpoint reads the contract surface
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-02b §C — /reports/umrah-transport reads transport_bookings, not umrah_transport", () => {
-  it("the umrah-transport report endpoint exists in routes/umrah-entities.ts", () => {
+  it("the umrah-transport report endpoint exists in routes/umrah-reports.ts", () => {
     expect(ROUTE_UMRAH_ENT).toMatch(
       /router\.get\("\/reports\/umrah-transport"/,
     );
