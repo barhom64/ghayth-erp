@@ -9,8 +9,9 @@ import { join } from "node:path";
  * (not a status approximation). The bookkeeper's "did this sub-agent
  * pay?" query is what closes the umrah financial loop.
  */
+// U-07 Phase 13 — subagent-balances report carved into umrah-reports.ts.
 const ROUTE_ENT = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const PAGE = readFileSync(

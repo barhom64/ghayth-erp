@@ -62,8 +62,12 @@ describe("U-07 Phase 11 §A — umrah-reports.ts is a valid sub-router file", ()
 
   it("is a read-only carve — no writes, no ledger posting, no audit/event helpers", () => {
     expect(CHILD).not.toMatch(/INSERT\s+INTO|rawExecute|withTransaction/);
-    expect(CHILD).not.toMatch(/postNuskJournalEntries|reclassifyRevenueForInvoices/);
-    expect(CHILD).not.toMatch(/createAuditLog|auditFromRequest|emitEvent/);
+    // Match actual ledger-posting INVOCATIONS (open paren), not incidental
+    // comment mentions of the helper names — the U-07 Phase 13 compliance
+    // report carries a comment referencing postNuskJournalEntries to explain a
+    // column's provenance while doing nothing but SELECT.
+    expect(CHILD).not.toMatch(/postNuskJournalEntries\s*\(|reclassifyRevenueForInvoices\s*\(/);
+    expect(CHILD).not.toMatch(/createAuditLog\s*\(|auditFromRequest\s*\(|emitEvent\s*\(/);
   });
 });
 

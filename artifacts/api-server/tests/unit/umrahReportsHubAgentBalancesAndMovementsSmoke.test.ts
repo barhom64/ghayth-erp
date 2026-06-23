@@ -16,8 +16,10 @@ import { join } from "node:path";
  * (3) /umrah/reports hub + nav tab — single entry point for all
  *     existing + new reports, grouped by category.
  */
+// U-07 Phase 13 — agent-balances + pilgrim-movements reports carved into
+// umrah-reports.ts.
 const ROUTE_ENT = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const HUB_PAGE = readFileSync(
