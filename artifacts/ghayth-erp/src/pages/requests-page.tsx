@@ -729,7 +729,7 @@ export default function RequestsPage() {
         ))}
       </div>
       <Tabs defaultValue={initialTab} dir="rtl">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto md:h-9">
           <TabsTrigger value="catalog">مركز الطلبات</TabsTrigger>
           <TabsTrigger value="requests">الطلبات</TabsTrigger>
           <TabsTrigger value="types">أنواع الطلبات</TabsTrigger>

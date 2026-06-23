@@ -299,7 +299,7 @@ export default function ManagerBoard() {
               <p className="text-sm text-muted-foreground text-center py-4">جاري التحميل...</p>
             ) : (
               <>
-                <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                   {[
                     { label: "حاضر", value: presentCount, color: "bg-status-success-surface text-status-success-foreground" },
                     { label: "غائب", value: absentCount, color: "bg-status-error-surface text-status-error-foreground" },

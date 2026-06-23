@@ -1085,7 +1085,7 @@ export default function NotificationEnginePage() {
       breadcrumbs={[{ href: "/settings", label: "الإعدادات" }, { label: "محرك الإشعارات" }]}
     >
       <Tabs defaultValue="routing" dir="rtl">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 h-auto md:h-9">
           <TabsTrigger value="routing" className="gap-1">
             <Route className="h-4 w-4" /> التوجيه
           </TabsTrigger>

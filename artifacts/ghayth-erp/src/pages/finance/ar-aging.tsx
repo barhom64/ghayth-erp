@@ -71,6 +71,7 @@ export default function ArAgingPage() {
       header: "العميل",
       sortable: true,
       searchable: true,
+      footer: () => "المجموع",
       render: (c) => (
         <div>
           <p className="font-semibold text-sm">{c.clientName}</p>
@@ -78,12 +79,12 @@ export default function ArAgingPage() {
         </div>
       ),
     },
-    { key: "current", header: "حالي", sortable: true, render: (c) => c.current > 0 ? <Badge className="bg-status-success-surface text-status-success-foreground">{formatCurrency(c.current)}</Badge> : "—" },
-    { key: "1_30", header: "1-30 يوم", sortable: true, render: (c) => c["1_30"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(c["1_30"])}</Badge> : "—" },
-    { key: "31_60", header: "31-60 يوم", sortable: true, render: (c) => c["31_60"] > 0 ? <Badge className="bg-orange-100 text-orange-700">{formatCurrency(c["31_60"])}</Badge> : "—" },
-    { key: "61_90", header: "61-90 يوم", sortable: true, render: (c) => c["61_90"] > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground">{formatCurrency(c["61_90"])}</Badge> : "—" },
-    { key: "over90", header: "+90 يوم", sortable: true, render: (c) => c.over90 > 0 ? <Badge className="bg-red-200 text-status-error-foreground">{formatCurrency(c.over90)}</Badge> : "—" },
-    { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-orange-600", render: (c) => formatCurrency(c.total) },
+    { key: "current", header: "حالي", sortable: true, footer: () => formatCurrency(Number(summary.current ?? 0)), render: (c) => c.current > 0 ? <Badge className="bg-status-success-surface text-status-success-foreground">{formatCurrency(c.current)}</Badge> : "—" },
+    { key: "1_30", header: "1-30 يوم", sortable: true, footer: () => formatCurrency(Number(summary["1_30"] ?? 0)), render: (c) => c["1_30"] > 0 ? <Badge className="bg-status-warning-surface text-status-warning-foreground">{formatCurrency(c["1_30"])}</Badge> : "—" },
+    { key: "31_60", header: "31-60 يوم", sortable: true, footer: () => formatCurrency(Number(summary["31_60"] ?? 0)), render: (c) => c["31_60"] > 0 ? <Badge className="bg-orange-100 text-orange-700">{formatCurrency(c["31_60"])}</Badge> : "—" },
+    { key: "61_90", header: "61-90 يوم", sortable: true, footer: () => formatCurrency(Number(summary["61_90"] ?? 0)), render: (c) => c["61_90"] > 0 ? <Badge className="bg-status-error-surface text-status-error-foreground">{formatCurrency(c["61_90"])}</Badge> : "—" },
+    { key: "over90", header: "+90 يوم", sortable: true, footer: () => formatCurrency(Number(summary.over90 ?? 0)), render: (c) => c.over90 > 0 ? <Badge className="bg-red-200 text-status-error-foreground">{formatCurrency(c.over90)}</Badge> : "—" },
+    { key: "total", header: "الإجمالي", sortable: true, className: "font-bold text-orange-600", footer: () => formatCurrency(Number(summary.grandTotal ?? 0)), render: (c) => formatCurrency(c.total) },
   ];
 
   return (
@@ -188,20 +189,6 @@ export default function ArAgingPage() {
           );
         }}
       />
-
-      {clients.length > 0 && (
-        <Card className="bg-surface-subtle">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-7 gap-4 text-sm font-bold">
-              <div>المجموع</div>
-              {BUCKETS.map(b => (
-                <div key={b.key}>{formatCurrency(Number(summary[b.key] ?? 0))}</div>
-              ))}
-              <div className="text-orange-600">{formatCurrency(Number(summary.grandTotal ?? 0))}</div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </PageShell>
   );
 }

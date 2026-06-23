@@ -64,7 +64,7 @@ export default function Warehouse() {
     >
       <WarehouseTabsNav />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 h-auto md:h-9">
           <TabsTrigger value="products" className="gap-2"><Package className="h-4 w-4" /> المنتجات</TabsTrigger>
           <TabsTrigger value="movements" className="gap-2"><ArrowLeftRight className="h-4 w-4" /> الحركات</TabsTrigger>
           <TabsTrigger value="categories" className="gap-2"><Layers className="h-4 w-4" /> التصنيفات</TabsTrigger>

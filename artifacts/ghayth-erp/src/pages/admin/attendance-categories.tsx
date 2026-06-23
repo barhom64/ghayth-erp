@@ -295,7 +295,7 @@ export default function AttendanceCategoriesPage() {
                 </div>
                 <div>
                   <Label className="text-xs">سلّم الخصومات (مستويات 1→5، خصم لكل مرة تأخر)</Label>
-                  <div className="grid gap-2 grid-cols-5 mt-1">
+                  <div className="grid gap-2 grid-cols-2 md:grid-cols-5 mt-1">
                     {[1, 2, 3, 4, 5].map((lvl) => (
                       <div key={lvl}>
                         <Label className="text-xs text-muted-foreground">مستوى {lvl}</Label>
