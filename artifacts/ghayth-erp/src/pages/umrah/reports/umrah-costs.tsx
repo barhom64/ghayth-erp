@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/select";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { formatCurrency } from "@/lib/formatters";
 
 type Dimension = "season" | "group" | "agent";
@@ -153,54 +152,52 @@ export default function UmrahCostsReport() {
               لا فواتير نُسك تطابق الفلاتر.
             </p>
           ) : (
-            <div className="overflow-x-auto" data-testid="costs-table">
-              <DataTable<CostRow>
-                className="text-sm"
-                data={rows}
-                pageSize={0}
-                noToolbar
-                rowKey={(r) =>
-                  r.seasonId ?? r.groupId ?? r.agentId ?? `${r.name}-${rows.indexOf(r)}`
-                }
-                columns={[
-                  {
-                    key: "name",
-                    header: dimensionLabel,
-                    align: "start",
-                    className: "font-medium sticky right-0 bg-background",
-                    render: (r) => r.name ?? "—",
-                    footer: () => "الإجمالي",
-                  },
-                  ...(subColumnLabel
-                    ? ([{
-                        key: "nuskGroupNumber",
-                        header: subColumnLabel,
-                        align: "start",
-                        className: "text-muted-foreground",
-                        render: (r) => r.nuskGroupNumber ?? "—",
-                      }] as DataTableColumn<CostRow>[])
-                    : []),
-                  ...COST_COLUMNS.map<DataTableColumn<CostRow>>((c) => ({
-                    key: String(c.key),
-                    header: c.label,
-                    align: "end",
-                    className: "font-mono whitespace-nowrap",
-                    render: (r) => formatCurrency(Number(r[c.key]) || 0),
-                    exportValue: (r) => Number(r[c.key]) || 0,
-                    footer: () => formatCurrency(totals[c.key as string] ?? 0),
-                  })),
-                  {
-                    key: "totalAmount",
-                    header: "الإجمالي",
-                    align: "end",
-                    className: "font-mono font-bold whitespace-nowrap text-status-error-foreground",
-                    render: (r) => formatCurrency(Number(r.totalAmount) || 0),
-                    exportValue: (r) => Number(r.totalAmount) || 0,
-                    footer: () => formatCurrency(totals.totalAmount ?? 0),
-                  },
-                ]}
-              />
-            </div>
+            <div className="overflow-x-auto"><table className="w-full text-sm" data-testid="costs-table">
+              <thead className="bg-muted/40">
+                <tr>
+                  <th className="p-2 text-start sticky right-0 bg-muted/40">{dimensionLabel}</th>
+                  {subColumnLabel && <th className="p-2 text-start">{subColumnLabel}</th>}
+                  {COST_COLUMNS.map((c) => (
+                    <th key={String(c.key)} className="p-2 text-end whitespace-nowrap">{c.label}</th>
+                  ))}
+                  <th className="p-2 text-end whitespace-nowrap font-bold">الإجمالي</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const rowKey = r.seasonId ?? r.groupId ?? r.agentId ?? `${r.name}-${rows.indexOf(r)}`;
+                  return (
+                    <tr key={rowKey} className="border-t hover:bg-muted/20" data-testid={`costs-row-${rowKey}`}>
+                      <td className="p-2 font-medium sticky right-0 bg-background">{r.name ?? "—"}</td>
+                      {subColumnLabel && <td className="p-2 text-muted-foreground">{r.nuskGroupNumber ?? "—"}</td>}
+                      {COST_COLUMNS.map((c) => (
+                        <td key={String(c.key)} className="p-2 text-end font-mono whitespace-nowrap">
+                          {formatCurrency(Number(r[c.key]) || 0)}
+                        </td>
+                      ))}
+                      <td className="p-2 text-end font-mono font-bold whitespace-nowrap text-status-error-foreground">
+                        {formatCurrency(Number(r.totalAmount) || 0)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-muted/60 border-t-2 border-border">
+                <tr>
+                  <td className="p-2 font-bold sticky right-0 bg-muted/60" colSpan={subColumnLabel ? 2 : 1}>
+                    الإجمالي
+                  </td>
+                  {COST_COLUMNS.map((c) => (
+                    <td key={String(c.key)} className="p-2 text-end font-mono font-bold whitespace-nowrap">
+                      {formatCurrency(totals[c.key as string] ?? 0)}
+                    </td>
+                  ))}
+                  <td className="p-2 text-end font-mono font-bold whitespace-nowrap text-status-error-foreground">
+                    {formatCurrency(totals.totalAmount ?? 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table></div>
           )}
         </CardContent>
       </Card>

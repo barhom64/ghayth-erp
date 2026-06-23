@@ -3,7 +3,7 @@ import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
-import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PageShell } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -244,82 +244,6 @@ export default function IncomeStatementTrendPage() {
     1,
   );
 
-  // Flatten the two sections into one grouped dataset so the statement renders
-  // through the canonical DataTable: groupBy "_section" → الإيرادات/المصروفات
-  // section headers; per-column `groupFooter` → column-aligned section subtotals
-  // (إجمالي الإيرادات/المصروفات under each month); `footer` → the net-profit
-  // row. Same amounts/bars/trend/links as before; sticky first column is the
-  // one delta of adopting the shared component.
-  type IsRow = { code: string; name: string; amounts: number[]; _section: "revenue" | "expense" };
-  const isRows: IsRow[] = [
-    ...revenueRows.map((r) => ({ ...r, _section: "revenue" as const })),
-    ...expenseRows.map((r) => ({ ...r, _section: "expense" as const })),
-  ];
-  const isColumns: DataTableColumn<IsRow>[] = [
-    {
-      key: "account",
-      header: "الحساب",
-      sortable: false,
-      className: "w-64",
-      render: (r) => (
-        <Link href={`/finance/ledger/${r.code}`} className="flex flex-col hover:text-status-info-foreground">
-          <span className="font-mono text-[10px]">{r.code}</span>
-          <span className="text-[11px]">{r.name}</span>
-        </Link>
-      ),
-      groupFooter: (_rows, gv) => (gv === "revenue" ? "إجمالي الإيرادات" : "إجمالي المصروفات"),
-      footer: () => "صافي الربح",
-    },
-    ...buckets.map((b, i): DataTableColumn<IsRow> => ({
-      key: b.key,
-      header: b.label,
-      align: "end",
-      sortable: false,
-      className: "whitespace-nowrap",
-      render: (r) => {
-        const amt = r.amounts[i] ?? 0;
-        if (Math.abs(amt) < 0.01) return <span className="text-muted-foreground italic">—</span>;
-        return (
-          <div className="flex flex-col items-end gap-0.5">
-            <span className="font-mono text-[11px]">{formatCurrency(amt)}</span>
-            <div className="h-1 w-16 bg-muted rounded-full overflow-hidden">
-              <div
-                className={`h-full ${r._section === "revenue" ? "bg-emerald-500" : "bg-red-500"}`}
-                style={{ width: `${(Math.abs(amt) / max) * 100}%` }}
-              />
-            </div>
-          </div>
-        );
-      },
-      groupFooter: (rows, gv) => {
-        const sum = rows.reduce((s, r) => s + (r.amounts[i] ?? 0), 0);
-        return (
-          <span className={`font-mono ${gv === "revenue" ? "text-emerald-700" : "text-red-700"}`}>
-            {formatCurrency(sum)}
-          </span>
-        );
-      },
-      footer: () => {
-        const amt = netRow[i] ?? 0;
-        return (
-          <span className={`font-mono ${amt < 0 ? "text-red-700" : "text-emerald-700"}`}>
-            {amt < 0 ? "−" : ""}{formatCurrency(Math.abs(amt))}
-          </span>
-        );
-      },
-    })),
-    {
-      key: "mom",
-      header: "M-o-M",
-      align: "end",
-      sortable: false,
-      className: "whitespace-nowrap",
-      render: (r) => renderTrendCell(r.amounts),
-      groupFooter: (rows) => renderTrendCell(buckets.map((_, i) => rows.reduce((s, r) => s + (r.amounts[i] ?? 0), 0))),
-      footer: () => renderTrendCell(netRow),
-    },
-  ];
-
   return (
     <PageShell
       title="قائمة الدخل — اتجاه شهري متعدد الفترات"
@@ -393,16 +317,97 @@ export default function IncomeStatementTrendPage() {
               {buckets[0]?.label} → {buckets[buckets.length - 1]?.label}
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <DataTable
-              columns={isColumns}
-              data={isRows}
-              rowKey={(r) => `${r._section}-${r.code}`}
-              groupBy="_section"
-              renderGroupHeader={(gv) => (gv === "revenue" ? "الإيرادات" : "المصروفات")}
-              noToolbar
-              pageSize={0}
-            />
+          <CardContent className="p-0 overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-start p-2 font-semibold w-64 sticky right-0 bg-muted/50">الحساب</th>
+                  {buckets.map((b) => (
+                    <th key={b.key} className="text-end p-2 font-semibold whitespace-nowrap">{b.label}</th>
+                  ))}
+                  <th className="text-end p-2 font-semibold whitespace-nowrap">M-o-M</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-emerald-50/60 font-semibold">
+                  <td colSpan={buckets.length + 2} className="p-2">الإيرادات</td>
+                </tr>
+                {revenueRows.map((r) => (
+                  <tr key={`rev-${r.code}`} className="border-t hover:bg-muted/30">
+                    <td className="p-2 sticky right-0 bg-background border-l">
+                      <Link href={`/finance/ledger/${r.code}`} className="flex flex-col hover:text-status-info-foreground">
+                        <span className="font-mono text-[10px]">{r.code}</span>
+                        <span className="text-[11px]">{r.name}</span>
+                      </Link>
+                    </td>
+                    {r.amounts.map((amt, i) => (
+                      <td key={i} className="p-2 text-end whitespace-nowrap">
+                        {Math.abs(amt) < 0.01 ? <span className="text-muted-foreground italic">—</span> : (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="font-mono text-[11px]">{formatCurrency(amt)}</span>
+                            <div className="h-1 w-16 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500" style={{ width: `${(Math.abs(amt) / max) * 100}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    ))}
+                    <td className="p-2 text-end">{renderTrendCell(r.amounts)}</td>
+                  </tr>
+                ))}
+                <tr className="bg-emerald-100/60 font-bold border-t-2 border-emerald-300">
+                  <td className="p-2 sticky right-0 bg-emerald-100/60 border-l">إجمالي الإيرادات</td>
+                  {totalsRow.totRev.map((amt, i) => (
+                    <td key={i} className="p-2 text-end font-mono text-emerald-700">{formatCurrency(amt)}</td>
+                  ))}
+                  <td className="p-2 text-end">{renderTrendCell(totalsRow.totRev)}</td>
+                </tr>
+
+                <tr className="bg-red-50/60 font-semibold">
+                  <td colSpan={buckets.length + 2} className="p-2">المصروفات</td>
+                </tr>
+                {expenseRows.map((r) => (
+                  <tr key={`exp-${r.code}`} className="border-t hover:bg-muted/30">
+                    <td className="p-2 sticky right-0 bg-background border-l">
+                      <Link href={`/finance/ledger/${r.code}`} className="flex flex-col hover:text-status-info-foreground">
+                        <span className="font-mono text-[10px]">{r.code}</span>
+                        <span className="text-[11px]">{r.name}</span>
+                      </Link>
+                    </td>
+                    {r.amounts.map((amt, i) => (
+                      <td key={i} className="p-2 text-end whitespace-nowrap">
+                        {Math.abs(amt) < 0.01 ? <span className="text-muted-foreground italic">—</span> : (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="font-mono text-[11px]">{formatCurrency(amt)}</span>
+                            <div className="h-1 w-16 bg-muted rounded-full overflow-hidden">
+                              <div className="h-full bg-red-500" style={{ width: `${(Math.abs(amt) / max) * 100}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    ))}
+                    <td className="p-2 text-end">{renderTrendCell(r.amounts)}</td>
+                  </tr>
+                ))}
+                <tr className="bg-red-100/60 font-bold border-t-2 border-red-300">
+                  <td className="p-2 sticky right-0 bg-red-100/60 border-l">إجمالي المصروفات</td>
+                  {totalsRow.totExp.map((amt, i) => (
+                    <td key={i} className="p-2 text-end font-mono text-red-700">{formatCurrency(amt)}</td>
+                  ))}
+                  <td className="p-2 text-end">{renderTrendCell(totalsRow.totExp)}</td>
+                </tr>
+
+                <tr className="bg-status-info-surface/40 font-bold border-t-2 border-status-info-surface">
+                  <td className="p-2 sticky right-0 bg-status-info-surface/40 border-l text-status-info-foreground">صافي الربح</td>
+                  {netRow.map((amt, i) => (
+                    <td key={i} className={`p-2 text-end font-mono ${amt < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                      {amt < 0 ? "−" : ""}{formatCurrency(Math.abs(amt))}
+                    </td>
+                  ))}
+                  <td className="p-2 text-end">{renderTrendCell(netRow)}</td>
+                </tr>
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}

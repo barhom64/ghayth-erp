@@ -91,13 +91,14 @@ export default function ManagerBoard() {
   );
   const approvalMut = { mutate: (body: ApprovalBody) => (getApprovalMethod(body._type) === "POST" ? postMut : patchMut).mutate(body) };
 
-  if (actionLoading) return <LoadingSpinner />;
-  if (actionError) return <ErrorState />;
-
   const pending = actionData || {};
   const workflows = pending.pendingWorkflows || [];
   const allPending = buildAllPending(pending);
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(allPending);
+
+  if (actionLoading) return <LoadingSpinner />;
+  if (actionError) return <ErrorState />;
+
   const urgentPending = allPending.filter((r: any) => r.priority === "high" || r.priority === "urgent");
   const todayPending = allPending.filter((r: any) => {
     const created = new Date(r.createdAt);

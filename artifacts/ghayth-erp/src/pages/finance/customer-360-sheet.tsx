@@ -408,7 +408,7 @@ export default function Customer360SheetPage() {
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="overflow-x-auto">
-                  <DataTable<StmtResp["movements"][number]>
+                  <DataTable
                     data={recentMovements}
                     rowKey={(m) => `${m.movementType}-${m.id}`}
                     noToolbar

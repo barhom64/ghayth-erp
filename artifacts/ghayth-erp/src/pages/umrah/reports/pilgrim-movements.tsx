@@ -257,7 +257,7 @@ function DetailCard({ title, testid, icon: Icon, rows, columns, tone }: DetailCa
           <p className="text-xs text-muted-foreground text-center py-3">لا يوجد سجلات</p>
         ) : (
           <div className="overflow-x-auto max-h-96">
-            <DataTable<DetailRow>
+            <DataTable
               className="text-xs"
               data={rows}
               pageSize={0}

@@ -269,7 +269,7 @@ export default function TransportBookingConfirmation() {
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">مقاطع المسار ({c.lines.length})</div>
               <div className="overflow-x-auto text-sm">
-                <DataTable<RouteSegment>
+                <DataTable
                   columns={ROUTE_SEGMENT_COLUMNS}
                   data={c.lines}
                   rowKey={(l) => l.id}
@@ -296,7 +296,7 @@ export default function TransportBookingConfirmation() {
             <div className="border-t pt-3 mb-4">
               <div className="text-sm font-semibold mb-2">المركبات والسائقون المُسنَدون</div>
               <div className="overflow-x-auto text-sm">
-                <DataTable<DispatchOrder>
+                <DataTable
                   columns={DISPATCH_COLUMNS}
                   data={c.dispatchOrders}
                   rowKey={(d) => d.id}

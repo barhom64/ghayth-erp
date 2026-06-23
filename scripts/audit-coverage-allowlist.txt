@@ -10,6 +10,12 @@
 # climbs monotonically and can never silently regress.
 #
 # Baseline captured: 107 unaudited write endpoint(s).
+#
+# POST /finance/intercompany — audit IS present (emitEvent + createAuditLog in
+# finance-hardening.ts, ~L1470/L1479) but ~237 lines into the handler, beyond the
+# check's 120-line handler window. Not a real gap — both legs' JE creation is
+# audited + event-emitted on commit.
+POST /finance/intercompany
 DELETE /admin/pricing/rules/:id
 DELETE /admin/saudi/wps/credentials/:bankCode
 DELETE /documents/pricing/rules/:id

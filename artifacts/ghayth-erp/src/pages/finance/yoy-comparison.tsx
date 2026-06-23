@@ -367,7 +367,7 @@ export default function YoyComparisonPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <DataTable<ComparisonRow>
+          <DataTable
             data={rows}
             rowKey={(r) => `${r.type}-${r.code}`}
             noToolbar

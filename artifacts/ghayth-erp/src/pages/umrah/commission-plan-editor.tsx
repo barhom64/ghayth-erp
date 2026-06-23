@@ -16,7 +16,6 @@ import {
   FormSelectField,
   FormTextareaField,
   FormGrid,
-  DataTable,
 } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { GuardedButton } from "@/components/shared/permission-gate";
@@ -496,48 +495,80 @@ function TiersTab() {
         </GuardedButton>
       </div>
 
-      <DataTable<(typeof fields)[number]>
-        noToolbar
-        pageSize={0}
-        data={fields}
-        rowKey={(field) => field.id}
-        emptyMessage={'لا توجد شرائح — أضف الأولى بالضغط على "إضافة شريحة".'}
-        columns={[
-          { key: "idx", header: "#", sortable: false, className: "text-xs text-muted-foreground", render: (_f, i) => i + 1 },
-          {
-            key: "fromCount", header: "من (عدد)", sortable: false,
-            render: (_f, i) => <Input type="number" className="h-8" {...register(`tiers.${i}.fromCount`, { valueAsNumber: true })} />,
-          },
-          {
-            key: "toCount", header: "إلى (عدد)", sortable: false,
-            render: (_f, i) => (
-              <Input
-                type="number"
-                className="h-8"
-                placeholder="∞"
-                {...register(`tiers.${i}.toCount`, { setValueAs: (v) => (v === "" || v === null ? null : Number(v)) })}
-              />
-            ),
-          },
-          {
-            key: "bonusPerUnit", header: "مكافأة/وحدة", sortable: false,
-            render: (_f, i) => <Input type="number" className="h-8" {...register(`tiers.${i}.bonusPerUnit`, { valueAsNumber: true })} />,
-          },
-          { key: "cumulative", header: "تراكمي؟", sortable: false, render: (_f, i) => <TierCumulativeCell idx={i} setValue={setValue} /> },
-          {
-            key: "tierOrder", header: "ترتيب", sortable: false,
-            render: (_f, i) => <Input type="number" className="h-8 w-16" {...register(`tiers.${i}.tierOrder`, { valueAsNumber: true })} />,
-          },
-          {
-            key: "_actions", header: "", sortable: false,
-            render: (_f, i) => (
-              <GuardedButton perm="umrah:write" size="sm" variant="ghost" type="button" onClick={() => remove(i)}>
-                <Trash2 className="h-3.5 w-3.5 text-status-error-foreground" />
-              </GuardedButton>
-            ),
-          },
-        ]}
-      />
+      <div className="rounded border overflow-hidden">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
+          <thead className="bg-muted/40">
+            <tr>
+              <th className="p-2 text-start font-medium">#</th>
+              <th className="p-2 text-start font-medium">من (عدد)</th>
+              <th className="p-2 text-start font-medium">إلى (عدد)</th>
+              <th className="p-2 text-start font-medium">مكافأة/وحدة</th>
+              <th className="p-2 text-start font-medium">تراكمي؟</th>
+              <th className="p-2 text-start font-medium">ترتيب</th>
+              <th className="p-2 text-start font-medium"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map((field, i) => (
+              <tr key={field.id} className="border-t">
+                <td className="p-2 text-xs text-muted-foreground">{i + 1}</td>
+                <td className="p-2">
+                  <Input
+                    type="number"
+                    className="h-8"
+                    {...register(`tiers.${i}.fromCount`, { valueAsNumber: true })}
+                  />
+                </td>
+                <td className="p-2">
+                  <Input
+                    type="number"
+                    className="h-8"
+                    placeholder="∞"
+                    {...register(`tiers.${i}.toCount`, {
+                      setValueAs: (v) => v === "" || v === null ? null : Number(v),
+                    })}
+                  />
+                </td>
+                <td className="p-2">
+                  <Input
+                    type="number"
+                    className="h-8"
+                    {...register(`tiers.${i}.bonusPerUnit`, { valueAsNumber: true })}
+                  />
+                </td>
+                <td className="p-2">
+                  <TierCumulativeCell idx={i} setValue={setValue} />
+                </td>
+                <td className="p-2">
+                  <Input
+                    type="number"
+                    className="h-8 w-16"
+                    {...register(`tiers.${i}.tierOrder`, { valueAsNumber: true })}
+                  />
+                </td>
+                <td className="p-2">
+                  <GuardedButton
+                    perm="umrah:write"
+                    size="sm"
+                    variant="ghost"
+                    type="button"
+                    onClick={() => remove(i)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-status-error-foreground" />
+                  </GuardedButton>
+                </td>
+              </tr>
+            ))}
+            {fields.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-6 text-center text-sm text-muted-foreground">
+                  لا توجد شرائح — أضف الأولى بالضغط على "إضافة شريحة".
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table></div>
+      </div>
     </>
   );
 }

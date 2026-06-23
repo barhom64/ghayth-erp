@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -13,11 +13,8 @@ import {
   type DataTableColumn,
 } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation, asList } from "@/lib/api";
-import { PrintButton } from "@/components/shared/print-button";
-import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,11 +33,6 @@ const CHANNEL_LABELS: Record<string, string> = {
   whatsapp: "واتساب",
   webhook: "ويب هوك",
   github: "GitHub",
-};
-
-const SEND_STATUS_AR: Record<string, string> = {
-  sent: "مُرسل", delivered: "مُسلَّم", failed: "فشل",
-  retrying: "إعادة محاولة", pending: "معلّق", queued: "في الطابور",
 };
 
 const CHANNEL_ICONS: Record<string, any> = {
@@ -292,15 +284,6 @@ function IntegrationsList() {
 function IntegrationLogs() {
   const { data: logsResp, isLoading, isError, error, refetch } = useApiQuery<any>(["admin-int-logs"], "/admin/integration-logs");
   const logs = asList(logsResp);
-  const [q, setQ] = useState("");
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return logs;
-    return logs.filter((log: any) =>
-      [log.recipient, log.subject, log.channel].some((f) => String(f ?? "").toLowerCase().includes(term)),
-    );
-  }, [logs, q]);
-  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
   const { toast } = useToast();
 
   const retryMut = useApiMutation<any, Record<string, never>>(
@@ -349,40 +332,15 @@ function IntegrationLogs() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">سجل الإرسال</h3>
-        <div className="flex items-center gap-2">
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="بحث بالمستلم أو الموضوع أو القناة…"
-            className="h-9 w-60"
-          />
-          <PrintButton
-            entityType="report_admin_integration_logs"
-            entityId="list"
-            size="icon"
-            payload={() => ({
-              entity: { title: "سجل الإرسال — التكاملات", total: printRows.length },
-              items: printRows.map((log: any) => ({
-                "القناة": CHANNEL_LABELS[log.channel] || log.channel,
-                "المستلم": log.recipient || "—",
-                "الموضوع": log.subject || "—",
-                "الحالة": SEND_STATUS_AR[log.status] || log.status,
-                "المحاولة": log.retryAttempt || 0,
-                "التاريخ": log.createdAt,
-              })),
-            })}
-          />
-          <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={handleRetry}>
-            <RefreshCw className="h-4 w-4 me-1" />إعادة المحاولة للفاشلة
-          </GuardedButton>
-        </div>
+        <GuardedButton perm="admin:create" variant="outline" size="sm" onClick={handleRetry}>
+          <RefreshCw className="h-4 w-4 me-1" />إعادة المحاولة للفاشلة
+        </GuardedButton>
       </div>
       <Card>
         <CardContent className="p-0">
           <DataTable
             columns={columns}
-            data={filtered}
-            onSortedDataChange={setPrintRows}
+            data={logs}
             isLoading={isLoading}
             isError={isError}
             error={error as Error | null}

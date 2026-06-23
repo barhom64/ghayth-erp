@@ -206,9 +206,6 @@ export default function UmrahRefundRequests() {
     );
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => refetch()} />;
-
   const filteredItems = items.filter((r) => {
     if (filters.status && r.status !== filters.status) return false;
     if (filters.search) {
@@ -223,6 +220,9 @@ export default function UmrahRefundRequests() {
     return true;
   });
   const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   const sum = (rows: RefundRow[], f: (r: RefundRow) => number) =>
     rows.reduce((s, r) => s + f(r), 0);

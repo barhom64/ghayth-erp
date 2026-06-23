@@ -333,7 +333,7 @@ export default function IncomeStatementVsBudgetPage() {
                 {isOpen && (
                   <CardContent className="pt-0">
                     <div className="overflow-x-auto">
-                      <DataTable<IncomeStmtLine>
+                      <DataTable
                         data={sec.items}
                         rowKey={(it) => it.accountCode}
                         noToolbar

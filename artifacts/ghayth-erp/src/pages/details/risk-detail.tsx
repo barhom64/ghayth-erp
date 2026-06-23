@@ -202,7 +202,7 @@ export default function RiskDetail() {
   const matrix = (
     <div className="space-y-2">
       <div className="text-xs text-muted-foreground">مصفوفة المخاطر (الاحتمالية × الأثر)</div>
-      <DataTable<string>
+      <DataTable
         columns={matrixColumns}
         data={[...IMPACT_ORDER].reverse()}
         rowKey={(imp) => imp}

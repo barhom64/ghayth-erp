@@ -13,7 +13,6 @@ import { GuardedButton } from "@/components/shared/permission-gate";
 import { SearchableSelect } from "@/components/shared/searchable-select";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
-import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { formatNumber, todayLocal } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
@@ -982,25 +981,25 @@ export default function UmrahImportWizard() {
                       مستقبلاً، فستحتاج إلى ربط هؤلاء الوكلاء بعميل
                       صريح أولاً (عبر <span className="font-mono" dir="ltr">PUT /umrah/agents/:id/link-client</span>).
                     </p>
-                    <div className="rounded border border-blue-200 bg-white overflow-hidden" data-testid="import-unlinked-main-agents-table">
-                      <DataTable<NonNullable<PreviewSummary["unlinkedMainAgents"]>[number]>
-                        columns={[
-                          { key: "name", header: "الاسم", sortable: false, render: (a) => a.name },
-                          {
-                            key: "nuskAgentNumber",
-                            header: "رقم العقد (NUSK)",
-                            sortable: false,
-                            ltr: true,
-                            className: "font-mono text-[10px]",
-                            render: (a) => a.nuskAgentNumber ?? "—",
-                          },
-                        ]}
-                        data={preview.unlinkedMainAgents.slice(0, 10)}
-                        rowKey={(a) => a.agentId}
-                        noToolbar
-                        pageSize={0}
-                        className="text-xs"
-                      />
+                    <div className="rounded border border-blue-200 bg-white overflow-hidden">
+                      <div className="overflow-x-auto"><table className="w-full text-xs" data-testid="import-unlinked-main-agents-table">
+                        <thead className="bg-blue-100/50">
+                          <tr>
+                            <th className="p-2 text-start font-medium">الاسم</th>
+                            <th className="p-2 text-start font-medium">رقم العقد (NUSK)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.unlinkedMainAgents.slice(0, 10).map((a) => (
+                            <tr key={a.agentId} className="border-t border-blue-100">
+                              <td className="p-2">{a.name}</td>
+                              <td className="p-2 font-mono text-[10px]" dir="ltr">
+                                {a.nuskAgentNumber ?? "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table></div>
                       {preview.unlinkedMainAgents.length > 10 && (
                         <p className="px-2 py-1 text-[10px] text-muted-foreground border-t border-blue-100">
                           + {formatNumber(preview.unlinkedMainAgents.length - 10)} آخرين
@@ -1025,41 +1024,37 @@ export default function UmrahImportWizard() {
                   الوكلاء الفرعيون التاليون موجودون في الملف ولكن غير مربوطين بعملاء في النظام. يمكنك ربطهم الآن قبل التأكيد.
                 </p>
                 <div className="rounded border overflow-hidden">
-                  <DataTable<NonNullable<PreviewSummary["unlinkedSubAgents"]>[number]>
-                    columns={[
-                      {
-                        key: "nuskCode",
-                        header: "رمز نُسك",
-                        sortable: false,
-                        ltr: true,
-                        className: "font-mono text-xs",
-                        render: (u) => u.nuskCode,
-                      },
-                      { key: "name", header: "الاسم", sortable: false, render: (u) => u.name },
-                      { key: "rowCount", header: "عدد الصفوف", sortable: false, render: (u) => formatNumber(u.rowCount) },
-                      {
-                        key: "actions",
-                        header: "",
-                        render: (u) => (
-                          <GuardedButton
-                            perm="umrah:write"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setLinkingSubAgent(u)}
-                            className="gap-1"
-                          >
-                            <Link2 className="h-3.5 w-3.5" />
-                            ربط الآن
-                          </GuardedButton>
-                        ),
-                      },
-                    ]}
-                    data={preview.unlinkedSubAgents}
-                    rowKey={(u) => u.nuskCode}
-                    noToolbar
-                    pageSize={0}
-                    className="text-sm"
-                  />
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="p-2 text-start font-medium">رمز نُسك</th>
+                        <th className="p-2 text-start font-medium">الاسم</th>
+                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
+                        <th className="p-2 text-start font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.unlinkedSubAgents.map((u) => (
+                        <tr key={u.nuskCode} className="border-t">
+                          <td className="p-2 font-mono text-xs" dir="ltr">{u.nuskCode}</td>
+                          <td className="p-2">{u.name}</td>
+                          <td className="p-2">{formatNumber(u.rowCount)}</td>
+                          <td className="p-2">
+                            <GuardedButton
+                              perm="umrah:write"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setLinkingSubAgent(u)}
+                              className="gap-1"
+                            >
+                              <Link2 className="h-3.5 w-3.5" />
+                              ربط الآن
+                            </GuardedButton>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table></div>
                 </div>
               </CardContent>
             </Card>
@@ -1077,25 +1072,24 @@ export default function UmrahImportWizard() {
                   الوكلاء التاليون مذكورون في الملف ولا يوجد لهم سجل في النظام. سيُنشأون تلقائياً عند التأكيد. راجع الأسماء قبل المتابعة لتجنّب إنشاء سجلات مكررة بفروق إملائية.
                 </p>
                 <div className="rounded border overflow-hidden">
-                  <DataTable<NonNullable<PreviewSummary["newAgentsToCreate"]>[number]>
-                    columns={[
-                      {
-                        key: "nuskAgentNumber",
-                        header: "رقم الوكيل",
-                        sortable: false,
-                        ltr: true,
-                        className: "font-mono text-xs",
-                        render: (a) => a.nuskAgentNumber ?? "—",
-                      },
-                      { key: "agentName", header: "الاسم", sortable: false, render: (a) => a.agentName },
-                      { key: "rowCount", header: "عدد الصفوف", sortable: false, render: (a) => formatNumber(a.rowCount) },
-                    ]}
-                    data={preview.newAgentsToCreate}
-                    rowKey={(a, idx) => `${a.nuskAgentNumber ?? "name"}-${idx}`}
-                    noToolbar
-                    pageSize={0}
-                    className="text-sm"
-                  />
+                  <div className="overflow-x-auto"><table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="p-2 text-start font-medium">رقم الوكيل</th>
+                        <th className="p-2 text-start font-medium">الاسم</th>
+                        <th className="p-2 text-start font-medium">عدد الصفوف</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.newAgentsToCreate.map((a, idx) => (
+                        <tr key={`${a.nuskAgentNumber ?? "name"}-${idx}`} className="border-t">
+                          <td className="p-2 font-mono text-xs" dir="ltr">{a.nuskAgentNumber ?? "—"}</td>
+                          <td className="p-2">{a.agentName}</td>
+                          <td className="p-2">{formatNumber(a.rowCount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table></div>
                 </div>
               </CardContent>
             </Card>
@@ -1150,35 +1144,6 @@ export default function UmrahImportWizard() {
             // shows as "رقم الجواز" in both the field column and the
             // row-values preview.
             const errorLabels = headerMapsQ.data?.[fileType]?.labels ?? {};
-            type ErrorRow = NonNullable<PreviewSummary["errors"]>[number];
-            const errorColumns: DataTableColumn<ErrorRow>[] = [
-              {
-                key: "row",
-                header: "صف",
-                className: "align-top",
-                render: (e) => (
-                  <Badge variant="outline" className="font-mono">{formatNumber(e.row)}</Badge>
-                ),
-              },
-              {
-                key: "fieldName",
-                header: "الحقل",
-                className: "align-top text-muted-foreground",
-                render: (e) => (e.fieldName ? (errorLabels[e.fieldName] ?? e.fieldName) : "—"),
-              },
-              {
-                key: "message",
-                header: "سبب الرفض",
-                className: "align-top",
-                render: (e) => e.message,
-              },
-              {
-                key: "sample",
-                header: "قيم الصف",
-                className: "align-top text-muted-foreground",
-                render: (e) => (e.sample ? formatSamplePreview(e.sample, errorLabels) : "—"),
-              },
-            ];
             return (
             <Card className="border-status-error-surface">
               <CardContent className="p-4 space-y-3">
@@ -1195,15 +1160,33 @@ export default function UmrahImportWizard() {
                     تنزيل الصفوف المرفوضة (CSV)
                   </Button>
                 </div>
-                <div className="max-h-72 overflow-auto">
-                  <DataTable
-                    columns={errorColumns}
-                    data={preview.errors}
-                    rowKey={(_e, i) => i}
-                    noToolbar
-                    pageSize={0}
-                    className="text-xs"
-                  />
+                <div className="max-h-72 overflow-auto border rounded">
+                  <table className="w-full text-xs">
+                    <thead className="bg-status-error-surface sticky top-0">
+                      <tr className="text-right text-status-error-foreground">
+                        <th className="p-2 font-semibold">صف</th>
+                        <th className="p-2 font-semibold">الحقل</th>
+                        <th className="p-2 font-semibold">سبب الرفض</th>
+                        <th className="p-2 font-semibold">قيم الصف</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.errors.map((e, i) => (
+                        <tr key={i} className="border-t">
+                          <td className="p-2 align-top">
+                            <Badge variant="outline" className="font-mono">{formatNumber(e.row)}</Badge>
+                          </td>
+                          <td className="p-2 align-top text-muted-foreground">
+                            {e.fieldName ? (errorLabels[e.fieldName] ?? e.fieldName) : "—"}
+                          </td>
+                          <td className="p-2 align-top">{e.message}</td>
+                          <td className="p-2 align-top text-muted-foreground">
+                            {e.sample ? formatSamplePreview(e.sample, errorLabels) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </CardContent>
             </Card>

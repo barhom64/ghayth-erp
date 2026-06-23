@@ -753,7 +753,7 @@ export default function ExpenseDetail() {
                 <p className="text-xs text-muted-foreground">لا توجد بنود للقيد.</p>
               ) : (
                 <div className="overflow-x-auto" data-testid="lines-table">
-                  <DataTable<any>
+                  <DataTable
                     columns={JOURNAL_LINE_COLUMNS}
                     data={lines}
                     rowKey={(l, i) => l?.id ?? i}

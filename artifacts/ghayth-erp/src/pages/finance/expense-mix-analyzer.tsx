@@ -347,7 +347,7 @@ export default function ExpenseMixAnalyzerPage() {
                 <CardTitle className="text-base">القائمة الكاملة ({rows.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <DataTable<Row>
+                <DataTable
                   columns={fullTableColumns}
                   data={rows}
                   rowKey={(r) => String(r.key)}

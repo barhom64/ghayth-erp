@@ -286,7 +286,7 @@ function downloadRowsCsv<T>(columns: DataTableColumn<T>[], rows: T[]): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `selected-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `selected-${new Date().toISOString().slice(0, 10)}.csv`; // utc-ok: CSV download filename label, not wall-clock business data
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
