@@ -740,9 +740,14 @@ class FinancialEngineImpl implements DomainEngine {
       }
 
       // Note: createGuardedJournalEntry is called inside the same engine
-      // module; this is the SINGLE allowed entry point per the doctrine
-      // §1.1. SLICE-C will swap umrahInvoicingEngine to call this façade
-      // instead of createGuardedJournalEntry directly.
+      // module; this is the SINGLE allowed entry point per the doctrine §1.1.
+      // SLICE-C decision (Ibrahim 2026-06-23, path «ب»): umrahInvoicingEngine
+      // intentionally KEEPS its direct createGuardedJournalEntry call and is a
+      // documented exception — this façade does not yet model umrah's posting
+      // (margin VAT, penalty-income line, per-line visa/services accounts+rate,
+      // clientId dimension). Do NOT migrate umrah onto this façade without first
+      // extending it (SLICE-B.2) + assertion tests proving line-for-line JE
+      // equivalence. See plans/finance-2257-umrah-slice-c-2026-06-23.md.
       const journalEntryId = await createGuardedJournalEntry(
         {
           companyId: request.companyId,

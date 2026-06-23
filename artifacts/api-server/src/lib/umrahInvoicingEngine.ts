@@ -728,6 +728,16 @@ export async function generateSalesInvoice(scope: Scope, input: GenerateInvoiceI
     const vatPayableCode = await getAccountCodeFromMapping(scope.companyId, "vat_output", "credit", "2131");
     glLines.push({ accountCode: vatPayableCode, debit: 0, credit: vatAmount, description: `ضريبة قيمة مضافة — ${ref}`, ...umrahDims });
   }
+  // ─── استثناء مُعتمَد (#2257 SLICE-C — قرار إبراهيم 2026-06-23: المسار «ب») ───
+  // ترحيل فاتورة العمرة يبقى عبر createGuardedJournalEntry المباشر عمدًا، ولا
+  // يمرّ عبر financialEngine.postSalesInvoice. السبب: دلالات العمرة لا يمثّلها
+  // الفاصاد دون كسر الدفتر — (1) ضريبة على الهامش (البيع − تكلفة نُسك) لا على
+  // الإجمالي (امتثال ZATCA)، (2) سطر إيراد غرامات مستقل، (3) فصل حسابات
+  // التأشيرة (صفرية) عن الخدمات لكل سطر، (4) ختم أبعاد clientId/agentId/seasonId
+  // على كل سطر. createGuardedJournalEntry هو نقطة الترحيل المعتمدة (حارس
+  // check-ledger-posting-single-path أخضر) — فهذا استخدام للبدائي المعتمد لا
+  // خرق لمصدر الحقيقة. لا تُحوّله للفاصاد دون رفعه أولًا + assertion tests تثبت
+  // تطابق القيد سطرًا بسطر. التفاصيل: plans/finance-2257-umrah-slice-c-2026-06-23.md
   await createGuardedJournalEntry({
     companyId: scope.companyId,
     branchId: scope.branchId || 0,
