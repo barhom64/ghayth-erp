@@ -528,7 +528,7 @@ export default function BiOperationsPage() {
       <ApprovalTimeliness from={from} to={to} departmentId={departmentId} />
 
       <Tabs defaultValue="sla" dir="rtl">
-        <TabsList className="grid w-full grid-cols-6 print:hidden">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto md:h-9 print:hidden">
           <TabsTrigger value="sla">تأخر مستوى الخدمة</TabsTrigger>
           <TabsTrigger value="rejection">نسبة الرفض</TabsTrigger>
           <TabsTrigger value="bottleneck">الاختناقات</TabsTrigger>
