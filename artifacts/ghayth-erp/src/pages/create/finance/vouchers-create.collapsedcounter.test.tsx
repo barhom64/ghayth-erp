@@ -12,14 +12,24 @@ import { join } from "node:path";
 const PAGE = readFileSync(join(import.meta.dirname!, "vouchers-create.tsx"), "utf8");
 
 describe("voucher counter account is auto-derived + collapsed (helper-not-obstacle)", () => {
-  it("the counter account is no longer hard-required in validate()", () => {
+  it("the counter account is required ONLY for operation types that can't auto-route (Codex P2)", () => {
     expect(PAGE).not.toMatch(/accountCode: form\.accountCode \? null : "الحساب المحاسبي مطلوب"/);
+    // auto-routable types → optional; asset/liability types → required.
+    expect(PAGE).toMatch(/counterAutoRoutable \|\| form\.accountCode \? null :/);
+    expect(PAGE).toMatch(/const counterAutoRoutable = \(\(\) => \{/);
+    expect(PAGE).toMatch(/VOUCHER_COUNTER_ACCOUNT_TYPES\[form\.operationType\]/);
   });
 
-  it("shows a read-only derived counter display keyed off voucher direction", () => {
-    expect(PAGE).toMatch(/الحساب المقابل \(توجيه تلقائي حسب اتجاه السند\)/);
+  it("shows a read-only derived counter display when the direction default is valid", () => {
+    expect(PAGE).toMatch(/counterAutoRoutable \?/);
     expect(PAGE).toMatch(/يُشتق تلقائيًا: إيرادات متنوعة \(4930\)/);
     expect(PAGE).toMatch(/يُشتق تلقائيًا: مصروفات عمومية أخرى \(5399\)/);
+  });
+
+  it("shows a required picker (for everyone) when the type needs a specific account", () => {
+    // the else-branch renders a required AccountSelect so non-approvers can
+    // still create invoice_payment/deposit/advance/custody vouchers.
+    expect(PAGE).toMatch(/label="الحساب المقابل"\s*\n\s*required/);
   });
 
   it("the manual counter picker is gated behind approver permission + a collapse toggle", () => {

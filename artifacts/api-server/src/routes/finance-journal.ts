@@ -2156,12 +2156,27 @@ journalRouter.post("/vouchers", authorize({ feature: "finance.journal", action: 
         scope.allowedBranches.length > 0 && !scope.allowedBranches.includes(Number(branchId))) {
       throw new ForbiddenError("لا تملك صلاحية إنشاء سند في هذا الفرع", { field: "branchId" });
     }
-    // العقيدة «النظام مساعد لا عائق»: لا نرفض السند بلا حساب مقابل. عند تركه
-    // فارغًا يُوجَّه تلقائيًا حسب اتجاه السند إلى ورقة قابلة للترحيل:
-    //   صرف (payment) → 5399 «مصروفات عمومية أخرى»
-    //   قبض (receipt) → 4930 «إيرادات متنوعة»
-    // (راجَعه إبراهيم واعتمد التوجيه التلقائي 2026-06-23). assertOperationValid
-    // أدناه يبقى الحارس الذي يرفض اتجاهًا خاطئًا للحساب المُعيَّن صراحةً.
+    // العقيدة «النظام مساعد لا عائق»: لا نرفض السند بلا حساب مقابل عندما يكون
+    // التوجيه التلقائي صحيح النوع. عند تركه فارغًا يُوجَّه حسب اتجاه السند إلى
+    // ورقة قابلة للترحيل: صرف → 5399 «مصروفات عمومية أخرى» (مصروف)، قبض → 4930
+    // «إيرادات متنوعة» (إيراد). (راجَعه إبراهيم 2026-06-23.)
+    //
+    // لكن أنواع العمليات التي تتطلّب نوع حساب مختلفًا (invoice_payment=أصل،
+    // deposit=التزام، advance/custody=أصل…) لا يصحّ توجيهها لمصروف/إيراد —
+    // assertOperationValid سيرفضها (422). لهذه الأنواع يبقى الحساب المقابل
+    // مطلوبًا (والواجهة تُظهر المنتقي لها). (راجَعه Codex P2 #2920.)
+    const { VOUCHER_OPERATION_COUNTER_TYPES } = await import("../lib/financeOperationContext.js");
+    const defaultCounterType = type === "receipt" ? "revenue" : "expense";
+    const allowedCounterTypes = operationType ? VOUCHER_OPERATION_COUNTER_TYPES[operationType] : undefined;
+    const autoRouteOk = !allowedCounterTypes || allowedCounterTypes.includes(defaultCounterType);
+    const ACCT_TYPE_AR: Record<string, string> = { asset: "أصول/ذمم", liability: "التزامات", equity: "حقوق ملكية", revenue: "إيراد", expense: "مصروف" };
+    if (!accountCode && !autoRouteOk) {
+      const wanted = (allowedCounterTypes ?? []).map((t) => ACCT_TYPE_AR[t] ?? t).join(" أو ");
+      throw new ValidationError(`نوع السند «${operationType}» يتطلّب تحديد الحساب المقابل (${wanted})`, {
+        field: "accountCode",
+        fix: "اختر الحساب المقابل المناسب لهذا النوع من السندات",
+      });
+    }
     const resolvedCounterAccount = accountCode || (type === "receipt" ? "4930" : "5399");
 
     const voucherAttachCheck = checkAttachmentRequired({ operationType: type === "payment" ? "payment" : "receipt", amount: Number(amount) });

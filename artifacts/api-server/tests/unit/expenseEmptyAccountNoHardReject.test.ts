@@ -22,10 +22,18 @@ describe("expense create no longer hard-rejects a missing accountCode", () => {
     expect(CODE).toMatch(/\?\?\s*"5399"/);
   });
 
-  it("the voucher handler ALSO auto-routes an empty counter by direction (صرف→5399، قبض→4930)", () => {
+  it("the voucher handler auto-routes an empty counter by direction (صرف→5399، قبض→4930)", () => {
     // العقيدة طُبّقت على السند أيضًا (اعتمده إبراهيم): لم يعد يرفض الحساب المقابل
-    // الفارغ، بل يوجّهه حسب الاتجاه. لا رفض «الحساب المحاسبي مطلوب».
+    // الفارغ في الحالة العامة، بل يوجّهه حسب الاتجاه.
     expect(CODE).not.toMatch(/الحساب المحاسبي الرئيسي للسند/);
     expect(CODE).toMatch(/resolvedCounterAccount = accountCode \|\| \(type === "receipt" \? "4930" : "5399"\)/);
+  });
+
+  it("the voucher auto-route is gated on operation-type account-type (Codex P2): asset/liability types stay required", () => {
+    // invoice_payment(أصل)/deposit(التزام)/advance/custody لا يصحّ توجيهها لمصروف/
+    // إيراد — assertOperationValid يرفضها 422؛ فالحساب يبقى مطلوبًا لها.
+    expect(CODE).toMatch(/VOUCHER_OPERATION_COUNTER_TYPES/);
+    expect(CODE).toMatch(/autoRouteOk = !allowedCounterTypes \|\| allowedCounterTypes\.includes\(defaultCounterType\)/);
+    expect(CODE).toMatch(/if \(!accountCode && !autoRouteOk\)/);
   });
 });
