@@ -2,10 +2,12 @@
 // umrah-entities.ts — COMMERCIAL/FINANCE entities for the umrah module
 //
 // Owns: groups (CRUD),
-//       sales-invoices (generate + update), payments,
+//       sales-invoices (generate + update),
 //       dashboard, employee-assignments.
 //   (nusk-invoices — list/get/create/update/delete + AP journal posting —
 //    live in umrah-nusk-invoices.ts — U-07 Phase 19)
+//   (payments + revenue reclassification — register payment / reclassify —
+//    live in umrah-payments.ts — U-07 Phase 20)
 //   (letters PDF + dispatch live in umrah-letters.ts — U-07 Phase 12)
 //   (operational reports — daily-runsheet, reconciliation, exempt-pilgrims,
 //    group/season portfolio — live in umrah-reports.ts — U-07 Phase 11)
@@ -40,10 +42,8 @@ import {
   todayISO,
 } from "../lib/businessHelpers.js";
 import { internalTechRef } from "../lib/internalRef.js";
-import { reclassifyRevenueForInvoices } from "../lib/umrahReclassifyEngine.js";
 import {
   generateSalesInvoice,
-  registerPayment,
   listUninvoicedGroups,
 } from "../lib/umrahInvoicingEngine.js";
 import {
@@ -106,6 +106,11 @@ import settingsRouter from "./umrah-settings.js";
 // posting via the postNuskJournalEntries engine) moved to a dedicated
 // sub-router. Paths still resolve at /umrah/nusk-invoices...
 import nuskInvoicesRouter from "./umrah-nusk-invoices.js";
+// U-07 Phase 20 — payments (list + register via the registerPayment engine) and
+// revenue reclassification (via the reclassifyRevenueForInvoices engine) moved
+// to a dedicated sub-router. Paths still resolve at /umrah/payments and
+// /umrah/reclassify-revenue.
+import paymentsRouter from "./umrah-payments.js";
 
 const router = Router();
 router.use(journeyReportsRouter);
@@ -123,6 +128,7 @@ router.use(refundsRouter);
 router.use(calendarRouter);
 router.use(settingsRouter);
 router.use(nuskInvoicesRouter);
+router.use(paymentsRouter);
 
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
@@ -151,17 +157,6 @@ const updateInvoiceSchema = z.object({
   status: z.string().optional(),
   notes: z.string().nullable().optional(),
   dueDate: z.string().nullable().optional(),
-});
-
-const createPaymentSchema = z.object({
-  subAgentId: z.coerce.number({ required_error: "الوكيل الفرعي مطلوب" }),
-  sarAmount: z.coerce.number({ required_error: "المبلغ مطلوب" }),
-  amount: z.coerce.number().optional(),
-  currency: z.string().optional(),
-  exchangeRate: z.coerce.number().optional(),
-  method: z.string().optional(),
-  reference: z.string().optional(),
-  invoiceIds: z.array(z.coerce.number()).optional(),
 });
 
 // ============================================================================
@@ -977,111 +972,6 @@ router.patch("/invoices/:id", authorize({ feature: "umrah", action: "update" }),
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.invoice.updated", entity: "umrah_sales_invoices", entityId: id, details: JSON.stringify(b) }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.json(row);
   } catch (err) { handleRouteError(err, res, "Update umrah invoice"); }
-});
-
-// ============================================================================
-// PAYMENTS
-// ============================================================================
-
-router.get("/payments", authorize({ feature: "umrah", action: "list" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const { subAgentId } = req.query as Record<string, string | undefined>;
-    let where = `p."companyId" = $1 AND p."deletedAt" IS NULL`;
-    const params: unknown[] = [scope.companyId];
-    if (subAgentId) { params.push(subAgentId); where += ` AND p."subAgentId" = $${params.length}`; }
-    const rows = await rawQuery(
-      `SELECT p.*, sa.name AS "subAgentName"
-       FROM umrah_payments p
-       LEFT JOIN umrah_sub_agents sa
-         ON sa.id = p."subAgentId"
-        AND sa."companyId" = p."companyId"
-        AND sa."deletedAt" IS NULL
-       WHERE ${where}
-       ORDER BY p."paymentDate" DESC, p.id DESC
-       LIMIT 500`,
-      params
-    );
-    res.json(maskFields(req, { data: rows, total: rows.length }));
-  } catch (err) { handleRouteError(err, res, "List umrah payments"); }
-});
-
-router.post("/payments", authorize({ feature: "umrah", action: "create" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const parsed = zodParse(createPaymentSchema.safeParse(req.body));
-    const b = parsed;
-    const result = await registerPayment(
-      { companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId },
-      {
-        subAgentId: b.subAgentId,
-        amount: b.amount || b.sarAmount,
-        currency: b.currency || "SAR",
-        exchangeRate: b.exchangeRate,
-        sarAmount: b.sarAmount,
-        method: b.method || "bank_transfer",
-        reference: b.reference,
-        invoiceIds: b.invoiceIds,
-      }
-    );
-    createAuditLog({ companyId: scope.companyId, userId: scope.userId, action: "create", entity: "umrah_payments", entityId: result.paymentId, after: { subAgentId: b.subAgentId, sarAmount: b.sarAmount } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.payment.received", entity: "umrah_payments", entityId: result.paymentId, after: { ref: result.ref, sarAmount: b.sarAmount } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
-    res.status(201).json(result);
-  } catch (err) { handleRouteError(err, res, "Register umrah payment"); }
-});
-
-// ============================================================================
-// REVENUE RECLASSIFICATION (ledger-touching)
-//   Dashboard / compliance reports (compliance, agent-balances,
-//   pilgrim-movements, subagent-balances) moved to umrah-reports.ts — U-07
-//   Phase 13. Only the ledger-touching reclassify endpoint remains here.
-// ============================================================================
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RETROACTIVE REVENUE RECLASSIFICATION — answers the operator's «على القديم
-// والجديد» half. The dimensional resolver (revenueAccountResolver.ts) handles
-// NEW invoices automatically; this endpoint walks OLD invoices and shifts
-// their revenue posting from the original product-default account to whatever
-// the current subsidiary_accounts mapping resolves to for their dimension.
-//
-// Why we don't rewrite historical journal entries: auditable accounting
-// requires that once a number is posted, it stays. The correction shape is
-// a NEW journal entry that DR's the old revenue account and CR's the new
-// one — net effect: revenue moves from old to new as of today, without
-// touching last year's books. (Same pattern as commercial ERPs' "GL
-// reclassification" feature.)
-//
-// Idempotency: we use sourceKey=`umrah_reclass_${invoiceId}_to_${target}` so
-// re-running the endpoint with the same configuration is a no-op for already-
-// aligned invoices. We also UPDATE umrah_sales_invoice_items.accountCode to
-// reflect the new revenue account so subsequent runs see "already aligned"
-// and skip the work cheaply. If the operator later changes the override AGAIN,
-// the next run posts a fresh compensating entry from the current-effective
-// account (read from items.accountCode) to the new target.
-const reclassifyRevenueSchema = z.object({
-  /** Limit to specific invoice ids; omit to reclassify every eligible one. */
-  invoiceIds: z.array(z.coerce.number().int().positive()).optional(),
-  /** Limit to invoices for a single sub-agent (dimension-narrow). */
-  subAgentId: z.coerce.number().int().positive().optional(),
-  /** Limit to invoices in a single season. */
-  seasonId: z.coerce.number().int().positive().optional(),
-  /** When true, report what WOULD change without posting anything. */
-  dryRun: z.boolean().optional(),
-});
-
-router.post("/reclassify-revenue", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const body = zodParse(reclassifyRevenueSchema.safeParse(req.body));
-    // All business logic — invoice scan, resolver lookup, compensating
-    // JE posting, items update — lives in the umrahReclassifyEngine.
-    // The route is intentionally thin so the lint-patterns invariant
-    // (GL + account-mapping helpers must stay inside engines, not
-    // routes) holds at the seam.
-    const result = await reclassifyRevenueForInvoices(scope, body);
-    res.json(result);
-  } catch (err) { handleRouteError(err, res, "Reclassify revenue error:"); }
 });
 
 export default router;

@@ -277,7 +277,9 @@ const EMIT_GAP_ALLOWLIST: AllowEntry[] = [
   { file: "src/routes/settings.ts", action: "company.created", missing: ["name"], cat: "B" },
   { file: "src/routes/umrah-commission.ts", action: "umrah.commission.calculated", missing: ["agentId","amount","commissionId","period"], cat: "B" },
   { file: "src/routes/umrah-entities.ts", action: "umrah.invoice.generated", missing: ["invoiceId","pilgrimId"], cat: "B" },
-  { file: "src/routes/umrah-entities.ts", action: "umrah.payment.received", missing: ["amount","invoiceId","method","paymentId"], cat: "B" },
+  // U-07 Phase 20 — the payment register route (and its emit) moved verbatim to
+  // umrah-payments.ts; the pre-existing baselined gap follows it unchanged.
+  { file: "src/routes/umrah-payments.ts", action: "umrah.payment.received", missing: ["amount","invoiceId","method","paymentId"], cat: "B" },
   { file: "src/routes/umrah-entities.ts", action: "umrah.sales_invoice.created", missing: ["invoiceId"], cat: "B" },
 ];
 

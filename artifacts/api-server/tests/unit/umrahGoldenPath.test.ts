@@ -7,6 +7,8 @@ const UMRAH_ROUTE = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/route
 const UMRAH_ENT = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"), "utf8");
 // U-07 Phase 19: nusk-invoice CRUD routes carved into a dedicated sub-router.
 const UMRAH_NUSK = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-nusk-invoices.ts"), "utf8");
+// U-07 Phase 20: payments + revenue reclassification carved into a dedicated sub-router.
+const UMRAH_PAYMENTS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-payments.ts"), "utf8");
 // U-07 Phase 6: sub-agent CRUD + linking routes carved into a dedicated sub-router.
 const UMRAH_SUB_AGENTS = readFileSync(join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-sub-agents.ts"), "utf8");
 // U-07 Phase 7: pricing CRUD routes carved into a dedicated sub-router.
@@ -133,7 +135,8 @@ describe("Umrah entities route structure", () => {
 
   it("sales invoice and payment endpoints exist", () => {
     expect(UMRAH_ENT).toContain('"/invoices/generate"');
-    expect(UMRAH_ENT).toContain('"/payments"');
+    // U-07 Phase 20: payments carved into umrah-payments.ts.
+    expect(UMRAH_PAYMENTS).toContain('"/payments"');
   });
 
   it("import preview and confirm endpoints exist", () => {
@@ -400,10 +403,10 @@ describe("Umrah entities security", () => {
 
   it("entities create audit logs", () => {
     // U-07 Phase 19: the 3 nusk-invoice audit calls moved to
-    // umrah-nusk-invoices.ts (as auditFromRequest), so the entities floor
-    // dropped from 11 to 8.
+    // umrah-nusk-invoices.ts (as auditFromRequest); Phase 20 moved the 1
+    // payments audit call to umrah-payments.ts — entities floor now 7.
     const auditCalls = UMRAH_ENT.match(/createAuditLog\(/g);
-    expect(auditCalls!.length).toBeGreaterThanOrEqual(8);
+    expect(auditCalls!.length).toBeGreaterThanOrEqual(7);
   });
 });
 
