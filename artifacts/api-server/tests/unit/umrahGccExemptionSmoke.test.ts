@@ -120,6 +120,12 @@ const UMRAH_ENTITIES = readFileSync(
   join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
   "utf8",
 );
+// U-07 Phase 13 — the compliance report (which applies the GCC fragment to
+// p."nationality") was carved into umrah-reports.ts.
+const UMRAH_REPORTS = readFileSync(
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
+  "utf8",
+);
 const CRON = readFileSync(
   join(import.meta.dirname!, "../../src/lib/cronScheduler.ts"),
   "utf8",
@@ -138,7 +144,10 @@ describe("visa-expiring queries call the GCC exclusion", () => {
 
   it("umrah-entities.ts uses the GCC fragment too", () => {
     expect(UMRAH_ENTITIES).toMatch(/gccExclusionSqlFragment\(`"nationality"`\)/);
-    expect(UMRAH_ENTITIES).toMatch(/gccExclusionSqlFragment\(`p\.\"nationality\"`\)/);
+  });
+
+  it("umrah-reports.ts compliance report applies the GCC fragment (U-07 Phase 13)", () => {
+    expect(UMRAH_REPORTS).toMatch(/gccExclusionSqlFragment\(`p\.\"nationality\"`\)/);
   });
 
   it("cronScheduler.ts visa-expiry cron excludes GCC", () => {
