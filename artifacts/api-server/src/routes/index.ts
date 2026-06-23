@@ -148,6 +148,9 @@ import umrahCalendarRouter from "./umrah-calendar.js";
 // U-07 Phase 18 — settings policies split; imported for the wiring-scanner hint
 // below. Mounted via umrah-entities.ts.
 import umrahSettingsRouter from "./umrah-settings.js";
+// U-07 Phase 19 — nusk invoices split; imported for the wiring-scanner hint
+// below. Mounted via umrah-entities.ts.
+import umrahNuskInvoicesRouter from "./umrah-nusk-invoices.js";
 import operationsCenterRouter from "./operationsCenter.js";
 import {
   warehouseStubsRouter,
@@ -231,6 +234,7 @@ if (__WIRING_SCANNER_HINT__) {
   router.use("/umrah", umrahRefundsRouter);
   router.use("/umrah", umrahCalendarRouter);
   router.use("/umrah", umrahSettingsRouter);
+  router.use("/umrah", umrahNuskInvoicesRouter);
 }
 
 router.use(healthRouter);
