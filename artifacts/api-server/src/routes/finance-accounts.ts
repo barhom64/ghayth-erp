@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import {
   handleRouteError,
@@ -966,11 +967,11 @@ const upsertTaxCodeSchema = z.object({
   taxType: z.enum(TAX_TYPES),
   accountId: z.coerce.number().optional().nullable(),
   inputAccountId: z.coerce.number().optional().nullable(),
-  isInclusiveDefault: z.coerce.boolean().optional().default(false),
+  isInclusiveDefault: zCoerceBoolean().optional().default(false),
   zatcaCategoryCode: z.string().max(10).optional().nullable(),
   zatcaExemptionReason: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
-  isActive: z.coerce.boolean().optional().default(true),
+  isActive: zCoerceBoolean().optional().default(true),
 });
 
 accountsRouter.get("/tax-codes", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
@@ -1147,7 +1148,7 @@ const upsertWhtCategorySchema = z.object({
   appliesTo: z.enum(WHT_APPLIES_TO),
   payableAccountId: z.coerce.number().optional().nullable(),
   description: z.string().optional().nullable(),
-  isActive: z.coerce.boolean().optional().default(true),
+  isActive: zCoerceBoolean().optional().default(true),
 });
 
 accountsRouter.get("/wht-categories", authorize({ feature: "finance.accounts", action: "list" }), async (req, res) => {
@@ -1323,10 +1324,10 @@ const upsertRuleSchema = z.object({
   vatAccountId: z.coerce.number().optional().nullable(),
   costCenterStrategy: z.enum(ALLOCATION_COST_CENTRE_STRATEGIES).optional().nullable(),
   dimensionStrategyJson: z.record(z.any()).optional().nullable(),
-  autoCreateMissing: z.coerce.boolean().optional().default(false),
-  requiresEntityLink: z.coerce.boolean().optional().default(false),
+  autoCreateMissing: zCoerceBoolean().optional().default(false),
+  requiresEntityLink: zCoerceBoolean().optional().default(false),
   priority: z.coerce.number().int().optional().default(100),
-  isActive: z.coerce.boolean().optional().default(true),
+  isActive: zCoerceBoolean().optional().default(true),
 });
 
 // GET /finance/allocation-rules?documentType=invoice&isActive=true
