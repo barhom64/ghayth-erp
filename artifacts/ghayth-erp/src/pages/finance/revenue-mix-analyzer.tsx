@@ -424,6 +424,7 @@ export default function RevenueMixAnalyzerPage() {
                   {
                     key: "_idx", header: "#", width: "3rem", sortable: false,
                     render: (_r, idx) => <span className="text-muted-foreground">{idx + 1}</span>,
+                    footer: () => "الإجمالي",
                   },
                   {
                     key: "code", header: "الرمز", width: "6rem", searchable: true, ltr: true,
@@ -435,6 +436,7 @@ export default function RevenueMixAnalyzerPage() {
                     render: (r) => (
                       <span className="tabular-nums font-semibold">{formatCurrency(Number(r.amount))}</span>
                     ),
+                    footer: () => <span className="tabular-nums">{formatCurrency(totalRevenue)}</span>,
                   },
                   {
                     key: "_pct", header: "%", align: "end", width: "5rem", sortable: false,
@@ -442,20 +444,13 @@ export default function RevenueMixAnalyzerPage() {
                       const pct = totalRevenue > 0 ? (Number(r.amount) / totalRevenue) * 100 : 0;
                       return <span className="tabular-nums text-muted-foreground">{pct.toFixed(1)}%</span>;
                     },
+                    footer: () => "100%",
                   },
                   {
                     key: "entryCount", header: "قيود", align: "end", width: "5rem",
                     render: (r) => <span className="tabular-nums">{String(r.entryCount)}</span>,
                   },
                 ] satisfies DataTableColumn<ByAccountRow>[]}
-                renderGrandTotal={() => (
-                  <tr className="font-semibold bg-muted/40">
-                    <td colSpan={3} className="py-2 px-2">الإجمالي</td>
-                    <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totalRevenue)}</td>
-                    <td className="py-2 px-2 text-end">100%</td>
-                    <td></td>
-                  </tr>
-                )}
               />
             </CardContent>
           </Card>
