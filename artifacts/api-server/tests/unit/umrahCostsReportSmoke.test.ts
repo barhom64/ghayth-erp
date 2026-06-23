@@ -19,7 +19,7 @@ import { join } from "node:path";
  *      table with sticky first-column + footer with totals.
  */
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const PAGE = readFileSync(
