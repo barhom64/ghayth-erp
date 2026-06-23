@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Link2, AlertTriangle, Tags, Tag, Pencil } from "lucide-react";
 import { formatDateAr } from "@/lib/formatters";
 import {
@@ -94,6 +96,8 @@ export default function ClassificationCenterPage() {
   const analytic: AnalyticAccount[] = (analyticQ.data?.data || []) as AnalyticAccount[];
   const failures: PostingFailure[] = (failuresQ.data?.data || []) as PostingFailure[];
   const byCategory: Array<{ category: string; count: number }> = summary.postingFailuresByCategory || [];
+
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<AnalyticAccount>(analytic);
 
   const [linkFor, setLinkFor] = useState<AnalyticAccount | null>(null);
   const [linkForm, setLinkForm] = useState({ status: "active", partyRole: "", partyId: "", seasonId: "", reason: "" });
@@ -239,6 +243,24 @@ export default function ClassificationCenterPage() {
       subtitle="حسابات تحليلية أُنشئت تلقائياً وتحتاج ربطاً بطرف/موسم، وإخفاقات ترحيل تنتظر تصنيفاً — راجِعها وخطِّط معالجتها"
       breadcrumbs={[{ href: "/finance", label: "المالية" }, { label: "مركز التصنيف" }]}
       loading={summaryQ.isLoading}
+      actions={
+        <PrintButton
+          entityType="report_finance_classification_analytic"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "حسابات تحليلية تحتاج ربطاً", total: printRows.length },
+            items: printRows.map((r) => ({
+              "الحساب التحليلي": r.name,
+              "الرمز": r.code || "—",
+              "المصدر": r.sourceModule || "—",
+              "الطرف/الدور": r.partyRole || "—",
+              "الحالة": "تحتاج ربطاً",
+              "أُنشئ": formatDateAr(r.createdAt),
+            })),
+          })}
+        />
+      }
     >
       <FinanceTabsNav />
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3">
@@ -289,6 +311,7 @@ export default function ClassificationCenterPage() {
           <DataTable
             columns={analyticCols}
             data={analytic}
+            onSortedDataChange={setPrintRows}
             isLoading={analyticQ.isLoading}
             isError={analyticQ.isError}
             error={analyticQ.error as Error | null}

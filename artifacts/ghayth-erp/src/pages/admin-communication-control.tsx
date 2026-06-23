@@ -19,6 +19,9 @@ import {
 } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation } from "@tanstack/react-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
+import { resolveStatus } from "@workspace/ui-core";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -104,6 +107,22 @@ const CHANNEL_ICON: Record<string, typeof Mail> = {
   webhook: Radio,
 };
 
+// Arabic labels mirroring the channel/direction copy shown across the page
+// (the channel <Select> options + the inbox direction badge). Named
+// INBOX_* to avoid colliding with the channel-readiness CHANNEL_LABEL_AR
+// defined later in this file for a different (readiness) concept.
+const INBOX_CHANNEL_LABEL_AR: Record<string, string> = {
+  email: "بريد إلكتروني",
+  whatsapp: "واتساب",
+  sms: "رسائل SMS",
+  pbx: "سنترال (PBX)",
+  webhook: "Webhook",
+};
+const DIRECTION_LABEL_AR: Record<string, string> = {
+  inbound: "وارد",
+  outbound: "صادر",
+};
+
 export default function AdminCommunicationControl() {
   const [tab, setTab] = useState("overview");
   const [providerOpen, setProviderOpen] = useState(false);
@@ -131,6 +150,10 @@ export default function AdminCommunicationControl() {
   const providers = providersResp?.data ?? [];
   const rules = rulesResp?.data ?? [];
   const inbox = inboxResp?.data ?? [];
+
+  // Print wiring — the Unified Inbox is the primary operational row-level
+  // table (messages + calls); providers/DLP are smaller config registries.
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<InboxRow>(inbox);
 
   const refreshAll = () => {
     void refetchOverview();
@@ -348,12 +371,30 @@ export default function AdminCommunicationControl() {
                 </SelectContent>
               </Select>
               <span className="text-xs text-muted-foreground">آخر 24 ساعة، حد أقصى 100 سجل</span>
+              <div className="ms-auto">
+                <PrintButton
+                  entityType="report_admin_communication_control"
+                  entityId="list"
+                  size="icon"
+                  payload={() => ({
+                    entity: { title: "الصندوق الموحّد — مركز التحكّم بالاتصالات", total: printRows.length },
+                    items: printRows.map((r: InboxRow) => ({
+                      "القناة": INBOX_CHANNEL_LABEL_AR[r.channel] ?? r.channel,
+                      "الاتجاه": DIRECTION_LABEL_AR[r.direction] ?? r.direction,
+                      "من": r.from_addr ?? "—",
+                      "الموضوع / المحتوى": r.subject ?? r.body ?? "—",
+                      "الحالة": resolveStatus(r.status)?.label ?? r.status,
+                      "التاريخ": r.createdAt,
+                    })),
+                  })}
+                />
+              </div>
             </div>
             <Card>
               <CardContent className="p-0">
                 <PageStateWrapper isLoading={ibLoading && inbox.length === 0} compact onRetry={refetchInbox}>
                   {inbox.length > 0
-                    ? <DataTable columns={inboxColumns} data={inbox} noToolbar pageSize={0} />
+                    ? <DataTable columns={inboxColumns} data={inbox} onSortedDataChange={setPrintRows} noToolbar pageSize={0} />
                     : <p className="text-sm text-muted-foreground p-6 text-center">لا توجد رسائل واردة في النطاق المختار.</p>}
                 </PageStateWrapper>
               </CardContent>

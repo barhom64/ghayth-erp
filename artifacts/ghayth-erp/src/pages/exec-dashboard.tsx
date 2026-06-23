@@ -2,6 +2,8 @@ import { Link } from "wouter";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery } from "@/lib/api";
 import { STATUSES } from "@/lib/constants";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, formatDateAr } from "@/lib/formatters";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,6 +99,7 @@ export default function ExecDashboard() {
   const overdueInvoices = overdueResp?.data ?? [];
   const criticalObligations = obligResp?.data ?? [];
   const pnl = pnlResp;
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(overdueInvoices);
 
   if (isLoading) return <LoadingSpinner />;
   if (isError) return <ErrorState />;
@@ -108,6 +111,24 @@ export default function ExecDashboard() {
       title="لوحة القيادة التنفيذية"
       subtitle="نظرة شاملة على المخاطر والمؤشرات الحيوية"
       breadcrumbs={[{ label: "لوحة القيادة التنفيذية" }]}
+      actions={
+        <PrintButton
+          entityType="report_exec_dashboard_overdue"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "لوحة القيادة التنفيذية — فواتير متأخرة", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "الرقم": r.invoiceNumber,
+              "العميل": r.clientName || "—",
+              "المتبقي": formatCurrency(Number(r.outstanding)),
+              "أيام التأخر": r.daysPastDue,
+              "مرحلة المطالبة": r.dunningStage > 0 ? `#${r.dunningStage}` : "—",
+              "تاريخ الاستحقاق": r.dueDate,
+            })),
+          })}
+        />
+      }
     >
       {/* Risk Score */}
       <Card className={cn("border-2", riskColors[d.riskLevel] || riskColors.low)}>
@@ -386,6 +407,7 @@ export default function ExecDashboard() {
                 )},
               ] as DataTableColumn<OverdueInvoiceRow>[]}
               data={overdueInvoices}
+              onSortedDataChange={setPrintRows}
               noToolbar
               pageSize={10}
             />

@@ -3,7 +3,7 @@ import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -446,62 +446,33 @@ function SectionDetail({
         </div>
       </CardHeader>
       <CardContent className="pt-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-xs text-muted-foreground">
-                <th className="text-start py-2 px-2">التاريخ</th>
-                <th className="text-start py-2 px-2">المرجع</th>
-                <th className="text-start py-2 px-2">الوصف</th>
-                <th className="text-start py-2 px-2">الحساب المقابل</th>
-                <th className="text-end py-2 px-2">داخل</th>
-                <th className="text-end py-2 px-2">خارج</th>
-                <th className="py-2 px-2 w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map(item => (
-                <tr key={item.id} className="border-b hover:bg-muted/30">
-                  <td className="py-2 px-2 text-xs tabular-nums whitespace-nowrap">
-                    {formatDateAr(item.date.split("T")[0])}
-                  </td>
-                  <td className="py-2 px-2 text-xs font-mono">{item.ref}</td>
-                  <td className="py-2 px-2 text-xs max-w-xs truncate" title={item.description}>
-                    {item.description}
-                  </td>
-                  <td className="py-2 px-2 text-xs text-muted-foreground max-w-xs truncate" title={item.counterAccount ?? ""}>
-                    {item.counterAccount ?? "—"}
-                  </td>
-                  <td className="py-2 px-2 text-end tabular-nums">
-                    {item.inflow > 0 ? (
-                      <span className="text-status-success-foreground">+{formatCurrency(item.inflow)}</span>
-                    ) : "—"}
-                  </td>
-                  <td className="py-2 px-2 text-end tabular-nums">
-                    {item.outflow > 0 ? (
-                      <span className="text-status-danger-foreground">-{formatCurrency(item.outflow)}</span>
-                    ) : "—"}
-                  </td>
-                  <td className="py-2 px-2">
-                    <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/journal/${item.id}`}><ChevronRight className="w-4 h-4" /></Link></Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="font-semibold bg-muted/40">
-                <td colSpan={4} className="py-2 px-2">الإجمالي</td>
-                <td className="py-2 px-2 text-end tabular-nums text-status-success-foreground">
-                  +{formatCurrency(section.inflows)}
-                </td>
-                <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">
-                  -{formatCurrency(section.outflows)}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <DataTable<CFItem>
+          noToolbar
+          pageSize={0}
+          rowKey={(item) => item.id}
+          rowClassName={() => "hover:bg-muted/30"}
+          data={sorted}
+          columns={[
+            { key: "date", header: "التاريخ", sortable: false, className: "text-xs tabular-nums whitespace-nowrap", render: (item) => formatDateAr(item.date.split("T")[0]), footer: () => "الإجمالي" },
+            { key: "ref", header: "المرجع", sortable: false, className: "text-xs font-mono", render: (item) => item.ref },
+            { key: "description", header: "الوصف", sortable: false, className: "text-xs max-w-xs truncate", render: (item) => <span title={item.description}>{item.description}</span> },
+            { key: "counterAccount", header: "الحساب المقابل", sortable: false, className: "text-xs text-muted-foreground max-w-xs truncate", render: (item) => <span title={item.counterAccount ?? ""}>{item.counterAccount ?? "—"}</span> },
+            {
+              key: "inflow", header: "داخل", sortable: false, align: "end", className: "tabular-nums",
+              render: (item) => item.inflow > 0 ? <span className="text-status-success-foreground">+{formatCurrency(item.inflow)}</span> : "—",
+              footer: () => <span className="text-status-success-foreground">+{formatCurrency(section.inflows)}</span>,
+            },
+            {
+              key: "outflow", header: "خارج", sortable: false, align: "end", className: "tabular-nums",
+              render: (item) => item.outflow > 0 ? <span className="text-status-danger-foreground">-{formatCurrency(item.outflow)}</span> : "—",
+              footer: () => <span className="text-status-danger-foreground">-{formatCurrency(section.outflows)}</span>,
+            },
+            {
+              key: "_actions", header: "", sortable: false, width: "2rem",
+              render: (item) => <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/journal/${item.id}`}><ChevronRight className="w-4 h-4" /></Link></Button>,
+            },
+          ]}
+        />
       </CardContent>
     </Card>
   );

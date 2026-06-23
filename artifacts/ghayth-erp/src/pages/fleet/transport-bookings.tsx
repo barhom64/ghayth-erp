@@ -13,6 +13,8 @@ import {
   PageShell,
 } from "@workspace/ui-core";
 import { Plus, Clipboard, Calendar, Truck, Users } from "lucide-react";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { KpiGrid } from "@/components/shared/kpi-card";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -83,6 +85,7 @@ export default function TransportBookingsList() {
   const rows = serviceFilter === "all"
     ? allRows
     : allRows.filter((r) => r.transportServiceType === serviceFilter);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   const kpi = {
     total: rows.length,
@@ -159,6 +162,22 @@ export default function TransportBookingsList() {
       breadcrumbs={[{ href: "/fleet", label: "الأسطول" }, { label: "حجوزات النقل" }]}
       actions={
         <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_transport_bookings"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "حجوزات النقل", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "رقم الحجز": r.bookingNumber,
+                "نوع الخدمة": SERVICE_TYPE_LABEL[r.transportServiceType] || r.transportServiceType,
+                "العميل": r.linkedCustomerName || r.customerName || "—",
+                "المسار": `${r.fromLocationText || "—"} → ${r.toLocationText || "—"}`,
+                "تاريخ التحميل": r.requestedPickupDate || "—",
+                "الحالة": STATUS_OPTIONS.find((o) => o.value === r.status)?.label ?? r.status,
+              })),
+            })}
+          />
           <Button asChild variant="outline" size="sm"><Link href="/fleet/transport/ops-dashboard">
               <Calendar className="h-4 w-4 me-1" />لوحة تشغيل اليوم
             </Link></Button>
@@ -226,6 +245,7 @@ export default function TransportBookingsList() {
           <DataTable
             columns={columns}
             data={rows}
+            onSortedDataChange={setPrintRows}
             onRowClick={(r) => navigate(`/fleet/transport/bookings/${r.id}`)}
             searchPlaceholder="ابحث برقم الحجز، اسم العميل…"
             emptyMessage="لا توجد حجوزات بعد"

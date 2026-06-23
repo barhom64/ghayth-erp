@@ -92,13 +92,13 @@ export default function DelegationsPage() {
   };
 
   const columns: DataTableColumn<any>[] = [
-    { key: "delegatorName", header: "المُفوِّض", render: (r) => r.delegatorName || `#${r.delegatorId}` },
-    { key: "delegateName", header: "المُفوَّض إليه", render: (r) => r.delegateName || `#${r.delegateId}` },
+    { key: "delegatorName", header: "المُفوِّض", searchable: true, render: (r) => r.delegatorName || `#${r.delegatorId}` },
+    { key: "delegateName", header: "المُفوَّض إليه", searchable: true, render: (r) => r.delegateName || `#${r.delegateId}` },
     { key: "features", header: "الصلاحيات المفوَّضة", render: (r) => <span className="max-w-[260px] truncate inline-block">{describeFeatures(r.features)}</span> },
     { key: "status", header: "الحالة", render: (r) => <PageStatusBadge status={r.status} /> },
     { key: "startDate", header: "من", render: (r) => (r.startDate ? formatDateAr(r.startDate) : "—") },
     { key: "endDate", header: "إلى", render: (r) => (r.endDate ? formatDateAr(r.endDate) : "—") },
-    { key: "reason", header: "السبب", render: (r) => <span className="max-w-[260px] truncate inline-block">{r.reason || "—"}</span> },
+    { key: "reason", header: "السبب", searchable: true, render: (r) => <span className="max-w-[260px] truncate inline-block">{r.reason || "—"}</span> },
     { key: "actions", header: "", render: (r) => (
       r.status === "active" ? (
         <GuardedButton perm="hr.organization:approve" variant="ghost" size="sm" className="text-status-error-foreground h-7 px-2" onClick={() => revoke(r.id)}>
@@ -206,8 +206,8 @@ export default function DelegationsPage() {
         columns={columns}
         onSortedDataChange={setPrintRows}
         data={delegations}
+        searchPlaceholder="بحث بالمُفوِّض أو المُفوَّض إليه أو السبب…"
         emptyMessage="لا توجد تفويضات"
-        noToolbar
       />
     </PageShell>
   );

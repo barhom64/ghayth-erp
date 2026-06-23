@@ -22,6 +22,8 @@ import {
 import { Link } from "wouter";
 import { useApiQuery, apiFetch } from "@/lib/api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -211,6 +213,10 @@ export default function AdminAiGovernance() {
   const providers = providersResp?.data ?? [];
   const prompts = promptsResp?.data ?? [];
   const reviewQueue = overview?.reviewQueue ?? [];
+
+  // Print wiring — the versioned prompt catalog is the primary records-level
+  // list on this page (providers is a smaller registry/config table).
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<PromptRow>(prompts);
 
   const refreshAll = () => {
     void refetchOverview();
@@ -530,7 +536,22 @@ export default function AdminAiGovernance() {
 
           {/* ── Prompts ───────────────────────────────────────────── */}
           <TabsContent value="prompts" className="space-y-3">
-            <div className="flex justify-end">
+            <div className="flex justify-end items-center gap-2">
+              <PrintButton
+                entityType="report_admin_ai_governance"
+                entityId="list"
+                size="icon"
+                payload={() => ({
+                  entity: { title: "كتالوج الموجّهات (Prompts) — حوكمة الذكاء الاصطناعي", total: printRows.length },
+                  items: printRows.map((p: PromptRow) => ({
+                    "المعرّف": p.slug,
+                    "الإصدار": p.version,
+                    "العنوان": p.title,
+                    "الحالة": statusLabel(p.status),
+                    "آخر تحديث": p.updatedAt,
+                  })),
+                })}
+              />
               <Button onClick={() => setNewPromptOpen(true)} size="sm" rateLimitAware>
                 <Plus className="w-4 h-4 me-1" />مسوّدة جديدة
               </Button>
@@ -538,7 +559,7 @@ export default function AdminAiGovernance() {
             <Card>
               <CardContent className="p-0">
                 <PageStateWrapper isLoading={pmLoading && prompts.length === 0} compact onRetry={refetchPrompts}>
-                  <DataTable columns={promptColumns} data={prompts} noToolbar pageSize={0} />
+                  <DataTable columns={promptColumns} data={prompts} onSortedDataChange={setPrintRows} noToolbar pageSize={0} />
                 </PageStateWrapper>
               </CardContent>
             </Card>

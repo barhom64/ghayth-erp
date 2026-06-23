@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useApiQuery, useApiMutation, getErrorMessage } from "@/lib/api";
-import { CreatePageLayout } from "@workspace/ui-core";
+import { CreatePageLayout, DataTable } from "@workspace/ui-core";
 import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -433,35 +433,18 @@ export default function CustomerReceiptWizardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3">
-            <div className="overflow-x-auto"><table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted-foreground border-b">
-                  <th className="text-end p-1">البند</th>
-                  <th className="text-end p-1">الوصف</th>
-                  <th className="text-end p-1">مدين</th>
-                  <th className="text-end p-1">دائن</th>
-                </tr>
-              </thead>
-              <tbody>
-                {previewLegs().map((jl, i) => (
-                  <tr key={i} className="border-b border-dashed">
-                    <td className="p-1">{jl.label}</td>
-                    <td className="p-1 text-muted-foreground">{jl.description}</td>
-                    <td className="p-1 font-mono text-end text-emerald-700">
-                      {Number(jl.debit) > 0 ? formatCurrency(Number(jl.debit)) : "—"}
-                    </td>
-                    <td className="p-1 font-mono text-end text-red-700">
-                      {Number(jl.credit) > 0 ? formatCurrency(Number(jl.credit)) : "—"}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-muted/40 font-bold">
-                  <td colSpan={2} className="p-1 text-end">الإجمالي</td>
-                  <td className="p-1 font-mono text-end text-emerald-700">{formatCurrency(totalAmount)}</td>
-                  <td className="p-1 font-mono text-end text-red-700">{formatCurrency(totalAmount)}</td>
-                </tr>
-              </tbody>
-            </table></div>
+            <DataTable<{ label: string; description: string; debit: number; credit: number }>
+              noToolbar
+              pageSize={0}
+              data={previewLegs()}
+              rowKey={(_jl, i) => i}
+              columns={[
+                { key: "label", header: "البند", sortable: false, render: (jl) => jl.label, footer: () => "الإجمالي" },
+                { key: "description", header: "الوصف", sortable: false, className: "text-muted-foreground", render: (jl) => jl.description },
+                { key: "debit", header: "مدين", sortable: false, align: "end", className: "font-mono text-emerald-700", render: (jl) => (Number(jl.debit) > 0 ? formatCurrency(Number(jl.debit)) : "—"), footer: () => formatCurrency(totalAmount) },
+                { key: "credit", header: "دائن", sortable: false, align: "end", className: "font-mono text-red-700", render: (jl) => (Number(jl.credit) > 0 ? formatCurrency(Number(jl.credit)) : "—"), footer: () => formatCurrency(totalAmount) },
+              ]}
+            />
             {/* #1945 (FIN-03) — الحسابات الفعلية يحدّدها محرك الترحيل
                 (resolveAccountCode) عند الحفظ؛ لا نعرض أكوادًا ثابتة قد تخالف
                 ما يُرحَّل فعليًا (كانت 1200/1220/2110 وهي رأس غير قابل للترحيل /

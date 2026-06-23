@@ -4,6 +4,8 @@ import { apiFetch } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +44,7 @@ export default function PropertySalesPage() {
     "/properties/sales"
   );
   const sales: any[] = resp?.data || [];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(sales);
 
   async function handleSave() {
     if (!form.buyerName.trim() || !form.salePrice || !form.saleDate) {
@@ -101,6 +104,24 @@ export default function PropertySalesPage() {
   return (
     <PageShell
       title="بيع العقارات"
+      actions={
+        <PrintButton
+          entityType="report_property_sales"
+          entityId="list"
+          size="icon"
+          payload={() => ({
+            entity: { title: "بيع العقارات", total: printRows.length },
+            items: printRows.map((r: any) => ({
+              "العقار": r.buildingName || "—",
+              "المشتري": r.buyerName,
+              "تاريخ البيع": r.saleDate,
+              "سعر البيع": formatCurrency(Number(r.salePrice || 0)),
+              "القيمة الدفترية": formatCurrency(Number(r.bookValue || 0)),
+              "الحالة": r.status === "completed" ? "مكتمل — مرحّل" : r.status === "draft" ? "مسودة — بدون قيد" : r.status === "pending" ? "قيد التنفيذ" : r.status,
+            })),
+          })}
+        />
+      }
     >
       <PropertyTabsNav />
       <div className="space-y-4">
@@ -156,6 +177,7 @@ export default function PropertySalesPage() {
               columns={columns}
               data={sales}
               isLoading={isLoading}
+              onSortedDataChange={setPrintRows}
               emptyMessage="لا توجد عمليات بيع مسجلة"
             />
           </CardContent>

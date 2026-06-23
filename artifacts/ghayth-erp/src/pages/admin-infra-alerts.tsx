@@ -1,5 +1,7 @@
 import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery, apiFetch } from "@/lib/api";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { PageStateWrapper } from "@/components/shared/page-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +91,15 @@ export default function AdminInfraAlerts() {
   );
 
   const rows = data?.data ?? [];
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return rows;
+    return rows.filter((r) =>
+      [r.title, r.type, r.companyName].some((f) => String(f ?? "").toLowerCase().includes(term)),
+    );
+  }, [rows, q]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filtered);
   const openTotal = data?.open ?? 0;
   const openCritical = data?.openCritical ?? 0;
 
@@ -274,6 +285,22 @@ export default function AdminInfraAlerts() {
       loading={isLoading}
       actions={
         <div className="flex gap-2">
+          <PrintButton
+            entityType="report_admin_infra_alerts"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تنبيهات البنية التحتية", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "الخطورة": (SEVERITY_META[r.severity] ?? SEVERITY_META.info).label,
+                "التنبيه": r.title,
+                "النوع": r.type,
+                "الشركة": r.companyName || `#${r.companyId}`,
+                "الوقت": r.createdAt,
+                "الحالة": r.isDismissed ? "معتمد" : "مفتوح",
+              })),
+            })}
+          />
           {!showAcknowledged && openTotal > 0 && (
             <GuardedButton perm={["admin:update"]} size="sm" disabled={busy} onClick={() => setConfirmBulk({})}>
               <CheckCheck className="h-4 w-4 me-1" />اعتماد الكل
@@ -491,10 +518,18 @@ export default function AdminInfraAlerts() {
           </Card>
 
           <Card>
-            <CardContent className="p-0">
+            <CardContent className="p-3 space-y-3">
+              <div className="max-w-sm">
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="بحث بالتنبيه أو النوع أو الشركة…"
+                />
+              </div>
               <DataTable
                 columns={columns}
-                data={rows}
+                data={filtered}
+                onSortedDataChange={setPrintRows}
                 noToolbar
                 pageSize={0}
                 emptyMessage={showAcknowledged ? "لا توجد تنبيهات معتمدة" : "لا توجد تنبيهات بنية تحتية مفتوحة — المنصّة تعمل بشكل طبيعي"}

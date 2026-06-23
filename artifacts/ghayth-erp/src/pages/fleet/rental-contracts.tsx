@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Plus, Car, User, Search, Calendar } from "lucide-react";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
@@ -160,6 +160,83 @@ export default function RentalContractsPage() {
     } as Record<SubStage, number>,
   );
 
+  const columns: DataTableColumn<RentalRow>[] = [
+    {
+      key: "ref",
+      header: "المرجع",
+      className: "font-mono text-xs",
+      render: (r) => (
+        <Link href={`/fleet/rental-contracts/${r.id}`} asChild>
+          <a className="text-status-info-foreground hover:underline">
+            {r.ref ?? `#${r.id}`}
+          </a>
+        </Link>
+      ),
+    },
+    {
+      key: "plateNumber",
+      header: "المركبة",
+      render: (r) => (
+        <>
+          <div className="font-mono">{r.plateNumber ?? `#${r.vehicleId}`}</div>
+          <div className="text-[10px] text-muted-foreground">
+            {[r.make, r.model].filter(Boolean).join(" ")}
+          </div>
+        </>
+      ),
+    },
+    {
+      key: "clientName",
+      header: "العميل",
+      render: (r) => r.clientName ?? `#${r.clientId}`,
+    },
+    {
+      key: "driverName",
+      header: "السائق",
+      className: "text-xs",
+      render: (r) =>
+        r.withDriver
+          ? (r.driverName ?? `#${r.driverId}`)
+          : <span className="text-muted-foreground">بدون سائق</span>,
+    },
+    {
+      key: "startDate",
+      header: "المدة",
+      className: "text-xs",
+      render: (r) => (
+        <>
+          <div className="font-mono">{r.startDate}</div>
+          <div className="text-[10px] text-muted-foreground">
+            → {r.actualEndDate ?? r.endDate ?? "—"}
+          </div>
+        </>
+      ),
+    },
+    {
+      key: "totalAmount",
+      header: "القيمة",
+      className: "font-mono text-xs",
+      render: (r) =>
+        r.totalAmount ? Number(r.totalAmount).toLocaleString("ar-SA") : "—",
+    },
+    {
+      key: "securityDeposit",
+      header: "الوديعة",
+      className: "font-mono text-xs",
+      render: (r) =>
+        r.securityDeposit ? Number(r.securityDeposit).toLocaleString("ar-SA") : "—",
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r) => (
+        <Badge variant="outline" className={`${SUB_STAGE_TONE[classify(r)]} text-[10px]`}>
+          {SUB_STAGE_LABEL[classify(r)]}
+        </Badge>
+      ),
+    },
+  ];
+
   return (
     <PageShell
       title="تأجير المركبات"
@@ -209,70 +286,12 @@ export default function RentalContractsPage() {
           <CardTitle className="text-sm">{rows.length} عقد</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-subtle text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-start">المرجع</th>
-                  <th className="px-3 py-2 text-start">المركبة</th>
-                  <th className="px-3 py-2 text-start">العميل</th>
-                  <th className="px-3 py-2 text-start">السائق</th>
-                  <th className="px-3 py-2 text-start">المدة</th>
-                  <th className="px-3 py-2 text-start">القيمة</th>
-                  <th className="px-3 py-2 text-start">الوديعة</th>
-                  <th className="px-3 py-2 text-start">الحالة</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="text-center py-8 text-muted-foreground text-sm">
-                      لا توجد عقود مطابقة
-                    </td>
-                  </tr>
-                ) : rows.map((r) => (
-                  <tr key={r.id} className="border-t hover:bg-surface-subtle">
-                    <td className="px-3 py-2 font-mono text-xs">
-                      <Link href={`/fleet/rental-contracts/${r.id}`} asChild>
-                        <a className="text-status-info-foreground hover:underline">
-                          {r.ref ?? `#${r.id}`}
-                        </a>
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="font-mono">{r.plateNumber ?? `#${r.vehicleId}`}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {[r.make, r.model].filter(Boolean).join(" ")}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">{r.clientName ?? `#${r.clientId}`}</td>
-                    <td className="px-3 py-2 text-xs">
-                      {r.withDriver
-                        ? (r.driverName ?? `#${r.driverId}`)
-                        : <span className="text-muted-foreground">بدون سائق</span>}
-                    </td>
-                    <td className="px-3 py-2 text-xs">
-                      <div className="font-mono">{r.startDate}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        → {r.actualEndDate ?? r.endDate ?? "—"}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">
-                      {r.totalAmount ? Number(r.totalAmount).toLocaleString("ar-SA") : "—"}
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">
-                      {r.securityDeposit ? Number(r.securityDeposit).toLocaleString("ar-SA") : "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Badge variant="outline" className={`${SUB_STAGE_TONE[classify(r)]} text-[10px]`}>
-                        {SUB_STAGE_LABEL[classify(r)]}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={columns}
+            data={rows}
+            noToolbar
+            emptyMessage="لا توجد عقود مطابقة"
+          />
         </CardContent>
       </Card>
     </PageShell>
