@@ -3,7 +3,8 @@
 //
 // Owns: groups (CRUD), nusk-invoices,
 //       sales-invoices (generate + update), payments,
-//       letters, dashboard, employee-assignments.
+//       dashboard, employee-assignments.
+//   (letters PDF + dispatch live in umrah-letters.ts — U-07 Phase 12)
 //   (operational reports — daily-runsheet, reconciliation, exempt-pilgrims,
 //    group/season portfolio — live in umrah-reports.ts — U-07 Phase 11)
 //   (attachments — polymorphic document storage — live in
@@ -60,7 +61,6 @@ import {
   REPORT_STATUS_LABELS_AR,
 } from "../lib/umrahReportsCatalog.js";
 import { logger } from "../lib/logger.js";
-import { renderPrint } from "../lib/print/printService.js";
 // U-07 Phase 1 — journey + recovery reports moved to a dedicated
 // sub-router so the parent file shrinks. The API surface is
 // unchanged: the sub-router mounts on `/` here so its paths still
@@ -96,6 +96,9 @@ import attachmentsRouter from "./umrah-attachments.js";
 // exempt-pilgrims, group/season portfolio) moved to a dedicated sub-router.
 // Paths still resolve at /umrah/reports/...
 import reportsRouter from "./umrah-reports.js";
+// U-07 Phase 12 — letters (PDF + dispatch) moved to a dedicated sub-router.
+// Paths still resolve at /umrah/letters/...
+import lettersRouter from "./umrah-letters.js";
 
 const router = Router();
 router.use(journeyReportsRouter);
@@ -108,6 +111,7 @@ router.use(importBatchesRouter);
 router.use(statementsRouter);
 router.use(attachmentsRouter);
 router.use(reportsRouter);
+router.use(lettersRouter);
 
 async function requireOpenSeason(seasonId: number, companyId: number): Promise<void> {
   const [season] = await rawQuery<{ id: number; status: string }>(
@@ -1233,112 +1237,6 @@ router.post("/payments", authorize({ feature: "umrah", action: "create" }), asyn
     emitEvent({ companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId, action: "umrah.payment.received", entity: "umrah_payments", entityId: result.paymentId, after: { ref: result.ref, sarAmount: b.sarAmount } }).catch((e) => logger.error(e, "umrah-entities background task failed"));
     res.status(201).json(result);
   } catch (err) { handleRouteError(err, res, "Register umrah payment"); }
-});
-
-// ============================================================================
-// LETTERS — PDF rendering + dispatch (closes spec §14 dispatch gap)
-// ============================================================================
-
-// Download a generated umrah letter as a printable Arabic PDF. Reads
-// from the central official_letters table — same table HR / legal /
-// contracts use — so there's no parallel storage.
-router.get("/letters/:id/pdf", authorize({ feature: "umrah", action: "view" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      throw new ValidationError("معرّف الخطاب غير صالح");
-    }
-    // Scope check — letter belongs to the user's company AND is umrah-typed.
-    // The dataLoader will refetch the full row inside renderPrint; we still
-    // do the gate here so the failure mode is a clean 404 instead of an
-    // empty document.
-    const [letter] = await rawQuery<{ id: number; type: string }>(
-      `SELECT id, type FROM official_letters
-        WHERE id=$1 AND "companyId"=$2
-          AND (type LIKE 'umrah_%' OR type = 'umrah')`,
-      [id, scope.companyId]
-    );
-    if (!letter) throw new NotFoundError("الخطاب غير موجود");
-
-    const result = await renderPrint(
-      {
-        companyId: scope.companyId, branchId: scope.branchId ?? null,
-        userId: scope.userId, role: scope.role, isOwner: scope.isOwner,
-      },
-      { entityType: "official_letter", entityId: String(id), format: "a4" },
-      { ipAddress: req.ip, userAgent: req.get("user-agent") ?? undefined },
-    );
-    res.setHeader("Content-Type", result.mime);
-    res.setHeader("Content-Disposition", `inline; filename="umrah-letter-${id}.${result.mime.includes("html") ? "html" : "pdf"}"`);
-    if (result.jobId) res.setHeader("X-Print-Job-Id", result.jobId);
-    res.send(result.bytes);
-  } catch (err) { handleRouteError(err, res, "Letter PDF"); }
-});
-
-// Mark an umrah letter as dispatched. Sets sentAt + dispatchedVia + flips
-// status='sent'. Idempotent: re-dispatch returns 409 (typed ConflictError).
-router.post("/letters/:id/dispatch", authorize({ feature: "umrah", action: "update" }), async (req, res) => {
-  try {
-    const scope = req.scope!;
-    const id = Number(req.params.id);
-    const body = z.object({
-      dispatchedVia: z.enum(["print", "email", "whatsapp", "courier", "hand_delivery"]),
-      recipient: z.string().optional(),
-      notes: z.string().optional(),
-    }).parse(req.body);
-    if (!Number.isFinite(id) || id <= 0) {
-      throw new ValidationError("معرّف الخطاب غير صالح");
-    }
-    const [letter] = await rawQuery<{ id: number; status: string; sentAt: string | null; type: string }>(
-      `SELECT id, status, "sentAt", type FROM official_letters
-        WHERE id=$1 AND "companyId"=$2
-          AND (type LIKE 'umrah_%' OR type = 'umrah')`,
-      [id, scope.companyId]
-    );
-    if (!letter) throw new NotFoundError("الخطاب غير موجود");
-    if (letter.sentAt) {
-      throw new ConflictError("الخطاب مُرسل سابقاً", {
-        meta: { sentAt: letter.sentAt, currentStatus: letter.status },
-      });
-    }
-    if (letter.status === "draft") {
-      throw new ConflictError("لا يمكن إرسال خطاب في حالة draft — يحتاج اعتماد أولاً", {
-        meta: { currentStatus: letter.status, fix: "اعتمد الخطاب من /official-letters/:id/approve" },
-      });
-    }
-
-    await rawExecute(
-      `UPDATE official_letters
-          SET "sentAt"=NOW(), "dispatchedVia"=$1, status='sent'
-        WHERE id=$2 AND "companyId"=$3`,
-      [body.dispatchedVia, id, scope.companyId]
-    );
-
-    await createAuditLog({
-      companyId: scope.companyId,
-      userId: scope.userId,
-      action: "dispatch",
-      entity: "umrah_letter",
-      entityId: id,
-      after: { dispatchedVia: body.dispatchedVia, recipient: body.recipient ?? null },
-    });
-
-    await emitEvent({
-      companyId: scope.companyId,
-      branchId: scope.branchId ?? undefined,
-      userId: scope.userId,
-      action: "umrah.letter.dispatched",
-      entity: "official_letters",
-      entityId: id,
-      details: JSON.stringify({
-        dispatchedVia: body.dispatchedVia,
-        recipient: body.recipient,
-      }),
-    });
-
-    res.json({ id, status: "sent", dispatchedVia: body.dispatchedVia, sentAt: new Date().toISOString() });
-  } catch (err) { handleRouteError(err, res, "Letter dispatch"); }
 });
 
 // ============================================================================
