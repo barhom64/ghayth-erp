@@ -1,4 +1,8 @@
 /**
+ * ⚠️ LEGACY / غير موصول. `runPeriodEndRevaluation`/`collectMonetaryItems`/
+ * `computeRevaluationLines` لا تُستدعى من أي مسار إنتاجي (اختبارات فقط). المسار
+ * الكنسي الحيّ هو `POST /finance/fx/revaluation/post`. لا تبنِ عليه جديدًا.
+ *
  * Period-end FX revaluation per IAS 21.
  *
  * "Monetary items denominated in a foreign currency are translated
