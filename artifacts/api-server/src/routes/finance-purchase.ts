@@ -34,7 +34,7 @@ import { buildScopedWhere, parseScopeFilters } from "../lib/scopedQuery.js";
 import { OWNER_GM_ROLES } from "../lib/rbacCatalog.js";
 import { registerObligation } from "../lib/obligationsEngine.js";
 import { applyTransition, lifecycleErrorResponse } from "../lib/lifecycleEngine.js";
-import { markIdempotencyReplay, requestIdempotencyToken } from "../lib/requestIdempotency.js";
+import { markIdempotencyReplay, requestIdempotencyToken, boundedIdempotencyToken } from "../lib/requestIdempotency.js";
 import { assertDocumentBranchAccess } from "../lib/branchResolution.js";
 import { z } from "zod";
 
@@ -2781,7 +2781,7 @@ purchaseRouter.post("/vendor-advances", authorize({ feature: "finance.purchase",
     // vendor_advances (migration 232) catches concurrent races, while a
     // sequential retry is short-circuited below BEFORE a number is issued.
     const advIdemToken = requestIdempotencyToken(req);
-    const advReplayKey = `finance:vendor_advance:${supplierId}:${recvDate}:${advIdemToken}`;
+    const advReplayKey = `finance:vendor_advance:${supplierId}:${recvDate}:${boundedIdempotencyToken(advIdemToken)}`;
 
     // Idempotency: short-circuit a sequential retry BEFORE issuing, so no
     // fresh number is burned and no duplicate document is created.
@@ -3072,7 +3072,7 @@ purchaseRouter.post("/vendor-credits", authorize({ feature: "finance.purchase", 
     // short-circuited here BEFORE a number is issued, so no fresh VCN is
     // burned and no duplicate memo/JE is created. The number comes only
     // from issueNumber and is independent of this key.
-    const creditReplayKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${requestIdempotencyToken(req)}`;
+    const creditReplayKey = `finance:vendor_credit:${supplierId}:${memoDateStr}:${boundedIdempotencyToken(requestIdempotencyToken(req))}`;
     const [existingMemo] = await rawQuery<{ id: number; ref: string; amount: string; vatAmount: string; totalAmount: string; journalId: number | null; status: string }>(
       `SELECT id, ref, amount::text, "vatAmount"::text, "totalAmount"::text, "journalId", status
          FROM vendor_credit_memos
