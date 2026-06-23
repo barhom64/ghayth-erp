@@ -9,6 +9,7 @@ import {
 } from "../lib/errorHandler.js";
 import { Router } from "express";
 import { z } from "zod";
+import { zCoerceBoolean } from "../lib/zodCoerce.js";
 import { rawQuery, rawExecute, withTransaction, assertInsert } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { movingAverage } from "../lib/algorithms.js";
@@ -220,12 +221,12 @@ const patchProductSchema = z.object({
   defaultAssetAccountId: z.coerce.number().int().positive().optional().nullable(),
   defaultTaxCode: z.string().optional().nullable(),
   defaultActivityType: z.string().optional().nullable(),
-  requiresVehicle: z.coerce.boolean().optional(),
-  requiresProperty: z.coerce.boolean().optional(),
-  requiresProject: z.coerce.boolean().optional(),
-  requiresContract: z.coerce.boolean().optional(),
-  requiresUmrahAgent: z.coerce.boolean().optional(),
-  requiresUmrahSeason: z.coerce.boolean().optional(),
+  requiresVehicle: zCoerceBoolean().optional(),
+  requiresProperty: zCoerceBoolean().optional(),
+  requiresProject: zCoerceBoolean().optional(),
+  requiresContract: zCoerceBoolean().optional(),
+  requiresUmrahAgent: zCoerceBoolean().optional(),
+  requiresUmrahSeason: zCoerceBoolean().optional(),
   defaultCostCenterStrategy: z.enum([
     "from_vehicle", "from_property", "from_unit", "from_project",
     "from_employee", "from_contract", "from_umrah_agent", "from_umrah_season",
