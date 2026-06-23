@@ -210,6 +210,10 @@ export default function ExpensesCreate() {
   const derivedAccountName = form.accountCode
     ? accounts.find((a: any) => String(a.code) === String(form.accountCode))?.name
     : undefined;
+  // مصدر الصرف (الخزنة/البنك) مطويّ تلقائيًا: عند تطابق خزنة واحدة فقط مع طريقة
+  // الدفع (#2230 يختارها تلقائيًا) لا يوجد ما يُختار — تُعرض للقراءة. عند تعدّد
+  // الخزائن يبقى المنتقي (اختيار تشغيلي حقيقي: أيّ خزنة). نفس عقيدة «مساعد لا عائق».
+  const onlySource = sourceOptions.length === 1 ? sourceOptions[0] : null;
 
   // Audit item #2 — per-line allocation overrides. Default state mirrors
   // the auto-derived fields (accountCode + costCenter + relatedEntity)
@@ -704,9 +708,23 @@ export default function ExpensesCreate() {
               </FormFieldWrapper>
             )}
             <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">
-              <Autocomplete options={sourceOptions} value={form.sourceAccountCode}
-                onChange={(val) => setForm(prev => ({ ...prev, sourceAccountCode: String(val) }))}
-                placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} />
+              {onlySource ? (
+                /* خزنة واحدة متطابقة مع طريقة الدفع — تُعرض مطويّة للقراءة (لا
+                   بديل لاختياره). تغيير «طريقة الدفع» أعلاه يعيد الترشيح. */
+                <div className="rounded-md border bg-muted/40 p-2 text-sm flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  <span>
+                    {onlySource.label}
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      الخزنة الوحيدة المطابقة لطريقة الدفع — تُحدَّد تلقائيًا.
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <Autocomplete options={sourceOptions} value={form.sourceAccountCode}
+                  onChange={(val) => setForm(prev => ({ ...prev, sourceAccountCode: String(val) }))}
+                  placeholder="ابحث عن مصدر صرف..." loading={accountsLoading} />
+              )}
             </FormFieldWrapper>
           </div>
         </div>
