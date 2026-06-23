@@ -21,6 +21,7 @@
 //     and bumps the counter past the highest existing sequence.
 
 import { useState, useMemo, Component, type ErrorInfo } from "react";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { useApiQuery, useApiMutation, asList, apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -346,76 +347,88 @@ function PoliciesPanel({ schemes, onChange }: { schemes: Scheme[]; onChange: () 
     if (el && selected) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
 
+  // Columns mirror the original raw policies table — same order, headers and
+  // per-cell rendering. The whole row toggles the inline editor (onRowClick),
+  // and the explicit Edit/Close button is preserved inside the last column's
+  // render with stopPropagation so it stays unambiguous. The action column is
+  // non-sortable; the row highlight for the open row is kept via rowClassName.
+  const policyColumns: DataTableColumn<Scheme>[] = [
+    {
+      key: "displayNameAr",
+      header: "نوع المعاملة",
+      render: (s) => <div className="font-medium">{s.displayNameAr}</div>,
+    },
+    {
+      key: "method",
+      header: "طريقة الترقيم",
+      className: "text-sm",
+      render: (s) => {
+        const presetDef = PRESETS.find((p) => p.key === detectPreset(s));
+        return presetDef ? presetDef.label : <span className="text-muted-foreground">مخصص</span>;
+      },
+    },
+    {
+      key: "sample",
+      header: "مثال الرقم",
+      sortable: false,
+      className: "font-mono text-xs text-status-info-foreground",
+      render: (s) => samplePreview(s),
+    },
+    {
+      key: "assignmentCount",
+      header: "عدد الأرقام الصادرة",
+      className: "text-sm",
+      render: (s) => (s.assignmentCount ?? 0).toLocaleString("ar-SA"),
+    },
+    {
+      key: "isActive",
+      header: "الحالة",
+      render: (s) => (
+        <Badge variant={s.isActive ? "default" : "secondary"} className="text-xs">
+          {s.isActive ? "نشطة" : "متوقفة"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      width: "8rem",
+      sortable: false,
+      render: (s) => {
+        const isSelected = selectedId === s.id;
+        // Explicit button so the click target is unambiguous; the
+        // whole row still toggles, but a clear button label cures
+        // "the chevron moved but nothing opened" confusion.
+        return (
+          <Button
+            variant={isSelected ? "default" : "ghost"}
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); setSelectedId(isSelected ? null : s.id); }}
+          >
+            {isSelected ? (
+              <><ChevronUp className="h-4 w-4 me-1" /> إغلاق</>
+            ) : (
+              <><Edit className="h-4 w-4 me-1" /> تعديل</>
+            )}
+          </Button>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-4">
-      <Card><CardContent className="p-0 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-surface-subtle">
-              <th className="p-3 text-start">نوع المعاملة</th>
-              <th className="p-3 text-start">طريقة الترقيم</th>
-              <th className="p-3 text-start">مثال الرقم</th>
-              <th className="p-3 text-start">عدد الأرقام الصادرة</th>
-              <th className="p-3 text-start">الحالة</th>
-              <th className="p-3 text-end w-32"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {schemes.map((s) => {
-              const preset = detectPreset(s);
-              const presetDef = PRESETS.find((p) => p.key === preset);
-              const isSelected = selectedId === s.id;
-              const toggle = () => setSelectedId(isSelected ? null : s.id);
-              return (
-                <tr
-                  key={s.id}
-                  className={cn(
-                    "border-b hover:bg-surface-subtle cursor-pointer",
-                    isSelected && "bg-status-info-surface/30"
-                  )}
-                  onClick={toggle}
-                >
-                  <td className="p-3">
-                    <div className="font-medium">{s.displayNameAr}</div>
-                  </td>
-                  <td className="p-3 text-sm">
-                    {presetDef ? presetDef.label : <span className="text-muted-foreground">مخصص</span>}
-                  </td>
-                  <td className="p-3 font-mono text-xs text-status-info-foreground">
-                    {samplePreview(s)}
-                  </td>
-                  <td className="p-3 text-sm">{(s.assignmentCount ?? 0).toLocaleString("ar-SA")}</td>
-                  <td className="p-3">
-                    <Badge variant={s.isActive ? "default" : "secondary"} className="text-xs">
-                      {s.isActive ? "نشطة" : "متوقفة"}
-                    </Badge>
-                  </td>
-                  <td className="p-3 text-end">
-                    {/* Explicit button so the click target is unambiguous; the
-                        whole row still toggles, but a clear button label cures
-                        "the chevron moved but nothing opened" confusion. */}
-                    <Button
-                      variant={isSelected ? "default" : "ghost"}
-                      size="sm"
-                      onClick={(e) => { e.stopPropagation(); toggle(); }}
-                    >
-                      {isSelected ? (
-                        <><ChevronUp className="h-4 w-4 me-1" /> إغلاق</>
-                      ) : (
-                        <><Edit className="h-4 w-4 me-1" /> تعديل</>
-                      )}
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
-            {schemes.length === 0 && (
-              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">
-                لا توجد سياسات ترقيم
-              </td></tr>
-            )}
-          </tbody>
-        </table>
+      <Card><CardContent className="p-0">
+        <DataTable
+          columns={policyColumns}
+          data={schemes}
+          noToolbar
+          pageSize={0}
+          onRowClick={(s) => setSelectedId(selectedId === s.id ? null : s.id)}
+          rowClassName={(s) => (selectedId === s.id ? "bg-status-info-surface/30" : undefined)}
+          emptyMessage="لا توجد سياسات ترقيم"
+        />
       </CardContent></Card>
 
       {selected && (
@@ -900,64 +913,71 @@ function CountersStrip({ schemeId }: { schemeId: number }) {
     }
   };
 
+  // Counters strip columns — same order/headers/rendering as the original raw
+  // table. The reset / lock GuardedButtons (and their RBAC perms) are preserved
+  // verbatim inside the actions column render; that column is non-sortable.
+  const counterColumns: DataTableColumn<Counter>[] = [
+    { key: "branchId", header: "الفرع", render: (c) => c.branchId ?? "—" },
+    { key: "fiscalYear", header: "السنة", render: (c) => c.fiscalYear ?? "—" },
+    { key: "seasonId", header: "الموسم", render: (c) => c.seasonId ?? "—" },
+    { key: "lastNumber", header: "آخر رقم صدر", className: "font-mono", render: (c) => c.lastNumber },
+    {
+      key: "nextNumber",
+      header: "القادم",
+      className: "font-mono font-semibold text-status-info-foreground",
+      render: (c) => c.nextNumber,
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      sortable: false,
+      render: (c) =>
+        c.lockedAt ? (
+          <Badge variant="destructive" className="text-xs">مقفول</Badge>
+        ) : (
+          <Badge className="text-xs">نشط</Badge>
+        ),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      align: "end",
+      render: (c) => (
+        <>
+          <GuardedButton
+            perm="settings.numbering.reset:update"
+            variant="ghost"
+            size="sm"
+            title="تصفير"
+            onClick={() => handleReset(c.id)}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </GuardedButton>
+          <GuardedButton
+            perm="settings.numbering:update"
+            variant="ghost"
+            size="sm"
+            title={c.lockedAt ? "فتح القفل" : "قفل العداد"}
+            onClick={() => handleLockToggle(c)}
+          >
+            {c.lockedAt ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+          </GuardedButton>
+        </>
+      ),
+    },
+  ];
+
   return (
     <div className="border-t pt-3 space-y-2">
       <div className="text-sm font-medium flex items-center gap-2">
         <Hash className="h-4 w-4" /> العدادات الفعلية
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b">
-              <th className="p-2 text-start">الفرع</th>
-              <th className="p-2 text-start">السنة</th>
-              <th className="p-2 text-start">الموسم</th>
-              <th className="p-2 text-start">آخر رقم صدر</th>
-              <th className="p-2 text-start">القادم</th>
-              <th className="p-2 text-start">الحالة</th>
-              <th className="p-2 text-end">إجراءات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {counters.map((c) => (
-              <tr key={c.id} className="border-b">
-                <td className="p-2">{c.branchId ?? "—"}</td>
-                <td className="p-2">{c.fiscalYear ?? "—"}</td>
-                <td className="p-2">{c.seasonId ?? "—"}</td>
-                <td className="p-2 font-mono">{c.lastNumber}</td>
-                <td className="p-2 font-mono font-semibold text-status-info-foreground">{c.nextNumber}</td>
-                <td className="p-2">
-                  {c.lockedAt ? (
-                    <Badge variant="destructive" className="text-xs">مقفول</Badge>
-                  ) : (
-                    <Badge className="text-xs">نشط</Badge>
-                  )}
-                </td>
-                <td className="p-2 text-end">
-                  <GuardedButton
-                    perm="settings.numbering.reset:update"
-                    variant="ghost"
-                    size="sm"
-                    title="تصفير"
-                    onClick={() => handleReset(c.id)}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </GuardedButton>
-                  <GuardedButton
-                    perm="settings.numbering:update"
-                    variant="ghost"
-                    size="sm"
-                    title={c.lockedAt ? "فتح القفل" : "قفل العداد"}
-                    onClick={() => handleLockToggle(c)}
-                  >
-                    {c.lockedAt ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-                  </GuardedButton>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={counterColumns}
+        data={counters}
+        noToolbar
+        pageSize={0}
+      />
       {actionMode && actionCounterId !== null && (
         <div className="border-t pt-2 mt-2 space-y-2 bg-surface-subtle/40 rounded p-2">
           <div className="text-xs font-medium">
@@ -1074,6 +1094,63 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
     );
   };
 
+  // Assignments (numbers log) columns — same order/headers/rendering as the
+  // original raw table. The تعديل (override) / إلغاء (void) buttons, shown only
+  // for non-voided rows, are preserved verbatim inside the actions column
+  // render and drive the same inline override/void Cards below. Non-sortable.
+  const assignmentColumns: DataTableColumn<Assignment>[] = [
+    { key: "number", header: "الرقم", className: "font-mono font-semibold", render: (r) => r.number },
+    {
+      key: "schemeName",
+      header: "السياسة",
+      render: (r) => r.schemeName || `${r.moduleKey}.${r.entityKey}`,
+    },
+    {
+      key: "entityTable",
+      header: "الجدول",
+      className: "font-mono text-xs text-muted-foreground",
+      render: (r) => r.entityTable,
+    },
+    { key: "entityId", header: "المعرف", render: (r) => r.entityId ?? "—" },
+    {
+      key: "status",
+      header: "الحالة",
+      render: (r) => (
+        <Badge variant={r.status === "voided" ? "destructive" : "default"} className="text-xs">
+          {r.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "issuedAt",
+      header: "تاريخ الإصدار",
+      className: "text-xs text-muted-foreground",
+      render: (r) => formatDateAr(r.issuedAt),
+    },
+    {
+      key: "actions",
+      header: "إجراءات",
+      sortable: false,
+      render: (r) =>
+        r.status !== "voided" ? (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost" size="sm" className="h-7 text-xs"
+              onClick={() => { setOverrideRow(r); setNewNumber(r.number); setReason(""); }}
+            >
+              تعديل
+            </Button>
+            <Button
+              variant="ghost" size="sm" className="h-7 text-xs text-status-error-foreground"
+              onClick={() => { setVoidRow(r); setVoidReason(""); }}
+            >
+              إلغاء
+            </Button>
+          </div>
+        ) : null,
+    },
+  ];
+
   return (
     <div className="space-y-3">
       <Card><CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1111,62 +1188,16 @@ function AssignmentsPanel({ schemes }: { schemes: Scheme[] }) {
         </div>
       </CardContent></Card>
 
-      {isLoading ? <LoadingSpinner /> : (
-        <Card><CardContent className="p-0 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-surface-subtle">
-                <th className="p-3 text-start">الرقم</th>
-                <th className="p-3 text-start">السياسة</th>
-                <th className="p-3 text-start">الجدول</th>
-                <th className="p-3 text-start">المعرف</th>
-                <th className="p-3 text-start">الحالة</th>
-                <th className="p-3 text-start">تاريخ الإصدار</th>
-                <th className="p-3 text-start">إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b hover:bg-surface-subtle">
-                  <td className="p-3 font-mono font-semibold">{r.number}</td>
-                  <td className="p-3">{r.schemeName || `${r.moduleKey}.${r.entityKey}`}</td>
-                  <td className="p-3 font-mono text-xs text-muted-foreground">{r.entityTable}</td>
-                  <td className="p-3">{r.entityId ?? "—"}</td>
-                  <td className="p-3">
-                    <Badge variant={r.status === "voided" ? "destructive" : "default"} className="text-xs">
-                      {r.status}
-                    </Badge>
-                  </td>
-                  <td className="p-3 text-xs text-muted-foreground">{formatDateAr(r.issuedAt)}</td>
-                  <td className="p-3">
-                    {r.status !== "voided" && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost" size="sm" className="h-7 text-xs"
-                          onClick={() => { setOverrideRow(r); setNewNumber(r.number); setReason(""); }}
-                        >
-                          تعديل
-                        </Button>
-                        <Button
-                          variant="ghost" size="sm" className="h-7 text-xs text-status-error-foreground"
-                          onClick={() => { setVoidRow(r); setVoidReason(""); }}
-                        >
-                          إلغاء
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  لا توجد أرقام مسجلة بهذه المعايير
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </CardContent></Card>
-      )}
+      <Card><CardContent className="p-0">
+        <DataTable
+          columns={assignmentColumns}
+          data={rows}
+          isLoading={isLoading}
+          noToolbar
+          pageSize={0}
+          emptyMessage="لا توجد أرقام مسجلة بهذه المعايير"
+        />
+      </CardContent></Card>
 
       {overrideRow && (
         <Card className="border-status-info-surface bg-status-info-surface/30">
@@ -1270,6 +1301,40 @@ function AuditPanel() {
     return map[action] || action;
   };
 
+  // Audit log columns — read-only, same order/headers/rendering as the raw
+  // table (action badge, scheme/number stack, reason, actor, date). Rows keep
+  // the align-top class via rowClassName.
+  const auditColumns: DataTableColumn<AuditRow>[] = [
+    {
+      key: "action",
+      header: "الإجراء",
+      render: (r) => <Badge variant="outline" className="text-xs">{labelFor(r.action)}</Badge>,
+    },
+    {
+      key: "schemeName",
+      header: "السياسة / الرقم",
+      className: "text-xs",
+      render: (r) => (
+        <>
+          {r.schemeName && <div>{r.schemeName}</div>}
+          {r.entityTable && (
+            <div className="font-mono text-muted-foreground">
+              {r.entityTable}{r.entityId !== null ? `#${r.entityId}` : ""}
+            </div>
+          )}
+        </>
+      ),
+    },
+    { key: "reason", header: "السبب", className: "text-xs", render: (r) => r.reason || "—" },
+    { key: "actorName", header: "المستخدم", className: "text-xs", render: (r) => r.actorName || "—" },
+    {
+      key: "createdAt",
+      header: "التاريخ",
+      className: "text-xs text-muted-foreground",
+      render: (r) => formatDateAr(r.createdAt),
+    },
+  ];
+
   return (
     <div className="space-y-3">
       {health && (
@@ -1288,44 +1353,16 @@ function AuditPanel() {
           </CardContent>
         </Card>
       )}
-    <Card><CardContent className="p-0 overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-surface-subtle">
-            <th className="p-3 text-start">الإجراء</th>
-            <th className="p-3 text-start">السياسة / الرقم</th>
-            <th className="p-3 text-start">السبب</th>
-            <th className="p-3 text-start">المستخدم</th>
-            <th className="p-3 text-start">التاريخ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} className="border-b hover:bg-surface-subtle align-top">
-              <td className="p-3">
-                <Badge variant="outline" className="text-xs">{labelFor(r.action)}</Badge>
-              </td>
-              <td className="p-3 text-xs">
-                {r.schemeName && <div>{r.schemeName}</div>}
-                {r.entityTable && (
-                  <div className="font-mono text-muted-foreground">
-                    {r.entityTable}{r.entityId !== null ? `#${r.entityId}` : ""}
-                  </div>
-                )}
-              </td>
-              <td className="p-3 text-xs">{r.reason || "—"}</td>
-              <td className="p-3 text-xs">{r.actorName || "—"}</td>
-              <td className="p-3 text-xs text-muted-foreground">{formatDateAr(r.createdAt)}</td>
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr><td colSpan={5} className="p-8 text-center text-muted-foreground">
-              <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              لا توجد سجلات تدقيق بعد
-            </td></tr>
-          )}
-        </tbody>
-      </table>
+    <Card><CardContent className="p-0">
+      <DataTable
+        columns={auditColumns}
+        data={rows}
+        noToolbar
+        pageSize={0}
+        rowClassName={() => "align-top"}
+        emptyMessage="لا توجد سجلات تدقيق بعد"
+        emptyIcon={<History className="w-8 h-8 mx-auto mb-2 opacity-50" />}
+      />
     </CardContent></Card>
     </div>
   );

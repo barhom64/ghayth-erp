@@ -7,7 +7,7 @@ import {
   type RelatedEntity,
   EntityComments,
 } from "@workspace/entity-kit";
-import { FormGrid, FormTextField, FormTextareaField, FormSelectField } from "@workspace/ui-core";
+import { FormGrid, FormTextField, FormTextareaField, FormSelectField, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { EntityEditDialog } from "@/components/shared/entity-edit-dialog";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { PrintButton } from "@/components/shared/print-button";
@@ -169,47 +169,47 @@ export default function RiskDetail() {
 
 
   // Risk matrix — rows: impact (critical -> low top to bottom), cols: likelihood (rare -> certain left to right).
-  // Highlight the current risk cell.
+  // Highlight the current risk cell. Rendered via DataTable: each data row is one
+  // impact level; the leading column shows the impact label, and one column per
+  // LIKELIHOOD_ORDER entry renders that (impact × likelihood) cell with its score
+  // and color. Matrix axes are fixed-order → every column sortable:false.
+  const matrixColumns: DataTableColumn<string>[] = [
+    {
+      key: "__impact",
+      header: "",
+      sortable: false,
+      align: "end",
+      className: "text-[10px] text-muted-foreground font-normal pe-2",
+      render: (imp) => SEVERITY_LABELS[imp],
+    },
+    ...LIKELIHOOD_ORDER.map<DataTableColumn<string>>((lk) => ({
+      key: lk,
+      header: LIKELIHOOD_LABELS[lk],
+      sortable: false,
+      align: "center",
+      className: "text-[10px] font-normal",
+      render: (imp) => LIKELIHOOD_SCORE[lk] * IMPACT_SCORE[imp],
+      cellClassName: (imp) => {
+        const cellScore = LIKELIHOOD_SCORE[lk] * IMPACT_SCORE[imp];
+        const isCurrent = risk?.likelihood === lk && risk?.impact === imp;
+        return `p-2 border border-white ${severityCellColor(cellScore)} ${
+          isCurrent ? "ring-2 ring-offset-1 ring-blue-600 font-bold" : "opacity-70"
+        }`;
+      },
+    })),
+  ];
+
   const matrix = (
     <div className="space-y-2">
       <div className="text-xs text-muted-foreground">مصفوفة المخاطر (الاحتمالية × الأثر)</div>
-      <div className="overflow-x-auto">
-        <table className="text-[10px] border-collapse">
-          <thead>
-            <tr>
-              <th className="p-1"></th>
-              {LIKELIHOOD_ORDER.map((lk) => (
-                <th key={lk} className="p-1 text-muted-foreground font-normal">
-                  {LIKELIHOOD_LABELS[lk]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[...IMPACT_ORDER].reverse().map((imp) => (
-              <tr key={imp}>
-                <th className="p-1 text-muted-foreground font-normal text-right pe-2">
-                  {SEVERITY_LABELS[imp]}
-                </th>
-                {LIKELIHOOD_ORDER.map((lk) => {
-                  const cellScore = LIKELIHOOD_SCORE[lk] * IMPACT_SCORE[imp];
-                  const isCurrent = risk?.likelihood === lk && risk?.impact === imp;
-                  return (
-                    <td
-                      key={lk}
-                      className={`p-2 text-center border border-white ${severityCellColor(cellScore)} ${
-                        isCurrent ? "ring-2 ring-offset-1 ring-blue-600 font-bold" : "opacity-70"
-                      }`}
-                    >
-                      {cellScore}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={matrixColumns}
+        data={[...IMPACT_ORDER].reverse()}
+        rowKey={(imp) => imp}
+        rowClassName={() => "hover:bg-transparent"}
+        noToolbar
+        pageSize={0}
+      />
     </div>
   );
 

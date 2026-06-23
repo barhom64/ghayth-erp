@@ -30,6 +30,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useApiQuery, apiFetch, ApiError, API_BASE, nativeAuthHeaders } from "@/lib/api";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { listTemplates, previewDocument, type PrintTemplateRow } from "@/lib/print-client";
@@ -159,6 +161,7 @@ export default function PrintTemplatesPage() {
     `/print/templates`,
   );
   const rows = useMemo<PrintTemplateRow[]>(() => data?.items ?? [], [data]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(rows);
 
   // GET /print/assignments + POST /print/assignments — branch-level
   // template overrides. POST creates a new (branch,entityType) →
@@ -337,10 +340,28 @@ export default function PrintTemplatesPage() {
       subtitle="إدارة قوالب المستندات: الخطوط، الألوان، الـ HTML، التذييل والترويسة"
       loading={isLoading}
       actions={
-        <Button onClick={openNew} className="gap-2">
-          <Plus className="h-4 w-4" />
-          قالب جديد
-        </Button>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_admin_print_templates"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "قوالب الطباعة", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "الاسم": r.name,
+                "النوع": r.entityType,
+                "الفرع": r.branchId === null ? "(جميع الفروع)" : `#${r.branchId}`,
+                "حجم الورق": r.paperSize,
+                "النمط": r.mode === "preset" ? "جاهز" : r.mode === "visual" ? "مرئي" : r.mode,
+                "افتراضي": r.isDefault ? "نعم" : "لا",
+              })),
+            })}
+          />
+          <Button onClick={openNew} className="gap-2">
+            <Plus className="h-4 w-4" />
+            قالب جديد
+          </Button>
+        </div>
       }
     >
       <Card>
@@ -352,6 +373,7 @@ export default function PrintTemplatesPage() {
             columns={cols}
             data={rows}
             rowKey={(r) => String(r.id)}
+            onSortedDataChange={setPrintRows}
             emptyMessage="لا توجد قوالب — أنشئ واحداً لتبدأ"
           />
         </CardContent>

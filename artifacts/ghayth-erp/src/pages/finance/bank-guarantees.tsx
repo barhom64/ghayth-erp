@@ -332,6 +332,7 @@ export default function BankGuaranteesPage() {
       key: "ref",
       header: "رقم الضمان",
       sortable: true,
+      searchable: true,
       render: (row) => <span className="font-mono text-status-info-foreground text-xs">{row.ref}</span>,
     },
     {
@@ -354,8 +355,8 @@ export default function BankGuaranteesPage() {
         </span>
       ),
     },
-    { key: "bank", header: "البنك", sortable: true },
-    { key: "beneficiary", header: "الجهة المستفيدة", sortable: true },
+    { key: "bank", header: "البنك", sortable: true, searchable: true },
+    { key: "beneficiary", header: "الجهة المستفيدة", sortable: true, searchable: true },
     {
       key: "amount",
       header: "المبلغ",
@@ -572,9 +573,9 @@ export default function BankGuaranteesPage() {
           onSortedDataChange={setPrintRows}
           data={list}
           isLoading={isLoading}
+          searchPlaceholder="بحث برقم الضمان أو البنك أو المستفيد…"
           emptyMessage="لا توجد ضمانات بنكية مسجلة"
           emptyIcon={<Shield className="h-6 w-6 text-slate-400" />}
-          noToolbar
         />
       </PageShell>
 

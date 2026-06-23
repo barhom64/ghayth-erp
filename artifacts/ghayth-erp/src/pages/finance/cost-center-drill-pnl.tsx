@@ -13,6 +13,8 @@ import { DateRangePresets } from "@/components/shared/date-range-presets";
 import { formatCurrency } from "@/lib/formatters";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { InlineSparkline } from "@/components/shared/inline-sparkline";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { TrendingUp, TrendingDown, ScrollText, Network, ArrowLeftRight, Download } from "lucide-react";
 
 /**
@@ -128,6 +130,19 @@ export default function CostCenterDrillPnlPage() {
     yoyPath,
   );
 
+  // P&L breakdown rows for print — the revenue / expense / net lines, each
+  // showing both the self (direct) and rolled (incl. descendants) figures so
+  // the printed قائمة دخل mirrors the two on-screen bucket cards.
+  const pnlRows = useMemo(() => {
+    if (!data) return [] as { بند: string; ذاتي: number; تجميعي: number }[];
+    return [
+      { بند: "الإيرادات", ذاتي: data.buckets.self.revenue, تجميعي: data.buckets.rolled.revenue },
+      { بند: "المصروفات", ذاتي: data.buckets.self.expense, تجميعي: data.buckets.rolled.expense },
+      { بند: "الصافي", ذاتي: data.buckets.self.net, تجميعي: data.buckets.rolled.net },
+    ];
+  }, [data]);
+  const { sortedRows: printRows } = usePrintRows<{ بند: string; ذاتي: number; تجميعي: number }>(pnlRows);
+
   return (
     <PageShell
       title={data ? `أرباح وخسائر — ${data.costCenter.name}` : "أرباح وخسائر مركز التكلفة"}
@@ -138,7 +153,25 @@ export default function CostCenterDrillPnlPage() {
         { label: "أرباح وخسائر" },
       ]}
       actions={
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {data && id != null && (
+            <PrintButton
+              entityType="report_finance_cost_center_pnl"
+              entityId={String(id)}
+              size="icon"
+              payload={() => ({
+                entity: {
+                  title: `أرباح وخسائر — ${data.costCenter.name}`,
+                  total: printRows.length,
+                },
+                items: printRows.map((r) => ({
+                  "البند": r.بند,
+                  "ذاتي": r.ذاتي,
+                  "تجميعي": r.تجميعي,
+                })),
+              })}
+            />
+          )}
           {data && (
             <Button
               variant="outline"

@@ -26,6 +26,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { GuardedButton } from "@/components/shared/permission-gate";
 import { TeamSelect, CommitteeSelect, ProjectSelect } from "@/components/shared/entity-selects";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, X, Trash2, Users, Gavel, Briefcase } from "lucide-react";
 
@@ -84,6 +86,15 @@ function TeamsMembersTab() {
     { enabled: !!teamId },
   );
   const members = asList<Member>(membersData?.data || []);
+  const [q, setQ] = useState("");
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return members;
+    return members.filter((m) =>
+      [m.employeeName, m.role, m.jobTitle].some((f) => String(f ?? "").toLowerCase().includes(term)),
+    );
+  }, [members, q]);
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<Member>(filtered);
 
   const add = async () => {
     const aid = Number(form.assignmentId);
@@ -159,12 +170,34 @@ function TeamsMembersTab() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" /> الأعضاء النشطون ({members.length})
-            </CardTitle></CardHeader>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" /> الأعضاء النشطون ({members.length})
+              </CardTitle>
+              <PrintButton
+                entityType="report_admin_team_members"
+                entityId="list"
+                size="icon"
+                payload={() => ({
+                  entity: { title: "أعضاء الفريق", total: printRows.length },
+                  items: printRows.map((m) => ({
+                    "الموظف": m.employeeName,
+                    "الدور": TEAM_ROLE_LABELS[m.role as keyof typeof TEAM_ROLE_LABELS] || m.role,
+                    "منذ": m.startDate?.slice(0, 10) || "—",
+                  })),
+                })}
+              />
+            </CardHeader>
             <CardContent>
+              <div className="mb-3 max-w-sm">
+                <Input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="بحث بالموظف أو الدور أو المسمى…"
+                />
+              </div>
               {isLoading ? <LoadingSpinner /> : (
-                <DataTable data={members} columns={columns} pageSize={20} noToolbar emptyMessage="لا يوجد أعضاء بعد." />
+                <DataTable data={filtered} columns={columns} onSortedDataChange={setPrintRows} pageSize={20} noToolbar emptyMessage="لا يوجد أعضاء بعد." />
               )}
             </CardContent>
           </Card>

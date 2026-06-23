@@ -44,6 +44,9 @@ import {
   type DataTableColumn,
   PageShell,
   PageStatusBadge,
+  AdvancedFilters,
+  useFilters,
+  applyFilters,
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { formatCurrency, todayLocal } from "@/lib/formatters";
@@ -144,6 +147,9 @@ type Tab = "mudad" | "lots" | "fx" | "cycle" | "realized" | "payroll-liability";
 
 export default function GLPostingQueuePage() {
   const [tab, setTab] = useState<Tab>("mudad");
+  // Search applies to the main operational queue (Mudad salaries) — its
+  // period/status are real text fields. The other tabs key on numeric ids.
+  const [mudadFilters, setMudadFilters] = useFilters();
 
   const mudad = useApiQuery<{ data: MudadPendingRow[] }>(
     ["gl-helpers", "mudad-salary", "pending"],
@@ -286,6 +292,9 @@ export default function GLPostingQueuePage() {
   }
 
   const mudadRows = mudad.data?.data ?? [];
+  const filteredMudadRows = applyFilters(mudadRows, mudadFilters, {
+    searchFields: ["period", "status"],
+  });
   const lotRows = lots.data?.data ?? [];
   const fxRows = fx.data?.data ?? [];
   const cycleRows = cycle.data?.data ?? [];
@@ -769,9 +778,17 @@ export default function GLPostingQueuePage() {
         </TabsList>
 
         <TabsContent value="mudad" className="mt-3">
+          <div className="mb-3">
+            <AdvancedFilters
+              config={{ searchPlaceholder: "بحث بالفترة أو الحالة…", showDateRange: false }}
+              values={mudadFilters}
+              onChange={setMudadFilters}
+              resultCount={filteredMudadRows.length}
+            />
+          </div>
           <DataTable
             columns={mudadColumns}
-            data={mudadRows}
+            data={filteredMudadRows}
             rowKey={(r) => `mudad-${r.id}`}
             emptyMessage="لا توجد رواتب معتمدة بانتظار الترحيل"
             emptyIcon={<Coins className="h-10 w-10 opacity-30" />}

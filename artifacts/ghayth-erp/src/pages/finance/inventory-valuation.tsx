@@ -123,11 +123,11 @@ export default function InventoryValuationPage() {
 
   const productColumns: DataTableColumn<ValuationRow>[] = [
     {
-      key: "sku", header: "الرمز", sortable: true,
+      key: "sku", header: "الرمز", sortable: true, searchable: true,
       render: (r) => <span className="font-mono text-xs text-status-info-foreground">{r.sku ?? "—"}</span>,
     },
     {
-      key: "name", header: "المنتج", sortable: true,
+      key: "name", header: "المنتج", sortable: true, searchable: true,
       render: (r) => <span className="font-medium">{r.name}</span>,
     },
     {
@@ -306,6 +306,7 @@ export default function InventoryValuationPage() {
         <DataTable
           columns={productColumns} data={rows}
           onSortedDataChange={setPrintRows}
+          searchPlaceholder="بحث بالرمز أو اسم المنتج…"
           emptyMessage="لا يوجد مخزون نشط"
           pageSize={50}
         />
