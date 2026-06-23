@@ -99,7 +99,7 @@ export default function GanttPage() {
 
       {gantt && (
         <>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold">{tasks.length}</div><div className="text-xs text-muted-foreground">مهام</div></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold text-status-success-foreground">{tasks.filter((t: any) => t.status === "completed").length}</div><div className="text-xs text-muted-foreground">مكتملة</div></CardContent></Card>
             <Card><CardContent className="pt-4 text-center"><div className="text-xl font-bold text-orange-600">{milestones.length}</div><div className="text-xs text-muted-foreground">معالم</div></CardContent></Card>

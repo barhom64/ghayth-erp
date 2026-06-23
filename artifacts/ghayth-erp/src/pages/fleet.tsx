@@ -45,7 +45,7 @@ export default function Fleet() {
     >
       <FleetTabsNav />
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-5 h-auto md:h-9">
           <TabsTrigger value="vehicles" className="gap-2"><Car className="h-4 w-4" /> المركبات</TabsTrigger>
           <TabsTrigger value="drivers" className="gap-2"><Users className="h-4 w-4" /> السائقون</TabsTrigger>
           <TabsTrigger value="trips" className="gap-2"><MapPin className="h-4 w-4" /> الرحلات</TabsTrigger>

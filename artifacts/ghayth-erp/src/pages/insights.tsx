@@ -233,7 +233,7 @@ export default function Insights() {
       </div>
 
       <Tabs defaultValue="usage">
-        <TabsList className="grid grid-cols-4 w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto md:h-9">
           <TabsTrigger value="usage" className="flex items-center gap-1"><Activity className="h-3 w-3" /> أنماط الاستخدام</TabsTrigger>
           <TabsTrigger value="clients" className="flex items-center gap-1"><Users className="h-3 w-3" /> تحليل العملاء</TabsTrigger>
           <TabsTrigger value="kpis" className="flex items-center gap-1"><Target className="h-3 w-3" /> مؤشرات الأداء</TabsTrigger>

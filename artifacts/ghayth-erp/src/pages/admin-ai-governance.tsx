@@ -405,7 +405,7 @@ export default function AdminAiGovernance() {
               <CardContent className="space-y-2">
                 <div className="flex items-center gap-3 flex-wrap">
                   <Button size="sm" variant="outline" onClick={runConnectionTest} disabled={testingConn}>
-                    {testingConn ? "جارٍ الاختبار…" : "اختبار الاتصال"}
+                    {testingConn ? "جاري الاختبار…" : "اختبار الاتصال"}
                   </Button>
                   {connTest && (
                     <span
@@ -1089,7 +1089,7 @@ function SimulatePromptDialog({ promptId, onClose }: {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-4 gap-2 text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">المدة</span><br /><span className="font-mono font-semibold">{result.durationMs}ms</span></div>
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الموجّه</span><br /><span className="font-mono font-semibold">{result.promptTokens}</span></div>
                     <div className="bg-surface-subtle p-2 rounded"><span className="text-muted-foreground">رموز الإكمال</span><br /><span className="font-mono font-semibold">{result.completionTokens}</span></div>
