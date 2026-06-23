@@ -374,7 +374,7 @@ export default function Customer360SheetPage() {
                 <CardTitle className="text-base">أعمار الفواتير المفتوحة</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   {[
                     { key: "current" as const, label: "حالي", color: "" },
                     { key: "1-30" as const, label: "1-30 يوم", color: "text-status-success-foreground" },
