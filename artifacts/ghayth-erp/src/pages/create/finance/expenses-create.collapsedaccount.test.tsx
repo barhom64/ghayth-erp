@@ -28,3 +28,26 @@ describe("expense sub-account is auto-derived + collapsed (helper-not-obstacle)"
     expect(PAGE).not.toMatch(/بند المصروفات \(اختياري — توجيه تلقائي\)/);
   });
 });
+
+describe("expense source treasury collapses when a single box matches (helper-not-obstacle)", () => {
+  it("derives a single-source flag from the payment-method-filtered options", () => {
+    expect(PAGE).toMatch(/const onlySource = sourceOptions\.length === 1 \? sourceOptions\[0\] : null/);
+  });
+
+  it("renders a read-only treasury display when exactly one source matches", () => {
+    expect(PAGE).toMatch(/\{onlySource \?/);
+    expect(PAGE).toMatch(/الخزنة الوحيدة المطابقة لطريقة الدفع/);
+  });
+
+  it("still shows the picker when multiple treasuries are available (real operational choice)", () => {
+    // the Autocomplete remains in the else-branch for the multi-source case.
+    expect(PAGE).toMatch(/<Autocomplete options=\{sourceOptions\}/);
+  });
+
+  it("the payment-method effect clears AND auto-selects in one pass (Codex P1: no empty lone source)", () => {
+    // switching between two single-source methods must end up with the new lone
+    // source selected, not cleared-then-stuck-empty under the collapsed display.
+    expect(PAGE).toMatch(/const stillValid = !!prev\.sourceAccountCode && codes\.includes\(prev\.sourceAccountCode\)/);
+    expect(PAGE).toMatch(/if \(codes\.length === 1\) return \{ \.\.\.prev, sourceAccountCode: codes\[0\] \}/);
+  });
+});
