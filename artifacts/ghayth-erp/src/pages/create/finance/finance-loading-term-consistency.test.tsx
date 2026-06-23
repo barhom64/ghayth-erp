@@ -12,6 +12,14 @@ const ROOTS = [
   join(import.meta.dirname!, "../../finance"),           // pages/finance
 ];
 
+// Finance-facing files outside the finance dirs that this fix also touched —
+// include them explicitly so the guard protects the FULL set it was added for
+// (Codex P2 #2928): a shared finance component + the project billing detail.
+const EXTRA_FILES = [
+  join(import.meta.dirname!, "../../../components/shared/financial-attachment-viewer.tsx"),
+  join(import.meta.dirname!, "../../details/project-detail.tsx"),
+];
+
 function walk(dir: string): string[] {
   const out: string[] = [];
   let entries: string[] = [];
@@ -27,10 +35,11 @@ function walk(dir: string): string[] {
 describe("finance UI loading text uses the unified «جاري …» (not «جارٍ …»)", () => {
   it("no finance page/component reintroduces the «جارٍ» spelling variant", () => {
     const offenders: string[] = [];
-    for (const root of ROOTS) {
-      for (const f of walk(root)) {
-        if (/جارٍ/.test(readFileSync(f, "utf8"))) offenders.push(f);
-      }
+    const files = [...ROOTS.flatMap(walk), ...EXTRA_FILES];
+    for (const f of files) {
+      let src = "";
+      try { src = readFileSync(f, "utf8"); } catch { continue; }
+      if (/جارٍ/.test(src)) offenders.push(f);
     }
     expect(offenders, `استعمل «جاري …» الموحّدة بدل «جارٍ …» في: ${offenders.join(", ")}`).toEqual([]);
   });
