@@ -280,6 +280,7 @@ export const DEFAULT_CHART_OF_ACCOUNTS: Array<{
   { code: "1250", name: "تحسينات على مأجور", nameEn: "Leasehold Improvements", type: "asset", level: 3, parentCode: "1200" },
   { code: "1260", name: "الأصول غير الملموسة (برامج وتراخيص)", nameEn: "Intangible Assets", type: "asset", level: 3, parentCode: "1200" },
   { code: "1270", name: "أعمال تحت التنفيذ", nameEn: "Capital Work In Progress", type: "asset", level: 3, parentCode: "1200" },
+  { code: "1280", name: "أصول ثابتة أخرى", nameEn: "Other Fixed Assets", type: "asset", level: 3, parentCode: "1200" },
 
   // 1291 مجمع انخفاض قيمة الأصول الثابتة — IAS 36 contra-asset مستقل عن مجمعات
   // الإهلاك (1211/1221/…) لضمان فصل مخصص الهبوط عن مخصص الإهلاك في الميزانية.

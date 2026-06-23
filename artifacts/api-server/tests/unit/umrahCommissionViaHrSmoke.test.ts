@@ -53,8 +53,9 @@ describe("§5 — CR account routing branches on viaHr", () => {
     expect(ENGINE).toMatch(/getAccountCodeFromMapping\(plan\.companyId, "commission_payable",\s*"credit", "2155"\)/);
   });
 
-  it("DR commission_expense (6200) is unchanged — only the payable side switches per the operator's instruction", () => {
-    expect(ENGINE).toMatch(/getAccountCodeFromMapping\(plan\.companyId, "commission_expense", "debit", "6200"\)/);
+  it("DR commission_expense resolves the commission leaf — only the payable side switches per the operator's instruction", () => {
+    // Repointed phantom 6200 → 5430 «العمولات والوساطة» (postable expense leaf).
+    expect(ENGINE).toMatch(/getAccountCodeFromMapping\(plan\.companyId, "commission_expense", "debit", "5430"\)/);
   });
 });
 
