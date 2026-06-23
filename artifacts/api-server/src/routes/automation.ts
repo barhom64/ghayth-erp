@@ -11,7 +11,12 @@ const router = Router();
 router.get("/cron-jobs", authorize({ feature: "admin", action: "list" }), async (req, res): Promise<void> => {
   try {
     const scope = req.scope!;
-    const rows = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs ORDER BY name LIMIT 500`, []);
+    // تقييد العزل متعدد الشركات: مهام الشركة + المهام النظامية (companyId NULL،
+    // مقصودة حسب هجرة 124). كان السرد بلا ترشيح فيكشف مهام شركات أخرى لمدير ≥60.
+    const rows = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM cron_jobs WHERE "companyId" = $1 OR "companyId" IS NULL ORDER BY name LIMIT 500`,
+      [scope.companyId],
+    );
     res.json(maskFields(req, { data: rows, total: rows.length, page: 1, pageSize: rows.length }));
   } catch (err) { handleRouteError(err, res, "Cron jobs error:"); }
 });
@@ -33,7 +38,12 @@ router.post("/cron-jobs/:id/trigger", authorize({ feature: "admin", action: "upd
   try {
     const scope = req.scope!;
     const id = parseId(req.params.id, "id");
-    const [job] = await rawQuery<Record<string, unknown>>(`SELECT * FROM cron_jobs WHERE id=$1`, [id]);
+    // نفس التقييد: لا يُشغّل مديرٌ مهمةَ شركةٍ أخرى عبر تخمين id (IDOR-trigger).
+    // المهام النظامية (companyId NULL) تبقى قابلة للتشغيل كما كان.
+    const [job] = await rawQuery<Record<string, unknown>>(
+      `SELECT * FROM cron_jobs WHERE id=$1 AND ("companyId" = $2 OR "companyId" IS NULL)`,
+      [id, scope.companyId],
+    );
     if (!job) throw new NotFoundError("المهمة غير موجودة");
 
     const result = await triggerJobByName(job.name as string);
