@@ -22,7 +22,7 @@ import { join } from "node:path";
  *   7. Route registered.
  */
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-reports.ts"),
   "utf8",
 );
 const PAGE = readFileSync(
