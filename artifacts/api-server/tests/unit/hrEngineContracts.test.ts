@@ -81,11 +81,19 @@ describe("hrEngine GL account resolution patterns", () => {
 
   it("postMonthlyAccrualsGL resolves 4 accounts: leave + EOS expense/liability", () => {
     const idx = ENGINE_SRC.indexOf("async postMonthlyAccrualsGL");
-    const section = ENGINE_SRC.slice(idx, idx + 1200);
+    const section = ENGINE_SRC.slice(idx, idx + 1400);
     expect(section).toContain("hr_leave_accrual_expense");
-    expect(section).toContain("hr_leave_accrual_liability");
+    // Leave-accrual LIABILITY must honour finance's controllable mapping key
+    // `leave_accrual_liability` (accounting_mappings → 2150, migration 365 /
+    // #2277) with a 2150 fallback — NOT the hr_-prefixed key, which is seeded
+    // nowhere and silently fell back to 2220, bypassing finance's pinned
+    // account. (`leave_accrual_liability` is a substring of the old prefixed
+    // key, so we assert the full 2150 signature + absence of the hr_ key.)
+    expect(section).toContain('"leave_accrual_liability", "credit", "2150"');
+    expect(section).not.toContain("hr_leave_accrual_liability");
     expect(section).toContain("hr_eos_accrual_expense");
-    expect(section).toContain("hr_eos_accrual_liability");
+    // EOS accrual stays on its own long-term-provision account (2220).
+    expect(section).toContain('"hr_eos_accrual_liability", "credit", "2220"');
   });
 });
 
