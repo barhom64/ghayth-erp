@@ -37,7 +37,7 @@ import { join } from "node:path";
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
 const ROUTES = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-reports.ts"),
   "utf8",
 );
 const ENGINE = readFileSync(

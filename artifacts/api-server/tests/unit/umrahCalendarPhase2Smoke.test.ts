@@ -19,8 +19,9 @@ import { join } from "node:path";
  *   5. Existing layer drill-downs still wired (LAYER_HREF entries
  *      for the two new layers).
  */
+// U-07 Phase 15 — calendar route + layer metadata carved into umrah-calendar.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-calendar.ts"),
   "utf8",
 );
 const PAGE = readFileSync(
