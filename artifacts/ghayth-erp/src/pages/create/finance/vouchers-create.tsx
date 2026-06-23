@@ -21,7 +21,8 @@ import { FinanceOperationContextPanel } from "@/components/shared/finance-operat
 import { ActiveContextNotice, useActiveFinanceContext } from "@/components/shared/active-context-gate";
 import { deriveRelatedEntity, voucherCounterAccountHint } from "@/lib/finance/scenario-model";
 import { buildAllocationPayload } from "@/components/shared/line-allocation-panel";
-import { AlertCircle, Paperclip } from "lucide-react";
+import { AlertCircle, Paperclip, Lock, ChevronDown } from "lucide-react";
+import { usePermission } from "@/components/shared/permission-gate";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
 import { EmployeeContextCard } from "@/components/shared/employee-context-card";
 import { SupplierContextCard } from "@/components/shared/supplier-context-card";
@@ -78,6 +79,10 @@ export default function VouchersCreate() {
   // Dedicated dry-run mutation (no cache invalidation — it never commits).
   const previewMut = useApiMutation<{ lines: Array<{ accountCode: string; debit: number; credit: number }>; totals?: { totalDebit: number; totalCredit: number } }, any>("/finance/vouchers", "POST", []);
   const [preview, setPreview] = useState<{ lines: Array<{ accountCode: string; debit: number; credit: number }>; totals?: { totalDebit: number; totalCredit: number } } | null>(null);
+  // العقيدة «مساعد لا عائق»: الحساب المقابل مطويّ للقراءة ويُشتق من اتجاه السند —
+  // التجاوز اليدوي خلف زر «تعديل» لذوي صلاحية الاعتماد المالي فقط.
+  const canManualOverride = usePermission("finance:approve");
+  const [manualCounterOpen, setManualCounterOpen] = useState(false);
   const { data: taxCodesData } = useApiQuery<{ data: TaxCodeOption[] }>(
     ["tax-codes", "active"],
     "/finance/tax-codes?active=true",
@@ -237,8 +242,10 @@ export default function VouchersCreate() {
   const validateVoucher = () => validate({
     type: form.type ? null : "يرجى اختيار نوع السند",
     amount: !form.amount ? "المبلغ مطلوب" : Number(form.amount) <= 0 ? "المبلغ يجب أن يكون أكبر من صفر" : null,
-    accountCode: form.accountCode ? null : "الحساب المحاسبي مطلوب",
-    sourceAccountCode: !form.sourceAccountCode && !form.accountCode ? "يجب تحديد حساب مدين وحساب دائن" : null,
+    // العقيدة «النظام مساعد لا عائق»: الحساب المقابل اختياري — إن تُرك فارغًا
+    // يوجّهه الخادم تلقائيًا حسب اتجاه السند (صرف→5399، قبض→4930). غير المحاسب
+    // لا يُجبَر على اختياره. تبقى الخزنة مطلوبة (جانب المال الفعلي).
+    sourceAccountCode: form.sourceAccountCode ? null : "حدد الخزنة / البنك (مصدر أو وجهة المال)",
     // الفرع اختياري في الخلفية ويُعبّأ من سياق الدخول — لا يُفرض.
   });
 
@@ -390,21 +397,44 @@ export default function VouchersCreate() {
       <div className="border rounded-lg p-4 mb-4 space-y-3">
         <h3 className="font-semibold text-sm text-muted-foreground">الحسابات</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <AccountSelect
-              value={form.accountCode}
-              onChange={(v) => setField("accountCode", v)}
-              label="الحساب المقابل"
-              required
-              error={fieldErrors.accountCode}
-              placeholder="اختر الحساب..."
-            />
-            {/* #1945 item 5 — direction-aware hint (صرف=مصروف / قبض=إيراد);
-                the backend enforces the same rule and rejects mismatches. */}
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {voucherCounterAccountHint(form.operationType, form.type === "receipt" ? "receipt" : "payment")}
-            </p>
-          </div>
+          <FormFieldWrapper label="الحساب المقابل (توجيه تلقائي حسب اتجاه السند)">
+            {/* العقيدة: مطويّ ومُشتق — صرف→5399 «مصروفات عمومية أخرى»،
+                قبض→4930 «إيرادات متنوعة» (يحلّه الخادم). زر «تعديل» لذوي صلاحية
+                الاعتماد فقط للتجاوز اليدوي النادر. */}
+            <div className="rounded-md border bg-muted/40 p-2 text-sm flex items-start gap-2">
+              <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <span className="block">
+                  {form.accountCode
+                    ? `الحساب المقابل: ${form.accountCode}`
+                    : (form.type === "receipt"
+                        ? "يُشتق تلقائيًا: إيرادات متنوعة (4930)"
+                        : "يُشتق تلقائيًا: مصروفات عمومية أخرى (5399)")}
+                </span>
+                <span className="block text-[10px] text-muted-foreground mt-0.5">
+                  {voucherCounterAccountHint(form.operationType, form.type === "receipt" ? "receipt" : "payment")}
+                </span>
+              </div>
+              {canManualOverride && (
+                <button type="button" onClick={() => setManualCounterOpen((v) => !v)}
+                  className="text-xs text-status-info-foreground hover:underline shrink-0 flex items-center gap-1">
+                  {manualCounterOpen ? "إخفاء" : "تعديل"}
+                  <ChevronDown className={`h-3 w-3 transition-transform ${manualCounterOpen ? "rotate-180" : ""}`} />
+                </button>
+              )}
+            </div>
+            {canManualOverride && manualCounterOpen && (
+              <div className="mt-2">
+                <AccountSelect
+                  value={form.accountCode}
+                  onChange={(v) => setField("accountCode", v)}
+                  label=""
+                  error={fieldErrors.accountCode}
+                  placeholder="تجاوز يدوي — اتركه فارغًا للتوجيه التلقائي…"
+                />
+              </div>
+            )}
+          </FormFieldWrapper>
           <AccountSelect
             value={form.sourceAccountCode}
             onChange={(v) => setField("sourceAccountCode", v)}

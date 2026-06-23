@@ -22,8 +22,10 @@ describe("expense create no longer hard-rejects a missing accountCode", () => {
     expect(CODE).toMatch(/\?\?\s*"5399"/);
   });
 
-  it("the SEPARATE voucher handler keeps its own required-account guard (out of scope)", () => {
-    // vouchers (سند) legitimately require a main account; this fix is expenses-only.
-    expect(CODE).toMatch(/الحساب المحاسبي الرئيسي للسند|الحساب المحاسبي مطلوب/);
+  it("the voucher handler ALSO auto-routes an empty counter by direction (صرف→5399، قبض→4930)", () => {
+    // العقيدة طُبّقت على السند أيضًا (اعتمده إبراهيم): لم يعد يرفض الحساب المقابل
+    // الفارغ، بل يوجّهه حسب الاتجاه. لا رفض «الحساب المحاسبي مطلوب».
+    expect(CODE).not.toMatch(/الحساب المحاسبي الرئيسي للسند/);
+    expect(CODE).toMatch(/resolvedCounterAccount = accountCode \|\| \(type === "receipt" \? "4930" : "5399"\)/);
   });
 });
