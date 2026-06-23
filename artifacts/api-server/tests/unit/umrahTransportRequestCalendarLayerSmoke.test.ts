@@ -37,8 +37,9 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
 
+// U-07 Phase 15 — calendar route + transport_request layer carved into umrah-calendar.ts.
 const ROUTE_UMRAH_ENT = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-calendar.ts"),
   "utf8",
 );
 const CALENDAR_PAGE = readFileSync(
