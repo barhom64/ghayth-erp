@@ -23,8 +23,9 @@ import { join } from "node:path";
  *   - more layers (pricing/commission/group readiness)
  *   - real-time refresh via the §10 event stream
  */
+// U-07 Phase 15 — calendar route + CALENDAR_LAYER_META carved into umrah-calendar.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-calendar.ts"),
   "utf8",
 );
 const PAGE = readFileSync(

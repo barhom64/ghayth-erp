@@ -299,6 +299,12 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // buildScopedWhere — inherits the same allowlist justification as the parent
   // umrah-entities.ts.
   "umrah-refunds.ts",
+  // umrah-calendar.ts: U-07 Phase 15 split — the read-only operational calendar
+  // aggregator (/calendar/events) carved verbatim out of umrah-entities.ts.
+  // Pure SELECT aggregates per layer scoped on (companyId, …); no list cascade
+  // for buildScopedWhere — inherits the same allowlist justification as the
+  // parent umrah-entities.ts.
+  "umrah-calendar.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -493,9 +499,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // +1 total/manualOnly: U-07 Phase 14 routes/umrah-refunds.ts — 6
       // refund-request lifecycle routes carved verbatim out of
       // umrah-entities.ts. Same allowlist justification as the parent.
-      total: 146,
+      // +1 total/manualOnly: U-07 Phase 15 routes/umrah-calendar.ts — the
+      // read-only operational calendar aggregator carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification as the parent.
+      total: 147,
       helperUsers: 39,
-      manualOnly: 103,
+      manualOnly: 104,
     });
   });
 });
