@@ -394,7 +394,7 @@ export interface PurchaseTreatment {
 export const PURCHASE_LINE_TREATMENTS: PurchaseTreatment[] = [
   { value: "inventory", label: "مخزون (Inventory)", accountPurpose: "inventory_receipt", defaultCode: "1150", capitalize: true, hint: "يُرسمَل في المخزون ويُسوّى عند استلام البضاعة (GRN)." },
   { value: "expense", label: "مصروف (Expense)", accountPurpose: "general_expense", defaultCode: "6900", capitalize: false, hint: "يُقيَّد مصروفًا عامًا فور الاستلام." },
-  { value: "fixed_asset", label: "أصل ثابت (Fixed Asset)", accountPurpose: "fixed_asset_purchase", defaultCode: "1500", capitalize: true, hint: "يُرسمَل كأصل ثابت ويبدأ إهلاكه الشهري تلقائيًا." },
+  { value: "fixed_asset", label: "أصل ثابت (Fixed Asset)", accountPurpose: "fixed_asset_purchase", defaultCode: "1280", capitalize: true, hint: "يُرسمَل كأصل ثابت ويبدأ إهلاكه الشهري تلقائيًا." },
   { value: "project_cost", label: "تكلفة مشروع (Project Cost)", accountPurpose: "project_cost", defaultCode: "6800", capitalize: false, hint: "يُحمَّل على تكلفة المشروع المرتبط." },
   { value: "vehicle_cost", label: "تكلفة مركبة (Vehicle Cost)", accountPurpose: "vehicle_expense", defaultCode: "6500", capitalize: false, hint: "يُحمَّل على مصروفات المركبة." },
   { value: "property_maintenance", label: "صيانة عقار (Property Maintenance)", accountPurpose: "property_maintenance_expense", defaultCode: "6600", capitalize: false, hint: "يُحمَّل على صيانة العقار." },

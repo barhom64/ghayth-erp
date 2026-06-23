@@ -49,6 +49,8 @@ routes/umrah-entities.ts:umrah_agents
 routes/umrah-entities.ts:umrah_groups
 routes/umrah-entities.ts:umrah_sub_agents
 routes/umrah-import-batches.ts:umrah_import_changes
+routes/umrah-reports.ts:umrah_groups
+routes/umrah-reports.ts:umrah_sub_agents
 routes/umrah.ts:fleet_drivers
 routes/umrah.ts:fleet_vehicles
 routes/umrah.ts:umrah_agents
@@ -284,7 +286,7 @@ routes/transport-pricing.ts:fleet_vehicles
 # finance-algorithms.ts:cip_costs. The read is correctly filtered; this is a scanner
 # limitation, not a real ghost-row leak.
 routes/umrah-commission.ts:employee_commission_tiers
-routes/umrah-entities.ts:official_letters
+routes/umrah-letters.ts:official_letters
 routes/umrah.ts:employees
 routes/umrah.ts:purchase_orders
 routes/umrah.ts:umrah_groups

@@ -73,6 +73,9 @@ vi.mock("@workspace/ui-core", () => ({
       </tbody>
     </table>
   ),
+  AdvancedFilters: () => null,
+  useFilters: () => [{}, () => {}],
+  applyFilters: (items: any) => items,
 }));
 
 // Render every tab's content (skip Radix tab-switching) so the

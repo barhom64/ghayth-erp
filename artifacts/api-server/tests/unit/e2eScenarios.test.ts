@@ -14,6 +14,8 @@ describe("E2E: Umrah full lifecycle scenario", () => {
   const entities = read("routes/umrah-entities.ts");
   // U-07 Phase 6: sub-agent CRUD + linking routes live here.
   const subAgents = read("routes/umrah-sub-agents.ts");
+  // U-07 Phase 9: sub-agent statement routes (JSON + PDF) live here.
+  const statements = read("routes/umrah-statements.ts");
   const importEngine = read("lib/umrahImportEngine.ts");
   const invoiceEngine = read("lib/umrahInvoicingEngine.ts");
 
@@ -75,7 +77,7 @@ describe("E2E: Umrah full lifecycle scenario", () => {
   });
 
   it("12. Statement generation exists", () => {
-    expect(entities).toContain('"/statements/');
+    expect(statements).toContain('"/statements/');
     expect(invoiceEngine).toContain("generateStatement");
   });
 
@@ -349,6 +351,8 @@ describe("E2E: Nusk invoice CRUD", () => {
 describe("E2E: Full umrah lifecycle flow verification", () => {
   const umrah = read("routes/umrah.ts");
   const entities = read("routes/umrah-entities.ts");
+  // U-07 Phase 9: sub-agent statement routes (JSON + PDF) live here.
+  const statements = read("routes/umrah-statements.ts");
   const importEngine = read("lib/umrahImportEngine.ts");
   const invoiceEngine = read("lib/umrahInvoicingEngine.ts");
   const catalog = read("lib/eventCatalog.ts");
@@ -405,7 +409,7 @@ describe("E2E: Full umrah lifecycle flow verification", () => {
 
   it("Step 10: Statement is generated per sub-agent", () => {
     expect(invoiceEngine).toContain("generateStatement");
-    expect(entities).toContain('"/statements/');
+    expect(statements).toContain('"/statements/');
   });
 
   it("Step 11: Journal entries are guarded", () => {

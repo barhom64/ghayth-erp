@@ -108,7 +108,7 @@ export default function NegativeStockPage() {
       ),
     },
     {
-      key: "sku", header: "المنتج",
+      key: "sku", header: "المنتج", searchable: true,
       render: (r) => (
         <div>
           <p className="font-mono text-xs text-status-info-foreground">{r.sku ?? "—"}</p>
@@ -117,7 +117,7 @@ export default function NegativeStockPage() {
       ),
     },
     {
-      key: "lotNumber", header: "التشغيلة",
+      key: "lotNumber", header: "التشغيلة", searchable: true,
       render: (r) => <span className="font-mono text-xs">{r.lotNumber}</span>,
     },
     {
@@ -277,6 +277,7 @@ export default function NegativeStockPage() {
           <h3 className="text-base font-semibold mb-3">تفصيل التشغيلات السالبة ({rows.length})</h3>
           <DataTable
             columns={columns} data={rows}
+            searchPlaceholder="بحث بالرمز أو رقم التشغيلة…"
             emptyMessage="—"
             pageSize={50}
           />

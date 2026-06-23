@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   FolderOpen, TrendingUp, TrendingDown, Download, BarChart3,
   ExternalLink, AlertTriangle, CheckCircle2,
@@ -108,6 +109,10 @@ export default function ProjectPortfolioDashboardPage() {
 
   const sorted = portfolio.slice().sort((a, b) => b.profit - a.profit);
   const maxAbsProfit = Math.max(...portfolio.map(p => Math.abs(p.profit)), 1);
+
+  // Detail-table rows: carry the profit-DESC rank so "#" stays the portfolio
+  // rank regardless of any header re-sort.
+  const tableRows = sorted.map((p, idx) => ({ ...p, rank: idx + 1 }));
 
   const exportCSV = () => {
     const lines: string[] = [];
@@ -316,59 +321,96 @@ export default function ProjectPortfolioDashboardPage() {
             <CardHeader>
               <CardTitle className="text-base">الجدول التفصيلي ({portfolio.length})</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2 w-12">#</th>
-                      <th className="text-start py-2 px-2">المشروع</th>
-                      <th className="text-start py-2 px-2">العميل</th>
-                      <th className="text-end py-2 px-2">الإيرادات</th>
-                      <th className="text-end py-2 px-2">المصاريف</th>
-                      <th className="text-end py-2 px-2">الربح</th>
-                      <th className="text-end py-2 px-2 w-20">الهامش</th>
-                      <th className="py-2 px-2 w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map((p, idx) => (
-                      <tr key={p.id} className="border-b hover:bg-muted/30">
-                        <td className="py-1.5 px-2 text-muted-foreground">{idx + 1}</td>
-                        <td className="py-1.5 px-2 font-medium">{p.name}</td>
-                        <td className="py-1.5 px-2 text-xs text-muted-foreground">{p.clientName ?? "—"}</td>
-                        <td className="py-1.5 px-2 text-end tabular-nums">{formatCurrency(p.revenue)}</td>
-                        <td className="py-1.5 px-2 text-end tabular-nums text-status-danger-foreground">
-                          {formatCurrency(p.expense)}
-                        </td>
-                        <td className={`py-1.5 px-2 text-end tabular-nums font-semibold ${p.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                          {p.profit >= 0 ? "+" : ""}{formatCurrency(p.profit)}
-                        </td>
-                        <td className={`py-1.5 px-2 text-end tabular-nums font-bold ${p.margin >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
-                          {p.margin.toFixed(1)}%
-                        </td>
-                        <td className="py-1.5 px-2">
-                          <Button asChild variant="ghost" size="icon" className="h-7 w-7"><Link href={`/finance/project-costing/${p.id}`}>
-                              <ExternalLink className="w-3 h-3" />
-                            </Link></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="font-semibold bg-muted/40 border-t-2">
-                      <td colSpan={3} className="py-2 px-2">الإجمالي</td>
-                      <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totals.revenue)}</td>
-                      <td className="py-2 px-2 text-end tabular-nums text-status-danger-foreground">{formatCurrency(totals.expense)}</td>
-                      <td className={`py-2 px-2 text-end tabular-nums ${totals.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
+            <CardContent className="p-0">
+              <DataTable
+                data={tableRows}
+                rowKey={(p) => p.id}
+                noToolbar
+                pageSize={0}
+                columns={[
+                  {
+                    key: "rank",
+                    header: "#",
+                    width: "3rem",
+                    sortable: false,
+                    render: (p) => <span className="text-muted-foreground">{p.rank}</span>,
+                  },
+                  {
+                    key: "name",
+                    header: "المشروع",
+                    render: (p) => <span className="font-medium">{p.name}</span>,
+                    footer: () => "الإجمالي",
+                  },
+                  {
+                    key: "clientName",
+                    header: "العميل",
+                    className: "text-xs text-muted-foreground",
+                    render: (p) => p.clientName ?? "—",
+                  },
+                  {
+                    key: "revenue",
+                    header: "الإيرادات",
+                    align: "end",
+                    ltr: true,
+                    className: "tabular-nums",
+                    render: (p) => formatCurrency(p.revenue),
+                    footer: () => formatCurrency(totals.revenue),
+                  },
+                  {
+                    key: "expense",
+                    header: "المصاريف",
+                    align: "end",
+                    ltr: true,
+                    className: "tabular-nums text-status-danger-foreground",
+                    render: (p) => formatCurrency(p.expense),
+                    footer: () => formatCurrency(totals.expense),
+                  },
+                  {
+                    key: "profit",
+                    header: "الربح",
+                    align: "end",
+                    ltr: true,
+                    className: "tabular-nums font-semibold",
+                    render: (p) => (
+                      <span className={p.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}>
+                        {p.profit >= 0 ? "+" : ""}{formatCurrency(p.profit)}
+                      </span>
+                    ),
+                    footer: () => (
+                      <span className={totals.profit >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}>
                         {totals.profit >= 0 ? "+" : ""}{formatCurrency(totals.profit)}
-                      </td>
-                      <td className="py-2 px-2 text-end tabular-nums">{portfolioMargin.toFixed(1)}%</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                      </span>
+                    ),
+                  },
+                  {
+                    key: "margin",
+                    header: "الهامش",
+                    align: "end",
+                    width: "5rem",
+                    ltr: true,
+                    className: "tabular-nums font-bold",
+                    render: (p) => (
+                      <span className={p.margin >= 0 ? "text-status-success-foreground" : "text-status-danger-foreground"}>
+                        {p.margin.toFixed(1)}%
+                      </span>
+                    ),
+                    footer: () => `${portfolioMargin.toFixed(1)}%`,
+                  },
+                  {
+                    key: "_actions",
+                    header: "",
+                    width: "2rem",
+                    sortable: false,
+                    render: (p) => (
+                      <Button asChild variant="ghost" size="icon" className="h-7 w-7">
+                        <Link href={`/finance/project-costing/${p.id}`}>
+                          <ExternalLink className="w-3 h-3" />
+                        </Link>
+                      </Button>
+                    ),
+                  },
+                ] satisfies DataTableColumn<typeof tableRows[number]>[]}
+              />
             </CardContent>
           </Card>
         </>

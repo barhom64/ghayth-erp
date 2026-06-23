@@ -2,9 +2,8 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
@@ -151,6 +150,80 @@ export default function BudgetHeatmapPage() {
       }).catch((err) => console.error("[export] failed", err));
     }
 };
+
+  type HeatRow = (typeof accountMap)[number];
+  const heatColumns: DataTableColumn<HeatRow>[] = [
+    {
+      key: "account",
+      header: "الحساب",
+      sortable: false,
+      className: "w-48 min-w-48",
+      render: (a) => (
+        <div>
+          <div className="font-mono text-[11px] text-muted-foreground">{a.code}</div>
+          <div className="text-xs font-medium truncate max-w-44" title={a.name}>{a.name}</div>
+        </div>
+      ),
+      footer: () => "الإجمالي",
+    },
+    ...MONTHS_AR.map((m, i): DataTableColumn<HeatRow> => ({
+      key: `m${i}`,
+      header: m.slice(0, 4),
+      align: "center",
+      sortable: false,
+      className: "w-14 min-w-14 text-[11px]",
+      cellClassName: (a) => colorFor(a.months[i].pct).bg,
+      render: (a) => {
+        const mo = a.months[i];
+        const c = colorFor(mo.pct);
+        const tooltip = mo.budget > 0
+          ? `${MONTHS_AR[i]} ${year}\nالميزانية: ${formatCurrency(mo.budget)}\nالفعلي: ${formatCurrency(mo.actual)}\nالاستخدام: ${mo.pct.toFixed(0)}%`
+          : `${MONTHS_AR[i]}: لا ميزانية`;
+        return (
+          <span className={`text-[11px] font-semibold tabular-nums ${c.text}`} title={tooltip}>
+            {mo.budget > 0 ? `${mo.pct.toFixed(0)}%` : "—"}
+          </span>
+        );
+      },
+      footer: () => {
+        const monthBudget = accountMap.reduce((s, a) => s + a.months[i].budget, 0);
+        const monthActual = accountMap.reduce((s, a) => s + a.months[i].actual, 0);
+        const pct = monthBudget > 0 ? (monthActual / monthBudget) * 100 : 0;
+        const c = colorFor(pct);
+        return (
+          <span className={`text-[11px] font-bold ${c.text}`}>
+            {monthBudget > 0 ? `${pct.toFixed(0)}%` : "—"}
+          </span>
+        );
+      },
+    })),
+    {
+      key: "totalActual",
+      header: "إجمالي الفعلي",
+      align: "end",
+      sortable: false,
+      className: "w-28 tabular-nums font-semibold",
+      render: (a) => formatCurrency(a.totalActual),
+      footer: () => <span className="tabular-nums">{formatCurrency(totalActual)}</span>,
+    },
+    {
+      key: "pct",
+      header: "%",
+      align: "end",
+      sortable: false,
+      className: "w-14 tabular-nums font-bold",
+      cellClassName: (a) => {
+        const yearPct = a.totalBudget > 0 ? (a.totalActual / a.totalBudget) * 100 : 0;
+        const c = colorFor(yearPct);
+        return `${c.bg} ${c.text}`;
+      },
+      render: (a) => {
+        const yearPct = a.totalBudget > 0 ? (a.totalActual / a.totalBudget) * 100 : 0;
+        return `${yearPct.toFixed(0)}%`;
+      },
+      footer: () => <span className="tabular-nums">{totalPct.toFixed(0)}%</span>,
+    },
+  ];
 
   return (
     <PageShell
@@ -312,79 +385,13 @@ export default function BudgetHeatmapPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs border-collapse">
-                    <thead className="sticky top-0 bg-background z-10">
-                      <tr className="border-b">
-                        <th className="text-start py-2 px-2 sticky right-0 bg-background z-20 w-48 min-w-48">الحساب</th>
-                        {MONTHS_AR.map((m, i) => (
-                          <th key={i} className="text-center py-2 px-1 w-14 min-w-14 text-[11px] font-medium text-muted-foreground">
-                            {m.slice(0, 4)}
-                          </th>
-                        ))}
-                        <th className="text-end py-2 px-2 w-28">إجمالي الفعلي</th>
-                        <th className="text-end py-2 px-2 w-14">%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {accountMap.map(a => {
-                        const yearPct = a.totalBudget > 0 ? (a.totalActual / a.totalBudget) * 100 : 0;
-                        const yearColor = colorFor(yearPct);
-                        return (
-                          <tr key={a.code} className="border-b hover:bg-muted/20">
-                            <td className="py-1.5 px-2 sticky right-0 bg-background z-10">
-                              <div className="font-mono text-[11px] text-muted-foreground">{a.code}</div>
-                              <div className="text-xs font-medium truncate max-w-44" title={a.name}>{a.name}</div>
-                            </td>
-                            {a.months.map((m, i) => {
-                              const c = colorFor(m.pct);
-                              const tooltip = m.budget > 0
-                                ? `${MONTHS_AR[i]} ${year}\nالميزانية: ${formatCurrency(m.budget)}\nالفعلي: ${formatCurrency(m.actual)}\nالاستخدام: ${m.pct.toFixed(0)}%`
-                                : `${MONTHS_AR[i]}: لا ميزانية`;
-                              return (
-                                <td
-                                  key={i}
-                                  className={`text-center py-1.5 px-1 ${c.bg}`}
-                                  title={tooltip}
-                                >
-                                  <span className={`text-[11px] font-semibold tabular-nums ${c.text}`}>
-                                    {m.budget > 0 ? `${m.pct.toFixed(0)}%` : "—"}
-                                  </span>
-                                </td>
-                              );
-                            })}
-                            <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                              {formatCurrency(a.totalActual)}
-                            </td>
-                            <td className={`py-1.5 px-2 text-end tabular-nums font-bold ${yearColor.text} ${yearColor.bg}`}>
-                              {yearPct.toFixed(0)}%
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="font-semibold bg-muted/40 border-t-2">
-                        <td className="py-2 px-2 sticky right-0 bg-muted/40 z-10">الإجمالي</td>
-                        {Array.from({ length: 12 }, (_, i) => {
-                          const monthBudget = accountMap.reduce((s, a) => s + a.months[i].budget, 0);
-                          const monthActual = accountMap.reduce((s, a) => s + a.months[i].actual, 0);
-                          const pct = monthBudget > 0 ? (monthActual / monthBudget) * 100 : 0;
-                          const c = colorFor(pct);
-                          return (
-                            <td key={i} className={`text-center py-2 px-1 ${c.bg}`}>
-                              <span className={`text-[11px] font-bold ${c.text}`}>
-                                {monthBudget > 0 ? `${pct.toFixed(0)}%` : "—"}
-                              </span>
-                            </td>
-                          );
-                        })}
-                        <td className="py-2 px-2 text-end tabular-nums">{formatCurrency(totalActual)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums">{totalPct.toFixed(0)}%</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                <DataTable
+                  columns={heatColumns}
+                  data={accountMap}
+                  rowKey={(a) => a.code}
+                  noToolbar
+                  pageSize={0}
+                />
               </CardContent>
             </Card>
           )}

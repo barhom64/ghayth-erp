@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/select";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { PlaneTakeoff, PlaneLanding, AlertTriangle, Clock, MapPin, Calendar } from "lucide-react";
 import { todayLocal, formatUmrahDate } from "@/lib/formatters";
 import { Badge } from "@/components/ui/badge";
@@ -256,54 +257,63 @@ function DetailCard({ title, testid, icon: Icon, rows, columns, tone }: DetailCa
           <p className="text-xs text-muted-foreground text-center py-3">لا يوجد سجلات</p>
         ) : (
           <div className="overflow-x-auto max-h-96">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-muted/40">
-                <tr className="text-right text-muted-foreground border-b">
-                  {columns.map((c) => (
-                    <th key={String(c)} className="p-2 font-medium">{COL_LABELS[String(c)] || String(c)}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/20">
-                    {columns.map((c) => {
-                      const val = r[c];
-                      if (c === "fullName") {
-                        return (
-                          <td key={String(c)} className="p-2">
-                            <Link href={`/umrah/pilgrims/${r.id}`} className="text-blue-600 hover:underline">
-                              {String(val ?? "—")}
-                            </Link>
-                          </td>
-                        );
-                      }
-                      if (c === "status") {
-                        return (
-                          <td key={String(c)} className="p-2">
-                            <Badge variant="outline" className="text-[10px]">
-                              {PILGRIM_STATUS_LABELS[String(val ?? "")] || String(val ?? "—")}
-                            </Badge>
-                          </td>
-                        );
-                      }
-                      if (c === "departureDate" && val) {
-                        return <td key={String(c)} className="p-2">{formatUmrahDate(String(val))}</td>;
-                      }
-                      if (c === "overstayDays" || c === "daysOverdue") {
-                        const n = Number(val ?? 0);
-                        return (
-                          <td key={String(c)} className="p-2 font-bold text-status-error-foreground">
-                            {n > 0 ? n : "—"}
-                          </td>
-                        );
-                      }
-                      return <td key={String(c)} className="p-2">{String(val ?? "—")}</td>;
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              className="text-xs"
+              data={rows}
+              pageSize={0}
+              noToolbar
+              columns={columns.map<DataTableColumn<DetailRow>>((c) => {
+                const header = COL_LABELS[String(c)] || String(c);
+                if (c === "fullName") {
+                  return {
+                    key: String(c),
+                    header,
+                    render: (r) => (
+                      <Link href={`/umrah/pilgrims/${r.id}`} className="text-blue-600 hover:underline">
+                        {String(r[c] ?? "—")}
+                      </Link>
+                    ),
+                    exportValue: (r) => String(r[c] ?? "—"),
+                  };
+                }
+                if (c === "status") {
+                  return {
+                    key: String(c),
+                    header,
+                    render: (r) => (
+                      <Badge variant="outline" className="text-[10px]">
+                        {PILGRIM_STATUS_LABELS[String(r[c] ?? "")] || String(r[c] ?? "—")}
+                      </Badge>
+                    ),
+                    exportValue: (r) => PILGRIM_STATUS_LABELS[String(r[c] ?? "")] || String(r[c] ?? "—"),
+                  };
+                }
+                if (c === "departureDate") {
+                  return {
+                    key: String(c),
+                    header,
+                    render: (r) => (r[c] ? formatUmrahDate(String(r[c])) : "—"),
+                  };
+                }
+                if (c === "overstayDays" || c === "daysOverdue") {
+                  return {
+                    key: String(c),
+                    header,
+                    className: "font-bold text-status-error-foreground",
+                    render: (r) => {
+                      const n = Number(r[c] ?? 0);
+                      return n > 0 ? n : "—";
+                    },
+                    exportValue: (r) => Number(r[c] ?? 0),
+                  };
+                }
+                return {
+                  key: String(c),
+                  header,
+                  render: (r) => String(r[c] ?? "—"),
+                };
+              })}
+            />
           </div>
         )}
       </CardContent>

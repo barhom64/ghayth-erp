@@ -29,6 +29,8 @@ import {
   exportToCSV,
 } from "@workspace/ui-core";
 import { UmrahTabsNav } from "@/components/shared/umrah-tabs-nav";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -204,9 +206,6 @@ export default function UmrahRefundRequests() {
     );
   };
 
-  if (isLoading) return <LoadingSpinner />;
-  if (isError) return <ErrorState onRetry={() => refetch()} />;
-
   const filteredItems = items.filter((r) => {
     if (filters.status && r.status !== filters.status) return false;
     if (filters.search) {
@@ -220,6 +219,10 @@ export default function UmrahRefundRequests() {
     }
     return true;
   });
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<any>(filteredItems);
+
+  if (isLoading) return <LoadingSpinner />;
+  if (isError) return <ErrorState onRetry={() => refetch()} />;
 
   const sum = (rows: RefundRow[], f: (r: RefundRow) => number) =>
     rows.reduce((s, r) => s + f(r), 0);
@@ -328,10 +331,28 @@ export default function UmrahRefundRequests() {
       subtitle="دورة استرداد كاملة: تقديم ← موافقة/رفض ← صرف من الخزينة ← إغلاق — الخادم يتحقق من كل انتقال"
       breadcrumbs={[{ href: "/umrah", label: "إدارة العمرة" }, { label: "طلبات الاسترداد" }]}
       actions={
-        <GuardedButton perm="umrah:create" variant="outline" className="gap-2"
-          onClick={() => setCreateOpen((v) => !v)}>
-          <Plus className="h-4 w-4" />طلب استرداد
-        </GuardedButton>
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_umrah_refund_requests"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "طلبات الاسترداد", total: printRows.length },
+              items: printRows.map((r: any) => ({
+                "المستفيد": r.pilgrimName ?? r.agentName ?? "—",
+                "السبب": r.reason ?? "—",
+                "الإجمالي (ريال)": formatCurrency(Number(r.grossAmount || 0)),
+                "استقطاع الوزارة": Number(r.mofaRetention || 0) > 0 ? formatCurrency(Number(r.mofaRetention)) : "—",
+                "المصروف": r.settledAmount != null ? formatCurrency(Number(r.settledAmount)) : "—",
+                "الحالة": umrahRefundStatusLabel(r.status),
+              })),
+            })}
+          />
+          <GuardedButton perm="umrah:create" variant="outline" className="gap-2"
+            onClick={() => setCreateOpen((v) => !v)}>
+            <Plus className="h-4 w-4" />طلب استرداد
+          </GuardedButton>
+        </div>
       }
     >
       <UmrahTabsNav />
@@ -422,6 +443,7 @@ export default function UmrahRefundRequests() {
       <DataTable
         columns={columns}
         data={filteredItems}
+        onSortedDataChange={setPrintRows}
         isLoading={isLoading}
         isError={isError}
         error={error as Error | null}

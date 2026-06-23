@@ -14,6 +14,8 @@ import {
 } from "@workspace/ui-core";
 import { LoadingSpinner, ErrorState } from "@/components/shared/loading-error-states";
 import { KpiGrid } from "@/components/shared/kpi-card";
+import { PrintButton } from "@/components/shared/print-button";
+import { usePrintRows } from "@/hooks/use-print-rows";
 import { FleetTabsNav } from "@/components/shared/fleet-tabs-nav";
 import { FleetTelematicsTabsNav } from "@/components/shared/fleet-telematics-tabs-nav";
 
@@ -72,6 +74,7 @@ export default function FleetTelematicsOperations() {
       "/fleet/telematics/sync-logs",
     );
   const syncRows = asList(syncLogs) as SyncLogRow[];
+  const { sortedRows: printRows, setSortedRows: setPrintRows } = usePrintRows<SyncLogRow>(syncRows);
 
   const { data: breaker, refetch: refetchBreaker } =
     useApiQuery<BreakerResponse>(
@@ -224,7 +227,23 @@ export default function FleetTelematicsOperations() {
         { label: "لوحة التشغيل" },
       ]}
       actions={
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <PrintButton
+            entityType="report_fleet_telematics_sync_logs"
+            entityId="list"
+            size="icon"
+            payload={() => ({
+              entity: { title: "تشغيل التتبع — سجل عمليات المزامنة (آخر 200)", total: printRows.length },
+              items: printRows.map((r) => ({
+                "النتيجة": STATUS_LABEL[r.status] ?? r.status,
+                "العملية": r.operation,
+                "تكامل": r.integrationId ?? "—",
+                "معالَج": r.itemsProcessed,
+                "أُنشئ": r.itemsCreated,
+                "بدأ في": r.startedAt,
+              })),
+            })}
+          />
           <button
             onClick={() => syncMut.mutate({})}
             disabled={syncMut.isPending}
@@ -323,6 +342,7 @@ export default function FleetTelematicsOperations() {
           <DataTable
             columns={syncColumns}
             data={syncRows}
+            onSortedDataChange={setPrintRows}
             searchPlaceholder="ابحث في العمليات…"
             emptyMessage="لا سجلات مزامنة بعد"
           />

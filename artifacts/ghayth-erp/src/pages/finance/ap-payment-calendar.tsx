@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { exportRowsToCsv } from "@/lib/unified-export";
 import { Link } from "wouter";
 import { useApiQuery } from "@/lib/api";
-import { PageShell } from "@workspace/ui-core";
+import { PageShell, DataTable, type DataTableColumn } from "@workspace/ui-core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -397,36 +397,44 @@ export default function ApPaymentCalendarPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto"><table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground">
-                      <th className="text-start py-2 px-2">المورد</th>
-                      <th className="text-end py-2 px-2 w-20">أوامر الشراء</th>
-                      <th className="text-end py-2 px-2 w-32">المستحق</th>
-                      <th className="text-end py-2 px-2 w-20">%</th>
-                      <th className="py-2 px-2 w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data?.byVendor ?? []).slice().sort((a, b) => b.amount - a.amount).slice(0, 15).map(v => (
-                      <tr key={v.supplierId} className="border-b hover:bg-muted/30">
-                        <td className="py-2 px-2">
-                          <Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
-                            <span className="hover:underline cursor-pointer">{v.supplierName}</span>
-                          </Link>
-                        </td>
-                        <td className="py-2 px-2 text-end tabular-nums">{v.count}</td>
-                        <td className="py-2 px-2 text-end tabular-nums font-semibold">{formatCurrency(v.amount)}</td>
-                        <td className="py-2 px-2 text-end tabular-nums text-muted-foreground">
+                <DataTable
+                  noToolbar
+                  pageSize={0}
+                  rowKey={(v) => v.supplierId}
+                  data={(data?.byVendor ?? []).slice().sort((a, b) => b.amount - a.amount).slice(0, 15)}
+                  columns={[
+                    {
+                      key: "supplierName", header: "المورد",
+                      render: (v) => (
+                        <Link href={`/finance/vendor-360-sheet?vendorId=${v.supplierId}`}>
+                          <span className="hover:underline cursor-pointer">{v.supplierName}</span>
+                        </Link>
+                      ),
+                    },
+                    {
+                      key: "count", header: "أوامر الشراء", align: "end", width: "5rem",
+                      render: (v) => <span className="tabular-nums">{v.count}</span>,
+                    },
+                    {
+                      key: "amount", header: "المستحق", align: "end", width: "8rem",
+                      render: (v) => <span className="tabular-nums font-semibold">{formatCurrency(v.amount)}</span>,
+                    },
+                    {
+                      key: "_pct", header: "%", align: "end", width: "5rem", sortable: false,
+                      render: (v) => (
+                        <span className="tabular-nums text-muted-foreground">
                           {totalDue > 0 ? `${((v.amount / totalDue) * 100).toFixed(1)}%` : "—"}
-                        </td>
-                        <td className="py-2 px-2">
-                          <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/vendors/${v.supplierId}`}><ChevronRight className="w-4 h-4" /></Link></Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table></div>
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "_action", header: "", width: "2rem", sortable: false,
+                      render: (v) => (
+                        <Button asChild variant="ghost" size="icon" title="التالي" className="h-7 w-7"><Link href={`/finance/vendors/${v.supplierId}`}><ChevronRight className="w-4 h-4" /></Link></Button>
+                      ),
+                    },
+                  ] satisfies DataTableColumn<VendorGroup>[]}
+                />
               </CardContent>
             </Card>
           )}

@@ -21,8 +21,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
+// U-07 Phase 11: the season-portfolio query was carved into umrah-reports.ts.
 const SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-reports.ts"),
   "utf8",
 );
 

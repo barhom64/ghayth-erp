@@ -1,4 +1,13 @@
 /**
+ * ⚠️ LEGACY / غير موصول للترحيل التشغيلي. المسار الكنسي الحيّ لإعادة تقييم
+ * الفترة هو `POST /finance/fx/revaluation/post` (routes/finance-algorithms.ts
+ * → lib/fx/build-period-reval-lines.ts) الذي يكتب لجدول `fx_revaluations`.
+ * هذا المسار المكتبي (revaluation.ts + post-revaluation-journal.ts، جدولا
+ * fx_revaluation_log/lines) لا يُستدعى من أي مسار إنتاجي عدا
+ * `POST /finance/gl-helpers/fx-revaluation/:revaluationLogId` الذي يفترض صفوفًا
+ * مسبقة في fx_revaluation_log (لا كاتب حيّ لها). توحيد المسارين = بند مستقل
+ * (تحقيق 2026-06-23). لا تبنِ عليه جديدًا — استخدم المسار الكنسي.
+ *
  * Wire the FX revaluation log into a balanced journal entry via
  * the GL helpers shipped in #224 (account purposes + journal
  * builder) and #252 (postJournalEntry DB driver).

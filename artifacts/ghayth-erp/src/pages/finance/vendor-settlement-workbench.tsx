@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { LoadingSpinner } from "@/components/shared/loading-error-states";
 import { FinanceTabsNav } from "@/components/shared/finance-tabs-nav";
 import { PrintButton } from "@/components/shared/print-button";
+import { DataTable, type DataTableColumn } from "@workspace/ui-core";
 import {
   Phone, Mail, AlertTriangle, ChevronDown, ChevronRight, Search,
   ExternalLink, Download, Users, Banknote, Clock, FileText,
@@ -393,46 +394,56 @@ export default function VendorSettlementWorkbenchPage() {
                     </CardHeader>
                     {isOpen && (
                       <CardContent className="pt-0">
-                        <div className="overflow-x-auto"><table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b text-xs text-muted-foreground">
-                              <th className="text-start py-2 px-2 w-24">النوع</th>
-                              <th className="text-start py-2 px-2">المرجع</th>
-                              <th className="text-start py-2 px-2 w-24">الاستحقاق</th>
-                              <th className="text-end py-2 px-2 w-24">أيام</th>
-                              <th className="text-end py-2 px-2 w-28">المبلغ</th>
-                              <th className="py-2 px-2 w-16"></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {v.orders.sort((a, b) => b.daysOverdue - a.daysOverdue).map(o => (
-                              <tr key={`${o.sourceType}-${o.id}`} className="border-b hover:bg-muted/30">
-                                <td className="py-1.5 px-2">
-                                  <Badge variant="outline" className="text-[10px]">{SOURCE_LABELS[o.sourceType]}</Badge>
-                                </td>
-                                <td className="py-1.5 px-2 font-mono text-xs">{o.ref}</td>
-                                <td className="py-1.5 px-2 text-xs">{formatDateAr(o.dueDate.split("T")[0])}</td>
-                                <td className="py-1.5 px-2 text-end tabular-nums">
-                                  {o.daysOverdue > 0 ? (
-                                    <span className={o.daysOverdue > 90 ? "text-status-danger-foreground font-semibold" : o.daysOverdue > 60 ? "text-status-warning-foreground" : ""}>
-                                      {o.daysOverdue} يوم
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground">لم يستحق</span>
-                                  )}
-                                </td>
-                                <td className="py-1.5 px-2 text-end tabular-nums font-semibold">
-                                  {formatCurrency(o.outstanding)}
-                                </td>
-                                <td className="py-1.5 px-2">
-                                  {o.sourceType === "purchase_order" && (
-                                    <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/purchase-orders/${o.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table></div>
+                        <DataTable
+                          noToolbar
+                          pageSize={0}
+                          className="text-sm"
+                          data={v.orders.slice().sort((a, b) => b.daysOverdue - a.daysOverdue)}
+                          rowKey={(o) => `${o.sourceType}-${o.id}`}
+                          columns={[
+                            {
+                              key: "sourceType", header: "النوع", width: "6rem",
+                              render: (o) => (
+                                <Badge variant="outline" className="text-[10px]">{SOURCE_LABELS[o.sourceType]}</Badge>
+                              ),
+                              exportValue: (o) => SOURCE_LABELS[o.sourceType],
+                            },
+                            {
+                              key: "ref", header: "المرجع", className: "font-mono text-xs",
+                              render: (o) => o.ref,
+                            },
+                            {
+                              key: "dueDate", header: "الاستحقاق", width: "6rem", className: "text-xs",
+                              render: (o) => formatDateAr(o.dueDate.split("T")[0]),
+                              exportValue: (o) => o.dueDate.split("T")[0],
+                            },
+                            {
+                              key: "daysOverdue", header: "أيام", align: "end", width: "6rem", className: "tabular-nums",
+                              render: (o) => (
+                                o.daysOverdue > 0 ? (
+                                  <span className={o.daysOverdue > 90 ? "text-status-danger-foreground font-semibold" : o.daysOverdue > 60 ? "text-status-warning-foreground" : ""}>
+                                    {o.daysOverdue} يوم
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">لم يستحق</span>
+                                )
+                              ),
+                            },
+                            {
+                              key: "outstanding", header: "المبلغ", align: "end", width: "7rem",
+                              className: "tabular-nums font-semibold",
+                              render: (o) => formatCurrency(o.outstanding),
+                            },
+                            {
+                              key: "_actions", header: "", width: "4rem", sortable: false,
+                              render: (o) => (
+                                o.sourceType === "purchase_order" ? (
+                                  <Button asChild variant="ghost" size="icon" title="فتح في نافذة جديدة" className="h-7 w-7"><Link href={`/finance/purchase-orders/${o.id}`}><ExternalLink className="w-3 h-3" /></Link></Button>
+                                ) : null
+                              ),
+                            },
+                          ] satisfies DataTableColumn<AgingOrder>[]}
+                        />
                         <div className="flex justify-end gap-2 mt-3 border-t pt-3">
                           {v.supplierId && (
                             <Button asChild size="sm" variant="outline"><Link href={`/finance/payment-run?supplierId=${v.supplierId}`}>
