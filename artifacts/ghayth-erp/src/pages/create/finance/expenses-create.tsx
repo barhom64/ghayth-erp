@@ -205,6 +205,11 @@ export default function ExpensesCreate() {
     value: a.code || String(a.id),
     label: `${a.code} - ${a.name}`,
   }));
+  // اسم الحساب المشتق (للعرض المطويّ للقراءة) — يُجلب من الشجرة بالكود الذي
+  // اشتقّه النظام من نوع المصروف (LiveImpactPreview → suggestedAccountCode).
+  const derivedAccountName = form.accountCode
+    ? accounts.find((a: any) => String(a.code) === String(form.accountCode))?.name
+    : undefined;
 
   // Audit item #2 — per-line allocation overrides. Default state mirrors
   // the auto-derived fields (accountCode + costCenter + relatedEntity)
@@ -256,6 +261,10 @@ export default function ExpensesCreate() {
   // (the operation context + impact preview) is the default for everyone else.
   const canManualOverride = usePermission("finance:approve");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  // العقيدة «النظام مساعد لا عائق»: الحساب الفرعي يُشتق تلقائيًا من نوع المصروف
+  // ويُعرض مطويًّا (للقراءة) — غير المحاسب لا يختار حسابًا. الاختيار اليدوي
+  // مخبّأ خلف زر «تعديل» لا يظهر إلا لمن يملك صلاحية الاعتماد المالي.
+  const [manualAccountOpen, setManualAccountOpen] = useState(false);
   // #1715 (owner feedback) — purchase/fleet line item: بند / كمية / وحدة /
   // سعر الوحدة. When quantity × unit price is entered the amount auto-fills.
   const [lineItem, setLineItem] = useState({ itemName: "", quantity: "", unit: "", unitPrice: "" });
@@ -658,13 +667,40 @@ export default function ExpensesCreate() {
                 </div>
               </FormFieldWrapper>
             ) : (
-              <FormFieldWrapper label="بند المصروفات (اختياري — توجيه تلقائي)">
-                <Autocomplete options={expenseOptions} value={form.accountCode}
-                  onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
-                  placeholder="اتركه فارغًا للتوجيه التلقائي…" loading={accountsLoading} />
-                <p className="text-xs text-muted-foreground mt-1">
-                  إن تركته فارغًا، يوجّهه النظام تلقائيًا حسب نوع المصروف (أو «مصروفات عمومية أخرى»).
-                </p>
+              <FormFieldWrapper label="بند المصروفات (توجيه تلقائي حسب نوع المصروف)">
+                {/* العقيدة: الحساب الفرعي مطويّ ومُشتق من نوع المصروف — يُعرض
+                    للقراءة، ولا يختاره غير المحاسب. زر «تعديل» (لذوي صلاحية
+                    الاعتماد فقط) يفتح المنتقي اليدوي عند الحاجة النادرة. */}
+                <div className="rounded-md border bg-muted/40 p-2 text-sm flex items-start gap-2">
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <span className="block">
+                      {form.accountCode
+                        ? `حساب المصروف: ${form.accountCode}${derivedAccountName ? ` — ${derivedAccountName}` : ""}`
+                        : "يُشتق تلقائيًا حسب نوع المصروف عند إدخال المبلغ…"}
+                    </span>
+                    <span className="block text-xs text-muted-foreground mt-0.5">
+                      يحدّده النظام حسب «التصنيف التفصيلي» أعلاه — لا حاجة لاختياره يدويًا.
+                    </span>
+                  </div>
+                  {canManualOverride && (
+                    <button type="button" onClick={() => setManualAccountOpen((v) => !v)}
+                      className="text-xs text-status-info-foreground hover:underline shrink-0 flex items-center gap-1">
+                      {manualAccountOpen ? "إخفاء" : "تعديل"}
+                      <ChevronDown className={`h-3 w-3 transition-transform ${manualAccountOpen ? "rotate-180" : ""}`} />
+                    </button>
+                  )}
+                </div>
+                {canManualOverride && manualAccountOpen && (
+                  <div className="mt-2">
+                    <Autocomplete options={expenseOptions} value={form.accountCode}
+                      onChange={(val) => setForm(prev => ({ ...prev, accountCode: String(val) }))}
+                      placeholder="اتركه فارغًا للتوجيه التلقائي…" loading={accountsLoading} />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      تجاوز يدوي (لذوي الصلاحية) — اتركه فارغًا ليوجّهه النظام تلقائيًا.
+                    </p>
+                  </div>
+                )}
               </FormFieldWrapper>
             )}
             <FormFieldWrapper label="مصدر الصرف (الخزنة / البنك)">

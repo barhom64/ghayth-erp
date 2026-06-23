@@ -14,8 +14,11 @@ describe("expense account is optional (auto-routed), not a forced obstacle", () 
   it("validate() no longer hard-requires accountCode", () => {
     expect(PAGE).not.toMatch(/accountCode: form\.accountCode \? null : "بند المصروفات مطلوب"/);
   });
-  it("the manual account field is labelled optional with an auto-route hint", () => {
-    expect(PAGE).toMatch(/label="بند المصروفات \(اختياري — توجيه تلقائي\)"/);
-    expect(PAGE).toMatch(/يوجّهه النظام تلقائيًا حسب نوع المصروف/);
+  it("the account is auto-routed (now a collapsed read-only display, not a forced picker)", () => {
+    // Helper-not-obstacle deepened: the sub-account is derived from expense type
+    // and shown read-only/collapsed (see expenses-create.collapsedaccount.test.tsx);
+    // the manual picker is approver-gated. Either way the account is never forced.
+    expect(PAGE).toMatch(/بند المصروفات \(توجيه تلقائي حسب نوع المصروف\)/);
+    expect(PAGE).toMatch(/يحدّده النظام حسب «التصنيف التفصيلي»/);
   });
 });
