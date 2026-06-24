@@ -58,6 +58,14 @@ routes/umrah-nusk-invoices.ts:umrah_groups
 routes/umrah-nusk-invoices.ts:umrah_sub_agents
 routes/umrah-reports.ts:umrah_groups
 routes/umrah-reports.ts:umrah_sub_agents
+# U-07 Phase 22 — groups CRUD list display JOINs to agent/sub-agent name
+# columns, carved VERBATIM out of umrah-entities.ts. Same grandfathered Task #163
+# baseline exception (display-only name lookups; the group row itself is
+# deletedAt-filtered). No behaviour change — moved as-is. Parent entries kept
+# (group sub-resources — split/merge/cost-breakdown — still reference them).
+routes/umrah-groups.ts:umrah_agents
+routes/umrah-groups.ts:umrah_groups
+routes/umrah-groups.ts:umrah_sub_agents
 routes/umrah.ts:fleet_drivers
 routes/umrah.ts:fleet_vehicles
 routes/umrah.ts:umrah_agents
