@@ -206,62 +206,6 @@ class HREngineImpl implements DomainEngine {
     });
   }
 
-  async postLeaveAccrualGL(
-    ctx: HRGLContext,
-    accrual: { period: string; totalAmount: number; employeeCount: number }
-  ) {
-    const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_expense", "debit", "5270"),
-      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_liability", "credit", "2150"),
-    ]);
-
-    return financialEngine.postJournalEntry({
-      companyId: ctx.companyId,
-      branchId: ctx.branchId,
-      createdBy: ctx.createdBy,
-      ref: `JE-LVAC-${accrual.period}`,
-      description: `استحقاق إجازات — ${accrual.period} (${accrual.employeeCount} موظف)`,
-      type: "accrual",
-      sourceType: "hr_leave_accruals",
-      sourceId: 0,
-      sourceKey: `hr:leave_accrual:${ctx.companyId}:${accrual.period}`,
-      guardTable: "payroll_runs",
-      guardId: 0,
-      lines: [
-        { accountCode: debitCode, debit: accrual.totalAmount, credit: 0, description: `مصروف استحقاق إجازات — ${accrual.period}` },
-        { accountCode: creditCode, debit: 0, credit: accrual.totalAmount, description: `التزام إجازات مستحقة — ${accrual.period}` },
-      ],
-    });
-  }
-
-  async postEOSAccrualGL(
-    ctx: HRGLContext,
-    accrual: { period: string; totalAmount: number; employeeCount: number }
-  ) {
-    const [debitCode, creditCode] = await Promise.all([
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_expense", "debit", "5260"),
-      financialEngine.resolveAccountCode(ctx.companyId, "eos_accrual_liability", "credit", "2220"),
-    ]);
-
-    return financialEngine.postJournalEntry({
-      companyId: ctx.companyId,
-      branchId: ctx.branchId,
-      createdBy: ctx.createdBy,
-      ref: `JE-EOSAC-${accrual.period}`,
-      description: `استحقاق مكافأة نهاية خدمة — ${accrual.period} (${accrual.employeeCount} موظف)`,
-      type: "accrual",
-      sourceType: "hr_eos_accruals",
-      sourceId: 0,
-      sourceKey: `hr:eos_accrual:${ctx.companyId}:${accrual.period}`,
-      guardTable: "payroll_runs",
-      guardId: 0,
-      lines: [
-        { accountCode: debitCode, debit: accrual.totalAmount, credit: 0, description: `مصروف استحقاق نهاية خدمة — ${accrual.period}` },
-        { accountCode: creditCode, debit: 0, credit: accrual.totalAmount, description: `التزام نهاية خدمة — ${accrual.period}` },
-      ],
-    });
-  }
-
   async postPayrollRunGL(
     ctx: HRGLContext,
     payroll: {
