@@ -19,7 +19,9 @@ import { join } from "node:path";
 const root = join(import.meta.dirname!, "../../../../artifacts/api-server/src/routes");
 const read = (f: string) => readFileSync(join(root, f), "utf8");
 
-const UMRAH_ENTITIES = read("umrah-entities.ts");
+// U-07 Phase 22 — group split/merge carved into umrah-groups.ts (they INSERT
+// umrah_groups, so they ship with groups CRUD + issueNumber).
+const UMRAH_GROUPS = read("umrah-groups.ts");
 const UMRAH = read("umrah.ts");
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -28,30 +30,30 @@ const UMRAH = read("umrah.ts");
 
 describe("umrah-entities — group split (#312)", () => {
   it("mounts POST /groups/:id/split", () => {
-    expect(UMRAH_ENTITIES).toMatch(/router\.post\(["']\/groups\/:id\/split["']/);
+    expect(UMRAH_GROUPS).toMatch(/router\.post\(["']\/groups\/:id\/split["']/);
   });
 
   it("requires authorize({ feature: 'umrah', action: 'update' })", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/:id/split"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 300);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/:id/split"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 300);
     expect(section).toMatch(/authorize\(\{\s*feature:\s*["']umrah["']\s*,\s*action:\s*["']update["']/);
   });
 
   it("validates body via zod (splitGroupSchema)", () => {
-    expect(UMRAH_ENTITIES).toContain("splitGroupSchema");
-    expect(UMRAH_ENTITIES).toMatch(/pilgrimIds:\s*z\.array\(z\.number\(\)\.int\(\)\.positive\(\)\)/);
+    expect(UMRAH_GROUPS).toContain("splitGroupSchema");
+    expect(UMRAH_GROUPS).toMatch(/pilgrimIds:\s*z\.array\(z\.number\(\)\.int\(\)\.positive\(\)\)/);
   });
 
   it("rejects invoiced source group with ConflictError (no silent merge)", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/:id/split"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 2500);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/:id/split"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 2500);
     expect(section).toContain("salesInvoiceId");
     expect(section).toContain("ConflictError");
   });
 
   it("scopes source lookup + child pilgrim verification by companyId", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/:id/split"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 2500);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/:id/split"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 2500);
     // Source select
     expect(section).toMatch(/FROM\s+umrah_groups[\s\S]*?"companyId"\s*=/);
     // Pilgrim verification join
@@ -59,57 +61,59 @@ describe("umrah-entities — group split (#312)", () => {
   });
 
   it("transactional + audit + event emission", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/:id/split"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 5000);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/:id/split"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 5000);
     expect(section).toContain("withTransaction");
-    expect(section).toContain("createAuditLog");
+    // U-07 Phase 22 — IGOC ratchet: createAuditLog → auditFromRequest on the carve.
+    expect(section).toContain("auditFromRequest");
     // emitEvent target string at file scope so we don't fight slice
     // boundaries — every group split path emits this event.
-    expect(UMRAH_ENTITIES).toContain('action: "umrah.group.split"');
+    expect(UMRAH_GROUPS).toContain('action: "umrah.group.split"');
   });
 });
 
 describe("umrah-entities — group merge (#312)", () => {
   it("mounts POST /groups/merge", () => {
-    expect(UMRAH_ENTITIES).toMatch(/router\.post\(["']\/groups\/merge["']/);
+    expect(UMRAH_GROUPS).toMatch(/router\.post\(["']\/groups\/merge["']/);
   });
 
   it("requires authorize({ feature: 'umrah', action: 'update' })", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/merge"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 300);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/merge"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 300);
     expect(section).toMatch(/authorize\(\{\s*feature:\s*["']umrah["']\s*,\s*action:\s*["']update["']/);
   });
 
   it("validates body via zod (mergeGroupsSchema)", () => {
-    expect(UMRAH_ENTITIES).toContain("mergeGroupsSchema");
-    expect(UMRAH_ENTITIES).toMatch(/sourceGroupIds:\s*z\.array\(z\.number\(\)\.int\(\)\.positive\(\)\)/);
+    expect(UMRAH_GROUPS).toContain("mergeGroupsSchema");
+    expect(UMRAH_GROUPS).toMatch(/sourceGroupIds:\s*z\.array\(z\.number\(\)\.int\(\)\.positive\(\)\)/);
   });
 
   it("rejects self-merge (target cannot be a source)", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/merge"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 1500);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/merge"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 1500);
     expect(section).toMatch(/sourceGroupIds\.includes\(.*targetGroupId/);
   });
 
   it("rejects merging when any source is invoiced (409 ConflictError)", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/merge"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 3000);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/merge"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 3000);
     expect(section).toContain("salesInvoiceId");
     expect(section).toContain("ConflictError");
   });
 
   it("soft-deletes source groups (no hard delete)", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/merge"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 3500);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/merge"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 3500);
     expect(section).toMatch(/UPDATE\s+umrah_groups[\s\S]*?"deletedAt"\s*=\s*NOW\(\)/);
   });
 
   it("transactional + audit + event emission", () => {
-    const idx = UMRAH_ENTITIES.indexOf('"/groups/merge"');
-    const section = UMRAH_ENTITIES.slice(idx, idx + 6000);
+    const idx = UMRAH_GROUPS.indexOf('"/groups/merge"');
+    const section = UMRAH_GROUPS.slice(idx, idx + 6000);
     expect(section).toContain("withTransaction");
-    expect(section).toContain("createAuditLog");
-    expect(UMRAH_ENTITIES).toContain('action: "umrah.group.merged"');
+    // U-07 Phase 22 — IGOC ratchet: createAuditLog → auditFromRequest on the carve.
+    expect(section).toContain("auditFromRequest");
+    expect(UMRAH_GROUPS).toContain('action: "umrah.group.merged"');
   });
 });
 
