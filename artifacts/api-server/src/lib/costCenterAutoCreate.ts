@@ -288,6 +288,57 @@ async function upsertCostCenter(
 }
 
 /**
+ * GUARANTEED variant of createCostCenterForEntity (batch 6 — «تعميم عقد
+ * الأبعاد المحاسبية»).
+ *
+ * The plain createCostCenterForEntity was historically wired fire-and-forget
+ * (`.catch(log)` on an un-awaited promise) at every entity-create call site.
+ * That shape has a race: the entity row is already persisted and the HTTP 201
+ * can return BEFORE the cost-centre link lands — and if the link throws, the
+ * failure is swallowed silently, leaving the entity with a null cost-centre
+ * dimension on its first posting. Per-entity P&L then silently misses rows.
+ *
+ * This wrapper closes the race WITHOUT touching the ledger / GL: it only
+ * provisions the cost_centers master row (the dimension), never a journal
+ * line or account balance. It MUST be awaited by the caller so the link is
+ * established synchronously, before the create handler responds.
+ *
+ * Resilience contract (unchanged from the fire-and-forget era):
+ *   - It NEVER throws — a cost-centre hiccup must not fail the entity create.
+ *   - It is idempotent — re-runs reuse the existing CC (see upsertCostCenter).
+ * What changes: a failed/empty link is no longer SILENT. When the link can't
+ * be established it logs at error level with a stable, greppable marker so the
+ * gap is observable (and recoverable via POST /finance/cost-centers/backfill).
+ *
+ * Returns the linked cost centre, or null when the link could not be made.
+ */
+export async function ensureCostCenterForEntity(
+  companyId: number,
+  entityType: CostCenterEntityType,
+  entityId: number,
+  entityName: string,
+  options: AutoCreateOptions = {},
+): Promise<AutoCreatedCostCenter | null> {
+  const cc = await createCostCenterForEntity(
+    companyId,
+    entityType,
+    entityId,
+    entityName,
+    options,
+  );
+  if (!cc) {
+    // Non-silent: the link could not be established. The entity create still
+    // succeeds (resilience), but operators can grep this marker and re-run
+    // the backfill to repair the dimension.
+    logger.error(
+      { companyId, entityType, entityId },
+      `[costCenterAutoCreate] LINK_GAP — entity ${entityType}#${entityId} created without a cost-centre link; run /finance/cost-centers/backfill to repair`,
+    );
+  }
+  return cc;
+}
+
+/**
  * Keep the linked cost centre's allocatedAmount in step with the entity's
  * budget (e.g. when a project's budget is edited). No-op when the entity has
  * no auto-created cost centre yet. Variance reporting reads
