@@ -284,9 +284,12 @@ describe("Module coverage: Umrah", () => {
   });
 
   // Validation
-  it("both Umrah route files use Zod validation", () => {
+  it("Umrah route files use Zod validation (umrah.ts + the carved groups sub-router)", () => {
     expect(umrah).toContain("zodParse");
-    expect(entities).toContain("zodParse");
+    // U-07 Phase 22/23 — umrah-entities.ts is now down to employee-assignments
+    // only (no body validation); the group schemas + zodParse moved to
+    // umrah-groups.ts with the CRUD/ops routes.
+    expect(groups).toContain("zodParse");
   });
 
   it("umrah defines schemas for seasons, agents, packages, pilgrims", () => {

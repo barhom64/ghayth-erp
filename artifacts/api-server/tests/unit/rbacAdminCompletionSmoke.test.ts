@@ -111,6 +111,31 @@ describe("RBAC-002 — POST /admin/onboard (quick create employee + user + roles
   });
 });
 
+describe("runtime role mutation — central grant + permission-cache invalidation", () => {
+  it("POST /user-roles grants via the central rbacService (SoD + cache) not a raw INSERT", () => {
+    const idx = ADMIN.indexOf('router.post("/user-roles"');
+    const section = ADMIN.slice(idx, idx + 3000);
+    // Routed through grantUserRole (which enforces SoD AND invalidates caches);
+    // an SoD conflict is a HARD 403 here (explicit single-role admin action).
+    expect(section).toMatch(/grantUserRole\(/);
+    expect(section).toMatch(/sod_conflict/);
+    expect(section).toMatch(/ForbiddenError/);
+    // Seed-on-demand (#1791) preserved.
+    expect(section).toMatch(/PREDEFINED_ROLES\.find/);
+    // No more inline rbac_user_roles INSERT in this handler.
+    expect(section).not.toMatch(/INSERT INTO rbac_user_roles/);
+  });
+
+  it("PATCH /users/:id invalidates both permission caches after a role change", () => {
+    // The replace-role branch lives in the PATCH /users/:id handler; the
+    // invalidation runs right after its withTransaction commits.
+    expect(ADMIN).toMatch(/bumpCacheVersion\(scope\.companyId\)/);
+    expect(ADMIN).toMatch(/invalidateRoleCache\(id\)/);
+    expect(ADMIN).toMatch(/import \{ bumpCacheVersion \} from "\.\.\/lib\/rbac\/authzEngine\.js"/);
+    expect(ADMIN).toMatch(/import \{ invalidateRoleCache \} from "\.\.\/middlewares\/roleGuard\.js"/);
+  });
+});
+
 describe("RBAC-004 — GET /admin/users/:id/effective-permissions", () => {
   it("mounts gated + enforces admin level", () => {
     expect(ADMIN).toMatch(/router\.get\("\/users\/:id\/effective-permissions", authorize\(\{ feature: "admin", action: "view" \}\)/);

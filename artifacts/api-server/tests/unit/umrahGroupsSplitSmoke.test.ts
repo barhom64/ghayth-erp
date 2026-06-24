@@ -109,9 +109,10 @@ describe("U-07 Phase 22 §C — all 5 moved routes are present in the child", ()
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// §D — The moved routes are GONE from the parent (no double mount). The parent
-//      KEEPS the transport service-contract sub-resources (/groups/:id/transport-
-//      requests, /groups/:id/cost-breakdown) — those are a later phase.
+// §D — The moved routes are GONE from the parent (no double mount).
+//      (The transport service-contract sub-resources were carved into
+//      umrah-group-transport.ts in U-07 Phase 23, so they're no longer in the
+//      parent either — see umrahGroupTransportSplitSmoke.test.ts.)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("U-07 Phase 22 §D — parent no longer declares the moved routes", () => {
   for (const [method, route] of ROUTES) {
@@ -119,11 +120,6 @@ describe("U-07 Phase 22 §D — parent no longer declares the moved routes", () 
       expect(PARENT).not.toMatch(new RegExp(`router\\.${method}\\(\\s*["']${esc(route)}["']`));
     });
   }
-
-  it("parent STILL declares the transport sub-resources (not part of this carve)", () => {
-    expect(PARENT).toMatch(/router\.post\("\/groups\/:id\/transport-requests"/);
-    expect(PARENT).toMatch(/router\.get\("\/groups\/:id\/cost-breakdown"/);
-  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
