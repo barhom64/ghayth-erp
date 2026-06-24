@@ -385,13 +385,13 @@ export default function CashPositionCalculatorPage() {
               {adhoc.length > 0 && (
                 <div className="mt-3 space-y-1">
                   {adhoc.map(a => (
-                    <div key={a.id} className="flex items-center justify-between text-xs border rounded px-2 py-1 bg-muted/30">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`text-[10px] ${a.type === "in" ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
+                    <div key={a.id} className="flex items-center justify-between gap-2 text-xs border rounded px-2 py-1 bg-muted/30">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge variant="outline" className={`shrink-0 text-[10px] ${a.type === "in" ? "text-status-success-foreground" : "text-status-danger-foreground"}`}>
                           {a.type === "in" ? "+" : "-"}{formatCurrency(a.amount)}
                         </Badge>
-                        <span>{formatDateAr(a.date)}</span>
-                        <span className="text-muted-foreground">{a.description}</span>
+                        <span className="shrink-0">{formatDateAr(a.date)}</span>
+                        <span className="text-muted-foreground truncate">{a.description}</span>
                       </div>
                       <Button variant="ghost" size="icon" title="حذف" className="h-6 w-6 text-status-danger-foreground" onClick={() => removeAdhoc(a.id)}>
                         <Trash2 className="w-3 h-3" />

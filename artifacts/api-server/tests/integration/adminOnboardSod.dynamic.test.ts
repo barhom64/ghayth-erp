@@ -149,12 +149,15 @@ d("Admin onboard → RBAC multi-role grant + SoD (live DB, HTTP, owner)", () => 
     );
   }
 
+  // phone + nationalId are globally unique in the system, so derive them from
+  // the per-test companyId (itself globally unique) to avoid colliding with the
+  // OTHER dynamic test files when vitest runs them in parallel.
   const baseBody = (ctx: Ctx, suffix: string) => ({
     name: `موظف ${suffix}`,
-    phone: `05000${suffix}`,
-    nationalId: `209900${suffix}`,
+    phone: `0590${ctx.companyId}${suffix}`,
+    nationalId: `29${ctx.companyId}${suffix}0`,
     nationality: "سعودي",
-    email: `${PFX}${suffix}@test.local`,
+    email: `${PFX}${ctx.companyId}-${suffix}@test.local`,
     jobTitle: `مسمى ${suffix}`,
     salary: 5000,
     branchId: ctx.branchId,
@@ -236,7 +239,7 @@ d("Admin onboard → RBAC multi-role grant + SoD (live DB, HTTP, owner)", () => 
 
     const created = await rawQuery<{ id: number }>(
       `SELECT id FROM users WHERE email = $1`,
-      [`${PFX}03@test.local`],
+      [`${PFX}${ctx.companyId}-03@test.local`],
     );
     expect(created.length, "a bad role key must abort the whole onboard").toBe(0);
   }, 60_000);
