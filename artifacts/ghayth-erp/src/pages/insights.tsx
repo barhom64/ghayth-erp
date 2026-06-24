@@ -359,9 +359,9 @@ export default function Insights() {
               <CardContent className="p-0">
                 <div className="divide-y">
                   {clientAnalyticsLive.topClients.slice(0, 10).map((c: any) => (
-                    <div key={c.id ?? c.clientId} className="p-2 flex items-center justify-between text-xs">
-                      <span className="font-medium">{c.name ?? c.clientName}</span>
-                      <div className="flex items-center gap-2 text-muted-foreground">
+                    <div key={c.id ?? c.clientId} className="p-2 flex items-center justify-between gap-2 text-xs">
+                      <span className="font-medium min-w-0 flex-1 truncate">{c.name ?? c.clientName}</span>
+                      <div className="flex items-center gap-2 text-muted-foreground shrink-0">
                         <span>{c.frequency ?? 0} طلب</span>
                         <span className="font-mono font-semibold text-status-success-foreground">
                           {formatCurrency(Number(c.totalValue ?? 0))}
@@ -437,10 +437,10 @@ export default function Insights() {
               <CardContent>
                 <div className="space-y-2">
                   {(clientAnalytics.topClients ?? []).slice(0, 8).map((c: any, idx: number) => (
-                    <div key={c.clientId} className="flex items-center justify-between p-2 rounded bg-surface-subtle border">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground w-5">{idx + 1}</span>
-                        <span className="text-sm font-medium">{c.clientName}</span>
+                    <div key={c.clientId} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded bg-surface-subtle border">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs text-muted-foreground w-5 shrink-0">{idx + 1}</span>
+                        <span className="text-sm font-medium truncate">{c.clientName}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full ${SEGMENT_COLORS[c.segment] ?? "bg-surface-subtle text-status-neutral-foreground"}`}>
                           {SEGMENT_LABELS[c.segment] ?? c.segment}
                         </span>
