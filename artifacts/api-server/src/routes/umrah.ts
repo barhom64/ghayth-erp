@@ -16,7 +16,7 @@ import { z } from "zod";
 import { rawQuery, rawExecute, withTransaction } from "../lib/rawdb.js";
 import { authorize, maskFields } from "../lib/rbac/authorize.js";
 import { createSubsidiaryAccountsForEntity } from "./accounting-engine.js";
-import { createCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
+import { ensureCostCenterForEntity } from "../lib/costCenterAutoCreate.js";
 import { handleRouteError, ValidationError, NotFoundError, ConflictError,
   parseId,
   zodParse,
@@ -602,7 +602,10 @@ router.post("/seasons", authorize({ feature: "umrah", action: "create" }), async
     // Per-season cost centre — season is a time-bound cost/profit bucket
     // (costs carry umrahSeasonId on their journal lines); auto-provision it so
     // per-season P&L drill-down works from day one, like project/agent.
-    createCostCenterForEntity(scope.companyId, "umrah_season", rows[0].id as number, b.title, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah season cost-centre auto-create failed"));
+    // Batch 6 — GUARANTEED (awaited) cost-centre link before the 201, not
+    // fire-and-forget: the season must never reach its first posting with a
+    // null cost-centre dimension. Idempotent + never throws (logs LINK_GAP).
+    await ensureCostCenterForEntity(scope.companyId, "umrah_season", rows[0].id as number, b.title, { actorUserId: scope.userId });
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create season error"); }
 });
@@ -799,7 +802,10 @@ router.post("/agents", authorize({ feature: "umrah", action: "create" }), async 
     // Per-agent cost centre — backs /reports/profitability/umrah-agent with a real
     // cost_centers row (the agent already had a subsidiary account + umrahAgentId
     // dimension, but no auto cost centre — the one asymmetry vs vehicle/property).
-    createCostCenterForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { actorUserId: scope.userId }).catch((e) => logger.error(e, "umrah agent cost-centre auto-create failed"));
+    // Batch 6 — GUARANTEED (awaited) cost-centre link before the 201, not
+    // fire-and-forget: the agent must never reach its first posting with a
+    // null cost-centre dimension. Idempotent + never throws (logs LINK_GAP).
+    await ensureCostCenterForEntity(scope.companyId, "umrah_agent", rows[0].id as number, b.name, { actorUserId: scope.userId });
     res.status(201).json(rows[0]);
   } catch (err) { handleRouteError(err, res, "Create agent error"); }
 });
