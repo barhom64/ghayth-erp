@@ -419,19 +419,38 @@ describe("Employees — audit, events, and obligations", () => {
     expect(s).not.toContain("كلمة المرور المؤقتة");
   });
 
-  it("POST / grants the RBAC v2 role (rbac_user_roles) so a new employee's services actually work", () => {
+  it("POST / grants the RBAC v2 role(s) via the central rbacService so a new employee's services actually work", () => {
     // Regression: previously creation only set the legacy role string and
     // never inserted rbac_user_roles, so the new user saw modules but got
     // 403 on every action (RBAC v2 is the enforcement authority). Creation
-    // must now resolve the effective role key → rbac_roles.id and bind it.
+    // now delegates the actual bind to the central, SoD-guarded service
+    // (lib/rbacService.grantUserRole) — HR only chooses which role keys; the
+    // resolve→SoD→INSERT→cache-invalidate logic lives in the RBAC path.
     const s = fullHandler('router.post("/",');
-    expect(s).toContain("INSERT INTO rbac_user_roles");
-    expect(s).toContain("FROM rbac_roles");
-    expect(s).toContain("role_key = $1");
-    // Job-title defaultRoleKey wins when the body didn't override the role.
+    expect(s).toContain("grantUserRole");
+    // Multi-role mode: every operator-selected key is granted.
+    expect(s).toContain("selectedRoleKeys");
+    // Job-title defaultRoleKey still wins for the legacy single-role mode.
     expect(s).toContain("defaultRoleKeyFromJob");
-    // Only when a fresh user account was actually created in this request.
-    expect(s).toContain("createdNewUser");
+    // The first SUCCESSFULLY granted role is the primary one.
+    expect(s).toContain("isPrimary");
+  });
+
+  it("the central rbacService grants a role with SoD enforcement + idempotent insert", () => {
+    // The actual rbac_user_roles write + SoD gate moved here (DRY: employees.ts
+    // Step 8a-bis now calls this instead of duplicating the SQL).
+    const svc = readFileSync(join(import.meta.dirname!, "../../src/lib/rbacService.ts"), "utf8");
+    expect(svc).toContain("export async function grantUserRole");
+    expect(svc).toContain("INSERT INTO rbac_user_roles");
+    expect(svc).toContain("FROM rbac_roles");
+    expect(svc).toContain("role_key = $1");
+    // Reuses the canonical SoD gate — does NOT redefine the rules.
+    expect(svc).toContain("findSeparationOfDutiesConflict");
+    expect(svc).toContain("getActiveRoleKeysForUser");
+    // Idempotent + cache invalidation reused from the existing primitives.
+    expect(svc).toContain("ON CONFLICT");
+    expect(svc).toContain("bumpCacheVersion");
+    expect(svc).toContain("invalidateRoleCache");
   });
 
   it("POST / copies active salary components to the new employee", () => {

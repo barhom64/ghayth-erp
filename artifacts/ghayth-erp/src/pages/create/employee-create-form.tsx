@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CreatePageLayout, CreationDateField } from "@workspace/ui-core";
 import { useToast } from "@/hooks/use-toast";
 import { ROLES } from "@/lib/constants";
+import { useRbacRoles } from "@/pages/admin/use-rbac-roles";
 import { NATIONALITIES } from "@/lib/nationalities";
 import { CheckCircle, AlertCircle, User, Briefcase, FileText, Calendar, Shield, DollarSign, Clock, Building2, CreditCard, Users, ArrowRight, Network } from "lucide-react";
 import { FileDropZone, type Attachment } from "@/components/shared/file-drop-zone";
@@ -215,6 +216,26 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
   const [managerSearch, setManagerSearch] = useState("");
   const [showManagerDropdown, setShowManagerDropdown] = useState(false);
 
+  // RBAC multi-role — reuse the canonical role source (the same hook the admin
+  // user screens use; reads GET /rbac/v2/roles incl. custom roles, falls back
+  // to the static standard list when the caller lacks admin.roles:list). HR
+  // only SELECTS here — the actual grant + SoD gate live server-side in the
+  // central rbacService. Each option's value is a role_key string → exactly the
+  // shape `selectedRoleKeys` expects.
+  const { options: roleOptions } = useRbacRoles();
+  // Selected role keys (multi). Pre-selected with the smart default below so
+  // every employee always carries at least one role.
+  const [selectedRoleKeys, setSelectedRoleKeys] = useState<string[]>([]);
+  // Tracks whether the operator has manually touched the role selection, so the
+  // job-title-driven default only auto-fills while it's still untouched.
+  const [rolesTouched, setRolesTouched] = useState(false);
+  const toggleRole = (key: string) => {
+    setRolesTouched(true);
+    setSelectedRoleKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  };
+
   const { form, setForm, clearDraft, hasDraft } = useAutoDraft(draftKey, {
     name: "", phone: "", email: "", jobTitle: "", jobTitleId: "", role: "employee", salary: "",
     hireDate: todayLocal(),
@@ -274,6 +295,17 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
   const pbxConnected = extProvData?.data?.pbxConnected || false;
   const availableExtensions = extProvData?.data?.available || [];
   const nextExtension = extProvData?.data?.nextExtension || "";
+
+  // Smart default — keep the role selection pre-filled with the single
+  // derived role (job-title defaultRoleKey, which already flows into form.role
+  // when a title is picked, else the "الصلاحية" select) UNTIL the operator
+  // edits the multi-select themselves. This guarantees every employee carries
+  // at least one role without forcing manual selection, while letting HR add
+  // more roles or change the default freely.
+  useEffect(() => {
+    if (rolesTouched) return;
+    if (form.role) setSelectedRoleKeys([form.role]);
+  }, [form.role, rolesTouched]);
 
   // Auto-fill the local part from the suggested transliteration once the
   // name is entered and the user hasn't typed their own local part yet.
@@ -408,6 +440,13 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
         // bridge rows inside the create transaction.
         positionId: form.positionId ? Number(form.positionId) : undefined,
         categoryKey: form.categoryKey || undefined,
+        // RBAC multi-role — send the selected role keys (de-duped). The server
+        // grants each via the central rbacService (SoD-guarded); when omitted
+        // it falls back to the single derived role. We always send at least the
+        // smart default, so an employee never lands role-less.
+        ...(selectedRoleKeys.length > 0
+          ? { selectedRoleKeys: Array.from(new Set(selectedRoleKeys)) }
+          : {}),
         teamId: form.teamId ? Number(form.teamId) : undefined,
         projectId: form.projectId ? Number(form.projectId) : undefined,
         costCenterId: form.costCenterId ? Number(form.costCenterId) : undefined,
@@ -533,6 +572,8 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
             });
             setMultiBranch(false);
             setBranchAllocs([]);
+            setSelectedRoleKeys([]);
+            setRolesTouched(false);
           }}>
             إضافة موظف آخر
           </Button>
@@ -732,7 +773,10 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
             </SelectContent>
           </Select>
         </FormFieldWrapper>
-        <FormFieldWrapper label="الصلاحية">
+        {/* الدور الأساسي المقترح — يُشتق تلقائيًا من المسمى الوظيفي ويُمكن
+            تغييره. يُستخدم كأساس ذكي مُسبق الاختيار في قسم «الأدوار
+            والصلاحيات» أدناه، ويبقى الدور الأول (الأساسي) المرسَل للنظام. */}
+        <FormFieldWrapper label="الدور الأساسي المقترح">
           <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -740,6 +784,49 @@ export function EmployeeCreateForm({ onCreated, onCancel, draftKey = "employees_
             </SelectContent>
           </Select>
         </FormFieldWrapper>
+
+        {/* قسم «الأدوار والصلاحيات» — اختيار متعدّد لأدوار النظام (RBAC).
+            يُعيد استخدام مصدر الأدوار المعتمد (useRbacRoles). HR هنا «يختار»
+            فقط؛ الإسناد الفعلي وفحص فصل المهام (SoD) يجريان في خدمة RBAC
+            المركزية على الخادم. الدور الأساسي المقترح أعلاه مُسبق الاختيار
+            تلقائيًا كي لا يبقى الموظف بلا دور، ويمكن إضافة أدوار أخرى. */}
+        <div className="md:col-span-2 border-t pt-4 mt-2">
+          <h3 className="text-sm font-semibold text-status-info-foreground mb-1 flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            الأدوار والصلاحيات
+          </h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            اختر دورًا واحدًا أو أكثر للموظف. النظام يطبّق فصل المهام تلقائيًا:
+            أي دور يخالف فصل المهام لن يُسنَد ويُترك للإدارة، ويُنشأ الموظف
+            بباقي الأدوار. الدور الأول هو الدور الأساسي.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {roleOptions.map((opt) => {
+              const checked = selectedRoleKeys.includes(opt.value);
+              const isPrimary = checked && selectedRoleKeys[0] === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => toggleRole(opt.value)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    checked
+                      ? "bg-status-info-surface border-status-info-foreground text-status-info-foreground font-medium"
+                      : "bg-surface-subtle border-border text-muted-foreground hover:bg-surface-subtle/70"
+                  }`}
+                  data-testid={`role-chip-${opt.value}`}
+                >
+                  {checked ? "✓ " : ""}{opt.label}{isPrimary ? " · أساسي" : ""}
+                </button>
+              );
+            })}
+          </div>
+          {selectedRoleKeys.length === 0 && (
+            <p className="text-xs text-status-warning-foreground mt-2">
+              لم يُختَر أي دور — سيُسنَد الدور الأساسي المقترح فقط.
+            </p>
+          )}
+        </div>
         <div id="wizard-step-job" className="md:col-span-2 scroll-mt-24" />
         <FormFieldWrapper label="نوع العقد" error={fieldErrors.contractType}>
           <Select value={form.contractType} onValueChange={(v) => setForm((f) => ({ ...f, contractType: v }))}>

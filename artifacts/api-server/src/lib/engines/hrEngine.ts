@@ -833,7 +833,13 @@ class HREngineImpl implements DomainEngine {
   ) {
     const [leaveExpenseCode, leaveLiabilityCode, eosExpenseCode, eosLiabilityCode] = await Promise.all([
       financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_expense", "debit", "5270"),
-      financialEngine.resolveAccountCode(ctx.companyId, "hr_leave_accrual_liability", "credit", "2220"),
+      // التزام استحقاق الإجازات يستخدم مفتاح المالية القابل للتحرير
+      // `leave_accrual_liability` (accounting_mappings → 2150 «مصروفات مستحقة
+      // الدفع»، مثبَّت بهجرة 365 / #2277)، لا مفتاحًا ببادئة hr_. المفتاح المبدوء
+      // بـhr_ غير مزروع، فكان هذا الترحيل يسقط بصمت إلى 2220 ويتجاوز خريطة المالية
+      // القابلة للتحرير؛ والافتراضي الآن 2150 ليطابقها. نهاية الخدمة تبقى على
+      // حساب مخصصها طويل الأجل (2220).
+      financialEngine.resolveAccountCode(ctx.companyId, "leave_accrual_liability", "credit", "2150"),
       financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_expense", "debit", "5260"),
       financialEngine.resolveAccountCode(ctx.companyId, "hr_eos_accrual_liability", "credit", "2220"),
     ]);
