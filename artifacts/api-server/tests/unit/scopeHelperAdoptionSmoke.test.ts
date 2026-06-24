@@ -335,6 +335,13 @@ const MANUAL_SCOPE_ALLOWLIST = new Set<string>([
   // tenant-scoped with explicit `"companyId" = $n AND "deletedAt" IS NULL`; same
   // allowlist justification as the parent.
   "umrah-groups.ts",
+  // umrah-group-transport.ts: U-07 Phase 23 split — group service-contract
+  // (transport-requests POST/GET via the umrahTransportContract engine) + the
+  // read-only cost-breakdown aggregation, carved verbatim out of
+  // umrah-entities.ts. cost-breakdown reads umrah_nusk_invoices / umrah_sales_
+  // invoices tenant-scoped with explicit `"companyId" = $n`; same allowlist
+  // justification as the parent.
+  "umrah-group-transport.ts",
   // umrah-journey-reports.ts: U-07 Phase 1 split — 4 read-only journey/recovery/
   // pricing-drift routes carved out of umrah-entities.ts verbatim. Pure SELECT
   // aggregates keyed on (companyId, …); inherits the same allowlist
@@ -546,9 +553,12 @@ describe("scope helper adoption ratchet — GAP_MATRIX #13", () => {
       // umrah-entities.ts. Same allowlist justification.
       // +1 total/manualOnly: U-07 Phase 22 routes/umrah-groups.ts — groups CRUD
       // carved verbatim out of umrah-entities.ts. Same allowlist justification.
-      total: 152,
+      // +1 total/manualOnly: U-07 Phase 23 routes/umrah-group-transport.ts —
+      // group service-contract + cost-breakdown carved verbatim out of
+      // umrah-entities.ts. Same allowlist justification.
+      total: 153,
       helperUsers: 39,
-      manualOnly: 109,
+      manualOnly: 110,
     });
   });
 });

@@ -13,8 +13,9 @@ import { join } from "node:path";
  *
  * Answers: "ما توزيع التكلفة؟ هل المجموعة رابحة؟ هل في فواتير AP ناقصة؟"
  */
+// U-07 Phase 23 — GET /groups/:id/cost-breakdown carved into umrah-group-transport.ts.
 const ROUTE = readFileSync(
-  join(import.meta.dirname!, "../../src/routes/umrah-entities.ts"),
+  join(import.meta.dirname!, "../../src/routes/umrah-group-transport.ts"),
   "utf8",
 );
 const CARD = readFileSync(
