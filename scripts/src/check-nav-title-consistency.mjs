@@ -32,7 +32,7 @@ const strict = process.argv.includes("--strict");
 const full = process.argv.includes("--full");
 
 // Established acronyms allowed to remain in an Arabic page title.
-const ACRONYM = /\b(WPS|ZATCA|WHT|PDPL|CAPA|B2C|YTD|MDVR|CMSV6|GL|PBX|VAT|SARIE)\b/g;
+const ACRONYM = /\b(WPS|ZATCA|WHT|PDPL|CAPA|B2C|YTD|MDVR|CMSV6|GL|PBX|VAT|SARIE|OCR)\b/g;
 
 function norm(s) {
   return s.replace(/[ً-ْـ]/g, "").replace(/\s+/g, " ").replace(/^ال/, "").trim();
