@@ -394,6 +394,12 @@ router.post("/groups/:id/split", authorize({ feature: "umrah", action: "update" 
     const sourceId = parseId(req.params.id, "id");
     const body = zodParse(splitGroupSchema.safeParse(req.body));
 
+    // Captured from inside the txn so the numbering-centre assignment can be
+    // linked to the new group id after commit (same non-blocking link pattern
+    // as POST /groups). Stays out of the returned `result` so the response shape
+    // is unchanged.
+    let splitAssignmentId: number | null = null;
+
     const result = await withTransaction(async (client) => {
       const [source] = (await client.query(
         `SELECT * FROM umrah_groups WHERE id=$1 AND "companyId"=$2 AND "deletedAt" IS NULL FOR UPDATE`,
@@ -418,14 +424,31 @@ router.post("/groups/:id/split", authorize({ feature: "umrah", action: "update" 
       const newNuskNum = body.newNuskGroupNumber || `${source.nuskGroupNumber}-S${Date.now().toString().slice(-5)}`;
       const newName = body.newGroupName || `${source.name || ""} - تقسيم`.trim();
 
+      // Numbering centre (Issue #1141) — a split-off group is a real group and
+      // gets its own per-season internalRef, exactly like POST /groups. Issued
+      // here (inside the txn, after the source's seasonId is known) on the
+      // numbering service's own connection; a number gap on rollback is
+      // acceptable — same property as the create path.
+      const issuedSplit = await issueNumber({
+        companyId: scope.companyId,
+        branchId: scope.branchId ?? (source.branchId ?? null),
+        moduleKey: "umrah",
+        entityKey: "umrah_group",
+        entityTable: "umrah_groups",
+        seasonId: source.seasonId,
+        actorId: scope.userId,
+        expectedTiming: "on_draft",
+      });
+      splitAssignmentId = issuedSplit.assignmentId;
+
       const insertRes = await client.query(
         `INSERT INTO umrah_groups
-          ("companyId","branchId","nuskGroupNumber",name,"agentId","subAgentId","seasonId",
+          ("companyId","branchId","nuskGroupNumber","internalRef",name,"agentId","subAgentId","seasonId",
            "mutamerCount","programDuration",status,"createdBy","createdAt","updatedAt")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'split_from_'||$10,$11,NOW(),NOW())
-         RETURNING id, "nuskGroupNumber", name, "mutamerCount"`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'split_from_'||$11,$12,NOW(),NOW())
+         RETURNING id, "nuskGroupNumber", "internalRef", name, "mutamerCount"`,
         [
-          scope.companyId, scope.branchId || source.branchId, newNuskNum, newName,
+          scope.companyId, scope.branchId || source.branchId, newNuskNum, issuedSplit.number, newName,
           source.agentId, source.subAgentId, source.seasonId,
           body.pilgrimIds.length, source.programDuration, sourceId, scope.userId,
         ]
@@ -450,8 +473,17 @@ router.post("/groups/:id/split", authorize({ feature: "umrah", action: "update" 
       return { newGroup, movedCount: body.pilgrimIds.length };
     });
 
+    // Link the numbering-centre assignment to the freshly created split group
+    // (non-blocking, same as POST /groups).
+    if (result.newGroup?.id && splitAssignmentId != null) {
+      await rawExecute(
+        `UPDATE numbering_assignments SET "entityId" = $1 WHERE id = $2`,
+        [result.newGroup.id as number, splitAssignmentId]
+      ).catch(() => { /* non-blocking link */ });
+    }
+
     auditFromRequest(req, "umrah.group.split", "umrah_groups", sourceId, {
-      after: { newGroupId: result.newGroup.id, movedCount: result.movedCount },
+      after: { newGroupId: result.newGroup.id, internalRef: result.newGroup.internalRef, movedCount: result.movedCount },
     }).catch((e) => logger.error(e, "umrah groups split bg"));
     emitEvent({
       companyId: scope.companyId, branchId: scope.branchId, userId: scope.userId,
