@@ -229,16 +229,16 @@ describe("Module coverage: Umrah", () => {
   const indexTs = read("routes/index.ts");
 
   // Permissions
-  it("both Umrah route files have authorize guards", () => {
+  it("Umrah route files have authorize guards (umrah.ts + the carved sub-routers)", () => {
     expect(umrah).toContain("authorize(");
-    expect(entities).toContain("authorize(");
+    // U-07 Phase 24 — umrah-entities.ts is now a pure aggregator (no routes); the
+    // authorize guards live in the carved sub-routers (e.g. umrah-groups.ts).
+    expect(groups).toContain("authorize(");
   });
 
   it("Umrah routes use umrah: permission scope", () => {
-    expect(umrah).toContain('authorize(');
-    expect(umrah).toContain('authorize(');
-    expect(entities).toContain('authorize(');
-    expect(entities).toContain('authorize(');
+    expect(umrah).toContain('authorize({ feature: "umrah"');
+    expect(groups).toContain('authorize({ feature: "umrah"');
   });
 
   it("Umrah is gated by requireModule('operations') + requireGuards('financial') in index", () => {
