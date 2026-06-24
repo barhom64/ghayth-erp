@@ -222,6 +222,8 @@ describe("Module coverage: Umrah", () => {
   const entities = read("routes/umrah-entities.ts");
   // U-07 Phase 19: nusk-invoice CRUD routes live here.
   const nuskInvoices = read("routes/umrah-nusk-invoices.ts");
+  // U-07 Phase 22: groups CRUD (+ requireOpenSeason helper) live here.
+  const groups = read("routes/umrah-groups.ts");
   // U-07 Phase 6: sub-agent CRUD + linking routes live here.
   const subAgents = read("routes/umrah-sub-agents.ts");
   const indexTs = read("routes/index.ts");
@@ -245,9 +247,11 @@ describe("Module coverage: Umrah", () => {
   });
 
   // Audit
-  it("both Umrah route files emit audit logs", () => {
+  it("Umrah route files emit audit logs (umrah.ts + the carved groups sub-router)", () => {
     expect(umrah).toContain("createAuditLog");
-    expect(entities).toContain("createAuditLog");
+    // U-07 Phase 22 — umrah-entities.ts no longer audits directly; the group
+    // write trail moved to umrah-groups.ts as auditFromRequest (IGOC ratchet).
+    expect(groups).toContain("auditFromRequest");
   });
 
   // Sub-agent CRUD + its audit trail live in umrah-sub-agents.ts since the
@@ -262,9 +266,11 @@ describe("Module coverage: Umrah", () => {
   });
 
   // Events
-  it("both Umrah route files emit domain events", () => {
+  it("Umrah route files emit domain events (umrah.ts + the carved groups sub-router)", () => {
     expect(umrah).toContain("emitEvent");
-    expect(entities).toContain("emitEvent");
+    // U-07 Phase 22 — group domain events (created/updated/deleted/split/merged)
+    // moved with the routes to umrah-groups.ts.
+    expect(groups).toContain("emitEvent");
   });
 
   it("sub-agents router emits umrah.sub_agent.created event", () => {
@@ -278,9 +284,12 @@ describe("Module coverage: Umrah", () => {
   });
 
   // Validation
-  it("both Umrah route files use Zod validation", () => {
+  it("Umrah route files use Zod validation (umrah.ts + the carved groups sub-router)", () => {
     expect(umrah).toContain("zodParse");
-    expect(entities).toContain("zodParse");
+    // U-07 Phase 22/23 — umrah-entities.ts is now down to employee-assignments
+    // only (no body validation); the group schemas + zodParse moved to
+    // umrah-groups.ts with the CRUD/ops routes.
+    expect(groups).toContain("zodParse");
   });
 
   it("umrah defines schemas for seasons, agents, packages, pilgrims", () => {
@@ -300,7 +309,8 @@ describe("Module coverage: Umrah", () => {
   // Season locking
   it("enforces season lock on write operations", () => {
     expect(umrah).toContain("requireOpenSeason");
-    expect(entities).toContain("requireOpenSeason");
+    // U-07 Phase 22 — requireOpenSeason moved with groups CRUD to umrah-groups.ts.
+    expect(groups).toContain("requireOpenSeason");
   });
 
   // Nusk invoice CRUD

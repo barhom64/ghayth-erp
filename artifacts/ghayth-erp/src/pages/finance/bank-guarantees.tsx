@@ -550,12 +550,12 @@ export default function BankGuaranteesPage() {
               {alerts.map((g) => (
                 <div
                   key={g.id}
-                  className="flex items-center justify-between bg-background rounded-lg px-4 py-2 text-sm"
+                  className="flex items-center justify-between gap-2 bg-background rounded-lg px-4 py-2 text-sm"
                 >
-                  <div className="font-medium">
+                  <div className="font-medium min-w-0 truncate">
                     {g.ref} — {g.beneficiary}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className="text-muted-foreground">{g.bank}</span>
                     <span className="text-muted-foreground">{formatCurrency(g.amount)}</span>
                     <PageStatusBadge status={ALERT_RENDER[g.alertStatus]?.statusKey ?? "expired"}>

@@ -34,8 +34,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname!, "../../../..");
+// U-07 Phase 22 — GET /umrah/groups (the N+1-fixed list) carved into umrah-groups.ts.
 const SRC = readFileSync(
-  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-entities.ts"),
+  join(REPO_ROOT, "artifacts/api-server/src/routes/umrah-groups.ts"),
   "utf8",
 );
 
