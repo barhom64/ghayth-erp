@@ -40,6 +40,10 @@ import { emitEvent, auditFromRequest } from "../lib/businessHelpers.js";
 import { logger } from "../lib/logger.js";
 import { gccExclusionSqlFragment } from "../lib/umrahNationalityRules.js";
 import { issueNumber } from "../lib/numberingService.js";
+import {
+  previewSplitGroupNumberingBackfill,
+  backfillSplitGroupNumbering,
+} from "../lib/umrahGroupNumberingBackfill.js";
 
 const router = Router();
 
@@ -575,5 +579,40 @@ router.post("/groups/merge", authorize({ feature: "umrah", action: "update" }), 
     res.json({ success: true, ...result });
   } catch (err) { handleRouteError(err, res, "Merge groups"); }
 });
+
+// ─── Numbering backfill for historical split-off groups (Issue #1141) ────────
+// Split groups created before #2956 carry internalRef = NULL. The register-based
+// numbering backfill skips NULL-ref rows by design, so these need a number
+// MINTED through the centre. Preview first (read-only), then execute.
+router.get(
+  "/groups/numbering-backfill/preview",
+  authorize({ feature: "umrah", action: "view" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const preview = await previewSplitGroupNumberingBackfill({ companyId: scope.companyId });
+      res.json({ success: true, ...preview });
+    } catch (err) { handleRouteError(err, res, "Preview split-group numbering backfill"); }
+  }
+);
+
+// Audit: no domain audit/event here — same as the numbering-centre's own
+// /numbering/schemes/:id/backfill endpoint. Each minted number is already
+// traced by issueNumber() into numbering_audit_logs ('issue', actor + entityId
+// + number), which is the authoritative trail for number issuance.
+router.post(
+  "/groups/numbering-backfill",
+  authorize({ feature: "umrah", action: "update" }),
+  async (req, res): Promise<void> => {
+    try {
+      const scope = req.scope!;
+      const result = await backfillSplitGroupNumbering({
+        companyId: scope.companyId,
+        actorId: scope.userId,
+      });
+      res.json({ success: true, ...result });
+    } catch (err) { handleRouteError(err, res, "Split-group numbering backfill"); }
+  }
+);
 
 export default router;
